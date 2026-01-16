@@ -183,9 +183,9 @@ export const isPlanModeAtom = atomWithStorage<boolean>(
 
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
-  opus: "opus",
-  sonnet: "sonnet",
-  haiku: "haiku",
+  opus: "claude-opus-4-5-20251101",
+  sonnet: "claude-sonnet-4-5-20251101",
+  haiku: "claude-haiku-4-5-20251101",
 }
 
 // Sidebar state

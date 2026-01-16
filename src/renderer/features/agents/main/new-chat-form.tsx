@@ -100,9 +100,9 @@ const CodexIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 // Model options for Claude Code
 const claudeModels = [
-  { id: "opus", name: "Opus" },
-  { id: "sonnet", name: "Sonnet" },
-  { id: "haiku", name: "Haiku" },
+  { id: "opus", name: "Opus 4.5" },
+  { id: "sonnet", name: "Sonnet 4.5" },
+  { id: "haiku", name: "Haiku 4.5" },
 ]
 
 // Agent providers
@@ -182,10 +182,58 @@ export function NewChatForm({
   const [selectedAgent, setSelectedAgent] = useState(
     () => agents.find((a) => a.id === lastSelectedAgentId) || agents[0],
   )
-  const [selectedModel, setSelectedModel] = useState(
-    () =>
-      claudeModels.find((m) => m.id === lastSelectedModelId) || claudeModels[1],
-  )
+
+  // Query active provider for model information
+  const { data: activeProvider } = trpc.providers.getActive.useQuery()
+
+  // Build models list based on active provider type
+  const availableModels = useMemo(() => {
+    // For OAuth providers, allow model selection (opus/sonnet/haiku)
+    if (activeProvider?.providerType === "oauth") {
+      return claudeModels
+    }
+    // For API Key providers, use the configured model only
+    if (activeProvider?.model) {
+      return [
+        {
+          id: "provider-model",
+          name: activeProvider.model,
+          isProviderModel: true,
+        },
+      ]
+    }
+    // No provider: show default Anthropic models
+    return claudeModels
+  }, [activeProvider])
+
+  const [selectedModel, setSelectedModel] = useState(() => {
+    // For API Key providers, use the provider's model
+    if (activeProvider?.providerType === "api_key" && activeProvider?.model) {
+      return {
+        id: "provider-model",
+        name: activeProvider.model,
+        isProviderModel: true,
+      }
+    }
+    // For OAuth or no provider, use saved selection or default to Sonnet
+    return (
+      claudeModels.find((m) => m.id === lastSelectedModelId) || claudeModels[1]
+    )
+  })
+
+  // Update selected model when active provider changes
+  useEffect(() => {
+    // For API Key providers, force provider's model
+    if (activeProvider?.providerType === "api_key" && activeProvider?.model) {
+      setSelectedModel({
+        id: "provider-model",
+        name: activeProvider.model,
+        isProviderModel: true,
+      })
+    }
+    // For OAuth providers, keep current selection (opus/sonnet/haiku)
+  }, [activeProvider])
+
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
   const [lastSelectedBranches, setLastSelectedBranches] = useAtom(
@@ -1149,10 +1197,7 @@ export function NewChatForm({
                         <DropdownMenuTrigger asChild>
                           <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
-                            <span>
-                              {selectedModel?.name}{" "}
-                              <span className="text-muted-foreground">4.5</span>
-                            </span>
+                            <span>{selectedModel?.name}</span>
                             <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                           </button>
                         </DropdownMenuTrigger>
@@ -1160,25 +1205,22 @@ export function NewChatForm({
                           align="start"
                           className="w-[150px]"
                         >
-                          {claudeModels.map((model) => {
+                          {availableModels.map((model) => {
                             const isSelected = selectedModel?.id === model.id
                             return (
                               <DropdownMenuItem
                                 key={model.id}
                                 onClick={() => {
                                   setSelectedModel(model)
-                                  setLastSelectedModelId(model.id)
+                                  if (!model.isProviderModel) {
+                                    setLastSelectedModelId(model.id)
+                                  }
                                 }}
                                 className="gap-2 justify-between"
                               >
                                 <div className="flex items-center gap-1.5">
                                   <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  <span>
-                                    {model.name}{" "}
-                                    <span className="text-muted-foreground">
-                                      4.5
-                                    </span>
-                                  </span>
+                                  <span>{model.name}</span>
                                 </div>
                                 {isSelected && (
                                   <CheckIcon className="h-3.5 w-3.5 shrink-0" />

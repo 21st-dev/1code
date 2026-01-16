@@ -949,10 +949,50 @@ function ChatViewInner({
     lastSelectedModelIdAtom,
   )
   const [selectedAgent, setSelectedAgent] = useState(() => agents[0])
-  const [selectedModel, setSelectedModel] = useState(
-    () =>
-      claudeModels.find((m) => m.id === lastSelectedModelId) || claudeModels[1],
-  )
+
+  // Query active provider for model information
+  const { data: activeProvider } = trpc.providers.getActive.useQuery()
+
+  // Build models list based on active provider
+  const availableModels = useMemo(() => {
+    if (activeProvider?.model) {
+      // Use provider's model
+      return [
+        {
+          id: "provider-model",
+          name: activeProvider.model,
+          isProviderModel: true,
+        },
+      ]
+    }
+    // Fallback to default Anthropic models
+    return claudeModels
+  }, [activeProvider])
+
+  const [selectedModel, setSelectedModel] = useState(() => {
+    if (activeProvider?.model) {
+      return {
+        id: "provider-model",
+        name: activeProvider.model,
+        isProviderModel: true,
+      }
+    }
+    return (
+      claudeModels.find((m) => m.id === lastSelectedModelId) || claudeModels[1]
+    )
+  })
+
+  // Update selected model when active provider changes
+  useEffect(() => {
+    if (activeProvider?.model) {
+      setSelectedModel({
+        id: "provider-model",
+        name: activeProvider.model,
+        isProviderModel: true,
+      })
+    }
+  }, [activeProvider])
+
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
   const [shouldOpenClaudeSubmenu, setShouldOpenClaudeSubmenu] = useState(false)
 
@@ -2940,31 +2980,45 @@ function ChatViewInner({
                         <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
                           <ClaudeCodeIcon className="h-3.5 w-3.5" />
                           <span>
-                            {selectedModel?.name}{" "}
-                            <span className="text-muted-foreground">4.5</span>
+                            {selectedModel?.isProviderModel
+                              ? selectedModel.name
+                              : `${selectedModel?.name} `}
+                            {selectedModel?.isProviderModel ? (
+                              ""
+                            ) : (
+                              <span className="text-muted-foreground">4.5</span>
+                            )}
                           </span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-[150px]">
-                        {claudeModels.map((model) => {
+                        {availableModels.map((model) => {
                           const isSelected = selectedModel?.id === model.id
                           return (
                             <DropdownMenuItem
                               key={model.id}
                               onClick={() => {
                                 setSelectedModel(model)
-                                setLastSelectedModelId(model.id)
+                                if (!model.isProviderModel) {
+                                  setLastSelectedModelId(model.id)
+                                }
                               }}
                               className="gap-2 justify-between"
                             >
                               <div className="flex items-center gap-1.5">
                                 <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                 <span>
-                                  {model.name}{" "}
-                                  <span className="text-muted-foreground">
-                                    4.5
-                                  </span>
+                                  {model.isProviderModel ? (
+                                    model.name
+                                  ) : (
+                                    <>
+                                      {model.name}{" "}
+                                      <span className="text-muted-foreground">
+                                        4.5
+                                      </span>
+                                    </>
+                                  )}
                                 </span>
                               </div>
                               {isSelected && (

@@ -10,13 +10,16 @@ import {
   EyeOpenFilledIcon,
   SlidersFilledIcon,
 } from "../../icons"
-import { SkillIcon, AgentIcon } from "../ui/icons"
+import { SkillIcon, AgentIcon, GlobeIcon } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
 import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
 import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
+import { AgentsProviderTab } from "./settings-tabs/agents-provider-tab"
+
+type SettingsTab = "profile" | "appearance" | "preferences" | "skills" | "agents" | "provider" | "debug"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -75,6 +78,12 @@ const ALL_TABS = [
     icon: AgentIcon,
     description: "Manage custom Claude agents",
     beta: true,
+  },
+  {
+    id: "provider" as SettingsTab,
+    label: "Provider",
+    icon: GlobeIcon,
+    description: "Configure AI provider settings",
   },
   // Debug tab - always shown in desktop for development
   ...(isDevelopment
@@ -203,6 +212,8 @@ export function AgentsSettingsDialog({
         return <AgentsSkillsTab />
       case "agents":
         return <AgentsCustomAgentsTab />
+      case "provider":
+        return <AgentsProviderTab />
       case "debug":
         return isDevelopment ? <AgentsDebugTab /> : null
       default:
@@ -304,7 +315,7 @@ export function AgentsSettingsDialog({
           />
 
           {/* Settings Dialog */}
-          <div className="fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-[45]">
+          <div className="fixed inset-0 z-[45] flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
