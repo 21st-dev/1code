@@ -1,0 +1,1 @@
+ALTER TABLE `ai_providers` ADD `is_builtin` integer DEFAULT false NOT NULL;

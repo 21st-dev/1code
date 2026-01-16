@@ -239,17 +239,26 @@ export function AnthropicOnboardingPage() {
           {!urlOpened &&
             flowState.step !== "has_url" &&
             flowState.step !== "error" && (
-              <button
-                onClick={handleConnectClick}
-                disabled={userClickedConnect && isLoadingAuth}
-                className="w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {userClickedConnect && isLoadingAuth ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  "Connect"
-                )}
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={handleConnectClick}
+                  disabled={userClickedConnect && isLoadingAuth}
+                  className="w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {userClickedConnect && isLoadingAuth ? (
+                    <IconSpinner className="h-4 w-4" />
+                  ) : (
+                    "Connect"
+                  )}
+                </button>
+                <button
+                  onClick={() => setAnthropicOnboardingCompleted(true)}
+                  disabled={userClickedConnect && isLoadingAuth}
+                  className="w-full h-8 px-3 bg-transparent text-muted-foreground rounded-lg text-sm font-medium transition-colors duration-150 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Skip for now
+                </button>
+              </div>
             )}
 
           {/* Code Input - Show after URL is opened, if has_url (after redirect), or if submitting */}

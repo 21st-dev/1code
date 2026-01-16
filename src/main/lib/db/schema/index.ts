@@ -98,6 +98,31 @@ export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
   userId: text("user_id"), // Desktop auth user ID (for reference)
 })
 
+// ============ AI PROVIDERS ============
+// Stores multiple AI provider profiles with encrypted credentials
+export const aiProviders = sqliteTable("ai_providers", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull(), // Display name: "glm 4.7", "minimax 2.1"
+  model: text("model").notNull(), // Model name: "glm-4.7", "claude-opus-4-5-20251101"
+  providerType: text("provider_type").notNull(), // "oauth" | "api_key"
+  // OAuth-specific fields
+  oauthToken: text("oauth_token"), // Encrypted with safeStorage
+  // API Key-specific fields
+  apiKey: text("api_key"), // Encrypted with safeStorage
+  baseUrl: text("base_url"), // Custom endpoint: "https://api.z.ai/api/anthropic"
+  // Metadata
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  userId: text("user_id"), // Desktop auth user ID (for reference)
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -107,3 +132,5 @@ export type SubChat = typeof subChats.$inferSelect
 export type NewSubChat = typeof subChats.$inferInsert
 export type ClaudeCodeCredential = typeof claudeCodeCredentials.$inferSelect
 export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
+export type AIProvider = typeof aiProviders.$inferSelect
+export type NewAIProvider = typeof aiProviders.$inferInsert

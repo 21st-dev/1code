@@ -13,7 +13,7 @@ import {
   logRawClaudeMessage,
   type UIMessageChunk,
 } from "../../claude"
-import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
+import { chats, claudeCodeCredentials, getDatabase, subChats, aiProviders } from "../../db"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 
@@ -77,26 +77,70 @@ function decryptToken(encrypted: string): string {
 }
 
 /**
- * Get Claude Code OAuth token from local SQLite
- * Returns null if not connected
+ * Get active provider credentials and model from ai_providers table
+ * Falls back to legacy claudeCodeCredentials for migration compatibility
+ * Returns null if no provider is configured
  */
-function getClaudeCodeToken(): string | null {
+function getActiveProviderConfig(): {
+  model: string
+  type: "oauth" | "api_key"
+  token: string | null
+  baseUrl: string | null
+} | null {
   try {
     const db = getDatabase()
+
+    // First, try to get from new ai_providers table
+    const provider = db
+      .select()
+      .from(aiProviders)
+      .where(eq(aiProviders.isActive, true))
+      .get()
+
+    if (provider) {
+      console.log("[claude] Using provider from ai_providers:", provider.name)
+
+      const decrypt = (encrypted: string | null) => {
+        if (!encrypted) return null
+        if (!safeStorage.isEncryptionAvailable()) {
+          return Buffer.from(encrypted, "base64").toString("utf-8")
+        }
+        const buffer = Buffer.from(encrypted, "base64")
+        return safeStorage.decryptString(buffer)
+      }
+
+      return {
+        model: provider.model,
+        type: provider.providerType as "oauth" | "api_key",
+        token:
+          provider.providerType === "oauth"
+            ? decrypt(provider.oauthToken)
+            : decrypt(provider.apiKey),
+        baseUrl: provider.baseUrl,
+      }
+    }
+
+    // Fallback: try legacy claudeCodeCredentials table
     const cred = db
       .select()
       .from(claudeCodeCredentials)
       .where(eq(claudeCodeCredentials.id, "default"))
       .get()
 
-    if (!cred?.oauthToken) {
-      console.log("[claude] No Claude Code credentials found")
-      return null
+    if (cred?.oauthToken) {
+      console.log("[claude] Using legacy claudeCodeCredentials (should migrate to ai_providers)")
+      return {
+        model: "claude-sonnet-4-5-20251101", // Default model for legacy credentials
+        type: "oauth",
+        token: decryptToken(cred.oauthToken),
+        baseUrl: null,
+      }
     }
 
-    return decryptToken(cred.oauthToken)
+    console.log("[claude] No active provider found")
+    return null
   } catch (error) {
-    console.error("[claude] Error getting Claude Code token:", error)
+    console.error("[claude] Error getting provider config:", error)
     return null
   }
 }
@@ -367,8 +411,21 @@ export const claudeRouter = router({
               logClaudeEnv(claudeEnv, `[${input.subChatId}] `)
             }
 
-            // Get Claude Code OAuth token from local storage (optional)
-            const claudeCodeToken = getClaudeCodeToken()
+            // Get active provider config
+            const providerConfig = getActiveProviderConfig()
+
+            if (!providerConfig) {
+              safeEmit({
+                type: "error",
+                errorText: "No AI provider configured. Please add and activate a provider in Settings → Provider.",
+              } as UIMessageChunk)
+              console.log(`[SD] M:END sub=${subId} reason=no_provider n=${chunkCount}`)
+              safeEmit({ type: "finish" } as UIMessageChunk)
+              safeComplete()
+              return
+            }
+
+            console.log(`[claude] Using provider: ${providerConfig.model} (${providerConfig.type})`)
 
             // Create isolated config directory per subChat to prevent session contamination
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
@@ -417,12 +474,20 @@ export const claudeRouter = router({
               console.error(`[claude] Failed to setup isolated config dir:`, mkdirErr)
             }
 
-            // Build final env - only add OAuth token if we have one
+            // Build final env based on provider type
             const finalEnv = {
               ...claudeEnv,
-              ...(claudeCodeToken && {
-                CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
-              }),
+              ...(providerConfig.type === "oauth" &&
+                providerConfig.token && {
+                  CLAUDE_CODE_OAUTH_TOKEN: providerConfig.token,
+                }),
+              ...(providerConfig.type === "api_key" &&
+                providerConfig.token && {
+                  ANTHROPIC_AUTH_TOKEN: providerConfig.token,
+                  ...(providerConfig.baseUrl && {
+                    ANTHROPIC_BASE_URL: providerConfig.baseUrl,
+                  }),
+                }),
               // Isolate Claude's config/session storage per subChat
               CLAUDE_CONFIG_DIR: isolatedConfigDir,
             }
@@ -550,8 +615,8 @@ export const claudeRouter = router({
                   resume: resumeSessionId,
                   continue: true,
                 }),
-                ...(input.model && { model: input.model }),
-                // fallbackModel: "claude-opus-4-5-20251101",
+                // Use provider's model, allow input.model to override for testing
+                model: input.model || providerConfig.model,
                 ...(input.maxThinkingTokens && {
                   maxThinkingTokens: input.maxThinkingTokens,
                 }),

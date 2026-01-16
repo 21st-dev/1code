@@ -5,6 +5,7 @@ import { app } from "electron"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
 import * as schema from "./schema"
+import { migrateToProviders } from "./migrate-providers"
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 let sqlite: Database.Database | null = null
@@ -63,6 +64,9 @@ export function initDatabase() {
   try {
     migrate(db, { migrationsFolder: migrationsPath })
     console.log("[DB] Migrations completed")
+
+    // Run data migration after schema migration
+    migrateToProviders()
   } catch (error) {
     console.error("[DB] Migration error:", error)
     throw error

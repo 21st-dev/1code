@@ -36,6 +36,20 @@
       "when": 1768199613729,
       "tag": "0004_melted_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1768523235453,
+      "tag": "0005_premium_photon",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1768526759982,
+      "tag": "0006_smart_nightshade",
+      "breakpoints": true
     }
   ]
 }
