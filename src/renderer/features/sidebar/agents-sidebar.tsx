@@ -90,7 +90,7 @@ import {
   undoStackAtom,
   type UndoItem,
 } from "../agents/atoms"
-import { useAgentSubChatStore } from "../agents/stores/sub-chat-store"
+import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
 import { pluralize } from "../agents/utils/pluralize"
@@ -319,9 +319,23 @@ export function AgentsSidebar({
   // Fetch all chats (no project filter)
   const { data: agentChats } = trpc.chats.list.useQuery({})
 
+  // Track open sub-chat changes for reactivity
+  const [openSubChatsVersion, setOpenSubChatsVersion] = useState(0)
+  useEffect(() => {
+    const handleChange = () => setOpenSubChatsVersion((v) => v + 1)
+    window.addEventListener(OPEN_SUB_CHATS_CHANGE_EVENT, handleChange)
+    return () => window.removeEventListener(OPEN_SUB_CHATS_CHANGE_EVENT, handleChange)
+  }, [])
+
+  // Store previous value to avoid unnecessary React Query refetches
+  const prevOpenSubChatIdsRef = useRef<string[]>([])
+
   // Collect all open sub-chat IDs from localStorage for all workspaces
   const allOpenSubChatIds = useMemo(() => {
-    if (!agentChats) return []
+    // openSubChatsVersion is used to trigger recalculation when sub-chats change
+    void openSubChatsVersion
+    if (!agentChats) return prevOpenSubChatIdsRef.current
+
     const allIds: string[] = []
     for (const chat of agentChats) {
       try {
@@ -334,8 +348,19 @@ export function AgentsSidebar({
         // Skip invalid JSON
       }
     }
+
+    // Compare with previous - if content is same, return old reference
+    // This prevents React Query from refetching when array content hasn't changed
+    const prev = prevOpenSubChatIdsRef.current
+    const sorted = [...allIds].sort()
+    const prevSorted = [...prev].sort()
+    if (sorted.length === prevSorted.length && sorted.every((id, i) => id === prevSorted[i])) {
+      return prev
+    }
+
+    prevOpenSubChatIdsRef.current = allIds
     return allIds
-  }, [agentChats])
+  }, [agentChats, openSubChatsVersion])
 
   // File changes stats from DB - only for open sub-chats
   const { data: fileStatsData } = trpc.chats.getFileStats.useQuery(
@@ -1796,25 +1821,27 @@ export function AgentsSidebar({
                                       )}
                                   </div>
                                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 min-w-0">
-                                    <span className="truncate">
+                                    <span className="truncate flex-1 min-w-0">
                                       {displayText}
                                     </span>
-                                    {stats && (stats.additions > 0 || stats.deletions > 0) && (
-                                      <>
-                                        <span className="text-green-600 dark:text-green-400">
-                                          +{stats.additions}
-                                        </span>
-                                        <span className="text-red-600 dark:text-red-400">
-                                          -{stats.deletions}
-                                        </span>
-                                      </>
-                                    )}
-                                    <span className="flex-shrink-0">
-                                      {formatTime(
-                                        chat.updatedAt?.toISOString() ??
-                                          new Date().toISOString(),
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      {stats && (stats.additions > 0 || stats.deletions > 0) && (
+                                        <>
+                                          <span className="text-green-600 dark:text-green-400">
+                                            +{stats.additions}
+                                          </span>
+                                          <span className="text-red-600 dark:text-red-400">
+                                            -{stats.deletions}
+                                          </span>
+                                        </>
                                       )}
-                                    </span>
+                                      <span>
+                                        {formatTime(
+                                          chat.updatedAt?.toISOString() ??
+                                            new Date().toISOString(),
+                                        )}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -2092,25 +2119,27 @@ export function AgentsSidebar({
                                   </div>
                                   {/* Bottom line: Branch/Repository (left), Time, and Stats (right) */}
                                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 min-w-0">
-                                    <span className="truncate">
+                                    <span className="truncate flex-1 min-w-0">
                                       {displayText}
                                     </span>
-                                    {stats && (stats.additions > 0 || stats.deletions > 0) && (
-                                      <>
-                                        <span className="text-green-600 dark:text-green-400">
-                                          +{stats.additions}
-                                        </span>
-                                        <span className="text-red-600 dark:text-red-400">
-                                          -{stats.deletions}
-                                        </span>
-                                      </>
-                                    )}
-                                    <span className="flex-shrink-0">
-                                      {formatTime(
-                                        chat.updatedAt?.toISOString() ??
-                                          new Date().toISOString(),
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      {stats && (stats.additions > 0 || stats.deletions > 0) && (
+                                        <>
+                                          <span className="text-green-600 dark:text-green-400">
+                                            +{stats.additions}
+                                          </span>
+                                          <span className="text-red-600 dark:text-red-400">
+                                            -{stats.deletions}
+                                          </span>
+                                        </>
                                       )}
-                                    </span>
+                                      <span>
+                                        {formatTime(
+                                          chat.updatedAt?.toISOString() ??
+                                            new Date().toISOString(),
+                                        )}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
