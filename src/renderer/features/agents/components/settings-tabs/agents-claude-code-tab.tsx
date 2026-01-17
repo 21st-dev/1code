@@ -45,6 +45,10 @@ export function AgentsClaudeCodeTab() {
     description: string
     enabled: boolean
   }>>([])
+  // Auth mode state
+  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey">("oauth")
+  const [apiKey, setApiKey] = useState("")
+  const [bedrockRegion, setBedrockRegion] = useState("us-east-1")
   const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
@@ -163,6 +167,9 @@ export function AgentsClaudeCodeTab() {
           .map(([k, v]) => `${k}=${v}`)
           .join("\n") || ""
       )
+      setAuthMode(claudeSettings.authMode || "oauth")
+      setBedrockRegion(claudeSettings.bedrockRegion || "us-east-1")
+      // Don't set API key from masked value - user needs to enter it
     }
   }, [claudeSettings])
 
@@ -267,8 +274,92 @@ export function AgentsClaudeCodeTab() {
         {/* Main Content */}
         <div className="bg-background rounded-lg border border-border overflow-hidden">
           <div className="p-4 space-y-6">
-            {/* Connected State */}
-            {isConnected && flowState.step === "idle" && (
+            {/* Auth Mode Selector */}
+            <div className="space-y-3 pb-4 border-b border-border">
+              <Label className="text-sm font-medium">Authentication Mode</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={authMode === "oauth" ? "default" : "outline"}
+                  onClick={() => setAuthMode("oauth")}
+                  className="flex-1"
+                  size="sm"
+                >
+                  OAuth
+                </Button>
+                <Button
+                  variant={authMode === "aws" ? "default" : "outline"}
+                  onClick={() => setAuthMode("aws")}
+                  className="flex-1"
+                  size="sm"
+                >
+                  AWS Bedrock
+                </Button>
+                <Button
+                  variant={authMode === "apiKey" ? "default" : "outline"}
+                  onClick={() => setAuthMode("apiKey")}
+                  className="flex-1"
+                  size="sm"
+                >
+                  API Key
+                </Button>
+              </div>
+
+              {/* API Key Input - only show in apiKey mode */}
+              {authMode === "apiKey" && (
+                <div className="space-y-2 pt-2">
+                  <Label className="text-sm">Anthropic API Key</Label>
+                  <Input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-ant-api03-..."
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Your API key is encrypted and stored locally. Only used when API Key mode is selected.
+                  </p>
+                </div>
+              )}
+
+              {/* Bedrock Region Selector - only show in aws mode */}
+              {authMode === "aws" && (
+                <div className="space-y-2 pt-2">
+                  <Label className="text-sm">Bedrock Region</Label>
+                  <Input
+                    value={bedrockRegion}
+                    onChange={(e) => setBedrockRegion(e.target.value)}
+                    placeholder="us-east-1"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    AWS region for Bedrock (e.g., us-east-1, eu-central-1)
+                  </p>
+                </div>
+              )}
+
+              {/* Save Auth Settings Button */}
+              <div className="flex justify-end pt-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    updateSettings.mutate({
+                      authMode,
+                      ...(authMode === "apiKey" && apiKey && { apiKey }),
+                      bedrockRegion,
+                    })
+                  }}
+                  disabled={updateSettings.isPending}
+                >
+                  {updateSettings.isPending && (
+                    <IconSpinner className="h-4 w-4 mr-2" />
+                  )}
+                  Save Auth Settings
+                </Button>
+              </div>
+            </div>
+
+            {/* Connected State - OAuth mode only */}
+            {isConnected && authMode === "oauth" && flowState.step === "idle" && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -276,7 +367,7 @@ export function AgentsClaudeCodeTab() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      Connected
+                      Connected (OAuth)
                     </p>
                     {integration?.connectedAt && (
                       <p className="text-xs text-muted-foreground">
@@ -301,14 +392,66 @@ export function AgentsClaudeCodeTab() {
               </div>
             )}
 
-            {/* Not Connected - Idle State */}
-            {!isConnected && flowState.step === "idle" && (
+            {/* AWS Mode Status */}
+            {authMode === "aws" && flowState.step === "idle" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      AWS Bedrock Mode
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Region: {bedrockRegion || "us-east-1"}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Ensure you have AWS credentials configured (env vars or ~/.aws/credentials file)
+                </p>
+              </div>
+            )}
+
+            {/* API Key Mode Status */}
+            {authMode === "apiKey" && flowState.step === "idle" && (
+              <div className="space-y-4">
+                {apiKey ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        API Key Configured
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Using encrypted API key storage
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                      <X className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Enter an API key above to continue
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Not Connected - OAuth Mode Only */}
+            {!isConnected && authMode === "oauth" && flowState.step === "idle" && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                     <X className="w-4 h-4 text-muted-foreground" />
                   </div>
-                  <p className="text-sm text-muted-foreground">Not connected</p>
+                  <p className="text-sm text-muted-foreground">Not connected (OAuth)</p>
                 </div>
 
                 <Button onClick={handleStartAuth}>Connect Claude Code</Button>
@@ -553,6 +696,13 @@ export function AgentsClaudeCodeTab() {
                         customBinaryPath: customBinaryPath || null,
                         customEnvVars: parseEnvVars(envVarsText),
                         customConfigDir: customConfigDir || null,
+                        mcpServerSettings: mcpServers.reduce(
+                          (acc, s) => ({
+                            ...acc,
+                            [s.id]: { enabled: s.enabled },
+                          }),
+                          {},
+                        ),
                       })
                     }}
                     disabled={updateSettings.isPending}
