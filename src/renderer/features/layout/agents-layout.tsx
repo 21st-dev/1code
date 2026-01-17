@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { isDesktopApp } from "../../lib/utils/platform"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
@@ -18,7 +18,6 @@ import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { AgentsSettingsDialog } from "../../components/dialogs/agents-settings-dialog"
 import { AgentsShortcutsDialog } from "../../components/dialogs/agents-shortcuts-dialog"
-import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { AgentsSidebar } from "../sidebar/agents-sidebar"
@@ -146,26 +145,6 @@ export function AgentsLayout() {
   }, [sidebarOpen, isDesktop])
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
 
-  // Desktop user state
-  const [desktopUser, setDesktopUser] = useState<{
-    id: string
-    email: string
-    name: string | null
-    imageUrl: string | null
-    username: string | null
-  } | null>(null)
-
-  // Fetch desktop user on mount
-  useEffect(() => {
-    async function fetchUser() {
-      if (window.desktopApi?.getUser) {
-        const user = await window.desktopApi.getUser()
-        setDesktopUser(user)
-      }
-    }
-    fetchUser()
-  }, [])
-
   // Auto-open sidebar when project is selected, close when no project
   // Only act after projects have loaded to avoid closing sidebar during initial load
   useEffect(() => {
@@ -177,17 +156,6 @@ export function AgentsLayout() {
       setSidebarOpen(false)
     }
   }, [validatedProject, projects, setSidebarOpen])
-
-  // Handle sign out
-  const handleSignOut = useCallback(async () => {
-    // Clear selected project and anthropic onboarding on logout
-    setSelectedProject(null)
-    setSelectedChatId(null)
-    setAnthropicOnboardingCompleted(false)
-    if (window.desktopApi?.logout) {
-      await window.desktopApi.logout()
-    }
-  }, [setSelectedProject, setSelectedChatId, setAnthropicOnboardingCompleted])
 
   // Initialize sub-chats when chat is selected
   useEffect(() => {
@@ -222,7 +190,6 @@ export function AgentsLayout() {
         isOpen={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
       />
-      <ClaudeLoginModal />
       <div className="flex w-full h-full relative overflow-hidden bg-background select-none">
         {/* Left Sidebar (Agents) */}
         <ResizableSidebar
@@ -240,11 +207,7 @@ export function AgentsLayout() {
           className="overflow-hidden bg-background border-r"
           style={{ borderRightWidth: "0.5px" }}
         >
-          <AgentsSidebar
-            desktopUser={desktopUser}
-            onSignOut={handleSignOut}
-            onToggleSidebar={handleCloseSidebar}
-          />
+          <AgentsSidebar onToggleSidebar={handleCloseSidebar} />
         </ResizableSidebar>
 
         {/* Main Content */}

@@ -200,8 +200,6 @@ const ChatIcon = React.memo(function ChatIcon({
 interface AgentsSidebarProps {
   userId?: string | null | undefined
   clerkUser?: any
-  desktopUser?: { id: string; email: string; name?: string } | null
-  onSignOut?: () => void
   onToggleSidebar?: () => void
   isMobileFullscreen?: boolean
   onChatSelect?: () => void
@@ -210,12 +208,6 @@ interface AgentsSidebarProps {
 export function AgentsSidebar({
   userId = "demo-user-id",
   clerkUser = null,
-  desktopUser = {
-    id: "demo-user-id",
-    email: "demo@example.com",
-    name: "Demo User",
-  },
-  onSignOut = () => {},
   onToggleSidebar,
   isMobileFullscreen = false,
   onChatSelect,
@@ -1105,10 +1097,7 @@ export function AgentsSidebar({
                             </div>
                             <div className="flex-1 min-w-0 overflow-hidden">
                               <div className="font-medium text-sm text-foreground truncate">
-                                {desktopUser?.name || "User"}
-                              </div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {desktopUser?.email}
+                                User
                               </div>
                             </div>
                           </div>
@@ -1166,68 +1155,9 @@ export function AgentsSidebar({
                           )}
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
-
-                      <DropdownMenuSeparator />
-
-                      {/* Log out */}
-                      <div className="">
-                        <DropdownMenuItem
-                          className="gap-2"
-                          onSelect={() => onSignOut()}
-                        >
-                          <svg
-                            className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <polyline
-                              points="16,17 21,12 16,7"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <line
-                              x1="21"
-                              y1="12"
-                              x2="9"
-                              y2="12"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                          Log out
-                        </DropdownMenuItem>
-                      </div>
                     </>
                   ) : (
                     <>
-                      {/* Login for unauthenticated users */}
-                      <div className="">
-                        <DropdownMenuItem
-                          className="gap-2"
-                          onSelect={() => {
-                            setIsDropdownOpen(false)
-                            setShowAuthDialog(true)
-                          }}
-                        >
-                          <ProfileIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                          Login
-                        </DropdownMenuItem>
-                      </div>
-
-                      <DropdownMenuSeparator />
-
                       {/* Help Submenu */}
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger className="gap-2">
