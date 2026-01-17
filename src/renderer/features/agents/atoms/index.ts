@@ -504,3 +504,37 @@ export type UndoItem =
   | { type: "subchat"; subChatId: string; chatId: string; timeoutId: ReturnType<typeof setTimeout> }
 
 export const undoStackAtom = atom<UndoItem[]>([])
+
+// File tree sidebar state
+export const agentsFileTreeSidebarOpenAtom = atomWithStorage<boolean>(
+  "agents-file-tree-sidebar-open",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+export const agentsFileTreeSidebarWidthAtom = atomWithStorage<number>(
+  "agents-file-tree-sidebar-width",
+  250,
+  undefined,
+  { getOnInit: true },
+)
+
+// Expanded folders per project - stores Set of expanded folder paths
+const expandedFoldersStorageAtom = atomWithStorage<Record<string, string[]>>(
+  "agents:expandedFolders",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set expanded folders per projectId
+export const expandedFoldersAtomFamily = atomFamily((projectId: string) =>
+  atom(
+    (get) => new Set(get(expandedFoldersStorageAtom)[projectId] ?? []),
+    (get, set, newSet: Set<string>) => {
+      const current = get(expandedFoldersStorageAtom)
+      set(expandedFoldersStorageAtom, { ...current, [projectId]: Array.from(newSet) })
+    },
+  ),
+)

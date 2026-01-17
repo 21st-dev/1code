@@ -54,6 +54,7 @@ import {
   ChevronDown,
   Columns2,
   Eye,
+  FolderTree,
   GitCommitHorizontal,
   GitMerge,
   ListTree,
@@ -87,6 +88,8 @@ import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import {
   agentsDiffSidebarWidthAtom,
+  agentsFileTreeSidebarOpenAtom,
+  agentsFileTreeSidebarWidthAtom,
   agentsPreviewSidebarOpenAtom,
   agentsPreviewSidebarWidthAtom,
   agentsScrollPositionsAtom,
@@ -171,6 +174,7 @@ import { AgentWebSearchCollapsible } from "../ui/agent-web-search-collapsible"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { McpServersIndicator } from "../ui/mcp-servers-indicator"
+import { FileTreeSidebar } from "../ui/file-tree"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
 import { PrStatusBar } from "../ui/pr-status-bar"
 import { SubChatSelector } from "../ui/sub-chat-selector"
@@ -3591,6 +3595,9 @@ export function ChatView({
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(
     terminalSidebarOpenAtom,
   )
+  const [isFileTreeSidebarOpen, setIsFileTreeSidebarOpen] = useAtom(
+    agentsFileTreeSidebarOpenAtom,
+  )
   const [diffStats, setDiffStats] = useState({
     fileCount: 0,
     additions: 0,
@@ -4669,6 +4676,31 @@ export function ChatView({
     return () => window.removeEventListener("keydown", handleKeyDown, true)
   }, [diffStats.hasChanges, isDiffSidebarOpen])
 
+  // Keyboard shortcut: Cmd + B to toggle file tree sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd (Meta) + B (without Alt/Shift)
+      if (
+        e.metaKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        e.code === "KeyB"
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+
+        // Toggle: only when worktree exists
+        if (worktreePath) {
+          setIsFileTreeSidebarOpen((prev) => !prev)
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => window.removeEventListener("keydown", handleKeyDown, true)
+  }, [worktreePath, setIsFileTreeSidebarOpen])
+
   // Keyboard shortcut: Create PR (preview)
   // Web: Opt+Cmd+P (browser uses Cmd+P for print)
   // Desktop: Cmd+P
@@ -4848,6 +4880,30 @@ export function ChatView({
     <div className="flex h-full flex-col">
       {/* Main content */}
       <div className="flex-1 overflow-hidden flex">
+        {/* File Tree Sidebar - LEFT side */}
+        {worktreePath && !isMobileFullscreen && (
+          <ResizableSidebar
+            isOpen={isFileTreeSidebarOpen}
+            onClose={() => setIsFileTreeSidebarOpen(false)}
+            widthAtom={agentsFileTreeSidebarWidthAtom}
+            minWidth={180}
+            maxWidth={400}
+            side="left"
+            animationDuration={0}
+            initialWidth={0}
+            exitWidth={0}
+            showResizeTooltip={true}
+            className="bg-background border-r"
+            style={{ borderRightWidth: "0.5px", overflow: "hidden" }}
+          >
+            <FileTreeSidebar
+              projectPath={worktreePath}
+              projectId={chatId}
+              onClose={() => setIsFileTreeSidebarOpen(false)}
+            />
+          </ResizableSidebar>
+        )}
+
         {/* Chat Panel */}
         <div
           className="flex-1 flex flex-col overflow-hidden relative"
@@ -4946,6 +5002,28 @@ export function ChatView({
                       </span>
                     </PreviewSetupHoverCard>
                   ))}
+                {/* File Tree Button - shows when file tree is closed and worktree exists (desktop only) */}
+                {!isMobileFullscreen &&
+                  !isFileTreeSidebarOpen &&
+                  worktreePath && (
+                    <Tooltip delayDuration={500}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setIsFileTreeSidebarOpen(true)}
+                          className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                          aria-label="Open file tree"
+                        >
+                          <FolderTree className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        Open file tree
+                        <Kbd>⌘B</Kbd>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 {/* Terminal Button - shows when terminal is closed and worktree exists (desktop only) */}
                 {!isMobileFullscreen &&
                   !isTerminalSidebarOpen &&
