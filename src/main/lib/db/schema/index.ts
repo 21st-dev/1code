@@ -104,6 +104,8 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   id: text("id").primaryKey().default("default"), // Single row, always "default"
   customBinaryPath: text("custom_binary_path"), // Path to user-specified Claude binary (null = use bundled)
   customEnvVars: text("custom_env_vars").notNull().default("{}"), // JSON object of custom env vars
+  customConfigDir: text("custom_config_dir"), // Path to Claude config dir (null = use per-subchat isolated)
+  mcpServerSettings: text("mcp_server_settings").notNull().default("{}"), // JSON object of MCP server overrides
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
