@@ -7,10 +7,10 @@ import {
   ctrlTabTargetAtom,
   notificationModeAtom,
   toastNotificationsEnabledAtom,
-  activityFeedEnabledAtom,
   type CtrlTabTarget,
   type NotificationMode,
 } from "../../../lib/atoms"
+import { rightPanelOpenAtom } from "../../../features/right-panel/atoms"
 import { Switch } from "../../ui/switch"
 import { Button } from "../../ui/button"
 import {
@@ -47,7 +47,7 @@ export function AgentsPreferencesTab() {
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
   const [notificationMode, setNotificationMode] = useAtom(notificationModeAtom)
   const [toastEnabled, setToastEnabled] = useAtom(toastNotificationsEnabledAtom)
-  const [activityFeedEnabled, setActivityFeedEnabled] = useAtom(activityFeedEnabledAtom)
+  const [rightPanelOpen, setRightPanelOpen] = useAtom(rightPanelOpenAtom)
   const isNarrowScreen = useIsNarrowScreen()
 
   // Sync opt-out status to main process
@@ -171,10 +171,10 @@ export function AgentsPreferencesTab() {
                   Activity Feed
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Show activity feed panel on the right side
+                  Show activity feed and terminals panel on the right side
                 </span>
               </div>
-              <Switch checked={activityFeedEnabled} onCheckedChange={setActivityFeedEnabled} />
+              <Switch checked={rightPanelOpen} onCheckedChange={setRightPanelOpen} />
             </div>
 
             {/* Test Notification Button */}

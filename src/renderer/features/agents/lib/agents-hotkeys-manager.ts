@@ -61,6 +61,7 @@ function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
 export interface AgentsHotkeysManagerConfig {
   setSelectedChatId?: (id: string | null) => void
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
+  setRightPanelOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
   setSettingsDialogOpen?: (open: boolean) => void
   setSettingsActiveTab?: (tab: SettingsTab) => void
   setShortcutsDialogOpen?: (open: boolean) => void
@@ -89,6 +90,7 @@ export function useAgentsHotkeys(
     (): AgentActionContext => ({
       setSelectedChatId: config.setSelectedChatId,
       setSidebarOpen: config.setSidebarOpen,
+      setRightPanelOpen: config.setRightPanelOpen,
       setSettingsDialogOpen: config.setSettingsDialogOpen,
       setSettingsActiveTab: config.setSettingsActiveTab,
       setShortcutsDialogOpen: config.setShortcutsDialogOpen,
@@ -209,6 +211,7 @@ export function useAgentsHotkeys(
           action.hotkey !== undefined &&
           action.id !== "create-new-agent" &&
           action.id !== "toggle-sidebar" &&
+          action.id !== "toggle-right-panel" &&
           action.id !== "open-shortcuts" &&
           action.id !== "open-settings",
       ),

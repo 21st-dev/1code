@@ -19,6 +19,7 @@ export interface AgentActionContext {
 
   // UI states
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
+  setRightPanelOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
   setSettingsDialogOpen?: (open: boolean) => void
   setSettingsActiveTab?: (tab: SettingsTab) => void
   setShortcutsDialogOpen?: (open: boolean) => void
@@ -105,6 +106,18 @@ const toggleSidebarAction: AgentActionDefinition = {
   },
 }
 
+const toggleRightPanelAction: AgentActionDefinition = {
+  id: "toggle-right-panel",
+  label: "Toggle right panel",
+  description: "Show/hide right panel",
+  category: "view",
+  hotkey: ["cmd+shift+p", "ctrl+shift+p"],
+  handler: async (context) => {
+    context.setRightPanelOpen?.((prev) => !prev)
+    return { success: true }
+  },
+}
+
 // ============================================================================
 // ACTION REGISTRY
 // ============================================================================
@@ -114,6 +127,7 @@ export const AGENT_ACTIONS: Record<string, AgentActionDefinition> = {
   "create-new-agent": createNewAgentAction,
   "open-settings": openSettingsAction,
   "toggle-sidebar": toggleSidebarAction,
+  "toggle-right-panel": toggleRightPanelAction,
 }
 
 export function getAgentAction(id: string): AgentActionDefinition | undefined {

@@ -27,7 +27,7 @@ import { AgentsContent } from "../agents/ui/agents-content"
 import { UpdateBanner } from "../../components/update-banner"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
-import { ActivityFeed } from "../activity"
+import { RightPanel, rightPanelOpenAtom } from "../right-panel"
 
 // ============================================================================
 // Constants
@@ -86,6 +86,7 @@ export function AgentsLayout() {
 
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [sidebarWidth, setSidebarWidth] = useAtom(agentsSidebarWidthAtom)
+  const [rightPanelOpen, setRightPanelOpen] = useAtom(rightPanelOpenAtom)
   const [settingsOpen, setSettingsOpen] = useAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [shortcutsOpen, setShortcutsOpen] = useAtom(
@@ -204,6 +205,7 @@ export function AgentsLayout() {
   useAgentsHotkeys({
     setSelectedChatId,
     setSidebarOpen,
+    setRightPanelOpen,
     setSettingsDialogOpen: setSettingsOpen,
     setSettingsActiveTab,
     setShortcutsDialogOpen: setShortcutsOpen,
@@ -254,8 +256,8 @@ export function AgentsLayout() {
           <AgentsContent />
         </div>
 
-        {/* Activity Feed (Right Panel) */}
-        {!isMobile && <ActivityFeed />}
+        {/* Right Panel (Activity + Terminal) */}
+        {!isMobile && <RightPanel projectId={selectedProject?.id} projectPath={selectedProject?.path} />}
 
         {/* Update Banner */}
         <UpdateBanner />

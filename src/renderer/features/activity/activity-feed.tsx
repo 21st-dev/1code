@@ -415,7 +415,7 @@ export function ActivityFeed({ className }: { className?: string }) {
     <>
       <div
         className={cn(
-          "w-56 border-l border-border/50 bg-background h-full overflow-hidden flex flex-col",
+          "h-full overflow-hidden flex flex-col",
           className,
         )}
       >

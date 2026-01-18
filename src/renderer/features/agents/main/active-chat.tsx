@@ -86,6 +86,7 @@ import { cn } from "../../../lib/utils"
 import { getShortcutKey, isDesktopApp } from "../../../lib/utils/platform"
 import { terminalSidebarOpenAtom, openClaudeCodeAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
+import { rightPanelOpenAtom } from "../../right-panel/atoms"
 import {
   agentsDiffSidebarWidthAtom,
   agentsPreviewSidebarOpenAtom,
@@ -3658,7 +3659,8 @@ export function ChatView({
     Record<string, string>
   >({})
   const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
-  const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
+  const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(agentsSubChatsSidebarModeAtom)
+  const [isRightPanelOpen, setIsRightPanelOpen] = useAtom(rightPanelOpenAtom)
 
   // Track diff sidebar width for responsive header
   const storedDiffSidebarWidth = useAtomValue(agentsDiffSidebarWidthAtom)
@@ -4988,6 +4990,8 @@ export function ChatView({
                         isSubChatsSidebarOpen={
                           subChatsSidebarMode === "sidebar"
                         }
+                        isRightPanelOpen={isRightPanelOpen}
+                        onToggleRightPanel={() => setIsRightPanelOpen(!isRightPanelOpen)}
                       />
                       <SubChatSelector
                         onCreateNew={handleCreateNewSubChat}

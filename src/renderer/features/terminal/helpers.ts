@@ -172,14 +172,25 @@ export function createTerminalInstance(
     xterm.registerLinkProvider(filePathLinkProvider)
   }
 
-  // 9. Fit to get actual dimensions
+  // 9. Fit to get actual dimensions - wait for next frame to ensure rendering is ready
   console.log("[Terminal:create] Step 9: Fitting terminal")
-  try {
-    fitAddon.fit()
-    console.log("[Terminal:create] Fit successful - cols:", xterm.cols, "rows:", xterm.rows)
-  } catch (err) {
-    console.log("[Terminal:create] Fit failed:", err)
-  }
+  requestAnimationFrame(() => {
+    try {
+      fitAddon.fit()
+      console.log("[Terminal:create] Fit successful - cols:", xterm.cols, "rows:", xterm.rows)
+    } catch (err) {
+      console.log("[Terminal:create] Fit failed (retry):", err)
+      // Retry once more after a small delay if first attempt failed
+      setTimeout(() => {
+        try {
+          fitAddon.fit()
+          console.log("[Terminal:create] Retry fit successful")
+        } catch (e) {
+          console.warn("[Terminal:create] Retry fit failed:", e)
+        }
+      }, 50)
+    }
+  })
 
   console.log("[Terminal:create] Complete!")
 
@@ -267,7 +278,7 @@ export function setupPasteHandler(
   options: PasteHandlerOptions = {}
 ): () => void {
   const textarea = xterm.textarea
-  if (!textarea) return () => {}
+  if (!textarea) return () => { }
 
   const handlePaste = (event: ClipboardEvent) => {
     const text = event.clipboardData?.getData("text/plain")
