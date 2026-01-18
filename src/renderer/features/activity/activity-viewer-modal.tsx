@@ -20,6 +20,8 @@ import {
   FileCode,
   Wrench,
   FolderSearch,
+  ClipboardList,
+  LogOut,
 } from "lucide-react"
 import {
   BashModalContent,
@@ -28,6 +30,8 @@ import {
   WebSearchModalContent,
   ExploreModalContent,
   DefaultModalContent,
+  PlanModalContent,
+  ExitPlanModalContent,
 } from "./tool-modal-content"
 
 // Tool icon components for display
@@ -57,6 +61,10 @@ function getToolIcon(toolName: string) {
       return <HelpCircle className={iconClass} />
     case "NotebookEdit":
       return <FileCode className={iconClass} />
+    case "PlanWrite":
+      return <ClipboardList className={iconClass} />
+    case "ExitPlanMode":
+      return <LogOut className={iconClass} />
     default:
       return <Wrench className={iconClass} />
   }
@@ -80,6 +88,9 @@ function getModalSizeClass(toolName: string): string {
     case "Read":
     case "Grep":
     case "Glob":
+      return "max-w-2xl"
+    case "PlanWrite":
+    case "ExitPlanMode":
       return "max-w-2xl"
     default:
       return "max-w-lg"
@@ -117,6 +128,10 @@ function getModalContent(activity: ToolActivity, activities?: ToolActivity[]) {
     case "Grep":
     case "Glob":
       return <ExploreModalContent activity={activity} activities={activities} />
+    case "PlanWrite":
+      return <PlanModalContent activity={activity} />
+    case "ExitPlanMode":
+      return <ExitPlanModalContent activity={activity} />
     default:
       return <DefaultModalContent activity={activity} />
   }

@@ -33,6 +33,7 @@ import {
 } from "../../components/ui/tooltip"
 import { toast } from "sonner"
 import type { ChangedFile, FileStatus } from "../../../shared/changes-types"
+import { CommitGraphPanel } from "./commit-graph-panel"
 
 interface GitPanelProps {
   worktreePath: string | null
@@ -686,6 +687,9 @@ export function GitPanel({
               </CollapsibleContent>
             </Collapsible>
           )}
+
+          {/* Commit History Graph */}
+          <CommitGraphPanel worktreePath={worktreePath} />
         </div>
       </div>
     </div>

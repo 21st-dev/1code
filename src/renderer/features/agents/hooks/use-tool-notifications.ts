@@ -26,6 +26,8 @@ const TOOL_ICONS: Record<string, string> = {
   WebSearch: "🔎",
   AskUserQuestion: "❓",
   NotebookEdit: "📓",
+  PlanWrite: "📋",
+  ExitPlanMode: "✅",
 }
 
 /**
@@ -67,6 +69,13 @@ function getToolSummary(
     case "TodoWrite": {
       const todos = input?.todos as unknown[]
       return todos ? `${todos.length} items` : "todos"
+    }
+    case "PlanWrite": {
+      const plan = input?.plan as { title?: string }
+      return plan?.title || "Plan"
+    }
+    case "ExitPlanMode": {
+      return "Plan ready for approval"
     }
     default:
       return toolName

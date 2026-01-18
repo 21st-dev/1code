@@ -52,6 +52,25 @@ export default defineConfig({
     resolve: {
       alias: {
         "@": resolve(__dirname, "src/renderer"),
+        // Stub Node.js core modules used by commit-graph
+        tty: resolve(__dirname, "src/renderer/lib/stubs/tty.ts"),
+      },
+    },
+    define: {
+      // Fix for Node.js modules that expect process to be defined (commit-graph uses these)
+      "process.env.NODE_ENV": JSON.stringify("development"),
+      "process.env.NO_COLOR": JSON.stringify(""),
+      "process.env.FORCE_COLOR": JSON.stringify(""),
+      "process.env.TERM": JSON.stringify("xterm-256color"),
+      "process.env.CI": JSON.stringify(""),
+      "process.platform": JSON.stringify("darwin"),
+      "process.argv": JSON.stringify([]),
+    },
+    optimizeDeps: {
+      esbuildOptions: {
+        define: {
+          global: "globalThis",
+        },
       },
     },
     build: {

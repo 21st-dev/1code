@@ -97,8 +97,149 @@ export const createStatusRouter = () => {
 
 				return files;
 			}),
+
+		/**
+		 * Get commit log for commit-graph visualization.
+		 * Returns commits in the format expected by the commit-graph npm package.
+		 */
+		getCommitLog: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					limit: z.number().optional().default(50),
+					offset: z.number().optional().default(0),
+				}),
+			)
+			.query(async ({ input }) => {
+				assertRegisteredWorktree(input.worktreePath);
+
+				const git = simpleGit(input.worktreePath);
+
+				// Get commits with parent info in format: hash|parents|subject|author|email|date
+				const logOutput = await git.raw([
+					"log",
+					"--all",
+					`--skip=${input.offset}`,
+					`-n${input.limit}`,
+					"--format=%H|%P|%s|%an|%ae|%aI",
+				]);
+
+				const commits = parseCommitLogForGraph(logOutput);
+
+				// Get branch heads (local and remote)
+				const branchOutput = await git.raw([
+					"for-each-ref",
+					"--format=%(refname:short)|%(objectname)",
+					"refs/heads",
+					"refs/remotes/origin",
+				]);
+
+				const branches = parseBranchHeads(branchOutput);
+
+				// Get set of commits that exist on remote (for sync status)
+				const remoteShas = await getRemoteCommitShas(git);
+
+				// Check if there are more commits
+				const totalCountOutput = await git.raw(["rev-list", "--all", "--count"]);
+				const totalCount = Number.parseInt(totalCountOutput.trim(), 10);
+				const hasMore = input.offset + input.limit < totalCount;
+
+				return {
+					commits,
+					branches,
+					remoteShas,
+					hasMore,
+					totalCount,
+				};
+			}),
 	});
 };
+
+/** Commit type for commit-graph package */
+interface GraphCommit {
+	sha: string;
+	commit: {
+		author: {
+			name: string;
+			email: string;
+			date: string;
+		};
+		message: string;
+	};
+	parents: Array<{ sha: string }>;
+}
+
+/** Branch type for commit-graph package */
+interface GraphBranch {
+	name: string;
+	commit: { sha: string };
+}
+
+function parseCommitLogForGraph(output: string): GraphCommit[] {
+	if (!output.trim()) return [];
+
+	return output
+		.trim()
+		.split("\n")
+		.filter((line) => line.trim())
+		.map((line) => {
+			const [hash, parents, message, author, email, date] = line.split("|");
+			return {
+				sha: hash,
+				commit: {
+					author: {
+						name: author,
+						email: email,
+						date: date,
+					},
+					message: message,
+				},
+				parents: parents
+					? parents.split(" ").map((p) => ({ sha: p }))
+					: [],
+			};
+		});
+}
+
+function parseBranchHeads(output: string): GraphBranch[] {
+	if (!output.trim()) return [];
+
+	return output
+		.trim()
+		.split("\n")
+		.filter((line) => line.trim())
+		.map((line) => {
+			const [name, sha] = line.split("|");
+			// Clean up remote branch names (origin/main -> main)
+			const cleanName = name.startsWith("origin/")
+				? name.replace("origin/", "") + " (remote)"
+				: name;
+			return {
+				name: cleanName,
+				commit: { sha },
+			};
+		});
+}
+
+async function getRemoteCommitShas(
+	git: ReturnType<typeof simpleGit>,
+): Promise<string[]> {
+	try {
+		// Get all commits that exist on the remote tracking branch
+		const output = await git.raw([
+			"rev-list",
+			"--remotes",
+			"-n",
+			"100", // Limit to avoid performance issues
+		]);
+		return output
+			.trim()
+			.split("\n")
+			.filter((sha) => sha.trim());
+	} catch {
+		return [];
+	}
+}
 
 interface BranchComparison {
 	commits: GitChangesStatus["commits"];

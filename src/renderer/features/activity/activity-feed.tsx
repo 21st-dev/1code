@@ -31,6 +31,8 @@ import {
   Pin,
   FolderSearch,
   ChevronRight,
+  ClipboardList,
+  LogOut,
 } from "lucide-react"
 
 // Exploration tools that can be grouped
@@ -84,6 +86,10 @@ function getToolIcon(toolName: string) {
       return <HelpCircle className={iconClass} />
     case "NotebookEdit":
       return <FileCode className={iconClass} />
+    case "PlanWrite":
+      return <ClipboardList className={iconClass} />
+    case "ExitPlanMode":
+      return <LogOut className={iconClass} />
     default:
       return <Wrench className={iconClass} />
   }
