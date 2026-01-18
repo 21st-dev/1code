@@ -20,6 +20,7 @@ import {
   downloadUpdate,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
+import { initGhAuth } from "./lib/git/gh-auth-setup"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -623,6 +624,11 @@ if (gotTheLock) {
     } catch (error) {
       console.error("[App] Failed to initialize database:", error)
     }
+
+    // Configure git to use GitHub CLI for private repo auth
+    initGhAuth().catch((error) => {
+      console.warn("[App] GitHub CLI auth setup failed:", error)
+    })
 
     // Create main window
     createMainWindow()

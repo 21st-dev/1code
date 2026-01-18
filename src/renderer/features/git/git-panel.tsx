@@ -15,6 +15,7 @@ import {
   Download,
   Sparkles,
   Loader2,
+  ArrowDownUp,
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../../components/ui/button"
@@ -229,6 +230,14 @@ export function GitPanel({
     onError: (err) => toast.error(`Pull failed: ${err.message}`),
   })
 
+  const syncMutation = trpc.changes.sync.useMutation({
+    onSuccess: () => {
+      utils.changes.getStatus.invalidate()
+      toast.success("Synced with remote!")
+    },
+    onError: (err) => toast.error(`Sync failed: ${err.message}`),
+  })
+
   const generateMutation = trpc.changes.generateCommitMessage.useMutation({
     onSuccess: (data) => {
       setCommitMessage(data.message)
@@ -326,43 +335,71 @@ export function GitPanel({
           <span className="text-sm font-medium">{status?.branch || "—"}</span>
         </div>
         <div className="flex items-center gap-1">
-          {status?.pullCount ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() =>
-                    worktreePath && pullMutation.mutate({ worktreePath })
-                  }
-                  disabled={pullMutation.isPending}
-                >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() =>
+                  worktreePath && pullMutation.mutate({ worktreePath })
+                }
+                disabled={pullMutation.isPending || !status?.hasUpstream}
+              >
+                {pullMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
                   <Download className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Pull ({status.pullCount})</TooltipContent>
-            </Tooltip>
-          ) : null}
-          {status?.pushCount ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() =>
-                    worktreePath &&
-                    pushMutation.mutate({ worktreePath, setUpstream: true })
-                  }
-                  disabled={pushMutation.isPending}
-                >
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Pull{status?.pullCount ? ` (${status.pullCount})` : ""}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() =>
+                  worktreePath &&
+                  pushMutation.mutate({ worktreePath, setUpstream: true })
+                }
+                disabled={pushMutation.isPending}
+              >
+                {pushMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
                   <Upload className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Push ({status.pushCount})</TooltipContent>
-            </Tooltip>
-          ) : null}
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Push{status?.pushCount ? ` (${status.pushCount})` : ""}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() =>
+                  worktreePath && syncMutation.mutate({ worktreePath })
+                }
+                disabled={syncMutation.isPending}
+              >
+                {syncMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowDownUp className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Sync (Pull & Push)</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
