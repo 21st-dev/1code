@@ -28,7 +28,10 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "ts:check": "tsgo --noEmit",
-    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\""
+    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3',{stdio:'inherit'})}\""
+  },
+  "overrides": {
+    "node-gyp": "^10.2.0"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",
@@ -119,6 +122,7 @@
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^3.0.0",
     "postcss": "^8.5.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.4.5",
     "vite": "^6.3.4"
@@ -127,6 +131,7 @@
     "appId": "dev.21st.agents",
     "productName": "1Code",
     "npmRebuild": true,
+    "beforeBuild": "./scripts/before-build.js",
     "protocols": [
       {
         "name": "1Code",
@@ -140,7 +145,12 @@
       "output": "release"
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*",
+      "node_modules/file-uri-to-path/**/*",
+      "node_modules/node-pty/**/*",
+      "node_modules/node-addon-api/**/*"
     ],
     "extraResources": [
       {
