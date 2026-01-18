@@ -1,0 +1,21 @@
+id,name,email,age,city,salary,join_date,is_active
+1,John Smith,john.smith@example.com,32,New York,75000,2022-01-15,true
+2,Jane Doe,jane.doe@example.com,28,Los Angeles,68000,2022-03-22,true
+3,Bob Johnson,bob.johnson@example.com,45,Chicago,92000,2021-06-10,true
+4,Alice Williams,alice.w@example.com,35,Houston,81000,2022-08-05,false
+5,Charlie Brown,charlie.b@example.com,29,Phoenix,62000,2023-01-20,true
+6,Diana Ross,diana.ross@example.com,41,Philadelphia,88000,2021-11-30,true
+7,Edward Lee,edward.lee@example.com,38,San Antonio,79000,2022-04-18,false
+8,Fiona Green,fiona.green@example.com,26,San Diego,58000,2023-02-14,true
+9,George White,george.w@example.com,52,Dallas,105000,2020-09-01,true
+10,Helen Black,helen.black@example.com,33,San Jose,72000,2022-07-12,true
+11,Ivan Gray,ivan.gray@example.com,44,Austin,95000,2021-03-25,false
+12,Julia Adams,julia.adams@example.com,31,Jacksonville,67000,2022-10-08,true
+13,Kevin Martin,kevin.m@example.com,37,Fort Worth,83000,2021-12-17,true
+14,Laura Wilson,laura.wilson@example.com,27,Columbus,61000,2023-04-03,true
+15,Michael Taylor,michael.t@example.com,49,Charlotte,98000,2020-07-22,false
+16,Nancy Moore,nancy.moore@example.com,34,San Francisco,89000,2022-02-28,true
+17,Oscar Davis,oscar.davis@example.com,42,Indianapolis,91000,2021-08-14,true
+18,Patricia Clark,patricia.c@example.com,30,Seattle,70000,2022-11-21,true
+19,Quinn Harris,quinn.harris@example.com,36,Denver,77000,2022-05-09,false
+20,Rachel Lewis,rachel.lewis@example.com,25,Washington,55000,2023-03-16,true

@@ -538,3 +538,72 @@ export const expandedFoldersAtomFamily = atomFamily((projectId: string) =>
     },
   ),
 )
+
+// ============================================================================
+// Data Viewer Sidebar
+// ============================================================================
+
+// Data viewer sidebar width (global, shared across all chats)
+export const dataViewerSidebarWidthAtom = atomWithStorage<number>(
+  "agents-data-viewer-sidebar-width",
+  500,
+  undefined,
+  { getOnInit: true },
+)
+
+// Data viewer sidebar open state per chat
+const dataViewerSidebarOpenStorageAtom = atomWithStorage<Record<string, boolean>>(
+  "agents:dataViewerSidebarOpen",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set data viewer sidebar open state per chatId
+export const dataViewerSidebarOpenAtomFamily = atomFamily((chatId: string) =>
+  atom(
+    (get) => get(dataViewerSidebarOpenStorageAtom)[chatId] ?? false,
+    (get, set, isOpen: boolean) => {
+      const current = get(dataViewerSidebarOpenStorageAtom)
+      set(dataViewerSidebarOpenStorageAtom, { ...current, [chatId]: isOpen })
+    },
+  ),
+)
+
+// Currently viewed data file path per chat
+const viewedDataFileStorageAtom = atomWithStorage<Record<string, string | null>>(
+  "agents:viewedDataFile",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set viewed data file path per chatId
+export const viewedDataFileAtomFamily = atomFamily((chatId: string) =>
+  atom(
+    (get) => get(viewedDataFileStorageAtom)[chatId] ?? null,
+    (get, set, filePath: string | null) => {
+      const current = get(viewedDataFileStorageAtom)
+      set(viewedDataFileStorageAtom, { ...current, [chatId]: filePath })
+    },
+  ),
+)
+
+// Selected table for SQLite files (per file path)
+const selectedSqliteTableStorageAtom = atomWithStorage<Record<string, string>>(
+  "agents:selectedSqliteTable",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set selected SQLite table per file path
+export const selectedSqliteTableAtomFamily = atomFamily((filePath: string) =>
+  atom(
+    (get) => get(selectedSqliteTableStorageAtom)[filePath] ?? "",
+    (get, set, tableName: string) => {
+      const current = get(selectedSqliteTableStorageAtom)
+      set(selectedSqliteTableStorageAtom, { ...current, [filePath]: tableName })
+    },
+  ),
+)

@@ -86,6 +86,7 @@ import { cn } from "../../../lib/utils"
 import { getShortcutKey, isDesktopApp } from "../../../lib/utils/platform"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
+import { DataViewerSidebar } from "../../data/components/data-viewer-sidebar"
 import {
   agentsDiffSidebarWidthAtom,
   agentsFileTreeSidebarOpenAtom,
@@ -94,6 +95,9 @@ import {
   agentsPreviewSidebarWidthAtom,
   agentsScrollPositionsAtom,
   agentsSubChatsSidebarModeAtom,
+  dataViewerSidebarOpenAtomFamily,
+  dataViewerSidebarWidthAtom,
+  viewedDataFileAtomFamily,
   agentsSubChatUnseenChangesAtom,
   agentsUnseenChangesAtom,
   clearLoading,
@@ -3598,6 +3602,17 @@ export function ChatView({
   const [isFileTreeSidebarOpen, setIsFileTreeSidebarOpen] = useAtom(
     agentsFileTreeSidebarOpenAtom,
   )
+  // Per-chat data viewer sidebar state
+  const dataViewerSidebarAtom = useMemo(
+    () => dataViewerSidebarOpenAtomFamily(chatId),
+    [chatId],
+  )
+  const viewedDataFileAtom = useMemo(
+    () => viewedDataFileAtomFamily(chatId),
+    [chatId],
+  )
+  const [isDataViewerSidebarOpen, setIsDataViewerSidebarOpen] = useAtom(dataViewerSidebarAtom)
+  const [viewedDataFile, setViewedDataFile] = useAtom(viewedDataFileAtom)
   const [diffStats, setDiffStats] = useState({
     fileCount: 0,
     additions: 0,
@@ -4897,9 +4912,19 @@ export function ChatView({
             style={{ borderRightWidth: "0.5px", overflow: "hidden" }}
           >
             <FileTreeSidebar
-              projectPath={worktreePath}
+              projectPath={worktreePath || originalProjectPath}
               projectId={chatId}
               onClose={() => setIsFileTreeSidebarOpen(false)}
+              onSelectFile={(filePath) => {
+                // Check if it's a data file (CSV, JSON, SQLite)
+                const ext = filePath.includes(".") ? `.${filePath.split(".").pop()?.toLowerCase()}` : ""
+                const dataExtensions = [".csv", ".tsv", ".json", ".jsonl", ".db", ".sqlite", ".sqlite3"]
+                if (dataExtensions.includes(ext)) {
+                  // Open in data viewer sidebar
+                  setViewedDataFile(filePath)
+                  setIsDataViewerSidebarOpen(true)
+                }
+              }}
             />
           </ResizableSidebar>
         )}
@@ -5568,6 +5593,36 @@ export function ChatView({
             cwd={worktreePath}
             workspaceId={chatId}
           />
+        )}
+
+        {/* Data Viewer Sidebar - for viewing CSV, JSON, SQLite files */}
+        {isDataViewerSidebarOpen && viewedDataFile && (worktreePath || originalProjectPath) && (
+          <ResizableSidebar
+            isOpen={isDataViewerSidebarOpen}
+            onClose={() => {
+              setIsDataViewerSidebarOpen(false)
+              setViewedDataFile(null)
+            }}
+            widthAtom={dataViewerSidebarWidthAtom}
+            minWidth={400}
+            side="right"
+            animationDuration={0}
+            initialWidth={0}
+            exitWidth={0}
+            showResizeTooltip={true}
+            className="bg-background border-l"
+            style={{ borderLeftWidth: "0.5px", overflow: "hidden" }}
+          >
+            <DataViewerSidebar
+              chatId={chatId}
+              filePath={viewedDataFile}
+              projectPath={(worktreePath || originalProjectPath) as string}
+              onClose={() => {
+                setIsDataViewerSidebarOpen(false)
+                setViewedDataFile(null)
+              }}
+            />
+          </ResizableSidebar>
         )}
       </div>
     </div>

@@ -1,9 +1,29 @@
 "use client"
 
-import { ChevronRight, File, Folder, FolderOpen } from "lucide-react"
+import { ChevronRight, File, Folder, FolderOpen, FileSpreadsheet, FileJson, Database } from "lucide-react"
 import { memo, useCallback, useMemo } from "react"
 import { cn } from "../../../../lib/utils"
 import type { TreeNode } from "./build-file-tree"
+
+// Data file extensions for special icons
+const DATA_FILE_EXTENSIONS: Record<string, "csv" | "json" | "sqlite"> = {
+  ".csv": "csv",
+  ".tsv": "csv",
+  ".json": "json",
+  ".jsonl": "json",
+  ".db": "sqlite",
+  ".sqlite": "sqlite",
+  ".sqlite3": "sqlite",
+}
+
+function getDataFileType(filename: string): "csv" | "json" | "sqlite" | null {
+  const ext = filename.includes(".") ? `.${filename.split(".").pop()?.toLowerCase()}` : ""
+  return DATA_FILE_EXTENSIONS[ext] || null
+}
+
+function isDataFile(filename: string): boolean {
+  return getDataFileType(filename) !== null
+}
 
 // Git status type matching the backend
 type GitStatusCode =
@@ -130,7 +150,20 @@ export const FileTreeNode = memo(function FileTreeNode({
             )} />
           )
         ) : (
-          <File className={cn("size-3.5 shrink-0", textColorClass)} />
+          // Use special icons for data files
+          (() => {
+            const dataType = getDataFileType(node.name)
+            if (dataType === "csv") {
+              return <FileSpreadsheet className="size-3.5 shrink-0 text-green-500" />
+            }
+            if (dataType === "json") {
+              return <FileJson className="size-3.5 shrink-0 text-yellow-500" />
+            }
+            if (dataType === "sqlite") {
+              return <Database className="size-3.5 shrink-0 text-blue-500" />
+            }
+            return <File className={cn("size-3.5 shrink-0", textColorClass)} />
+          })()
         )}
 
         {/* Name */}

@@ -7,6 +7,13 @@ import { observable } from "@trpc/server/observable"
 import { EventEmitter } from "node:events"
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
+import {
+  getDataFileInfo,
+  parseDataFile,
+  querySqlite,
+  listSqliteTables,
+  isDataFile,
+} from "../../parsers"
 
 const execAsync = promisify(exec)
 
@@ -670,5 +677,66 @@ export const filesRouter = router({
           stopGitWatching(projectPath)
         }
       })
+    }),
+
+  /**
+   * Check if a file is a supported data file (CSV, JSON, SQLite)
+   */
+  isDataFile: publicProcedure
+    .input(z.object({ filePath: z.string() }))
+    .query(({ input }) => {
+      return isDataFile(input.filePath)
+    }),
+
+  /**
+   * Get metadata about a data file (type, size, tables for SQLite)
+   */
+  getDataFileInfo: publicProcedure
+    .input(z.object({ filePath: z.string() }))
+    .query(async ({ input }) => {
+      return await getDataFileInfo(input.filePath)
+    }),
+
+  /**
+   * Parse and preview a data file (first N rows)
+   */
+  previewDataFile: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string(),
+        limit: z.number().min(1).max(10000).default(1000),
+        offset: z.number().min(0).default(0),
+        tableName: z.string().optional(), // For SQLite files
+      })
+    )
+    .query(async ({ input }) => {
+      return await parseDataFile(input.filePath, {
+        limit: input.limit,
+        offset: input.offset,
+        tableName: input.tableName,
+      })
+    }),
+
+  /**
+   * Execute a SQL query on a SQLite file
+   */
+  querySqliteFile: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string(),
+        sql: z.string(),
+      })
+    )
+    .query(({ input }) => {
+      return querySqlite(input.filePath, input.sql)
+    }),
+
+  /**
+   * List tables in a SQLite file
+   */
+  listSqliteTables: publicProcedure
+    .input(z.object({ filePath: z.string() }))
+    .query(({ input }) => {
+      return listSqliteTables(input.filePath)
     }),
 })
