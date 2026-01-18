@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronRight, File, Folder, FolderOpen, FileSpreadsheet, FileJson, Database, FileBox, Table2, ArrowRight } from "lucide-react"
-import { memo, useCallback, useMemo, useState } from "react"
+import { memo, useCallback, useMemo } from "react"
 import { cn } from "../../../../lib/utils"
 import type { TreeNode } from "./build-file-tree"
 import {
@@ -74,6 +74,27 @@ const STATUS_INDICATORS: Record<string, string> = {
   unmerged: "!",
 }
 
+// Helper to highlight matching text in search results
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text
+
+  const lowerText = text.toLowerCase()
+  const lowerQuery = query.toLowerCase()
+  const index = lowerText.indexOf(lowerQuery)
+
+  if (index === -1) return text
+
+  return (
+    <>
+      {text.slice(0, index)}
+      <span className="bg-yellow-300/40 dark:bg-yellow-500/30 rounded-sm">
+        {text.slice(index, index + query.length)}
+      </span>
+      {text.slice(index + query.length)}
+    </>
+  )
+}
+
 interface FileTreeNodeProps {
   node: TreeNode
   level: number
@@ -96,6 +117,8 @@ interface FileTreeNodeProps {
   onDragEnterFolder?: (folderPath: string) => void
   /** Called when drag leaves a folder */
   onDragLeaveFolder?: () => void
+  /** Current search query for highlighting */
+  searchQuery?: string
 }
 
 export const FileTreeNode = memo(function FileTreeNode({
@@ -112,6 +135,7 @@ export const FileTreeNode = memo(function FileTreeNode({
   dropTargetPath,
   onDragEnterFolder,
   onDragLeaveFolder,
+  searchQuery,
 }: FileTreeNodeProps) {
   const isExpanded = node.type === "folder" && expandedFolders.has(node.path)
   const hasChildren = node.type === "folder" && node.children.length > 0
@@ -320,7 +344,7 @@ export const FileTreeNode = memo(function FileTreeNode({
 
             {/* Name */}
             <span className={cn("truncate flex-1", textColorClass)}>
-              {node.name}
+              {searchQuery ? highlightMatch(node.name, searchQuery) : node.name}
             </span>
 
             {/* Status indicator */}
@@ -363,6 +387,7 @@ export const FileTreeNode = memo(function FileTreeNode({
               dropTargetPath={dropTargetPath}
               onDragEnterFolder={onDragEnterFolder}
               onDragLeaveFolder={onDragLeaveFolder}
+              searchQuery={searchQuery}
             />
           ))}
         </div>

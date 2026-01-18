@@ -4,6 +4,7 @@ import { useAtom } from "jotai"
 import { useCallback, useMemo, useState, useEffect, useRef } from "react"
 import { Button } from "../../../../components/ui/button"
 import { IconDoubleChevronLeft } from "../../../../components/ui/icons"
+import { Input } from "../../../../components/ui/input"
 import { Kbd } from "../../../../components/ui/kbd"
 import {
   Tooltip,
@@ -12,7 +13,7 @@ import {
 } from "../../../../components/ui/tooltip"
 import { trpc } from "../../../../lib/trpc"
 import { expandedFoldersAtomFamily } from "../../atoms"
-import { buildFileTree, countFiles, countFolders } from "./build-file-tree"
+import { buildFileTree, countFiles, countFolders, filterTree } from "./build-file-tree"
 import { FileTreeNode, type GitStatusMap } from "./FileTreeNode"
 import { Download } from "lucide-react"
 import { toast } from "sonner"
@@ -46,6 +47,10 @@ export function FileTreeSidebar({
   const [expandedFolders, setExpandedFolders] = useAtom(
     expandedFoldersAtomFamily(projectId),
   )
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("")
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Drag and drop state - unified to ensure mutual exclusivity
   const [dropTarget, setDropTarget] = useState<DropTarget>({ type: "none" })
@@ -103,7 +108,13 @@ export function FileTreeSidebar({
   // Build tree from flat entries
   const tree = useMemo(() => buildFileTree(entries), [entries])
 
-  // Stats for footer
+  // Filter tree based on search query
+  const filteredTree = useMemo(
+    () => filterTree(tree, searchQuery),
+    [tree, searchQuery]
+  )
+
+  // Stats for footer (show unfiltered counts)
   const fileCount = useMemo(() => countFiles(tree), [tree])
   const folderCount = useMemo(() => countFolders(tree), [tree])
 
@@ -342,30 +353,59 @@ export function FileTreeSidebar({
       className="flex flex-col h-full min-w-0 overflow-hidden"
       tabIndex={0} // Make focusable for paste events
     >
-      {/* Header */}
-      <div className="flex items-center justify-between gap-1 px-2 py-1.5 flex-shrink-0">
-        <span className="text-xs font-medium text-foreground truncate pl-0.5">
-          Files
-        </span>
-        {/* Close button */}
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-              aria-label="Close file tree"
-            >
-              <IconDoubleChevronLeft className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Close file tree
-            <Kbd>⌘B</Kbd>
-          </TooltipContent>
-        </Tooltip>
+      {/* Header - matches sidebar team dropdown area */}
+      <div className="px-2 pt-2 pb-2 flex-shrink-0">
+        <div className="flex items-center justify-between gap-1">
+          <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap px-1.5">
+            Files
+          </h3>
+          {/* Close button */}
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
+                aria-label="Close file tree"
+              >
+                <IconDoubleChevronLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Close file tree
+              <Kbd>⌘B</Kbd>
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
+
+      {/* Search Input - matches sidebar search section */}
+      <div className="px-2 pb-3 flex-shrink-0">
+        <Input
+          ref={searchInputRef}
+          placeholder="Search files..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault()
+              setSearchQuery("")
+              searchInputRef.current?.blur()
+            }
+          }}
+          className="w-full h-7 rounded-lg text-sm bg-muted border border-input placeholder:text-muted-foreground/40"
+        />
+      </div>
+
+      {/* Root folder name */}
+      {projectPath && (
+        <div className="px-2 pb-1 flex-shrink-0">
+          <div className="px-1.5 py-1 text-xs font-medium text-muted-foreground uppercase truncate">
+            {projectPath.split("/").pop()}
+          </div>
+        </div>
+      )}
 
       {/* Content with drag-and-drop */}
       <div
@@ -417,8 +457,12 @@ export function FileTreeSidebar({
             <span>No files found</span>
             <span className="text-[10px]">Drag & drop or paste (⌘V) files here</span>
           </div>
+        ) : filteredTree.length === 0 ? (
+          <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+            No files matching "{searchQuery}"
+          </div>
         ) : (
-          tree.map((node) => (
+          filteredTree.map((node) => (
             <FileTreeNode
               key={node.path}
               node={node}
@@ -434,6 +478,7 @@ export function FileTreeSidebar({
               dropTargetPath={dropTarget.type === "folder" ? dropTarget.path : null}
               onDragEnterFolder={handleDragEnterFolder}
               onDragLeaveFolder={handleDragLeaveFolder}
+              searchQuery={searchQuery}
             />
           ))
         )}

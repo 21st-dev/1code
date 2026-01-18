@@ -109,3 +109,38 @@ export function countFolders(nodes: TreeNode[]): number {
   }
   return count
 }
+
+/**
+ * Filter tree nodes by search query
+ * Returns nodes that match the query or have children that match
+ */
+export function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
+  if (!query.trim()) return nodes
+
+  const lowerQuery = query.toLowerCase()
+
+  const filterNode = (node: TreeNode): TreeNode | null => {
+    const nameMatches = node.name.toLowerCase().includes(lowerQuery)
+
+    if (node.type === "file") {
+      return nameMatches ? node : null
+    }
+
+    // For folders, check if any children match
+    const filteredChildren = node.children
+      .map(filterNode)
+      .filter((n): n is TreeNode => n !== null)
+
+    // Include folder if its name matches OR it has matching children
+    if (nameMatches || filteredChildren.length > 0) {
+      return {
+        ...node,
+        children: filteredChildren,
+      }
+    }
+
+    return null
+  }
+
+  return nodes.map(filterNode).filter((n): n is TreeNode => n !== null)
+}
