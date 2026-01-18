@@ -25,7 +25,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "ts:check": "tsgo --noEmit",
-    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3',{stdio:'inherit'})}\""
+    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -o better-sqlite3',{stdio:'inherit'})}\""
   },
   "overrides": {
     "node-gyp": "^10.2.0"
