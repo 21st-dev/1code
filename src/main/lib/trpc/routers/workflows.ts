@@ -264,7 +264,7 @@ export const workflowsRouter = router({
 
   /**
    * List all skills from the Claude config directory
-   * Scans ~/.claude/skills/*/SKILL.md (or customConfigDir/skills/)
+   * Scans ~/.claude/skills/[dirname]/SKILL.md (or customConfigDir/skills/)
    */
   listSkills: publicProcedure.query(async () => {
     const baseDir = await getClaudeConfigDir()
