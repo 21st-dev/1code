@@ -834,6 +834,38 @@ export const filesRouter = router({
     }),
 
   /**
+   * Move a file or folder to a new directory
+   */
+  moveFile: publicProcedure
+    .input(z.object({
+      sourcePath: z.string(),
+      targetDir: z.string()
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const fileName = basename(input.sourcePath)
+        const destPath = join(input.targetDir, fileName)
+
+        // Check if destination already exists
+        try {
+          await stat(destPath)
+          throw new Error(`A file named "${fileName}" already exists in the target folder`)
+        } catch (err: any) {
+          if (err.code !== "ENOENT") {
+            throw err
+          }
+          // File doesn't exist, proceed with move
+        }
+
+        await rename(input.sourcePath, destPath)
+        return { success: true, newPath: destPath }
+      } catch (error) {
+        console.error("[files.moveFile] Error:", error)
+        throw new Error(`Failed to move: ${error instanceof Error ? error.message : "Unknown error"}`)
+      }
+    }),
+
+  /**
    * Reveal a file or folder in the system file manager (Finder/Explorer)
    */
   revealInFileManager: publicProcedure

@@ -2225,6 +2225,35 @@ function ChatViewInner({
     (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragOver(false)
+
+      // Check for internal file tree drag (file path from our file tree)
+      const internalPath = e.dataTransfer.getData("application/x-file-tree-path")
+      const internalType = e.dataTransfer.getData("application/x-file-tree-type")
+
+      if (internalPath) {
+        // Insert as a file mention
+        const fileName = internalPath.split("/").pop() || internalPath
+        const mention: FileMentionOption = {
+          id: `${internalType || "file"}:local:${internalPath}`,
+          label: fileName,
+          path: internalPath,
+          repository: "local",
+          truncatedPath: internalPath.includes("/")
+            ? internalPath.substring(0, internalPath.lastIndexOf("/"))
+            : "",
+          type: internalType === "folder" ? "folder" : "file",
+        }
+        editorRef.current?.insertMention(mention)
+        // Focus after state update
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            editorRef.current?.focus()
+          })
+        })
+        return
+      }
+
+      // External files from system
       const droppedFiles = Array.from(e.dataTransfer.files)
       handleAddAttachments(droppedFiles)
       // Focus after state update - use double rAF to wait for React render

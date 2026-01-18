@@ -89,7 +89,7 @@ interface FileTreeNodeProps {
   /** Absolute path to project root (for context menu actions) */
   projectPath?: string
   /** Called when files are dropped onto a folder */
-  onDropFiles?: (targetDir: string, filePaths: string[]) => void
+  onDropFiles?: (targetDir: string, filePaths: string[], isInternalMove?: boolean) => void
   /** Currently active drop target folder path */
   dropTargetPath?: string | null
   /** Called when drag enters a folder */
@@ -149,12 +149,27 @@ export const FileTreeNode = memo(function FileTreeNode({
     }
   }, [node.type, node.path, node.name, onToggleFolder, onSelectDataFile, onSelectSourceFile, onSelectFile])
 
+  // Make files/folders draggable for internal drag-and-drop
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    // Set custom data for internal drag-and-drop
+    // Use a custom MIME type to identify internal drags
+    e.dataTransfer.setData("application/x-file-tree-path", node.path)
+    e.dataTransfer.setData("application/x-file-tree-type", node.type)
+    e.dataTransfer.setData("text/plain", node.path) // Fallback for chat input
+    e.dataTransfer.effectAllowed = "copyMove"
+  }, [node.path, node.type])
+
   // Drag and drop handlers for folders
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     if (node.type !== "folder") return
     e.preventDefault()
     e.stopPropagation()
-    if (e.dataTransfer.types.includes("Files")) {
+
+    // Support both external files and internal drags
+    const hasFiles = e.dataTransfer.types.includes("Files")
+    const hasInternalDrag = e.dataTransfer.types.includes("application/x-file-tree-path")
+
+    if (hasFiles || hasInternalDrag) {
       onDragEnterFolder?.(node.path)
     }
   }, [node.type, node.path, onDragEnterFolder])
@@ -163,11 +178,17 @@ export const FileTreeNode = memo(function FileTreeNode({
     if (node.type !== "folder") return
     e.preventDefault()
     e.stopPropagation()
-    // Keep the drop target active while dragging over
-    if (e.dataTransfer.types.includes("Files")) {
-      e.dataTransfer.dropEffect = "copy"
+
+    // Support both external files and internal drags
+    const hasFiles = e.dataTransfer.types.includes("Files")
+    const hasInternalDrag = e.dataTransfer.types.includes("application/x-file-tree-path")
+
+    if (hasFiles || hasInternalDrag) {
+      e.dataTransfer.dropEffect = hasInternalDrag ? "move" : "copy"
+      // Re-assert this folder as target (in case of rapid mouse movement between folders)
+      onDragEnterFolder?.(node.path)
     }
-  }, [node.type])
+  }, [node.type, node.path, onDragEnterFolder])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     if (node.type !== "folder") return
@@ -188,25 +209,31 @@ export const FileTreeNode = memo(function FileTreeNode({
       e.preventDefault()
       e.stopPropagation()
 
-      console.log("[FileTreeNode] Drop on folder:", node.path)
+      // Check for internal file tree drag (file/folder being moved within tree)
+      const internalPath = e.dataTransfer.getData("application/x-file-tree-path")
+      const internalType = e.dataTransfer.getData("application/x-file-tree-type")
 
+      if (internalPath && internalType) {
+        // Don't allow dropping a folder into itself or its children
+        if (internalPath === node.path || node.path.startsWith(internalPath + "/")) {
+          return
+        }
+        // Call the move handler with the source path
+        onDropFiles?.(node.path, [internalPath], true) // true = internal move
+        return
+      }
+
+      // External files from system
       const files = Array.from(e.dataTransfer.files)
-      console.log("[FileTreeNode] Files:", files.length)
       if (files.length === 0) return
 
       // Get file paths using Electron's webUtils API
       const filePaths = files
-        .map((file) => {
-          const path = window.webUtils?.getPathForFile?.(file)
-          console.log("[FileTreeNode] File path:", path)
-          return path
-        })
+        .map((file) => window.webUtils?.getPathForFile?.(file))
         .filter((p): p is string => !!p)
 
-      console.log("[FileTreeNode] Valid paths:", filePaths)
-
       if (filePaths.length > 0) {
-        onDropFiles?.(node.path, filePaths)
+        onDropFiles?.(node.path, filePaths, false) // false = external import
       }
     }
   }, [node.type, node.path, onDropFiles])
@@ -223,7 +250,9 @@ export const FileTreeNode = memo(function FileTreeNode({
         <ContextMenuTrigger asChild>
           <button
             type="button"
+            draggable
             onClick={handleClick}
+            onDragStart={handleDragStart}
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}

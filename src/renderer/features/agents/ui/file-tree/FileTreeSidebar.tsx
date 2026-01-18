@@ -29,6 +29,12 @@ interface FileTreeSidebarProps {
   onSelectFile?: (path: string) => void
 }
 
+// Unified drop target state - ensures mutual exclusivity
+type DropTarget =
+  | { type: "none" }                    // Not dragging over file tree
+  | { type: "root" }                    // Drop to project root
+  | { type: "folder"; path: string }    // Drop to specific folder
+
 export function FileTreeSidebar({
   projectPath,
   projectId,
@@ -41,10 +47,9 @@ export function FileTreeSidebar({
     expandedFoldersAtomFamily(projectId),
   )
 
-  // Drag and drop state
-  const [isDragOver, setIsDragOver] = useState(false)
+  // Drag and drop state - unified to ensure mutual exclusivity
+  const [dropTarget, setDropTarget] = useState<DropTarget>({ type: "none" })
   const [isImporting, setIsImporting] = useState(false)
-  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null)
 
   // Fetch all files from project
   const {
@@ -131,6 +136,17 @@ export function FileTreeSidebar({
     },
   })
 
+  // Move file mutation (for internal drag-and-drop)
+  const moveFileMutation = trpc.files.moveFile.useMutation({
+    onSuccess: () => {
+      toast.success("File moved successfully")
+      // File watcher will automatically refresh the tree
+    },
+    onError: (error) => {
+      toast.error(`Move failed: ${error.message}`)
+    },
+  })
+
   // Import files to a target directory
   const importFilesToDir = useCallback(
     async (targetDir: string, filePaths: string[]) => {
@@ -140,7 +156,7 @@ export function FileTreeSidebar({
       }
 
       setIsImporting(true)
-      setDropTargetPath(null)
+      setDropTarget({ type: "none" })
       try {
         await importFilesMutation.mutateAsync({
           sourcePaths: filePaths,
@@ -155,88 +171,107 @@ export function FileTreeSidebar({
 
   // Folder-level drag handlers (passed to FileTreeNode)
   const handleDragEnterFolder = useCallback((folderPath: string) => {
-    setDropTargetPath(folderPath)
-    setIsDragOver(false) // Hide root drop zone when over a folder
+    // Entering a folder - set folder as drop target (hides root overlay)
+    setDropTarget({ type: "folder", path: folderPath })
   }, [])
 
   const handleDragLeaveFolder = useCallback(() => {
-    setDropTargetPath(null)
+    // Leaving a folder - revert to root (still dragging, just not over folder)
+    setDropTarget({ type: "root" })
   }, [])
 
   const handleDropOnFolder = useCallback(
-    (targetDir: string, filePaths: string[]) => {
-      console.log("[FileTreeSidebar] handleDropOnFolder called:", { targetDir, filePaths, projectPath })
+    (targetDir: string, filePaths: string[], isInternalMove?: boolean) => {
       if (!projectPath) return
+
       // targetDir from FileTreeNode is a relative path, convert to absolute
       const absoluteTargetDir = targetDir.startsWith("/")
         ? targetDir
         : `${projectPath}/${targetDir}`
-      console.log("[FileTreeSidebar] Importing to:", absoluteTargetDir)
-      importFilesToDir(absoluteTargetDir, filePaths)
+
+      if (isInternalMove && filePaths.length === 1) {
+        // Internal move - the filePath is a relative path within the project
+        const sourcePath = filePaths[0].startsWith("/")
+          ? filePaths[0]
+          : `${projectPath}/${filePaths[0]}`
+        moveFileMutation.mutate({ sourcePath, targetDir: absoluteTargetDir })
+      } else {
+        // External import
+        importFilesToDir(absoluteTargetDir, filePaths)
+      }
     },
-    [importFilesToDir, projectPath]
+    [importFilesToDir, projectPath, moveFileMutation]
   )
 
   // Root container drag handlers (for dropping on empty area = project root)
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // Only show root drop zone if not hovering over a specific folder
-    if (e.dataTransfer.types.includes("Files") && !dropTargetPath) {
-      setIsDragOver(true)
+
+    const hasFiles = e.dataTransfer.types.includes("Files")
+    const hasInternalDrag = e.dataTransfer.types.includes("application/x-file-tree-path")
+
+    if (hasFiles || hasInternalDrag) {
+      // Only set to root if we're not already targeting a folder
+      // Use functional update to avoid stale closure issues
+      setDropTarget((prev) => {
+        if (prev.type === "folder") return prev  // Keep folder target
+        return { type: "root" }
+      })
     }
-  }, [dropTargetPath])
+  }, [])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // Only set false if we're leaving the container (not entering a child)
+
+    // Only clear if actually leaving the container bounds entirely
     const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX
-    const y = e.clientY
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      setIsDragOver(false)
-      setDropTargetPath(null)
+    if (
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom
+    ) {
+      setDropTarget({ type: "none" })
     }
   }, [])
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
-      console.log("[FileTreeSidebar] Container handleDrop, dropTargetPath:", dropTargetPath)
-
       e.preventDefault()
       e.stopPropagation()
 
-      // If a folder is being targeted, the folder's onDrop should have already handled it
-      // But if we get here with a dropTargetPath, something went wrong - handle it here as fallback
-      if (dropTargetPath) {
-        console.log("[FileTreeSidebar] Folder was targeted, handling drop for folder:", dropTargetPath)
-        const files = Array.from(e.dataTransfer.files)
-        if (files.length > 0) {
-          const filePaths = files
-            .map((file) => window.webUtils?.getPathForFile?.(file))
-            .filter((p): p is string => !!p)
-
-          if (filePaths.length > 0 && projectPath) {
-            const absoluteTargetDir = dropTargetPath.startsWith("/")
-              ? dropTargetPath
-              : `${projectPath}/${dropTargetPath}`
-            importFilesToDir(absoluteTargetDir, filePaths)
-          }
-        }
-        setIsDragOver(false)
-        setDropTargetPath(null)
-        return
-      }
-
-      setIsDragOver(false)
-      setDropTargetPath(null)
+      // Always clear drop target state on drop
+      setDropTarget({ type: "none" })
 
       if (!projectPath) {
         toast.error("No project selected")
         return
       }
 
+      // Check for internal file tree drag (moving file within the project)
+      const internalPath = e.dataTransfer.getData("application/x-file-tree-path")
+      if (internalPath) {
+        // Internal move - move file to project root
+        const sourcePath = internalPath.startsWith("/")
+          ? internalPath
+          : `${projectPath}/${internalPath}`
+
+        // Don't move if already at root level
+        const relativePath = sourcePath.startsWith(projectPath)
+          ? sourcePath.slice(projectPath.length + 1)
+          : internalPath
+        if (!relativePath.includes("/")) {
+          // File is already at root level
+          return
+        }
+
+        moveFileMutation.mutate({ sourcePath, targetDir: projectPath })
+        return
+      }
+
+      // External files from system
       const files = Array.from(e.dataTransfer.files)
       if (files.length === 0) return
 
@@ -253,7 +288,7 @@ export function FileTreeSidebar({
       // Import to project root
       importFilesToDir(projectPath, filePaths)
     },
-    [projectPath, importFilesToDir, dropTargetPath]
+    [projectPath, importFilesToDir, moveFileMutation]
   )
 
   // Container ref for focus management
@@ -340,18 +375,24 @@ export function FileTreeSidebar({
         onDrop={handleDrop}
       >
         {/* Drop overlay - for project root */}
-        {isDragOver && !dropTargetPath && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-md m-1 pointer-events-none">
-            <Download className="h-8 w-8 text-primary mb-2" />
-            <span className="text-sm font-medium text-primary">Drop files here</span>
-            <span className="text-xs text-muted-foreground mt-1">Files will be copied to project root</span>
+        {dropTarget.type === "root" && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-1 rounded-md border border-primary/40 bg-primary/5" />
+            <div className="relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-background/90 border border-border shadow-sm">
+              <Download className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Drop to project root</span>
+            </div>
           </div>
         )}
 
         {/* Drop indicator for specific folder */}
-        {dropTargetPath && (
-          <div className="absolute bottom-0 left-0 right-0 z-40 px-3 py-1.5 bg-primary/90 text-primary-foreground text-xs font-medium pointer-events-none">
-            Drop into: {dropTargetPath.split("/").pop()}
+        {dropTarget.type === "folder" && (
+          <div className="absolute inset-0 z-40 pointer-events-none">
+            <div className="absolute inset-1 rounded-md border border-primary/40 bg-primary/5" />
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-background/90 border border-border shadow-sm">
+              <Download className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Drop into <span className="font-medium text-foreground">{dropTarget.path.split("/").pop()}</span></span>
+            </div>
           </div>
         )}
 
@@ -390,7 +431,7 @@ export function FileTreeSidebar({
               gitStatus={gitStatus as GitStatusMap}
               projectPath={projectPath}
               onDropFiles={handleDropOnFolder}
-              dropTargetPath={dropTargetPath}
+              dropTargetPath={dropTarget.type === "folder" ? dropTarget.path : null}
               onDragEnterFolder={handleDragEnterFolder}
               onDragLeaveFolder={handleDragLeaveFolder}
             />
