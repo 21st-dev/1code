@@ -11,6 +11,7 @@ import { join } from "path"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
+import { getClaudeShellEnvironment } from "../lib/claude"
 
 // Register IPC handlers for window operations (only once)
 let ipcHandlersRegistered = false
@@ -329,10 +330,20 @@ export function createMainWindow(): BrowserWindow {
   console.log("[Main] isAuthenticated():", isAuth)
   const user = authManager.getUser()
   console.log("[Main] getUser():", user ? user.email : "null")
+
+  // Check for existing CLI config (API key or custom proxy)
+  const shellEnv = getClaudeShellEnvironment()
+  const hasExistingCliConfig = !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_BASE_URL)
+  console.log("[Main] hasExistingCliConfig:", hasExistingCliConfig)
+  if (hasExistingCliConfig) {
+    console.log("[Main] CLI config - API_KEY:", shellEnv.ANTHROPIC_API_KEY ? "set" : "not set")
+    console.log("[Main] CLI config - BASE_URL:", shellEnv.ANTHROPIC_BASE_URL || "default")
+  }
   console.log("[Main] ================================")
 
-  if (isAuth) {
-    console.log("[Main] ✓ User authenticated, loading app")
+  // Allow access if authenticated OR if user has existing CLI config
+  if (isAuth || hasExistingCliConfig) {
+    console.log("[Main] ✓ Access granted:", isAuth ? "OAuth authenticated" : "using existing CLI config")
     if (devServerUrl) {
       window.loadURL(devServerUrl)
       window.webContents.openDevTools()

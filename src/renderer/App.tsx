@@ -40,6 +40,10 @@ function AppContent() {
   )
   const selectedProject = useAtomValue(selectedProjectAtom)
 
+  // Check if user has existing CLI config (API key or proxy)
+  const { data: cliConfig, isLoading: isLoadingCliConfig } =
+    trpc.claudeCode.hasExistingCliConfig.useQuery()
+
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
@@ -55,11 +59,19 @@ function AppContent() {
     return exists ? selectedProject : null
   }, [selectedProject, projects, isLoadingProjects])
 
+  // Skip onboarding if user has existing CLI config OR completed OAuth
+  const skipOnboarding = anthropicOnboardingCompleted || cliConfig?.hasConfig
+
   // Determine which page to show:
-  // 1. Anthropic onboarding not completed -> AnthropicOnboardingPage
-  // 2. No valid project selected -> SelectRepoPage
-  // 3. Otherwise -> AgentsLayout
-  if (!anthropicOnboardingCompleted) {
+  // 1. Still loading CLI config -> show nothing (brief flash)
+  // 2. Has existing CLI config OR completed onboarding -> skip to next step
+  // 3. No valid project selected -> SelectRepoPage
+  // 4. Otherwise -> AgentsLayout
+  if (isLoadingCliConfig) {
+    return null // Brief loading state
+  }
+
+  if (!skipOnboarding) {
     return <AnthropicOnboardingPage />
   }
 

@@ -5,6 +5,7 @@ import { getAuthManager } from "../../../index"
 import { getApiUrl } from "../../config"
 import { getDatabase, claudeCodeCredentials } from "../../db"
 import { eq } from "drizzle-orm"
+import { getClaudeShellEnvironment } from "../../claude"
 
 /**
  * Get desktop auth token for server API calls
@@ -41,6 +42,20 @@ function decryptToken(encrypted: string): string {
  * Uses server only for sandbox creation, stores token locally
  */
 export const claudeCodeRouter = router({
+  /**
+   * Check if user has existing CLI config (API key or proxy)
+   * If true, user can skip OAuth onboarding
+   */
+  hasExistingCliConfig: publicProcedure.query(() => {
+    const shellEnv = getClaudeShellEnvironment()
+    const hasConfig = !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_BASE_URL)
+    return {
+      hasConfig,
+      hasApiKey: !!shellEnv.ANTHROPIC_API_KEY,
+      baseUrl: shellEnv.ANTHROPIC_BASE_URL || null,
+    }
+  }),
+
   /**
    * Check if user has Claude Code connected (local check)
    */
