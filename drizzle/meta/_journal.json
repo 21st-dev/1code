@@ -36,6 +36,20 @@
       "when": 1768199613729,
       "tag": "0004_melted_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1768707036280,
+      "tag": "0005_lumpy_nightcrawler",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1768707518469,
+      "tag": "0006_loud_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }

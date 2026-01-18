@@ -17,6 +17,10 @@ import {
   pendingUserQuestionsAtom,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import {
+  dispatchToolStart,
+  dispatchToolComplete,
+} from "../hooks/use-tool-notifications"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -218,6 +222,34 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   plugins: chunk.plugins,
                   skills: chunk.skills,
                 })
+              }
+
+              // Dispatch tool events for notification system
+              if (chunk.type === "tool-input-available") {
+                // Get chat name from store for display
+                const subChat = useAgentSubChatStore
+                  .getState()
+                  .allSubChats.find((sc) => sc.id === this.config.subChatId)
+                const chatName = subChat?.name || "Agent"
+
+                dispatchToolStart(
+                  chunk.toolCallId,
+                  chunk.toolName,
+                  chunk.input || {},
+                  this.config.subChatId,
+                  chatName,
+                )
+              }
+
+              if (chunk.type === "tool-output-available") {
+                dispatchToolComplete(chunk.toolCallId, false, chunk.output)
+              } else if (chunk.type === "tool-output-error") {
+                dispatchToolComplete(
+                  chunk.toolCallId,
+                  true,
+                  undefined,
+                  chunk.errorText,
+                )
               }
 
               // Clear pending questions ONLY when agent has moved on

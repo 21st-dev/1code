@@ -5,9 +5,14 @@ import {
   soundNotificationsEnabledAtom,
   analyticsOptOutAtom,
   ctrlTabTargetAtom,
+  notificationModeAtom,
+  toastNotificationsEnabledAtom,
+  activityFeedEnabledAtom,
   type CtrlTabTarget,
+  type NotificationMode,
 } from "../../../lib/atoms"
 import { Switch } from "../../ui/switch"
+import { Button } from "../../ui/button"
 import {
   Select,
   SelectContent,
@@ -40,6 +45,9 @@ export function AgentsPreferencesTab() {
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
   const [analyticsOptOut, setAnalyticsOptOut] = useAtom(analyticsOptOutAtom)
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
+  const [notificationMode, setNotificationMode] = useAtom(notificationModeAtom)
+  const [toastEnabled, setToastEnabled] = useAtom(toastNotificationsEnabledAtom)
+  const [activityFeedEnabled, setActivityFeedEnabled] = useAtom(activityFeedEnabledAtom)
   const isNarrowScreen = useIsNarrowScreen()
 
   // Sync opt-out status to main process
@@ -97,6 +105,101 @@ export function AgentsPreferencesTab() {
               </span>
             </div>
             <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+          </div>
+        </div>
+      </div>
+
+      {/* Notifications Section */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">Notifications</h4>
+          <p className="text-xs text-muted-foreground mt-1">
+            Configure how you get notified about agent activity
+          </p>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-6">
+            {/* Notification Mode */}
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col space-y-1">
+                <span className="text-sm font-medium text-foreground">
+                  Notification Mode
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  When to show notifications
+                </span>
+              </div>
+              <Select
+                value={notificationMode}
+                onValueChange={(value: NotificationMode) => setNotificationMode(value)}
+              >
+                <SelectTrigger className="w-auto px-2">
+                  <span className="text-xs">
+                    {notificationMode === "always"
+                      ? "Always"
+                      : notificationMode === "unfocused"
+                        ? "When unfocused"
+                        : "Never"}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="always">Always notify</SelectItem>
+                  <SelectItem value="unfocused">Only when app not focused</SelectItem>
+                  <SelectItem value="never">Never</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Toast Notifications Toggle */}
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col space-y-1">
+                <span className="text-sm font-medium text-foreground">
+                  Toast Notifications
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Show toast popups for tool executions
+                </span>
+              </div>
+              <Switch checked={toastEnabled} onCheckedChange={setToastEnabled} />
+            </div>
+
+            {/* Activity Feed Toggle */}
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col space-y-1">
+                <span className="text-sm font-medium text-foreground">
+                  Activity Feed
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Show activity feed panel on the right side
+                </span>
+              </div>
+              <Switch checked={activityFeedEnabled} onCheckedChange={setActivityFeedEnabled} />
+            </div>
+
+            {/* Test Notification Button */}
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col space-y-1">
+                <span className="text-sm font-medium text-foreground">
+                  Test Notification
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Send a test notification to verify it's working
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  window.desktopApi?.showNotification({
+                    title: "21st Agents",
+                    body: "Notifications are working!",
+                  })
+                }}
+              >
+                Test
+              </Button>
+            </div>
           </div>
         </div>
       </div>

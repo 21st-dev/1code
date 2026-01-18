@@ -504,3 +504,18 @@ export type UndoItem =
   | { type: "subchat"; subChatId: string; chatId: string; timeoutId: ReturnType<typeof setTimeout> }
 
 export const undoStackAtom = atom<UndoItem[]>([])
+
+// Git panel state
+export const gitPanelOpenAtom = atomWithStorage<boolean>(
+  "agents:gitPanelOpen",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+export const gitPanelHeightAtom = atomWithStorage<number>(
+  "agents:gitPanelHeight",
+  250,
+  undefined,
+  { getOnInit: true },
+)

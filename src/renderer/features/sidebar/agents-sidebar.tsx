@@ -23,7 +23,7 @@ import {
   isFullscreenAtom,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal } from "lucide-react"
+import { ChevronDown, MoreHorizontal, GitBranch, MessageSquare } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null })
@@ -88,8 +88,10 @@ import {
   selectedProjectAtom,
   justCreatedIdsAtom,
   undoStackAtom,
+  gitPanelOpenAtom,
   type UndoItem,
 } from "../agents/atoms"
+import { GitPanel } from "../git"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
@@ -152,7 +154,19 @@ const ChatIcon = React.memo(function ChatIcon({
   }
 
   return (
-    <div className="relative flex-shrink-0 w-4 h-4">
+    <motion.div
+      className="relative flex-shrink-0 w-4 h-4"
+      animate={
+        isLoading
+          ? { scale: [1, 1.08, 1] }
+          : { scale: 1 }
+      }
+      transition={
+        isLoading
+          ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" }
+          : { duration: 0.2 }
+      }
+    >
       {/* Checkbox slides in from left, icon slides out */}
       <div
         className={cn(
@@ -182,25 +196,28 @@ const ChatIcon = React.memo(function ChatIcon({
       </div>
       {/* Badge in bottom-right corner: loader → amber dot → blue dot - hidden during multi-select */}
       {(isLoading || hasUnseenChanges || hasPendingPlan) && !isMultiSelectMode && (
-        <div
+        <motion.div
           className={cn(
             "absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center",
             isSelected
               ? "bg-[#E8E8E8] dark:bg-[#1B1B1B]"
               : "bg-[#F4F4F4] group-hover:bg-[#E8E8E8] dark:bg-[#101010] dark:group-hover:bg-[#1B1B1B]",
           )}
+          initial={isLoading ? { scale: 0.8, opacity: 0 } : false}
+          animate={isLoading ? { scale: 1, opacity: 1 } : { scale: 1, opacity: 1 }}
+          transition={{ duration: 0.2 }}
         >
           {/* Priority: loader > amber dot (pending plan) > blue dot (unseen) */}
           {isLoading ? (
-            <LoadingDot isLoading={true} className="w-2.5 h-2.5 text-muted-foreground" />
+            <LoadingDot isLoading={true} className="w-2.5 h-2.5 text-primary" />
           ) : hasPendingPlan ? (
             <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
           ) : (
             <LoadingDot isLoading={false} className="w-2.5 h-2.5 text-muted-foreground" />
           )}
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   )
 })
 
@@ -263,6 +280,9 @@ export function AgentsSidebar({
   const unseenChanges = useAtomValue(agentsUnseenChangesAtom)
   const archivePopoverOpen = useAtomValue(archivePopoverOpenAtom)
   const justCreatedIds = useAtomValue(justCreatedIdsAtom)
+
+  // Git panel state
+  const [gitPanelOpen, setGitPanelOpen] = useAtom(gitPanelOpenAtom)
 
   const [helpPopoverOpen, setHelpPopoverOpen] = useAtom(
     agentsHelpPopoverOpenAtom,
@@ -1459,8 +1479,38 @@ export function AgentsSidebar({
         </div>
       </div>
 
-      {/* Search and New Workspace */}
-      <div className="px-2 pb-3 flex-shrink-0">
+      {/* Tab Switcher - Chats / Source Control */}
+      <div className="px-2 pb-2 flex-shrink-0">
+        <div className="flex items-center gap-1 p-0.5 bg-muted rounded-lg">
+          <button
+            onClick={() => setGitPanelOpen(false)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+              !gitPanelOpen
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <MessageSquare className="h-3 w-3" />
+            Chats
+          </button>
+          <button
+            onClick={() => setGitPanelOpen(true)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+              gitPanelOpen
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <GitBranch className="h-3 w-3" />
+            Changes
+          </button>
+        </div>
+      </div>
+
+      {/* Search and New Workspace - only shown when not in git panel mode */}
+      <div className={cn("px-2 pb-3 flex-shrink-0", gitPanelOpen && "hidden")}>
         <div className="space-y-2">
           {/* Search Input */}
           <div className="relative">
@@ -1544,8 +1594,8 @@ export function AgentsSidebar({
         </div>
       </div>
 
-      {/* Scrollable Agents List */}
-      <div className="flex-1 min-h-0 relative">
+      {/* Scrollable Agents List - hidden when git panel is open */}
+      <div className={cn("flex-1 min-h-0 relative", gitPanelOpen && "hidden")}>
         <div
           ref={scrollContainerRef}
           onScroll={handleAgentsScroll}
@@ -2265,6 +2315,16 @@ export function AgentsSidebar({
           )}
         />
       </div>
+
+      {/* Git Source Control Panel - shown when git panel is open */}
+      {gitPanelOpen && (
+        <div className="flex-1 min-h-0">
+          <GitPanel
+            worktreePath={selectedProject?.path || null}
+            defaultBranch="main"
+          />
+        </div>
+      )}
 
       {/* Footer - Multi-select toolbar or normal footer */}
       <AnimatePresence mode="wait">

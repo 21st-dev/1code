@@ -8,6 +8,7 @@ import {
   session,
 } from "electron"
 import { join } from "path"
+import { exec } from "child_process"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
@@ -32,6 +33,29 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
     (_event, options: { title: string; body: string }) => {
       const { Notification } = require("electron")
       new Notification(options).show()
+    },
+  )
+
+  // Terminal-notifier for macOS (per CLAUDE.md instructions)
+  ipcMain.handle(
+    "app:terminal-notify",
+    (_event, { message, title }: { message: string; title: string }) => {
+      if (process.platform === "darwin") {
+        // Escape quotes to prevent command injection
+        const safeMessage = message.replace(/"/g, '\\"')
+        const safeTitle = title.replace(/"/g, '\\"')
+        exec(
+          `terminal-notifier -message "${safeMessage}" -title "${safeTitle}"`,
+          (err) => {
+            if (err) {
+              console.warn(
+                "[Notification] terminal-notifier failed:",
+                err.message,
+              )
+            }
+          },
+        )
+      }
     },
   )
 

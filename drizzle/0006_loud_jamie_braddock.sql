@@ -1,0 +1,1 @@
+ALTER TABLE `tool_activities` ADD `is_pinned` integer DEFAULT false NOT NULL;

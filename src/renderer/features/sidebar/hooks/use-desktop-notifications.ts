@@ -78,6 +78,7 @@ export function useDesktopNotifications() {
   /**
    * Show a notification for agent completion
    * Only shows if window is not focused (in desktop app)
+   * Uses terminal-notifier per CLAUDE.md instructions (with Electron fallback)
    */
   const notifyAgentComplete = useCallback(
     (agentName: string) => {
@@ -88,11 +89,19 @@ export function useDesktopNotifications() {
         // Increment badge count
         setPendingCount((prev) => prev + 1)
 
-        // Show native notification
-        window.desktopApi?.showNotification({
-          title: "Agent finished",
-          body: `${agentName} completed the task`,
-        })
+        // Use terminal-notifier per CLAUDE.md (preferred on macOS)
+        if (window.desktopApi?.terminalNotify) {
+          window.desktopApi.terminalNotify(
+            `Completed: ${agentName}`,
+            "Claude Code",
+          )
+        } else {
+          // Fallback to Electron notification
+          window.desktopApi?.showNotification({
+            title: "Agent finished",
+            body: `${agentName} completed the task`,
+          })
+        }
       }
     },
     [setPendingCount],
@@ -118,15 +127,22 @@ export function useDesktopNotifications() {
 
 /**
  * Standalone function to show notification (for use outside React components)
+ * Uses terminal-notifier per CLAUDE.md instructions (with Electron fallback)
  */
 export function showAgentNotification(agentName: string) {
   if (!isDesktopApp() || typeof window === "undefined") return
 
   // Only notify if window is not focused
   if (!document.hasFocus()) {
-    window.desktopApi?.showNotification({
-      title: "Agent finished",
-      body: `${agentName} completed the task`,
-    })
+    // Use terminal-notifier per CLAUDE.md (preferred on macOS)
+    if (window.desktopApi?.terminalNotify) {
+      window.desktopApi.terminalNotify(`Completed: ${agentName}`, "Claude Code")
+    } else {
+      // Fallback to Electron notification
+      window.desktopApi?.showNotification({
+        title: "Agent finished",
+        body: `${agentName} completed the task`,
+      })
+    }
   }
 }

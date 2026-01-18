@@ -98,6 +98,26 @@ export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
   userId: text("user_id"), // Desktop auth user ID (for reference)
 })
 
+// ============ TOOL ACTIVITIES ============
+// Persisted tool execution history for activity feed
+export const toolActivities = sqliteTable("tool_activities", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  subChatId: text("sub_chat_id").notNull(), // No FK - keep activities even if sub-chat deleted
+  chatName: text("chat_name").notNull(),
+  toolName: text("tool_name").notNull(),
+  summary: text("summary").notNull(),
+  state: text("state").notNull(), // "running" | "complete" | "error"
+  input: text("input"), // JSON string (truncated to 50KB)
+  output: text("output"), // JSON string (truncated to 50KB)
+  errorText: text("error_text"),
+  isPinned: integer("is_pinned", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -107,3 +127,5 @@ export type SubChat = typeof subChats.$inferSelect
 export type NewSubChat = typeof subChats.$inferInsert
 export type ClaudeCodeCredential = typeof claudeCodeCredentials.$inferSelect
 export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
+export type ToolActivity = typeof toolActivities.$inferSelect
+export type NewToolActivity = typeof toolActivities.$inferInsert

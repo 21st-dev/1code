@@ -12,6 +12,7 @@ import {
   isDesktopAtom,
   isFullscreenAtom,
   anthropicOnboardingCompletedAtom,
+  activityFeedEnabledAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
@@ -26,6 +27,7 @@ import { AgentsContent } from "../agents/ui/agents-content"
 import { UpdateBanner } from "../../components/update-banner"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
+import { ActivityFeed } from "../activity"
 
 // ============================================================================
 // Constants
@@ -251,6 +253,9 @@ export function AgentsLayout() {
         <div className="flex-1 overflow-hidden flex flex-col min-w-0">
           <AgentsContent />
         </div>
+
+        {/* Activity Feed (Right Panel) */}
+        {!isMobile && <ActivityFeed />}
 
         {/* Update Banner */}
         <UpdateBanner />

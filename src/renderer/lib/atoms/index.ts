@@ -59,6 +59,10 @@ export {
   // AskUserQuestion
   pendingUserQuestionsAtom,
 
+  // Git panel
+  gitPanelOpenAtom,
+  gitPanelHeightAtom,
+
   // Types
   type SavedRepo,
   type SelectedProject,
@@ -403,4 +407,140 @@ export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
   null,
   undefined,
   { getOnInit: true },
+)
+
+// ============================================
+// NOTIFICATION SYSTEM ATOMS
+// ============================================
+
+// Notification mode preference
+// "always" - notify regardless of window focus
+// "unfocused" - only notify when app is not focused (default)
+// "never" - disable all notifications
+export type NotificationMode = "always" | "unfocused" | "never"
+
+export const notificationModeAtom = atomWithStorage<NotificationMode>(
+  "preferences:notification-mode",
+  "unfocused",
+  undefined,
+  { getOnInit: true },
+)
+
+// Toast notifications for tool events
+// When enabled, shows toast when tools start/complete
+export const toastNotificationsEnabledAtom = atomWithStorage<boolean>(
+  "preferences:toast-notifications-enabled",
+  true,
+  undefined,
+  { getOnInit: true },
+)
+
+// Activity feed panel
+// When enabled, shows the activity feed sidebar panel
+export const activityFeedEnabledAtom = atomWithStorage<boolean>(
+  "preferences:activity-feed-enabled",
+  true,
+  undefined,
+  { getOnInit: true },
+)
+
+// Activity feed state (in-memory cache, persisted to DB)
+export interface ToolActivity {
+  id: string
+  subChatId: string
+  chatName: string
+  toolName: string
+  summary: string // "package.json", "npm install", "*.tsx"
+  state: "running" | "complete" | "error"
+  input: string | null // JSON string
+  output: string | null // JSON string
+  errorText: string | null
+  isPinned: boolean
+  createdAt: Date // From DB (mode: "timestamp")
+}
+
+export const toolActivityAtom = atom<ToolActivity[]>([])
+export const MAX_ACTIVITY_ITEMS = 50
+
+// Selected activity for viewer modal
+export const selectedActivityIdAtom = atom<string | null>(null)
+
+// Helper to add activity (returns the new activity with generated ID)
+export const addToolActivityAtom = atom(
+  null,
+  (
+    get,
+    set,
+    activity: Omit<
+      ToolActivity,
+      "id" | "createdAt" | "output" | "errorText" | "isPinned"
+    >,
+  ) => {
+    const prev = get(toolActivityAtom)
+    const newActivity: ToolActivity = {
+      ...activity,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      output: null,
+      errorText: null,
+      isPinned: false,
+      createdAt: new Date(),
+    }
+    set(toolActivityAtom, [newActivity, ...prev].slice(0, MAX_ACTIVITY_ITEMS))
+    return newActivity
+  },
+)
+
+// Helper to update activity state with output/error
+export const updateToolActivityAtom = atom(
+  null,
+  (
+    get,
+    set,
+    update: {
+      id: string
+      state: ToolActivity["state"]
+      output?: string | null
+      errorText?: string | null
+    },
+  ) => {
+    const prev = get(toolActivityAtom)
+    set(
+      toolActivityAtom,
+      prev.map((a) =>
+        a.id === update.id
+          ? {
+              ...a,
+              state: update.state,
+              output: update.output ?? a.output,
+              errorText: update.errorText ?? a.errorText,
+            }
+          : a,
+      ),
+    )
+  },
+)
+
+// Helper to set activities (for loading from DB)
+export const setToolActivitiesAtom = atom(
+  null,
+  (_get, set, activities: ToolActivity[]) => {
+    set(toolActivityAtom, activities.slice(0, MAX_ACTIVITY_ITEMS))
+  },
+)
+
+// Helper to clear activities
+export const clearToolActivityAtom = atom(null, (_get, set) => {
+  set(toolActivityAtom, [])
+})
+
+// Helper to toggle pin status
+export const toggleActivityPinAtom = atom(
+  null,
+  (get, set, { id, isPinned }: { id: string; isPinned: boolean }) => {
+    const prev = get(toolActivityAtom)
+    set(
+      toolActivityAtom,
+      prev.map((a) => (a.id === id ? { ...a, isPinned } : a)),
+    )
+  },
 )

@@ -76,7 +76,7 @@ import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
-import { soundNotificationsEnabledAtom } from "../../../lib/atoms"
+import { soundNotificationsEnabledAtom, notificationModeAtom } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { api } from "../../../lib/mock-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
@@ -124,6 +124,7 @@ import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
 import { useDesktopNotifications } from "../hooks/use-desktop-notifications"
+import { useToolNotifications } from "../hooks/use-tool-notifications"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useHaptic } from "../hooks/use-haptic"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
@@ -1210,7 +1211,7 @@ function ChatViewInner({
     id: subChatId,
     chat,
     resume: !!streamId,
-    // experimental_throttle: 200,
+    experimental_throttle: 200,
   })
 
   // Stream debug: log status changes and scroll to plan/response start when streaming finishes
@@ -3574,6 +3575,9 @@ export function ChatView({
   const setUndoStack = useSetAtom(undoStackAtom)
   const { notifyAgentComplete } = useDesktopNotifications()
 
+  // Get active sub-chat ID for tracking purposes
+  const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
+
   // Check if any chat has unseen changes
   const hasAnyUnseenChanges = unseenChanges.size > 0
   const [, forceUpdate] = useState({})
@@ -3681,9 +3685,6 @@ export function ChatView({
     })
   }, [chatId, setUnseenChanges])
 
-  // Get sub-chat state from store
-  const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
-
   // Clear sub-chat "unseen changes" indicator when sub-chat becomes active
   useEffect(() => {
     if (!activeSubChatId) return
@@ -3716,6 +3717,13 @@ export function ChatView({
     { chatId },
     { enabled: !!chatId },
   )
+
+  // Tool notifications (toast + activity feed) - listens for tool events via window events
+  useToolNotifications(
+    activeSubChatId || "",
+    agentChat?.name || "Agent",
+  )
+
   const agentSubChats = (agentChat?.subChats ?? []) as Array<{
     id: string
     name?: string | null
@@ -4271,9 +4279,15 @@ export function ChatView({
             })
 
             // Play completion sound only if NOT manually aborted and sound is enabled
+            // Respect notification mode setting
             if (!wasManuallyAborted) {
               const isSoundEnabled = appStore.get(soundNotificationsEnabledAtom)
-              if (isSoundEnabled) {
+              const notifMode = appStore.get(notificationModeAtom)
+              const shouldNotify =
+                notifMode === "always" ||
+                (notifMode === "unfocused" && !document.hasFocus())
+
+              if (isSoundEnabled && shouldNotify) {
                 try {
                   const audio = new Audio("./sound.mp3")
                   audio.volume = 1.0
@@ -4283,8 +4297,10 @@ export function ChatView({
                 }
               }
 
-              // Show native notification (desktop app, when window not focused)
-              notifyAgentComplete(agentChat?.name || "Agent")
+              // Show native notification (desktop app) based on notification mode
+              if (shouldNotify) {
+                notifyAgentComplete(agentChat?.name || "Agent")
+              }
             }
           }
 
@@ -4396,9 +4412,15 @@ export function ChatView({
             })
 
             // Play completion sound only if NOT manually aborted and sound is enabled
+            // Respect notification mode setting
             if (!wasManuallyAborted) {
               const isSoundEnabled = appStore.get(soundNotificationsEnabledAtom)
-              if (isSoundEnabled) {
+              const notifMode = appStore.get(notificationModeAtom)
+              const shouldNotify =
+                notifMode === "always" ||
+                (notifMode === "unfocused" && !document.hasFocus())
+
+              if (isSoundEnabled && shouldNotify) {
                 try {
                   const audio = new Audio("./sound.mp3")
                   audio.volume = 1.0
@@ -4408,8 +4430,10 @@ export function ChatView({
                 }
               }
 
-              // Show native notification (desktop app, when window not focused)
-              notifyAgentComplete(agentChat?.name || "Agent")
+              // Show native notification (desktop app) based on notification mode
+              if (shouldNotify) {
+                notifyAgentComplete(agentChat?.name || "Agent")
+              }
             }
           }
 

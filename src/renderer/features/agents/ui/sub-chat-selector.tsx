@@ -9,7 +9,7 @@ import {
   pendingUserQuestionsAtom,
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
-import { X, Plus, AlignJustify, Play } from "lucide-react"
+import { X, Plus, AlignJustify, Play, GripVertical } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -45,6 +45,25 @@ import { toast } from "sonner"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { SubChatContextMenu } from "./sub-chat-context-menu"
 import { formatTimeAgo } from "../utils/format-time-ago"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+} from "@dnd-kit/core"
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 interface DiffStats {
   fileCount: number
@@ -52,6 +71,223 @@ interface DiffStats {
   deletions: number
   isLoading: boolean
   hasChanges: boolean
+}
+
+interface SortableTabProps {
+  subChat: SubChatMeta
+  isActive: boolean
+  isLoading: boolean
+  hasUnseen: boolean
+  isPinned: boolean
+  hasPendingQuestion: boolean
+  hasPendingPlan: boolean
+  isEditing: boolean
+  editName: string
+  editLoading: boolean
+  isTruncated: boolean
+  canClose: boolean
+  onSwitch: (id: string) => void
+  onRename: (subChat: SubChatMeta) => void
+  onEditSave: (subChat: SubChatMeta) => void
+  onEditCancel: (subChat: SubChatMeta) => void
+  onEditNameChange: (name: string) => void
+  onClose: (id: string) => void
+  tabRef: (el: HTMLButtonElement | null) => void
+  textRef: (el: HTMLSpanElement | null) => void
+  isDragging?: boolean
+}
+
+function SortableTab({
+  subChat,
+  isActive,
+  isLoading,
+  hasUnseen,
+  isPinned,
+  hasPendingQuestion,
+  hasPendingPlan,
+  isEditing,
+  editName,
+  editLoading,
+  isTruncated,
+  canClose,
+  onSwitch,
+  onRename,
+  onEditSave,
+  onEditCancel,
+  onEditNameChange,
+  onClose,
+  tabRef,
+  textRef,
+  isDragging = false,
+}: SortableTabProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSortableDragging,
+  } = useSortable({ id: subChat.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isSortableDragging ? 0.5 : 1,
+  }
+
+  const mode = subChat.mode || "agent"
+
+  return (
+    <button
+      ref={(el) => {
+        setNodeRef(el)
+        tabRef(el)
+      }}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        if (!isEditing) {
+          onSwitch(subChat.id)
+        }
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        if (!isEditing) {
+          onRename(subChat)
+        }
+      }}
+      className={cn(
+        "group relative flex items-center text-sm rounded-md transition-colors cursor-pointer h-6 flex-shrink-0",
+        "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+        isEditing
+          ? "overflow-visible px-0"
+          : "overflow-hidden px-1.5 py-0.5 whitespace-nowrap min-w-[50px] gap-1.5",
+        isActive
+          ? "bg-muted text-foreground max-w-[180px]"
+          : "hover:bg-muted/80 max-w-[150px]",
+        isDragging && "shadow-lg ring-1 ring-border",
+      )}
+    >
+      {/* Icon: question icon (priority) OR loading spinner OR mode icon with badge (hide when editing) */}
+      {!isEditing && (
+        <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center relative">
+          {hasPendingQuestion ? (
+            <QuestionIcon className="w-3.5 h-3.5 text-blue-500" />
+          ) : isLoading ? (
+            <IconSpinner className="w-3.5 h-3.5 text-muted-foreground" />
+          ) : (
+            <>
+              {mode === "plan" ? (
+                <PlanIcon className="w-3.5 h-3.5 text-muted-foreground" />
+              ) : (
+                <AgentIcon className="w-3.5 h-3.5 text-muted-foreground" />
+              )}
+              {(hasPendingPlan || hasUnseen || isPinned) && (
+                <div
+                  className={cn(
+                    "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full flex items-center justify-center",
+                    isActive ? "bg-muted" : "bg-background",
+                  )}
+                >
+                  {hasPendingPlan ? (
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  ) : hasUnseen ? (
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#307BD0]" />
+                  ) : isPinned ? (
+                    <PinFilledIcon className="w-2 h-2 text-muted-foreground" />
+                  ) : null}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {isEditing ? (
+        <InlineEdit
+          value={editName}
+          onChange={onEditNameChange}
+          onSave={() => onEditSave(subChat)}
+          onCancel={() => onEditCancel(subChat)}
+          isEditing={true}
+          disabled={editLoading}
+          className="text-sm !px-1 !py-0 !h-6 min-w-[100px] border border-input rounded-md !ring-0 !shadow-none focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!border-input"
+        />
+      ) : (
+        <span
+          ref={textRef}
+          className="relative z-0 text-left flex-1 min-w-0 pr-1 overflow-hidden block whitespace-nowrap"
+        >
+          {subChat.name || "New Chat"}
+        </span>
+      )}
+
+      {/* Gradient fade on the right when text is truncated and not editing */}
+      {isTruncated && !isEditing && (
+        <div
+          className={cn(
+            "absolute right-0 top-0 bottom-0 w-6 pointer-events-none z-[1] rounded-r-md opacity-100 group-hover:opacity-0 transition-opacity duration-200",
+            isActive
+              ? "bg-gradient-to-l from-muted to-transparent"
+              : "bg-gradient-to-l from-background to-transparent",
+          )}
+        />
+      )}
+
+      {/* Close button - only show when hovered and multiple tabs and not editing */}
+      {canClose && !isEditing && (
+        <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+          <div
+            className={cn(
+              "absolute right-0 top-0 bottom-0 w-9 flex items-center justify-center rounded-r-md",
+              isActive
+                ? "bg-[linear-gradient(to_left,hsl(var(--muted))_0%,hsl(var(--muted))_60%,transparent_100%)]"
+                : "bg-[linear-gradient(to_left,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_0%,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_60%,transparent_100%)]",
+            )}
+          />
+          <span
+            role="button"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose(subChat.id)
+            }}
+            className="relative z-20 hover:text-foreground rounded p-0.5 transition-[color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer"
+            title={isActive ? `Close tab (${getShortcutKey("closeTab")})` : "Close tab"}
+          >
+            <X className="h-3 w-3" />
+          </span>
+        </div>
+      )}
+    </button>
+  )
+}
+
+// Overlay component for drag preview (simpler version without refs)
+function TabDragOverlay({ subChat, isActive }: { subChat: SubChatMeta; isActive: boolean }) {
+  const mode = subChat.mode || "agent"
+
+  return (
+    <div
+      className={cn(
+        "flex items-center text-sm rounded-md h-6 px-1.5 py-0.5 gap-1.5 shadow-lg ring-1 ring-border",
+        isActive ? "bg-muted text-foreground" : "bg-background",
+      )}
+    >
+      <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center">
+        {mode === "plan" ? (
+          <PlanIcon className="w-3.5 h-3.5 text-muted-foreground" />
+        ) : (
+          <AgentIcon className="w-3.5 h-3.5 text-muted-foreground" />
+        )}
+      </div>
+      <span className="whitespace-nowrap">{subChat.name || "New Chat"}</span>
+    </div>
+  )
 }
 
 interface SubChatSelectorProps {
@@ -78,7 +314,7 @@ export function SubChatSelector({
   diffStats,
 }: SubChatSelectorProps) {
   // Use shallow comparison to prevent re-renders when arrays have same content
-  const { activeSubChatId, openSubChatIds, pinnedSubChatIds, allSubChats, parentChatId, togglePinSubChat } = useAgentSubChatStore(
+  const { activeSubChatId, openSubChatIds, pinnedSubChatIds, allSubChats, parentChatId, togglePinSubChat, reorderOpenSubChats } = useAgentSubChatStore(
     useShallow((state) => ({
       activeSubChatId: state.activeSubChatId,
       openSubChatIds: state.openSubChatIds,
@@ -86,6 +322,7 @@ export function SubChatSelector({
       allSubChats: state.allSubChats,
       parentChatId: state.chatId,
       togglePinSubChat: state.togglePinSubChat,
+      reorderOpenSubChats: state.reorderOpenSubChats,
     }))
   )
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
@@ -118,6 +355,7 @@ export function SubChatSelector({
   const [truncatedTabs, setTruncatedTabs] = useState<Set<string>>(new Set())
   const [showLeftGradient, setShowLeftGradient] = useState(false)
   const [showRightGradient, setShowRightGradient] = useState(false)
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
   // Map open IDs to metadata and sort: pinned first, then preserve user's tab order
   const openSubChats = useMemo(() => {
@@ -146,6 +384,40 @@ export function SubChatSelector({
     // Unpinned maintain their order from openSubChatIds (user's tab order)
     return [...pinnedChats, ...unpinnedChats]
   }, [openSubChatIds, allSubChats, pinnedSubChatIds])
+
+  // dnd-kit sensors with distance threshold to allow clicks
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px drag distance before activation
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string)
+  }, [])
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveDragId(null)
+
+    if (over && active.id !== over.id) {
+      const oldIndex = openSubChatIds.indexOf(active.id as string)
+      const newIndex = openSubChatIds.indexOf(over.id as string)
+      if (oldIndex !== -1 && newIndex !== -1) {
+        reorderOpenSubChats(oldIndex, newIndex)
+      }
+    }
+  }, [openSubChatIds, reorderOpenSubChats])
+
+  const activeDragSubChat = useMemo(() => {
+    if (!activeDragId) return null
+    return openSubChats.find((sc) => sc.id === activeDragId) || null
+  }, [activeDragId, openSubChats])
 
   const onSwitch = useCallback(
     (subChatId: string) => {
@@ -491,193 +763,102 @@ export function SubChatSelector({
         )}
 
         {/* Scrollable tabs container - with padding-right for plus button */}
-        <div
-          ref={tabsContainerRef}
-          className={cn(
-            "flex items-center px-1 py-1 -my-1 gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide pr-12",
-            subChatsSidebarMode === "sidebar" && !isMobile && "hidden",
-          )}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
-          {hasNoChats
-            ? null
-            : openSubChats.map((subChat, index) => {
-                const isActive = activeSubChatId === subChat.id
-                const isLoading = loadingSubChats.has(subChat.id)
-                const hasUnseen = subChatUnseenChanges.has(subChat.id)
-                const hasTabsToRight = index < openSubChats.length - 1
-                const isPinned = pinnedSubChatIds.includes(subChat.id)
-                // Get mode from sub-chat itself (defaults to "agent")
-                const mode = subChat.mode || "agent"
-                // Check if this chat is waiting for user answer
-                const hasPendingQuestion = pendingQuestions?.subChatId === subChat.id
-                // Check if this chat has a pending plan approval
-                const hasPendingPlan = pendingPlanApprovals.has(subChat.id)
+          <SortableContext
+            items={openSubChatIds}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div
+              ref={tabsContainerRef}
+              className={cn(
+                "flex items-center px-1 py-1 -my-1 gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide pr-12",
+                subChatsSidebarMode === "sidebar" && !isMobile && "hidden",
+              )}
+            >
+              {hasNoChats
+                ? null
+                : openSubChats.map((subChat, index) => {
+                    const isActive = activeSubChatId === subChat.id
+                    const isLoading = loadingSubChats.has(subChat.id)
+                    const hasUnseen = subChatUnseenChanges.has(subChat.id)
+                    const hasTabsToRight = index < openSubChats.length - 1
+                    const isPinned = pinnedSubChatIds.includes(subChat.id)
+                    const hasPendingQuestion = pendingQuestions?.subChatId === subChat.id
+                    const hasPendingPlan = pendingPlanApprovals.has(subChat.id)
 
-                return (
-                  <ContextMenu key={subChat.id}>
-                    <ContextMenuTrigger asChild>
-                      <button
-                        ref={(el) => {
-                          if (el) {
-                            tabRefs.current.set(subChat.id, el)
-                          } else {
-                            tabRefs.current.delete(subChat.id)
-                          }
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          e.preventDefault()
-                          if (editingSubChatId !== subChat.id) {
-                            onSwitch(subChat.id)
-                          }
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation()
-                          e.preventDefault()
-                          if (editingSubChatId !== subChat.id) {
-                            handleRenameClick(subChat)
-                          }
-                        }}
-                        className={cn(
-                          "group relative flex items-center text-sm rounded-md transition-colors cursor-pointer h-6 flex-shrink-0",
-                          "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                          editingSubChatId === subChat.id
-                            ? "overflow-visible px-0"
-                            : "overflow-hidden px-1.5 py-0.5 whitespace-nowrap min-w-[50px] gap-1.5",
-                          isActive
-                            ? "bg-muted text-foreground max-w-[180px]"
-                            : "hover:bg-muted/80 max-w-[150px]",
-                        )}
-                      >
-                        {/* Icon: question icon (priority) OR loading spinner OR mode icon with badge (hide when editing) */}
-                        {editingSubChatId !== subChat.id && (
-                          <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center relative">
-                            {hasPendingQuestion ? (
-                              // Waiting for user answer: show question icon (highest priority)
-                              <QuestionIcon className="w-3.5 h-3.5 text-blue-500" />
-                            ) : isLoading ? (
-                              // Loading: show spinner
-                              <IconSpinner className="w-3.5 h-3.5 text-muted-foreground" />
-                            ) : (
-                              <>
-                                {/* Main mode icon */}
-                                {mode === "plan" ? (
-                                  <PlanIcon className="w-3.5 h-3.5 text-muted-foreground" />
-                                ) : (
-                                  <AgentIcon className="w-3.5 h-3.5 text-muted-foreground" />
-                                )}
-                                {/* Badge in bottom-right corner: amber dot (plan) > unseen dot > pin icon */}
-                                {(hasPendingPlan || hasUnseen || isPinned) && (
-                                  <div
-                                    className={cn(
-                                      "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full flex items-center justify-center",
-                                      isActive ? "bg-muted" : "bg-background",
-                                    )}
-                                  >
-                                    {hasPendingPlan ? (
-                                      <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                    ) : hasUnseen ? (
-                                      <div className="w-1.5 h-1.5 rounded-full bg-[#307BD0]" />
-                                    ) : isPinned ? (
-                                      <PinFilledIcon className="w-2 h-2 text-muted-foreground" />
-                                    ) : null}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-
-                        {editingSubChatId === subChat.id ? (
-                          <InlineEdit
-                            value={editName}
-                            onChange={setEditName}
-                            onSave={() => handleEditSave(subChat)}
-                            onCancel={() => handleEditCancel(subChat)}
-                            isEditing={true}
-                            disabled={editLoading}
-                            className="text-sm !px-1 !py-0 !h-6 min-w-[100px] border border-input rounded-md !ring-0 !shadow-none focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!border-input"
-                          />
-                        ) : (
-                          <span
-                            ref={(el) => {
+                    return (
+                      <ContextMenu key={subChat.id}>
+                        <ContextMenuTrigger asChild>
+                          <SortableTab
+                            subChat={subChat}
+                            isActive={isActive}
+                            isLoading={isLoading}
+                            hasUnseen={hasUnseen}
+                            isPinned={isPinned}
+                            hasPendingQuestion={hasPendingQuestion}
+                            hasPendingPlan={hasPendingPlan}
+                            isEditing={editingSubChatId === subChat.id}
+                            editName={editName}
+                            editLoading={editLoading}
+                            isTruncated={truncatedTabs.has(subChat.id)}
+                            canClose={openSubChats.length > 1}
+                            onSwitch={onSwitch}
+                            onRename={handleRenameClick}
+                            onEditSave={handleEditSave}
+                            onEditCancel={handleEditCancel}
+                            onEditNameChange={setEditName}
+                            onClose={onCloseTab}
+                            tabRef={(el) => {
+                              if (el) {
+                                tabRefs.current.set(subChat.id, el)
+                              } else {
+                                tabRefs.current.delete(subChat.id)
+                              }
+                            }}
+                            textRef={(el) => {
                               if (el) {
                                 textRefs.current.set(subChat.id, el)
                               } else {
                                 textRefs.current.delete(subChat.id)
                               }
                             }}
-                            className="relative z-0 text-left flex-1 min-w-0 pr-1 overflow-hidden block whitespace-nowrap"
-                          >
-                            {subChat.name || "New Chat"}
-                          </span>
-                        )}
-
-                        {/* Gradient fade on the right when text is truncated and not editing */}
-                        {truncatedTabs.has(subChat.id) &&
-                          editingSubChatId !== subChat.id && (
-                            <div
-                              className={cn(
-                                "absolute right-0 top-0 bottom-0 w-6 pointer-events-none z-[1] rounded-r-md opacity-100 group-hover:opacity-0 transition-opacity duration-200",
-                                isActive
-                                  ? "bg-gradient-to-l from-muted to-transparent"
-                                  : "bg-gradient-to-l from-background to-transparent",
-                              )}
-                            />
-                          )}
-
-                        {/* Close button - only show when hovered and multiple tabs and not editing */}
-                        {openSubChats.length > 1 &&
-                          editingSubChatId !== subChat.id && (
-                            <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                              <div
-                                className={cn(
-                                  "absolute right-0 top-0 bottom-0 w-9 flex items-center justify-center rounded-r-md",
-                                  isActive
-                                    ? "bg-[linear-gradient(to_left,hsl(var(--muted))_0%,hsl(var(--muted))_60%,transparent_100%)]"
-                                    : "bg-[linear-gradient(to_left,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_0%,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_60%,transparent_100%)]",
-                                )}
-                              />
-                              <span
-                                role="button"
-                                tabIndex={-1}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onCloseTab(subChat.id)
-                                }}
-                                className="relative z-20 hover:text-foreground rounded p-0.5 transition-[color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer"
-                                title={
-                                  isActive
-                                    ? `Close tab (${getShortcutKey("closeTab")})`
-                                    : "Close tab"
-                                }
-                              >
-                                <X className="h-3 w-3" />
-                              </span>
-                            </div>
-                          )}
-                      </button>
-                    </ContextMenuTrigger>
-                    <SubChatContextMenu
-                      subChat={subChat}
-                      isPinned={isPinned}
-                      onTogglePin={togglePinSubChat}
-                      onRename={handleRenameClick}
-                      onArchive={onCloseTab}
-                      onArchiveOthers={onCloseOtherTabs}
-                      isOnlyChat={openSubChats.length === 1}
-                      showCloseTabOptions={true}
-                      onCloseTab={onCloseTab}
-                      onCloseOtherTabs={onCloseOtherTabs}
-                      onCloseTabsToRight={onCloseTabsToRight}
-                      visualIndex={index}
-                      hasTabsToRight={hasTabsToRight}
-                      canCloseOtherTabs={openSubChats.length > 2}
-                    />
-                  </ContextMenu>
-                )
-              })}
-        </div>
+                          />
+                        </ContextMenuTrigger>
+                        <SubChatContextMenu
+                          subChat={subChat}
+                          isPinned={isPinned}
+                          onTogglePin={togglePinSubChat}
+                          onRename={handleRenameClick}
+                          onArchive={onCloseTab}
+                          onArchiveOthers={onCloseOtherTabs}
+                          isOnlyChat={openSubChats.length === 1}
+                          showCloseTabOptions={true}
+                          onCloseTab={onCloseTab}
+                          onCloseOtherTabs={onCloseOtherTabs}
+                          onCloseTabsToRight={onCloseTabsToRight}
+                          visualIndex={index}
+                          hasTabsToRight={hasTabsToRight}
+                          canCloseOtherTabs={openSubChats.length > 2}
+                        />
+                      </ContextMenu>
+                    )
+                  })}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {activeDragSubChat ? (
+              <TabDragOverlay
+                subChat={activeDragSubChat}
+                isActive={activeSubChatId === activeDragSubChat.id}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
 
         {/* Plus button - absolute positioned on right with gradient cover */}
         {(isMobile || (!isMobile && subChatsSidebarMode === "tabs")) && (

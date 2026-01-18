@@ -30,6 +30,7 @@ interface AgentSubChatStore {
   updateSubChatName: (subChatId: string, name: string) => void
   updateSubChatMode: (subChatId: string, mode: "plan" | "agent") => void
   updateSubChatTimestamp: (subChatId: string) => void
+  reorderOpenSubChats: (oldIndex: number, newIndex: number) => void
   reset: () => void
 }
 
@@ -186,6 +187,20 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
           : sc,
       ),
     })
+  },
+
+  reorderOpenSubChats: (oldIndex: number, newIndex: number) => {
+    const { openSubChatIds, chatId } = get()
+    if (oldIndex === newIndex) return
+    if (oldIndex < 0 || oldIndex >= openSubChatIds.length) return
+    if (newIndex < 0 || newIndex >= openSubChatIds.length) return
+
+    const newIds = [...openSubChatIds]
+    const [removed] = newIds.splice(oldIndex, 1)
+    newIds.splice(newIndex, 0, removed)
+
+    set({ openSubChatIds: newIds })
+    if (chatId) saveToLS(chatId, "open", newIds)
   },
 
   reset: () => {
