@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useTheme } from "next-themes"
 import { fullThemeDataAtom } from "@/lib/atoms"
 import { motion } from "motion/react"
@@ -25,6 +25,7 @@ import {
   terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,
+  openClaudeCodeAtom,
 } from "./atoms"
 import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "./types"
@@ -96,6 +97,7 @@ export function TerminalSidebar({
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
+  const [openClaudeCodeSignal, setOpenClaudeCodeSignal] = useAtom(openClaudeCodeAtom)
 
   // Theme detection for terminal background
   const { resolvedTheme } = useTheme()
@@ -175,8 +177,12 @@ export function TerminalSidebar({
   }, [setAllTerminals, setAllActiveIds])
 
   // Open in Claude Code - stable callback
-  const openInClaudeCode = useCallback(() => {
-    if (!subChatId || !sessionId) {
+  // Can be called with explicit params (from atom signal) or use props (from button)
+  const openInClaudeCode = useCallback((params?: { subChatId: string; sessionId: string }) => {
+    const targetSubChatId = params?.subChatId ?? subChatId
+    const targetSessionId = params?.sessionId ?? sessionId
+
+    if (!targetSubChatId || !targetSessionId) {
       console.warn(
         "[TERMINAL] Cannot open Claude Code: missing subChatId or sessionId",
       )
@@ -195,8 +201,8 @@ export function TerminalSidebar({
       name: "Claude Code",
       createdAt: Date.now(),
       isClaudeCode: true,
-      subChatId,
-      sessionId,
+      subChatId: targetSubChatId,
+      sessionId: targetSessionId,
     }
 
     // Add the terminal to state
@@ -214,8 +220,8 @@ export function TerminalSidebar({
     // Create the Claude Code session via tRPC
     createClaudeCodeMutation.mutate({
       paneId,
-      subChatId,
-      sessionId,
+      subChatId: targetSubChatId,
+      sessionId: targetSessionId,
       cwd,
       workspaceId,
     })
@@ -405,6 +411,19 @@ export function TerminalSidebar({
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
   }, [setIsOpen])
+
+  // Watch for "Open in Claude Code" signal from chat input area
+  useEffect(() => {
+    if (openClaudeCodeSignal && openClaudeCodeSignal.chatId === chatId) {
+      // Clear the signal first to prevent re-triggering
+      setOpenClaudeCodeSignal(null)
+      // Open Claude Code with the provided params
+      openInClaudeCode({
+        subChatId: openClaudeCodeSignal.subChatId,
+        sessionId: openClaudeCodeSignal.sessionId,
+      })
+    }
+  }, [openClaudeCodeSignal, chatId, setOpenClaudeCodeSignal, openInClaudeCode])
 
   // Handle mobile close - also close the sidebar atom to prevent re-opening as desktop sidebar
   const handleMobileClose = useCallback(() => {

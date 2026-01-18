@@ -11,6 +11,7 @@ import {
   type ToolActivity,
 } from "../../../lib/atoms"
 import { trpcClient } from "../../../lib/trpc"
+import { detectCommand } from "../../../lib/bash-command-utils"
 
 // Tool icons for toast notifications
 const TOOL_ICONS: Record<string, string> = {
@@ -45,8 +46,17 @@ function getToolSummary(
       return filePath?.split("/").pop() || "file"
     }
     case "Bash": {
+      // First check if Claude provided a description
+      const description = input?.description as string
+      if (description) {
+        return description.length > 50
+          ? description.substring(0, 50) + "..."
+          : description
+      }
+      // Fall back to smart command detection
       const cmd = (input?.command as string) || ""
-      return cmd.length > 40 ? cmd.substring(0, 40) + "..." : cmd
+      const detected = detectCommand(cmd)
+      return detected.summary
     }
     case "Glob":
     case "Grep": {

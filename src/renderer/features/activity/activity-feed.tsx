@@ -17,6 +17,8 @@ import { cn } from "../../lib/utils"
 import { trpcClient } from "../../lib/trpc"
 import { ActivityViewerModal } from "./activity-viewer-modal"
 import { useAgentSubChatStore } from "../agents/stores/sub-chat-store"
+import { detectCommand } from "../../lib/bash-command-utils"
+import { CommandIcon } from "../../lib/command-icons"
 import {
   FileText,
   FilePen,
@@ -60,8 +62,20 @@ function isActivityGroup(item: FeedItem): item is ActivityGroup {
 }
 
 // Tool icon components for display
-function getToolIcon(toolName: string) {
+function getToolIcon(toolName: string, activity?: ToolActivity) {
   const iconClass = "w-3.5 h-3.5"
+
+  // Special handling for Bash - detect command type
+  if (toolName === "Bash" && activity?.input) {
+    try {
+      const input = JSON.parse(activity.input)
+      const detected = detectCommand(input.command || "")
+      return <CommandIcon type={detected.type} className={iconClass} size={14} />
+    } catch {
+      // Fall through to default
+    }
+  }
+
   switch (toolName) {
     case "Read":
       return <FileText className={iconClass} />
@@ -198,7 +212,7 @@ function ActivityItem({
       onClick={onClick}
     >
       <div className="flex items-center gap-2">
-        <div className="text-muted-foreground">{getToolIcon(activity.toolName)}</div>
+        <div className="text-muted-foreground">{getToolIcon(activity.toolName, activity)}</div>
         <span className="font-medium text-sm truncate flex-1">
           {activity.toolName}
         </span>

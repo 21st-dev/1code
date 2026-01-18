@@ -46,3 +46,14 @@ export const terminalsAtom = atomWithStorage<
 export const activeTerminalIdAtom = atomWithStorage<
   Record<string, string | null>
 >("active-terminal-by-chat", {}, undefined, { getOnInit: true })
+
+/**
+ * Signal to open Claude Code in terminal with specific session.
+ * Set by chat input area, consumed by TerminalSidebar.
+ * null = no pending request, object = request to open Claude Code
+ */
+export const openClaudeCodeAtom = atom<{
+  subChatId: string
+  sessionId: string
+  chatId: string
+} | null>(null)

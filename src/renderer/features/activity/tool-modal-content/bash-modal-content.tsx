@@ -5,6 +5,8 @@ import { Check, X, Copy } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { type ToolActivity } from "../../../lib/atoms"
 import { cn } from "../../../lib/utils"
+import { detectCommand } from "../../../lib/bash-command-utils"
+import { CommandIcon } from "../../../lib/command-icons"
 
 interface BashModalContentProps {
   activity: ToolActivity
@@ -48,6 +50,9 @@ export function BashModalContent({ activity }: BashModalContentProps) {
   const isError = exitCode !== undefined && exitCode !== 0
   const isRunning = activity.state === "running"
 
+  // Detect command type for header display
+  const detected = useMemo(() => detectCommand(command), [command])
+
   const handleCopyCommand = async () => {
     await navigator.clipboard.writeText(command)
     setCopied(true)
@@ -86,10 +91,21 @@ export function BashModalContent({ activity }: BashModalContentProps) {
       <div className="rounded-lg border border-border bg-zinc-950 dark:bg-zinc-900 overflow-hidden">
         {/* Terminal header */}
         <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/50 border-b border-zinc-700">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500/80" />
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-            <div className="w-3 h-3 rounded-full bg-green-500/80" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-500/80" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+              <div className="w-3 h-3 rounded-full bg-green-500/80" />
+            </div>
+            {/* Show detected command type */}
+            {detected.type !== "unknown" && (
+              <div className="flex items-center gap-1.5 text-zinc-400">
+                <CommandIcon type={detected.type} size={14} />
+                <span className="text-xs font-medium capitalize">
+                  {detected.type}
+                </span>
+              </div>
+            )}
           </div>
           <Button
             variant="ghost"

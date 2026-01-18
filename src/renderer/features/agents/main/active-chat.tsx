@@ -52,6 +52,7 @@ import { DiffModeEnum } from "@git-diff-view/react"
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   ChevronDown,
+  Code,
   Columns2,
   Eye,
   GitCommitHorizontal,
@@ -83,7 +84,7 @@ import { trpc, trpcClient } from "../../../lib/trpc"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { cn } from "../../../lib/utils"
 import { getShortcutKey, isDesktopApp } from "../../../lib/utils/platform"
-import { terminalSidebarOpenAtom } from "../../terminal/atoms"
+import { terminalSidebarOpenAtom, openClaudeCodeAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import {
   agentsDiffSidebarWidthAtom,
@@ -967,6 +968,10 @@ function ChatViewInner({
   // Plan mode state (read from global atom)
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
 
+  // Terminal sidebar control for "Open in Claude Code" button
+  const setTerminalSidebarOpen = useSetAtom(terminalSidebarOpenAtom)
+  const setOpenClaudeCode = useSetAtom(openClaudeCodeAtom)
+
   // Mutation for updating sub-chat mode in database
   const updateSubChatModeMutation = api.agents.updateSubChatMode.useMutation({
     onSuccess: () => {
@@ -1259,6 +1264,12 @@ function ChatViewInner({
 
   const isStreaming = status === "streaming" || status === "submitted"
 
+  // Extract sessionId from last assistant message for CLI handoff
+  const sessionId = useMemo(() => {
+    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant")
+    return (lastAssistantMessage as any)?.metadata?.sessionId as string | undefined
+  }, [messages])
+
   // Track compacting status from SDK
   const compactingSubChats = useAtomValue(compactingSubChatsAtom)
   const isCompacting = compactingSubChats.has(subChatId)
@@ -1271,6 +1282,15 @@ function ChatViewInner({
       parts: [{ type: "text", text: "/compact" }],
     })
   }, [isStreaming, sendMessage])
+
+  // Handler to open chat in Claude Code CLI
+  const handleOpenInClaudeCode = useCallback(() => {
+    if (!sessionId) return
+    // Signal to terminal sidebar to create Claude Code session
+    setOpenClaudeCode({ subChatId, sessionId, chatId: parentChatId })
+    // Open the terminal sidebar
+    setTerminalSidebarOpen(true)
+  }, [sessionId, subChatId, parentChatId, setOpenClaudeCode, setTerminalSidebarOpen])
 
   // Keep refs updated for scroll save cleanup to use
   useEffect(() => {
@@ -3403,6 +3423,24 @@ function ChatViewInner({
                         })}
                       </DropdownMenuContent>
                     </DropdownMenu>
+
+                    {/* Open in Claude Code button - only show when sessionId exists */}
+                    {sessionId && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={handleOpenInClaudeCode}
+                            className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                          >
+                            <Code className="h-3.5 w-3.5" />
+                            <span>CLI</span>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8}>
+                          Continue this chat in Claude Code terminal
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
@@ -5504,31 +5542,13 @@ export function ChatView({
         )}
 
         {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
-        {worktreePath && (() => {
-          // Extract sessionId from the last assistant message for CLI session resume
-          const lastAssistantMessage = activeChat?.messages
-            ?.slice()
-            .reverse()
-            .find((m) => m.role === "assistant")
-          const sessionId = (lastAssistantMessage as any)?.metadata?.sessionId
-
-          console.log("[CLAUDE-CODE-BUTTON] Debug:", {
-            activeSubChatId,
-            sessionId,
-            hasMessages: !!activeChat?.messages?.length,
-            lastAssistantMessage: !!lastAssistantMessage,
-          })
-
-          return (
-            <TerminalSidebar
-              chatId={chatId}
-              cwd={worktreePath}
-              workspaceId={chatId}
-              subChatId={activeSubChatId}
-              sessionId={sessionId}
-            />
-          )
-        })()}
+        {worktreePath && (
+          <TerminalSidebar
+            chatId={chatId}
+            cwd={worktreePath}
+            workspaceId={chatId}
+          />
+        )}
       </div>
     </div>
   )
