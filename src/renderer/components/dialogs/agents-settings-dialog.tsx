@@ -10,6 +10,7 @@ import {
   EyeOpenFilledIcon,
   SlidersFilledIcon,
 } from "../../icons"
+import { ClaudeCodeIcon } from "../ui/icons"
 import { SkillIcon, AgentIcon } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
@@ -17,6 +18,7 @@ import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
 import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
 import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
+import { AgentsClaudeCodeTab } from "../../features/agents/components/settings-tabs/agents-claude-code-tab"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -49,6 +51,12 @@ const ALL_TABS = [
     label: "Account",
     icon: ProfileIconFilled,
     description: "Manage your account settings",
+  },
+  {
+    id: "claude-code" as SettingsTab,
+    label: "Claude Code",
+    icon: ClaudeCodeIcon,
+    description: "Claude Code integration settings",
   },
   {
     id: "appearance" as SettingsTab,
@@ -195,6 +203,8 @@ export function AgentsSettingsDialog({
     switch (activeTab) {
       case "profile":
         return <AgentsProfileTab />
+      case "claude-code":
+        return <AgentsClaudeCodeTab />
       case "appearance":
         return <AgentsAppearanceTab />
       case "preferences":
