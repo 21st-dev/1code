@@ -10,12 +10,10 @@ import {
 } from "../../../../components/ui/context-menu"
 import { FileTreeContextMenu } from "./FileTreeContextMenu"
 
-// Data file extensions for special icons
-const DATA_FILE_EXTENSIONS: Record<string, "csv" | "json" | "sqlite" | "parquet" | "excel" | "arrow"> = {
+// Data file extensions for special icons (files that open in data viewer)
+const DATA_FILE_EXTENSIONS: Record<string, "csv" | "sqlite" | "parquet" | "excel" | "arrow"> = {
   ".csv": "csv",
   ".tsv": "csv",
-  ".json": "json",
-  ".jsonl": "json",
   ".db": "sqlite",
   ".sqlite": "sqlite",
   ".sqlite3": "sqlite",
@@ -28,7 +26,7 @@ const DATA_FILE_EXTENSIONS: Record<string, "csv" | "json" | "sqlite" | "parquet"
   ".ipc": "arrow",
 }
 
-function getDataFileType(filename: string): "csv" | "json" | "sqlite" | "parquet" | "excel" | "arrow" | null {
+function getDataFileType(filename: string): "csv" | "sqlite" | "parquet" | "excel" | "arrow" | null {
   const ext = filename.includes(".") ? `.${filename.split(".").pop()?.toLowerCase()}` : ""
   return DATA_FILE_EXTENSIONS[ext] || null
 }
