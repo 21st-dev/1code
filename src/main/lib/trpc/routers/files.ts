@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { readdir, stat } from "node:fs/promises"
+import { readdir, stat, readFile } from "node:fs/promises"
 import { watch, type FSWatcher } from "node:fs"
 import { join, relative, basename } from "node:path"
 import { observable } from "@trpc/server/observable"
@@ -738,5 +738,57 @@ export const filesRouter = router({
     .input(z.object({ filePath: z.string() }))
     .query(({ input }) => {
       return listSqliteTables(input.filePath)
+    }),
+
+  /**
+   * Read a text file's content for the file viewer
+   * Returns the content as a string with size and binary detection
+   */
+  readTextFile: publicProcedure
+    .input(z.object({ filePath: z.string() }))
+    .query(async ({ input }): Promise<{
+      ok: true
+      content: string
+      byteLength: number
+    } | {
+      ok: false
+      reason: "not-found" | "too-large" | "binary"
+    }> => {
+      const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2 MB
+      const BINARY_CHECK_SIZE = 8192
+
+      console.log("[files.readTextFile] Reading file:", input.filePath)
+
+      try {
+        // Check file size first
+        const stats = await stat(input.filePath)
+        console.log("[files.readTextFile] File size:", stats.size)
+        if (stats.size > MAX_FILE_SIZE) {
+          console.log("[files.readTextFile] File too large")
+          return { ok: false, reason: "too-large" }
+        }
+
+        // Read file content
+        const buffer = await readFile(input.filePath)
+
+        // Check for binary content (NUL bytes in first 8KB)
+        const checkLength = Math.min(buffer.length, BINARY_CHECK_SIZE)
+        for (let i = 0; i < checkLength; i++) {
+          if (buffer[i] === 0) {
+            console.log("[files.readTextFile] Binary file detected")
+            return { ok: false, reason: "binary" }
+          }
+        }
+
+        console.log("[files.readTextFile] Success, returning", buffer.length, "bytes")
+        return {
+          ok: true,
+          content: buffer.toString("utf-8"),
+          byteLength: buffer.length,
+        }
+      } catch (error) {
+        console.error("[files.readTextFile] Error:", error)
+        return { ok: false, reason: "not-found" }
+      }
     }),
 })

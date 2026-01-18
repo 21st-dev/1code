@@ -1,18 +1,35 @@
 import { loader } from "@monaco-editor/react"
+import * as monaco from "monaco-editor"
 import type { editor } from "monaco-editor"
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
+import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker"
+import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker"
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
 
-// Configure Monaco loader for Electron
-// In Electron, we need to ensure Monaco loads from local node_modules
-// rather than from CDN, which may not work in packaged apps
-export function configureMonacoLoader() {
-  // Monaco will automatically resolve from node_modules in Electron
-  // The @monaco-editor/react package handles this well by default
-  // but we can configure it explicitly if needed
-  loader.config({
-    // Use default CDN in development, will work in Electron
-    // For production builds, the bundler handles Monaco correctly
-  })
+// Configure Monaco workers for Vite
+// @ts-ignore - Monaco's global window setup
+self.MonacoEnvironment = {
+  getWorker(_: unknown, label: string) {
+    if (label === "json") {
+      return new jsonWorker()
+    }
+    if (label === "css" || label === "scss" || label === "less") {
+      return new cssWorker()
+    }
+    if (label === "html" || label === "handlebars" || label === "razor") {
+      return new htmlWorker()
+    }
+    if (label === "typescript" || label === "javascript") {
+      return new tsWorker()
+    }
+    return new editorWorker()
+  },
 }
+
+// Configure Monaco to use local package instead of CDN
+// This is required for Electron apps due to CSP restrictions
+loader.config({ monaco })
 
 // Default editor options for read-only file viewing
 export const defaultEditorOptions: editor.IStandaloneEditorConstructionOptions = {
