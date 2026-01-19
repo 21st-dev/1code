@@ -1028,4 +1028,253 @@ export const chatsRouter = router({
         return { hasWorktree: false, uncommittedCount: 0 }
       }
     }),
+
+  /**
+   * Export a chat conversation to various formats.
+   * Useful for sharing, backup, or importing into other tools.
+   */
+  exportChat: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string(),
+        format: z.enum(["json", "markdown", "text"]).default("markdown"),
+        includeMetadata: z.boolean().default(false),
+      }),
+    )
+    .query(async ({ input }) => {
+      const db = getDatabase()
+      const chat = db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, input.chatId))
+        .get()
+
+      if (!chat) {
+        throw new Error("Chat not found")
+      }
+
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, chat.projectId))
+        .get()
+
+      const chatSubChats = db
+        .select()
+        .from(subChats)
+        .where(eq(subChats.chatId, input.chatId))
+        .orderBy(subChats.createdAt)
+        .all()
+
+      // parse messages from all sub-chats
+      const allMessages: Array<{
+        subChatId: string
+        subChatName: string | null
+        messages: Array<{
+          id: string
+          role: string
+          parts: Array<{ type: string; text?: string; [key: string]: any }>
+          metadata?: any
+        }>
+      }> = []
+
+      for (const subChat of chatSubChats) {
+        try {
+          const messages = JSON.parse(subChat.messages || "[]")
+          allMessages.push({
+            subChatId: subChat.id,
+            subChatName: subChat.name,
+            messages,
+          })
+        } catch {
+          // skip invalid json
+        }
+      }
+
+      if (input.format === "json") {
+        return {
+          format: "json" as const,
+          content: JSON.stringify(
+            {
+              exportedAt: new Date().toISOString(),
+              chat: {
+                id: chat.id,
+                name: chat.name,
+                createdAt: chat.createdAt,
+                branch: chat.branch,
+                baseBranch: chat.baseBranch,
+                prUrl: chat.prUrl,
+              },
+              project: project
+                ? {
+                    id: project.id,
+                    name: project.name,
+                    path: project.path,
+                  }
+                : null,
+              conversations: allMessages,
+            },
+            null,
+            2,
+          ),
+          filename: `${chat.name || "chat"}-${chat.id.slice(0, 8)}.json`,
+        }
+      }
+
+      if (input.format === "text") {
+        // plain text format
+        let text = `# ${chat.name || "Untitled Chat"}\n`
+        text += `exported: ${new Date().toISOString()}\n`
+        if (project) {
+          text += `project: ${project.name}\n`
+        }
+        text += `\n---\n\n`
+
+        for (const subChatData of allMessages) {
+          if (subChatData.subChatName) {
+            text += `## ${subChatData.subChatName}\n\n`
+          }
+
+          for (const msg of subChatData.messages) {
+            const role = msg.role === "user" ? "You" : "Assistant"
+            text += `${role}:\n`
+
+            for (const part of msg.parts || []) {
+              if (part.type === "text" && part.text) {
+                text += `${part.text}\n`
+              } else if (part.type?.startsWith("tool-") && part.toolName) {
+                text += `[used ${part.toolName} tool]\n`
+              }
+            }
+            text += "\n"
+          }
+        }
+
+        return {
+          format: "text" as const,
+          content: text,
+          filename: `${chat.name || "chat"}-${chat.id.slice(0, 8)}.txt`,
+        }
+      }
+
+      // markdown format (default)
+      let markdown = `# ${chat.name || "Untitled Chat"}\n\n`
+      markdown += `**Exported:** ${new Date().toISOString()}\n\n`
+      if (project) {
+        markdown += `**Project:** ${project.name}\n\n`
+      }
+      if (chat.branch) {
+        markdown += `**Branch:** \`${chat.branch}\`\n\n`
+      }
+      if (chat.prUrl) {
+        markdown += `**PR:** [${chat.prUrl}](${chat.prUrl})\n\n`
+      }
+      markdown += `---\n\n`
+
+      for (const subChatData of allMessages) {
+        if (subChatData.subChatName) {
+          markdown += `## ${subChatData.subChatName}\n\n`
+        }
+
+        for (const msg of subChatData.messages) {
+          const role = msg.role === "user" ? "**You**" : "**Assistant**"
+          markdown += `### ${role}\n\n`
+
+          for (const part of msg.parts || []) {
+            if (part.type === "text" && part.text) {
+              markdown += `${part.text}\n\n`
+            } else if (part.type?.startsWith("tool-") && part.toolName) {
+              const toolName = part.toolName
+              if (toolName === "Bash" && part.input?.command) {
+                markdown += `\`\`\`bash\n${part.input.command}\n\`\`\`\n\n`
+              } else if (
+                (toolName === "Edit" || toolName === "Write") &&
+                part.input?.file_path
+              ) {
+                markdown += `> Modified: \`${part.input.file_path}\`\n\n`
+              } else if (toolName === "Read" && part.input?.file_path) {
+                markdown += `> Read: \`${part.input.file_path}\`\n\n`
+              } else {
+                markdown += `> *Used ${toolName} tool*\n\n`
+              }
+            }
+          }
+        }
+      }
+
+      return {
+        format: "markdown" as const,
+        content: markdown,
+        filename: `${chat.name || "chat"}-${chat.id.slice(0, 8)}.md`,
+      }
+    }),
+
+  /**
+   * Get basic stats for a chat (message count, tool usage, etc.)
+   * Useful for showing chat summary in sidebar or export dialogs.
+   */
+  getChatStats: publicProcedure
+    .input(z.object({ chatId: z.string() }))
+    .query(({ input }) => {
+      const db = getDatabase()
+      const chatSubChats = db
+        .select()
+        .from(subChats)
+        .where(eq(subChats.chatId, input.chatId))
+        .all()
+
+      let messageCount = 0
+      let userMessageCount = 0
+      let assistantMessageCount = 0
+      let toolCalls = 0
+      const toolUsage: Record<string, number> = {}
+      let totalInputTokens = 0
+      let totalOutputTokens = 0
+
+      for (const subChat of chatSubChats) {
+        try {
+          const messages = JSON.parse(subChat.messages || "[]") as Array<{
+            role: string
+            parts?: Array<{ type: string; toolName?: string }>
+            metadata?: { usage?: { inputTokens?: number; outputTokens?: number } }
+          }>
+
+          for (const msg of messages) {
+            messageCount++
+            if (msg.role === "user") {
+              userMessageCount++
+            } else if (msg.role === "assistant") {
+              assistantMessageCount++
+
+              // count tool calls
+              for (const part of msg.parts || []) {
+                if (part.type?.startsWith("tool-") && part.toolName) {
+                  toolCalls++
+                  toolUsage[part.toolName] = (toolUsage[part.toolName] || 0) + 1
+                }
+              }
+
+              // aggregate token usage
+              if (msg.metadata?.usage) {
+                totalInputTokens += msg.metadata.usage.inputTokens || 0
+                totalOutputTokens += msg.metadata.usage.outputTokens || 0
+              }
+            }
+          }
+        } catch {
+          // skip invalid json
+        }
+      }
+
+      return {
+        messageCount,
+        userMessageCount,
+        assistantMessageCount,
+        toolCalls,
+        toolUsage,
+        totalInputTokens,
+        totalOutputTokens,
+        subChatCount: chatSubChats.length,
+      }
+    }),
 })

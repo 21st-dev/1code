@@ -2416,7 +2416,7 @@ export function ChatView({
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
   const setUndoStack = useSetAtom(undoStackAtom)
-  const { notifyAgentComplete } = useDesktopNotifications()
+  const { notifyAgentComplete, notifyAgentNeedsInput, notifyPlanReady } = useDesktopNotifications()
 
   // Check if any chat has unseen changes
   const hasAnyUnseenChanges = unseenChanges.size > 0
@@ -3304,6 +3304,20 @@ export function ChatView({
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [handleCreateNewSubChat])
+
+  // desktop notification for pending user questions (when window is not focused)
+  const pendingUserQuestions = useAtomValue(pendingUserQuestionsAtom)
+  const prevPendingQuestionsRef = useRef<typeof pendingUserQuestions>(null)
+  useEffect(() => {
+    // only trigger on new question appearing, not on every re-render
+    const hadQuestion = !!prevPendingQuestionsRef.current
+    const hasQuestion = !!pendingUserQuestions
+    prevPendingQuestionsRef.current = pendingUserQuestions
+
+    if (!hadQuestion && hasQuestion) {
+      notifyAgentNeedsInput(agentChat?.name || "Agent")
+    }
+  }, [pendingUserQuestions, notifyAgentNeedsInput, agentChat?.name])
 
   // Multi-select state for sub-chats (for Cmd+W bulk close)
   const selectedSubChatIds = useAtomValue(selectedSubChatIdsAtom)

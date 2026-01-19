@@ -5,6 +5,8 @@
 
 import { PostHog } from "posthog-node"
 import { app } from "electron"
+import * as fs from "fs"
+import * as path from "path"
 
 // PostHog configuration from environment
 const POSTHOG_DESKTOP_KEY = import.meta.env.MAIN_VITE_POSTHOG_KEY
@@ -13,6 +15,40 @@ const POSTHOG_HOST = import.meta.env.MAIN_VITE_POSTHOG_HOST || "https://us.i.pos
 let posthog: PostHog | null = null
 let currentUserId: string | null = null
 let userOptedOut = false // Synced from renderer
+
+// track first launch using a marker file
+const FIRST_LAUNCH_MARKER = ".first_launch_tracked"
+
+function getFirstLaunchMarkerPath(): string {
+  try {
+    return path.join(app.getPath("userData"), FIRST_LAUNCH_MARKER)
+  } catch {
+    // app not ready yet
+    return ""
+  }
+}
+
+function isFirstLaunch(): boolean {
+  const markerPath = getFirstLaunchMarkerPath()
+  if (!markerPath) return false
+
+  try {
+    return !fs.existsSync(markerPath)
+  } catch {
+    return false
+  }
+}
+
+function markFirstLaunchTracked(): void {
+  const markerPath = getFirstLaunchMarkerPath()
+  if (!markerPath) return
+
+  try {
+    fs.writeFileSync(markerPath, new Date().toISOString())
+  } catch {
+    // ignore errors writing marker
+  }
+}
 
 // Check if we're in development mode
 // Set FORCE_ANALYTICS=true to test analytics in development
@@ -157,9 +193,22 @@ export async function shutdown() {
  * Track app opened event
  */
 export function trackAppOpened() {
+  const firstLaunch = isFirstLaunch()
+
   capture("desktop_opened", {
-    first_launch: false, // TODO: track first launch
+    first_launch: firstLaunch,
   })
+
+  if (firstLaunch) {
+    // mark as tracked so subsequent opens don't count as first launch
+    markFirstLaunchTracked()
+
+    // also fire a separate first_launch event for funnel analysis
+    capture("first_launch", {
+      app_version: app.getVersion(),
+      platform: process.platform,
+    })
+  }
 }
 
 /**
