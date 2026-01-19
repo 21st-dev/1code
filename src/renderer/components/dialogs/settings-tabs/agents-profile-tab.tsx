@@ -4,6 +4,7 @@ import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { IconSpinner } from "../../../icons"
 import { toast } from "sonner"
+import { UsageStats } from "../../../features/settings/usage-stats"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -147,6 +148,22 @@ export function AgentsProfileTab() {
         </div>
       </div>
 
+      {/* Usage Statistics */}
+      <div className="space-y-2">
+        {!isNarrowScreen && (
+          <div className="pb-3 mb-4">
+            <h3 className="text-sm font-medium text-foreground">Usage</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Directly fetch from 'https://api.anthropic.com/api/oauth/usage'
+            </p>
+          </div>
+        )}
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4">
+            <UsageStats />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
