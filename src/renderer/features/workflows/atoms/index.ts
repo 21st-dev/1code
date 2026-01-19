@@ -21,36 +21,25 @@ export const workflowsSidebarOpenAtom = atomWithStorage<boolean>(
 // ============================================
 
 /**
- * Storage key for expanded tree nodes
- * Format: Set<string> where keys are:
- * - "agents" - top-level agents category
- * - "commands" - top-level commands category
- * - "skills" - top-level skills category
- * - "agent:{id}" - specific agent node
- * - "command:{id}" - specific command node
- * - "skill:{id}" - specific skill node
- * - "tools" - tools category under a node
- * - "mcpServers" - MCP servers category under a node
+ * Storage atom for expanded tree nodes (array-based for JSON serialization)
+ * atomWithStorage serializes Set to JSON, so we store as array and convert to Set in the derived atom
+ * Storage key: "workflows:expanded-nodes"
  */
-const workflowsTreeExpandedNodesStorageAtom = atomWithStorage<Set<string>>(
+const workflowsTreeExpandedNodesStorageAtom = atomWithStorage<string[]>(
   "workflows:expanded-nodes",
-  new Set<string>(["agents", "commands", "skills"]), // Default: top-level categories expanded
+  ["agents", "commands", "skills"], // Default: top-level categories expanded (as array)
   undefined,
   { getOnInit: true },
 )
 
 /**
  * Read-write atom for expanded nodes set
- * Note: atomWithStorage serializes to JSON, so we convert array <-> Set
+ * Converts between array (storage) and Set (usage)
  */
 export const workflowsTreeExpandedNodesAtom = atom<Set<string>>(
-  (get) => {
-    const stored = get(workflowsTreeExpandedNodesStorageAtom)
-    // Convert from array (if deserialized from storage) or ensure it's a Set
-    return Array.isArray(stored) ? new Set(stored) : stored
-  },
+  (get) => new Set(get(workflowsTreeExpandedNodesStorageAtom)),
   (get, set, newSet: Set<string>) => {
-    set(workflowsTreeExpandedNodesStorageAtom, newSet)
+    set(workflowsTreeExpandedNodesStorageAtom, Array.from(newSet))
   },
 )
 
@@ -61,13 +50,11 @@ export const workflowsToggleNodeAtom = atom(
   null,
   (get, set, nodeKey: string) => {
     const current = get(workflowsTreeExpandedNodesStorageAtom)
-    const newSet = new Set(current)
-    if (newSet.has(nodeKey)) {
-      newSet.delete(nodeKey)
+    if (current.includes(nodeKey)) {
+      set(workflowsTreeExpandedNodesStorageAtom, current.filter((k) => k !== nodeKey))
     } else {
-      newSet.add(nodeKey)
+      set(workflowsTreeExpandedNodesStorageAtom, [...current, nodeKey])
     }
-    set(workflowsTreeExpandedNodesStorageAtom, newSet)
   },
 )
 
@@ -78,11 +65,8 @@ export const workflowsExpandCategoryAtom = atom(
   null,
   (get, set, nodeKeys: string[]) => {
     const current = get(workflowsTreeExpandedNodesStorageAtom)
-    const newSet = new Set(current)
-    for (const key of nodeKeys) {
-      newSet.add(key)
-    }
-    set(workflowsTreeExpandedNodesStorageAtom, newSet)
+    const combined = [...new Set([...current, ...nodeKeys])] // Dedupe and add
+    set(workflowsTreeExpandedNodesStorageAtom, combined)
   },
 )
 
@@ -93,11 +77,8 @@ export const workflowsCollapseCategoryAtom = atom(
   null,
   (get, set, nodeKeys: string[]) => {
     const current = get(workflowsTreeExpandedNodesStorageAtom)
-    const newSet = new Set(current)
-    for (const key of nodeKeys) {
-      newSet.delete(key)
-    }
-    set(workflowsTreeExpandedNodesStorageAtom, newSet)
+    const remaining = current.filter((k) => !nodeKeys.includes(k))
+    set(workflowsTreeExpandedNodesStorageAtom, remaining)
   },
 )
 
@@ -105,14 +86,14 @@ export const workflowsCollapseCategoryAtom = atom(
  * Expand all nodes (helper for "Expand All" action)
  */
 export const workflowsExpandAllAtom = atom(null, (_get, set, allNodeKeys: string[]) => {
-  set(workflowsTreeExpandedNodesStorageAtom, new Set(allNodeKeys))
+  set(workflowsTreeExpandedNodesStorageAtom, allNodeKeys)
 })
 
 /**
  * Collapse all nodes (helper for "Collapse All" action)
  */
 export const workflowsCollapseAllAtom = atom(null, (_get, set) => {
-  set(workflowsTreeExpandedNodesStorageAtom, new Set<string>())
+  set(workflowsTreeExpandedNodesStorageAtom, [])
 })
 
 // ============================================
