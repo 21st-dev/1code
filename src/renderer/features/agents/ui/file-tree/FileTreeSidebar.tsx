@@ -56,7 +56,7 @@ export function FileTreeSidebar({
   const [dropTarget, setDropTarget] = useState<DropTarget>({ type: "none" })
   const [isImporting, setIsImporting] = useState(false)
 
-  // Fetch all files from project
+  // Fetch all files from project (like VS Code, we scan everything upfront)
   const {
     data: entries = [],
     isLoading,
@@ -105,7 +105,7 @@ export function FileTreeSidebar({
     },
   )
 
-  // Build tree from flat entries
+  // Build tree from entries (all files are loaded upfront like VS Code)
   const tree = useMemo(() => buildFileTree(entries), [entries])
 
   // Filter tree based on search query
@@ -118,7 +118,7 @@ export function FileTreeSidebar({
   const fileCount = useMemo(() => countFiles(tree), [tree])
   const folderCount = useMemo(() => countFolders(tree), [tree])
 
-  // Toggle folder expansion
+  // Toggle folder expansion (simple - all files are loaded upfront)
   const handleToggleFolder = useCallback(
     (path: string) => {
       const next = new Set(expandedFolders)

@@ -154,8 +154,20 @@ export const FileTreeNode = memo(function FileTreeNode({
     )
   }, [node.type, node.path, gitStatus])
 
-  // Check if this item is ignored
-  const isIgnored = statusCode === "ignored"
+  // Check if this item or any parent folder is ignored
+  const isIgnored = useMemo(() => {
+    // Direct status check
+    if (statusCode === "ignored") return true
+
+    // Check if any parent folder is ignored in gitStatus
+    const pathParts = node.path.split("/")
+    for (let i = 1; i <= pathParts.length; i++) {
+      const parentPath = pathParts.slice(0, i).join("/")
+      if (gitStatus[parentPath]?.status === "ignored") return true
+    }
+
+    return false
+  }, [node.path, statusCode, gitStatus])
 
   const handleClick = useCallback(() => {
     if (node.type === "folder") {

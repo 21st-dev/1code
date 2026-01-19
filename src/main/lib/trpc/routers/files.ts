@@ -144,6 +144,11 @@ function parseGitStatus(output: string): Map<string, GitFileStatus> {
       filePath = filePath.slice(1, -1)
     }
 
+    // Remove trailing slash for directories (git reports ignored dirs as "!! dir/")
+    if (filePath.endsWith("/")) {
+      filePath = filePath.slice(0, -1)
+    }
+
     let status: GitStatusCode = null
     let staged = false
 
@@ -311,14 +316,11 @@ function startWatching(projectPath: string): void {
     const watcher = watch(projectPath, { recursive: true }, (eventType, filename) => {
       if (!filename) return
 
-      // Skip ignored directories and files
-      const parts = filename.split("/")
-      const shouldIgnore = parts.some(part =>
-        IGNORED_DIRS.has(part) ||
-        IGNORED_FILES.has(part) ||
-        (part.startsWith(".") && !part.startsWith(".github") && !part.startsWith(".vscode"))
-      )
-      if (shouldIgnore) return
+      // Skip .git directory changes (handled separately by git watcher)
+      if (filename.startsWith(".git/") || filename === ".git") return
+
+      // Skip system files
+      if (filename.endsWith(".DS_Store") || filename.endsWith("Thumbs.db")) return
 
       // Debounce rapid changes
       const existing = debounceTimers.get(projectPath)
@@ -369,15 +371,12 @@ function stopWatching(projectPath: string): void {
 
 /**
  * Recursively scan a directory and return all file and folder paths
+ * Like VS Code, we scan everything - the file system is fast, only rendering is slow
  */
 async function scanDirectory(
   rootPath: string,
-  currentPath: string = rootPath,
-  depth: number = 0,
-  maxDepth: number = 15
+  currentPath: string = rootPath
 ): Promise<FileEntry[]> {
-  if (depth > maxDepth) return []
-
   const entries: FileEntry[] = []
 
   try {
@@ -388,33 +387,24 @@ async function scanDirectory(
       const relativePath = relative(rootPath, fullPath)
 
       if (entry.isDirectory()) {
-        // Skip ignored directories
-        if (IGNORED_DIRS.has(entry.name)) continue
-        // Skip hidden directories (except .github, .vscode, etc.)
-        if (entry.name.startsWith(".") && !entry.name.startsWith(".github") && !entry.name.startsWith(".vscode")) continue
+        // Skip .git directory (internal git data, not useful to show)
+        if (entry.name === ".git") continue
 
         // Add the folder itself to results
         entries.push({ path: relativePath, type: "folder" })
 
-        // Recurse into subdirectory
-        const subEntries = await scanDirectory(rootPath, fullPath, depth + 1, maxDepth)
+        // Recurse into all subdirectories - no depth limit like VS Code
+        const subEntries = await scanDirectory(rootPath, fullPath)
         entries.push(...subEntries)
       } else if (entry.isFile()) {
-        // Skip ignored files
-        if (IGNORED_FILES.has(entry.name)) continue
-
-        // Check extension
-        const ext = entry.name.includes(".") ? "." + entry.name.split(".").pop()?.toLowerCase() : ""
-        if (IGNORED_EXTENSIONS.has(ext)) {
-          // Allow specific lock files
-          if (!ALLOWED_LOCK_FILES.has(entry.name)) continue
-        }
+        // Skip macOS/Windows system files
+        if (entry.name === ".DS_Store" || entry.name === "Thumbs.db") continue
 
         entries.push({ path: relativePath, type: "file" })
       }
     }
   } catch (error) {
-    // Silently skip directories we can't read
+    // Silently skip directories we can't read (permissions, etc.)
     console.warn(`[files] Could not read directory: ${currentPath}`, error)
   }
 
@@ -588,6 +578,63 @@ export const filesRouter = router({
         return entries
       } catch (error) {
         console.error(`[files] Error listing files:`, error)
+        return []
+      }
+    }),
+
+  /**
+   * List contents of a specific folder (for lazy loading in file tree)
+   * Used when expanding folders that weren't included in initial scan
+   */
+  listFolderContents: publicProcedure
+    .input(z.object({
+      projectPath: z.string(),
+      folderPath: z.string()  // Relative path like "node_modules" or "node_modules/react"
+    }))
+    .query(async ({ input }) => {
+      const { projectPath, folderPath } = input
+
+      if (!projectPath || !folderPath) {
+        return []
+      }
+
+      try {
+        const fullPath = join(projectPath, folderPath)
+
+        // Verify the path exists and is a directory
+        const pathStat = await stat(fullPath)
+        if (!pathStat.isDirectory()) {
+          console.warn(`[files] Not a directory: ${fullPath}`)
+          return []
+        }
+
+        const dirEntries = await readdir(fullPath, { withFileTypes: true })
+
+        const entries: { path: string; type: "file" | "folder" }[] = []
+
+        for (const entry of dirEntries) {
+          // Skip .git and system files
+          if (entry.name === ".git") continue
+          if (entry.name === ".DS_Store" || entry.name === "Thumbs.db") continue
+
+          const relativePath = join(folderPath, entry.name)
+
+          if (entry.isDirectory()) {
+            entries.push({ path: relativePath, type: "folder" })
+          } else if (entry.isFile()) {
+            entries.push({ path: relativePath, type: "file" })
+          }
+        }
+
+        // Sort: folders first, then alphabetically
+        entries.sort((a, b) => {
+          if (a.type !== b.type) return a.type === "folder" ? -1 : 1
+          return a.path.localeCompare(b.path)
+        })
+
+        return entries
+      } catch (error) {
+        console.error(`[files] Error listing folder contents:`, error)
         return []
       }
     }),
