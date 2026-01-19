@@ -34,10 +34,15 @@ export function AnthropicOnboardingPage() {
   const [userClickedConnect, setUserClickedConnect] = useState(false)
   const [urlOpened, setUrlOpened] = useState(false)
   const [savedOauthUrl, setSavedOauthUrl] = useState<string | null>(null)
+  const [showOAuthFlow, setShowOAuthFlow] = useState(false)
   const urlOpenedRef = useRef(false)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
+
+  // Check for existing CLI config
+  const { data: cliConfig, isLoading: isLoadingCliConfig } =
+    trpc.claudeCode.hasExistingCliConfig.useQuery()
 
   // tRPC mutations
   const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
@@ -56,9 +61,9 @@ export function AnthropicOnboardingPage() {
     }
   )
 
-  // Auto-start auth on mount
+  // Auto-start auth on mount ONLY if no CLI config or user chose OAuth
   useEffect(() => {
-    if (flowState.step === "idle") {
+    if (flowState.step === "idle" && showOAuthFlow) {
       setFlowState({ step: "starting" })
       startAuthMutation.mutate(undefined, {
         onSuccess: (result) => {
@@ -77,7 +82,7 @@ export function AnthropicOnboardingPage() {
         },
       })
     }
-  }, [flowState.step, startAuthMutation])
+  }, [flowState.step, startAuthMutation, showOAuthFlow])
 
   // Update flow state when we get the OAuth URL
   useEffect(() => {
@@ -119,6 +124,16 @@ export function AnthropicOnboardingPage() {
   const isValidCodeFormat = (code: string) => {
     const trimmed = code.trim()
     return trimmed.length > 50 && trimmed.includes("#")
+  }
+
+  // Use existing CLI config
+  const handleUseExistingConfig = () => {
+    setAnthropicOnboardingCompleted(true)
+  }
+
+  // Switch to OAuth flow
+  const handleConnectWithOAuth = () => {
+    setShowOAuthFlow(true)
   }
 
   const handleConnectClick = async () => {
@@ -204,6 +219,87 @@ export function AnthropicOnboardingPage() {
     flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
 
+  // Show loading state while checking CLI config
+  if (isLoadingCliConfig) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <IconSpinner className="h-6 w-6" />
+      </div>
+    )
+  }
+
+  // Show existing config detected UI
+  if (cliConfig?.hasConfig && !showOAuthFlow) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
+        {/* Draggable title bar area */}
+        <div
+          className="fixed top-0 left-0 right-0 h-10"
+          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        />
+
+        <div className="w-full max-w-[440px] space-y-8 px-4">
+          {/* Header with dual icons */}
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
+              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+                <Logo className="w-5 h-5" fill="white" />
+              </div>
+              <div className="w-10 h-10 rounded-full bg-[#D97757] flex items-center justify-center">
+                <ClaudeCodeIcon className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-base font-semibold tracking-tight">
+                Claude Configuration Detected
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                We found an existing Claude CLI configuration
+              </p>
+            </div>
+          </div>
+
+          {/* Detected config info */}
+          <div className="p-4 bg-muted/50 border border-border rounded-lg space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-sm font-medium">API Key</span>
+              <span className="text-sm text-muted-foreground">
+                {cliConfig.hasApiKey ? "Configured" : "Not set"}
+              </span>
+            </div>
+            {cliConfig.baseUrl && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="text-sm font-medium">API Proxy</span>
+                <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+                  {cliConfig.baseUrl}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="space-y-3">
+            <button
+              onClick={handleUseExistingConfig}
+              className="w-full h-10 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center"
+            >
+              Use Existing Configuration
+            </button>
+            <button
+              onClick={handleConnectWithOAuth}
+              className="w-full h-10 px-3 bg-transparent text-muted-foreground rounded-lg text-sm font-medium transition-colors duration-150 hover:text-foreground hover:bg-muted/50 flex items-center justify-center"
+            >
+              Connect with Claude OAuth instead
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // OAuth flow UI (existing code)
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
       {/* Draggable title bar area */}

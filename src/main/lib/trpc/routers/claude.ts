@@ -387,8 +387,16 @@ export const claudeRouter = router({
               logClaudeEnv(claudeEnv, `[${input.subChatId}] `)
             }
 
-            // Get Claude Code OAuth token from local storage (optional)
-            const claudeCodeToken = getClaudeCodeToken()
+            // Check if user has existing API key or proxy configured in their shell environment
+            // If so, use that instead of OAuth (allows using custom API proxies)
+            const hasExistingApiConfig = !!(claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_BASE_URL)
+
+            if (hasExistingApiConfig) {
+              console.log(`[claude] Using existing CLI config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${claudeEnv.ANTHROPIC_BASE_URL || "default"}`)
+            }
+
+            // Get Claude Code OAuth token from local storage (only if no existing config)
+            const claudeCodeToken = hasExistingApiConfig ? null : getClaudeCodeToken()
 
             // Create isolated config directory per subChat to prevent session contamination
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
