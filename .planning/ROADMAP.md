@@ -12,7 +12,7 @@ None
 
 - [x] **Phase 1: Discovery Layer** — SDK/file parsing to find agents, commands, skills
 - [x] **Phase 2: Tree Visualization** — Sidebar entries + nested dependency tree UI
-- [ ] **Phase 3: Content Preview** — Full source code/file content on node click
+- [x] **Phase 3: Content Preview** — Full source code/file content on node click
 
 ## Phase Details
 
@@ -37,16 +37,14 @@ Plans:
 - [x] 02-01: Workflows state management (atoms for tree state, expand/collapse, selection)
 - [x] 02-02: Dependency tree component with nested rendering and sidebar integration
 
-### Phase 3: Content Preview
+### Phase 3: Content Preview ✅
 **Goal**: Show full source code/file content when clicking any node in the tree
 **Depends on**: Phase 2
 **Research**: Unlikely (code preview is well-trodden UI pattern)
-**Plans**: TBD
+**Plans**: 1 (consolidated feature implementation)
 
 Plans:
-- [ ] 03-01: Content preview pane with syntax highlighting
-- [ ] 03-02: File type detection and appropriate renderers
-- [ ] 03-03: Testing and refinement
+- [x] 03-01: Content preview pane with syntax highlighting (includes file type detection)
 
 ## Progress
 
@@ -54,4 +52,4 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Discovery Layer | 2/2 | Complete | 2025-01-18 |
 | 2. Tree Visualization | 2/2 | Complete | 2025-01-18 |
-| 3. Content Preview | 0/3 | Not started | - |
+| 3. Content Preview | 1/1 | Complete | 2026-01-18 |
