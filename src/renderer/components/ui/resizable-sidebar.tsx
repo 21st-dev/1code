@@ -2,7 +2,7 @@
 
 import { useAtom, type WritableAtom } from "jotai"
 import { AnimatePresence, motion } from "motion/react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal, flushSync } from "react-dom"
 import { Kbd } from "./kbd"
 
@@ -34,7 +34,7 @@ const DEFAULT_MAX_WIDTH = 9999 // Effectively no limit - CSS constraints handle 
 const DEFAULT_ANIMATION_DURATION = 0 // Disabled for performance
 const EXTENDED_HOVER_AREA_WIDTH = 8
 
-export function ResizableSidebar({
+export const ResizableSidebar = React.memo(function ResizableSidebar({
   isOpen,
   onClose,
   widthAtom,
@@ -552,4 +552,4 @@ export function ResizableSidebar({
       </AnimatePresence>
     </>
   )
-}
+})

@@ -71,8 +71,10 @@ export function AgentsLayout() {
     const isDev = import.meta.env.DEV
     if (isDev) {
       const interval = setInterval(() => {
-        window.desktopApi?.windowIsFullscreen?.().then(setIsFullscreen)
-      }, 300)
+        window.desktopApi?.windowIsFullscreen?.().then((val) => {
+          setIsFullscreen((prev) => (prev !== val ? val : prev))
+        })
+      }, 1000)
       return () => clearInterval(interval)
     }
 
