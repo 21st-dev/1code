@@ -341,7 +341,10 @@ export const api = {
       },
       github: {
         getSlashCommandContent: {
-          fetch: async (_args?: AnyObj) => ({ content: "" }),
+          fetch: async (args?: { path?: string }) => {
+            if (!args?.path) return { content: "" }
+            return trpcClient.commands.getContent.query({ path: args.path })
+          },
         },
         searchFiles: {
           cancel: async () => utils.files.search.cancel(),
@@ -453,7 +456,34 @@ export const api = {
         }
       },
     },
-    getSlashCommands: { useQuery: () => ({ data: [], isLoading: false }) },
+    getSlashCommands: {
+      useQuery: (
+        args?: { projectPath?: string },
+        opts?: AnyObj,
+      ) => {
+        const result = trpc.commands.list.useQuery(
+          { cwd: args?.projectPath },
+          {
+            enabled: opts?.enabled !== false,
+            staleTime: opts?.staleTime ?? 30_000,
+            refetchOnWindowFocus: false,
+          },
+        )
+        return {
+          data: (result.data ?? []).map((cmd) => ({
+            id: `claude:${cmd.name}`,
+            name: cmd.name,
+            command: `/${cmd.name}`,
+            description: cmd.description,
+            argumentHint: cmd.argumentHint,
+            category: "repository" as const,
+            path: cmd.path,
+            source: cmd.source,
+          })),
+          isLoading: result.isLoading,
+        }
+      },
+    },
     getUserInstallations: { useQuery: () => ({ data: [], isLoading: false }) },
     getGithubConnection: {
       useQuery: () => ({ data: { isConnected: false }, isLoading: false }),

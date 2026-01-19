@@ -52,7 +52,8 @@ const agentsSettingsDialogOpenAtom = atom(false)
 const agentsSettingsDialogActiveTabAtom = atom<string | null>(null)
 // Desktop uses real tRPC
 import { toast } from "sonner"
-import { trpc } from "../../../lib/trpc"
+import { trpc, trpcClient } from "../../../lib/trpc"
+import { api } from "../../../lib/mock-api"
 import {
   AgentsSlashCommand,
   COMMAND_PROMPTS,
@@ -104,6 +105,12 @@ const claudeModels = [
   { id: "sonnet", name: "Sonnet" },
   { id: "haiku", name: "Haiku" },
 ]
+
+// Builtin slash commands that don't use $ARGUMENTS pattern
+const BUILTIN_COMMAND_NAMES = new Set([
+  "clear", "plan", "agent", "compact",
+  "review", "pr-comments", "release-notes", "security-review",
+])
 
 // Agent providers
 const agents = [
@@ -613,12 +620,35 @@ export function NewChatForm({
     }
   }
 
-  const handleSend = useCallback(() => {
+  // Utils for fetching slash command content
+  const apiUtils = api.useUtils()
+
+  const handleSend = useCallback(async () => {
     // Get value from uncontrolled editor
-    const message = editorRef.current?.getValue() || ""
+    let message = editorRef.current?.getValue() || ""
 
     if (!message.trim() || !selectedProject) {
       return
+    }
+
+    // Check if message starts with a Claude Code slash command (e.g., "/apex arguments")
+    const slashMatch = message.match(/^\/([a-zA-Z0-9_:-]+)\s*(.*)$/s)
+    if (slashMatch) {
+      const [, commandName, args] = slashMatch
+      if (!BUILTIN_COMMAND_NAMES.has(commandName)) {
+        try {
+          const commandsData = await trpcClient.commands.list.query({ cwd: selectedProject.path })
+          const command = commandsData.find((c) => c.name === commandName)
+          if (command) {
+            const result = await apiUtils.github.getSlashCommandContent.fetch({ path: command.path })
+            if (result.content) {
+              message = result.content.replace(/\$ARGUMENTS/g, args.trim())
+            }
+          }
+        } catch (err) {
+          console.error("[handleSend] Failed to fetch slash command content:", err)
+        }
+      }
     }
 
     // Build message parts array (images first, then text)
@@ -669,6 +699,7 @@ export function NewChatForm({
     workMode,
     images,
     isPlanMode,
+    apiUtils,
   ])
 
   const handleMentionSelect = useCallback((mention: FileMentionOption) => {
@@ -834,11 +865,9 @@ export function NewChatForm({
         return
       }
 
-      // Handle repository commands - auto-send to agent
-      if (command.prompt) {
-        editorRef.current?.setValue(command.prompt)
-        setTimeout(() => handleSend(), 0)
-      }
+      // Handle Claude Code commands - insert command name for user to add arguments
+      // The command content will be fetched and $ARGUMENTS replaced when sending
+      editorRef.current?.setValue(`/${command.name} `)
     },
     [isPlanMode, setIsPlanMode, handleSend],
   )
@@ -1466,6 +1495,7 @@ export function NewChatForm({
                   position={slashPosition}
                   teamId={selectedTeamId || undefined}
                   repository={resolvedRepo?.full_name}
+                  projectPath={validatedProject?.path}
                   isPlanMode={isPlanMode}
                   disabledCommands={["clear"]}
                 />

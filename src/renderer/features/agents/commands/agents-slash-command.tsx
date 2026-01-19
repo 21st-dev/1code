@@ -59,6 +59,7 @@ interface AgentsSlashCommandProps {
   position: { top: number; left: number }
   teamId?: string
   repository?: string
+  projectPath?: string
   isPlanMode?: boolean
   disabledCommands?: string[]
 }
@@ -72,6 +73,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   position,
   teamId,
   repository,
+  projectPath,
   isPlanMode,
   disabledCommands,
 }: AgentsSlashCommandProps) {
@@ -88,16 +90,13 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     return () => clearTimeout(timer)
   }, [searchText])
 
-  // Fetch repository commands
+  // Fetch Claude Code commands from local filesystem
   const { data: repoCommands = [], isLoading } =
     api.github.getSlashCommands.useQuery(
+      { projectPath },
       {
-        teamId: teamId!,
-        repository: repository!,
-      },
-      {
-        enabled: isOpen && !!teamId && !!repository,
-        staleTime: 30_000, // Cache for 30 seconds
+        enabled: isOpen,
+        staleTime: 30_000,
         refetchOnWindowFocus: false,
       },
     )
@@ -108,7 +107,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   // tRPC utils for fetching command content
   const utils = api.useUtils()
 
-  // Handle command selection - fetch content for repository commands
+  // Handle command selection - fetch content for Claude Code commands
   const handleSelect = useCallback(
     async (option: SlashCommandOption) => {
       // For builtin commands, call onSelect directly
@@ -117,13 +116,11 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         return
       }
 
-      // For repository commands, fetch the prompt content first
-      if (option.path && teamId) {
+      // For Claude Code commands, fetch the prompt content first
+      if (option.path) {
         setIsLoadingContent(true)
         try {
           const result = await utils.github.getSlashCommandContent.fetch({
-            teamId,
-            repository: option.repository || repository!,
             path: option.path,
           })
 
@@ -134,17 +131,15 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
           })
         } catch (error) {
           console.error("Failed to fetch slash command content:", error)
-          // Still close the dropdown even on error
           onClose()
         } finally {
           setIsLoadingContent(false)
         }
       } else {
-        // Fallback - just call onSelect without prompt
         onSelect(option)
       }
     },
-    [onSelect, onClose, teamId, repository, utils],
+    [onSelect, onClose, utils],
   )
 
   // Combine builtin and repository commands, filtered by search
@@ -428,11 +423,11 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         </>
       )}
 
-      {/* Repository commands section */}
+      {/* Claude Code commands section */}
       {repoOptions.length > 0 && (
         <>
           <div className="px-2.5 py-1.5 mx-1 text-xs font-medium text-muted-foreground mt-1">
-            From repository
+            Claude Commands
           </div>
           {repoOptions.map((option) => {
             const currentIndex = globalIndex++
