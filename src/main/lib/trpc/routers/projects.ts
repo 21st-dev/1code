@@ -6,8 +6,16 @@ import { dialog, BrowserWindow } from "electron"
 import { basename } from "path"
 import { getGitRemoteInfo } from "../../git"
 import { trackProjectOpened } from "../../analytics"
+import { getLaunchDirectory } from "../../cli"
 
 export const projectsRouter = router({
+  /**
+   * Get launch directory from CLI args (consumed once)
+   */
+  getLaunchDirectory: publicProcedure.query(() => {
+    return getLaunchDirectory()
+  }),
+
   /**
    * List all projects
    */

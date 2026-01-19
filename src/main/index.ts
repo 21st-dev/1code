@@ -19,6 +19,12 @@ import {
   downloadUpdate,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
+import {
+  parseLaunchDirectory,
+  isCliInstalled,
+  installCli,
+  uninstallCli,
+} from "./lib/cli"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -477,6 +483,41 @@ if (gotTheLock) {
               },
             },
             { type: "separator" },
+            {
+              label: isCliInstalled()
+                ? "Uninstall '1code' Command..."
+                : "Install '1code' Command in PATH...",
+              click: async () => {
+                const { dialog } = await import("electron")
+                if (isCliInstalled()) {
+                  const result = await uninstallCli()
+                  if (result.success) {
+                    dialog.showMessageBox({
+                      type: "info",
+                      message: "CLI command uninstalled",
+                      detail: "The '1code' command has been removed from your PATH.",
+                    })
+                    buildMenu()
+                  } else {
+                    dialog.showErrorBox("Uninstallation Failed", result.error || "Unknown error")
+                  }
+                } else {
+                  const result = await installCli()
+                  if (result.success) {
+                    dialog.showMessageBox({
+                      type: "info",
+                      message: "CLI command installed",
+                      detail:
+                        "You can now use '1code .' in any terminal to open 1Code in that directory.",
+                    })
+                    buildMenu()
+                  } else {
+                    dialog.showErrorBox("Installation Failed", result.error || "Unknown error")
+                  }
+                }
+              },
+            },
+            { type: "separator" },
             { role: "services" },
             { type: "separator" },
             { role: "hide" },
@@ -631,6 +672,9 @@ if (gotTheLock) {
         checkForUpdates(true)
       }, 5000)
     }
+
+    // Handle directory argument from CLI (e.g., `1code /path/to/project`)
+    parseLaunchDirectory()
 
     // Handle deep link from app launch (Windows/Linux)
     const deepLinkUrl = process.argv.find((arg) =>

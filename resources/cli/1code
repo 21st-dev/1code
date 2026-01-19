@@ -1,0 +1,16 @@
+#!/bin/bash
+# 1code - Open 1Code in a directory
+# Usage: 1code [directory]
+
+DIR="${1:-.}"
+
+# Resolve to absolute path
+if [[ -d "$DIR" ]]; then
+    DIR=$(cd "$DIR" && pwd)
+else
+    echo "Error: '$DIR' is not a valid directory"
+    exit 1
+fi
+
+# Open 1Code with the directory as argument
+open -a "1Code" --args "$DIR"
