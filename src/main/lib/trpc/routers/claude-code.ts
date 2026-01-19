@@ -1,17 +1,95 @@
 import { z } from "zod"
 import { shell, safeStorage } from "electron"
+import { randomBytes, createHash, randomUUID } from "crypto"
 import { router, publicProcedure } from "../index"
-import { getAuthManager } from "../../../index"
-import { getApiUrl } from "../../config"
 import { getDatabase, claudeCodeCredentials } from "../../db"
 import { eq } from "drizzle-orm"
 
-/**
- * Get desktop auth token for server API calls
- */
-async function getDesktopToken(): Promise<string | null> {
-  const authManager = getAuthManager()
-  return authManager.getValidToken()
+const CLAUDE_CODE_OAUTH_CLIENT_ID =
+  process.env.CLAUDE_CODE_OAUTH_CLIENT_ID ||
+  "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+
+const CLAUDE_CODE_AUTHORIZE_URL =
+  process.env.CLAUDE_CODE_AUTHORIZE_URL || "https://platform.claude.com/oauth/authorize"
+
+const CLAUDE_CODE_TOKEN_URL =
+  process.env.CLAUDE_CODE_TOKEN_URL || "https://platform.claude.com/v1/oauth/token"
+
+const CLAUDE_CODE_MANUAL_REDIRECT_URL =
+  process.env.CLAUDE_CODE_MANUAL_REDIRECT_URL ||
+  "https://platform.claude.com/oauth/code/callback"
+
+const CLAUDE_CODE_SCOPES = [
+  "org:create_api_key",
+  "user:profile",
+  "user:inference",
+  "user:sessions:claude_code",
+]
+
+type OAuthSession = {
+  sessionId: string
+  createdAtMs: number
+  oauthUrl: string
+  state: string
+  codeVerifier: string
+}
+
+const sessions = new Map<string, OAuthSession>()
+
+function base64UrlEncode(buffer: Buffer): string {
+  return buffer
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "")
+}
+
+function createCodeVerifier(): string {
+  // RFC 7636: 43-128 chars, unreserved URL chars
+  return base64UrlEncode(randomBytes(64))
+}
+
+function createCodeChallenge(verifier: string): string {
+  const hash = createHash("sha256").update(verifier).digest()
+  return base64UrlEncode(hash)
+}
+
+function buildAuthorizeUrl(state: string, codeChallenge: string): string {
+  const url = new URL(CLAUDE_CODE_AUTHORIZE_URL)
+  // Claude Code CLI includes this flag in the authorize URL
+  url.searchParams.set("code", "true")
+  url.searchParams.set("client_id", CLAUDE_CODE_OAUTH_CLIENT_ID)
+  url.searchParams.set("response_type", "code")
+  url.searchParams.set("redirect_uri", CLAUDE_CODE_MANUAL_REDIRECT_URL)
+  url.searchParams.set("scope", CLAUDE_CODE_SCOPES.join(" "))
+  url.searchParams.set("state", state)
+  url.searchParams.set("code_challenge", codeChallenge)
+  url.searchParams.set("code_challenge_method", "S256")
+  return url.toString()
+}
+
+function parsePastedAuthCode(raw: string): { code: string; state: string | null } {
+  const trimmed = raw.trim()
+
+  // Accept full callback URL (common copy/paste)
+  try {
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      const url = new URL(trimmed)
+      const code = url.searchParams.get("code")?.trim()
+      const state = url.searchParams.get("state")?.trim() || null
+      if (code) return { code, state }
+    }
+  } catch {
+    // fall through
+  }
+
+  const hashIndex = trimmed.indexOf("#")
+  if (hashIndex === -1) {
+    return { code: trimmed, state: null }
+  }
+  const code = trimmed.slice(0, hashIndex).trim()
+  const state = trimmed.slice(hashIndex + 1).trim() || null
+  return { code, state }
 }
 
 /**
@@ -38,7 +116,7 @@ function decryptToken(encrypted: string): string {
 
 /**
  * Claude Code OAuth router for desktop
- * Uses server only for sandbox creation, stores token locally
+ * Uses PKCE OAuth directly (no 21st.dev login required), stores token locally
  */
 export const claudeCodeRouter = router({
   /**
@@ -59,34 +137,33 @@ export const claudeCodeRouter = router({
   }),
 
   /**
-   * Start OAuth flow - calls server to create sandbox
+   * Start OAuth flow - creates local PKCE session
    */
   startAuth: publicProcedure.mutation(async () => {
-    const token = await getDesktopToken()
-    if (!token) {
-      throw new Error("Not authenticated with 21st.dev")
-    }
+    const sessionId = randomUUID()
+    const codeVerifier = createCodeVerifier()
+    const codeChallenge = createCodeChallenge(codeVerifier)
+    const state = base64UrlEncode(randomBytes(24))
+    const oauthUrl = buildAuthorizeUrl(state, codeChallenge)
 
-    // Server creates sandbox (has CodeSandbox SDK)
-    const response = await fetch(`${getApiUrl()}/api/auth/claude-code/start`, {
-      method: "POST",
-      headers: { "x-desktop-token": token },
+    sessions.set(sessionId, {
+      sessionId,
+      createdAtMs: Date.now(),
+      oauthUrl,
+      state,
+      codeVerifier,
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }))
-      throw new Error(error.error || `Start auth failed: ${response.status}`)
-    }
-
-    return (await response.json()) as {
-      sandboxId: string
-      sandboxUrl: string
-      sessionId: string
+    // Preserve existing renderer contract (sandboxUrl is unused in local flow)
+    return {
+      sandboxId: "local",
+      sandboxUrl: "local",
+      sessionId,
     }
   }),
 
   /**
-   * Poll for OAuth URL - calls sandbox directly
+   * Poll for OAuth URL - returns local URL
    */
   pollStatus: publicProcedure
     .input(
@@ -96,29 +173,23 @@ export const claudeCodeRouter = router({
       })
     )
     .query(async ({ input }) => {
-      try {
-        const response = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
-
-        if (!response.ok) {
-          return { state: "error" as const, oauthUrl: null, error: "Failed to poll status" }
-        }
-
-        const data = await response.json()
+      const session = sessions.get(input.sessionId)
+      if (!session) {
         return {
-          state: data.state as string,
-          oauthUrl: data.oauthUrl ?? null,
-          error: data.error ?? null,
+          state: "error" as const,
+          oauthUrl: null,
+          error: "Auth session not found. Please restart authentication.",
         }
-      } catch (error) {
-        console.error("[ClaudeCode] Poll status error:", error)
-        return { state: "error" as const, oauthUrl: null, error: "Connection failed" }
+      }
+      return {
+        state: "waiting_code" as const,
+        oauthUrl: session.oauthUrl,
+        error: null,
       }
     }),
 
   /**
-   * Submit OAuth code - calls sandbox directly, stores token locally
+   * Submit OAuth code - exchanges directly, stores token locally
    */
   submitCode: publicProcedure
     .input(
@@ -129,56 +200,58 @@ export const claudeCodeRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      // Submit code to sandbox
-      const codeRes = await fetch(
-        `${input.sandboxUrl}/api/auth/${input.sessionId}/code`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: input.code }),
-        }
-      )
-
-      if (!codeRes.ok) {
-        throw new Error(`Code submission failed: ${codeRes.statusText}`)
+      const session = sessions.get(input.sessionId)
+      if (!session) {
+        throw new Error("Auth session not found. Please restart authentication.")
       }
 
-      // Poll for OAuth token (max 10 seconds)
-      let oauthToken: string | null = null
+      const { code, state } = parsePastedAuthCode(input.code)
 
-      for (let i = 0; i < 10; i++) {
-        await new Promise((r) => setTimeout(r, 1000))
+      if (!code) {
+        throw new Error("Invalid authorization code")
+      }
 
-        const statusRes = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
+      if (state && state !== session.state) {
+        throw new Error("Authorization code does not match this session. Please restart authentication.")
+      }
+
+      // Match Claude Code CLI's token exchange payload (JSON + includes state)
+      const body = JSON.stringify({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: CLAUDE_CODE_MANUAL_REDIRECT_URL,
+        client_id: CLAUDE_CODE_OAUTH_CLIENT_ID,
+        code_verifier: session.codeVerifier,
+        state: session.state,
+      })
+
+      const response = await fetch(CLAUDE_CODE_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body,
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "")
+        throw new Error(
+          `Token exchange failed: ${response.status}${errorText ? ` - ${errorText}` : ""}`,
         )
-
-        if (!statusRes.ok) continue
-
-        const status = await statusRes.json()
-
-        if (status.state === "success" && status.oauthToken) {
-          oauthToken = status.oauthToken
-          break
-        }
-
-        if (status.state === "error") {
-          throw new Error(status.error || "Authentication failed")
-        }
       }
+
+      const data = (await response.json()) as { access_token?: string }
+      const oauthToken = data.access_token
 
       if (!oauthToken) {
-        throw new Error("Timeout waiting for OAuth token")
+        throw new Error("Token exchange failed: missing access_token")
       }
 
       // Validate token format
       if (!oauthToken.startsWith("sk-ant-oat01-")) {
         throw new Error("Invalid OAuth token format")
       }
-
-      // Get user ID for reference
-      const authManager = getAuthManager()
-      const user = authManager.getUser()
 
       // Encrypt and store locally
       const encryptedToken = encryptToken(oauthToken)
@@ -194,11 +267,12 @@ export const claudeCodeRouter = router({
           id: "default",
           oauthToken: encryptedToken,
           connectedAt: new Date(),
-          userId: user?.id ?? null,
+          userId: null,
         })
         .run()
 
       console.log("[ClaudeCode] Token stored locally")
+      sessions.delete(input.sessionId)
       return { success: true }
     }),
 

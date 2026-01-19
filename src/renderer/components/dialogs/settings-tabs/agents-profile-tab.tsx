@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react"
+import { useAtom } from "jotai"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { IconSpinner } from "../../../icons"
 import { toast } from "sonner"
+import { localProfileNameAtom } from "../../../lib/atoms"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -22,46 +24,21 @@ function useIsNarrowScreen(): boolean {
   return isNarrow
 }
 
-interface DesktopUser {
-  id: string
-  email: string
-  name: string | null
-  imageUrl: string | null
-  username: string | null
-}
-
 export function AgentsProfileTab() {
-  const [user, setUser] = useState<DesktopUser | null>(null)
-  const [fullName, setFullName] = useState("")
+  const [storedName, setStoredName] = useAtom(localProfileNameAtom)
+  const [fullName, setFullName] = useState(storedName)
   const [isSaving, setIsSaving] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const isNarrowScreen = useIsNarrowScreen()
 
-  // Fetch real user data from desktop API
   useEffect(() => {
-    async function fetchUser() {
-      if (window.desktopApi?.getUser) {
-        const userData = await window.desktopApi.getUser()
-        setUser(userData)
-        setFullName(userData?.name || "")
-      }
-      setIsLoading(false)
-    }
-    fetchUser()
-  }, [])
+    setFullName(storedName)
+  }, [storedName])
 
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      if (window.desktopApi?.updateUser) {
-        const updatedUser = await window.desktopApi.updateUser({ name: fullName })
-        if (updatedUser) {
-          setUser(updatedUser)
-          toast.success("Profile updated successfully")
-        }
-      } else {
-        throw new Error("Desktop API not available")
-      }
+      setStoredName(fullName.trim())
+      toast.success("Profile saved")
     } catch (error) {
       console.error("Error updating profile:", error)
       toast.error(
@@ -70,14 +47,6 @@ export function AgentsProfileTab() {
     } finally {
       setIsSaving(false)
     }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <IconSpinner className="h-6 w-6" />
-      </div>
-    )
   }
 
   return (
@@ -106,23 +75,6 @@ export function AgentsProfileTab() {
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full"
                   placeholder="Enter your name"
-                />
-              </div>
-            </div>
-
-            {/* Email Field (read-only) */}
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <Label className="text-sm font-medium">Email</Label>
-                <p className="text-sm text-muted-foreground">
-                  Your account email
-                </p>
-              </div>
-              <div className="flex-shrink-0 w-80">
-                <Input
-                  value={user?.email || ""}
-                  disabled
-                  className="w-full opacity-60"
                 />
               </div>
             </div>

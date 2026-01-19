@@ -12,6 +12,7 @@ import {
 } from "../../icons"
 import { SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
+import { AgentsClaudeCodeTab } from "./settings-tabs/agents-claude-code-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
@@ -47,9 +48,15 @@ interface AgentsSettingsDialogProps {
 const ALL_TABS = [
   {
     id: "profile" as SettingsTab,
-    label: "Account",
+    label: "Profile",
     icon: ProfileIconFilled,
-    description: "Manage your account settings",
+    description: "Manage your profile settings",
+  },
+  {
+    id: "claudeCode" as SettingsTab,
+    label: "Claude Code",
+    icon: OriginalMCPIcon,
+    description: "Connect Claude Code OAuth",
   },
   {
     id: "appearance" as SettingsTab,
@@ -202,6 +209,8 @@ export function AgentsSettingsDialog({
     switch (activeTab) {
       case "profile":
         return <AgentsProfileTab />
+      case "claudeCode":
+        return <AgentsClaudeCodeTab />
       case "appearance":
         return <AgentsAppearanceTab />
       case "preferences":

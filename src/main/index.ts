@@ -1,17 +1,13 @@
-import { app, BrowserWindow, session, Menu } from "electron"
+import { app, BrowserWindow, Menu } from "electron"
 import { join } from "path"
-import { createServer } from "http"
 import { readFileSync, existsSync, unlinkSync, readlinkSync } from "fs"
 // NOTE: @sentry/electron CANNOT be statically imported - it accesses electron.app at require time
 // which fails in dev mode. We use dynamic import in initSentry() instead.
 import { initDatabase, closeDatabase } from "./lib/db"
-import { createMainWindow, getWindow, showLoginPage } from "./windows/main"
-import { AuthManager } from "./auth-manager"
+import { createMainWindow, getWindow } from "./windows/main"
 import {
   initAnalytics,
-  identify,
   trackAppOpened,
-  trackAuthCompleted,
   shutdown as shutdownAnalytics,
 } from "./lib/analytics"
 import {
@@ -24,10 +20,6 @@ import { initGhAuth } from "./lib/git/gh-auth-setup"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
-
-// Deep link protocol (must match package.json build.protocols.schemes)
-// Use different protocol in dev to avoid conflicts with production app
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
@@ -70,263 +62,6 @@ export function getBaseUrl(): string {
     return "https://21st.dev"
   }
   return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
-}
-
-export function getAppUrl(): string {
-  return process.env.ELECTRON_RENDERER_URL || "https://21st.dev/agents"
-}
-
-// Auth manager singleton
-let authManager: AuthManager
-
-export function getAuthManager(): AuthManager {
-  return authManager
-}
-
-// Handle auth code from deep link (exported for IPC handlers)
-export async function handleAuthCode(code: string): Promise<void> {
-  console.log("[Auth] Handling auth code:", code.slice(0, 8) + "...")
-
-  try {
-    const authData = await authManager.exchangeCode(code)
-    console.log("[Auth] Success for user:", authData.user.email)
-
-    // Track successful authentication
-    trackAuthCompleted(authData.user.id, authData.user.email)
-
-    // Set desktop token cookie using persist:main partition
-    const ses = session.fromPartition("persist:main")
-    try {
-      // First remove any existing cookie to avoid HttpOnly conflict
-      await ses.cookies.remove(getBaseUrl(), "x-desktop-token")
-      await ses.cookies.set({
-        url: getBaseUrl(),
-        name: "x-desktop-token",
-        value: authData.token,
-        expirationDate: Math.floor(
-          new Date(authData.expiresAt).getTime() / 1000,
-        ),
-        httpOnly: false,
-        secure: getBaseUrl().startsWith("https"),
-        sameSite: "lax" as const,
-      })
-      console.log("[Auth] Desktop token cookie set")
-    } catch (cookieError) {
-      // Cookie setting is optional - auth data is already saved to disk
-      console.warn("[Auth] Cookie set failed (non-critical):", cookieError)
-    }
-
-    // Notify renderer
-    const win = getWindow()
-    win?.webContents.send("auth:success", authData.user)
-
-    // Reload window to show app
-    if (process.env.ELECTRON_RENDERER_URL) {
-      win?.loadURL(process.env.ELECTRON_RENDERER_URL)
-    } else {
-      win?.loadFile(join(__dirname, "../renderer/index.html"))
-    }
-    win?.focus()
-  } catch (error) {
-    console.error("[Auth] Exchange failed:", error)
-    getWindow()?.webContents.send("auth:error", (error as Error).message)
-  }
-}
-
-// Handle deep link
-function handleDeepLink(url: string): void {
-  console.log("[DeepLink] Received:", url)
-
-  try {
-    const parsed = new URL(url)
-
-    // Handle auth callback: twentyfirstdev://auth?code=xxx
-    if (parsed.pathname === "/auth" || parsed.host === "auth") {
-      const code = parsed.searchParams.get("code")
-      if (code) {
-        handleAuthCode(code)
-        return
-      }
-    }
-  } catch (e) {
-    console.error("[DeepLink] Failed to parse:", e)
-  }
-}
-
-// Register protocol BEFORE app is ready
-console.log("[Protocol] ========== PROTOCOL REGISTRATION ==========")
-console.log("[Protocol] Protocol:", PROTOCOL)
-console.log("[Protocol] Is dev mode (process.defaultApp):", process.defaultApp)
-console.log("[Protocol] process.execPath:", process.execPath)
-console.log("[Protocol] process.argv:", process.argv)
-
-/**
- * Register the app as the handler for our custom protocol.
- * On macOS, this may not take effect immediately on first install -
- * Launch Services caches protocol handlers and may need time to update.
- */
-function registerProtocol(): boolean {
-  let success = false
-
-  if (process.defaultApp) {
-    // Dev mode: need to pass execPath and script path
-    if (process.argv.length >= 2) {
-      success = app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [
-        process.argv[1]!,
-      ])
-      console.log(
-        `[Protocol] Dev mode registration:`,
-        success ? "success" : "failed",
-      )
-    } else {
-      console.warn("[Protocol] Dev mode: insufficient argv for registration")
-    }
-  } else {
-    // Production mode
-    success = app.setAsDefaultProtocolClient(PROTOCOL)
-    console.log(
-      `[Protocol] Production registration:`,
-      success ? "success" : "failed",
-    )
-  }
-
-  return success
-}
-
-// Store initial registration result (set in app.whenReady())
-let initialRegistration = false
-
-// Verify registration (this checks if OS recognizes us as the handler)
-function verifyProtocolRegistration(): void {
-  const isDefault = process.defaultApp
-    ? app.isDefaultProtocolClient(PROTOCOL, process.execPath, [
-        process.argv[1]!,
-      ])
-    : app.isDefaultProtocolClient(PROTOCOL)
-
-  console.log(`[Protocol] Verification - isDefaultProtocolClient: ${isDefault}`)
-
-  if (!isDefault && initialRegistration) {
-    console.warn(
-      "[Protocol] Registration returned success but verification failed.",
-    )
-    console.warn(
-      "[Protocol] This is common on first install - macOS Launch Services may need time to update.",
-    )
-    console.warn("[Protocol] The protocol should work after app restart.")
-  }
-}
-
-console.log("[Protocol] =============================================")
-
-// Note: app.on("open-url") will be registered in app.whenReady()
-
-// SVG favicon as data URI for auth callback pages (matches web app favicon)
-const FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="1024" height="1024" fill="#0033FF"/><path fill-rule="evenodd" clip-rule="evenodd" d="M800.165 148C842.048 148 876 181.952 876 223.835V686.415C876 690.606 872.606 694 868.415 694H640.915C636.729 694 633.335 697.394 633.335 701.585V868.415C633.335 872.606 629.936 876 625.75 876H223.835C181.952 876 148 842.048 148 800.165V702.59C148 697.262 150.807 692.326 155.376 689.586L427.843 526.1C434.031 522.388 431.956 513.238 425.327 512.118L423.962 512H155.585C151.394 512 148 508.606 148 504.415V337.585C148 333.394 151.394 330 155.585 330H443.75C447.936 330 451.335 326.606 451.335 322.415V155.585C451.335 151.394 454.729 148 458.915 148H800.165ZM458.915 330C454.729 330 451.335 333.394 451.335 337.585V686.415C451.335 690.606 454.729 694 458.915 694H625.75C629.936 694 633.335 690.606 633.335 686.415V337.585C633.335 333.394 629.936 330 625.75 330H458.915Z" fill="#F4F4F4"/></svg>`
-const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
-
-// Dev mode: Start local HTTP server for auth callback
-// This catches http://localhost:21321/auth/callback?code=xxx
-if (process.env.ELECTRON_RENDERER_URL) {
-  const server = createServer((req, res) => {
-    const url = new URL(req.url || "", "http://localhost:21321")
-
-    // Serve favicon
-    if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
-      res.writeHead(200, { "Content-Type": "image/svg+xml" })
-      res.end(FAVICON_SVG)
-      return
-    }
-
-    if (url.pathname === "/auth/callback") {
-      const code = url.searchParams.get("code")
-      console.log(
-        "[Auth Server] Received callback with code:",
-        code?.slice(0, 8) + "...",
-      )
-
-      if (code) {
-        // Handle the auth code
-        handleAuthCode(code)
-
-        // Send success response and close the browser tab
-        res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - Authentication</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root {
-      --bg: #09090b;
-      --text: #fafafa;
-      --text-muted: #71717a;
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #ffffff;
-        --text: #09090b;
-        --text-muted: #71717a;
-      }
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-    }
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-    .logo {
-      width: 24px;
-      height: 24px;
-      margin-bottom: 8px;
-    }
-    h1 {
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 4px;
-    }
-    p {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <svg class="logo" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path fill-rule="evenodd" clip-rule="evenodd" d="M14.3333 0C15.2538 0 16 0.746192 16 1.66667V11.8333C16 11.9254 15.9254 12 15.8333 12H10.8333C10.7413 12 10.6667 12.0746 10.6667 12.1667V15.8333C10.6667 15.9254 10.592 16 10.5 16H1.66667C0.746192 16 0 15.2538 0 14.3333V12.1888C0 12.0717 0.0617409 11.9632 0.162081 11.903L6.15043 8.30986C6.28644 8.22833 6.24077 8.02716 6.09507 8.00256L6.06511 8H0.166667C0.0746186 8 0 7.92538 0 7.83333V4.16667C0 4.07462 0.0746193 4 0.166667 4H6.5C6.59205 4 6.66667 3.92538 6.66667 3.83333V0.166667C6.66667 0.0746193 6.74129 0 6.83333 0H14.3333ZM6.83333 4C6.74129 4 6.66667 4.07462 6.66667 4.16667V11.8333C6.66667 11.9254 6.74129 12 6.83333 12H10.5C10.592 12 10.6667 11.9254 10.6667 11.8333V4.16667C10.6667 4.07462 10.592 4 10.5 4H6.83333Z" fill="#0033FF"/>
-    </svg>
-    <h1>Authentication successful</h1>
-    <p>You can close this tab</p>
-  </div>
-  <script>setTimeout(() => window.close(), 1000)</script>
-</body>
-</html>`)
-      } else {
-        res.writeHead(400, { "Content-Type": "text/plain" })
-        res.end("Missing code parameter")
-      }
-    } else {
-      res.writeHead(404, { "Content-Type": "text/plain" })
-      res.end("Not found")
-    }
-  })
-
-  server.listen(21321, () => {
-    console.log("[Auth Server] Listening on http://localhost:21321")
-  })
 }
 
 // Clean up stale lock files from crashed instances
@@ -387,14 +122,8 @@ if (!gotTheLock) {
 }
 
 if (gotTheLock) {
-  // Handle second instance launch (also handles deep links on Windows/Linux)
+  // Handle second instance launch
   app.on("second-instance", (_event, commandLine) => {
-    // Check for deep link in command line args
-    const url = commandLine.find((arg) => arg.startsWith(`${PROTOCOL}://`))
-    if (url) {
-      handleDeepLink(url)
-    }
-
     const window = getWindow()
     if (window) {
       if (window.isMinimized()) window.restore()
@@ -409,26 +138,12 @@ if (gotTheLock) {
       app.name = "Agents Dev"
     }
 
-    // Register protocol handler (must be after app is ready)
-    initialRegistration = registerProtocol()
-
-    // Handle deep link on macOS (app already running)
-    app.on("open-url", (event, url) => {
-      console.log("[Protocol] open-url event received:", url)
-      event.preventDefault()
-      handleDeepLink(url)
-    })
-
     // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
     if (process.platform === "win32") {
       app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
     }
 
     console.log(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
-
-    // Verify protocol registration after app is ready
-    // This helps diagnose first-install issues where the protocol isn't recognized yet
-    verifyProtocolRegistration()
 
     // Get Claude Code version for About panel
     let claudeCodeVersion = "unknown"
@@ -576,46 +291,11 @@ if (gotTheLock) {
     // Build initial menu
     buildMenu()
 
-    // Initialize auth manager
-    authManager = new AuthManager(!!process.env.ELECTRON_RENDERER_URL)
-    console.log("[App] Auth manager initialized")
-
-    // Initialize analytics after auth manager so we can identify user
+    // Initialize analytics
     initAnalytics()
 
-    // If user already authenticated from previous session, identify them
-    if (authManager.isAuthenticated()) {
-      const user = authManager.getUser()
-      if (user) {
-        identify(user.id, { email: user.email })
-        console.log("[Analytics] User identified from saved session:", user.id)
-      }
-    }
-
-    // Track app opened (now with correct user ID if authenticated)
+    // Track app opened
     trackAppOpened()
-
-    // Set up callback to update cookie when token is refreshed
-    authManager.setOnTokenRefresh(async (authData) => {
-      console.log("[Auth] Token refreshed, updating cookie...")
-      const ses = session.fromPartition("persist:main")
-      try {
-        await ses.cookies.set({
-          url: getBaseUrl(),
-          name: "x-desktop-token",
-          value: authData.token,
-          expirationDate: Math.floor(
-            new Date(authData.expiresAt).getTime() / 1000,
-          ),
-          httpOnly: false,
-          secure: getBaseUrl().startsWith("https"),
-          sameSite: "lax" as const,
-        })
-        console.log("[Auth] Desktop token cookie updated after refresh")
-      } catch (err) {
-        console.error("[Auth] Failed to update cookie:", err)
-      }
-    })
 
     // Initialize database
     try {
@@ -642,14 +322,6 @@ if (gotTheLock) {
       setTimeout(() => {
         checkForUpdates(true)
       }, 5000)
-    }
-
-    // Handle deep link from app launch (Windows/Linux)
-    const deepLinkUrl = process.argv.find((arg) =>
-      arg.startsWith(`${PROTOCOL}://`),
-    )
-    if (deepLinkUrl) {
-      handleDeepLink(deepLinkUrl)
     }
 
     // macOS: Re-create window when dock icon is clicked

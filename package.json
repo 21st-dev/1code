@@ -127,14 +127,6 @@
     "appId": "dev.21st.agents",
     "productName": "1Code",
     "npmRebuild": true,
-    "protocols": [
-      {
-        "name": "1Code",
-        "schemes": [
-          "twentyfirst-agents"
-        ]
-      }
-    ],
     "directories": {
       "buildResources": "build",
       "output": "release"

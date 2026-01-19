@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState, useMemo } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { isDesktopApp } from "../../lib/utils/platform"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
@@ -11,8 +11,8 @@ import {
   agentsShortcutsDialogOpenAtom,
   isDesktopAtom,
   isFullscreenAtom,
-  anthropicOnboardingCompletedAtom,
   activityFeedEnabledAtom,
+  localProfileNameAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
@@ -96,10 +96,6 @@ export function AgentsLayout() {
   )
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom
-  )
-
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
@@ -151,25 +147,15 @@ export function AgentsLayout() {
   }, [sidebarOpen, isDesktop])
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
 
-  // Desktop user state
-  const [desktopUser, setDesktopUser] = useState<{
-    id: string
-    email: string
-    name: string | null
-    imageUrl: string | null
-    username: string | null
-  } | null>(null)
-
-  // Fetch desktop user on mount
-  useEffect(() => {
-    async function fetchUser() {
-      if (window.desktopApi?.getUser) {
-        const user = await window.desktopApi.getUser()
-        setDesktopUser(user)
-      }
-    }
-    fetchUser()
-  }, [])
+  const localProfileName = useAtomValue(localProfileNameAtom)
+  const desktopUser = useMemo(
+    () => ({
+      id: "local",
+      email: "Local",
+      name: localProfileName?.trim() || "Local User",
+    }),
+    [localProfileName],
+  )
 
   // Auto-open sidebar when project is selected, close when no project
   // Only act after projects have loaded to avoid closing sidebar during initial load
@@ -182,17 +168,6 @@ export function AgentsLayout() {
       setSidebarOpen(false)
     }
   }, [validatedProject, projects, setSidebarOpen])
-
-  // Handle sign out
-  const handleSignOut = useCallback(async () => {
-    // Clear selected project and anthropic onboarding on logout
-    setSelectedProject(null)
-    setSelectedChatId(null)
-    setAnthropicOnboardingCompleted(false)
-    if (window.desktopApi?.logout) {
-      await window.desktopApi.logout()
-    }
-  }, [setSelectedProject, setSelectedChatId, setAnthropicOnboardingCompleted])
 
   // Initialize sub-chats when chat is selected
   // Using useLayoutEffect to sync Zustand store synchronously before paint,
@@ -250,7 +225,6 @@ export function AgentsLayout() {
         >
           <AgentsSidebar
             desktopUser={desktopUser}
-            onSignOut={handleSignOut}
             onToggleSidebar={handleCloseSidebar}
           />
         </ResizableSidebar>

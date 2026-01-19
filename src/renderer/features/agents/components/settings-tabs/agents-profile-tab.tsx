@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useAtom, useAtomValue, atom } from "jotai"
 import { Button } from "../../../../components/ui/button"
 import { Input } from "../../../../components/ui/input"
 import { Label } from "../../../../components/ui/label"
@@ -9,6 +10,7 @@ import { toast } from "sonner"
 import { Upload, Edit } from "lucide-react"
 import { motion } from "motion/react"
 import { cn } from "../../../../lib/utils"
+import { localProfileNameAtom } from "../../../../lib/atoms"
 
 // Desktop user interface
 interface DesktopUser {
@@ -21,21 +23,21 @@ interface DesktopUser {
 
 // Custom hook for desktop user profile
 const useDesktopUserProfile = () => {
-  const [user, setUser] = useState<DesktopUser | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [storedName, setStoredName] = useAtom(localProfileNameAtom)
 
-  useEffect(() => {
-    async function fetchUser() {
-      if (window.desktopApi?.getUser) {
-        const userData = await window.desktopApi.getUser()
-        setUser(userData)
-      }
-      setIsLoading(false)
-    }
-    fetchUser()
-  }, [])
+  const user: DesktopUser = {
+    id: "local",
+    email: "Local",
+    name: storedName?.trim() || null,
+    imageUrl: null,
+    username: null,
+  }
 
-  return { user, setUser, isLoading }
+  return {
+    user,
+    setUser: (next: DesktopUser | null) => setStoredName(next?.name ?? ""),
+    isLoading: false,
+  }
 }
 
 // Stub for image upload (not implemented in desktop yet)
@@ -85,9 +87,6 @@ const api = {
     },
   },
 }
-import { useAtomValue } from "jotai"
-// Desktop: mock team atom
-import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
 
 type AuthFlowState =
@@ -137,15 +136,14 @@ export function AgentsProfileTab() {
     setIsSaving(true)
 
     try {
-      if (window.desktopApi?.updateUser) {
-        const updatedUser = await window.desktopApi.updateUser({ name: fullName })
-        if (updatedUser) {
-          setUser(updatedUser)
-          toast.success("Profile updated successfully")
-        }
-      } else {
-        throw new Error("Desktop API not available")
-      }
+      setUser({
+        id: "local",
+        email: "Local",
+        name: fullName.trim() || null,
+        imageUrl: null,
+        username: null,
+      })
+      toast.success("Profile saved")
     } catch (error) {
       console.error("Error updating profile:", error)
       toast.error(

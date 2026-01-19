@@ -85,6 +85,17 @@ export const selectedTeamIdAtom = atomWithStorage<string | null>(
 export const createTeamDialogOpenAtom = atom<boolean>(false)
 
 // ============================================
+// LOCAL PROFILE (desktop-only)
+// ============================================
+
+export const localProfileNameAtom = atomWithStorage<string>(
+  "profile:local-name",
+  "",
+  undefined,
+  { getOnInit: true },
+)
+
+// ============================================
 // MULTI-SELECT ATOMS - Chats (unique to lib/atoms)
 // ============================================
 
@@ -167,7 +178,15 @@ export const clearSubChatSelectionAtom = atom(null, (_get, set) => {
 // ============================================
 
 // Settings dialog
-export type SettingsTab = "profile" | "appearance" | "preferences" | "skills" | "agents" | "mcp" | "debug"
+export type SettingsTab =
+  | "profile"
+  | "claudeCode"
+  | "appearance"
+  | "preferences"
+  | "skills"
+  | "agents"
+  | "mcp"
+  | "debug"
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("profile")
 export const agentsSettingsDialogOpenAtom = atom<boolean>(false)
 

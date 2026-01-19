@@ -51,14 +51,6 @@ export function AgentsDebugTab() {
     onError: (error) => toast.error(error.message),
   })
 
-  const logoutMutation = trpc.debug.logout.useMutation({
-    onSuccess: () => {
-      toast.success("Logged out. Reloading...")
-      setTimeout(() => window.location.reload(), 500)
-    },
-    onError: (error) => toast.error(error.message),
-  })
-
   const openFolderMutation = trpc.debug.openUserDataFolder.useMutation({
     onError: (error) => toast.error(error.message),
   })
@@ -117,12 +109,6 @@ export function AgentsDebugTab() {
             label="Dev Mode"
             value={systemInfo?.isDev ? "Yes" : "No"}
             isLoading={isLoading}
-          />
-          <InfoRow
-            label="Protocol"
-            value={systemInfo?.protocolRegistered ? "Registered" : "Not registered"}
-            isLoading={isLoading}
-            status={systemInfo?.protocolRegistered ? "success" : "warning"}
           />
           <div className="flex items-center justify-between p-3">
             <span className="text-sm text-muted-foreground">userData</span>
@@ -275,7 +261,7 @@ export function AgentsDebugTab() {
         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
           Data Management
         </h4>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -289,24 +275,12 @@ export function AgentsDebugTab() {
             {clearChatsMutation.isPending ? "..." : "Clear Chats"}
           </Button>
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (confirm("Logout? You will need to sign in again.")) {
-                logoutMutation.mutate()
-              }
-            }}
-            disabled={logoutMutation.isPending}
-          >
-            {logoutMutation.isPending ? "..." : "Logout"}
-          </Button>
-          <Button
             variant="destructive"
             size="sm"
             onClick={() => {
               if (
                 confirm(
-                  "Reset everything? This will clear all data and log you out.",
+                  "Reset everything? This will clear all data.",
                 )
               ) {
                 clearAllDataMutation.mutate()

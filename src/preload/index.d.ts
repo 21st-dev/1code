@@ -10,14 +10,6 @@ export interface UpdateProgress {
   total: number
 }
 
-export interface DesktopUser {
-  id: string
-  email: string
-  name: string | null
-  imageUrl: string | null
-  username: string | null
-}
-
 export interface DesktopApi {
   // Platform info
   platform: NodeJS.Platform
@@ -68,16 +60,6 @@ export interface DesktopApi {
   // Clipboard
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
-
-  // Auth
-  getUser: () => Promise<DesktopUser | null>
-  isAuthenticated: () => Promise<boolean>
-  logout: () => Promise<void>
-  startAuthFlow: () => Promise<void>
-  submitAuthCode: (code: string) => Promise<void>
-  updateUser: (updates: { name?: string }) => Promise<DesktopUser | null>
-  onAuthSuccess: (callback: (user: any) => void) => () => void
-  onAuthError: (callback: (error: string) => void) => () => void
 
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void

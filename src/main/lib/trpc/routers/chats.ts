@@ -10,7 +10,6 @@ import {
 } from "../../git"
 import { execWithShellEnv } from "../../git/shell-env"
 import simpleGit from "simple-git"
-import { getAuthManager, getBaseUrl } from "../../../index"
 import {
   trackWorkspaceCreated,
   trackWorkspaceArchived,
@@ -517,47 +516,8 @@ export const chatsRouter = router({
     .input(z.object({ userMessage: z.string() }))
     .mutation(async ({ input }) => {
       try {
-        const authManager = getAuthManager()
-        const token = await authManager.getValidToken()
-        // Always use production API for name generation
-        const apiUrl = "https://21st.dev"
-
-        console.log(
-          "[generateSubChatName] Calling API with token:",
-          token ? "present" : "missing",
-        )
-        console.log(
-          "[generateSubChatName] URL:",
-          `${apiUrl}/api/agents/sub-chat/generate-name`,
-        )
-
-        const response = await fetch(
-          `${apiUrl}/api/agents/sub-chat/generate-name`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token && { "X-Desktop-Token": token }),
-            },
-            body: JSON.stringify({ userMessage: input.userMessage }),
-          },
-        )
-
-        console.log("[generateSubChatName] Response status:", response.status)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error(
-            "[generateSubChatName] API error:",
-            response.status,
-            errorText,
-          )
-          return { name: getFallbackName(input.userMessage) }
-        }
-
-        const data = await response.json()
-        console.log("[generateSubChatName] Generated name:", data.name)
-        return { name: data.name || getFallbackName(input.userMessage) }
+        // Local-only mode: avoid external API calls
+        return { name: getFallbackName(input.userMessage) }
       } catch (error) {
         console.error("[generateSubChatName] Error:", error)
         return { name: getFallbackName(input.userMessage) }

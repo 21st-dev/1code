@@ -1,38 +1,19 @@
 import { router, publicProcedure } from "../index"
 import { getDatabase, projects, chats, subChats } from "../../db"
 import { app, shell } from "electron"
-import { getAuthManager } from "../../../index"
-
-// Protocol constant (must match main/index.ts)
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
 
 export const debugRouter = router({
   /**
    * Get system information for debug display
    */
   getSystemInfo: publicProcedure.query(() => {
-    // Check protocol registration
-    let protocolRegistered = false
-    try {
-      protocolRegistered = process.defaultApp
-        ? app.isDefaultProtocolClient(
-            PROTOCOL,
-            process.execPath,
-            [process.argv[1]!],
-          )
-        : app.isDefaultProtocolClient(PROTOCOL)
-    } catch {
-      protocolRegistered = false
-    }
-
     return {
       version: app.getVersion(),
       platform: process.platform,
       arch: process.arch,
       isDev: IS_DEV,
       userDataPath: app.getPath("userData"),
-      protocolRegistered,
     }
   }),
 
@@ -74,16 +55,6 @@ export const debugRouter = router({
     db.delete(chats).run()
     db.delete(projects).run()
     console.log("[Debug] Cleared all database data")
-    return { success: true }
-  }),
-
-  /**
-   * Logout (clear auth only)
-   */
-  logout: publicProcedure.mutation(() => {
-    const authManager = getAuthManager()
-    authManager.logout()
-    console.log("[Debug] User logged out")
     return { success: true }
   }),
 

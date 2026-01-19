@@ -26,7 +26,7 @@ import { ArchivePopover } from "../agents/ui/archive-popover"
 import { ChevronDown, MoreHorizontal, GitBranch, MessageSquare } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
-const useCombinedAuth = () => ({ userId: null })
+const useCombinedAuth = () => ({ userId: "local" })
 // import { AuthDialog } from "@/components/auth/auth-dialog"
 const AuthDialog = () => null
 // Desktop: archive is handled inline, not via hook
@@ -1371,48 +1371,6 @@ export function AgentsSidebar({
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
 
-                      <DropdownMenuSeparator />
-
-                      {/* Log out */}
-                      <div className="">
-                        <DropdownMenuItem
-                          className="gap-2"
-                          onSelect={() => onSignOut()}
-                        >
-                          <svg
-                            className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <polyline
-                              points="16,17 21,12 16,7"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <line
-                              x1="21"
-                              y1="12"
-                              x2="9"
-                              y2="12"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                          Log out
-                        </DropdownMenuItem>
-                      </div>
                     </>
                   ) : (
                     <>

@@ -367,6 +367,7 @@ export const claudeRouter = router({
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
+            const RESERVED_MCP_SERVER_NAMES = new Set(["claude-in-chrome"])
 
             // Ensure isolated config dir exists and symlink skills/agents from ~/.claude/
             // This is needed because SDK looks for skills at $CLAUDE_CONFIG_DIR/skills/
@@ -422,8 +423,19 @@ export const claudeRouter = router({
                   console.log(`[claude] MCP config lookup: lookupPath=${lookupPath}, found=${!!projectConfig?.mcpServers}`)
                   if (projectConfig?.mcpServers) {
                     console.log(`[claude] MCP servers found: ${Object.keys(projectConfig.mcpServers).join(", ")}`)
-                    // Store MCP servers to pass to SDK
-                    mcpServersForSdk = projectConfig.mcpServers
+                    // Store MCP servers to pass to SDK (filter reserved names that crash Claude Code)
+                    mcpServersForSdk = Object.fromEntries(
+                      Object.entries(projectConfig.mcpServers).filter(
+                        ([name]) => !RESERVED_MCP_SERVER_NAMES.has(name),
+                      ),
+                    )
+                    for (const name of Object.keys(projectConfig.mcpServers)) {
+                      if (RESERVED_MCP_SERVER_NAMES.has(name)) {
+                        console.warn(
+                          `[claude] Skipping reserved MCP server "${name}" from ~/.claude.json (it causes Claude Code to crash)`,
+                        )
+                      }
+                    }
                   } else {
                     // Log available project paths in config for debugging
                     const projectPaths = Object.keys(originalConfig.projects || {}).filter(k => originalConfig.projects[k]?.mcpServers)

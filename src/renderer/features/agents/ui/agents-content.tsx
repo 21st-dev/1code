@@ -8,7 +8,6 @@ const useSearchParams = () => ({ get: () => null })
 const useRouter = () => ({ push: () => { }, replace: () => { } })
 // Desktop: mock Clerk hooks
 const useUser = () => ({ user: null })
-const useClerk = () => ({ signOut: () => { } })
 import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
@@ -46,7 +45,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 // import { useClerk, useUser } from "@clerk/nextjs"
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
-const useCombinedAuth = () => ({ userId: null }) // Desktop mock
+const useCombinedAuth = () => ({ userId: "local" }) // Desktop mock
 import { Button } from "../../../components/ui/button"
 import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
@@ -85,7 +84,6 @@ export const AgentsContent = memo(function AgentsContent() {
   const [isHydrated, setIsHydrated] = useState(false)
   const { userId } = useCombinedAuth()
   const { user } = useUser()
-  const { signOut } = useClerk()
   const isAdmin = useIsAdmin()
 
   // Quick-switch dialog state - Agents (Opt+Ctrl+Tab)
@@ -696,14 +694,7 @@ export const AgentsContent = memo(function AgentsContent() {
   // Note: Cmd+E archive hotkey is handled in AgentsSidebar to share undo stack
 
   const handleSignOut = async () => {
-    // Check if running in Electron desktop app
-    if (typeof window !== "undefined" && window.desktopApi) {
-      // Use desktop logout which clears the token and shows login page
-      await window.desktopApi.logout()
-    } else {
-      // Web: use Clerk sign out
-      await signOut({ redirectUrl: window.location.pathname })
-    }
+    // No-op in desktop local mode (no app-level login)
   }
 
   // Check if sub-chats data is loaded (use separate selectors to avoid object creation)
