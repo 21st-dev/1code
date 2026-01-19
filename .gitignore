@@ -30,4 +30,6 @@ electron.vite.config.*.mjs
 
 # Claude binary (downloaded at build time)
 resources/bin/
-/test-data
+
+# Test data (local testing only)
+test-data/
