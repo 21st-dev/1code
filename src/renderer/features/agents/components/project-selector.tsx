@@ -14,7 +14,15 @@ import {
   CommandItem,
   CommandList,
 } from "../../../components/ui/command"
-import { IconChevronDown, CheckIcon, FolderPlusIcon } from "../../../components/ui/icons"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "../../../components/ui/dialog"
+import { Input } from "../../../components/ui/input"
+import { IconChevronDown, CheckIcon, FolderPlusIcon, GitHubIcon } from "../../../components/ui/icons"
 import { trpc } from "../../../lib/trpc"
 import { selectedProjectAtom } from "../atoms"
 
@@ -48,6 +56,8 @@ export function ProjectSelector() {
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [githubDialogOpen, setGithubDialogOpen] = useState(false)
+  const [githubUrl, setGithubUrl] = useState("")
 
   // Fetch projects from DB
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
@@ -100,9 +110,48 @@ export function ProjectSelector() {
     },
   })
 
+  // Clone from GitHub mutation
+  const cloneFromGitHub = trpc.projects.cloneFromGitHub.useMutation({
+    onSuccess: (project) => {
+      if (project) {
+        utils.projects.list.setData(undefined, (oldData) => {
+          if (!oldData) return [project]
+          const exists = oldData.some((p) => p.id === project.id)
+          if (exists) {
+            return oldData.map((p) =>
+              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+            )
+          }
+          return [project, ...oldData]
+        })
+
+        setSelectedProject({
+          id: project.id,
+          name: project.name,
+          path: project.path,
+          gitRemoteUrl: project.gitRemoteUrl,
+          gitProvider: project.gitProvider as
+            | "github"
+            | "gitlab"
+            | "bitbucket"
+            | null,
+          gitOwner: project.gitOwner,
+          gitRepo: project.gitRepo,
+        })
+        setGithubDialogOpen(false)
+        setGithubUrl("")
+      }
+    },
+  })
+
   const handleOpenFolder = async () => {
     setOpen(false)
     await openFolder.mutateAsync()
+  }
+
+  const handleCloneFromGitHub = async () => {
+    if (!githubUrl.trim()) return
+    await cloneFromGitHub.mutateAsync({ repoUrl: githubUrl.trim() })
   }
 
   const handleSelectProject = (projectId: string) => {
@@ -152,6 +201,7 @@ export function ProjectSelector() {
   }
 
   return (
+    <>
     <Popover
       open={open}
       onOpenChange={(isOpen) => {
@@ -222,9 +272,61 @@ export function ProjectSelector() {
               <FolderPlusIcon className="h-4 w-4 text-muted-foreground" />
               <span>{openFolder.isPending ? "Adding..." : "Add repository"}</span>
             </button>
+            <button
+              onClick={() => {
+                setOpen(false)
+                setGithubDialogOpen(true)
+              }}
+              className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
+            >
+              <GitHubIcon className="h-4 w-4 text-muted-foreground" />
+              <span>Add from GitHub</span>
+            </button>
           </div>
         </Command>
       </PopoverContent>
     </Popover>
+
+    <Dialog open={githubDialogOpen} onOpenChange={setGithubDialogOpen}>
+      <DialogContent className="w-[400px]">
+        <DialogHeader>
+          <DialogTitle>Clone from GitHub</DialogTitle>
+          <DialogDescription>
+            Enter a GitHub repository URL or owner/repo
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleCloneFromGitHub()
+          }}
+          className="flex flex-col gap-4"
+        >
+          <Input
+            placeholder="owner/repo or https://github.com/..."
+            value={githubUrl}
+            onChange={(e) => setGithubUrl(e.target.value)}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setGithubDialogOpen(false)}
+              className="px-3 py-1.5 text-sm rounded-md hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!githubUrl.trim() || cloneFromGitHub.isPending}
+              className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {cloneFromGitHub.isPending ? "Cloning..." : "Clone"}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

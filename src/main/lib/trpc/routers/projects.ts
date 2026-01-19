@@ -2,10 +2,16 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, projects } from "../../db"
 import { eq, desc } from "drizzle-orm"
-import { dialog, BrowserWindow } from "electron"
-import { basename } from "path"
+import { dialog, BrowserWindow, app } from "electron"
+import { basename, join } from "path"
+import { exec } from "node:child_process"
+import { promisify } from "node:util"
+import { existsSync } from "node:fs"
+import { mkdir } from "node:fs/promises"
 import { getGitRemoteInfo } from "../../git"
 import { trackProjectOpened } from "../../analytics"
+
+const execAsync = promisify(exec)
 
 export const projectsRouter = router({
   /**
@@ -218,5 +224,121 @@ export const projectsRouter = router({
         .where(eq(projects.id, input.id))
         .returning()
         .get()
+    }),
+
+  /**
+   * Clone a GitHub repo and create a project
+   */
+  cloneFromGitHub: publicProcedure
+    .input(z.object({ repoUrl: z.string() }))
+    .mutation(async ({ input }) => {
+      const { repoUrl } = input
+
+      // Parse the URL to extract owner/repo
+      let owner: string | null = null
+      let repo: string | null = null
+
+      // Match HTTPS format: https://github.com/owner/repo
+      const httpsMatch = repoUrl.match(
+        /https?:\/\/github\.com\/([^/]+)\/([^/]+)/,
+      )
+      if (httpsMatch) {
+        owner = httpsMatch[1] || null
+        repo = httpsMatch[2]?.replace(/\.git$/, "") || null
+      }
+
+      // Match SSH format: git@github.com:owner/repo
+      const sshMatch = repoUrl.match(/git@github\.com:([^/]+)\/(.+)/)
+      if (sshMatch) {
+        owner = sshMatch[1] || null
+        repo = sshMatch[2]?.replace(/\.git$/, "") || null
+      }
+
+      // Match short format: owner/repo
+      const shortMatch = repoUrl.match(/^([^/]+)\/([^/]+)$/)
+      if (shortMatch) {
+        owner = shortMatch[1] || null
+        repo = shortMatch[2]?.replace(/\.git$/, "") || null
+      }
+
+      if (!owner || !repo) {
+        throw new Error("Invalid GitHub URL or repo format")
+      }
+
+      // Clone to ~/.21st/repos/{owner}/{repo}
+      const homePath = app.getPath("home")
+      const reposDir = join(homePath, ".21st", "repos", owner)
+      const clonePath = join(reposDir, repo)
+
+      // Check if already cloned
+      if (existsSync(clonePath)) {
+        // Project might already exist in DB
+        const db = getDatabase()
+        const existing = db
+          .select()
+          .from(projects)
+          .where(eq(projects.path, clonePath))
+          .get()
+
+        if (existing) {
+          trackProjectOpened({
+            id: existing.id,
+            hasGitRemote: !!existing.gitRemoteUrl,
+          })
+          return existing
+        }
+
+        // Create project for existing clone
+        const gitInfo = await getGitRemoteInfo(clonePath)
+        const newProject = db
+          .insert(projects)
+          .values({
+            name: repo,
+            path: clonePath,
+            gitRemoteUrl: gitInfo.remoteUrl,
+            gitProvider: gitInfo.provider,
+            gitOwner: gitInfo.owner,
+            gitRepo: gitInfo.repo,
+          })
+          .returning()
+          .get()
+
+        trackProjectOpened({
+          id: newProject!.id,
+          hasGitRemote: !!gitInfo.remoteUrl,
+        })
+        return newProject
+      }
+
+      // Create repos directory
+      await mkdir(reposDir, { recursive: true })
+
+      // Clone the repo
+      const cloneUrl = `https://github.com/${owner}/${repo}.git`
+      await execAsync(`git clone "${cloneUrl}" "${clonePath}"`)
+
+      // Get git info and create project
+      const db = getDatabase()
+      const gitInfo = await getGitRemoteInfo(clonePath)
+
+      const newProject = db
+        .insert(projects)
+        .values({
+          name: repo,
+          path: clonePath,
+          gitRemoteUrl: gitInfo.remoteUrl,
+          gitProvider: gitInfo.provider,
+          gitOwner: gitInfo.owner,
+          gitRepo: gitInfo.repo,
+        })
+        .returning()
+        .get()
+
+      trackProjectOpened({
+        id: newProject!.id,
+        hasGitRemote: !!gitInfo.remoteUrl,
+      })
+
+      return newProject
     }),
 })
