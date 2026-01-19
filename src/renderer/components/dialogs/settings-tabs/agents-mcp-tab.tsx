@@ -3,17 +3,19 @@
 import { useState, useEffect } from "react"
 import { ChevronRight } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
-import { useAtomValue } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { sessionInfoAtom } from "../../../lib/atoms"
+import { selectedProjectAtom } from "../../../features/agents/atoms"
 import { cn } from "../../../lib/utils"
 import { OriginalMCPIcon } from "../../ui/icons"
+import { trpc } from "../../../lib/trpc"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
   const [isNarrow, setIsNarrow] = useState(false)
 
   useEffect(() => {
-    const checkWidth = () => {
+    const checkWidth = (): void => {
       setIsNarrow(window.innerWidth <= 768)
     }
 
@@ -33,7 +35,7 @@ function StatusDot({ status }: { status: string }) {
         "w-2 h-2 rounded-full flex-shrink-0",
         status === "connected" && "bg-foreground",
         status !== "connected" && "bg-muted-foreground/50",
-        status === "pending" && "animate-pulse",
+        status === "connecting" && "animate-pulse",
       )}
     />
   )
@@ -49,6 +51,8 @@ function getStatusText(status: string): string {
     case "needs-auth":
       return "Needs auth"
     case "pending":
+      return "Available"
+    case "connecting":
       return "Connecting..."
     default:
       return status
@@ -150,8 +154,34 @@ export function AgentsMcpTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [expandedServer, setExpandedServer] = useState<string | null>(null)
 
-  const sessionInfo = useAtomValue(sessionInfoAtom)
-  const mcpServers = sessionInfo?.mcpServers || []
+  const [sessionInfo, setSessionInfo] = useAtom(sessionInfoAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
+
+  // Fetch MCP config when tab is opened (even before starting a chat)
+  const { data: mcpConfig } = trpc.claude.getMcpConfig.useQuery(
+    { projectPath: selectedProject?.path || "" },
+    {
+      enabled: true, // Always fetch to show available MCP servers
+      staleTime: 30 * 1000, // 30 seconds
+    },
+  )
+
+  // Update sessionInfo with MCP config if we got servers from config
+  useEffect(() => {
+    if (mcpConfig?.mcpServers?.length && !sessionInfo?.mcpServers?.length) {
+      setSessionInfo((prev) => ({
+        tools: prev?.tools || [],
+        mcpServers: mcpConfig.mcpServers.map((s) => ({
+          name: s.name,
+          status: s.status,
+        })),
+        plugins: prev?.plugins || [],
+        skills: prev?.skills || [],
+      }))
+    }
+  }, [mcpConfig, sessionInfo?.mcpServers?.length, setSessionInfo])
+
+  const mcpServers = sessionInfo?.mcpServers || mcpConfig?.mcpServers?.map(s => ({ name: s.name, status: s.status })) || []
   const tools = sessionInfo?.tools || []
 
   // Group tools by server
