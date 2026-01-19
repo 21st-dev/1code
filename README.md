@@ -55,6 +55,19 @@ Claude asks clarifying questions, builds structured plans, and shows clean markd
 - **Project Management** - Link local folders with automatic Git remote detection
 - **Integrated Terminal** - Full terminal access within the app
 
+## 🔌 Plugin System (Experimental)
+
+1Code includes an experimental plugin architecture that allows extending functionality
+without modifying core code.
+
+Plugins can:
+- Register custom commands
+- Hook into application lifecycle
+- Enable future extensions like linters, formatters, and AI tools
+
+See `src/shared/plugins/samplePlugin.ts` for a minimal example.
+
+
 ## Installation
 
 ### Option 1: Build from source (free)
@@ -81,6 +94,32 @@ Your subscription helps us maintain and improve 1Code.
 bun install
 bun run claude:download  # First time only
 bun run dev
+```
+
+## Codespaces & Linux Notes
+
+When running the Electron app inside **GitHub Codespaces**, Docker containers,
+or minimal Linux environments, the UI may fail to launch due to the absence of
+an X11 display server.
+
+This is expected behavior and does **not** block development or builds.
+
+If you encounter dependency resolution issues, use:
+
+```bash
+npm install --legacy-peer-deps
+```
+
+On Linux, Electron may require additional system libraries:
+
+```bash
+sudo apt-get install -y libatk1.0-0 libgtk-3-0 libnss3 libxss1 libasound2
+```
+
+You can still validate your changes by running:
+
+```bash
+npm run build
 ```
 
 ## Feedback & Community
