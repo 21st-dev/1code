@@ -168,6 +168,8 @@ interface ChatMarkdownRendererProps {
   syntaxHighlight?: boolean
   /** Whether content is being streamed - enables throttling for better FPS */
   isStreaming?: boolean
+  /** Callback when a localhost URL is clicked (opens preview) */
+  onUrlClick?: (url: string) => void
 }
 
 // Size-based styles inspired by Notion's spacing
@@ -279,6 +281,7 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   className,
   syntaxHighlight = true,
   isStreaming = false,
+  onUrlClick,
 }: ChatMarkdownRendererProps) {
   const codeTheme = useCodeTheme()
   const styles = sizeStyles[size]
@@ -370,21 +373,43 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
           {children}
         </li>
       ),
-      a: ({ href, children, ...props }: any) => (
-        <a
-          href={href}
-          onClick={(e) => {
-            e.preventDefault()
-            if (href) {
-              window.desktopApi.openExternal(href)
-            }
-          }}
-          className="text-blue-600 dark:text-blue-400 no-underline hover:underline hover:decoration-current underline-offset-2 decoration-1 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:rounded-sm"
-          {...props}
-        >
-          {children}
-        </a>
-      ),
+      a: ({ href, children, ...props }: any) => {
+        // Detect localhost/dev server URLs
+        const isLocalhost = href && (
+          href.includes('localhost') ||
+          href.includes('127.0.0.1') ||
+          /:\d{4,5}/.test(href) // URLs with port numbers (e.g., :3000, :8080)
+        )
+
+        return (
+          <a
+            href={href}
+            onClick={(e) => {
+              e.preventDefault()
+              if (href) {
+                // If localhost URL and onUrlClick handler exists, open in preview
+                if (isLocalhost && onUrlClick) {
+                  onUrlClick(href)
+                } else {
+                  // Otherwise open in external browser
+                  window.desktopApi.openExternal(href)
+                }
+              }
+            }}
+            className="text-blue-600 dark:text-blue-400 no-underline hover:underline hover:decoration-current underline-offset-2 decoration-1 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:rounded-sm"
+            {...props}
+          >
+            {children}
+            {/* Visual indicator for preview-able URLs */}
+            {isLocalhost && onUrlClick && (
+              <svg className="inline h-3 w-3 ml-1 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            )}
+          </a>
+        )
+      },
       strong: ({ children, ...props }: any) => (
         <strong className="font-medium text-foreground" {...props}>
           {children}
@@ -461,7 +486,7 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
         )
       },
     }),
-    [styles, codeTheme, syntaxHighlight, size],
+    [styles, codeTheme, syntaxHighlight, size, onUrlClick],
   )
 
   return (
@@ -591,11 +616,13 @@ const MemoizedMarkdownBlock = memo(
     size,
     className,
     blockIndex,
+    onUrlClick,
   }: {
     content: string
     size: MarkdownSize
     className?: string
     blockIndex: number
+    onUrlClick?: (url: string) => void
   }) {
     // Don't render empty blocks
     if (!content.trim()) return null
@@ -606,6 +633,7 @@ const MemoizedMarkdownBlock = memo(
         size={size}
         className={className}
         isStreaming={false}  // Individual blocks are never "streaming"
+        onUrlClick={onUrlClick}
       />
     )
   },
@@ -613,7 +641,8 @@ const MemoizedMarkdownBlock = memo(
     // Only re-render if content actually changed
     const same = prevProps.content === nextProps.content &&
            prevProps.size === nextProps.size &&
-           prevProps.className === nextProps.className
+           prevProps.className === nextProps.className &&
+           prevProps.onUrlClick === nextProps.onUrlClick
     return same
   },
 )
@@ -627,11 +656,13 @@ export const MemoizedMarkdown = memo(
     id,
     size = "sm",
     className,
+    onUrlClick,
   }: {
     content: string
     id: string  // Unique ID for stable keys
     size?: MarkdownSize
     className?: string
+    onUrlClick?: (url: string) => void
   }) {
     // Pre-process content before splitting into blocks
     const processedContent = useMemo(
@@ -652,6 +683,7 @@ export const MemoizedMarkdown = memo(
             size={size}
             className={className}
             blockIndex={index}
+            onUrlClick={onUrlClick}
           />
         ))}
       </>

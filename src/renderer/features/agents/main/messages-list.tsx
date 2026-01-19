@@ -287,6 +287,7 @@ interface MessageItemWrapperProps {
   subChatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
+  onUrlClick?: (url: string) => void
 }
 
 // Hook that only re-renders THIS component when it becomes/stops being the last message
@@ -357,11 +358,13 @@ const NonStreamingMessageItem = memo(function NonStreamingMessageItem({
   subChatId,
   isMobile,
   sandboxSetupStatus,
+  onUrlClick,
 }: {
   message: any
   subChatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
+  onUrlClick?: (url: string) => void
 }) {
   return (
     <AssistantMessageItem
@@ -372,6 +375,7 @@ const NonStreamingMessageItem = memo(function NonStreamingMessageItem({
       subChatId={subChatId}
       isMobile={isMobile}
       sandboxSetupStatus={sandboxSetupStatus}
+      onUrlClick={onUrlClick}
     />
   )
 })
@@ -382,11 +386,13 @@ const StreamingMessageItem = memo(function StreamingMessageItem({
   subChatId,
   isMobile,
   sandboxSetupStatus,
+  onUrlClick,
 }: {
   message: any
   subChatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
+  onUrlClick?: (url: string) => void
 }) {
   // Use Jotai atoms for streaming status
   const isStreaming = useAtomValue(isStreamingAtom)
@@ -401,6 +407,7 @@ const StreamingMessageItem = memo(function StreamingMessageItem({
       subChatId={subChatId}
       isMobile={isMobile}
       sandboxSetupStatus={sandboxSetupStatus}
+      onUrlClick={onUrlClick}
     />
   )
 })
@@ -457,6 +464,7 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
   subChatId,
   isMobile,
   sandboxSetupStatus,
+  onUrlClick,
 }: MessageItemWrapperProps) {
   // Use Jotai atoms for fine-grained subscriptions
   const message = useAtomValue(messageAtomFamily(messageId))
@@ -473,6 +481,7 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
         subChatId={subChatId}
         isMobile={isMobile}
         sandboxSetupStatus={sandboxSetupStatus}
+        onUrlClick={onUrlClick}
       />
     )
   }
@@ -481,6 +490,7 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
     <NonStreamingMessageItem
       message={message}
       subChatId={subChatId}
+      onUrlClick={onUrlClick}
       isMobile={isMobile}
       sandboxSetupStatus={sandboxSetupStatus}
     />
@@ -501,6 +511,7 @@ interface MemoizedAssistantMessagesProps {
   subChatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
+  onUrlClick?: (url: string) => void
 }
 
 function areMemoizedAssistantMessagesEqual(
@@ -523,6 +534,7 @@ function areMemoizedAssistantMessagesEqual(
   if (prev.subChatId !== next.subChatId) return false
   if (prev.isMobile !== next.isMobile) return false
   if (prev.sandboxSetupStatus !== next.sandboxSetupStatus) return false
+  if (prev.onUrlClick !== next.onUrlClick) return false
 
   return true
 }
@@ -532,6 +544,7 @@ export const MemoizedAssistantMessages = memo(function MemoizedAssistantMessages
   subChatId,
   isMobile,
   sandboxSetupStatus,
+  onUrlClick,
 }: MemoizedAssistantMessagesProps) {
   // This component only re-renders when assistantMsgIds changes
   // During streaming, IDs stay the same, so this doesn't re-render
@@ -546,6 +559,7 @@ export const MemoizedAssistantMessages = memo(function MemoizedAssistantMessages
           subChatId={subChatId}
           isMobile={isMobile}
           sandboxSetupStatus={sandboxSetupStatus}
+          onUrlClick={onUrlClick}
         />
       ))}
     </>
@@ -703,12 +717,14 @@ interface MessagesListProps {
   subChatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
+  onUrlClick?: (url: string) => void
 }
 
 export const MessagesList = memo(function MessagesList({
   subChatId,
   isMobile,
   sandboxSetupStatus,
+  onUrlClick,
 }: MessagesListProps) {
   const messageIds = useMessageIds()
 
@@ -721,6 +737,7 @@ export const MessagesList = memo(function MessagesList({
           subChatId={subChatId}
           isMobile={isMobile}
           sandboxSetupStatus={sandboxSetupStatus}
+          onUrlClick={onUrlClick}
         />
       ))}
     </>

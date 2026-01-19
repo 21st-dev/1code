@@ -132,6 +132,7 @@ export interface AssistantMessageItemProps {
   isMobile: boolean
   subChatId: string
   sandboxSetupStatus?: "cloning" | "ready" | "error"
+  onUrlClick?: (url: string) => void
 }
 
 // Cache for tracking previous text lengths per message (to detect AI SDK in-place mutations)
@@ -201,6 +202,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   isMobile,
   subChatId,
   sandboxSetupStatus = "ready",
+  onUrlClick,
 }: AssistantMessageItemProps) {
   const messageParts = message?.parts || []
 
@@ -349,6 +351,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
           isFinalText={isFinalText}
           visibleStepsCount={visibleStepsCount}
           isStreaming={isTextStreaming}
+          onUrlClick={onUrlClick}
         />
       )
     }

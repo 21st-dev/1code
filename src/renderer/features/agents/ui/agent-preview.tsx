@@ -27,8 +27,9 @@ import { DEVICE_PRESETS, AGENTS_PREVIEW_CONSTANTS } from "../constants"
 const getSandboxPreviewUrl = (sandboxId: string, port: number, _type: string) => `https://${sandboxId}-${port}.csb.app` // Desktop mock
 interface AgentPreviewProps {
   chatId: string
-  sandboxId: string
-  port: number
+  sandboxId?: string
+  port?: number
+  customUrl?: string
   repository?: string
   hideHeader?: boolean
   onClose?: () => void
@@ -39,6 +40,7 @@ export function AgentPreview({
   chatId,
   sandboxId,
   port,
+  customUrl,
   repository,
   hideHeader = false,
   onClose,
@@ -47,6 +49,7 @@ export function AgentPreview({
   const [isLoaded, setIsLoaded] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [editableCustomUrl, setEditableCustomUrl] = useState(customUrl || "")
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   const resizeCleanupRef = useRef<(() => void) | null>(null)
@@ -131,18 +134,49 @@ export function AgentPreview({
     setCurrentPath(persistedPath)
   }, [persistedPath])
 
+  // Sync editableCustomUrl when customUrl prop changes
+  useEffect(() => {
+    if (customUrl) {
+      setEditableCustomUrl(customUrl)
+    }
+  }, [customUrl])
+
+  // Handler for custom URL changes
+  const handleCustomUrlChange = useCallback((newUrl: string) => {
+    setEditableCustomUrl(newUrl)
+    setIsLoaded(false) // Show loading state
+    setReloadKey((prev) => prev + 1) // Force iframe reload
+  }, [])
+
   // Compute base host and preview URL
-  const previewBaseUrl = useMemo(
-    () => getSandboxPreviewUrl(sandboxId, port, "agents"),
-    [sandboxId, port],
-  )
+  const previewBaseUrl = useMemo(() => {
+    // Priority: editableCustomUrl > sandboxId > fallback
+    if (editableCustomUrl) {
+      // Remove trailing slash if present
+      return editableCustomUrl.replace(/\/$/, "")
+    }
+    if (sandboxId && port) {
+      return getSandboxPreviewUrl(sandboxId, port, "agents")
+    }
+    return "about:blank"
+  }, [editableCustomUrl, sandboxId, port])
+
   const baseHost = useMemo(() => {
-    return new URL(previewBaseUrl).host
+    try {
+      return new URL(previewBaseUrl).host
+    } catch {
+      return "localhost"
+    }
   }, [previewBaseUrl])
 
   const previewUrl = useMemo(() => {
+    if (previewBaseUrl === "about:blank") return previewBaseUrl
+    // For custom URLs, check if it already includes a path
+    if (editableCustomUrl && editableCustomUrl.includes(loadedPath) && loadedPath !== "/") {
+      return editableCustomUrl
+    }
     return `${previewBaseUrl}${loadedPath}`
-  }, [previewBaseUrl, loadedPath])
+  }, [previewBaseUrl, loadedPath, editableCustomUrl])
 
   // Handle path selection from URL bar
   const handlePathSelect = useCallback(
@@ -365,6 +399,8 @@ export function AgentPreview({
                 isLoading={!isLoaded}
                 className="w-full"
                 variant="mobile"
+                fullUrl={editableCustomUrl || undefined}
+                onFullUrlChange={editableCustomUrl ? handleCustomUrlChange : undefined}
               />
             </div>
 
@@ -409,6 +445,8 @@ export function AgentPreview({
               onPathChange={handlePathSelect}
               isLoading={!isLoaded}
               className="max-w-[350px] w-full"
+              fullUrl={editableCustomUrl || undefined}
+              onFullUrlChange={editableCustomUrl ? handleCustomUrlChange : undefined}
             />
           </div>
 

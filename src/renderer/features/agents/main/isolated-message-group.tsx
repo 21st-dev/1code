@@ -35,6 +35,7 @@ interface IsolatedMessageGroupProps {
   stickyTopClass: string
   sandboxSetupError?: string
   onRetrySetup?: () => void
+  onUrlClick?: (url: string) => void
   // Components passed from parent - must be stable references
   UserBubbleComponent: React.ComponentType<{
     messageId: string
@@ -63,6 +64,7 @@ function areGroupPropsEqual(
     prev.stickyTopClass === next.stickyTopClass &&
     prev.sandboxSetupError === next.sandboxSetupError &&
     prev.onRetrySetup === next.onRetrySetup &&
+    prev.onUrlClick === next.onUrlClick &&
     prev.UserBubbleComponent === next.UserBubbleComponent &&
     prev.ToolCallComponent === next.ToolCallComponent &&
     prev.MessageGroupWrapper === next.MessageGroupWrapper &&
@@ -78,6 +80,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
   stickyTopClass,
   sandboxSetupError,
   onRetrySetup,
+  onUrlClick,
   UserBubbleComponent,
   ToolCallComponent,
   MessageGroupWrapper,
@@ -173,6 +176,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
           subChatId={subChatId}
           isMobile={isMobile}
           sandboxSetupStatus={sandboxSetupStatus}
+          onUrlClick={onUrlClick}
         />
       )}
 

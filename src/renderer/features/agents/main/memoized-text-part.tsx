@@ -10,6 +10,7 @@ interface MemoizedTextPartProps {
   isFinalText: boolean
   visibleStepsCount: number
   isStreaming?: boolean
+  onUrlClick?: (url: string) => void
 }
 
 // Only re-render when text actually changes
@@ -19,7 +20,8 @@ function areTextPropsEqual(prev: MemoizedTextPartProps, next: MemoizedTextPartPr
     prev.messageId === next.messageId &&
     prev.isFinalText === next.isFinalText &&
     prev.visibleStepsCount === next.visibleStepsCount &&
-    prev.isStreaming === next.isStreaming
+    prev.isStreaming === next.isStreaming &&
+    prev.onUrlClick === next.onUrlClick
   )
 }
 
@@ -29,6 +31,7 @@ export const MemoizedTextPart = memo(function MemoizedTextPart({
   isFinalText,
   visibleStepsCount,
   isStreaming = false,
+  onUrlClick,
 }: MemoizedTextPartProps) {
   if (!text?.trim()) return null
 
@@ -44,7 +47,7 @@ export const MemoizedTextPart = memo(function MemoizedTextPart({
           Response
         </div>
       )}
-      <MemoizedMarkdown content={text} id={messageId} size="sm" />
+      <MemoizedMarkdown content={text} id={messageId} size="sm" onUrlClick={onUrlClick} />
     </div>
   )
 }, areTextPropsEqual)

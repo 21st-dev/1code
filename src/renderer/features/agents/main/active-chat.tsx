@@ -106,6 +106,7 @@ import {
   pendingReviewMessageAtom,
   pendingUserQuestionsAtom,
   pendingPlanApprovalsAtom,
+  previewCustomUrlAtomFamily,
   QUESTIONS_SKIPPED_MESSAGE,
   scrollPositionsCacheStore,
   selectedAgentChatIdAtom,
@@ -824,6 +825,7 @@ function ChatViewInner({
   projectPath,
   isArchived = false,
   onRestoreWorkspace,
+  onUrlClick,
 }: {
   chat: Chat<any>
   subChatId: string
@@ -843,6 +845,7 @@ function ChatViewInner({
   projectPath?: string
   isArchived?: boolean
   onRestoreWorkspace?: () => void
+  onUrlClick?: (url: string) => void
 }) {
   const hasTriggeredRenameRef = useRef(false)
   const hasTriggeredAutoGenerateRef = useRef(false)
@@ -2171,6 +2174,7 @@ function ChatViewInner({
               stickyTopClass={stickyTopClass}
               sandboxSetupError={sandboxSetupError}
               onRetrySetup={onRetrySetup}
+              onUrlClick={onUrlClick}
               UserBubbleComponent={AgentUserMessageBubble}
               ToolCallComponent={AgentToolCall}
               MessageGroupWrapper={MessageGroup}
@@ -2285,6 +2289,17 @@ export function ChatView({
   const [isPreviewSidebarOpen, setIsPreviewSidebarOpen] = useAtom(
     agentsPreviewSidebarOpenAtom,
   )
+  // Custom preview URL per chat (temporary, not persisted)
+  const customPreviewUrlAtom = useMemo(
+    () => previewCustomUrlAtomFamily(chatId),
+    [chatId],
+  )
+  const [customPreviewUrl, setCustomPreviewUrl] = useAtom(customPreviewUrlAtom)
+
+  // Debug: track when customPreviewUrl changes
+  useEffect(() => {
+    console.log('[Preview] customPreviewUrl changed to:', customPreviewUrl)
+  }, [customPreviewUrl])
   // Per-chat diff sidebar state - each chat remembers its own open/close state
   const diffSidebarAtom = useMemo(
     () => diffSidebarOpenAtomFamily(chatId),
@@ -2514,22 +2529,45 @@ export function ChatView({
   const isQuickSetup = meta?.isQuickSetup || !meta?.sandboxConfig?.port
   const previewPort = meta?.sandboxConfig?.port ?? 3000
 
-  // Check if preview can be opened (sandbox with port exists and not quick setup)
+  // Check if preview can be opened (sandbox with port exists and not quick setup, OR custom URL is set)
   const canOpenPreview = !!(
-    sandboxId &&
-    !isQuickSetup &&
-    meta?.sandboxConfig?.port
+    customPreviewUrl ||
+    (sandboxId && !isQuickSetup && meta?.sandboxConfig?.port)
   )
+
+  // Debug log
+  useEffect(() => {
+    console.log('[Preview] canOpenPreview:', canOpenPreview, 'customPreviewUrl:', customPreviewUrl, 'sandboxId:', sandboxId)
+  }, [canOpenPreview, customPreviewUrl, sandboxId])
 
   // Check if diff can be opened (worktree for desktop, sandbox for web)
   const canOpenDiff = !!worktreePath || !!sandboxId
 
   // Close preview sidebar if preview becomes unavailable
+  // BUT: Don't close immediately after opening (to avoid race condition with atom updates)
+  const justOpenedPreviewRef = useRef(false)
   useEffect(() => {
-    if (!canOpenPreview && isPreviewSidebarOpen) {
+    if (!canOpenPreview && isPreviewSidebarOpen && !justOpenedPreviewRef.current) {
+      console.log('[Preview] Closing preview because canOpenPreview is false')
       setIsPreviewSidebarOpen(false)
     }
+    // Reset the flag after a short delay
+    if (justOpenedPreviewRef.current) {
+      const timer = setTimeout(() => {
+        justOpenedPreviewRef.current = false
+      }, 100)
+      return () => clearTimeout(timer)
+    }
   }, [canOpenPreview, isPreviewSidebarOpen, setIsPreviewSidebarOpen])
+
+  // Handle opening preview when URL is clicked in messages
+  const handleOpenPreview = useCallback((url: string) => {
+    console.log('[Preview] Opening preview with URL:', url)
+    justOpenedPreviewRef.current = true // Set flag to prevent immediate closure
+    setCustomPreviewUrl(url)
+    setIsPreviewSidebarOpen(true)
+    console.log('[Preview] Preview sidebar opened')
+  }, [setCustomPreviewUrl, setIsPreviewSidebarOpen])
 
   // Note: We no longer forcibly close diff sidebar when canOpenDiff is false.
   // The sidebar render is guarded by canOpenDiff, so it naturally hides.
@@ -3714,6 +3752,7 @@ export function ChatView({
               projectPath={worktreePath || undefined}
               isArchived={isArchived}
               onRestoreWorkspace={handleRestoreWorkspace}
+              onUrlClick={handleOpenPreview}
             />
           ) : (
             <>
@@ -4177,9 +4216,13 @@ export function ChatView({
                 chatId={chatId}
                 sandboxId={sandboxId}
                 port={previewPort}
+                customUrl={customPreviewUrl ?? undefined}
                 repository={repository}
                 hideHeader={false}
-                onClose={() => setIsPreviewSidebarOpen(false)}
+                onClose={() => {
+                  setIsPreviewSidebarOpen(false)
+                  setCustomPreviewUrl(null)
+                }}
               />
             )}
           </ResizableSidebar>

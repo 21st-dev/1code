@@ -23,6 +23,10 @@ interface PreviewUrlInputProps {
   className?: string
   /** Variant for different contexts */
   variant?: "default" | "mobile"
+  /** Full URL to display (for custom URLs) - overrides baseHost + currentPath display */
+  fullUrl?: string
+  /** Called when full URL changes (for custom URLs) */
+  onFullUrlChange?: (url: string) => void
 }
 
 export function PreviewUrlInput({
@@ -32,6 +36,8 @@ export function PreviewUrlInput({
   isLoading = false,
   className,
   variant = "default",
+  fullUrl,
+  onFullUrlChange,
 }: PreviewUrlInputProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState("")
@@ -108,6 +114,16 @@ export function PreviewUrlInput({
   const handleSubmit = useCallback(() => {
     let input = inputValue.trim()
 
+    // If we're in full URL mode and have a change handler, use it
+    if (fullUrl && onFullUrlChange) {
+      // User is editing a full URL
+      if (input !== fullUrl) {
+        onFullUrlChange(input)
+      }
+      setIsEditing(false)
+      return
+    }
+
     // Handle ~ prefix format (our display format)
     if (input.startsWith("~")) {
       input = input.slice(1) // Remove ~ prefix
@@ -143,7 +159,7 @@ export function PreviewUrlInput({
       onPathChange(newPath)
     }
     setIsEditing(false)
-  }, [inputValue, currentPath, onPathChange])
+  }, [inputValue, currentPath, onPathChange, fullUrl, onFullUrlChange])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -152,17 +168,19 @@ export function PreviewUrlInput({
         handleSubmit()
       } else if (e.key === "Escape") {
         e.preventDefault()
-        setInputValue(`~${currentPath}`)
+        // Reset to original value
+        setInputValue(fullUrl || `~${currentPath}`)
         setIsEditing(false)
       }
     },
-    [handleSubmit, currentPath],
+    [handleSubmit, currentPath, fullUrl],
   )
 
   const startEditing = useCallback(() => {
-    setInputValue(`~${currentPath}`)
+    // If we have a full URL, show it; otherwise show path with ~ prefix
+    setInputValue(fullUrl || `~${currentPath}`)
     setIsEditing(true)
-  }, [currentPath])
+  }, [currentPath, fullUrl])
 
   if (!baseHost) {
     return null
@@ -212,7 +230,7 @@ export function PreviewUrlInput({
                 : "truncate text-muted-foreground hover:text-foreground transition-all cursor-pointer hover:bg-background hover:shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)] dark:hover:shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
             )}
           >
-            ~{currentPath}
+            {fullUrl || `~${currentPath}`}
           </button>
         )}
 

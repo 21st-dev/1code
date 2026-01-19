@@ -99,6 +99,12 @@ export const mobileDeviceAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
+// Custom preview URL per chat (temporary, not persisted)
+// Used when user clicks a localhost URL in chat to open preview
+export const previewCustomUrlAtomFamily = atomFamily((chatId: string) =>
+  atom<string | null>(null),
+)
+
 // Loading sub-chats: Map<subChatId, parentChatId>
 // Used to show loading indicators on tabs and sidebar
 // Set when generation starts, cleared when onFinish fires
