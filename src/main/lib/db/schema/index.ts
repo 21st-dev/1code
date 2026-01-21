@@ -367,7 +367,25 @@ export const integrationSettings = sqliteTable("integration_settings", {
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 })
 
+// ============ APP SETTINGS ============
+// General key-value settings storage
+export const appSettings = sqliteTable("app_settings", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
+export type AppSetting = typeof appSettings.$inferSelect
+export type NewAppSetting = typeof appSettings.$inferInsert
 export type IntegrationSetting = typeof integrationSettings.$inferSelect
 export type NewIntegrationSetting = typeof integrationSettings.$inferInsert
 export type Project = typeof projects.$inferSelect

@@ -21,7 +21,7 @@ export interface CredentialContext {
 
 // ============ ENCRYPTION HELPERS ============
 
-function decryptString(encrypted: string): string {
+export function decryptString(encrypted: string): string {
   if (!safeStorage.isEncryptionAvailable()) {
     return Buffer.from(encrypted, "base64").toString("utf-8")
   }

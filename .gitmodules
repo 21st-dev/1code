@@ -10,3 +10,9 @@
 [submodule "external-tools/cli-proxy-api-plus"]
 	path = external-tools/cli-proxy-api-plus
 	url = https://github.com/router-for-me/CLIProxyAPIplus.git
+[submodule "external-tools/vibe-kanban"]
+	path = external-tools/vibe-kanban
+	url = https://github.com/BloopAI/vibe-kanban
+[submodule "external-tools/cc-wf-studio"]
+	path = external-tools/cc-wf-studio
+	url = https://github.com/breaking-brake/cc-wf-studio

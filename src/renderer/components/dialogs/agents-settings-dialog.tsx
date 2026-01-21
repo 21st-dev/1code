@@ -2,29 +2,17 @@ import { useAtom } from "jotai"
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { X, Bug, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, ChevronLeft, ChevronRight, User, Palette, Settings2, Cpu, GitBranch, Puzzle, Wrench } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
-import {
-  ProfileIconFilled,
-  EyeOpenFilledIcon,
-  SlidersFilledIcon,
-} from "../../icons"
-import { SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../ui/icons"
+// Tab Components - 7 Main Tabs
+import { AgentsAccountTab } from "./settings-tabs/agents-account-tab"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
-import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
-import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
-import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
-import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
-import { AgentsMcpTab } from "./settings-tabs/agents-mcp-tab"
-import { AgentsProviderTab } from "./settings-tabs/agents-provider-tab"
 import { AgentsRoutingTab } from "./settings-tabs/agents-routing-tab"
-import { AgentsIntegrationsTab } from "./settings-tabs/agents-integrations-tab"
-import { AgentsCCSTab } from "./settings-tabs/agents-ccs-tab"
-import { AgentsCCRProvidersTab } from "./settings-tabs/agents-ccr-providers-tab"
-import { AgentsCCRRoutingTab } from "./settings-tabs/agents-ccr-routing-tab"
-import { Cpu, GitBranch, Plug, Server, Router } from "lucide-react"
+import { AgentsAddonsTab } from "./settings-tabs/agents-addons-tab"
+import { AgentsAdvancedTab } from "./settings-tabs/agents-advanced-tab"
+import { ProviderAccordion } from "./settings-tabs/provider-accordion"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -51,96 +39,54 @@ interface AgentsSettingsDialogProps {
   onClose: () => void
 }
 
-const ALL_TABS = [
+// New 7-Tab Structure (consolidated from 12 tabs)
+const MAIN_TABS = [
   {
-    id: "profile" as SettingsTab,
-    label: "Account",
-    icon: ProfileIconFilled,
-    description: "Manage your account settings",
+    id: "account" as SettingsTab,
+    label: "Account & Analytics",
+    icon: User,
+    description: "Profile, GitHub linking, usage analytics, device sync",
   },
   {
     id: "appearance" as SettingsTab,
-    label: "Appearance",
-    icon: EyeOpenFilledIcon,
-    description: "Theme settings",
+    label: "Appearance & Layouts",
+    icon: Palette,
+    description: "Themes, layout modes, multi-chat settings",
   },
   {
     id: "preferences" as SettingsTab,
     label: "Preferences",
-    icon: SlidersFilledIcon,
-    description: "Claude behavior settings",
+    icon: Settings2,
+    description: "Main view, CCR templates, Claude-Mem, backup/restore",
   },
   {
-    id: "providers" as SettingsTab,
-    label: "Providers",
+    id: "provider" as SettingsTab,
+    label: "Provider",
     icon: Cpu,
-    description: "AI provider configuration",
+    description: "AI providers, OAuth, CCS, CCR configuration",
   },
   {
     id: "routing" as SettingsTab,
-    label: "Task Routing",
+    label: "Routing",
     icon: GitBranch,
-    description: "Route tasks to providers",
+    description: "Task routing, commands, import/export",
   },
   {
-    id: "skills" as SettingsTab,
-    label: "Skills",
-    icon: SkillIconFilled,
-    description: "Custom Claude skills",
-    beta: true,
+    id: "addons" as SettingsTab,
+    label: "Addons",
+    icon: Puzzle,
+    description: "MCP servers, plugins, skills, custom agents",
   },
   {
-    id: "agents" as SettingsTab,
-    label: "Custom Agents",
-    icon: CustomAgentIconFilled,
-    description: "Manage custom Claude agents",
-    beta: true,
+    id: "advanced" as SettingsTab,
+    label: "Advanced",
+    icon: Wrench,
+    description: "Integrations, external tools, debug options",
   },
-  {
-    id: "mcp" as SettingsTab,
-    label: "MCP Servers",
-    icon: OriginalMCPIcon,
-    description: "Model Context Protocol servers",
-  },
-  {
-    id: "integrations" as SettingsTab,
-    label: "Integrations",
-    icon: Plug,
-    description: "External tool integrations",
-  },
-  {
-    id: "ccs" as SettingsTab,
-    label: "CCS Profiles",
-    icon: Server,
-    description: "Claude Code Switch profiles",
-    beta: true,
-  },
-  {
-    id: "ccrProviders" as SettingsTab,
-    label: "CCR Providers",
-    icon: Router,
-    description: "Claude Code Router providers",
-    beta: true,
-  },
-  {
-    id: "ccrRouting" as SettingsTab,
-    label: "CCR Routing",
-    icon: GitBranch,
-    description: "CCR task routing configuration",
-    beta: true,
-  },
-  // Debug tab - always shown in desktop for development
-  ...(isDevelopment
-    ? [
-        {
-          id: "debug" as SettingsTab,
-          label: "Debug",
-          icon: Bug,
-          description: "Test first-time user experience",
-        },
-      ]
-    : []),
 ]
+
+// All tabs for lookup (no more separate advanced section)
+const ALL_TABS = [...MAIN_TABS]
 
 interface TabButtonProps {
   tab: (typeof ALL_TABS)[number]
@@ -246,32 +192,34 @@ export function AgentsSettingsDialog({
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case "profile":
-        return <AgentsProfileTab />
+      // Tab 1: Account & Analytics (profile, GitHub, commit settings, analytics, sync)
+      case "account":
+        return <AgentsAccountTab />
+
+      // Tab 2: Appearance & Layouts (extends appearance)
       case "appearance":
         return <AgentsAppearanceTab />
+
+      // Tab 3: Preferences (extends preferences)
       case "preferences":
         return <AgentsPreferencesTab />
-      case "providers":
-        return <AgentsProviderTab />
+
+      // Tab 4: Provider (consolidated - uses ProviderAccordion which includes CCS/CCR)
+      case "provider":
+        return <ProviderAccordion />
+
+      // Tab 5: Routing (extends routing + CCR routing)
       case "routing":
         return <AgentsRoutingTab />
-      case "skills":
-        return <AgentsSkillsTab />
-      case "agents":
-        return <AgentsCustomAgentsTab />
-      case "mcp":
-        return <AgentsMcpTab />
-      case "integrations":
-        return <AgentsIntegrationsTab />
-      case "ccs":
-        return <AgentsCCSTab />
-      case "ccrProviders":
-        return <AgentsCCRProvidersTab />
-      case "ccrRouting":
-        return <AgentsCCRRoutingTab />
-      case "debug":
-        return isDevelopment ? <AgentsDebugTab /> : null
+
+      // Tab 6: Addons (MCP, Plugins, Skills, Custom Agents sub-tabs)
+      case "addons":
+        return <AgentsAddonsTab />
+
+      // Tab 7: Advanced (combines integrations + debug + ADB easter egg)
+      case "advanced":
+        return <AgentsAdvancedTab />
+
       default:
         return null
     }
@@ -279,7 +227,8 @@ export function AgentsSettingsDialog({
 
   const renderTabList = () => (
     <div className="space-y-1.5 px-1">
-      {ALL_TABS.map((tab) => (
+      {/* 7 Main Settings Tabs */}
+      {MAIN_TABS.map((tab) => (
         <TabButton
           key={tab.id}
           tab={tab}
@@ -389,16 +338,16 @@ export function AgentsSettingsDialog({
                 Settings
               </h2>
 
-              <div className="flex h-full p-2">
-                {/* Left Sidebar - Tabs */}
+              <div className="flex flex-col h-full sm:flex-row p-2">
+                {/* Left Sidebar - 7 Main Tabs */}
                 <div className="w-52 px-1 py-5 space-y-4">
                   <h2 className="text-lg font-semibold px-2 pb-3 text-foreground">
                     Settings
                   </h2>
 
-                  {/* All Tabs */}
+                  {/* All 7 Settings Tabs */}
                   <div className="space-y-1">
-                    {ALL_TABS.map((tab) => (
+                    {MAIN_TABS.map((tab) => (
                       <TabButton
                         key={tab.id}
                         tab={tab}

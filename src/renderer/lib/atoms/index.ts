@@ -162,10 +162,81 @@ export const clearSubChatSelectionAtom = atom(null, (_get, set) => {
 // DIALOG ATOMS (unique to lib/atoms)
 // ============================================
 
-// Settings dialog
-export type SettingsTab = "profile" | "appearance" | "preferences" | "providers" | "routing" | "skills" | "agents" | "mcp" | "integrations" | "ccs" | "ccrProviders" | "ccrRouting" | "debug"
-export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("profile")
+// Settings dialog - 7 consolidated tabs
+export type SettingsTab =
+  | "account"      // Tab 1: Account & Analytics (was "profile")
+  | "appearance"   // Tab 2: Appearance & Layouts
+  | "preferences"  // Tab 3: Preferences
+  | "provider"     // Tab 4: Provider (consolidated from providers, ccs, ccrProviders)
+  | "routing"      // Tab 5: Routing (consolidated from routing, ccrRouting)
+  | "addons"       // Tab 6: Addons (sub-tabs: mcp, plugins, skills, agents)
+  | "advanced"     // Tab 7: Advanced (from integrations, debug)
+
+export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("account")
 export const agentsSettingsDialogOpenAtom = atom<boolean>(false)
+
+// Addons sub-tab state (for Tab 6)
+export type AddonsSubTab = "mcp" | "plugins" | "skills" | "customAgents"
+export const addonsActiveSubTabAtom = atomWithStorage<AddonsSubTab>(
+  "settings:addons-active-subtab",
+  "mcp",
+  undefined,
+  { getOnInit: true },
+)
+
+// ADB Easter Egg state (for Tab 7: Advanced)
+// Hammer icon needs 7 clicks within 3 seconds to unlock
+export const adbClickCountAtom = atom<number>(0)
+export const adbUnlockedAtom = atomWithStorage<boolean>(
+  "settings:adb-unlocked",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+// Layout mode preference (for Tab 2: Appearance & Layouts)
+export type LayoutMode = "single" | "split" | "multi"
+export const layoutModeAtom = atomWithStorage<LayoutMode>(
+  "settings:layout-mode",
+  "single",
+  undefined,
+  { getOnInit: true },
+)
+
+// Device sync enabled state (for Tab 1: Account & Analytics)
+export const deviceSyncEnabledAtom = atomWithStorage<boolean>(
+  "settings:device-sync-enabled",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+// GitHub linking method preference
+export type GitHubLinkingMethod = "oauth" | "pat"
+export const githubLinkingMethodAtom = atomWithStorage<GitHubLinkingMethod>(
+  "settings:github-linking-method",
+  "oauth",
+  undefined,
+  { getOnInit: true },
+)
+
+// Default main view/tab selection (for Tab 3: Preferences)
+export type DefaultMainView = "builder" | "kanban" | "flow-studio"
+export const defaultMainViewAtom = atomWithStorage<DefaultMainView>(
+  "settings:default-main-view",
+  "builder",
+  undefined,
+  { getOnInit: true },
+)
+
+// CCR Template selection (for Tab 3: Preferences)
+export type CCRTemplate = "best-value" | "best-code" | "best-budget"
+export const ccrTemplateAtom = atomWithStorage<CCRTemplate>(
+  "settings:ccr-template",
+  "best-value",
+  undefined,
+  { getOnInit: true },
+)
 
 // Preferences - Extended Thinking
 // When enabled, Claude will use extended thinking for deeper reasoning (128K tokens)

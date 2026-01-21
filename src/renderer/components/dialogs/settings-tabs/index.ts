@@ -1,3 +1,4 @@
+export { AgentsAccountTab } from "./agents-account-tab"
 export { AgentsAppearanceTab } from "./agents-appearance-tab"
 export { AgentsProfileTab } from "./agents-profile-tab"
 export { AgentsDebugTab } from "./agents-debug-tab"
@@ -6,7 +7,15 @@ export { AgentsCustomAgentsTab } from "./agents-custom-agents-tab"
 export { AgentsProviderTab } from "./agents-provider-tab"
 export { AgentsRoutingTab } from "./agents-routing-tab"
 export { AgentsIntegrationsTab } from "./agents-integrations-tab"
+export { AgentsAddonsTab } from "./agents-addons-tab"
+export { AgentsAdvancedTab } from "./agents-advanced-tab"
+export { AgentsPreferencesTab } from "./agents-preferences-tab"
 // External tool integration tabs
 export { AgentsCCSTab } from "./agents-ccs-tab"
 export { AgentsCCRProvidersTab } from "./agents-ccr-providers-tab"
 export { AgentsCCRRoutingTab } from "./agents-ccr-routing-tab"
+export { AgentsProxyTab } from "./agents-proxy-tab"
+// OAuth Provider Grid for CLIProxy accounts
+export { OAuthProviderGrid } from "./oauth-provider-grid"
+// Provider accordion (unified provider system UI)
+export { ProviderAccordion } from "./provider-accordion"

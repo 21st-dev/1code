@@ -18,6 +18,10 @@ import { switchingRouter } from "./switching"
 import { integrationsRouter } from "./integrations"
 import { ccsRouter } from "./ccs"
 import { ccrRouter } from "./ccr"
+import { proxyRouter } from "./proxy"
+import { githubRouter } from "./github"
+import { syncRouter } from "./sync"
+import { adbRouter } from "./adb"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -49,6 +53,14 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     ccs: ccsRouter,
     // CCR (Claude Code Router) provider routing
     ccr: ccrRouter,
+    // ProxyCLI (CLI Proxy API Plus) OAuth-to-OpenAI conversion
+    proxy: proxyRouter,
+    // GitHub account linking (OAuth + PAT)
+    github: githubRouter,
+    // Device sync (21st.dev cloud sync)
+    sync: syncRouter,
+    // ADB (Android Debug Bridge) tools
+    adb: adbRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })
