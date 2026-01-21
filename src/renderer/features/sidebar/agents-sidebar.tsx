@@ -25,6 +25,8 @@ import {
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
+import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
+import { selectedMcpCategoryAtom } from "../mcp/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
@@ -216,6 +218,7 @@ export function AgentsSidebar({
 }: AgentsSidebarProps) {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const setSelectedCategory = useSetAtom(selectedWorkflowCategoryAtom)
+  const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const [isSidebarHovered, setIsSidebarHovered] = useState(false)
@@ -755,6 +758,8 @@ export function AgentsSidebar({
 
     // Clear workflow category when chat is selected (to show chat view)
     setSelectedCategory(null)
+    // Clear MCP category when chat is selected
+    setSelectedMcpCategory(null)
 
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
@@ -1991,6 +1996,9 @@ export function AgentsSidebar({
 
       {/* Workflows Section */}
       <WorkflowsSidebarSection />
+
+      {/* MCP Servers Section */}
+      <McpSidebarSection />
 
       {/* Footer - Multi-select toolbar or normal footer */}
       <AnimatePresence mode="wait">

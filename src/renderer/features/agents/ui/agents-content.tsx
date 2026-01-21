@@ -51,6 +51,8 @@ const useCombinedAuth = () => ({ userId: null }) // Desktop mock
 import { Button } from "../../../components/ui/button"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { WorkflowsContent } from "../../workflows/ui/workflows-content"
+import { selectedMcpCategoryAtom } from "../../mcp/atoms"
+import { McpContent } from "../../mcp/ui/mcp-content"
 import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
@@ -63,6 +65,7 @@ const useIsAdmin = () => false
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
+  const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
 
   // Debug logging
   useEffect(() => {
@@ -926,6 +929,11 @@ export function AgentsContent() {
   }
 
   // Desktop layout
+  // If MCP category is selected, show MCP servers view (takes priority over chat)
+  if (selectedMcpCategory === "mcp") {
+    return <McpContent />
+  }
+
   // If workflow category is selected, show workflow browser (takes priority over chat)
   if (selectedWorkflowCategory) {
     return <WorkflowsContent />

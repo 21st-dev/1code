@@ -116,6 +116,16 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   ),
 })
 
+// ============ MCP SERVER CREDENTIALS ============
+// Stores encrypted credentials for MCP servers
+export const mcpCredentials = sqliteTable("mcp_credentials", {
+  id: text("id").primaryKey(), // Server name from mcp.json
+  credentials: text("credentials").notNull().default("{}"), // JSON object of encrypted credentials
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -127,3 +137,5 @@ export type ClaudeCodeCredential = typeof claudeCodeCredentials.$inferSelect
 export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
 export type ClaudeCodeSettings = typeof claudeCodeSettings.$inferSelect
 export type NewClaudeCodeSettings = typeof claudeCodeSettings.$inferInsert
+export type McpCredential = typeof mcpCredentials.$inferSelect
+export type NewMcpCredential = typeof mcpCredentials.$inferInsert
