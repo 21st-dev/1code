@@ -94,6 +94,9 @@ import {
   ImageFileIcon,
   WordIcon,
   PowerPointIcon,
+  GitIcon,
+  LockFileIcon,
+  LicenseIcon,
 } from "../../../icons/framework-icons"
 
 interface ChangedFile {
@@ -217,14 +220,53 @@ export function getFileIconByExtension(
 ) {
   const filenameLower = filename.toLowerCase()
 
+  // Get the base filename (without path)
+  const baseFilename = filenameLower.split("/").pop() || filenameLower
+
   // Special handling for files without extensions (like Dockerfile)
   if (filenameLower === "dockerfile" || filenameLower.endsWith("/dockerfile")) {
     return DockerIcon
   }
 
+  // Special handling for .gitignore and other git-related files
+  if (
+    baseFilename === ".gitignore" ||
+    baseFilename === ".gitattributes" ||
+    baseFilename === ".gitmodules" ||
+    baseFilename === ".gitkeep"
+  ) {
+    return GitIcon
+  }
+
+  // Special handling for LICENSE files (with or without extension)
+  if (
+    baseFilename === "license" ||
+    baseFilename === "license.md" ||
+    baseFilename === "license.txt" ||
+    baseFilename === "copying" ||
+    baseFilename === "copying.md" ||
+    baseFilename === "copying.txt"
+  ) {
+    return LicenseIcon
+  }
+
+  // Special handling for lock files
+  if (
+    baseFilename === "package-lock.json" ||
+    baseFilename === "yarn.lock" ||
+    baseFilename === "pnpm-lock.yaml" ||
+    baseFilename === "bun.lockb" ||
+    baseFilename === "composer.lock" ||
+    baseFilename === "gemfile.lock" ||
+    baseFilename === "cargo.lock" ||
+    baseFilename === "poetry.lock" ||
+    baseFilename === "pipfile.lock" ||
+    baseFilename.endsWith(".lock")
+  ) {
+    return LockFileIcon
+  }
+
   // Special handling for .env files
-  // Get the base filename (without path)
-  const baseFilename = filenameLower.split("/").pop() || filenameLower
   // .env (without suffix) -> TOML icon
   // .env.local, .env.example, .env.development, etc. -> Shell icon
   if (baseFilename === ".env") {
@@ -239,7 +281,7 @@ export function getFileIconByExtension(
   // README files -> MarkdownInfoIcon (with exclamation mark)
   // Other .md/.mdx files -> MarkdownIcon (standard markdown icon)
   if (filenameLower.endsWith(".md") || filenameLower.endsWith(".mdx")) {
-    const nameWithoutExt = filenameLower.replace(/\.(md|mdx)$/, "")
+    const nameWithoutExt = baseFilename.replace(/\.(md|mdx)$/, "")
     if (nameWithoutExt === "readme") {
       return MarkdownInfoIcon
     }

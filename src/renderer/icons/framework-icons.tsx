@@ -1607,3 +1607,90 @@ export function PowerPointIcon({ className }: FrameworkIconProps) {
     </svg>
   )
 }
+
+// Git Icon - Orange Git logo for .gitignore and git-related files
+export function GitIcon({ className }: FrameworkIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={cn("w-4 h-4", className)}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M21.635 11.455L12.545 2.365C12.0625 1.8825 11.2825 1.8825 10.8 2.365L8.6775 4.4875L11.4 7.21C11.935 7.0325 12.5475 7.1425 12.975 7.57C13.405 8 13.5125 8.6175 13.33 9.155L15.945 11.77C16.4825 11.5875 17.1 11.695 17.53 12.125C18.1475 12.7425 18.1475 13.745 17.53 14.3625C16.9125 14.98 15.91 14.98 15.2925 14.3625C14.8375 13.9075 14.74 13.24 14.97 12.68L12.525 10.235L12.525 15.51C12.68 15.5875 12.8275 15.69 12.9625 15.825C13.58 16.4425 13.58 17.445 12.9625 18.0625C12.345 18.68 11.3425 18.68 10.725 18.0625C10.1075 17.445 10.1075 16.4425 10.725 15.825C10.89 15.66 11.08 15.535 11.285 15.45V10.1275C11.08 10.0425 10.89 9.9175 10.725 9.7525C10.265 9.2925 10.17 8.6175 10.41 8.0525L7.74 5.3825L2.365 10.7575C1.8825 11.24 1.8825 12.02 2.365 12.5025L11.455 21.5925C11.9375 22.075 12.7175 22.075 13.2 21.5925L21.635 13.1575C22.1175 12.675 22.1175 11.9375 21.635 11.455Z"
+        fill="#F05032"
+      />
+    </svg>
+  )
+}
+
+// Lock Icon - For lock files (package-lock.json, yarn.lock, etc.)
+export function LockFileIcon({ className }: FrameworkIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={cn("w-4 h-4", className)}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect
+        x="5"
+        y="10"
+        width="14"
+        height="11"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        className="text-amber-500"
+      />
+      <path
+        d="M8 10V7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7V10"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        className="text-amber-500"
+      />
+      <circle cx="12" cy="15" r="1.5" fill="currentColor" className="text-amber-500" />
+      <path d="M12 16.5V18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-amber-500" />
+    </svg>
+  )
+}
+
+// License Icon - Document with seal/checkmark for LICENSE files
+export function LicenseIcon({ className }: FrameworkIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={cn("w-4 h-4", className)}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-purple-500"
+      />
+      <path
+        d="M14 2V8H20"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-purple-500"
+      />
+      <circle cx="12" cy="14" r="3" stroke="currentColor" strokeWidth="1.5" className="text-purple-500" />
+      <path
+        d="M10.5 14L11.5 15L13.5 13"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-purple-500"
+      />
+    </svg>
+  )
+}
