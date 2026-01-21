@@ -485,12 +485,51 @@ export const lastSelectedWorkModeAtom = atomWithStorage<WorkMode>(
 
 // Last selected branch per project (persisted)
 // Maps projectId -> { name: string, type: "local" | "remote" }
+// Custom storage with migration from old string format
+const lastSelectedBranchesStorage = {
+  getItem: (key: string, initialValue: Record<string, { name: string; type: "local" | "remote" }>) => {
+    const storedValue = localStorage.getItem(key)
+    if (!storedValue) return initialValue
+
+    try {
+      const parsed = JSON.parse(storedValue)
+      
+      // Migrate old format: Record<string, string> -> Record<string, { name, type }>
+      const migrated: Record<string, { name: string; type: "local" | "remote" }> = {}
+      for (const [projectId, value] of Object.entries(parsed)) {
+        if (typeof value === "string") {
+          // Old format: string branch name -> assume "local" type
+          migrated[projectId] = { name: value, type: "local" }
+        } else if (value && typeof value === "object" && "name" in value && "type" in value) {
+          // New format: already migrated
+          migrated[projectId] = value as { name: string; type: "local" | "remote" }
+        }
+      }
+      
+      // Save migrated data back to localStorage
+      if (Object.keys(migrated).length > 0) {
+        localStorage.setItem(key, JSON.stringify(migrated))
+      }
+      
+      return migrated
+    } catch {
+      return initialValue
+    }
+  },
+  setItem: (key: string, value: Record<string, { name: string; type: "local" | "remote" }>) => {
+    localStorage.setItem(key, JSON.stringify(value))
+  },
+  removeItem: (key: string) => {
+    localStorage.removeItem(key)
+  },
+}
+
 export const lastSelectedBranchesAtom = atomWithStorage<
   Record<string, { name: string; type: "local" | "remote" }>
 >(
   "agents:lastSelectedBranches",
   {},
-  undefined,
+  lastSelectedBranchesStorage,
   { getOnInit: true },
 )
 
