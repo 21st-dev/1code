@@ -546,8 +546,11 @@ export function NewChatForm({
       !selectedBranch
     ) {
       // Find the default branch in the branches list to get its type
+      // Prefer local over remote if both exist
       const defaultBranchObj = branches.find(
-        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault,
+        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "local",
+      ) || branches.find(
+        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "remote",
       )
       setSelectedBranch(
         branchesQuery.data.defaultBranch,
@@ -1517,7 +1520,7 @@ export function NewChatForm({
                                   const isSelected =
                                     (selectedBranch === branch.name &&
                                       selectedBranchType === branch.type) ||
-                                    (!selectedBranch && branch.isDefault)
+                                    (!selectedBranch && branch.isDefault && branch.type === "local")
                                   return (
                                     <button
                                       key={`${branch.type}-${branch.name}`}
