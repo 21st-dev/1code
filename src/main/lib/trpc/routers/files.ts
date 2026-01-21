@@ -62,7 +62,8 @@ async function isSymlinkOutsideDirectory(basePath: string, targetPath: string): 
 }
 
 // Helper to recursively copy a directory
-async function copyDir(src: string, dest: string): Promise<void> {
+// basePath is optional - when provided, validates symlinks don't point outside
+async function copyDir(src: string, dest: string, basePath?: string): Promise<void> {
   await mkdir(dest, { recursive: true })
   const entries = await readdir(src, { withFileTypes: true })
 
@@ -70,8 +71,15 @@ async function copyDir(src: string, dest: string): Promise<void> {
     const srcPath = join(src, entry.name)
     const destPath = join(dest, entry.name)
 
+    // Validate nested symlinks if basePath is provided
+    if (basePath && entry.isSymbolicLink()) {
+      if (await isSymlinkOutsideDirectory(basePath, srcPath)) {
+        throw new Error(`Cannot copy symlink pointing outside the project directory: ${srcPath}`)
+      }
+    }
+
     if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath)
+      await copyDir(srcPath, destPath, basePath)
     } else {
       await copyFile(srcPath, destPath)
     }
@@ -1244,8 +1252,8 @@ export const filesRouter = router({
           }
 
           if (sourceStats.isDirectory()) {
-            // Recursively copy directory
-            await copyDir(sourcePath, destPath)
+            // Recursively copy directory, passing projectPath to validate nested symlinks
+            await copyDir(sourcePath, destPath, projectPath)
           } else {
             await copyFile(sourcePath, destPath)
           }
