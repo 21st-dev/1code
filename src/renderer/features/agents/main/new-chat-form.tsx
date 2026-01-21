@@ -772,6 +772,7 @@ export function NewChatForm({
     createChatMutation,
     hasContent,
     selectedBranch,
+    selectedBranchType,
     workMode,
     images,
     isPlanMode,
