@@ -275,14 +275,14 @@ export function NewChatForm({
 
   // Get/set selected branch for current project (persisted per project)
   const selectedBranch = validatedProject?.id
-    ? lastSelectedBranches[validatedProject.id] || ""
+    ? lastSelectedBranches[validatedProject.id]?.name || ""
     : ""
   const setSelectedBranch = useCallback(
     (branch: string, type?: "local" | "remote") => {
-      if (validatedProject?.id) {
+      if (validatedProject?.id && type) {
         setLastSelectedBranches((prev) => ({
           ...prev,
-          [validatedProject.id]: branch,
+          [validatedProject.id]: { name: branch, type },
         }))
         setSelectedBranchType(type)
       }
@@ -292,6 +292,18 @@ export function NewChatForm({
   const branchListRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<AgentsMentionsEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Restore selectedBranchType from persisted storage when project changes
+  useEffect(() => {
+    if (validatedProject?.id) {
+      const stored = lastSelectedBranches[validatedProject.id]
+      if (stored?.type) {
+        setSelectedBranchType(stored.type)
+      } else {
+        setSelectedBranchType(undefined)
+      }
+    }
+  }, [validatedProject?.id, lastSelectedBranches])
 
   // Image upload hook
   const {

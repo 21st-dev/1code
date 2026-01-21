@@ -484,8 +484,10 @@ export const lastSelectedWorkModeAtom = atomWithStorage<WorkMode>(
 )
 
 // Last selected branch per project (persisted)
-// Maps projectId -> branchName
-export const lastSelectedBranchesAtom = atomWithStorage<Record<string, string>>(
+// Maps projectId -> { name: string, type: "local" | "remote" }
+export const lastSelectedBranchesAtom = atomWithStorage<
+  Record<string, { name: string; type: "local" | "remote" }>
+>(
   "agents:lastSelectedBranches",
   {},
   undefined,
