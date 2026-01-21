@@ -167,33 +167,36 @@ bun run dev
 
 ### Prerequisites for Notarization
 
-Set environment variables (add to `.zshrc` or `.env.local`):
-
-```bash
-export APPLE_ID="your-apple-id@example.com"
-export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"  # App-specific password from appleid.apple.com
-```
+- Keychain profile: `21st-notarize`
+- Create with: `xcrun notarytool store-credentials "21st-notarize" --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID`
 
 ### Release Commands
 
 ```bash
-# Full release (build, sign, notarize, generate manifests, upload to CDN)
+# Full release (build, sign, submit notarization, upload to CDN)
 bun run release
 
 # Or step by step:
 bun run build              # Compile TypeScript
-bun run package:mac        # Build, sign & notarize macOS app
+bun run package:mac        # Build & sign macOS app
 bun run dist:manifest      # Generate latest-mac.yml manifests
-./scripts/upload-release-wrangler.sh  # Upload to R2 CDN
+./scripts/upload-release-wrangler.sh  # Submit notarization & upload to R2 CDN
 ```
 
 ### Bump Version Before Release
 
 ```bash
-npm version patch  # 0.0.2 → 0.0.3
-npm version minor  # 0.0.3 → 0.1.0
-npm version major  # 0.1.0 → 1.0.0
+npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 ```
+
+### After Release Script Completes
+
+1. Wait for notarization (2-5 min): `xcrun notarytool history --keychain-profile "21st-notarize"`
+2. Staple DMGs: `cd release && xcrun stapler staple *.dmg`
+3. Re-upload stapled DMGs to R2 and GitHub (see RELEASE.md for commands)
+4. Update changelog: `gh release edit v0.0.X --notes "..."`
+5. **Upload manifests (triggers auto-updates!)** — see RELEASE.md
+6. Sync to public: `./scripts/sync-to-public.sh`
 
 ### Files Uploaded to CDN
 
@@ -201,10 +204,10 @@ npm version major  # 0.1.0 → 1.0.0
 |------|---------|
 | `latest-mac.yml` | Manifest for arm64 auto-updates |
 | `latest-mac-x64.yml` | Manifest for Intel auto-updates |
-| `Agents-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
-| `Agents-{version}-mac.zip` | Auto-update payload (Intel) |
-| `Agents-{version}-arm64.dmg` | Manual download (arm64) |
-| `Agents-{version}.dmg` | Manual download (Intel) |
+| `1Code-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
+| `1Code-{version}-mac.zip` | Auto-update payload (Intel) |
+| `1Code-{version}-arm64.dmg` | Manual download (arm64) |
+| `1Code-{version}.dmg` | Manual download (Intel) |
 
 ### Auto-Update Flow
 

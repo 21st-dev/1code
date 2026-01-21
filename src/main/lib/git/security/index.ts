@@ -12,9 +12,11 @@ export {
 	gitCheckoutFile,
 	gitStageAll,
 	gitStageFile,
+	gitStageFiles,
 	gitSwitchBranch,
 	gitUnstageAll,
 	gitUnstageFile,
+	gitUnstageFiles,
 } from "./git-commands";
 
 export {

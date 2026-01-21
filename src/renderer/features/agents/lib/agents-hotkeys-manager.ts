@@ -64,6 +64,7 @@ export interface AgentsHotkeysManagerConfig {
   setSettingsDialogOpen?: (open: boolean) => void
   setSettingsActiveTab?: (tab: SettingsTab) => void
   setShortcutsDialogOpen?: (open: boolean) => void
+  toggleChatSearch?: () => void
   selectedChatId?: string | null
 }
 
@@ -92,6 +93,7 @@ export function useAgentsHotkeys(
       setSettingsDialogOpen: config.setSettingsDialogOpen,
       setSettingsActiveTab: config.setSettingsActiveTab,
       setShortcutsDialogOpen: config.setShortcutsDialogOpen,
+      toggleChatSearch: config.toggleChatSearch,
       selectedChatId: config.selectedChatId,
     }),
     [
@@ -100,6 +102,7 @@ export function useAgentsHotkeys(
       config.setSettingsDialogOpen,
       config.setSettingsActiveTab,
       config.setShortcutsDialogOpen,
+      config.toggleChatSearch,
       config.selectedChatId,
     ],
   )
@@ -201,6 +204,27 @@ export function useAgentsHotkeys(
     return () => window.removeEventListener("keydown", handleSettings, true)
   }, [enabled, handleHotkeyAction])
 
+  // Direct listener for Cmd+F - toggle chat search
+  React.useEffect(() => {
+    if (!enabled) return
+
+    const handleChatSearch = (e: KeyboardEvent) => {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.key.toLowerCase() === "f" &&
+        !e.shiftKey &&
+        !e.altKey
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleHotkeyAction("toggle-chat-search")
+      }
+    }
+
+    window.addEventListener("keydown", handleChatSearch, true)
+    return () => window.removeEventListener("keydown", handleChatSearch, true)
+  }, [enabled, handleHotkeyAction])
+
   // General hotkey handler for remaining actions
   const actionsWithHotkeys = useMemo(
     () =>
@@ -210,7 +234,8 @@ export function useAgentsHotkeys(
           action.id !== "create-new-agent" &&
           action.id !== "toggle-sidebar" &&
           action.id !== "open-shortcuts" &&
-          action.id !== "open-settings",
+          action.id !== "open-settings" &&
+          action.id !== "toggle-chat-search",
       ),
     [],
   )

@@ -1,24 +1,24 @@
 import {
-  SearchIcon,
-  EyeIcon,
-  IconEditFile,
-  PlanningIcon,
-  WriteFileIcon,
-  CustomTerminalIcon,
-  GlobeIcon,
-  SparklesIcon,
-} from "../../icons"
-import {
+  Database,
+  FileCode2,
   FolderSearch,
   GitBranch,
   ListTodo,
   LogOut,
-  FileCode2,
+  Server,
   Terminal,
   XCircle,
-  Server,
-  Database,
 } from "lucide-react"
+import {
+  CustomTerminalIcon,
+  EyeIcon,
+  GlobeIcon,
+  IconEditFile,
+  PlanningIcon,
+  SearchIcon,
+  SparklesIcon,
+  WriteFileIcon,
+} from "../../icons"
 
 export type ToolVariant = "simple" | "collapsible"
 
@@ -31,7 +31,7 @@ export interface ToolMeta {
 
 export function getToolStatus(part: any, chatStatus?: string) {
   const basePending =
-    part.state !== "output-available" && part.state !== "output-error"
+    part.state !== "output-available" && part.state !== "output-error" && part.state !== "result"
   const isError =
     part.state === "output-error" ||
     (part.state === "output-available" && part.output?.success === false)
@@ -90,7 +90,18 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       const isPending =
         part.state !== "output-available" && part.state !== "output-error"
       if (isPending) return "Grepping"
+      // Handle different output modes:
+      // - "files_with_matches" mode: numFiles > 0, filenames is populated
+      // - "content" mode: numFiles = 0, but numLines > 0 and content has matches
+      const mode = part.output?.mode
       const numFiles = part.output?.numFiles || 0
+      const numLines = part.output?.numLines || 0
+
+      if (mode === "content") {
+        // In content mode, numFiles is always 0, use numLines instead
+        return numLines > 0 ? `Found ${numLines} matches` : "No matches"
+      }
+
       return numFiles > 0 ? `Grepped ${numFiles} files` : "No matches"
     },
     subtitle: (part) => {
@@ -311,8 +322,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-ExitPlanMode": {
     icon: LogOut,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
+      const { isPending } = getToolStatus(part)
       return isPending ? "Finishing plan" : "Plan complete"
     },
     subtitle: () => "",

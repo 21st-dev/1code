@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect, useMemo, useCallback } from "react"
+import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useSetAtom } from "jotai"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
 import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
@@ -17,12 +17,15 @@ import {
 } from "../../../components/ui/tooltip"
 import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { areToolPropsEqual } from "./agent-tool-utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom } from "../atoms"
 import { cn } from "../../../lib/utils"
 
 interface AgentEditToolProps {
   part: any
+  messageId?: string
+  partIndex?: number
   chatStatus?: string
 }
 
@@ -94,22 +97,30 @@ function getDiffLines(patches: Array<{ lines: string[] }>): DiffLine[] {
 }
 
 // Hook to batch-highlight all diff lines at once
+// During streaming, skip highlighting entirely to maximize FPS
 function useBatchHighlight(
   lines: DiffLine[],
   language: string,
   themeId: string,
+  isStreaming: boolean = false,
 ): Map<number, string> {
   const [highlightedMap, setHighlightedMap] = useState<Map<number, string>>(
     () => new Map(),
   )
 
   // Create stable key from lines content to detect changes
+  // Only compute when NOT streaming to avoid expensive join during animation
   const linesKey = useMemo(
-    () => lines.map((l) => l.content).join("\n"),
-    [lines],
+    () => (isStreaming ? "" : lines.map((l) => l.content).join("\n")),
+    [lines, isStreaming],
   )
 
   useEffect(() => {
+    // Skip highlighting during streaming - show plain text for better FPS
+    if (isStreaming) {
+      return
+    }
+
     if (lines.length === 0) {
       setHighlightedMap(new Map())
       return
@@ -123,6 +134,8 @@ function useBatchHighlight(
 
         // Highlight all lines in one batch using centralized loader
         for (let i = 0; i < lines.length; i++) {
+          // Check if cancelled between iterations to allow early exit
+          if (cancelled) return
           const content = lines[i].content || " "
           const highlighted = await highlightCode(content, language, themeId)
           results.set(i, highlighted)
@@ -140,59 +153,69 @@ function useBatchHighlight(
       }
     }
 
-    // Debounce highlighting during streaming to reduce CPU load
+    // Debounce highlighting after streaming completes
     const timer = setTimeout(highlightAll, 50)
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [linesKey, language, themeId, lines.length])
+  }, [linesKey, language, themeId, lines.length, isStreaming])
 
   return highlightedMap
 }
 
 // Memoized component for rendering a single diff line
-const DiffLineRow = memo(function DiffLineRow({
-  line,
-  highlightedHtml,
-}: {
-  line: DiffLine
-  highlightedHtml: string | undefined
-}) {
-  return (
-    <div
-      className={cn(
-        "px-2.5 py-0.5",
-        line.type === "removed" &&
-          "bg-red-500/10 dark:bg-red-500/15 border-l-2 border-red-500/50",
-        line.type === "added" &&
-          "bg-green-500/10 dark:bg-green-500/15 border-l-2 border-green-500/50",
-        line.type === "context" && "border-l-2 border-transparent",
-      )}
-    >
-      {highlightedHtml ? (
-        <span
-          className="whitespace-pre-wrap break-all [&_.shiki]:bg-transparent [&_pre]:bg-transparent [&_code]:bg-transparent"
-          dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-        />
-      ) : (
-        <span
-          className={cn(
-            "whitespace-pre-wrap break-all",
-            line.type === "removed" && "text-red-700 dark:text-red-300",
-            line.type === "added" && "text-green-700 dark:text-green-300",
-            line.type === "context" && "text-muted-foreground",
-          )}
-        >
-          {line.content || " "}
-        </span>
-      )}
-    </div>
-  )
-})
+// Uses custom comparator to compare line content instead of object reference
+const DiffLineRow = memo(
+  function DiffLineRow({
+    line,
+    highlightedHtml,
+  }: {
+    line: DiffLine
+    highlightedHtml: string | undefined
+  }) {
+    return (
+      <div
+        className={cn(
+          "px-2.5 py-0.5",
+          line.type === "removed" &&
+            "bg-red-500/10 dark:bg-red-500/15 border-l-2 border-red-500/50",
+          line.type === "added" &&
+            "bg-green-500/10 dark:bg-green-500/15 border-l-2 border-green-500/50",
+          line.type === "context" && "border-l-2 border-transparent",
+        )}
+      >
+        {highlightedHtml ? (
+          <span
+            className="whitespace-pre-wrap break-all [&_.shiki]:bg-transparent [&_pre]:bg-transparent [&_code]:bg-transparent"
+            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+          />
+        ) : (
+          <span
+            className={cn(
+              "whitespace-pre-wrap break-all",
+              line.type === "removed" && "text-red-700 dark:text-red-300",
+              line.type === "added" && "text-green-700 dark:text-green-300",
+              line.type === "context" && "text-muted-foreground",
+            )}
+          >
+            {line.content || " "}
+          </span>
+        )}
+      </div>
+    )
+  },
+  // Custom comparator: compare line content and type, not object reference
+  (prevProps, nextProps) =>
+    prevProps.line.type === nextProps.line.type &&
+    prevProps.line.content === nextProps.line.content &&
+    prevProps.highlightedHtml === nextProps.highlightedHtml,
+)
 
 export const AgentEditTool = memo(function AgentEditTool({
   part,
+  messageId,
+  partIndex,
   chatStatus,
 }: AgentEditToolProps) {
   const [isOutputExpanded, setIsOutputExpanded] = useState(false)
@@ -203,14 +226,19 @@ export const AgentEditTool = memo(function AgentEditTool({
   const setDiffSidebarOpen = useSetAtom(agentsDiffSidebarOpenAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
 
-  // Determine mode: Write (create new file) vs Edit (modify existing)
+  // Determine tool type
   const isWriteMode = part.type === "tool-Write"
+  const toolPrefix = isWriteMode ? "tool-Write" : "tool-Edit"
+
   // Only consider streaming if chat is actively streaming (prevents spinner hang on stop)
-  const isInputStreaming = part.state === "input-streaming" && chatStatus === "streaming"
+  // Include "submitted" status - this is when request was sent but streaming hasn't started yet
+  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
+  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
 
   const filePath = part.input?.file_path || ""
   const oldString = part.input?.old_string || ""
   const newString = part.input?.new_string || ""
+
   // For Write mode, content is in input.content
   const writeContent = part.input?.content || ""
 
@@ -255,6 +283,31 @@ export const AgentEditTool = memo(function AgentEditTool({
     setDiffSidebarOpen(true)
     setFocusedDiffFile(displayPath)
   }, [displayPath, setDiffSidebarOpen, setFocusedDiffFile])
+
+  // Memoized click handlers to prevent inline function re-creation
+  const handleHeaderClick = useCallback(() => {
+    if (!isPending && !isInputStreaming) {
+      setIsOutputExpanded(prev => !prev)
+    }
+  }, [isPending, isInputStreaming])
+
+  const handleFilenameClick = useCallback((e: React.MouseEvent) => {
+    if (displayPath) {
+      e.stopPropagation()
+      handleOpenInDiff()
+    }
+  }, [displayPath, handleOpenInDiff])
+
+  const handleExpandButtonClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsOutputExpanded(prev => !prev)
+  }, [])
+
+  const handleContentClick = useCallback(() => {
+    if (!isOutputExpanded && !isPending && !isInputStreaming) {
+      setIsOutputExpanded(true)
+    }
+  }, [isOutputExpanded, isPending, isInputStreaming])
 
   // Get file icon component and language
   // Pass true to not show default icon for unknown file types
@@ -327,12 +380,41 @@ export const AgentEditTool = memo(function AgentEditTool({
     return newString
   }, [isInputStreaming, isWriteMode, writeContent, newString])
 
+  // Throttle streaming content updates for better FPS
+  // Only update the displayed content every 100ms during streaming
+  const [throttledStreamingContent, setThrottledStreamingContent] = useState<string | null>(null)
+  const lastStreamingUpdateRef = useRef<number>(0)
+
+  useEffect(() => {
+    if (!isInputStreaming) {
+      setThrottledStreamingContent(null)
+      return
+    }
+
+    const now = Date.now()
+    const timeSinceLastUpdate = now - lastStreamingUpdateRef.current
+
+    // Throttle to ~10 updates per second (100ms intervals)
+    if (timeSinceLastUpdate >= 100) {
+      lastStreamingUpdateRef.current = now
+      setThrottledStreamingContent(streamingContent)
+    } else {
+      // Schedule update for remaining time
+      const timer = setTimeout(() => {
+        lastStreamingUpdateRef.current = Date.now()
+        setThrottledStreamingContent(streamingContent)
+      }, 100 - timeSinceLastUpdate)
+      return () => clearTimeout(timer)
+    }
+  }, [streamingContent, isInputStreaming])
+
   // Convert streaming content to diff lines
   // Up to 3 lines: show from top; more than 3 lines: show last N lines for autoscroll effect
   const { streamingLines, shouldAlignBottom } = useMemo(() => {
-    if (!streamingContent)
+    const content = throttledStreamingContent
+    if (!content)
       return { streamingLines: [], shouldAlignBottom: false }
-    const lines = streamingContent.split("\n")
+    const lines = content.split("\n")
     const totalLines = lines.length
     // If 3 or fewer lines, show all from top
     // If more than 3, show last 15 lines for autoscroll effect
@@ -344,11 +426,16 @@ export const AgentEditTool = memo(function AgentEditTool({
       })),
       shouldAlignBottom: totalLines > 3,
     }
-  }, [streamingContent])
+  }, [throttledStreamingContent])
 
   // Use streaming lines when streaming, otherwise use diff lines
-  const activeLines =
-    isInputStreaming && streamingLines.length > 0 ? streamingLines : diffLines
+  // IMPORTANT: Must be memoized to prevent infinite render loop!
+  // Without useMemo, activeLines gets a new reference on every render, which triggers
+  // firstChangeIndex -> displayLines -> useBatchHighlight -> setHighlightedMap -> re-render
+  const activeLines = useMemo(
+    () => isInputStreaming && streamingLines.length > 0 ? streamingLines : diffLines,
+    [isInputStreaming, streamingLines, diffLines]
+  )
 
   // Find index of first change line (added or removed) to focus on when collapsed
   // Prioritize added lines, but fall back to removed lines if no additions exist
@@ -372,17 +459,20 @@ export const AgentEditTool = memo(function AgentEditTool({
   )
 
   // Batch highlight all lines at once (instead of N×useEffect)
+  // Pass isInputStreaming to use longer debounce during streaming for better FPS
   const highlightedMap = useBatchHighlight(
     displayLines,
     language,
     codeTheme,
+    isInputStreaming,
   )
 
   // Check if we have VISIBLE content to show
   // For streaming, only show content area if we have some content to display
+  // Use throttled content check during streaming for consistent render behavior
   const hasVisibleContent =
     displayLines.length > 0 ||
-    (isInputStreaming && (streamingContent || newString || writeContent))
+    (isInputStreaming && (throttledStreamingContent || newString || writeContent))
 
   // Header title based on mode and state (used only in minimal view)
   const headerAction = useMemo(() => {
@@ -415,22 +505,23 @@ export const AgentEditTool = memo(function AgentEditTool({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
+    <div
+      data-message-id={messageId}
+      data-part-index={partIndex}
+      data-part-type={toolPrefix}
+      data-tool-file-path={displayPath}
+      className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2"
+    >
       {/* Header - clickable to expand, fixed height to prevent layout shift */}
       <div
-        onClick={() => hasVisibleContent && !isPending && !isInputStreaming && setIsOutputExpanded(!isOutputExpanded)}
+        onClick={hasVisibleContent ? handleHeaderClick : undefined}
         className={cn(
           "flex items-center justify-between pl-2.5 pr-2 h-7",
           hasVisibleContent && !isPending && !isInputStreaming && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <div
-          onClick={(e) => {
-            if (displayPath) {
-              e.stopPropagation()
-              handleOpenInDiff()
-            }
-          }}
+          onClick={handleFilenameClick}
           className={cn(
             "flex items-center gap-1.5 text-xs truncate flex-1 min-w-0",
             displayPath && "cursor-pointer hover:text-foreground",
@@ -488,10 +579,7 @@ export const AgentEditTool = memo(function AgentEditTool({
           {/* Expand/Collapse button - show when has visible content and not streaming */}
           {hasVisibleContent && !isPending && !isInputStreaming && (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsOutputExpanded(!isOutputExpanded)
-              }}
+              onClick={handleExpandButtonClick}
               className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
             >
               <div className="relative w-4 h-4">
@@ -520,12 +608,7 @@ export const AgentEditTool = memo(function AgentEditTool({
       {/* Content - git-style diff with syntax highlighting */}
       {hasVisibleContent && (
         <div
-          onClick={() =>
-            !isOutputExpanded &&
-            !isPending &&
-            !isInputStreaming &&
-            setIsOutputExpanded(true)
-          }
+          onClick={handleContentClick}
           className={cn(
             "border-t border-border transition-colors duration-150 font-mono text-xs",
             isOutputExpanded
@@ -558,7 +641,7 @@ export const AgentEditTool = memo(function AgentEditTool({
               ))}
             </div>
           ) : // Fallback: show raw streaming content when no lines parsed yet
-          streamingContent || newString ? (
+          throttledStreamingContent || newString ? (
             <div
               className={cn(
                 "px-2.5 py-1.5 text-green-700 dark:text-green-300 whitespace-pre-wrap break-all",
@@ -566,13 +649,13 @@ export const AgentEditTool = memo(function AgentEditTool({
               )}
             >
               {isInputStreaming && !isOutputExpanded
-                ? // Show last ~500 chars during streaming
-                  (streamingContent || newString).slice(-500)
-                : streamingContent || newString}
+                ? // Show last ~500 chars during streaming (use throttled for FPS)
+                  (throttledStreamingContent || newString).slice(-500)
+                : throttledStreamingContent || newString}
             </div>
           ) : null}
         </div>
       )}
     </div>
   )
-})
+}, areToolPropsEqual)

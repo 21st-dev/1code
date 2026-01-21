@@ -32,6 +32,7 @@ export interface CommitInfo {
 	hash: string;
 	shortHash: string; // Short hash (7 chars)
 	message: string; // Commit message (first line)
+	description?: string; // Commit description (body, optional)
 	author: string;
 	date: Date;
 	files: ChangedFile[];
@@ -70,4 +71,27 @@ export interface FileContents {
 	original: string; // Original content (before changes)
 	modified: string; // Modified content (after changes)
 	language: string; // Detected language for syntax highlighting
+}
+
+/** Parsed diff file for the diff viewer */
+export interface ParsedDiffFile {
+	key: string;
+	oldPath: string;
+	newPath: string;
+	diffText: string;
+	isBinary: boolean;
+	additions: number;
+	deletions: number;
+	isValid: boolean;
+	fileLang: string | null;
+	isNewFile: boolean;
+	isDeletedFile: boolean;
+}
+
+/** Response from getParsedDiff endpoint */
+export interface ParsedDiffResponse {
+	files: ParsedDiffFile[];
+	totalAdditions: number;
+	totalDeletions: number;
+	fileContents: Record<string, string>;
 }

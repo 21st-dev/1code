@@ -12,3 +12,5 @@ export {
   logClaudeEnv,
   getBundledClaudeBinaryPath,
 } from "./env"
+export { checkOfflineFallback } from "./offline-handler"
+export type { OfflineCheckResult, CustomClaudeConfig } from "./offline-handler"

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { X, ImageOff, ChevronLeft, ChevronRight } from "lucide-react"
 import { IconSpinner } from "../../../components/ui/icons"
 import {
@@ -150,8 +151,8 @@ export function AgentImageItem({
         )}
       </div>
 
-      {/* Fullscreen overlay with gallery navigation */}
-      {isFullscreen && currentImage?.url && (
+      {/* Fullscreen overlay with gallery navigation - rendered via portal to escape stacking context */}
+      {isFullscreen && currentImage?.url && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
           onClick={closeFullscreen}
@@ -226,7 +227,8 @@ export function AgentImageItem({
               </span>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

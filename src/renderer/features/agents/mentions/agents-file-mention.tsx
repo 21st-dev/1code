@@ -14,7 +14,7 @@ import {
   createElement,
   memo,
 } from "react"
-import { flushSync } from "react-dom"
+import { flushSync, createPortal } from "react-dom"
 import { createRoot } from "react-dom/client"
 import { useAtomValue } from "jotai"
 import type { FileMentionOption } from "./agents-mentions-editor"
@@ -1231,9 +1231,9 @@ export const AgentsFileMention = memo(function AgentsFileMention({
 
   // Decide placement like Radix Popover (auto-flip top/bottom)
   const safeMargin = 10
-  const caretOffsetBelow = 20 // small offset so list doesn't overlap caret line
+  const lineHeight = 20 // approximate line height for better positioning
   const availableBelow =
-    window.innerHeight - (position.top + caretOffsetBelow) - safeMargin
+    window.innerHeight - (position.top + lineHeight) - safeMargin
   const availableAbove = position.top - safeMargin
 
   // Compute desired placement, but lock it for the duration of the open state
@@ -1249,13 +1249,22 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   const placeAbove = placementRef.current === "above"
 
   // Compute final top based on placement
+  // Use line height for better positioning relative to cursor
   let finalTop = placeAbove
     ? position.top - gap
-    : position.top + gap + caretOffsetBelow
+    : position.top + lineHeight + gap
 
-  // Slight left bias to better align with '@'
-  const leftOffset = -4
-  let finalLeft = position.left + leftOffset
+  // Position is already aligned to editor left edge, no offset needed
+  let finalLeft = position.left
+
+  console.log('[FileMention] Position (aligned to editor left):', {
+    top: position.top,
+    left: position.left,
+    finalTop,
+    finalLeft,
+    placeAbove,
+    dropdownWidth
+  })
 
   // Adjust horizontal overflow
   if (finalLeft + dropdownWidth > window.innerWidth - safeMargin) {
@@ -1275,19 +1284,20 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   )
   const transformY = placeAbove ? "translateY(-100%)" : "translateY(0)"
 
-  return (
+  return createPortal(
     <TooltipProvider delayDuration={300}>
       <div
         ref={dropdownRef}
-        className="fixed z-[99999] overflow-hidden rounded-[10px] border border-border bg-popover py-1 text-xs text-popover-foreground shadow-lg dark"
+        className="fixed z-[99999] overflow-y-auto rounded-[10px] border border-border bg-popover py-1 text-xs text-popover-foreground shadow-lg dark [&::-webkit-scrollbar]:hidden"
         style={{
           top: finalTop,
           left: finalLeft,
           width: `${dropdownWidth}px`,
           maxHeight: `${computedMaxHeight}px`,
-          overflowY: "auto",
           transform: transformY,
-        }}
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        } as React.CSSProperties}
       >
         {/* Initial loading state (no previous data) */}
         {isLoading && options.length === 0 && (
@@ -1428,7 +1438,8 @@ export const AgentsFileMention = memo(function AgentsFileMention({
           </>
         )}
       </div>
-    </TooltipProvider>
+    </TooltipProvider>,
+    document.body
   )
 })
 

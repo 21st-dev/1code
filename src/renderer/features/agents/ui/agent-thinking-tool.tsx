@@ -5,6 +5,7 @@ import { ChevronRight } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface ThinkingToolPart {
   type: string
@@ -32,8 +33,10 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
 }: AgentThinkingToolProps) {
   const isPending =
     part.state !== "output-available" && part.state !== "output-error"
-  const isStreaming = isPending && chatStatus === "streaming"
-  const isInterrupted = isPending && chatStatus !== "streaming" && chatStatus !== undefined
+  // Include "submitted" status - this is when request was sent but streaming hasn't started yet
+  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
+  const isStreaming = isPending && isActivelyStreaming
+  const isInterrupted = isPending && !isActivelyStreaming && chatStatus !== undefined
 
   // Default: expanded while streaming, collapsed when done
   const [isExpanded, setIsExpanded] = useState(isStreaming)
@@ -129,4 +132,4 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
       )}
     </div>
   )
-})
+}, areToolPropsEqual)

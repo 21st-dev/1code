@@ -10,10 +10,13 @@ import {
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 
 interface AgentBashToolProps {
   part: any
+  messageId?: string
+  partIndex?: number
   chatStatus?: string
 }
 
@@ -43,6 +46,8 @@ function limitLines(text: string, maxLines: number): { text: string; truncated: 
 
 export const AgentBashTool = memo(function AgentBashTool({
   part,
+  messageId,
+  partIndex,
   chatStatus,
 }: AgentBashToolProps) {
   const [isOutputExpanded, setIsOutputExpanded] = useState(false)
@@ -75,7 +80,9 @@ export const AgentBashTool = memo(function AgentBashTool({
 
   // Check if command input is still being streamed
   // Only consider streaming if chat is actively streaming (prevents hang on stop)
-  const isInputStreaming = part.state === "input-streaming" && chatStatus === "streaming"
+  // Include "submitted" status - this is when request was sent but streaming hasn't started yet
+  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
+  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
 
   // If command is still being generated (input-streaming state), show loading state
   if (isInputStreaming) {
@@ -104,7 +111,12 @@ export const AgentBashTool = memo(function AgentBashTool({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
+    <div
+      data-message-id={messageId}
+      data-part-index={partIndex}
+      data-part-type="tool-Bash"
+      className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2"
+    >
       {/* Header - clickable to expand, fixed height to prevent layout shift */}
       <div
         onClick={() => hasMoreOutput && !isPending && setIsOutputExpanded(!isOutputExpanded)}
@@ -200,4 +212,4 @@ export const AgentBashTool = memo(function AgentBashTool({
       </div>
     </div>
   )
-})
+}, areToolPropsEqual)

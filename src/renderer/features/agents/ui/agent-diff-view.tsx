@@ -11,25 +11,40 @@ import {
   forwardRef,
   useImperativeHandle,
   startTransition,
+  useDeferredValue,
   type ReactNode,
   type ErrorInfo,
 } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
-import { agentsFocusedDiffFileAtom, filteredDiffFilesAtom } from "../atoms"
+import { agentsFocusedDiffFileAtom, filteredDiffFilesAtom, viewedFilesAtomFamily, type ViewedFileState } from "../atoms"
 import { DiffModeEnum, DiffView, DiffFile } from "@git-diff-view/react"
 import "@git-diff-view/react/styles/diff-view-pure.css"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import {
   AlertTriangle,
-  CheckCircle2,
+  Check,
   ChevronDown,
   Columns2,
   Rows2,
 } from "lucide-react"
+import {
+  ClipboardIcon,
+  ExternalLinkIcon,
+  FolderIcon,
+  UndoIcon,
+} from "../../../components/ui/icons"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog"
 import { Button } from "../../../components/ui/button"
 import {
   IconSpinner,
@@ -43,6 +58,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
+import { Kbd } from "../../../components/ui/kbd"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "../../../components/ui/context-menu"
 // e2b API routes are used instead of useSandboxManager for agents
 // import { useIsHydrated } from "@/hooks/use-is-hydrated"
 const useIsHydrated = () => true // Desktop is always hydrated
@@ -56,15 +79,28 @@ import {
 } from "../../../lib/themes/diff-view-highlighter"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
 
+// Simple fast string hash (djb2 algorithm) for content change detection
+function hashString(str: string): string {
+  let hash = 5381
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i)
+  }
+  // Convert to base36 for compact string representation
+  return (hash >>> 0).toString(36)
+}
+
 // Error Boundary for DiffView to catch parsing errors
 interface DiffErrorBoundaryProps {
   children: ReactNode
   fileName: string
+  /** Raw diff text to show as fallback when parsing fails */
+  rawDiff?: string
 }
 
 interface DiffErrorBoundaryState {
   hasError: boolean
   error: Error | null
+  prevRawDiff: string | undefined
 }
 
 class DiffErrorBoundary extends Component<
@@ -73,11 +109,22 @@ class DiffErrorBoundary extends Component<
 > {
   constructor(props: DiffErrorBoundaryProps) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, prevRawDiff: props.rawDiff }
   }
 
-  static getDerivedStateFromError(error: Error): DiffErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<DiffErrorBoundaryState> {
     return { hasError: true, error }
+  }
+
+  static getDerivedStateFromProps(
+    props: DiffErrorBoundaryProps,
+    state: DiffErrorBoundaryState
+  ): Partial<DiffErrorBoundaryState> | null {
+    // Reset error state when rawDiff changes (different file)
+    if (props.rawDiff !== state.prevRawDiff) {
+      return { hasError: false, error: null, prevRawDiff: props.rawDiff }
+    }
+    return null
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -86,6 +133,29 @@ class DiffErrorBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
+      // Show raw diff as fallback when library fails to parse
+      if (this.props.rawDiff) {
+        const lines = this.props.rawDiff.split('\n')
+        // Find first hunk header to skip diff metadata
+        const firstHunkIdx = lines.findIndex(l => l.startsWith('@@'))
+        const contentLines = firstHunkIdx > 0 ? lines.slice(firstHunkIdx) : lines
+
+        return (
+          <div className="text-xs font-mono overflow-x-auto">
+            {contentLines.map((line, i) => {
+              let className = "block px-3 py-px min-h-[20px]"
+              if (line.startsWith('+') && !line.startsWith('+++')) {
+                className += " text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+              } else if (line.startsWith('-') && !line.startsWith('---')) {
+                className += " text-red-600 dark:text-red-400 bg-red-500/10"
+              } else if (line.startsWith('@@')) {
+                className += " text-muted-foreground bg-blue-500/5 py-1 mt-1 first:mt-0"
+              }
+              return <code key={i} className={className}>{line || ' '}</code>
+            })}
+          </div>
+        )
+      }
       return (
         <div className="flex items-center gap-2 p-4 text-sm text-yellow-600 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-950/30 rounded-md">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
@@ -101,6 +171,21 @@ class DiffErrorBoundary extends Component<
   }
 }
 
+// Suppress @git-diff-view mismatch warnings globally in development
+// These warnings are caused by the library's internal validation which runs even in pure diff mode
+// The validation compares composed file content with diff hunks, but since we use pure diff mode
+// (content: null), the library composes content from diff which may have slight formatting differences
+if (typeof window !== "undefined") {
+  const originalWarn = console.warn
+  console.warn = (...args: unknown[]) => {
+    const message = args[0]
+    if (typeof message === "string" && message.includes("mismatch")) {
+      return // Suppress mismatch warnings from @git-diff-view
+    }
+    originalWarn.apply(console, args)
+  }
+}
+
 export type ParsedDiffFile = {
   key: string
   oldPath: string
@@ -110,6 +195,10 @@ export type ParsedDiffFile = {
   additions: number
   deletions: number
   isValid?: boolean // Whether the diff format is valid/complete
+  // Extended fields from server-side parsing (optional for backwards compat)
+  fileLang?: string | null
+  isNewFile?: boolean
+  isDeletedFile?: boolean
 }
 
 type DiffViewData = {
@@ -277,6 +366,14 @@ interface FileDiffCardProps {
   isLoadingContent: boolean
   diffMode: DiffModeEnum
   shikiHighlighter: Omit<DiffHighlighter, "getHighlighterEngine"> | null
+  /** Worktree path for file operations */
+  worktreePath?: string
+  /** Callback to discard changes for this file */
+  onDiscardFile?: (filePath: string) => void
+  /** Whether this file has been marked as viewed */
+  isViewed: boolean
+  /** Callback to toggle viewed state */
+  onToggleViewed: (fileKey: string, diffText: string) => void
 }
 
 // Custom comparator to prevent unnecessary re-renders
@@ -286,6 +383,8 @@ const fileDiffCardAreEqual = (
 ): boolean => {
   // Key comparison - file identity
   if (prev.file.key !== next.file.key) return false
+  // Diff content changes should re-render even when the file key is stable.
+  if (prev.file.diffText !== next.file.diffText) return false
   // State that affects rendering
   if (prev.isCollapsed !== next.isCollapsed) return false
   if (prev.isFullExpanded !== next.isFullExpanded) return false
@@ -296,6 +395,10 @@ const fileDiffCardAreEqual = (
   // Highlighter presence
   if ((prev.shikiHighlighter === null) !== (next.shikiHighlighter === null))
     return false
+  // Worktree path for context menu
+  if (prev.worktreePath !== next.worktreePath) return false
+  // Viewed state
+  if (prev.isViewed !== next.isViewed) return false
   return true
 }
 
@@ -311,12 +414,20 @@ const FileDiffCard = memo(function FileDiffCard({
   isLoadingContent,
   diffMode,
   shikiHighlighter,
+  worktreePath,
+  onDiscardFile,
+  isViewed,
+  onToggleViewed,
 }: FileDiffCardProps) {
   const diffViewRef = useRef<{ getDiffFileInstance: () => DiffFile } | null>(
     null,
   )
   const diffCardRef = useRef<HTMLDivElement>(null)
   const prevExpandedRef = useRef(isFullExpanded)
+
+  // tRPC mutations for file operations
+  const openInFinderMutation = trpcClient.external.openInFinder.mutate
+  const openInEditorMutation = trpcClient.external.openFileInEditor.mutate
 
   // Expand/collapse all hunks when button is clicked
   useEffect(() => {
@@ -360,33 +471,61 @@ const FileDiffCard = memo(function FileDiffCard({
   const isNewFile = file.oldPath === "/dev/null" && file.newPath
   const isDeletedFile = file.newPath === "/dev/null" && file.oldPath
 
-  return (
-    <div
-      ref={diffCardRef}
-      className="bg-background rounded-lg border border-border overflow-clip"
-      data-diff-file-path={file.newPath || file.oldPath}
+  // Absolute path for file operations
+  const absolutePath = worktreePath ? `${worktreePath}/${displayPath}` : null
+
+  const handleCopyPath = async () => {
+    if (absolutePath) {
+      await navigator.clipboard.writeText(absolutePath)
+      toast.success("Copied to clipboard", { description: absolutePath })
+    }
+  }
+
+  const handleCopyRelativePath = async () => {
+    await navigator.clipboard.writeText(displayPath)
+    toast.success("Copied to clipboard", { description: displayPath })
+  }
+
+  const handleRevealInFinder = () => {
+    if (absolutePath) {
+      openInFinderMutation(absolutePath)
+    }
+  }
+
+  const handleOpenInEditor = () => {
+    if (absolutePath && worktreePath) {
+      openInEditorMutation({ path: absolutePath, cwd: worktreePath })
+    }
+  }
+
+  const handleDiscard = () => {
+    if (onDiscardFile) {
+      onDiscardFile(displayPath)
+    }
+  }
+
+  const headerContent = (
+    <header
+      className={cn(
+        "group pl-3 pr-2 py-1 font-mono text-xs bg-muted cursor-pointer",
+        // Sticky header within the scroll container
+        "sticky top-0 z-10",
+        "border-b transition-colors",
+        "hover:bg-accent/50",
+        isCollapsed ? "border-b-transparent" : "border-b-border",
+      )}
+      onClick={() => toggleCollapsed(file.key)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          toggleCollapsed(file.key)
+        }
+      }}
+      aria-expanded={!isCollapsed}
     >
-      <header
-        className={cn(
-          "group px-3 py-1 font-mono text-xs bg-muted cursor-pointer",
-          // Note: sticky doesn't work with virtualization (absolute positioning)
-          // Headers scroll with content like in VS Code
-          "border-b transition-colors",
-          "hover:bg-accent/50",
-          isCollapsed ? "border-b-transparent" : "border-b-border",
-        )}
-        onClick={() => toggleCollapsed(file.key)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            toggleCollapsed(file.key)
-          }
-        }}
-        aria-expanded={!isCollapsed}
-      >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Collapse toggle + file info */}
           <div className="flex-1 flex items-center gap-2 text-left min-w-0 min-h-[22px]">
             {/* Icon container with hover swap */}
@@ -415,11 +554,11 @@ const FileDiffCard = memo(function FileDiffCard({
 
             {/* File name + path + status */}
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="font-medium text-foreground truncate">
+              <span className="font-medium text-foreground shrink-0">
                 {fileName}
               </span>
               {dirPath && (
-                <span className="text-muted-foreground truncate text-[11px]">
+                <span className="text-muted-foreground truncate text-[11px] min-w-0">
                   {dirPath}
                 </span>
               )}
@@ -500,8 +639,97 @@ const FileDiffCard = memo(function FileDiffCard({
                 <IconSpinner className="w-3.5 h-3.5 text-muted-foreground" />
               </div>
             )}
+
+          {/* Viewed checkbox with label - GitHub style */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleViewed(file.key, file.diffText)
+                }}
+                className={cn(
+                  "shrink-0 h-6 pl-1 pr-1.5 rounded-md flex items-center gap-1 transition-all duration-150 text-xs font-medium",
+                  isViewed
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+                aria-pressed={isViewed}
+              >
+                <div className={cn(
+                  "size-4 rounded flex items-center justify-center transition-all duration-150",
+                  isViewed
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-muted-foreground/40",
+                )}>
+                  {isViewed && <Check className="size-3" strokeWidth={2.5} />}
+                </div>
+                <span>Viewed</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {isViewed ? "Mark as unviewed" : "Mark as viewed"}
+              <Kbd>V</Kbd>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </header>
+  )
+
+  return (
+    <div
+      ref={diffCardRef}
+      className="bg-background rounded-lg border border-border overflow-clip"
+      data-diff-file-path={file.newPath || file.oldPath}
+    >
+      {worktreePath ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            {headerContent}
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-56">
+            <ContextMenuItem onClick={handleCopyPath} className="text-xs">
+              <ClipboardIcon className="mr-2 size-3.5" />
+              Copy File Path
+            </ContextMenuItem>
+            <ContextMenuItem onClick={handleCopyRelativePath} className="text-xs">
+              <ClipboardIcon className="mr-2 size-3.5" />
+              Copy Relative File Path
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={handleRevealInFinder} className="text-xs">
+              <FolderIcon className="mr-2 size-3.5" />
+              Reveal in Finder
+            </ContextMenuItem>
+            <ContextMenuItem onClick={handleOpenInEditor} className="text-xs">
+              <ExternalLinkIcon className="mr-2 size-3.5" />
+              Open in Editor
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onClick={() => onToggleViewed(file.key, file.diffText)}
+              className="text-xs justify-between"
+            >
+              {isViewed ? "Mark as unviewed" : "Mark as viewed"}
+              <Kbd>V</Kbd>
+            </ContextMenuItem>
+            {onDiscardFile && !isDeletedFile && (
+              <>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onClick={handleDiscard}
+                  className="text-xs data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
+                >
+                  Discard Changes
+                </ContextMenuItem>
+              </>
+            )}
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        headerContent
+      )}
 
       {/* Content area */}
       {!isCollapsed && (
@@ -520,7 +748,7 @@ const FileDiffCard = memo(function FileDiffCard({
             </div>
           ) : (
             <div className="agent-diff-wrapper">
-              <DiffErrorBoundary fileName={file.newPath || file.oldPath}>
+              <DiffErrorBoundary fileName={file.newPath || file.oldPath} rawDiff={file.diffText}>
                 <DiffView
                   ref={diffViewRef}
                   data={data}
@@ -575,6 +803,12 @@ interface AgentDiffViewProps {
     allCollapsed: boolean
     allExpanded: boolean
   }) => void
+  /** Callback to select next file in the file list (when marking as viewed) */
+  onSelectNextFile?: (filePath: string) => void
+  /** Callback when viewed count changes (for stable header updates) */
+  onViewedCountChange?: (count: number) => void
+  /** Initial selected file path - used to filter on first render before atom updates */
+  initialSelectedFile?: string | null
 }
 
 /** Ref handle for controlling AgentDiffView from parent */
@@ -583,6 +817,10 @@ export interface AgentDiffViewRef {
   collapseAll: () => void
   isAllCollapsed: () => boolean
   isAllExpanded: () => boolean
+  // Viewed files methods
+  getViewedCount: () => number
+  markAllViewed: () => void
+  markAllUnviewed: () => void
 }
 
 export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
@@ -602,6 +840,9 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       isMobile = false,
       onClose,
       onCollapsedStateChange,
+      onSelectNextFile,
+      onViewedCountChange,
+      initialSelectedFile,
     },
     ref,
   ) {
@@ -620,31 +861,47 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       setDiffViewTheme(codeThemeId)
     }, [codeThemeId])
 
-    // Load shiki highlighter on mount
+    // Load shiki highlighter AFTER first paint - critical for instant sidebar opening
+    // The getDiffHighlighter() call can block main thread for ~1s even if preloaded
     useEffect(() => {
       let cancelled = false
-      getDiffHighlighter()
-        .then((highlighter) => {
-          if (!cancelled) {
-            setShikiHighlighter(highlighter)
-          }
+
+      // Wait for first paint before even starting to load highlighter
+      // This ensures the diff sidebar is visible immediately
+      requestAnimationFrame(() => {
+        if (cancelled) return
+        requestAnimationFrame(() => {
+          if (cancelled) return
+          // Now we're after paint, safe to load highlighter
+          const start = performance.now()
+          getDiffHighlighter()
+            .then((highlighter) => {
+              const elapsed = performance.now() - start
+              if (!cancelled) {
+                setShikiHighlighter(highlighter)
+              }
+            })
+            .catch((err) => {
+              console.error("Failed to load diff highlighter:", err)
+            })
         })
-        .catch((err) => {
-          console.error("Failed to load diff highlighter:", err)
-        })
+      })
+
       return () => {
         cancelled = true
       }
     }, [])
 
     const [diff, setDiff] = useState<string | null>(initialDiff ?? null)
-    // Loading if initialDiff not provided, or if it's null AND no parsed files (parent still loading)
+    // Loading if initialDiff not provided, or if it's null AND no parsed files array provided
+    // Note: empty array [] means "no changes", null/undefined means "still loading"
     const [isLoadingDiff, setIsLoadingDiff] = useState(
       initialDiff === undefined ||
-        (initialDiff === null &&
-          (!initialParsedFiles || initialParsedFiles.length === 0)),
+        (initialDiff === null && !Array.isArray(initialParsedFiles)),
     )
+
     const [diffError, setDiffError] = useState<string | null>(null)
+    // Use local state for collapsed - faster than atom for frequent updates
     const [collapsedByFileKey, setCollapsedByFileKey] = useState<
       Record<string, boolean>
     >({})
@@ -652,6 +909,27 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       Record<string, boolean>
     >({})
     const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
+
+    // Discard changes state and mutation
+    const [discardFilePath, setDiscardFilePath] = useState<string | null>(null)
+
+    const handleDiscardFile = useCallback((filePath: string) => {
+      setDiscardFilePath(filePath)
+    }, [])
+
+    // Viewed files state for tracking reviewed files (GitHub-style)
+    const [viewedFiles, setViewedFiles] = useAtom(viewedFilesAtomFamily(chatId))
+
+    // Undo stack for viewed actions (stores previous viewedFiles states)
+    const viewedUndoStackRef = useRef<Array<{ fileKey: string; previousState: ViewedFileState | undefined }>>([])
+
+    // Check if file is viewed (and content hasn't changed since marking as viewed)
+    const isFileViewed = useCallback((fileKey: string, diffText: string): boolean => {
+      const viewedState = viewedFiles[fileKey]
+      if (!viewedState?.viewed) return false
+      // If content hash changed, file is no longer "viewed"
+      return viewedState.contentHash === hashString(diffText)
+    }, [viewedFiles])
 
     // Pre-fetched file contents for expand functionality
     // Use prefetched data if available, otherwise start empty
@@ -685,11 +963,10 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       // Skip fetch if initialDiff was provided with actual content or parsed files
       if (initialDiff !== undefined) {
         setDiff(initialDiff)
-        // Only mark as not loading if we have actual data or explicit empty diff
-        // If initialDiff is null and no parsed files, parent is still loading
+        // Only mark as not loading if we have actual data or parsed files array
+        // Note: empty array [] means "no changes", null/undefined means "still loading"
         const parentStillLoading =
-          initialDiff === null &&
-          (!initialParsedFiles || initialParsedFiles.length === 0)
+          initialDiff === null && !Array.isArray(initialParsedFiles)
         setIsLoadingDiff(parentStillLoading)
         return
       }
@@ -789,7 +1066,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     const filteredDiffFiles = useAtomValue(filteredDiffFilesAtom)
     const setFilteredDiffFiles = useSetAtom(filteredDiffFilesAtom)
 
-    // Clear filter when component unmounts
+    // Clear filter when component unmounts (not during close animation, only on actual unmount)
     useEffect(() => {
       return () => {
         setFilteredDiffFiles(null)
@@ -811,25 +1088,69 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     }, [diff, initialParsedFiles])
 
     // Filter files if filteredDiffFiles is set (for sub-chat Review)
+    // Use initialSelectedFile as fallback for first render before atom updates
+    const effectiveFilter = filteredDiffFiles ?? (initialSelectedFile ? [initialSelectedFile] : null)
+
     const fileDiffs = useMemo(() => {
-      if (!filteredDiffFiles || filteredDiffFiles.length === 0) {
-        return allFileDiffs
+      // First, filter out invalid files without proper paths (file-N keys indicate parse failure)
+      const validFiles = allFileDiffs.filter((file) => {
+        // Skip files that failed to parse (have generic file-N keys and no real paths)
+        if (file.key.startsWith('file-') && !file.oldPath && !file.newPath) {
+          return false
+        }
+        // Also skip files with only /dev/null paths (shouldn't happen but be safe)
+        if (file.oldPath === '/dev/null' && file.newPath === '/dev/null') {
+          return false
+        }
+        return true
+      })
+
+      // Filter out /dev/null from filter paths (it's not a real file path)
+      const validFilterPaths = effectiveFilter?.filter(p => p && p !== '/dev/null') || []
+
+      if (validFilterPaths.length === 0) {
+        return validFiles
       }
       // Filter to only show files matching the filter paths
-      return allFileDiffs.filter((file) => {
-        const filePath = file.newPath || file.oldPath
+      return validFiles.filter((file) => {
+        // Use the actual file path (prefer newPath for new/modified, oldPath for deleted)
+        const filePath = file.newPath !== '/dev/null' ? file.newPath : file.oldPath
         // Match by exact path or by path suffix (to handle sandbox path prefixes)
-        return filteredDiffFiles.some(
+        return validFilterPaths.some(
           (filterPath) =>
             filePath === filterPath ||
             filePath.endsWith(filterPath) ||
             filterPath.endsWith(filePath),
         )
       })
-    }, [allFileDiffs, filteredDiffFiles])
+    }, [allFileDiffs, effectiveFilter])
 
-    // Threshold for auto-collapsing files
-    const AUTO_COLLAPSE_THRESHOLD = 10
+    // Handle discard confirmation
+    const handleConfirmDiscard = useCallback(async () => {
+      if (!discardFilePath || !worktreePath) return
+
+      try {
+        // Check if this is a new file (untracked) - needs delete instead of discard
+        const file = fileDiffs.find(f => {
+          const path = f.newPath !== "/dev/null" ? f.newPath : f.oldPath
+          return path === discardFilePath
+        })
+        const isNewFile = file?.oldPath === "/dev/null"
+
+        if (isNewFile) {
+          await trpcClient.changes.deleteUntracked.mutate({ worktreePath, filePath: discardFilePath })
+        } else {
+          await trpcClient.changes.discardChanges.mutate({ worktreePath, filePath: discardFilePath })
+        }
+        toast.success("Changes discarded")
+        // Refresh the diff
+        handleRefresh()
+      } catch (error) {
+        toast.error(`Failed to discard: ${error instanceof Error ? error.message : "Unknown error"}`)
+      } finally {
+        setDiscardFilePath(null)
+      }
+    }, [discardFilePath, worktreePath, fileDiffs, handleRefresh])
 
     // Expand/collapse all functions - exposed via ref for parent control
     // Uses batched updates to avoid blocking UI with many files
@@ -899,6 +1220,36 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       return fileDiffs.every((file) => !collapsedByFileKey[file.key])
     }, [fileDiffs, collapsedByFileKey])
 
+    // Get count of viewed files (with matching content hash)
+    const getViewedCount = useCallback(() => {
+      return fileDiffs.filter((file) => isFileViewed(file.key, file.diffText)).length
+    }, [fileDiffs, isFileViewed])
+
+    // Mark all files as viewed and collapse them
+    const markAllViewed = useCallback(() => {
+      const newViewedState: Record<string, ViewedFileState> = {}
+      const newCollapsedState: Record<string, boolean> = {}
+      for (const file of fileDiffs) {
+        newViewedState[file.key] = {
+          viewed: true,
+          contentHash: hashString(file.diffText),
+        }
+        newCollapsedState[file.key] = true
+      }
+      setViewedFiles(newViewedState)
+      setCollapsedByFileKey(newCollapsedState)
+    }, [fileDiffs, setViewedFiles])
+
+    // Mark all files as unviewed and expand them
+    const markAllUnviewed = useCallback(() => {
+      setViewedFiles({})
+      const newCollapsedState: Record<string, boolean> = {}
+      for (const file of fileDiffs) {
+        newCollapsedState[file.key] = false
+      }
+      setCollapsedByFileKey(newCollapsedState)
+    }, [setViewedFiles, fileDiffs])
+
     // Expose expand/collapse methods to parent via ref
     useImperativeHandle(
       ref,
@@ -907,46 +1258,102 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         collapseAll,
         isAllCollapsed,
         isAllExpanded,
+        getViewedCount,
+        markAllViewed,
+        markAllUnviewed,
       }),
-      [expandAll, collapseAll, isAllCollapsed, isAllExpanded],
+      [expandAll, collapseAll, isAllCollapsed, isAllExpanded, getViewedCount, markAllViewed, markAllUnviewed],
     )
 
     // Notify parent when collapsed state changes
+    const prevCollapseStateRef = useRef<{ allCollapsed: boolean; allExpanded: boolean } | null>(null)
     useEffect(() => {
-      onCollapsedStateChange?.({
+      const newState = {
         allCollapsed: isAllCollapsed(),
         allExpanded: isAllExpanded(),
-      })
-    }, [
-      collapsedByFileKey,
-      fileDiffs,
-      onCollapsedStateChange,
-      isAllCollapsed,
-      isAllExpanded,
-    ])
+      }
+      // Only notify if state actually changed
+      if (
+        prevCollapseStateRef.current?.allCollapsed !== newState.allCollapsed ||
+        prevCollapseStateRef.current?.allExpanded !== newState.allExpanded
+      ) {
+        prevCollapseStateRef.current = newState
+        onCollapsedStateChange?.(newState)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable, excluding to prevent loops
+    }, [collapsedByFileKey, fileDiffs])
 
-    // Auto-collapse all files when there are many files (performance optimization)
+    // Notify parent when viewed count changes
+    const prevViewedCountRef = useRef<number | null>(null)
+    useEffect(() => {
+      const count = getViewedCount()
+      if (prevViewedCountRef.current !== count) {
+        prevViewedCountRef.current = count
+        onViewedCountChange?.(count)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable, excluding to prevent loops
+    }, [fileDiffs, viewedFiles])
+
+    // Auto-expand all files with lazy batching for performance
     // Track if we've already initialized the collapsed state for this set of files
     const prevFileKeysRef = useRef<string>("")
+    const isExpandingRef = useRef(false)
+
     useEffect(() => {
       // Generate a unique key for the current file set
       const currentFileKeys = fileDiffs.map((f) => f.key).join(",")
 
-      // Only update if the file set changed
-      if (currentFileKeys !== prevFileKeysRef.current) {
+      // Only update if the file set changed and we're not already expanding
+      if (currentFileKeys !== prevFileKeysRef.current && !isExpandingRef.current) {
         prevFileKeysRef.current = currentFileKeys
 
-        if (fileDiffs.length > AUTO_COLLAPSE_THRESHOLD) {
-          // Collapse all files when there are many
-          const collapsedState: Record<string, boolean> = {}
-          for (const file of fileDiffs) {
-            collapsedState[file.key] = true
-          }
-          setCollapsedByFileKey(collapsedState)
-        } else {
-          // Reset to expanded for smaller diffs
-          setCollapsedByFileKey({})
+        // For small number of files, expand all at once
+        if (fileDiffs.length <= 10) {
+          startTransition(() => {
+            const expandedState: Record<string, boolean> = {}
+            for (const file of fileDiffs) {
+              expandedState[file.key] = false
+            }
+            setCollapsedByFileKey(expandedState)
+          })
+          return
         }
+
+        // For many files, expand in batches to avoid UI freeze
+        isExpandingRef.current = true
+        const BATCH_SIZE = 5
+        let currentBatch = 0
+
+        const expandBatch = () => {
+          const start = currentBatch * BATCH_SIZE
+          const end = Math.min(start + BATCH_SIZE, fileDiffs.length)
+
+          if (start >= fileDiffs.length) {
+            isExpandingRef.current = false
+            return
+          }
+
+          startTransition(() => {
+            setCollapsedByFileKey((prev) => {
+              const next = { ...prev }
+              for (let i = start; i < end; i++) {
+                const file = fileDiffs[i]
+                if (file) next[file.key] = false
+              }
+              return next
+            })
+          })
+
+          currentBatch++
+          if (currentBatch * BATCH_SIZE < fileDiffs.length) {
+            // Use requestAnimationFrame for next batch to allow UI to breathe
+            requestAnimationFrame(() => setTimeout(expandBatch, 0))
+          } else {
+            isExpandingRef.current = false
+          }
+        }
+
+        expandBatch()
       }
     }, [fileDiffs])
 
@@ -963,36 +1370,68 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       }
       const record: Record<string, DiffViewData> = {}
       for (const file of fileDiffs) {
-        // Handle /dev/null cases (new files or deleted files)
-        const isNewFile = file.oldPath === "/dev/null"
-        const isDeletedFile = file.newPath === "/dev/null"
+        // Use server-provided flags if available, otherwise detect from paths
+        const isNewFile = file.isNewFile ?? file.oldPath === "/dev/null"
+        const isDeletedFile = file.isDeletedFile ?? file.newPath === "/dev/null"
 
-        const actualPath = isNewFile
-          ? file.newPath
-          : isDeletedFile
-            ? file.oldPath
-            : file.newPath || file.oldPath
-        const ext = (actualPath || "").split(".").pop()?.toLowerCase() || ""
-        const fileLang = langMap[ext] || ext || null
+        // Use server-provided fileLang if available, otherwise detect from extension
+        let fileLang = file.fileLang
+        if (fileLang === undefined) {
+          const actualPath = isNewFile
+            ? file.newPath
+            : isDeletedFile
+              ? file.oldPath
+              : file.newPath || file.oldPath
+          const ext = (actualPath || "").split(".").pop()?.toLowerCase() || ""
+          fileLang = langMap[ext] || ext || null
+        }
+
+        // PURE DIFF MODE: Always use null for content to avoid mismatch warnings
+        // The @git-diff-view library validates content against diff when content is provided,
+        // but the working directory may have changed since the diff was generated,
+        // causing expensive validation warnings that block the UI thread.
+        // Using null for both old/new content enables pure diff mode where the library
+        // only renders the diff hunks without validation.
+
+        // Normalize diff text: ensure proper ending for the parser
+        // The library fails on diffs that end with just "+" or "-" (empty line changes)
+        let normalizedDiff = file.diffText
+        // Remove trailing empty lines that might confuse the parser
+        normalizedDiff = normalizedDiff.replace(/\n+$/, '\n')
+        // If diff ends with an empty addition/deletion line, add a newline marker
+        if (normalizedDiff.endsWith('\n+\n') || normalizedDiff.endsWith('\n-\n')) {
+          normalizedDiff = normalizedDiff.slice(0, -1)
+        }
+        // Handle case where diff ends with just + or - on last line
+        const lines = normalizedDiff.split('\n')
+        const lastLine = lines[lines.length - 1]
+        if (lastLine === '+' || lastLine === '-') {
+          lines[lines.length - 1] = lastLine + ' '
+          normalizedDiff = lines.join('\n')
+        }
 
         record[file.key] = {
           oldFile: {
             fileName: isNewFile ? null : file.oldPath || null,
             fileLang,
-            // For new files, old content is empty
-            content: isNewFile ? "" : undefined,
+            content: null, // Pure diff mode - no validation
           },
           newFile: {
             fileName: isDeletedFile ? null : file.newPath || null,
             fileLang,
-            // For deleted files, new content is empty
-            content: isDeletedFile ? "" : fileContents[file.key] || null,
+            content: null, // Pure diff mode - no validation
           },
-          hunks: [file.diffText],
+          hunks: [normalizedDiff],
         }
       }
       return record
-    }, [fileDiffs, fileContents])
+    }, [fileDiffs])
+
+    // Use deferred value for diff data to prevent UI blocking during tab switches
+    // This allows the tab change to happen immediately while diff rendering is deferred
+    const deferredDiffViewData = useDeferredValue(diffViewDataByKey)
+    const deferredFileDiffs = useDeferredValue(fileDiffs)
+    const isDiffStale = deferredFileDiffs !== fileDiffs
 
     // Pre-fetch file contents when diff is loaded (for expand functionality)
     // Delayed to allow UI to render first, then fetch in background
@@ -1100,11 +1539,12 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     }, [])
 
     // Virtualizer for efficient rendering of many files
+    // Use deferred file list to prevent UI blocking during updates
     const virtualizer = useVirtualizer({
-      count: fileDiffs.length,
+      count: deferredFileDiffs.length,
       getScrollElement: () => scrollContainerRef.current,
       estimateSize: (index) => {
-        const file = fileDiffs[index]
+        const file = deferredFileDiffs[index]
         if (!file) return COLLAPSED_HEIGHT
         const isCollapsed = !!collapsedByFileKey[file.key]
         if (isCollapsed) {
@@ -1114,28 +1554,164 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         const lineCount = file.additions + file.deletions
         return Math.min(Math.max(lineCount * 22 + COLLAPSED_HEIGHT, 150), 800)
       },
-      overscan: 5,
+      overscan: 3, // Reduced overscan for better initial render performance
     })
 
-    const totalAdditions = fileDiffs.reduce((sum, f) => sum + f.additions, 0)
-    const totalDeletions = fileDiffs.reduce((sum, f) => sum + f.deletions, 0)
+    // Toggle viewed state for a file
+    // When marking as viewed, auto-navigate to the next UNVIEWED file
+    // Uses allFileDiffs (unfiltered list) for navigation since filtered list may only contain current file
+    const handleToggleViewed = useCallback((fileKey: string, diffText: string) => {
+      const currentHash = hashString(diffText)
+      const isCurrentlyViewed = isFileViewed(fileKey, diffText)
+      const willBeViewed = !isCurrentlyViewed
 
-    // Report stats to parent
+      // Save to undo stack before changing
+      viewedUndoStackRef.current.push({
+        fileKey,
+        previousState: viewedFiles[fileKey],
+      })
+      // Limit undo stack size to 50
+      if (viewedUndoStackRef.current.length > 50) {
+        viewedUndoStackRef.current.shift()
+      }
+
+      // Build new viewed state
+      const newViewedFiles = {
+        ...viewedFiles,
+        [fileKey]: {
+          viewed: willBeViewed,
+          contentHash: currentHash,
+        },
+      }
+      setViewedFiles(newViewedFiles)
+
+      // Helper to check if file is viewed using new state (not stale closure)
+      const isFileViewedWithNewState = (fKey: string, fDiffText: string): boolean => {
+        const viewedState = newViewedFiles[fKey]
+        if (!viewedState?.viewed) return false
+        return viewedState.contentHash === hashString(fDiffText)
+      }
+
+      // When marking as viewed, find and select next UNVIEWED file
+      // Use allFileDiffs (unfiltered) for navigation, since filtered list may only show current file
+      if (willBeViewed && onSelectNextFile) {
+        const currentIndex = allFileDiffs.findIndex((f) => f.key === fileKey)
+        if (currentIndex === -1) return
+
+        // Find next unviewed file after current position
+        let nextUnviewedFile: ParsedDiffFile | null = null
+        for (let i = currentIndex + 1; i < allFileDiffs.length; i++) {
+          const file = allFileDiffs[i]
+          if (file && !isFileViewedWithNewState(file.key, file.diffText)) {
+            nextUnviewedFile = file
+            break
+          }
+        }
+
+        // If no unviewed file found after current, wrap around and search from beginning
+        if (!nextUnviewedFile) {
+          for (let i = 0; i < currentIndex; i++) {
+            const file = allFileDiffs[i]
+            if (file && !isFileViewedWithNewState(file.key, file.diffText)) {
+              nextUnviewedFile = file
+              break
+            }
+          }
+        }
+
+        // If found an unviewed file, select it
+        if (nextUnviewedFile) {
+          // Get the actual file path (newPath for new/modified files, oldPath for deleted files)
+          const filePath = nextUnviewedFile.newPath && nextUnviewedFile.newPath !== "/dev/null"
+            ? nextUnviewedFile.newPath
+            : nextUnviewedFile.oldPath
+          if (filePath && filePath !== "/dev/null") {
+            // Select next file - this will update the filter and diff view
+            onSelectNextFile(filePath)
+          }
+        }
+        // If all files are viewed, do nothing (stay where we are)
+      }
+    }, [isFileViewed, setViewedFiles, viewedFiles, allFileDiffs, onSelectNextFile])
+
+    // Undo last viewed action
+    const undoLastViewed = useCallback(() => {
+      const lastAction = viewedUndoStackRef.current.pop()
+      if (!lastAction) return false
+
+      const { fileKey, previousState } = lastAction
+      if (previousState === undefined) {
+        // File wasn't in viewedFiles before - remove it
+        const newViewedFiles = { ...viewedFiles }
+        delete newViewedFiles[fileKey]
+        setViewedFiles(newViewedFiles)
+      } else {
+        // Restore previous state
+        setViewedFiles({
+          ...viewedFiles,
+          [fileKey]: previousState,
+        })
+      }
+
+      // Navigate back to the file that was undone
+      const file = allFileDiffs.find((f) => f.key === fileKey)
+      if (file && onSelectNextFile) {
+        const filePath = file.newPath && file.newPath !== "/dev/null"
+          ? file.newPath
+          : file.oldPath
+        if (filePath && filePath !== "/dev/null") {
+          onSelectNextFile(filePath)
+        }
+      }
+
+      return true
+    }, [viewedFiles, setViewedFiles, allFileDiffs, onSelectNextFile])
+
+    // Use ALL files for stats, not filtered ones (to avoid overwriting parent's stats when filtering)
+    const totalAdditions = allFileDiffs.reduce((sum, f) => sum + f.additions, 0)
+    const totalDeletions = allFileDiffs.reduce((sum, f) => sum + f.deletions, 0)
+
+    // Report stats to parent - only when we have actual data and NO filter active
+    // When filtering is active, parent already has correct stats from fetchDiffStats
+    const prevStatsRef = useRef<{ fileCount: number; additions: number; deletions: number; isLoading: boolean } | null>(null)
     useEffect(() => {
-      onStatsChange?.({
-        fileCount: fileDiffs.length,
+      // Don't report stats when filtering is active - parent already has correct totals
+      if (filteredDiffFiles && filteredDiffFiles.length > 0) {
+        return
+      }
+      if (allFileDiffs.length === 0 && !isLoadingDiff) {
+        // Don't report empty stats - let parent's fetchDiffStats be the source of truth
+        return
+      }
+      // Only notify if stats actually changed
+      if (
+        prevStatsRef.current?.fileCount === allFileDiffs.length &&
+        prevStatsRef.current?.additions === totalAdditions &&
+        prevStatsRef.current?.deletions === totalDeletions &&
+        prevStatsRef.current?.isLoading === isLoadingDiff
+      ) {
+        return
+      }
+      prevStatsRef.current = {
+        fileCount: allFileDiffs.length,
         additions: totalAdditions,
         deletions: totalDeletions,
         isLoading: isLoadingDiff,
-        hasChanges: Boolean(diff && diff.trim()),
+      }
+      onStatsChange?.({
+        fileCount: allFileDiffs.length,
+        additions: totalAdditions,
+        deletions: totalDeletions,
+        isLoading: isLoadingDiff,
+        hasChanges: allFileDiffs.length > 0,
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onStatsChange is stable setState, excluding to prevent loops
     }, [
-      fileDiffs.length,
+      allFileDiffs.length,
       totalAdditions,
       totalDeletions,
       isLoadingDiff,
-      diff,
-      onStatsChange,
+      filteredDiffFiles,
     ])
 
     // Scroll to focused file when atom changes (works with virtualized list)
@@ -1205,10 +1781,74 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       collapsedByFileKey,
     ])
 
+    // Keyboard shortcut: V to mark current file as viewed
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        // Use e.code for physical key position (works with any keyboard layout)
+        if (e.code !== "KeyV") return
+        if (e.metaKey || e.ctrlKey || e.altKey) return
+
+        // Don't trigger if typing in input/textarea
+        const target = e.target as HTMLElement
+        if (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable
+        ) {
+          return
+        }
+
+        // Find currently visible file and toggle its viewed state
+        // Use the first visible file in the virtualizer viewport
+        const visibleItems = virtualizer.getVirtualItems()
+        if (visibleItems.length === 0) return
+
+        const firstVisibleIndex = visibleItems[0]?.index ?? -1
+        if (firstVisibleIndex < 0) return
+
+        const file = deferredFileDiffs[firstVisibleIndex]
+        if (file) {
+          e.preventDefault()
+          handleToggleViewed(file.key, file.diffText)
+        }
+      }
+
+      window.addEventListener("keydown", handleKeyDown)
+      return () => window.removeEventListener("keydown", handleKeyDown)
+    }, [virtualizer, deferredFileDiffs, handleToggleViewed])
+
+    // Keyboard shortcut: Cmd+Z to undo last viewed action
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        // Use e.code for physical key position (works with any keyboard layout)
+        if (e.code !== "KeyZ") return
+        if (!e.metaKey || e.shiftKey || e.altKey) return // Only Cmd+Z, not Cmd+Shift+Z
+
+        // Don't trigger if typing in input/textarea
+        const target = e.target as HTMLElement
+        if (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable
+        ) {
+          return
+        }
+
+        // Try to undo - if successful, prevent default
+        if (undoLastViewed()) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
+
+      window.addEventListener("keydown", handleKeyDown)
+      return () => window.removeEventListener("keydown", handleKeyDown)
+    }, [undoLastViewed])
+
     if (!isHydrated) {
       return (
         <div className="flex h-full items-center justify-center">
-          <IconSpinner className="w-6 h-6" />
+          <IconSpinner className="w-4 h-4" />
         </div>
       )
     }
@@ -1310,28 +1950,11 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
             <div className="absolute -top-2 left-0 right-0 h-2 bg-background" />
           </div>
 
-          {/* Filter indicator when showing sub-chat files */}
-          {filteredDiffFiles && filteredDiffFiles.length > 0 && (
-            <div className="flex items-center justify-between gap-2 px-2 py-1.5 mb-2 rounded-md bg-primary/10 border border-primary/20">
-              <span className="text-xs text-primary">
-                Showing {fileDiffs.length} of {allFileDiffs.length} files from
-                this chat
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setFilteredDiffFiles(null)}
-                className="h-5 px-2 text-xs text-primary hover:text-primary"
-              >
-                Show all
-              </Button>
-            </div>
-          )}
 
           {isLoadingDiff ||
           (isLoadingFileContents && fileDiffs.length === 0) ? (
             <div className="flex items-center justify-center h-full">
-              <IconSpinner className="w-6 h-6" />
+              <IconSpinner className="w-4 h-4" />
             </div>
           ) : diffError ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -1340,16 +1963,22 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                 Try again
               </Button>
             </div>
-          ) : fileDiffs.length > 0 ? (
+          ) : deferredFileDiffs.length > 0 ? (
             <div
               style={{
                 height: virtualizer.getTotalSize(),
                 width: "100%",
                 position: "relative",
+                // Show visual feedback when diff is being updated
+                opacity: isDiffStale ? 0.7 : 1,
+                transition: "opacity 150ms ease-out",
               }}
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
-                const file = fileDiffs[virtualRow.index]!
+                const file = deferredFileDiffs[virtualRow.index]!
+                const data = deferredDiffViewData[file.key]
+                // Skip rendering if data not ready (during deferred update)
+                if (!data) return null
                 return (
                   <div
                     key={file.key}
@@ -1366,7 +1995,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                     <div className="pb-2">
                       <FileDiffCard
                         file={file}
-                        data={diffViewDataByKey[file.key]!}
+                        data={data}
                         isLight={isLight}
                         isCollapsed={!!collapsedByFileKey[file.key]}
                         toggleCollapsed={toggleFileCollapsed}
@@ -1376,6 +2005,10 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                         isLoadingContent={isLoadingFileContents}
                         diffMode={diffMode}
                         shikiHighlighter={shikiHighlighter}
+                        worktreePath={worktreePath}
+                        onDiscardFile={handleDiscardFile}
+                        isViewed={isFileViewed(file.key, file.diffText)}
+                        onToggleViewed={handleToggleViewed}
                       />
                     </div>
                   </div>
@@ -1383,27 +2016,41 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
               })}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center px-4">
-              <div
-                className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center mb-3",
-                  isLight ? "bg-emerald-100" : "bg-emerald-500/10",
-                )}
-              >
-                <CheckCircle2
-                  className={cn(
-                    "w-5 h-5",
-                    isLight ? "text-emerald-600" : "text-emerald-400",
-                  )}
-                />
-              </div>
-              <p className="text-sm font-medium mb-1">No changes detected</p>
-              <p className="text-xs text-muted-foreground">
-                Make some changes to see the diff
-              </p>
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm px-4 text-center h-full">
+              No changes detected
             </div>
           )}
         </div>
+
+        {/* Discard confirmation dialog */}
+        <AlertDialog open={!!discardFilePath} onOpenChange={(open) => !open && setDiscardFilePath(null)}>
+          <AlertDialogContent className="w-[340px]">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Discard changes to "{discardFilePath?.split("/").pop()}"?
+              </AlertDialogTitle>
+            </AlertDialogHeader>
+            <AlertDialogDescription className="px-5 pb-5">
+              This will revert all changes to this file. This action cannot be undone.
+            </AlertDialogDescription>
+            <AlertDialogFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDiscardFilePath(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirmDiscard}
+              >
+                Discard
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   },

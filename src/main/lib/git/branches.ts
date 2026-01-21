@@ -8,6 +8,12 @@ import {
 	getRegisteredChat,
 	gitSwitchBranch,
 } from "./security";
+import { createGit, createGitForNetwork, withGitLock, withLockRetry } from "./git-factory";
+
+/** Regex for valid branch names */
+const BRANCH_NAME_REGEX = /^[a-zA-Z0-9._/-]+$/;
+/** Invalid branch name patterns */
+const INVALID_BRANCH_PATTERNS = [/^-/, /\.\./, /\.$/, /^\./, /@\{/, /\\/, /\s/];
 
 export const createBranchesRouter = () => {
 	return router({
@@ -17,13 +23,14 @@ export const createBranchesRouter = () => {
 				async ({
 					input,
 				}): Promise<{
+					current: string;
 					local: Array<{ branch: string; lastCommitDate: number }>;
 					remote: string[];
 					defaultBranch: string;
 					checkedOutBranches: Record<string, string>;
 				}> => {
 					assertRegisteredWorktree(input.worktreePath);
-					const git = simpleGit(input.worktreePath);
+					const git = createGit(input.worktreePath);
 					const branchSummary = await git.branch(["-a"]);
 
 					const localBranches: string[] = [];
@@ -47,6 +54,7 @@ export const createBranchesRouter = () => {
 					);
 
 					return {
+						current: branchSummary.current,
 						local,
 						remote: remote.sort(),
 						defaultBranch,
@@ -86,26 +94,163 @@ export const createBranchesRouter = () => {
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean; branchName: string }> => {
 				assertRegisteredWorktree(input.projectPath);
-				const git = simpleGit(input.projectPath);
 
-				// Check if branch already exists
+				// Validate branch name
+				if (!BRANCH_NAME_REGEX.test(input.branchName)) {
+					throw new Error(
+						"Branch name can only contain letters, numbers, dots, hyphens, underscores, and slashes"
+					);
+				}
+				for (const pattern of INVALID_BRANCH_PATTERNS) {
+					if (pattern.test(input.branchName)) {
+						throw new Error(`Invalid branch name: '${input.branchName}'`);
+					}
+				}
+				if (input.branchName.length > 250) {
+					throw new Error("Branch name too long (max 250 characters)");
+				}
+
+				return withGitLock(input.projectPath, async () => {
+					const git = createGit(input.projectPath);
+
+					// Check if branch already exists
+					const branchSummary = await git.branch(["-a"]);
+					const allBranches = Object.keys(branchSummary.branches);
+
+					if (allBranches.includes(input.branchName)) {
+						throw new Error(`Branch '${input.branchName}' already exists`);
+					}
+
+					// Determine the start point (prefer remote, fallback to local)
+					let startPoint = input.baseBranch;
+					if (allBranches.includes(`remotes/origin/${input.baseBranch}`)) {
+						startPoint = `origin/${input.baseBranch}`;
+					}
+
+					// Create the new branch (without switching to it)
+					await withLockRetry(input.projectPath, () =>
+						git.branch([input.branchName, startPoint])
+					);
+
+					return { success: true, branchName: input.branchName };
+				});
+			}),
+
+		deleteBranch: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					branch: z.string(),
+					force: z.boolean().optional().default(false),
+					deleteRemote: z.boolean().optional().default(false),
+				}),
+			)
+			.mutation(async ({ input }): Promise<{ success: boolean }> => {
+				assertRegisteredWorktree(input.worktreePath);
+
+				return withGitLock(input.worktreePath, async () => {
+					const git = createGit(input.worktreePath);
+
+					// Get current branch
+					const branchSummary = await git.branch(["-a"]);
+					const currentBranch = branchSummary.current;
+
+					// Cannot delete current branch
+					if (input.branch === currentBranch) {
+						throw new Error(
+							`Cannot delete branch '${input.branch}' because it is currently checked out`
+						);
+					}
+
+					// Check if branch is checked out in another worktree
+					const checkedOutBranches = await getCheckedOutBranches(
+						git,
+						input.worktreePath
+					);
+					if (checkedOutBranches[input.branch]) {
+						throw new Error(
+							`Cannot delete branch '${input.branch}' because it is checked out in another worktree: ${checkedOutBranches[input.branch]}`
+						);
+					}
+
+					// Delete local branch
+					const deleteFlag = input.force ? "-D" : "-d";
+					await withLockRetry(input.worktreePath, () =>
+						git.branch([deleteFlag, input.branch])
+					);
+
+					// Optionally delete remote branch
+					if (input.deleteRemote) {
+						try {
+							const networkGit = createGitForNetwork(input.worktreePath);
+							await withLockRetry(input.worktreePath, () =>
+								networkGit.push(["origin", "--delete", input.branch])
+							);
+						} catch (error) {
+							const message = error instanceof Error ? error.message : String(error);
+							// Ignore if remote branch doesn't exist
+							if (!message.includes("remote ref does not exist")) {
+								throw new Error(`Local branch deleted, but failed to delete remote: ${message}`);
+							}
+						}
+					}
+
+					return { success: true };
+				});
+			}),
+
+		// Clean up orphaned branches (branches that were created for worktrees that no longer exist)
+		cleanupOrphanedBranches: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					dryRun: z.boolean().optional().default(true),
+				}),
+			)
+			.mutation(async ({ input }): Promise<{ orphanedBranches: string[]; deleted: string[] }> => {
+				assertRegisteredWorktree(input.worktreePath);
+
+				const git = createGit(input.worktreePath);
+				const db = getDatabase();
+
+				// Get all local branches
 				const branchSummary = await git.branch(["-a"]);
-				const allBranches = Object.keys(branchSummary.branches);
+				const localBranches = Object.keys(branchSummary.branches).filter(
+					(b) => !b.startsWith("remotes/")
+				);
 
-				if (allBranches.includes(input.branchName)) {
-					throw new Error(`Branch '${input.branchName}' already exists`);
+				// Get all branches that are associated with active chats
+				const activeChats = db.select().from(chats).all();
+				const activeBranches = new Set(activeChats.map((c) => c.branch).filter(Boolean));
+
+				// Also add the default branch and current branch
+				const defaultBranch = await getDefaultBranch(git, []);
+				activeBranches.add(defaultBranch);
+				activeBranches.add(branchSummary.current);
+
+				// Find orphaned branches (pattern: adjective-animal-hex, e.g., clever-fox-a1b2)
+				const worktreeBranchPattern = /^[a-z]+-[a-z]+-[a-f0-9]{3,}$/;
+				const orphanedBranches = localBranches.filter((branch) => {
+					// Only consider auto-generated worktree branches
+					if (!worktreeBranchPattern.test(branch)) return false;
+					// Skip if branch is active
+					if (activeBranches.has(branch)) return false;
+					return true;
+				});
+
+				const deleted: string[] = [];
+				if (!input.dryRun) {
+					for (const branch of orphanedBranches) {
+						try {
+							await git.branch(["-D", branch]);
+							deleted.push(branch);
+						} catch {
+							// Skip branches that can't be deleted
+						}
+					}
 				}
 
-				// Determine the start point (prefer remote, fallback to local)
-				let startPoint = input.baseBranch;
-				if (allBranches.includes(`remotes/origin/${input.baseBranch}`)) {
-					startPoint = `origin/${input.baseBranch}`;
-				}
-
-				// Create the new branch (without switching to it)
-				await git.branch([input.branchName, startPoint]);
-
-				return { success: true, branchName: input.branchName };
+				return { orphanedBranches, deleted };
 			}),
 	});
 };

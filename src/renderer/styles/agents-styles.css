@@ -273,3 +273,115 @@ body:has([data-agents-page]) .canvas-dialog,
   font-size: 12px;
   font-family: "Monaco", "Menlo", "Consolas", monospace;
 }
+
+/* ========================================
+   10. STREAMDOWN SPACING OVERRIDES
+   Notion-like compact spacing for markdown
+   ======================================== */
+
+/*
+ * Streamdown wraps EACH markdown block in its own div.space-y-4
+ * Structure: .prose > div.space-y-4 > h1, div.space-y-4 > p, div.space-y-4 > ul, etc.
+ * We need to control spacing BETWEEN these wrapper divs
+ */
+
+/* Reset space-y-4 internal spacing - it's not needed since each div has only one child */
+.prose > .space-y-4 {
+  margin: 0;
+  padding: 0;
+}
+
+.prose > .space-y-4 > * + * {
+  margin-top: 0;
+}
+
+/* ========================================
+   NOTION-LIKE SPACING BETWEEN BLOCKS
+   Each wrapper div gets margin based on its content
+   ======================================== */
+
+/* Base spacing for paragraph wrapper divs */
+.prose > .space-y-4:has(> p) {
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
+
+/* H1: large top margin for visual section break */
+.prose > .space-y-4:has(> h1) {
+  margin-top: 2em;
+  margin-bottom: 4px;
+}
+
+/* H2: medium top margin */
+.prose > .space-y-4:has(> h2) {
+  margin-top: 1.4em;
+  margin-bottom: 1px;
+}
+
+/* H3: smaller top margin */
+.prose > .space-y-4:has(> h3) {
+  margin-top: 1em;
+  margin-bottom: 1px;
+}
+
+/* H4, H5, H6 */
+.prose > .space-y-4:has(> h4),
+.prose > .space-y-4:has(> h5),
+.prose > .space-y-4:has(> h6) {
+  margin-top: 1em;
+  margin-bottom: 1px;
+}
+
+/* First element should not have top margin */
+.prose > .space-y-4:first-child {
+  margin-top: 0 !important;
+}
+
+/* Lists: tight spacing */
+.prose > .space-y-4:has(> ul),
+.prose > .space-y-4:has(> ol) {
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
+
+/* Blockquotes: slightly more spacing */
+.prose > .space-y-4:has(> blockquote) {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+/* Code blocks (wrapped in div): more breathing room */
+.prose > .space-y-4:has(> div) {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+/* Horizontal rules */
+.prose > .space-y-4:has(> hr) {
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
+
+/* Tables */
+.prose > .space-y-4:has(> table),
+.prose > .space-y-4:has(> .overflow-x-auto) {
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
+
+/* Reset margins inside elements themselves - let wrapper control spacing */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6,
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote,
+.prose hr,
+.prose table {
+  margin-top: 0;
+  margin-bottom: 0;
+}

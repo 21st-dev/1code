@@ -208,9 +208,21 @@ export async function scanAgentsDirectory(
   return agents
 }
 
+// Cache for loaded agents to avoid re-reading from disk
+const agentCache = new Map<string, ParsedAgent | null>()
+
+/**
+ * Clear the agent cache (for testing/debugging)
+ */
+export function clearAgentCache() {
+  agentCache.clear()
+  console.log("[agents] Cache cleared")
+}
+
 /**
  * Build agents Record for SDK Options
  * This properly registers agents with the SDK so Claude can invoke them via Task tool
+ * OPTIMIZATION: Caches loaded agents to avoid re-reading from disk
  */
 export async function buildAgentsOption(
   agentNames: string[],
@@ -229,7 +241,20 @@ export async function buildAgentsOption(
   > = {}
 
   for (const name of agentNames) {
-    const agent = await loadAgent(name, cwd)
+    // Create cache key including cwd to handle project-specific agents
+    const cacheKey = cwd ? `${name}:${cwd}` : name
+
+    // Check cache first
+    let agent = agentCache.get(cacheKey)
+    if (agent === undefined) {
+      // Not in cache, load from disk
+      console.log(`[agents] Cache MISS for ${name} - loading from disk`)
+      agent = await loadAgent(name, cwd)
+      agentCache.set(cacheKey, agent)
+    } else {
+      console.log(`[agents] Cache HIT for ${name}`)
+    }
+
     if (agent) {
       agents[name] = {
         description: agent.description,

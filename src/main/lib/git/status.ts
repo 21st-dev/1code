@@ -9,6 +9,7 @@ import {
 	parseGitStatus,
 	parseNameStatus,
 } from "./utils/parse-status";
+import { gitCache } from "./cache";
 
 export const createStatusRouter = () => {
 	return router({
@@ -20,29 +21,40 @@ export const createStatusRouter = () => {
 				}),
 			)
 			.query(async ({ input }): Promise<GitChangesStatus> => {
-				console.log("[getStatus] Called with worktreePath:", input.worktreePath);
 				assertRegisteredWorktree(input.worktreePath);
 
+				// Check cache first
+				const cached = gitCache.getStatus<GitChangesStatus>(input.worktreePath);
+				if (cached) {
+					console.log("[getStatus] Cache hit for:", input.worktreePath);
+					return cached;
+				}
+
+				console.log("[getStatus] Cache miss, fetching:", input.worktreePath);
 				const git = simpleGit(input.worktreePath);
 				const defaultBranch = input.defaultBranch || "main";
 
 				const status = await git.status();
 				const parsed = parseGitStatus(status);
 
-				const branchComparison = await getBranchComparison(git, defaultBranch);
-				const trackingStatus = await getTrackingBranchStatus(git);
-
-				await applyNumstatToFiles(git, parsed.staged, [
-					"diff",
-					"--cached",
-					"--numstat",
+				// Run independent git operations in parallel (VS Code style)
+				const [branchComparison, trackingStatus] = await Promise.all([
+					getBranchComparison(git, defaultBranch),
+					getTrackingBranchStatus(git),
 				]);
 
-				await applyNumstatToFiles(git, parsed.unstaged, ["diff", "--numstat"]);
+				// Run numstat operations in parallel
+				await Promise.all([
+					applyNumstatToFiles(git, parsed.staged, [
+						"diff",
+						"--cached",
+						"--numstat",
+					]),
+					applyNumstatToFiles(git, parsed.unstaged, ["diff", "--numstat"]),
+					applyUntrackedLineCount(input.worktreePath, parsed.untracked),
+				]);
 
-				await applyUntrackedLineCount(input.worktreePath, parsed.untracked);
-
-				const result = {
+				const result: GitChangesStatus = {
 					branch: parsed.branch,
 					defaultBranch,
 					againstBase: branchComparison.againstBase,
@@ -56,7 +68,11 @@ export const createStatusRouter = () => {
 					pullCount: trackingStatus.pullCount,
 					hasUpstream: trackingStatus.hasUpstream,
 				};
-				console.log("[getStatus] Returning:", {
+
+				// Store in cache
+				gitCache.setStatus(input.worktreePath, result);
+
+				console.log("[getStatus] Cached and returning:", {
 					branch: result.branch,
 					stagedCount: result.staged.length,
 					unstagedCount: result.unstaged.length,
@@ -74,28 +90,97 @@ export const createStatusRouter = () => {
 				}),
 			)
 			.query(async ({ input }): Promise<ChangedFile[]> => {
+				console.log("[getCommitFiles] START:", {
+					worktreePath: input.worktreePath,
+					commitHash: input.commitHash,
+				});
+
+				try {
+					assertRegisteredWorktree(input.worktreePath);
+					console.log("[getCommitFiles] Worktree validated");
+
+					const git = simpleGit(input.worktreePath);
+
+					const nameStatus = await git.raw([
+						"diff-tree",
+						"--no-commit-id",
+						"--name-status",
+						"-r",
+						input.commitHash,
+					]);
+
+					console.log("[getCommitFiles] diff-tree output:", {
+						length: nameStatus.length,
+						output: nameStatus.substring(0, 500), // First 500 chars
+					});
+
+					const files = parseNameStatus(nameStatus);
+					console.log("[getCommitFiles] Parsed files:", {
+						count: files.length,
+						files: files.map((f) => ({ path: f.path, status: f.status })),
+					});
+
+					await applyNumstatToFiles(git, files, [
+						"diff-tree",
+						"--no-commit-id",
+						"--numstat",
+						"-r",
+						input.commitHash,
+					]);
+
+					console.log("[getCommitFiles] SUCCESS:", { filesCount: files.length });
+					return files;
+				} catch (error) {
+					console.error("[getCommitFiles] ERROR:", {
+						error: error instanceof Error ? error.message : String(error),
+						stack: error instanceof Error ? error.stack : undefined,
+						worktreePath: input.worktreePath,
+						commitHash: input.commitHash,
+					});
+					throw error;
+				}
+			}),
+
+		/** Check if worktree is registered in database */
+		isWorktreeRegistered: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+				}),
+			)
+			.query(async ({ input }): Promise<boolean> => {
+				try {
+					assertRegisteredWorktree(input.worktreePath);
+					return true;
+				} catch (error) {
+					return false;
+				}
+			}),
+
+		/** Get the unified diff for a specific file in a commit */
+		getCommitFileDiff: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					commitHash: z.string(),
+					filePath: z.string(),
+				}),
+			)
+			.query(async ({ input }): Promise<string> => {
 				assertRegisteredWorktree(input.worktreePath);
 
 				const git = simpleGit(input.worktreePath);
 
-				const nameStatus = await git.raw([
-					"diff-tree",
-					"--no-commit-id",
-					"--name-status",
-					"-r",
+				// Get diff for specific file comparing commit to its parent
+				const diff = await git.raw([
+					"diff",
+					`${input.commitHash}^`,
 					input.commitHash,
-				]);
-				const files = parseNameStatus(nameStatus);
-
-				await applyNumstatToFiles(git, files, [
-					"diff-tree",
-					"--no-commit-id",
-					"--numstat",
-					"-r",
-					input.commitHash,
+					"--",
+					input.filePath,
 				]);
 
-				return files;
+				return diff;
 			}),
 	});
 };
@@ -130,7 +215,7 @@ async function getBranchComparison(
 		const logOutput = await git.raw([
 			"log",
 			`origin/${defaultBranch}..HEAD`,
-			"--format=%H|%h|%s|%an|%aI",
+			"--format=%H|%h|%s|%b|%an|%aI",
 		]);
 		commits = parseGitLog(logOutput);
 
@@ -185,15 +270,8 @@ async function getTrackingBranchStatus(
 	git: ReturnType<typeof simpleGit>,
 ): Promise<TrackingStatus> {
 	try {
-		const upstream = await git.raw([
-			"rev-parse",
-			"--abbrev-ref",
-			"@{upstream}",
-		]);
-		if (!upstream.trim()) {
-			return { pushCount: 0, pullCount: 0, hasUpstream: false };
-		}
-
+		// Single git call - rev-list will fail if no upstream exists
+		// This is faster than checking upstream first, then counting
 		const tracking = await git.raw([
 			"rev-list",
 			"--left-right",
@@ -207,6 +285,7 @@ async function getTrackingBranchStatus(
 			hasUpstream: true,
 		};
 	} catch {
+		// No upstream branch configured
 		return { pushCount: 0, pullCount: 0, hasUpstream: false };
 	}
 }

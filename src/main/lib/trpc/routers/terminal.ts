@@ -123,6 +123,15 @@ export const terminalRouter = router({
 		}),
 
 	/**
+	 * Get count of active terminal sessions for a workspace
+	 */
+	getActiveSessionCount: publicProcedure
+		.input(z.object({ workspaceId: z.string() }))
+		.query(({ input }) => {
+			return terminalManager.getSessionCountByWorkspaceId(input.workspaceId)
+		}),
+
+	/**
 	 * Get workspace cwd for terminal initialization
 	 */
 	getWorkspaceCwd: publicProcedure.input(z.string()).query(({ input }) => {

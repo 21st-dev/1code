@@ -9,6 +9,53 @@ import type { VSCodeFullTheme } from "../atoms"
  */
 let highlighterPromise: Promise<shiki.Highlighter> | null = null
 
+// ============================================================================
+// LRU CACHE FOR HIGHLIGHT RESULTS
+// ============================================================================
+// Prevents re-highlighting the same code when switching tabs.
+// Key: `${themeId}:${language}:${code}` -> Value: highlighted HTML
+// Max 500 entries (~5MB assuming 10KB average per entry)
+const HIGHLIGHT_CACHE_MAX_SIZE = 500
+
+class LRUCache<K, V> {
+  private cache = new Map<K, V>()
+  private maxSize: number
+
+  constructor(maxSize: number) {
+    this.maxSize = maxSize
+  }
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key)
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key)
+      this.cache.set(key, value)
+    }
+    return value
+  }
+
+  set(key: K, value: V): void {
+    // Delete first to ensure it's at the end
+    this.cache.delete(key)
+    this.cache.set(key, value)
+
+    // Evict oldest entries if over capacity
+    if (this.cache.size > this.maxSize) {
+      const firstKey = this.cache.keys().next().value
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey)
+      }
+    }
+  }
+
+  has(key: K): boolean {
+    return this.cache.has(key)
+  }
+}
+
+const highlightCache = new LRUCache<string, string>(HIGHLIGHT_CACHE_MAX_SIZE)
+
 /**
  * Languages supported by the highlighter
  */
@@ -197,12 +244,20 @@ function isThemeAvailable(themeId: string): boolean {
 /**
  * Highlight code with a specific theme
  * Uses custom themes with tokenColors when available, otherwise maps to bundled themes
+ * Results are cached to prevent re-highlighting when switching tabs
  */
 export async function highlightCode(
   code: string,
   language: string,
   themeId: string,
 ): Promise<string> {
+  // Check cache first - O(1) lookup
+  const cacheKey = `${themeId}:${language}:${code}`
+  const cached = highlightCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
   const highlighter = await getHighlighter()
 
   // Ensure the theme is loaded (if it's a custom theme with tokenColors)
@@ -223,7 +278,12 @@ export async function highlightCode(
 
   // Extract just the code content from shiki's output (remove wrapper)
   const match = html.match(/<code[^>]*>([\s\S]*?)<\/code>/)
-  return match ? match[1] : code
+  const result = match ? match[1] : code
+
+  // Cache the result
+  highlightCache.set(cacheKey, result)
+
+  return result
 }
 
 /**

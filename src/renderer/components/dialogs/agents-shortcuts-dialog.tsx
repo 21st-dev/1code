@@ -75,7 +75,7 @@ function getWorkspaceShortcuts(
 ): Shortcut[] {
   return [
     { label: "New workspace", keys: ["cmd", "N"] },
-    { label: "Search workspaces", keys: ["cmd", "F"] },
+    { label: "Search workspaces", keys: ["cmd", "K"] },
     { label: "Archive current workspace", keys: ["cmd", "E"] },
     {
       label: "Quick switch workspaces",
@@ -92,6 +92,7 @@ function getAgentShortcuts(
     // Creation & Management (mirrors Workspaces order)
     { label: "Create new agent", keys: ["cmd", "T"] },
     { label: "Search chats", keys: ["/"] },
+    { label: "Search text in current chat", keys: ["cmd", "F"] },
     { label: "Archive current agent", keys: ["cmd", "W"] },
     // Navigation
     {

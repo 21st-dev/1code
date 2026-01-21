@@ -1,13 +1,10 @@
 import { cn } from "../lib/utils"
-import { memo, useMemo, useState, useCallback, useEffect } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import { memo, useState, useCallback, useEffect, useMemo } from "react"
+import { Streamdown, parseMarkdownIntoBlocks } from "streamdown"
 import remarkBreaks from "remark-breaks"
 import { Copy, Check } from "lucide-react"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
-
-// Removed react-syntax-highlighter themes - now using Shiki with VS Code themes
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
 export function stripEmojis(text: string): string {
@@ -21,24 +18,6 @@ export function stripEmojis(text: string): string {
     .replace(/[\u{2700}-\u{27BF}]/gu, "") // Dingbats
 }
 
-// Function to fix numbered list items that have line breaks after the number
-// Converts "1.\n\nText" or "1.\n  \nText" to "1. Text"
-function fixNumberedListBreaks(text: string): string {
-  return text.replace(/^(\d+)\.\s*\n+\s*\n*/gm, "$1. ")
-}
-
-// Function to fix malformed bold/italic markdown where there's a space after opening markers
-// Converts "** text**" to "**text**" and "* text*" to "*text*"
-function fixMalformedEmphasis(text: string): string {
-  // Fix bold: "** text**" -> "**text**"
-  // Use " +" (spaces only) not "\s+" to avoid matching newlines
-  // Also require text to start with non-space to ensure we're at the START of bold content
-  let fixed = text.replace(/\*\* +([^\n*]+?)\*\*/g, "**$1**")
-  // Fix italic: "* text*" -> "*text*" (but not inside bold)
-  fixed = fixed.replace(/(?<!\*)\* +([^\n*]+?)\*(?!\*)/g, "*$1*")
-  return fixed
-}
-
 // Escape HTML special characters for safe rendering
 function escapeHtml(text: string): string {
   return text
@@ -49,9 +28,9 @@ function escapeHtml(text: string): string {
 
 // Code block text sizes matching paragraph text sizes
 const codeBlockTextSize = {
-  sm: "text-sm",  // 14px - matches p text
-  md: "text-sm",  // 14px - matches p text
-  lg: "text-sm",  // 14px - matches p text
+  sm: "text-sm",
+  md: "text-sm",
+  lg: "text-sm",
 }
 
 // Code block with copy button using Shiki
@@ -112,7 +91,7 @@ function CodeBlock({
       <button
         onClick={handleCopy}
         tabIndex={-1}
-        className="absolute top-[6px] right-[6px] p-1 z-10"
+        className="absolute top-[6px] right-[6px] p-1 z-2"
         title={copied ? "Copied!" : "Copy code"}
       >
         <div className="relative w-3.5 h-3.5">
@@ -165,13 +144,11 @@ interface ChatMarkdownRendererProps {
   className?: string
   /** Whether to enable syntax highlighting (default: true) */
   syntaxHighlight?: boolean
+  /** Whether content is being streamed */
+  isStreaming?: boolean
 }
 
 // Size-based styles inspired by Notion's spacing
-// Key principles:
-// - Minimal margin-bottom (elements "breathe" via padding)
-// - Larger margin-top on headings creates visual sections
-// - line-height: 1.5 for body, 1.3 for headings
 const sizeStyles: Record<
   MarkdownSize,
   {
@@ -197,7 +174,6 @@ const sizeStyles: Record<
   }
 > = {
   sm: {
-    // Compact variant for sidebar/compact views
     h1: "text-base font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
     h2: "text-base font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
     h3: "text-sm font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
@@ -221,7 +197,6 @@ const sizeStyles: Record<
     td: "text-sm text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
   },
   md: {
-    // Default variant - matches Notion spacing
     h1: "text-[1.5em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
     h2: "text-[1.5em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
     h3: "text-[1.25em] font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
@@ -245,7 +220,6 @@ const sizeStyles: Record<
     td: "text-sm text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
   },
   lg: {
-    // Fullscreen/large variant
     h1: "text-[1.875em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
     h2: "text-[1.5em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
     h3: "text-[1.25em] font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
@@ -270,15 +244,48 @@ const sizeStyles: Record<
   },
 }
 
+// Custom code component that uses our theme system
+function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: typeof sizeStyles.md) {
+  return function CodeComponent({ className, children, ...props }: any) {
+    const match = /language-(\w+)/.exec(className || "")
+    const language = match ? match[1] : undefined
+    const codeContent = String(children)
+
+    // Check if this is a code block (has language) or inline code
+    // Streamdown wraps code blocks in <pre><code>, inline code is just <code>
+    const isCodeBlock = language || (codeContent.includes("\n") && codeContent.length > 100)
+
+    if (isCodeBlock) {
+      return (
+        <CodeBlock
+          language={language}
+          themeId={codeTheme}
+          size={size}
+        >
+          {codeContent.replace(/\n$/, "")}
+        </CodeBlock>
+      )
+    }
+
+    // Inline code
+    return <span className={styles.inlineCode}>{children}</span>
+  }
+}
+
 export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   content,
   size = "md",
   className,
-  syntaxHighlight = true,
+  isStreaming = false,
 }: ChatMarkdownRendererProps) {
   const codeTheme = useCodeTheme()
   const styles = sizeStyles[size]
 
+  // Process content - strip emojis
+  const processedContent = useMemo(() => stripEmojis(content), [content])
+
+  // Memoize components object to prevent re-renders
+  // This is critical for Streamdown's block-level memoization to work
   const components = useMemo(
     () => ({
       h1: ({ children, ...props }: any) => (
@@ -395,37 +402,10 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
         </td>
       ),
       pre: ({ children }: any) => <>{children}</>,
-      code: ({ inline, className, children, ...props }: any) => {
-        const match = /language-(\w+)/.exec(className || "")
-        const language = match ? match[1] : undefined
-        const codeContent = String(children)
-
-        // Determine if code should be inline:
-        // 1. If markdown explicitly marks it as inline
-        // 2. If it's short code without line breaks (likely from single backticks)
-        const shouldBeInline =
-          inline ||
-          (!language && codeContent.length < 100 && !codeContent.includes("\n"))
-
-        if (shouldBeInline) {
-          return <span className={styles.inlineCode}>{children}</span>
-        }
-
-        return (
-          <CodeBlock
-            language={language}
-            themeId={codeTheme}
-            size={size}
-          >
-            {String(children).replace(/\n$/, "")}
-          </CodeBlock>
-        )
-      },
+      code: createCodeComponent(codeTheme, size, styles),
     }),
-    [styles, codeTheme, syntaxHighlight, size],
+    [styles, codeTheme, size],
   )
-
-  const processedContent = fixMalformedEmphasis(fixNumberedListBreaks(stripEmojis(content)))
 
   return (
     <div
@@ -453,9 +433,16 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
         className,
       )}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      <Streamdown
+        mode="streaming"
+        components={components}
+        remarkPlugins={[remarkBreaks]}
+        isAnimating={isStreaming}
+        parseIncompleteMarkdown={isStreaming}
+        controls={false}
+      >
         {processedContent}
-      </ReactMarkdown>
+      </Streamdown>
     </div>
   )
 })
@@ -464,17 +451,14 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
 export const CompactMarkdownRenderer = memo(function CompactMarkdownRenderer({
   content,
   className,
-  syntaxHighlight = false,
 }: {
   content: string
   className?: string
-  syntaxHighlight?: boolean
 }) {
   return (
     <ChatMarkdownRenderer
       content={content}
       size="sm"
-      syntaxHighlight={syntaxHighlight}
       className={className}
     />
   )
@@ -492,9 +476,279 @@ export const FullscreenMarkdownRenderer = memo(
       <ChatMarkdownRenderer
         content={content}
         size="lg"
-        syntaxHighlight={true}
         className={className}
       />
     )
   },
 )
+
+// ============================================================================
+// MEMOIZED MARKDOWN - Block-level memoization for streaming performance
+// ============================================================================
+// This is the KEY optimization for streaming performance!
+// Instead of re-rendering the entire markdown on each chunk, we:
+// 1. Parse markdown into discrete blocks (paragraphs, headers, code blocks, etc.)
+// 2. Memoize each block individually with content-based keys
+// 3. Only the last (incomplete) block re-renders during streaming
+//
+// Streamdown's internal memoization only works within a single render pass.
+// When the parent component re-renders (due to atom update), Streamdown
+// re-renders all blocks. This external block-level memoization prevents that.
+
+// Simple hash function for content-based keys
+// Using djb2 algorithm - fast and good distribution
+function hashString(str: string): string {
+  let hash = 5381
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i)
+  }
+  // Convert to unsigned 32-bit and then to base36 for shorter keys
+  return (hash >>> 0).toString(36)
+}
+
+interface ParsedBlock {
+  content: string
+  // Stable key based on: content hash + occurrence index
+  key: string
+}
+
+function parseIntoBlocks(markdown: string): ParsedBlock[] {
+  try {
+    // Use Streamdown's built-in parser for consistency
+    const blocks = parseMarkdownIntoBlocks(markdown)
+    // Track occurrences of each content hash to handle duplicates
+    const seen = new Map<string, number>()
+    return blocks.map((content) => {
+      const baseKey = hashString(content)
+      const occurrence = seen.get(baseKey) ?? 0
+      seen.set(baseKey, occurrence + 1)
+      const key = occurrence > 0 ? `${baseKey}-${occurrence}` : baseKey
+      return { content, key }
+    })
+  } catch {
+    // Fallback: return entire content as single block
+    return [{ content: markdown, key: `fallback-${hashString(markdown)}` }]
+  }
+}
+
+// Individual block - only re-renders when its content changes
+const MemoizedMarkdownBlock = memo(
+  function MemoizedMarkdownBlock({
+    content,
+    size,
+    className,
+    codeTheme,
+  }: {
+    content: string
+    size: MarkdownSize
+    className?: string
+    codeTheme: string
+  }) {
+    // Don't render empty blocks
+    if (!content.trim()) return null
+
+    const styles = sizeStyles[size]
+
+    // Memoize components object - critical for preventing re-renders
+    const components = useMemo(
+      () => ({
+        h1: ({ children, ...props }: any) => (
+          <h1 className={styles.h1} {...props}>
+            {children}
+          </h1>
+        ),
+        h2: ({ children, ...props }: any) => (
+          <h2 className={styles.h2} {...props}>
+            {children}
+          </h2>
+        ),
+        h3: ({ children, ...props }: any) => (
+          <h3 className={styles.h3} {...props}>
+            {children}
+          </h3>
+        ),
+        h4: ({ children, ...props }: any) => (
+          <h4 className={styles.h4} {...props}>
+            {children}
+          </h4>
+        ),
+        h5: ({ children, ...props }: any) => (
+          <h5 className={styles.h5} {...props}>
+            {children}
+          </h5>
+        ),
+        h6: ({ children, ...props }: any) => (
+          <h6 className={styles.h6} {...props}>
+            {children}
+          </h6>
+        ),
+        p: ({ children, ...props }: any) => (
+          <p className={styles.p} {...props}>
+            {children}
+          </p>
+        ),
+        ul: ({ children, ...props }: any) => (
+          <ul className={styles.ul} {...props}>
+            {children}
+          </ul>
+        ),
+        ol: ({ children, ...props }: any) => (
+          <ol className={styles.ol} {...props}>
+            {children}
+          </ol>
+        ),
+        li: ({ children, ...props }: any) => (
+          <li className={styles.li} {...props}>
+            {children}
+          </li>
+        ),
+        a: ({ href, children, ...props }: any) => (
+          <a
+            href={href}
+            onClick={(e) => {
+              e.preventDefault()
+              if (href) {
+                window.desktopApi.openExternal(href)
+              }
+            }}
+            className="text-blue-600 dark:text-blue-400 no-underline hover:underline hover:decoration-current underline-offset-2 decoration-1 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:rounded-sm"
+            {...props}
+          >
+            {children}
+          </a>
+        ),
+        strong: ({ children, ...props }: any) => (
+          <strong className="font-medium text-foreground" {...props}>
+            {children}
+          </strong>
+        ),
+        em: ({ children, ...props }: any) => (
+          <em className="italic" {...props}>
+            {children}
+          </em>
+        ),
+        blockquote: ({ children, ...props }: any) => (
+          <blockquote className={styles.blockquote} {...props}>
+            {children}
+          </blockquote>
+        ),
+        hr: ({ ...props }: any) => <hr className={styles.hr} {...props} />,
+        table: ({ children, ...props }: any) => (
+          <div className="overflow-x-auto my-3 rounded-lg border border-border overflow-hidden">
+            <table className={cn(styles.table, "border-collapse")} {...props}>
+              {children}
+            </table>
+          </div>
+        ),
+        thead: ({ children, ...props }: any) => (
+          <thead className={styles.thead} {...props}>
+            {children}
+          </thead>
+        ),
+        tbody: ({ children, ...props }: any) => (
+          <tbody className={styles.tbody} {...props}>
+            {children}
+          </tbody>
+        ),
+        tr: ({ children, ...props }: any) => (
+          <tr className={styles.tr} {...props}>
+            {children}
+          </tr>
+        ),
+        th: ({ children, ...props }: any) => (
+          <th className={styles.th} {...props}>
+            {children}
+          </th>
+        ),
+        td: ({ children, ...props }: any) => (
+          <td className={styles.td} {...props}>
+            {children}
+          </td>
+        ),
+        pre: ({ children }: any) => <>{children}</>,
+        code: createCodeComponent(codeTheme, size, styles),
+      }),
+      [styles, codeTheme, size],
+    )
+
+    return (
+      <Streamdown
+        mode="static"
+        components={components}
+        remarkPlugins={[remarkBreaks]}
+        controls={false}
+      >
+        {content}
+      </Streamdown>
+    )
+  },
+  (prevProps, nextProps) => {
+    // Only re-render if content or styling actually changed
+    return (
+      prevProps.content === nextProps.content &&
+      prevProps.size === nextProps.size &&
+      prevProps.className === nextProps.className &&
+      prevProps.codeTheme === nextProps.codeTheme
+    )
+  },
+)
+
+MemoizedMarkdownBlock.displayName = "MemoizedMarkdownBlock"
+
+// Main memoized markdown component - splits into blocks and memoizes each
+export const MemoizedMarkdown = memo(
+  function MemoizedMarkdown({
+    content,
+    id,
+    size = "sm",
+    className,
+  }: {
+    content: string
+    id: string
+    size?: MarkdownSize
+    className?: string
+  }) {
+    const codeTheme = useCodeTheme()
+
+    // Pre-process content - strip emojis
+    const processedContent = useMemo(() => stripEmojis(content), [content])
+
+    // Split into blocks - this recalculates when content changes,
+    // but each block is individually memoized with content-based keys
+    const blocks = useMemo(
+      () => parseIntoBlocks(processedContent),
+      [processedContent],
+    )
+
+    return (
+      <div
+        className={cn(
+          "prose prose-sm max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none",
+          "prose-p:my-0 prose-ul:my-0 prose-ol:my-0 prose-li:my-0",
+          "prose-ul:pl-0 prose-ol:pl-0 prose-li:pl-0",
+          "prose-hr:my-0",
+          "prose-table:my-0",
+          "[&_li>p]:inline [&_li>p]:mb-0",
+          "overflow-hidden break-words",
+          "[&_p:has(+hr)]:mb-6 [&_ul:has(+hr)]:mb-6 [&_ol:has(+hr)]:mb-6 [&_div:has(+hr)]:mb-6 [&_table:has(+hr)]:mb-6 [&_h1:has(+hr)]:mb-6 [&_h2:has(+hr)]:mb-6 [&_h3:has(+hr)]:mb-6 [&_blockquote:has(+hr)]:mb-6",
+          "[&_hr+p]:mt-4 [&_hr+ul]:mt-4 [&_hr+ol]:mt-4",
+          "[&_div+p]:mt-2 [&_div+ul]:mt-2 [&_div+ol]:mt-2",
+          "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
+          className,
+        )}
+      >
+        {blocks.map((block) => (
+          <MemoizedMarkdownBlock
+            key={`${id}-${block.key}`}
+            content={block.content}
+            size={size}
+            className={className}
+            codeTheme={codeTheme}
+          />
+        ))}
+      </div>
+    )
+  },
+)
+
+MemoizedMarkdown.displayName = "MemoizedMarkdown"

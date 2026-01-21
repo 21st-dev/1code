@@ -1,10 +1,11 @@
-import { z } from "zod"
-import { shell, safeStorage } from "electron"
-import { router, publicProcedure } from "../index"
-import { getAuthManager } from "../../../index"
-import { getApiUrl } from "../../config"
-import { getDatabase, claudeCodeCredentials } from "../../db"
 import { eq } from "drizzle-orm"
+import { safeStorage, shell } from "electron"
+import { z } from "zod"
+import { getAuthManager } from "../../../index"
+import { getExistingClaudeToken } from "../../claude-token"
+import { getApiUrl } from "../../config"
+import { claudeCodeCredentials, getDatabase } from "../../db"
+import { publicProcedure, router } from "../index"
 
 /**
  * Get desktop auth token for server API calls
@@ -34,6 +35,27 @@ function decryptToken(encrypted: string): string {
   }
   const buffer = Buffer.from(encrypted, "base64")
   return safeStorage.decryptString(buffer)
+}
+
+function storeOAuthToken(oauthToken: string) {
+  const authManager = getAuthManager()
+  const user = authManager.getUser()
+
+  const encryptedToken = encryptToken(oauthToken)
+  const db = getDatabase()
+
+  db.delete(claudeCodeCredentials)
+    .where(eq(claudeCodeCredentials.id, "default"))
+    .run()
+
+  db.insert(claudeCodeCredentials)
+    .values({
+      id: "default",
+      oauthToken: encryptedToken,
+      connectedAt: new Date(),
+      userId: user?.id ?? null,
+    })
+    .run()
 }
 
 /**
@@ -171,36 +193,51 @@ export const claudeCodeRouter = router({
         throw new Error("Timeout waiting for OAuth token")
       }
 
-      // Validate token format
-      if (!oauthToken.startsWith("sk-ant-oat01-")) {
-        throw new Error("Invalid OAuth token format")
-      }
-
-      // Get user ID for reference
-      const authManager = getAuthManager()
-      const user = authManager.getUser()
-
-      // Encrypt and store locally
-      const encryptedToken = encryptToken(oauthToken)
-      const db = getDatabase()
-
-      // Upsert - delete existing and insert new
-      db.delete(claudeCodeCredentials)
-        .where(eq(claudeCodeCredentials.id, "default"))
-        .run()
-
-      db.insert(claudeCodeCredentials)
-        .values({
-          id: "default",
-          oauthToken: encryptedToken,
-          connectedAt: new Date(),
-          userId: user?.id ?? null,
-        })
-        .run()
+      storeOAuthToken(oauthToken)
 
       console.log("[ClaudeCode] Token stored locally")
       return { success: true }
     }),
+
+  /**
+   * Import an existing OAuth token from the local machine
+   */
+  importToken: publicProcedure
+    .input(
+      z.object({
+        token: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const oauthToken = input.token.trim()
+
+      storeOAuthToken(oauthToken)
+
+      console.log("[ClaudeCode] Token imported locally")
+      return { success: true }
+    }),
+
+  /**
+   * Check for existing Claude token in system credentials
+   */
+  getSystemToken: publicProcedure.query(() => {
+    const token = getExistingClaudeToken()?.trim() ?? null
+    return { token }
+  }),
+
+  /**
+   * Import Claude token from system credentials
+   */
+  importSystemToken: publicProcedure.mutation(() => {
+    const token = getExistingClaudeToken()?.trim()
+    if (!token) {
+      throw new Error("No existing Claude token found")
+    }
+
+    storeOAuthToken(token)
+    console.log("[ClaudeCode] Token imported from system")
+    return { success: true }
+  }),
 
   /**
    * Get decrypted OAuth token (local)

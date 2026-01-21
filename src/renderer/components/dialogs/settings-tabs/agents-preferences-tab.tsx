@@ -1,20 +1,20 @@
 import { useAtom } from "jotai"
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
-  extendedThinkingEnabledAtom,
-  soundNotificationsEnabledAtom,
   analyticsOptOutAtom,
   ctrlTabTargetAtom,
+  extendedThinkingEnabledAtom,
+  soundNotificationsEnabledAtom,
   type CtrlTabTarget,
 } from "../../../lib/atoms"
-import { Switch } from "../../ui/switch"
+import { Kbd } from "../../ui/kbd"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
 } from "../../ui/select"
-import { Kbd } from "../../ui/kbd"
+import { Switch } from "../../ui/switch"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {

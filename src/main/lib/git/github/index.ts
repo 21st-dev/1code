@@ -1,2 +1,2 @@
 export { fetchGitHubPRStatus } from "./github";
-export type { CheckItem, GitHubStatus } from "./types";
+export type { CheckItem, GitHubStatus, MergeableStatus } from "./types";

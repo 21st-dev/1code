@@ -1,21 +1,26 @@
 "use client"
 
 import { useAtom, useSetAtom } from "jotai"
-import { useState, useEffect, useRef } from "react"
+import { X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
+import {
+  agentsLoginModalOpenAtom,
+  agentsSettingsDialogActiveTabAtom,
+  agentsSettingsDialogOpenAtom,
+  type SettingsTab,
+} from "../../lib/atoms"
+import { appStore } from "../../lib/jotai-store"
+import { trpc } from "../../lib/trpc"
 import {
   AlertDialog,
-  AlertDialogContent,
   AlertDialogCancel,
+  AlertDialogContent,
 } from "../ui/alert-dialog"
-import { X } from "lucide-react"
-import { Input } from "../ui/input"
-import { IconSpinner, ClaudeCodeIcon } from "../ui/icons"
 import { Button } from "../ui/button"
+import { ClaudeCodeIcon, IconSpinner } from "../ui/icons"
+import { Input } from "../ui/input"
 import { Logo } from "../ui/logo"
-import { agentsLoginModalOpenAtom } from "../../lib/atoms"
-import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
-import { trpc } from "../../lib/trpc"
-import { appStore } from "../../lib/jotai-store"
 
 type AuthFlowState =
   | { step: "idle" }
@@ -38,6 +43,8 @@ type AuthFlowState =
 
 export function ClaudeLoginModal() {
   const [open, setOpen] = useAtom(agentsLoginModalOpenAtom)
+  const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
+  const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
   const [authCode, setAuthCode] = useState("")
   const [userClickedConnect, setUserClickedConnect] = useState(false)
@@ -248,6 +255,13 @@ export function ClaudeLoginModal() {
     }
   }
 
+  const handleOpenModelsSettings = () => {
+    clearPendingRetry()
+    setSettingsActiveTab("models" as SettingsTab)
+    setSettingsOpen(true)
+    setOpen(false)
+  }
+
   const isLoadingAuth =
     flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
@@ -360,6 +374,16 @@ export function ClaudeLoginModal() {
                 </Button>
               </div>
             )}
+
+            <div className="text-center !mt-2">
+              <button
+                type="button"
+                onClick={handleOpenModelsSettings}
+                className="text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+              >
+                Set a custom model in Settings
+              </button>
+            </div>
           </div>
         </div>
       </AlertDialogContent>

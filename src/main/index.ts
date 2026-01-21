@@ -19,6 +19,7 @@ import {
   downloadUpdate,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
+import { cleanupGitWatchers } from "./lib/git/watcher"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -632,6 +633,17 @@ if (gotTheLock) {
       }, 5000)
     }
 
+    // Warm up MCP cache 3 seconds after startup (background, non-blocking)
+    // This populates the cache so all future sessions can use filtered MCP servers
+    setTimeout(async () => {
+      try {
+        const { warmupMcpCache } = await import("./lib/trpc/routers/claude")
+        await warmupMcpCache()
+      } catch (error) {
+        console.error("[App] MCP warmup failed:", error)
+      }
+    }, 3000)
+
     // Handle deep link from app launch (Windows/Linux)
     const deepLinkUrl = process.argv.find((arg) =>
       arg.startsWith(`${PROTOCOL}://`),
@@ -658,6 +670,7 @@ if (gotTheLock) {
   // Cleanup before quit
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
+    await cleanupGitWatchers()
     await shutdownAnalytics()
     await closeDatabase()
   })

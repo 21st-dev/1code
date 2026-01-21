@@ -2,6 +2,7 @@
 
 import { memo } from "react"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface ExitPlanModeToolPart {
   type: string
@@ -35,4 +36,4 @@ export const AgentExitPlanModeTool = memo(function AgentExitPlanModeTool({
       <ChatMarkdownRenderer content={planText} size="sm" />
     </div>
   )
-})
+}, areToolPropsEqual)

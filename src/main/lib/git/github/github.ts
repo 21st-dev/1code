@@ -105,7 +105,7 @@ async function getPRForBranch(
 				"view",
 				branch,
 				"--json",
-				"number,title,url,state,isDraft,mergedAt,additions,deletions,reviewDecision,statusCheckRollup",
+				"number,title,url,state,isDraft,mergedAt,additions,deletions,reviewDecision,statusCheckRollup,mergeable",
 			],
 			{ cwd: worktreePath },
 		);
@@ -131,6 +131,7 @@ async function getPRForBranch(
 			reviewDecision: mapReviewDecision(data.reviewDecision),
 			checksStatus: computeChecksStatus(data.statusCheckRollup),
 			checks,
+			mergeable: data.mergeable,
 		};
 	} catch (error) {
 		// "no pull requests found" is not an error - just no PR

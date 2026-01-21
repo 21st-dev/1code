@@ -1,6 +1,9 @@
-import { execSync } from "node:child_process"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import os from "node:os"
 import pidtree from "pidtree"
+
+const execFileAsync = promisify(execFile)
 
 export interface PortInfo {
 	port: number
@@ -8,6 +11,17 @@ export interface PortInfo {
 	address: string
 	processName: string
 }
+
+// Cache for port lookups to avoid repeated expensive calls
+const portCache = new Map<
+	string,
+	{ ports: PortInfo[]; timestamp: number }
+>()
+const PORT_CACHE_TTL = 2000 // 2 seconds - ports don't change that fast
+
+// Cache for process names
+const processNameCache = new Map<number, { name: string; timestamp: number }>()
+const PROCESS_NAME_CACHE_TTL = 10000 // 10 seconds
 
 /**
  * Get all child PIDs of a process (including the process itself)
@@ -22,28 +36,39 @@ export async function getProcessTree(pid: number): Promise<number[]> {
 }
 
 /**
- * Get listening TCP ports for a set of PIDs
+ * Get listening TCP ports for a set of PIDs (async, cached)
  * Cross-platform implementation using lsof (macOS/Linux) or netstat (Windows)
  */
-export function getListeningPortsForPids(pids: number[]): PortInfo[] {
+export async function getListeningPortsForPids(
+	pids: number[],
+): Promise<PortInfo[]> {
 	if (pids.length === 0) return []
 
+	// Check cache first
+	const cacheKey = pids.sort().join(",")
+	const cached = portCache.get(cacheKey)
+	if (cached && Date.now() - cached.timestamp < PORT_CACHE_TTL) {
+		return cached.ports
+	}
+
 	const platform = os.platform()
+	let ports: PortInfo[] = []
 
 	if (platform === "darwin" || platform === "linux") {
-		return getListeningPortsLsof(pids)
-	}
-	if (platform === "win32") {
-		return getListeningPortsWindows(pids)
+		ports = await getListeningPortsLsof(pids)
+	} else if (platform === "win32") {
+		ports = await getListeningPortsWindows(pids)
 	}
 
-	return []
+	// Update cache
+	portCache.set(cacheKey, { ports, timestamp: Date.now() })
+	return ports
 }
 
 /**
- * macOS/Linux implementation using lsof
+ * macOS/Linux implementation using lsof (async)
  */
-function getListeningPortsLsof(pids: number[]): PortInfo[] {
+async function getListeningPortsLsof(pids: number[]): Promise<PortInfo[]> {
 	try {
 		const pidArg = pids.join(",")
 		const pidSet = new Set(pids)
@@ -54,9 +79,10 @@ function getListeningPortsLsof(pids: number[]): PortInfo[] {
 		// -n: don't resolve hostnames
 		// Note: lsof may ignore -p filter if PIDs don't exist or have no matches,
 		// so we must validate PIDs in the output against our requested set
-		const output = execSync(
-			`lsof -p ${pidArg} -iTCP -sTCP:LISTEN -P -n 2>/dev/null || true`,
-			{ encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 },
+		const { stdout: output } = await execFileAsync(
+			"sh",
+			["-c", `lsof -p ${pidArg} -iTCP -sTCP:LISTEN -P -n 2>/dev/null || true`],
+			{ maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
 		)
 
 		if (!output.trim()) return []
@@ -106,18 +132,26 @@ function getListeningPortsLsof(pids: number[]): PortInfo[] {
 }
 
 /**
- * Windows implementation using netstat
+ * Windows implementation using netstat (async)
  */
-function getListeningPortsWindows(pids: number[]): PortInfo[] {
+async function getListeningPortsWindows(pids: number[]): Promise<PortInfo[]> {
 	try {
-		const output = execSync("netstat -ano", {
-			encoding: "utf-8",
+		const { stdout: output } = await execFileAsync("netstat", ["-ano"], {
 			maxBuffer: 10 * 1024 * 1024,
+			timeout: 5000,
 		})
 
 		const pidSet = new Set(pids)
 		const ports: PortInfo[] = []
 		const processNames = new Map<number, string>()
+
+		// Collect unique PIDs first, then batch fetch names
+		const uniquePids = new Set<number>()
+		const parsedLines: Array<{
+			pid: number
+			address: string
+			port: number
+		}> = []
 
 		for (const line of output.split("\n")) {
 			if (!line.includes("LISTENING")) continue
@@ -140,17 +174,27 @@ function getListeningPortsWindows(pids: number[]): PortInfo[] {
 
 				if (port < 1 || port > 65535) continue
 
-				if (!processNames.has(pid)) {
-					processNames.set(pid, getProcessNameWindows(pid))
-				}
-
-				ports.push({
-					port,
-					pid,
-					address,
-					processName: processNames.get(pid) || "unknown",
-				})
+				uniquePids.add(pid)
+				parsedLines.push({ pid, address, port })
 			}
+		}
+
+		// Fetch process names in parallel
+		await Promise.all(
+			Array.from(uniquePids).map(async (pid) => {
+				const name = await getProcessNameWindowsAsync(pid)
+				processNames.set(pid, name)
+			}),
+		)
+
+		// Build final result
+		for (const { pid, address, port } of parsedLines) {
+			ports.push({
+				port,
+				pid,
+				address,
+				processName: processNames.get(pid) || "unknown",
+			})
 		}
 
 		return ports
@@ -160,54 +204,79 @@ function getListeningPortsWindows(pids: number[]): PortInfo[] {
 }
 
 /**
- * Get process name for a PID on Windows
+ * Get process name for a PID on Windows (async with cache)
  */
-function getProcessNameWindows(pid: number): string {
+async function getProcessNameWindowsAsync(pid: number): Promise<string> {
+	// Check cache first
+	const cached = processNameCache.get(pid)
+	if (cached && Date.now() - cached.timestamp < PROCESS_NAME_CACHE_TTL) {
+		return cached.name
+	}
+
+	let name = "unknown"
 	try {
-		const output = execSync(
-			`wmic process where processid=${pid} get name 2>nul`,
-			{ encoding: "utf-8" },
+		const { stdout: output } = await execFileAsync(
+			"wmic",
+			["process", "where", `processid=${pid}`, "get", "name"],
+			{ timeout: 2000 },
 		)
 		const lines = output.trim().split("\n")
 		if (lines.length >= 2) {
-			const name = lines[1].trim()
-			return name.replace(/\.exe$/i, "") || "unknown"
+			const parsedName = lines[1].trim()
+			name = parsedName.replace(/\.exe$/i, "") || "unknown"
 		}
 	} catch {
 		// wmic is deprecated, try PowerShell as fallback
 		try {
-			const output = execSync(
-				`powershell -Command "(Get-Process -Id ${pid}).ProcessName"`,
-				{ encoding: "utf-8" },
+			const { stdout: output } = await execFileAsync(
+				"powershell",
+				["-Command", `(Get-Process -Id ${pid}).ProcessName`],
+				{ timeout: 2000 },
 			)
-			return output.trim() || "unknown"
+			name = output.trim() || "unknown"
 		} catch {
 			// Ignore
 		}
 	}
-	return "unknown"
+
+	// Update cache
+	processNameCache.set(pid, { name, timestamp: Date.now() })
+	return name
 }
 
 /**
- * Get process name for a PID (cross-platform)
+ * Get process name for a PID (cross-platform, async with cache)
  */
-export function getProcessName(pid: number): string {
+export async function getProcessName(pid: number): Promise<string> {
+	// Check cache first
+	const cached = processNameCache.get(pid)
+	if (cached && Date.now() - cached.timestamp < PROCESS_NAME_CACHE_TTL) {
+		return cached.name
+	}
+
 	const platform = os.platform()
+	let name = "unknown"
 
 	if (platform === "win32") {
-		return getProcessNameWindows(pid)
+		name = await getProcessNameWindowsAsync(pid)
+	} else {
+		// macOS/Linux
+		try {
+			const { stdout: output } = await execFileAsync(
+				"sh",
+				["-c", `ps -p ${pid} -o comm= 2>/dev/null || true`],
+				{ timeout: 2000 },
+			)
+			const parsedName = output.trim()
+			// On macOS, comm may be truncated. The full path can be gotten with -o command=
+			// but comm is usually sufficient for display purposes
+			name = parsedName || "unknown"
+		} catch {
+			name = "unknown"
+		}
 	}
 
-	// macOS/Linux
-	try {
-		const output = execSync(`ps -p ${pid} -o comm= 2>/dev/null || true`, {
-			encoding: "utf-8",
-		})
-		const name = output.trim()
-		// On macOS, comm may be truncated. The full path can be gotten with -o command=
-		// but comm is usually sufficient for display purposes
-		return name || "unknown"
-	} catch {
-		return "unknown"
-	}
+	// Update cache
+	processNameCache.set(pid, { name, timestamp: Date.now() })
+	return name
 }

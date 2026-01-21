@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
   platform: process.platform,
   arch: process.arch,
   getVersion: () => ipcRenderer.invoke("app:version"),
+  isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
 
   // Auto-update methods
   checkForUpdates: () => ipcRenderer.invoke("update:check"),
@@ -150,6 +151,17 @@ contextBridge.exposeInMainWorld("desktopApi", {
     ipcRenderer.on("file-changed", handler)
     return () => ipcRenderer.removeListener("file-changed", handler)
   },
+
+  // Git status change events (from file watcher)
+  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => {
+    const handler = (_event: unknown, data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => callback(data)
+    ipcRenderer.on("git:status-changed", handler)
+    return () => ipcRenderer.removeListener("git:status-changed", handler)
+  },
+
+  // Subscribe to git watcher for a worktree (from renderer)
+  subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
+  unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
 })
 
 // Type definitions
@@ -169,6 +181,7 @@ export interface DesktopApi {
   platform: NodeJS.Platform
   arch: string
   getVersion: () => Promise<string>
+  isPackaged: () => Promise<boolean>
   // Auto-update
   checkForUpdates: () => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
@@ -227,6 +240,10 @@ export interface DesktopApi {
   onShortcutNewAgent: (callback: () => void) => () => void
   // File changes
   onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => () => void
+  // Git status changes (from file watcher)
+  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => () => void
+  subscribeToGitWatcher: (worktreePath: string) => Promise<void>
+  unsubscribeFromGitWatcher: (worktreePath: string) => Promise<void>
 }
 
 declare global {

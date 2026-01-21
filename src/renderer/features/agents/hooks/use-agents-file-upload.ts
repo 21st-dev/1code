@@ -128,6 +128,15 @@ export function useAgentsFileUpload() {
     setFiles([])
   }, [])
 
+  // Direct state setters for restoring from draft
+  const setImagesFromDraft = useCallback((draftImages: UploadedImage[]) => {
+    setImages(draftImages)
+  }, [])
+
+  const setFilesFromDraft = useCallback((draftFiles: UploadedFile[]) => {
+    setFiles(draftFiles)
+  }, [])
+
   return {
     images,
     files,
@@ -138,5 +147,7 @@ export function useAgentsFileUpload() {
     clearFiles,
     clearAll,
     isUploading,
+    setImagesFromDraft,
+    setFilesFromDraft,
   }
 }

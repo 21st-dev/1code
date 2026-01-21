@@ -39,6 +39,8 @@ export const GHPRResponseSchema = z.object({
 		.nullable(),
 	// statusCheckRollup is an array directly, not { contexts: [...] }
 	statusCheckRollup: z.array(GHCheckContextSchema).nullable(),
+	// Mergeability status from GitHub
+	mergeable: z.enum(["MERGEABLE", "CONFLICTING", "UNKNOWN"]).optional(),
 });
 
 export const GHRepoResponseSchema = z.object({
@@ -54,6 +56,9 @@ export interface CheckItem {
 	url?: string;
 }
 
+/** PR mergeability status */
+export type MergeableStatus = "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
+
 /** GitHub PR and branch status */
 export interface GitHubStatus {
 	pr: {
@@ -67,6 +72,8 @@ export interface GitHubStatus {
 		reviewDecision: "approved" | "changes_requested" | "pending";
 		checksStatus: "success" | "failure" | "pending" | "none";
 		checks: CheckItem[];
+		/** Whether the PR can be cleanly merged */
+		mergeable?: MergeableStatus;
 	} | null;
 	repoUrl: string;
 	branchExistsOnRemote: boolean;

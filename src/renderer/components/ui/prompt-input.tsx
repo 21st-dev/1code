@@ -147,7 +147,8 @@ const PromptInputTextareaInner = (
   }, [value, disableAutosize, maxHeight])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+    // Prevent submission during IME composition (e.g., Chinese/Japanese/Korean input)
+    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       onSubmit?.()
     }

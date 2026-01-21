@@ -8,6 +8,7 @@ import {
 	PathValidationError,
 	secureFs,
 } from "./security";
+import { gitCache } from "./cache";
 
 /** Maximum file size for reading (2 MiB) */
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -59,6 +60,22 @@ export const createFileContentsRouter = () => {
 			.query(async ({ input }): Promise<FileContents> => {
 				assertRegisteredWorktree(input.worktreePath);
 
+				// Build cache key from all relevant parameters
+				const cacheKey = `${input.filePath}:${input.category}:${input.commitHash || "working"}:${input.oldPath || ""}`;
+
+				// Check cache first
+				const cached = gitCache.getFileContent(input.worktreePath, cacheKey);
+				if (cached) {
+					try {
+						const parsed = JSON.parse(cached) as FileContents;
+						console.log("[getFileContents] Cache hit for:", input.filePath);
+						return parsed;
+					} catch {
+						// Invalid cache entry, continue to fetch
+					}
+				}
+
+				console.log("[getFileContents] Cache miss, fetching:", input.filePath);
 				const git = simpleGit(input.worktreePath);
 				const defaultBranch = input.defaultBranch || "main";
 				const originalPath = input.oldPath || input.filePath;
@@ -73,11 +90,16 @@ export const createFileContentsRouter = () => {
 					input.commitHash,
 				);
 
-				return {
+				const result: FileContents = {
 					original,
 					modified,
 					language: detectLanguage(input.filePath),
 				};
+
+				// Store in cache
+				gitCache.setFileContent(input.worktreePath, cacheKey, JSON.stringify(result));
+
+				return result;
 			}),
 
 		saveFile: publicProcedure

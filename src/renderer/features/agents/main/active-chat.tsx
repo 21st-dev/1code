@@ -1,19 +1,9 @@
 "use client"
 
 import {
-  ChatMarkdownRenderer,
-  stripEmojis,
+  stripEmojis
 } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "../../../components/ui/dropdown-menu"
 import {
   AgentIcon,
   AttachIcon,
@@ -28,18 +18,14 @@ import {
   IconSpinner,
   IconTextUndo,
   PauseIcon,
-  PlanIcon,
-  PullRequestIcon,
-  VolumeIcon,
+  VolumeIcon
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import {
   PromptInput,
-  PromptInputActions,
-  PromptInputContextItems,
+  PromptInputActions
 } from "../../../components/ui/prompt-input"
 import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
-import { TextShimmer } from "../../../components/ui/text-shimmer"
 import {
   Tooltip,
   TooltipContent,
@@ -51,6 +37,7 @@ import { Chat, useChat } from "@ai-sdk/react"
 import { DiffModeEnum } from "@git-diff-view/react"
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
+  ArrowDown,
   ChevronDown,
   Columns2,
   Eye,
@@ -58,43 +45,53 @@ import {
   GitCommitHorizontal,
   GitMerge,
   ListTree,
-  MoreHorizontal,
-  Rows2,
-  TerminalSquare,
+  TerminalSquare
 } from "lucide-react"
-import { motion } from "motion/react"
+import { AnimatePresence, motion } from "motion/react"
 import {
   createContext,
+  memo,
   useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from "react"
-import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import type { FileStatus } from "../../../../shared/changes-types"
+import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
-import { soundNotificationsEnabledAtom } from "../../../lib/atoms"
+import {
+  customClaudeConfigAtom,
+  isDesktopAtom, isFullscreenAtom,
+  normalizeCustomClaudeConfig, soundNotificationsEnabledAtom
+} from "../../../lib/atoms"
+import { useFileChangeListener, useGitWatcher } from "../../../lib/hooks/use-file-change-listener"
 import { appStore } from "../../../lib/jotai-store"
 import { api } from "../../../lib/mock-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
-import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { cn } from "../../../lib/utils"
-import { getShortcutKey, isDesktopApp } from "../../../lib/utils/platform"
+import { isDesktopApp } from "../../../lib/utils/platform"
+import { ChangesPanel } from "../../changes"
+import { DiffCenterPeekDialog } from "../../changes/components/diff-center-peek-dialog"
+import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
+import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
+import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import { DataViewerSidebar } from "../../data/components/data-viewer-sidebar"
 import { FileViewerSidebar } from "../../file-viewer"
 import {
+  agentsChangesPanelCollapsedAtom,
+  agentsChangesPanelWidthAtom,
   agentsDiffSidebarWidthAtom,
   agentsFileTreeSidebarOpenAtom,
   agentsFileTreeSidebarWidthAtom,
   agentsPreviewSidebarOpenAtom,
   agentsPreviewSidebarWidthAtom,
-  agentsScrollPositionsAtom,
   agentsSubChatsSidebarModeAtom,
   dataViewerSidebarOpenAtomFamily,
   dataViewerSidebarWidthAtom,
@@ -107,94 +104,95 @@ import {
   clearLoading,
   compactingSubChatsAtom,
   diffSidebarOpenAtomFamily,
+  diffViewDisplayModeAtom,
+  filteredDiffFilesAtom,
+  filteredSubChatIdAtom,
+  isCreatingPrAtom,
+  selectedDiffFilePathAtom,
   isPlanModeAtom,
   justCreatedIdsAtom,
   lastSelectedModelIdAtom,
   loadingSubChatsAtom,
   pendingAuthRetryMessageAtom,
+  pendingConflictResolutionMessageAtom,
+  pendingPlanApprovalsAtom,
   pendingPrMessageAtom,
   pendingReviewMessageAtom,
   pendingUserQuestionsAtom,
-  pendingPlanApprovalsAtom,
   QUESTIONS_SKIPPED_MESSAGE,
-  scrollPositionsCacheStore,
   selectedAgentChatIdAtom,
+  selectedCommitAtom,
   setLoading,
   subChatFilesAtom,
   undoStackAtom,
-  type ScrollPositionData,
-  type UndoItem,
+  type SelectedCommit
 } from "../atoms"
-import {
-  AgentsSlashCommand,
-  COMMAND_PROMPTS,
-  type SlashCommandOption,
-} from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
+import { TextSelectionProvider } from "../context/text-selection-context"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
 import { useDesktopNotifications } from "../hooks/use-desktop-notifications"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useHaptic } from "../hooks/use-haptic"
+import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
+import {
+  clearSubChatDraft,
+  getSubChatDraftFull
+} from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
 import {
-  AgentsFileMention,
-  AgentsMentionsEditor,
+  createQueueItem,
+  generateQueueId,
+  toQueuedFile,
+  toQueuedImage,
+  toQueuedTextContext,
+} from "../lib/queue-utils"
+import {
   type AgentsMentionsEditorHandle,
-  type FileMentionOption,
+  MENTION_PREFIXES,
 } from "../mentions"
+import {
+  ChatSearchBar,
+  chatSearchCurrentMatchAtom,
+  SearchHighlightProvider
+} from "../search"
 import { agentChatStore } from "../stores/agent-chat-store"
+import { EMPTY_QUEUE, useMessageQueueStore } from "../stores/message-queue-store"
+import { clearSubChatCaches, isRollingBackAtom, rollbackHandlerAtom, syncMessagesWithStatusAtom } from "../stores/message-store"
+import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import {
   useAgentSubChatStore,
   type SubChatMeta,
 } from "../stores/sub-chat-store"
-import { AgentAskUserQuestionTool } from "../ui/agent-ask-user-question-tool"
-import { AgentBashTool } from "../ui/agent-bash-tool"
-import { AgentContextIndicator } from "../ui/agent-context-indicator"
 import {
   AgentDiffView,
   diffViewModeAtom,
   splitUnifiedDiffByFile,
   type AgentDiffViewRef,
+  type ParsedDiffFile,
 } from "../ui/agent-diff-view"
-import { AgentEditTool } from "../ui/agent-edit-tool"
-import { AgentExitPlanModeTool } from "../ui/agent-exit-plan-mode-tool"
-import { AgentExploringGroup } from "../ui/agent-exploring-group"
-import { AgentFileItem } from "../ui/agent-file-item"
-import { AgentImageItem } from "../ui/agent-image-item"
-import {
-  AgentMessageUsage,
-  type AgentMessageMetadata,
-} from "../ui/agent-message-usage"
-import { AgentPlanTool } from "../ui/agent-plan-tool"
 import { AgentPreview } from "../ui/agent-preview"
-import { AgentTaskTool } from "../ui/agent-task-tool"
-import { AgentThinkingTool } from "../ui/agent-thinking-tool"
-import { AgentTodoTool } from "../ui/agent-todo-tool"
+import { AgentQueueIndicator } from "../ui/agent-queue-indicator"
 import { AgentToolCall } from "../ui/agent-tool-call"
-import { AgentToolRegistry, getToolStatus } from "../ui/agent-tool-registry"
+import { AgentToolRegistry } from "../ui/agent-tool-registry"
 import { AgentUserMessageBubble } from "../ui/agent-user-message-bubble"
-import { AgentUserQuestion } from "../ui/agent-user-question"
-import { AgentWebFetchTool } from "../ui/agent-web-fetch-tool"
-import { AgentWebSearchCollapsible } from "../ui/agent-web-search-collapsible"
+import { AgentUserQuestion, type AgentUserQuestionHandle } from "../ui/agent-user-question"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { McpServersIndicator } from "../ui/mcp-servers-indicator"
 import { FileTreeSidebar } from "../ui/file-tree"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
-import { PrStatusBar } from "../ui/pr-status-bar"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
+import { TextSelectionPopover } from "../ui/text-selection-popover"
+import { QuickCommentInput } from "../ui/quick-comment-input"
+import type { TextSelectionSource } from "../context/text-selection-context"
 import { autoRenameAgentChat } from "../utils/auto-rename"
-import { handlePasteEvent } from "../utils/paste-text"
 import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
-import {
-  saveSubChatDraft,
-  clearSubChatDraft,
-  getSubChatDraft,
-} from "../lib/drafts"
+import { ChatInputArea } from "./chat-input-area"
+import { IsolatedMessagesSection } from "./isolated-messages-section"
 const clearSubChatSelectionAtom = atom(null, () => {})
 const isSubChatMultiSelectModeAtom = atom(false)
 const selectedSubChatIdsAtom = atom(new Set<string>())
@@ -202,6 +200,13 @@ const selectedSubChatIdsAtom = atom(new Set<string>())
 const selectedTeamIdAtom = atom<string | null>(null)
 // import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
+
+// UTF-8 safe base64 encoding (btoa doesn't support Unicode)
+function utf8ToBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str)
+  const binString = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join("")
+  return btoa(binString)
+}
 
 // Exploring tools - these get grouped when 2+ consecutive
 const EXPLORING_TOOLS = new Set([
@@ -256,34 +261,6 @@ function getFirstSubChatId(
       (b.created_at ? new Date(b.created_at).getTime() : 0),
   )
   return sorted[0]?.id ?? null
-}
-
-// Find the first NEW assistant message after the last known one
-// Used for smart scroll: when returning to a chat where streaming finished,
-// scroll to the start of the new response instead of bottom
-function findFirstNewAssistantMessage(
-  messages: Array<{ id: string; role: string }>,
-  lastKnownAssistantMsgId?: string,
-): string | undefined {
-  if (!lastKnownAssistantMsgId) {
-    // No previous assistant message - find first one
-    return messages.find((m) => m.role === "assistant")?.id
-  }
-
-  // Find index of last known message
-  const lastKnownIndex = messages.findIndex(
-    (m) => m.id === lastKnownAssistantMsgId,
-  )
-  if (lastKnownIndex === -1) return undefined
-
-  // Find first assistant message after that
-  for (let i = lastKnownIndex + 1; i < messages.length; i++) {
-    if (messages[i]?.role === "assistant") {
-      return messages[i]?.id
-    }
-  }
-
-  return undefined
 }
 
 // Layout constants for chat header and sticky messages
@@ -714,6 +691,149 @@ function PlayButton({
   )
 }
 
+// Rollback button component for reverting to a previous message state
+function RollbackButton({
+  disabled = false,
+  onRollback,
+  isRollingBack = false,
+}: {
+  disabled?: boolean
+  onRollback: () => void
+  isRollingBack?: boolean
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={onRollback}
+          disabled={disabled || isRollingBack}
+          tabIndex={-1}
+          className={cn(
+            "p-1.5 rounded-md transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
+            isRollingBack && "opacity-50 cursor-not-allowed",
+          )}
+        >
+          <IconTextUndo className="w-3.5 h-3.5 text-muted-foreground" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {isRollingBack ? "Rolling back..." : "Rollback to here"}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+// Isolated scroll-to-bottom button - uses own scroll listener to avoid re-renders of parent
+const ScrollToBottomButton = memo(function ScrollToBottomButton({
+  containerRef,
+  onScrollToBottom,
+  hasStackedCards = false,
+  subChatId,
+  isActive = true,
+}: {
+  containerRef: React.RefObject<HTMLElement | null>
+  onScrollToBottom: () => void
+  hasStackedCards?: boolean
+  subChatId?: string
+  isActive?: boolean
+}) {
+  const [isVisible, setIsVisible] = useState(false)
+
+  // Keep isActive in ref for scroll event handler
+  const isActiveRef = useRef(isActive)
+  isActiveRef.current = isActive
+
+  useEffect(() => {
+    // Skip scroll monitoring for inactive tabs (keep-alive)
+    if (!isActive) return
+
+    const container = containerRef.current
+    if (!container) return
+
+    // RAF throttle to avoid setState on every scroll event
+    let rafId: number | null = null
+    let lastAtBottom: boolean | null = null
+
+    const checkVisibility = () => {
+      // Skip if not active or RAF already pending
+      if (!isActiveRef.current || rafId !== null) return
+
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        // Double-check active state in RAF callback
+        if (!isActiveRef.current) return
+
+        const threshold = 50
+        const atBottom =
+          container.scrollHeight - container.scrollTop - container.clientHeight <=
+          threshold
+
+        // Only update state if value actually changed
+        if (lastAtBottom !== atBottom) {
+          lastAtBottom = atBottom
+          setIsVisible(!atBottom)
+        }
+      })
+    }
+
+    // Check initial state after a short delay to allow scroll position to be set
+    // This handles the case when entering a sub-chat that's scrolled to a specific position
+    const timeoutId = setTimeout(() => {
+      // Skip if not active
+      if (!isActiveRef.current) return
+
+      // Direct check for initial state (no RAF needed)
+      const threshold = 50
+      const atBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight <=
+        threshold
+      lastAtBottom = atBottom
+      setIsVisible(!atBottom)
+    }, 50)
+
+    container.addEventListener("scroll", checkVisibility, { passive: true })
+    return () => {
+      clearTimeout(timeoutId)
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      container.removeEventListener("scroll", checkVisibility)
+    }
+  }, [containerRef, subChatId, isActive])
+
+  return (
+    <AnimatePresence>
+      {isVisible && (
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              onClick={onScrollToBottom}
+              className={cn(
+                "absolute right-4 p-2 rounded-full bg-background border border-border shadow-md hover:bg-accent active:scale-[0.97] transition-colors z-20",
+                hasStackedCards ? "bottom-44 sm:bottom-36" : "bottom-32 sm:bottom-24"
+              )}
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDown className="h-4 w-4 text-muted-foreground" />
+            </motion.button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            Scroll to bottom
+            <span className="inline-flex items-center gap-0.5">
+              <Kbd>⌘</Kbd>
+              <Kbd>
+                <ArrowDown className="h-3 w-3" />
+              </Kbd>
+            </span>
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </AnimatePresence>
+  )
+})
+
 // Message group wrapper - measures user message height for sticky todo positioning
 interface MessageGroupProps {
   children: React.ReactNode
@@ -748,7 +868,17 @@ function MessageGroup({ children }: MessageGroupProps) {
   }, [])
 
   return (
-    <div ref={groupRef} className="relative">
+    <div
+      ref={groupRef}
+      className="relative"
+      style={{
+        // content-visibility: auto - браузер пропускает layout/paint для элементов вне viewport
+        // Это ОГРОМНАЯ оптимизация для длинных чатов - рендерится только видимое
+        contentVisibility: "auto",
+        // Примерная высота для правильного скроллбара до рендеринга
+        containIntrinsicSize: "auto 200px",
+      }}
+    >
       {children}
     </div>
   )
@@ -811,14 +941,855 @@ function CollapsibleSteps({
   )
 }
 
+// ============================================================================
+// DiffStateContext - isolates diff state management to prevent ChatView re-renders
+// ============================================================================
+
+interface DiffStateContextValue {
+  selectedFilePath: string | null
+  filteredSubChatId: string | null
+  viewedCount: number
+  handleDiffFileSelect: (file: { path: string }, category: string) => void
+  handleSelectNextFile: (filePath: string) => void
+  handleCommitSuccess: () => void
+  handleCloseDiff: () => void
+  handleViewedCountChange: (count: number) => void
+}
+
+const DiffStateContext = createContext<DiffStateContextValue | null>(null)
+
+function useDiffState() {
+  const ctx = useContext(DiffStateContext)
+  if (!ctx) throw new Error('useDiffState must be used within DiffStateProvider')
+  return ctx
+}
+
+// Diff sidebar content component with responsive layout
+interface DiffSidebarContentProps {
+  worktreePath: string | null
+  selectedFilePath: string | null
+  onFileSelect: (file: { path: string }, category: string) => void
+  chatId: string
+  sandboxId: string | null
+  repository: { owner: string; name: string } | null
+  diffStats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }
+  setDiffStats: (stats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }) => void
+  diffContent: string | null
+  parsedFileDiffs: unknown
+  prefetchedFileContents: Record<string, string> | undefined
+  setDiffCollapseState: (state: Map<string, boolean>) => void
+  diffViewRef: React.RefObject<{ expandAll: () => void; collapseAll: () => void; getViewedCount: () => number; markAllViewed: () => void; markAllUnviewed: () => void } | null>
+  agentChat: { prUrl?: string; prNumber?: number } | null | undefined
+  // Real-time sidebar width for responsive layout during resize
+  sidebarWidth: number
+  // Commit with AI
+  onCommitWithAI?: () => void
+  isCommittingWithAI?: boolean
+  // Diff view mode
+  diffMode: DiffModeEnum
+  setDiffMode: (mode: DiffModeEnum) => void
+  // Create PR callback
+  onCreatePr?: () => void
+  // Called after successful commit to reset diff view state
+  onCommitSuccess?: () => void
+  // Subchats with changed files for filtering
+  subChats?: Array<{ id: string; name: string; filePaths: string[]; fileCount: number }>
+  // Initial subchat filter (e.g., from Review button)
+  initialSubChatFilter?: string | null
+  // Callback when marking file as viewed to select next file
+  onSelectNextFile?: (filePath: string) => void
+}
+
+// Memoized commit file item for History tab
+const CommitFileItem = memo(function CommitFileItem({
+  file,
+  onClick,
+}: {
+  file: { path: string; status: FileStatus }
+  onClick: () => void
+}) {
+  const fileName = file.path.split('/').pop() || file.path
+  const dirPath = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 px-2 py-1 cursor-pointer transition-colors",
+        "hover:bg-muted/80"
+      )}
+      onClick={onClick}
+    >
+      <div className="flex-1 min-w-0 flex items-center overflow-hidden">
+        {dirPath && (
+          <span className="text-xs text-muted-foreground truncate flex-shrink min-w-0">
+            {dirPath}/
+          </span>
+        )}
+        <span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">
+          {fileName}
+        </span>
+      </div>
+      <div className="shrink-0">
+        {getStatusIndicator(file.status)}
+      </div>
+    </div>
+  )
+})
+
+const DiffSidebarContent = memo(function DiffSidebarContent({
+  worktreePath,
+  chatId,
+  sandboxId,
+  repository,
+  diffStats,
+  setDiffStats,
+  diffContent,
+  parsedFileDiffs,
+  prefetchedFileContents,
+  setDiffCollapseState,
+  diffViewRef,
+  agentChat,
+  sidebarWidth,
+  onCommitWithAI,
+  isCommittingWithAI = false,
+  diffMode,
+  setDiffMode,
+  onCreatePr,
+  subChats = [],
+}: Omit<DiffSidebarContentProps, 'selectedFilePath' | 'onFileSelect' | 'onCommitSuccess' | 'initialSubChatFilter' | 'onSelectNextFile'>) {
+  // Get values from context instead of props
+  const {
+    selectedFilePath,
+    filteredSubChatId,
+    handleDiffFileSelect,
+    handleSelectNextFile,
+    handleCommitSuccess,
+    handleViewedCountChange,
+  } = useDiffState()
+
+  // Compute initial selected file synchronously for first render
+  // This prevents AgentDiffView from rendering all files before filter kicks in
+  const initialSelectedFile = useMemo(() => {
+    if (selectedFilePath) return selectedFilePath
+    if (parsedFileDiffs && parsedFileDiffs.length > 0) {
+      const firstFile = parsedFileDiffs[0]
+      const filePath = firstFile.newPath !== '/dev/null' ? firstFile.newPath : firstFile.oldPath
+      if (filePath && filePath !== '/dev/null') {
+        return filePath
+      }
+    }
+    return null
+  }, [selectedFilePath, parsedFileDiffs])
+  const [changesPanelWidth, setChangesPanelWidth] = useAtom(agentsChangesPanelWidthAtom)
+  const [isChangesPanelCollapsed, setIsChangesPanelCollapsed] = useAtom(agentsChangesPanelCollapsedAtom)
+  const [isResizing, setIsResizing] = useState(false)
+
+  // Active tab state (Changes/History)
+  const [activeTab, setActiveTab] = useState<"changes" | "history">("changes")
+
+  // Selected commit for History tab
+  const [selectedCommit, setSelectedCommit] = useAtom(selectedCommitAtom)
+
+  // When sidebar is narrow (< 500px), use vertical layout
+  const isNarrow = sidebarWidth < 500
+
+  // Get diff stats for collapsed header display
+  const { data: diffStatus } = trpc.changes.getStatus.useQuery(
+    { worktreePath: worktreePath || "" },
+    { enabled: !!worktreePath && isNarrow }
+  )
+
+  // Handle resize drag
+  const handleResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const startX = event.clientX
+      const startWidth = changesPanelWidth
+      const pointerId = event.pointerId
+      const handleElement = event.currentTarget as HTMLElement
+
+      const minWidth = 200
+      const maxWidth = 450
+
+      const clampWidth = (width: number) =>
+        Math.max(minWidth, Math.min(maxWidth, width))
+
+      handleElement.setPointerCapture?.(pointerId)
+      setIsResizing(true)
+
+      const handlePointerMove = (e: PointerEvent) => {
+        const delta = e.clientX - startX
+        const newWidth = clampWidth(startWidth + delta)
+        setChangesPanelWidth(newWidth)
+      }
+
+      const handlePointerUp = () => {
+        if (handleElement.hasPointerCapture?.(pointerId)) {
+          handleElement.releasePointerCapture(pointerId)
+        }
+        document.removeEventListener("pointermove", handlePointerMove)
+        document.removeEventListener("pointerup", handlePointerUp)
+        setIsResizing(false)
+      }
+
+      document.addEventListener("pointermove", handlePointerMove)
+      document.addEventListener("pointerup", handlePointerUp, { once: true })
+    },
+    [changesPanelWidth, setChangesPanelWidth]
+  )
+
+  // Handle commit selection in History tab
+  const handleCommitSelect = useCallback((commit: SelectedCommit) => {
+    setSelectedCommit(commit)
+    // Reset file selection when changing commits
+    // The HistoryView will auto-select first file
+  }, [setSelectedCommit])
+
+  // Handle file selection in commit (History tab)
+  const handleCommitFileSelect = useCallback((file: { path: string }, commitHash: string) => {
+    // Set selected file path for highlighting
+    handleDiffFileSelect(file, "")
+  }, [handleDiffFileSelect])
+
+  // Fetch commit files when a commit is selected
+  const { data: commitFiles } = trpc.changes.getCommitFiles.useQuery(
+    {
+      worktreePath: worktreePath || "",
+      commitHash: selectedCommit?.hash || "",
+    },
+    {
+      enabled: !!worktreePath && !!selectedCommit,
+      staleTime: 60000, // Cache for 1 minute
+    }
+  )
+
+  // Fetch commit file diff when a commit is selected
+  const { data: commitFileDiff } = trpc.changes.getCommitFileDiff.useQuery(
+    {
+      worktreePath: worktreePath || "",
+      commitHash: selectedCommit?.hash || "",
+      filePath: selectedFilePath || "",
+    },
+    {
+      enabled: !!worktreePath && !!selectedCommit && !!selectedFilePath,
+      staleTime: 60000, // Cache for 1 minute
+    }
+  )
+
+  // Use commit diff or regular diff based on selection
+  // Only use commit data when in History tab, otherwise always use regular diff
+  const shouldUseCommitDiff = activeTab === "history" && selectedCommit
+  const effectiveDiff = shouldUseCommitDiff && commitFileDiff ? commitFileDiff : diffContent
+  const effectiveParsedFiles = shouldUseCommitDiff ? null : parsedFileDiffs
+  const effectivePrefetchedContents = shouldUseCommitDiff ? {} : prefetchedFileContents
+
+  if (isNarrow) {
+    // Count changed files for collapsed header
+    const changedFilesCount = diffStatus
+      ? (diffStatus.staged?.length || 0) + (diffStatus.unstaged?.length || 0) + (diffStatus.untracked?.length || 0)
+      : 0
+    const stagedCount = diffStatus?.staged?.length || 0
+
+    // Vertical layout: ChangesPanel on top, diff/file list below
+    return (
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        {/* Top: ChangesPanel (file list + commit) */}
+        {worktreePath && (
+          <div className={cn(
+            "flex-shrink-0 overflow-hidden flex flex-col",
+            "h-[45%] min-h-[200px] border-b border-border/50"
+          )}>
+            <ChangesPanel
+              worktreePath={worktreePath}
+              selectedFilePath={selectedFilePath}
+              onFileSelect={handleDiffFileSelect}
+              onFileOpenPinned={() => {}}
+              onCreatePr={onCreatePr}
+              onCommitSuccess={handleCommitSuccess}
+              subChats={subChats}
+              initialSubChatFilter={filteredSubChatId}
+              chatId={chatId}
+              selectedCommitHash={selectedCommit?.hash}
+              onCommitSelect={handleCommitSelect}
+              onCommitFileSelect={handleCommitFileSelect}
+              onActiveTabChange={setActiveTab}
+              pushCount={diffStatus?.pushCount}
+            />
+          </div>
+        )}
+        {/* Bottom: File list (when History tab + commit selected) or AgentDiffView (diff) */}
+        {/* Both views are always mounted but hidden via CSS to prevent expensive re-mounts */}
+        <div className="flex-1 overflow-hidden flex flex-col relative">
+          {/* History view - files in commit */}
+          <div className={cn(
+            "absolute inset-0 overflow-y-auto",
+            activeTab === "history" && selectedCommit ? "z-10" : "z-0 invisible"
+          )}>
+            {selectedCommit && (
+              !commitFiles ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+                  Loading files...
+                </div>
+              ) : commitFiles.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+                  No files changed in this commit
+                </div>
+              ) : (
+                <>
+                  {/* Commit message and description */}
+                  <div className="px-3 py-2 border-b border-border/50">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="text-sm font-medium text-foreground flex-1">
+                        {selectedCommit.message}
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedCommit.hash)
+                          toast.success('Copied SHA to clipboard')
+                        }}
+                        className="text-xs font-mono text-muted-foreground hover:text-foreground underline cursor-pointer shrink-0"
+                      >
+                        {selectedCommit.shortHash}
+                      </button>
+                    </div>
+                    {selectedCommit.description && (
+                      <div className="text-xs text-foreground/80 mb-2 whitespace-pre-wrap">
+                        {selectedCommit.description}
+                      </div>
+                    )}
+                    <div className="text-xs text-muted-foreground">
+                      {selectedCommit.author} • {selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : 'Unknown date'}
+                    </div>
+                  </div>
+
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground font-medium bg-muted/30 border-b border-border/50">
+                    Files in commit ({commitFiles.length})
+                  </div>
+                  {commitFiles.map((file) => (
+                    <CommitFileItem
+                      key={file.path}
+                      file={file}
+                      onClick={() => {}}
+                    />
+                  ))}
+                </>
+              )
+            )}
+          </div>
+          {/* Diff view - always mounted to prevent expensive re-initialization */}
+          <div className={cn(
+            "absolute inset-0 overflow-hidden",
+            activeTab === "history" && selectedCommit ? "z-0 invisible" : "z-10"
+          )}>
+            <AgentDiffView
+              ref={diffViewRef}
+              chatId={chatId}
+              sandboxId={sandboxId}
+              worktreePath={worktreePath || undefined}
+              repository={repository}
+              onStatsChange={setDiffStats}
+              initialDiff={effectiveDiff}
+              initialParsedFiles={effectiveParsedFiles}
+              prefetchedFileContents={effectivePrefetchedContents}
+              showFooter={false}
+              onCollapsedStateChange={setDiffCollapseState}
+              onSelectNextFile={handleSelectNextFile}
+              onViewedCountChange={handleViewedCountChange}
+              initialSelectedFile={initialSelectedFile}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Horizontal layout: files on left, diff on right
+  return (
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Left: ChangesPanel (file list + commit) with resize handle */}
+      {worktreePath && (
+        <div
+          className="h-full flex-shrink-0 relative"
+          style={{ width: changesPanelWidth }}
+        >
+          <ChangesPanel
+            worktreePath={worktreePath}
+            selectedFilePath={selectedFilePath}
+            onFileSelect={handleDiffFileSelect}
+            onFileOpenPinned={() => {}}
+            onCreatePr={onCreatePr}
+            onCommitSuccess={handleCommitSuccess}
+            subChats={subChats}
+            initialSubChatFilter={filteredSubChatId}
+            chatId={chatId}
+            selectedCommitHash={selectedCommit?.hash}
+            onCommitSelect={handleCommitSelect}
+            onCommitFileSelect={handleCommitFileSelect}
+            onActiveTabChange={setActiveTab}
+            pushCount={diffStatus?.pushCount}
+          />
+          {/* Resize handle - styled like ResizableSidebar */}
+          <div
+            onPointerDown={handleResizePointerDown}
+            className="absolute top-0 bottom-0 cursor-col-resize z-10"
+            style={{
+              right: 0,
+              width: "4px",
+              marginRight: "-2px",
+            }}
+          />
+        </div>
+      )}
+      {/* Right: File list (when History tab) or AgentDiffView (when Changes tab) */}
+      {/* Both views are always mounted but hidden via CSS to prevent expensive re-mounts */}
+      <div className={cn(
+        "flex-1 h-full min-w-0 overflow-hidden relative",
+        "border-l border-border/50"
+      )}>
+        {/* History view - files in commit */}
+        <div className={cn(
+          "absolute inset-0 overflow-y-auto",
+          activeTab === "history" && selectedCommit ? "z-10" : "z-0 invisible"
+        )}>
+          {selectedCommit && (
+            !commitFiles ? (
+              <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+                Loading files...
+              </div>
+            ) : commitFiles.length === 0 ? (
+              <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+                No files changed in this commit
+              </div>
+            ) : (
+              <>
+                {/* Commit message and description */}
+                <div className="px-3 py-2 border-b border-border/50">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="text-sm font-medium text-foreground flex-1">
+                      {selectedCommit.message}
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedCommit.hash)
+                        toast.success('Copied SHA to clipboard')
+                      }}
+                      className="text-xs font-mono text-muted-foreground hover:text-foreground underline cursor-pointer shrink-0"
+                    >
+                      {selectedCommit.shortHash}
+                    </button>
+                  </div>
+                  {selectedCommit.description && (
+                    <div className="text-xs text-foreground/80 mb-2 whitespace-pre-wrap">
+                      {selectedCommit.description}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    {selectedCommit.author} • {selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : 'Unknown date'}
+                  </div>
+                </div>
+
+                <div className="px-2 py-1.5 text-xs text-muted-foreground font-medium bg-muted/30 border-b border-border/50">
+                  Files in commit ({commitFiles.length})
+                </div>
+                {commitFiles.map((file) => (
+                  <CommitFileItem
+                    key={file.path}
+                    file={file}
+                    onClick={() => {}}
+                  />
+                ))}
+              </>
+            )
+          )}
+        </div>
+        {/* Diff view - always mounted to prevent expensive re-initialization */}
+        <div className={cn(
+          "absolute inset-0 overflow-hidden",
+          activeTab === "history" && selectedCommit ? "z-0 invisible" : "z-10"
+        )}>
+          <AgentDiffView
+            ref={diffViewRef}
+            chatId={chatId}
+            sandboxId={sandboxId}
+            worktreePath={worktreePath || undefined}
+            repository={repository}
+            onStatsChange={setDiffStats}
+            initialDiff={effectiveDiff}
+            initialParsedFiles={effectiveParsedFiles}
+            prefetchedFileContents={effectivePrefetchedContents}
+            showFooter={true}
+            onCollapsedStateChange={setDiffCollapseState}
+            onSelectNextFile={handleSelectNextFile}
+            onViewedCountChange={handleViewedCountChange}
+            initialSelectedFile={initialSelectedFile}
+          />
+        </div>
+      </div>
+    </div>
+  )
+})
+
+// ============================================================================
+// DiffStateProvider - manages diff state in isolation from ChatView
+// This prevents ChatView from re-rendering when selected file changes
+// ============================================================================
+
+interface DiffStateProviderProps {
+  isDiffSidebarOpen: boolean
+  parsedFileDiffs: ParsedDiffFile[] | null
+  isDiffSidebarNarrow: boolean
+  setIsDiffSidebarOpen: (open: boolean) => void
+  setDiffStats: (stats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }) => void
+  setDiffContent: (content: string | null) => void
+  setParsedFileDiffs: (files: ParsedDiffFile[] | null) => void
+  setPrefetchedFileContents: (contents: Record<string, string>) => void
+  fetchDiffStats: () => void
+  children: React.ReactNode
+}
+
+const DiffStateProvider = memo(function DiffStateProvider({
+  isDiffSidebarOpen,
+  parsedFileDiffs,
+  isDiffSidebarNarrow,
+  setIsDiffSidebarOpen,
+  setDiffStats,
+  setDiffContent,
+  setParsedFileDiffs,
+  setPrefetchedFileContents,
+  fetchDiffStats,
+  children,
+}: DiffStateProviderProps) {
+  // Viewed count state - kept here to avoid re-rendering ChatView
+  const [viewedCount, setViewedCount] = useState(0)
+
+  // All diff-related atoms are read HERE, not in ChatView
+  const [selectedFilePath, setSelectedFilePath] = useAtom(selectedDiffFilePathAtom)
+  const [, setFilteredDiffFiles] = useAtom(filteredDiffFilesAtom)
+  const [filteredSubChatId, setFilteredSubChatId] = useAtom(filteredSubChatIdAtom)
+  const isChangesPanelCollapsed = useAtomValue(agentsChangesPanelCollapsedAtom)
+
+  // Auto-select first file when diff sidebar opens - use useLayoutEffect for synchronous update
+  // This prevents the initial render from showing all 11 files before filter kicks in
+  useLayoutEffect(() => {
+    if (!isDiffSidebarOpen) {
+      setSelectedFilePath(null)
+      setFilteredDiffFiles(null)
+      return
+    }
+
+    // Determine which file to select
+    let fileToSelect = selectedFilePath
+    if (!fileToSelect && parsedFileDiffs && parsedFileDiffs.length > 0) {
+      const firstFile = parsedFileDiffs[0]
+      fileToSelect = firstFile.newPath !== '/dev/null' ? firstFile.newPath : firstFile.oldPath
+      if (fileToSelect && fileToSelect !== '/dev/null') {
+        setSelectedFilePath(fileToSelect)
+      }
+    }
+
+    // Filter logic based on layout mode
+    const shouldShowAllFiles = isDiffSidebarNarrow && isChangesPanelCollapsed
+
+    if (shouldShowAllFiles) {
+      setFilteredDiffFiles(null)
+    } else if (fileToSelect) {
+      setFilteredDiffFiles([fileToSelect])
+    } else {
+      setFilteredDiffFiles(null)
+    }
+  }, [isDiffSidebarOpen, selectedFilePath, parsedFileDiffs, isDiffSidebarNarrow, isChangesPanelCollapsed, setFilteredDiffFiles, setSelectedFilePath])
+
+  // Stable callbacks
+  const handleDiffFileSelect = useCallback((file: { path: string }, _category: string) => {
+    setSelectedFilePath(file.path)
+    setFilteredDiffFiles([file.path])
+  }, [setSelectedFilePath, setFilteredDiffFiles])
+
+  const handleSelectNextFile = useCallback((filePath: string) => {
+    setSelectedFilePath(filePath)
+    setFilteredDiffFiles([filePath])
+  }, [setSelectedFilePath, setFilteredDiffFiles])
+
+  const handleCommitSuccess = useCallback(() => {
+    setSelectedFilePath(null)
+    setFilteredDiffFiles(null)
+    setParsedFileDiffs(null)
+    setDiffContent(null)
+    setPrefetchedFileContents({})
+    setDiffStats({
+      fileCount: 0,
+      additions: 0,
+      deletions: 0,
+      isLoading: true,
+      hasChanges: false,
+    })
+    setTimeout(() => {
+      fetchDiffStats()
+    }, 500)
+  }, [setSelectedFilePath, setFilteredDiffFiles, setParsedFileDiffs, setDiffContent, setPrefetchedFileContents, setDiffStats, fetchDiffStats])
+
+  const handleCloseDiff = useCallback(() => {
+    setIsDiffSidebarOpen(false)
+    setFilteredSubChatId(null)
+  }, [setIsDiffSidebarOpen, setFilteredSubChatId])
+
+  const handleViewedCountChange = useCallback((count: number) => {
+    setViewedCount(count)
+  }, [])
+
+  const contextValue = useMemo(() => ({
+    selectedFilePath,
+    filteredSubChatId,
+    viewedCount,
+    handleDiffFileSelect,
+    handleSelectNextFile,
+    handleCommitSuccess,
+    handleCloseDiff,
+    handleViewedCountChange,
+  }), [selectedFilePath, filteredSubChatId, viewedCount, handleDiffFileSelect, handleSelectNextFile, handleCommitSuccess, handleCloseDiff, handleViewedCountChange])
+
+  return (
+    <DiffStateContext.Provider value={contextValue}>
+      {children}
+    </DiffStateContext.Provider>
+  )
+})
+
+// ============================================================================
+// DiffSidebarRenderer - renders the diff sidebar using context for state
+// This component is inside DiffStateProvider and uses useDiffState()
+// ============================================================================
+
+interface DiffSidebarRendererProps {
+  worktreePath: string | null
+  chatId: string
+  sandboxId: string | null
+  repository: { owner: string; name: string } | null
+  diffStats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }
+  diffContent: string | null
+  parsedFileDiffs: ParsedDiffFile[] | null
+  prefetchedFileContents: Record<string, string>
+  setDiffCollapseState: (state: { allCollapsed: boolean; allExpanded: boolean }) => void
+  diffViewRef: React.RefObject<AgentDiffViewRef | null>
+  diffSidebarRef: React.RefObject<HTMLDivElement | null>
+  agentChat: { prUrl?: string; prNumber?: number } | null | undefined
+  branchData: { current: string } | undefined
+  gitStatus: { pushCount?: number; pullCount?: number; hasUpstream?: boolean; ahead?: number; behind?: number; staged?: any[]; unstaged?: any[]; untracked?: any[] } | undefined
+  isGitStatusLoading: boolean
+  isDiffSidebarOpen: boolean
+  diffDisplayMode: "side-peek" | "center-peek" | "full-page"
+  diffSidebarWidth: number
+  handleReview: () => void
+  isReviewing: boolean
+  handleCreatePr: () => void
+  isCreatingPr: boolean
+  handleMergePr: () => void
+  mergePrMutation: { isPending: boolean }
+  handleRefreshGitStatus: () => void
+  hasPrNumber: boolean
+  isPrOpen: boolean
+  hasMergeConflicts: boolean
+  handleFixConflicts: () => void
+  handleExpandAll: () => void
+  handleCollapseAll: () => void
+  diffMode: DiffModeEnum
+  setDiffMode: (mode: DiffModeEnum) => void
+  handleMarkAllViewed: () => void
+  handleMarkAllUnviewed: () => void
+  isDesktop: boolean
+  isFullscreen: boolean
+  setDiffDisplayMode: (mode: "side-peek" | "center-peek" | "full-page") => void
+  handleCommitToPr: () => void
+  isCommittingToPr: boolean
+  subChatsWithFiles: Array<{ id: string; name: string; filePaths: string[]; fileCount: number }>
+  setDiffStats: (stats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }) => void
+}
+
+const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
+  worktreePath,
+  chatId,
+  sandboxId,
+  repository,
+  diffStats,
+  diffContent,
+  parsedFileDiffs,
+  prefetchedFileContents,
+  setDiffCollapseState,
+  diffViewRef,
+  diffSidebarRef,
+  agentChat,
+  branchData,
+  gitStatus,
+  isGitStatusLoading,
+  isDiffSidebarOpen,
+  diffDisplayMode,
+  diffSidebarWidth,
+  handleReview,
+  isReviewing,
+  handleCreatePr,
+  isCreatingPr,
+  handleMergePr,
+  mergePrMutation,
+  handleRefreshGitStatus,
+  hasPrNumber,
+  isPrOpen,
+  hasMergeConflicts,
+  handleFixConflicts,
+  handleExpandAll,
+  handleCollapseAll,
+  diffMode,
+  setDiffMode,
+  handleMarkAllViewed,
+  handleMarkAllUnviewed,
+  isDesktop,
+  isFullscreen,
+  setDiffDisplayMode,
+  handleCommitToPr,
+  isCommittingToPr,
+  subChatsWithFiles,
+  setDiffStats,
+}: DiffSidebarRendererProps) {
+  // Get callbacks and state from context
+  const { handleCloseDiff, viewedCount, handleViewedCountChange } = useDiffState()
+
+  // Width for responsive layouts - use stored width for sidebar, fixed for dialog/fullpage
+  const effectiveWidth = diffDisplayMode === "side-peek"
+    ? diffSidebarWidth
+    : diffDisplayMode === "center-peek"
+      ? 1200
+      : typeof window !== 'undefined' ? window.innerWidth : 1200
+
+  const diffViewContent = (
+    <div
+      ref={diffSidebarRef}
+      className="flex flex-col h-full min-w-0 overflow-hidden"
+    >
+      {/* Unified Header - branch selector, fetch, review, PR actions, close */}
+      {worktreePath && (
+        <DiffSidebarHeader
+          worktreePath={worktreePath}
+          currentBranch={branchData?.current ?? ""}
+          diffStats={diffStats}
+          sidebarWidth={effectiveWidth}
+          pushCount={gitStatus?.pushCount ?? 0}
+          pullCount={gitStatus?.pullCount ?? 0}
+          hasUpstream={gitStatus?.hasUpstream ?? true}
+          isSyncStatusLoading={isGitStatusLoading}
+          aheadOfDefault={gitStatus?.ahead ?? 0}
+          behindDefault={gitStatus?.behind ?? 0}
+          onReview={handleReview}
+          isReviewing={isReviewing}
+          onCreatePr={handleCreatePr}
+          isCreatingPr={isCreatingPr}
+          onCreatePrWithAI={handleCreatePr}
+          isCreatingPrWithAI={isCreatingPr}
+          onMergePr={handleMergePr}
+          isMergingPr={mergePrMutation.isPending}
+          onClose={handleCloseDiff}
+          onRefresh={handleRefreshGitStatus}
+          hasPrNumber={hasPrNumber}
+          isPrOpen={isPrOpen}
+          hasMergeConflicts={hasMergeConflicts}
+          onFixConflicts={handleFixConflicts}
+          onExpandAll={handleExpandAll}
+          onCollapseAll={handleCollapseAll}
+          viewMode={diffMode}
+          onViewModeChange={setDiffMode}
+          viewedCount={viewedCount}
+          onMarkAllViewed={handleMarkAllViewed}
+          onMarkAllUnviewed={handleMarkAllUnviewed}
+          isDesktop={isDesktop}
+          isFullscreen={isFullscreen}
+          displayMode={diffDisplayMode}
+          onDisplayModeChange={setDiffDisplayMode}
+        />
+      )}
+
+      {/* Content: file list + diff view - vertical when narrow */}
+      <DiffSidebarContent
+        worktreePath={worktreePath}
+        chatId={chatId}
+        sandboxId={sandboxId}
+        repository={repository}
+        diffStats={diffStats}
+        setDiffStats={setDiffStats}
+        diffContent={diffContent}
+        parsedFileDiffs={parsedFileDiffs}
+        prefetchedFileContents={prefetchedFileContents}
+        setDiffCollapseState={setDiffCollapseState}
+        diffViewRef={diffViewRef}
+        agentChat={agentChat}
+        sidebarWidth={effectiveWidth}
+        onCommitWithAI={handleCommitToPr}
+        isCommittingWithAI={isCommittingToPr}
+        diffMode={diffMode}
+        setDiffMode={setDiffMode}
+        onCreatePr={handleCreatePr}
+        subChats={subChatsWithFiles}
+      />
+    </div>
+  )
+
+  // Render based on display mode
+  if (diffDisplayMode === "side-peek") {
+    return (
+      <ResizableSidebar
+        isOpen={isDiffSidebarOpen}
+        onClose={handleCloseDiff}
+        widthAtom={agentsDiffSidebarWidthAtom}
+        minWidth={320}
+        side="right"
+        animationDuration={0}
+        initialWidth={0}
+        exitWidth={0}
+        showResizeTooltip={true}
+        className="bg-background border-l"
+        style={{ borderLeftWidth: "0.5px", overflow: "hidden" }}
+      >
+        {diffViewContent}
+      </ResizableSidebar>
+    )
+  }
+
+  if (diffDisplayMode === "center-peek") {
+    return (
+      <DiffCenterPeekDialog
+        isOpen={isDiffSidebarOpen}
+        onClose={handleCloseDiff}
+      >
+        {diffViewContent}
+      </DiffCenterPeekDialog>
+    )
+  }
+
+  if (diffDisplayMode === "full-page") {
+    return (
+      <DiffFullPageView
+        isOpen={isDiffSidebarOpen}
+        onClose={handleCloseDiff}
+      >
+        {diffViewContent}
+      </DiffFullPageView>
+    )
+  }
+
+  return null
+})
+
 // Inner chat component - only rendered when chat object is ready
-function ChatViewInner({
+// Memoized to prevent re-renders when parent state changes (e.g., selectedFilePath)
+const ChatViewInner = memo(function ChatViewInner({
   chat,
   subChatId,
   parentChatId,
   isFirstSubChat,
   onAutoRename,
   onCreateNewSubChat,
+  refreshDiff,
   teamId,
   repository,
   streamId,
@@ -831,6 +1802,8 @@ function ChatViewInner({
   projectPath,
   isArchived = false,
   onRestoreWorkspace,
+  existingPrUrl,
+  isActive = true,
 }: {
   chat: Chat<any>
   subChatId: string
@@ -838,6 +1811,7 @@ function ChatViewInner({
   isFirstSubChat: boolean
   onAutoRename: (userMessage: string, subChatId: string) => void
   onCreateNewSubChat?: () => void
+  refreshDiff?: () => void
   teamId?: string
   repository?: string
   streamId?: string | null
@@ -850,21 +1824,33 @@ function ChatViewInner({
   projectPath?: string
   isArchived?: boolean
   onRestoreWorkspace?: () => void
+  existingPrUrl?: string | null
+  isActive?: boolean
 }) {
-  // UNCONTROLLED: just track if editor has content for send button
-  const [hasContent, setHasContent] = useState(false)
-  const [isDragOver, setIsDragOver] = useState(false)
-  const [isFocused, setIsFocused] = useState(false)
   const hasTriggeredRenameRef = useRef(false)
   const hasTriggeredAutoGenerateRef = useRef(false)
 
+  // Keep isActive in ref for use in callbacks (avoid stale closures)
+  const isActiveRef = useRef(isActive)
+  isActiveRef.current = isActive
+
   // Scroll management state (like canvas chat)
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
-  const shouldAutoScrollRef = useRef(true) // Ref to read current value without triggering effect
+  // Using only ref to avoid re-renders on scroll
+  const shouldAutoScrollRef = useRef(true)
+  const isAutoScrollingRef = useRef(false) // Flag to ignore scroll events caused by auto-scroll
+  const isInitializingScrollRef = useRef(false) // Flag to ignore scroll events during scroll initialization (content loading)
+  const hasUnapprovedPlanRef = useRef(false) // Track unapproved plan state for scroll initialization
   const chatContainerRef = useRef<HTMLElement | null>(null)
-  const lastScrollUpdateRef = useRef<number>(0)
+
+  // Cleanup isAutoScrollingRef on unmount to prevent stuck state
+  useEffect(() => {
+    return () => {
+      isAutoScrollingRef.current = false
+    }
+  }, [])
   const editorRef = useRef<AgentsMentionsEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const questionRef = useRef<AgentUserQuestionHandle>(null)
   const prevChatKeyRef = useRef<string | null>(null)
   const prevSubChatIdRef = useRef<string | null>(null)
 
@@ -885,6 +1871,12 @@ function ChatViewInner({
     localStorage.setItem("tts-playback-rate", String(rate))
   }, [])
 
+  // PR creation loading state - from atom to allow resetting after message sent
+  const setIsCreatingPr = useSetAtom(isCreatingPrAtom)
+
+  // Rollback state
+  const [isRollingBack, setIsRollingBack] = useState(false)
+
   // Check if user is at bottom of chat (like canvas)
   const isAtBottom = useCallback(() => {
     const container = chatContainerRef.current
@@ -896,44 +1888,75 @@ function ChatViewInner({
     )
   }, [])
 
-  // Scroll position persistence (like canvas)
-  // Atom is used for localStorage persistence, but we also need a module-level cache
-  // for synchronous access during tab switches (atom updates are async)
-  const [scrollPositions, setScrollPositions] = useAtom(
-    agentsScrollPositionsAtom,
-  )
 
-  // Skip auto-scroll immediately after restore (state update is async, so use ref)
-  const justRestoredRef = useRef(false)
+  // Track previous scroll position to detect scroll direction
+  const prevScrollTopRef = useRef(0)
 
-  // Track current scroll position in ref (for saving on cleanup - container ref may point to new container)
-  const currentScrollTopRef = useRef(0)
-  // Track current scrollHeight for validation
-  const currentScrollHeightRef = useRef(0)
-  // Track current status for save cleanup (to know if we were streaming when leaving)
-  const currentStatusRef = useRef<string>("ready")
-  // Track last assistant message ID for smart scroll restoration
-  const lastAssistantMsgIdRef = useRef<string | undefined>(undefined)
-
-  // Handle scroll events to detect user scrolling (throttled)
-  // Updates shouldAutoScroll and tracks position in ref for cleanup
+  // Handle scroll events to detect user scrolling
+  // Updates shouldAutoScrollRef based on scroll direction
+  // Using refs only to avoid re-renders on scroll
   const handleScroll = useCallback(() => {
+    // Skip scroll handling for inactive tabs (keep-alive)
+    if (!isActiveRef.current) return
+
     const container = chatContainerRef.current
     if (!container) return
 
-    // Always track current position (for cleanup to use)
-    currentScrollTopRef.current = container.scrollTop
-    currentScrollHeightRef.current = container.scrollHeight
+    const currentScrollTop = container.scrollTop
+    const prevScrollTop = prevScrollTopRef.current
+    prevScrollTopRef.current = currentScrollTop
 
-    // Throttle state updates to reduce re-renders
-    const now = Date.now()
-    if (now - lastScrollUpdateRef.current > 100) {
-      lastScrollUpdateRef.current = now
-      const newIsAtBottom = isAtBottom()
-      setShouldAutoScroll(newIsAtBottom)
-      shouldAutoScrollRef.current = newIsAtBottom
+    // Ignore scroll events during initialization (content loading)
+    if (isAutoScrollingRef.current || isInitializingScrollRef.current) return
+
+    // If user scrolls UP - disable auto-scroll immediately
+    // BUT keep large padding (user wants to keep the clean slate UX)
+    if (currentScrollTop < prevScrollTop) {
+      console.log("[handleScroll] User scrolled UP - disabling auto-scroll only")
+      shouldAutoScrollRef.current = false
+      return
     }
+
+    // If user scrolls DOWN and reaches bottom - enable auto-scroll
+    shouldAutoScrollRef.current = isAtBottom()
   }, [isAtBottom])
+
+  // Scroll to bottom handler with ease-in-out animation
+  const scrollToBottom = useCallback(() => {
+    const container = chatContainerRef.current
+    if (!container) return
+
+    isAutoScrollingRef.current = true
+    shouldAutoScrollRef.current = true
+
+    const start = container.scrollTop
+    const duration = 300 // ms
+    const startTime = performance.now()
+
+    // Ease-in-out cubic function
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+
+    const animateScroll = (currentTime: number) => {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const easedProgress = easeInOutCubic(progress)
+
+      // Calculate end on each frame to handle dynamic content
+      const end = container.scrollHeight - container.clientHeight
+      container.scrollTop = start + (end - start) * easedProgress
+
+      if (progress < 1) {
+        requestAnimationFrame(animateScroll)
+      } else {
+        // Ensure we're at the absolute bottom
+        container.scrollTop = container.scrollHeight
+        isAutoScrollingRef.current = false
+      }
+    }
+
+    requestAnimationFrame(animateScroll)
+  }, [])
 
   // tRPC utils for cache invalidation
   const utils = api.useUtils()
@@ -955,6 +1978,12 @@ function ChatViewInner({
   })
 
   // Handler for renaming sub-chat
+  // Using ref for mutation to avoid callback recreation
+  const renameSubChatMutationRef = useRef(renameSubChatMutation)
+  renameSubChatMutationRef.current = renameSubChatMutation
+  const subChatNameRef = useRef(subChatName)
+  subChatNameRef.current = subChatName
+
   const handleRenameSubChat = useCallback(
     async (newName: string) => {
       // Optimistic update in store
@@ -962,7 +1991,7 @@ function ChatViewInner({
 
       // Save to database
       try {
-        await renameSubChatMutation.mutateAsync({
+        await renameSubChatMutationRef.current.mutateAsync({
           subChatId,
           name: newName,
         })
@@ -970,10 +1999,10 @@ function ChatViewInner({
         // Revert on error (toast shown by mutation onError)
         useAgentSubChatStore
           .getState()
-          .updateSubChatName(subChatId, subChatName || "New Chat")
+          .updateSubChatName(subChatId, subChatNameRef.current || "New Chat")
       }
     },
-    [subChatId, subChatName, renameSubChatMutation],
+    [subChatId],
   )
 
   // Plan mode state (read from global atom)
@@ -1029,6 +2058,18 @@ function ChatViewInner({
     // Dependencies: Only subChatId - setIsPlanMode is stable, useAgentSubChatStore is external
   }, [subChatId, setIsPlanMode])
 
+  // NOTE: We no longer clear caches on deactivation.
+  // With proper subChatId isolation, each chat's caches are separate.
+  // Caches are only cleared on unmount (when tab is evicted from keep-alive pool).
+
+  // Cleanup message caches on unmount (when tab is evicted from keep-alive)
+  useEffect(() => {
+    const currentSubChatId = subChatId
+    return () => {
+      clearSubChatCaches(currentSubChatId)
+    }
+  }, [subChatId])
+
   // Track last mode to detect actual user changes (not store updates)
   const lastIsPlanModeRef = useRef<boolean>(isPlanMode)
 
@@ -1055,18 +2096,6 @@ function ChatViewInner({
     // Dependencies: updateSubChatModeMutation.mutate is stable, useAgentSubChatStore is external
   }, [isPlanMode, subChatId, updateSubChatModeMutation.mutate])
 
-  // Model selection state
-  const [lastSelectedModelId, setLastSelectedModelId] = useAtom(
-    lastSelectedModelIdAtom,
-  )
-  const [selectedAgent, setSelectedAgent] = useState(() => agents[0])
-  const [selectedModel, setSelectedModel] = useState(
-    () =>
-      claudeModels.find((m) => m.id === lastSelectedModelId) || claudeModels[1],
-  )
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
-  const [shouldOpenClaudeSubmenu, setShouldOpenClaudeSubmenu] = useState(false)
-
   // File/image upload hook
   const {
     images,
@@ -1076,54 +2105,43 @@ function ChatViewInner({
     removeFile,
     clearAll,
     isUploading,
+    setImagesFromDraft,
+    setFilesFromDraft,
   } = useAgentsFileUpload()
 
-  // Mention dropdown state
-  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
-  const [mentionSearchText, setMentionSearchText] = useState("")
-  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 })
+  // Text context selection hook (for selecting text from assistant messages and diff)
+  const {
+    textContexts,
+    diffTextContexts,
+    addTextContext: addTextContextOriginal,
+    addDiffTextContext,
+    removeTextContext,
+    removeDiffTextContext,
+    clearTextContexts,
+    clearDiffTextContexts,
+    textContextsRef,
+    diffTextContextsRef,
+    setTextContextsFromDraft,
+    setDiffTextContextsFromDraft,
+  } = useTextContextSelection()
 
-  // Mention dropdown subpage navigation state
-  const [showingFilesList, setShowingFilesList] = useState(false)
-  const [showingSkillsList, setShowingSkillsList] = useState(false)
-  const [showingAgentsList, setShowingAgentsList] = useState(false)
-  const [showingToolsList, setShowingToolsList] = useState(false)
-
-  // Slash command dropdown state
-  const [showSlashDropdown, setShowSlashDropdown] = useState(false)
-  const [slashSearchText, setSlashSearchText] = useState("")
-  const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 })
-
-  // Shift+Tab handler for mode switching (now handled inside input component)
-
-  // Keyboard shortcut: Cmd+/ to open model selector (Claude submenu)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === "/") {
-        e.preventDefault()
-        e.stopPropagation()
-
-        setShouldOpenClaudeSubmenu(true)
-        setIsModelDropdownOpen(true)
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown, true)
-    return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [])
-
-  // Mode tooltip state (floating tooltip like canvas)
-  const [modeTooltip, setModeTooltip] = useState<{
-    visible: boolean
-    position: { top: number; left: number }
-    mode: "agent" | "plan"
+  // Quick comment state
+  const [quickCommentState, setQuickCommentState] = useState<{
+    selectedText: string
+    source: TextSelectionSource
+    rect: DOMRect
   } | null>(null)
+
+  // Message queue for sending messages while streaming
+  const queue = useMessageQueueStore((s) => s.queues[subChatId] ?? EMPTY_QUEUE)
+  const addToQueue = useMessageQueueStore((s) => s.addToQueue)
+  const removeFromQueue = useMessageQueueStore((s) => s.removeFromQueue)
+  const popItemFromQueue = useMessageQueueStore((s) => s.popItem)
+
+  // Plan approval pending state (for tool approval loading)
   const [planApprovalPending, setPlanApprovalPending] = useState<
     Record<string, boolean>
   >({})
-  const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasShownTooltipRef = useRef(false)
-  const [modeDropdownOpen, setModeDropdownOpen] = useState(false)
 
   // Track chat changes for rename trigger reset
   const chatRef = useRef<Chat<any> | null>(null)
@@ -1135,162 +2153,170 @@ function ChatViewInner({
   }
   chatRef.current = chat
 
-  // Save/restore drafts when switching between sub-chats or workspaces
-  // Use refs to capture current values for cleanup function
-  const currentSubChatIdRef = useRef<string>(subChatId)
-  const currentChatIdRef = useRef<string | null>(parentChatId)
-  const currentDraftTextRef = useRef<string>("")
-  currentSubChatIdRef.current = subChatId
-  currentChatIdRef.current = parentChatId
-
-  // Save draft on blur (when focus leaves editor) - updates ref and localStorage
-  const handleEditorBlur = useCallback(() => {
-    setIsFocused(false)
-
-    const draft = editorRef.current?.getValue() || ""
-    const chatId = currentChatIdRef.current
-    const subChatIdValue = currentSubChatIdRef.current
-
-    // Update ref for unmount save
-    currentDraftTextRef.current = draft
-
-    if (!chatId) return
-
-    if (draft.trim()) {
-      saveSubChatDraft(chatId, subChatIdValue, draft)
-    } else {
-      clearSubChatDraft(chatId, subChatIdValue)
-    }
-  }, [])
-
-  // Sync draft ref on every content change so unmount cleanup has fresh value
-  // (editorRef is null during unmount, so we need to keep ref in sync)
-  const handleContentChange = useCallback((hasContent: boolean) => {
-    setHasContent(hasContent)
-    // Sync the draft text ref for unmount save
-    const draft = editorRef.current?.getValue() || ""
-    currentDraftTextRef.current = draft
-  }, [])
-
-  // Save draft on unmount (when switching workspaces)
-  // Read directly from editor first (handles hotkey switch where blur didn't fire),
-  // fall back to ref if editor is already gone
-  useEffect(() => {
-    return () => {
-      const editorValue = editorRef.current?.getValue()
-      const refValue = currentDraftTextRef.current
-      const draft = editorValue || refValue
-      const chatId = currentChatIdRef.current
-      const subChatIdValue = currentSubChatIdRef.current
-
-      if (!chatId || !draft?.trim()) return
-
-      saveSubChatDraft(chatId, subChatIdValue, draft)
-    }
-  }, [])
-
   // Restore draft when subChatId changes (switching between sub-chats)
   const prevSubChatIdForDraftRef = useRef<string | null>(null)
   useEffect(() => {
-    // Save draft from previous sub-chat before switching (within same workspace)
-    if (prevSubChatIdForDraftRef.current && prevSubChatIdForDraftRef.current !== subChatId) {
-      const prevChatId = currentChatIdRef.current
-      const prevSubChatId = prevSubChatIdForDraftRef.current
-      const prevDraft = editorRef.current?.getValue() || ""
-
-      if (prevDraft.trim() && prevChatId) {
-        saveSubChatDraft(prevChatId, prevSubChatId, prevDraft)
-      }
-    }
-
-    // Restore draft for new sub-chat - read directly from localStorage
-    const savedDraft = parentChatId ? getSubChatDraft(parentChatId, subChatId) : null
+    // Restore full draft (text + attachments + text contexts) for new sub-chat
+    const savedDraft = parentChatId
+      ? getSubChatDraftFull(parentChatId, subChatId)
+      : null
 
     if (savedDraft) {
-      editorRef.current?.setValue(savedDraft)
-      currentDraftTextRef.current = savedDraft
-    } else if (prevSubChatIdForDraftRef.current && prevSubChatIdForDraftRef.current !== subChatId) {
+      // Restore text
+      if (savedDraft.text) {
+        editorRef.current?.setValue(savedDraft.text)
+      } else {
+        editorRef.current?.clear()
+      }
+      // Restore images
+      if (savedDraft.images.length > 0) {
+        setImagesFromDraft(savedDraft.images)
+      } else {
+        clearAll()
+      }
+      // Restore files
+      if (savedDraft.files.length > 0) {
+        setFilesFromDraft(savedDraft.files)
+      }
+      // Restore text contexts
+      if (savedDraft.textContexts.length > 0) {
+        setTextContextsFromDraft(savedDraft.textContexts)
+      } else {
+        clearTextContexts()
+      }
+    } else if (
+      prevSubChatIdForDraftRef.current &&
+      prevSubChatIdForDraftRef.current !== subChatId
+    ) {
+      // Clear everything when switching to a sub-chat with no draft
       editorRef.current?.clear()
-      currentDraftTextRef.current = ""
+      clearAll()
+      clearTextContexts()
     }
 
     prevSubChatIdForDraftRef.current = subChatId
-  }, [subChatId, parentChatId])
+  }, [
+    subChatId,
+    parentChatId,
+    setImagesFromDraft,
+    setFilesFromDraft,
+    setTextContextsFromDraft,
+    clearAll,
+    clearTextContexts,
+  ])
 
   // Use subChatId as stable key to prevent HMR-induced duplicate resume requests
   // resume: !!streamId to reconnect to active streams (background streaming support)
-  const { messages, sendMessage, status, stop, regenerate } = useChat({
+  const { messages, sendMessage, status, stop, regenerate, setMessages } = useChat({
     id: subChatId,
     chat,
     resume: !!streamId,
-    // experimental_throttle: 200,
+    experimental_throttle: 50,  // Throttle updates to reduce re-renders during streaming
   })
 
-  // Stream debug: log status changes and scroll to plan/response start when streaming finishes
-  const prevStatusRef = useRef(status)
-  useEffect(() => {
-    const wasStreaming = prevStatusRef.current === "streaming" || prevStatusRef.current === "submitted"
-    const nowFinished = status !== "streaming" && status !== "submitted"
-    const streamingJustFinished = wasStreaming && nowFinished
-
-    if (prevStatusRef.current !== status) {
-      const subId = subChatId.slice(-8)
-      console.log(`[SD] C:STATUS sub=${subId} ${prevStatusRef.current} → ${status} msgs=${messages.length}`)
-      prevStatusRef.current = status
-    }
-
-    // When streaming finishes and user was following along (auto-scroll enabled),
-    // scroll to the start of the response/plan instead of staying at bottom
-    if (streamingJustFinished && shouldAutoScrollRef.current) {
-      requestAnimationFrame(() => {
-        const container = chatContainerRef.current
-        if (!container) return
-
-        // Find the last assistant message element
-        const allAssistantEls = container.querySelectorAll("[data-assistant-message-id]")
-        const lastAssistantElement = allAssistantEls[allAssistantEls.length - 1]
-        if (!lastAssistantElement) return
-
-        // Check if it has a collapsed steps section OR a plan section
-        const hasCollapsedSection = lastAssistantElement.querySelector("[data-collapsible-steps]")
-        const hasPlanSection = lastAssistantElement.querySelector("[data-plan-section]")
-
-        if (hasCollapsedSection || hasPlanSection) {
-          // Scroll to the start of this response
-          const rect = lastAssistantElement.getBoundingClientRect()
-          const containerRect = container.getBoundingClientRect()
-          const scrollPos = container.scrollTop + (rect.top - containerRect.top) - 120 // 120px padding
-          container.scrollTop = Math.max(0, scrollPos)
-          currentScrollTopRef.current = container.scrollTop
-          shouldAutoScrollRef.current = false
-          setShouldAutoScroll(false)
-        }
-      })
-    }
-  }, [status, subChatId, messages.length])
+  // Refs for useChat functions to keep callbacks stable across renders
+  const sendMessageRef = useRef(sendMessage)
+  sendMessageRef.current = sendMessage
+  const stopRef = useRef(stop)
+  stopRef.current = stop
 
   const isStreaming = status === "streaming" || status === "submitted"
+
+  // Ref for isStreaming to use in callbacks/effects that need fresh value
+  const isStreamingRef = useRef(isStreaming)
+  isStreamingRef.current = isStreaming
 
   // Track compacting status from SDK
   const compactingSubChats = useAtomValue(compactingSubChatsAtom)
   const isCompacting = compactingSubChats.has(subChatId)
 
+  // Desktop/fullscreen state for window drag region
+  const isDesktop = useAtomValue(isDesktopAtom)
+  const isFullscreen = useAtomValue(isFullscreenAtom)
+
   // Handler to trigger manual context compaction
   const handleCompact = useCallback(() => {
-    if (isStreaming) return // Can't compact while streaming
-    sendMessage({
+    if (isStreamingRef.current) return // Can't compact while streaming
+    sendMessageRef.current({
       role: "user",
       parts: [{ type: "text", text: "/compact" }],
     })
-  }, [isStreaming, sendMessage])
+  }, [])
 
-  // Keep refs updated for scroll save cleanup to use
-  useEffect(() => {
-    currentStatusRef.current = status
-    // Find last assistant message ID
-    const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant")
-    lastAssistantMsgIdRef.current = lastAssistantMsg?.id
-  }, [status, messages])
+  // Handler to stop streaming - memoized to prevent ChatInputArea re-renders
+  const handleStop = useCallback(async () => {
+    // Mark as manually aborted to prevent completion sound
+    agentChatStore.setManuallyAborted(subChatId, true)
+    await stopRef.current()
+    // Call DELETE endpoint to cancel server-side stream
+    await fetch(
+      `/api/agents/chat?id=${encodeURIComponent(subChatId)}`,
+      { method: "DELETE", credentials: "include" },
+    )
+  }, [subChatId])
+
+  // Wrapper for addTextContext that handles TextSelectionSource
+  const addTextContext = useCallback((text: string, source: TextSelectionSource) => {
+    if (source.type === "assistant-message") {
+      addTextContextOriginal(text, source.messageId)
+    } else if (source.type === "diff") {
+      addDiffTextContext(text, source.filePath, source.lineNumber, source.lineType)
+    } else if (source.type === "tool-edit") {
+      // Tool edit selections are treated as code selections (similar to diff)
+      addDiffTextContext(text, source.filePath)
+    }
+  }, [addTextContextOriginal, addDiffTextContext])
+
+  // Focus handler for text selection popover - focus chat input after adding to context
+  const handleFocusInput = useCallback(() => {
+    editorRef.current?.focus()
+  }, [])
+
+  // Handler for quick comment trigger from popover
+  const handleQuickComment = useCallback((text: string, source: TextSelectionSource, rect: DOMRect) => {
+    setQuickCommentState({ selectedText: text, source, rect })
+  }, [])
+
+  // Handler for quick comment submission
+  const handleQuickCommentSubmit = useCallback((comment: string, selectedText: string, source: TextSelectionSource) => {
+    // Format message with mention token + comment
+    const preview = selectedText.slice(0, 50).replace(/[:\[\]]/g, "")
+    const encodedText = utf8ToBase64(selectedText)
+
+    let mentionToken: string
+    if (source.type === "diff") {
+      const lineNum = source.lineNumber || 0
+      mentionToken = `@[${MENTION_PREFIXES.DIFF}${source.filePath}:${lineNum}:${preview}:${encodedText}]`
+    } else if (source.type === "tool-edit") {
+      // Tool edit is treated as code/diff context
+      mentionToken = `@[${MENTION_PREFIXES.DIFF}${source.filePath}:0:${preview}:${encodedText}]`
+    } else {
+      mentionToken = `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
+    }
+
+    const message = `${mentionToken} ${comment}`
+
+    // If streaming, add to queue
+    if (isStreamingRef.current) {
+      const item = createQueueItem(generateQueueId(), message)
+      addToQueue(subChatId, item)
+    } else {
+      // Send directly
+      sendMessageRef.current({
+        role: "user",
+        parts: [{ type: "text", text: message }],
+      })
+    }
+
+    // Clear state and selection
+    setQuickCommentState(null)
+    window.getSelection()?.removeAllRanges()
+  }, [addToQueue, subChatId])
+
+  // Handler for quick comment cancel
+  const handleQuickCommentCancel = useCallback(() => {
+    setQuickCommentState(null)
+  }, [])
 
   // Sync loading status to atom for UI indicators
   // When streaming starts, set loading. When it stops, clear loading.
@@ -1321,6 +2347,9 @@ function ChatViewInner({
         role: "user",
         parts: [{ type: "text", text: pendingPrMessage }],
       })
+
+      // Reset creating PR state after message is sent
+      setIsCreatingPr(false)
     }
   }, [pendingPrMessage, isStreaming, sendMessage, setPendingPrMessage])
 
@@ -1342,16 +2371,53 @@ function ChatViewInner({
     }
   }, [pendingReviewMessage, isStreaming, sendMessage, setPendingReviewMessage])
 
+  // Watch for pending conflict resolution message and send it
+  const [pendingConflictMessage, setPendingConflictMessage] = useAtom(
+    pendingConflictResolutionMessageAtom,
+  )
+
+  useEffect(() => {
+    if (pendingConflictMessage && !isStreaming) {
+      // Clear the pending message immediately to prevent double-sending
+      setPendingConflictMessage(null)
+
+      // Send the message to Claude
+      sendMessage({
+        role: "user",
+        parts: [{ type: "text", text: pendingConflictMessage }],
+      })
+    }
+  }, [pendingConflictMessage, isStreaming, sendMessage, setPendingConflictMessage])
+
   // Pending user questions from AskUserQuestion tool
   const [pendingQuestions, setPendingQuestions] = useAtom(
     pendingUserQuestionsAtom,
   )
+
+  // Track whether chat input has content (for custom text with questions)
+  const [inputHasContent, setInputHasContent] = useState(false)
 
   // Memoize the last assistant message to avoid unnecessary recalculations
   const lastAssistantMessage = useMemo(
     () => messages.findLast((m) => m.role === "assistant"),
     [messages],
   )
+
+  // Pre-compute token data for ChatInputArea to avoid passing unstable messages array
+  // This prevents ChatInputArea from re-rendering on every streaming chunk
+  const messageTokenData = useMemo(() => {
+    let totalInputTokens = 0
+    let totalOutputTokens = 0
+    let totalCostUsd = 0
+    for (const msg of messages) {
+      if (msg.metadata) {
+        totalInputTokens += msg.metadata.inputTokens || 0
+        totalOutputTokens += msg.metadata.outputTokens || 0
+        totalCostUsd += msg.metadata.totalCostUsd || 0
+      }
+    }
+    return { totalInputTokens, totalOutputTokens, totalCostUsd, messageCount: messages.length }
+  }, [messages])
 
   // Track previous streaming state to detect stream stop
   const prevIsStreamingRef = useRef(isStreaming)
@@ -1484,6 +2550,88 @@ function ChatViewInner({
     }
   }, [pendingQuestions, setPendingQuestions])
 
+  // Ref to prevent double submit of question answer
+  const isSubmittingQuestionAnswerRef = useRef(false)
+
+  // Handle answering questions with custom text from input (called on Enter in input)
+  const handleSubmitWithQuestionAnswer = useCallback(
+    async () => {
+      if (!pendingQuestions) return
+      if (isSubmittingQuestionAnswerRef.current) return
+      isSubmittingQuestionAnswerRef.current = true
+
+      try {
+        // 1. Get custom text from input
+        const customText = editorRef.current?.getValue()?.trim() || ""
+        if (!customText) {
+          isSubmittingQuestionAnswerRef.current = false
+          return
+        }
+
+        // 2. Get already selected answers from question component
+        const selectedAnswers = questionRef.current?.getAnswers() || {}
+        const formattedAnswers: Record<string, string> = { ...selectedAnswers }
+
+        // 3. Add custom text to the last question as "Other"
+        const lastQuestion =
+          pendingQuestions.questions[pendingQuestions.questions.length - 1]
+        if (lastQuestion) {
+          const existingAnswer = formattedAnswers[lastQuestion.question]
+          if (existingAnswer) {
+            // Append to existing answer
+            formattedAnswers[lastQuestion.question] = `${existingAnswer}, Other: ${customText}`
+          } else {
+            formattedAnswers[lastQuestion.question] = `Other: ${customText}`
+          }
+        }
+
+        // 4. Submit tool response with all answers
+        await trpcClient.claude.respondToolApproval.mutate({
+          toolUseId: pendingQuestions.toolUseId,
+          approved: true,
+          updatedInput: {
+            questions: pendingQuestions.questions,
+            answers: formattedAnswers,
+          },
+        })
+        setPendingQuestions(null)
+
+        // 5. Stop stream if currently streaming
+        if (isStreamingRef.current) {
+          agentChatStore.setManuallyAborted(subChatId, true)
+          await stopRef.current()
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+
+        // 6. Clear input
+        editorRef.current?.clear()
+        if (parentChatId) {
+          clearSubChatDraft(parentChatId, subChatId)
+        }
+
+        // 7. Send custom text as a new user message
+        shouldAutoScrollRef.current = true
+        await sendMessageRef.current({
+          role: "user",
+          parts: [{ type: "text", text: customText }],
+        })
+      } finally {
+        isSubmittingQuestionAnswerRef.current = false
+      }
+    },
+    [pendingQuestions, setPendingQuestions, subChatId, parentChatId],
+  )
+
+  // Memoize the callback to prevent ChatInputArea re-renders
+  // Only provide callback when there's a pending question for this subChat
+  const submitWithQuestionAnswerCallback = useMemo(
+    () =>
+      pendingQuestions?.subChatId === subChatId
+        ? handleSubmitWithQuestionAnswer
+        : undefined,
+    [pendingQuestions?.subChatId, subChatId, handleSubmitWithQuestionAnswer],
+  )
+
   // Watch for pending auth retry message (after successful OAuth flow)
   const [pendingAuthRetry, setPendingAuthRetry] = useAtom(
     pendingAuthRetryMessageAtom,
@@ -1560,7 +2708,7 @@ function ChatViewInner({
     [],
   )
 
-  // Handle plan approval - sends "Implement plan" message and switches to agent mode
+  // Handle plan approval - sends "Build plan" message and switches to agent mode
   const handleApprovePlan = useCallback(() => {
     // Update store mode synchronously BEFORE sending (transport reads from store)
     useAgentSubChatStore.getState().updateSubChatMode(subChatId, "agent")
@@ -1568,15 +2716,20 @@ function ChatViewInner({
     // Update React state (for UI)
     setIsPlanMode(false)
 
-    // Send "Implement plan" message (now in agent mode)
-    sendMessage({
+    // Enable auto-scroll and immediately scroll to bottom
+    shouldAutoScrollRef.current = true
+    scrollToBottom()
+
+    // Send "Build plan" message (now in agent mode)
+    sendMessageRef.current({
       role: "user",
-      parts: [{ type: "text", text: "Implement plan" }],
+      parts: [{ type: "text", text: "Build plan" }],
     })
-  }, [subChatId, setIsPlanMode, sendMessage])
+  }, [subChatId, setIsPlanMode, scrollToBottom])
 
   // Detect PR URLs in assistant messages and store them
-  const detectedPrUrlRef = useRef<string | null>(null)
+  // Initialize with existing PR URL to prevent duplicate toast on re-mount
+  const detectedPrUrlRef = useRef<string | null>(existingPrUrl ?? null)
 
   useEffect(() => {
     // Only check after streaming ends
@@ -1620,20 +2773,88 @@ function ChatViewInner({
       }
     }
   }, [messages, isStreaming, parentChatId])
-
-  // Track changed files from Edit/Write tool calls
-  // Only recalculates after streaming ends (not during streaming)
-  const { changedFiles: changedFilesForSubChat } = useChangedFilesTracking(
+  const { changedFiles: changedFilesForSubChat, recomputeChangedFiles } = useChangedFilesTracking(
     messages,
     subChatId,
     isStreaming,
     parentChatId,
   )
 
+  // Rollback handler - truncates messages to the clicked assistant message and restores git state
+  // The SDK UUID from the last assistant message will be used for resumeSessionAt on next send
+  const handleRollback = useCallback(
+    async (assistantMsg: (typeof messages)[0]) => {
+      if (isRollingBack) {
+        toast.error("Rollback already in progress")
+        return
+      }
+      if (isStreaming) {
+        toast.error("Cannot rollback while streaming")
+        return
+      }
+
+      const sdkUuid = (assistantMsg.metadata as any)?.sdkMessageUuid
+      if (!sdkUuid) {
+        toast.error("Cannot rollback: message has no SDK UUID")
+        return
+      }
+
+      setIsRollingBack(true)
+
+      try {
+        // Single call handles both message truncation and git rollback
+        const result = await trpcClient.chats.rollbackToMessage.mutate({
+          subChatId,
+          sdkMessageUuid: sdkUuid,
+        })
+
+        if (!result.success) {
+          toast.error(`Failed to rollback: ${result.error}`)
+          setIsRollingBack(false)
+          return
+        }
+
+        // Update local state with truncated messages from server
+        setMessages(result.messages)
+        recomputeChangedFiles(result.messages)
+        refreshDiff?.()
+      } catch (error) {
+        console.error("[handleRollback] Error:", error)
+        toast.error("Failed to rollback")
+      } finally {
+        setIsRollingBack(false)
+      }
+    },
+    [
+      isRollingBack,
+      isStreaming,
+      setMessages,
+      subChatId,
+      recomputeChangedFiles,
+      refreshDiff,
+    ],
+  )
+
+  // Expose rollback handler/state via atoms for message action bar
+  const setRollbackHandler = useSetAtom(rollbackHandlerAtom)
+  useEffect(() => {
+    setRollbackHandler(() => handleRollback)
+    return () => setRollbackHandler(null)
+  }, [handleRollback, setRollbackHandler])
+
+  const setIsRollingBackAtom = useSetAtom(isRollingBackAtom)
+  useEffect(() => {
+    setIsRollingBackAtom(isRollingBack)
+  }, [isRollingBack, setIsRollingBackAtom])
+
   // ESC, Ctrl+C and Cmd+Shift+Backspace handler for stopping stream
   useEffect(() => {
+    // Skip keyboard handlers for inactive tabs (keep-alive)
+    if (!isActive) return
+
     const handleKeyDown = async (e: KeyboardEvent) => {
       let shouldStop = false
+      let shouldSkipQuestions = false
 
       // Check for Escape key without modifiers (works even from input fields, like terminal Ctrl+C)
       // Ignore if Cmd/Ctrl is pressed (reserved for Cmd+Esc to focus input)
@@ -1652,8 +2873,19 @@ function ChatViewInner({
           '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper], [data-state="open"]',
         )
 
-        if (!isInsideOverlay) {
-          shouldStop = true
+        // Also check if any dialog/modal is open anywhere in the document (not just at event target)
+        // This prevents stopping stream when settings dialog is open but not focused
+        const hasOpenDialog = document.querySelector(
+          '[role="dialog"][aria-modal="true"], [data-modal="agents-settings"]',
+        )
+
+        if (!isInsideOverlay && !hasOpenDialog) {
+          // If there are pending questions for this chat, skip them instead of stopping stream
+          if (pendingQuestions?.subChatId === subChatId) {
+            shouldSkipQuestions = true
+          } else {
+            shouldStop = true
+          }
         }
       }
 
@@ -1680,7 +2912,10 @@ function ChatViewInner({
         shouldStop = true
       }
 
-      if (shouldStop) {
+      if (shouldSkipQuestions) {
+        e.preventDefault()
+        await handleQuestionsSkip()
+      } else if (shouldStop) {
         e.preventDefault()
         // Mark as manually aborted to prevent completion sound
         agentChatStore.setManuallyAborted(subChatId, true)
@@ -1695,7 +2930,7 @@ function ChatViewInner({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isStreaming, stop, subChatId])
+  }, [isActive, isStreaming, stop, subChatId, pendingQuestions, handleQuestionsSkip])
 
   // Keyboard shortcut: Enter to focus input when not already focused
   useFocusInputOnEnter(editorRef)
@@ -1737,185 +2972,67 @@ function ChatViewInner({
     subChatId,
   ])
 
-  // Ref to track if scroll has been restored for this sub-chat
-  const scrollRestoredRef = useRef(false)
+  // Ref to track if initial scroll has been set for this sub-chat
+  const scrollInitializedRef = useRef(false)
 
-  // Save scroll position when LEAVING this tab (useLayoutEffect for synchronous save before unmount)
+  // Track if this tab has been initialized (for keep-alive)
+  const hasInitializedRef = useRef(false)
+
+  // Initialize scroll position on mount (only once per tab with keep-alive)
+  // Strategy: wait for content to stabilize, then scroll to bottom ONCE
+  // No jumping around - just wait and scroll when ready
   useLayoutEffect(() => {
-    const currentSubChatId = subChatId
-    const currentMessageCount = messages.length
+    // Skip if not active (keep-alive: hidden tabs don't need scroll init)
+    if (!isActive) return
 
-    return () => {
-      // Save position synchronously before unmount
-      const container = chatContainerRef.current
-      if (container) {
-        const wasStreaming =
-          currentStatusRef.current === "streaming" ||
-          currentStatusRef.current === "submitted"
-        const scrollData: ScrollPositionData = {
-          scrollTop: currentScrollTopRef.current,
-          scrollHeight: currentScrollHeightRef.current || container.scrollHeight,
-          messageCount: currentMessageCount,
-          wasStreaming,
-          lastAssistantMsgId: lastAssistantMsgIdRef.current,
-        }
-        // Save to SYNCHRONOUS cache first (for immediate reads on next tab switch)
-        scrollPositionsCacheStore.set(currentSubChatId, scrollData)
-        // Also save to atom for localStorage persistence
-        setScrollPositions((prev) => ({
-          ...prev,
-          [currentSubChatId]: scrollData,
-        }))
-      }
-    }
-  }, [subChatId, messages.length, setScrollPositions])
-
-  // Restore scroll position on mount with content-ready detection
-  useLayoutEffect(() => {
     const container = chatContainerRef.current
     if (!container) return
 
-    // Reset tracking refs on sub-chat change
-    scrollRestoredRef.current = false
+    // With keep-alive, only initialize once per tab mount
+    if (hasInitializedRef.current) return
+    hasInitializedRef.current = true
 
-    // Read saved position data - FIRST from synchronous cache, then fallback to atom
-    // The cache is updated synchronously in cleanup, while atom updates are async
-    const cachedData = scrollPositionsCacheStore.get(subChatId)
-    const atomData = scrollPositions[subChatId]
-    const savedData = cachedData ?? atomData
+    // Reset on sub-chat change
+    scrollInitializedRef.current = false
+    isInitializingScrollRef.current = true
 
-    // Function to attempt scroll restoration
-    const restoreScroll = (source: string): boolean => {
-      if (scrollRestoredRef.current) return true
+    // IMMEDIATE scroll to bottom - no waiting
+    container.scrollTop = container.scrollHeight
+    shouldAutoScrollRef.current = true
 
-      const currentContainer = chatContainerRef.current
-      if (!currentContainer) return false
+    // Mark as initialized IMMEDIATELY
+    scrollInitializedRef.current = true
+    isInitializingScrollRef.current = false
 
-      if (savedData !== undefined) {
-        // Validate: only restore if we have similar content
-        // If message count matches and scrollHeight is sufficient, restore position
-        const canRestore =
-          currentContainer.scrollHeight >= savedData.scrollTop &&
-          (messages.length === savedData.messageCount ||
-            currentContainer.scrollHeight >= savedData.scrollHeight * 0.8) // Allow 20% variance
+    // MutationObserver for async content (images, code blocks loading after initial render)
+    const observer = new MutationObserver((mutations) => {
+      // Skip if not active (keep-alive: don't scroll hidden tabs)
+      if (!isActive) return
+      if (!shouldAutoScrollRef.current) return
 
-        if (canRestore) {
-          currentContainer.scrollTop = savedData.scrollTop
-          currentScrollTopRef.current = savedData.scrollTop
-          currentScrollHeightRef.current = currentContainer.scrollHeight
-          scrollRestoredRef.current = true
-          justRestoredRef.current = true
+      // Check if content was added
+      const hasAddedContent = mutations.some(
+        (m) => m.type === "childList" && m.addedNodes.length > 0
+      )
 
-          // Calculate if user WAS at bottom when they LEFT (using saved data, not current DOM)
-          // This is critical because content may have grown while away
-          const clientHeight = currentContainer.clientHeight
-          const wasAtBottomWhenLeft =
-            savedData.scrollTop + clientHeight >= savedData.scrollHeight - 50 // 50px threshold
-
-          const atBottomNow = isAtBottom()
-          setShouldAutoScroll(atBottomNow)
-          shouldAutoScrollRef.current = atBottomNow
-
-          const contentGrew = currentContainer.scrollHeight > savedData.scrollHeight
-          const newMessagesAdded = messages.length > savedData.messageCount
-          const streamingFinished = savedData.wasStreaming && status !== "streaming" && status !== "submitted"
-
-          // SMART SCROLL: If was at bottom, streaming finished, and new content arrived
-          if (wasAtBottomWhenLeft && streamingFinished && (contentGrew || newMessagesAdded)) {
-            requestAnimationFrame(() => {
-              // Find the last assistant message element
-              const allAssistantEls = currentContainer.querySelectorAll("[data-assistant-message-id]")
-              const lastAssistantElement = allAssistantEls[allAssistantEls.length - 1]
-
-              // Check if it has a collapsed steps section OR a plan section
-              // These indicate there's substantial content worth scrolling to the start
-              const hasCollapsedSection = lastAssistantElement?.querySelector("[data-collapsible-steps]")
-              const hasPlanSection = lastAssistantElement?.querySelector("[data-plan-section]")
-
-              if (hasCollapsedSection || hasPlanSection) {
-                // Has collapsed section or plan - scroll to start of this response
-                const rect = lastAssistantElement.getBoundingClientRect()
-                const containerRect = currentContainer.getBoundingClientRect()
-                const scrollPos =
-                  currentContainer.scrollTop + (rect.top - containerRect.top) - 120 // 120px padding to clear user message shadow
-                currentContainer.scrollTop = Math.max(0, scrollPos)
-                currentScrollTopRef.current = currentContainer.scrollTop
-                shouldAutoScrollRef.current = false
-                setShouldAutoScroll(false)
-              } else {
-                // No collapsed section and no plan - just scroll to bottom
-                currentContainer.scrollTop = currentContainer.scrollHeight
-                currentScrollTopRef.current = currentContainer.scrollHeight
-                shouldAutoScrollRef.current = false
-                setShouldAutoScroll(false)
-              }
-            })
-            return true
-          }
-
-          // If still streaming and was at bottom, scroll to actual bottom (follow the stream)
-          if (wasAtBottomWhenLeft && contentGrew && (status === "streaming" || status === "submitted")) {
-            requestAnimationFrame(() => {
-              currentContainer.scrollTop = currentContainer.scrollHeight
-              currentScrollTopRef.current = currentContainer.scrollHeight
-              shouldAutoScrollRef.current = true
-              setShouldAutoScroll(true)
-            })
-          }
-          return true
-        }
-      } else if (currentContainer.scrollHeight > currentContainer.clientHeight) {
-        // First time opening this sub-chat with content - scroll to bottom
-        currentContainer.scrollTop = currentContainer.scrollHeight
-        currentScrollTopRef.current = currentContainer.scrollHeight
-        scrollRestoredRef.current = true
-        setShouldAutoScroll(true)
-        shouldAutoScrollRef.current = true
-        return true
-      } else if (messages.length === 0) {
-        // Empty chat - mark as restored (nothing to scroll)
-        scrollRestoredRef.current = true
-        setShouldAutoScroll(true)
-        shouldAutoScrollRef.current = true
-        return true
-      }
-
-      return false
-    }
-
-    // Try immediate restoration
-    if (restoreScroll("immediate")) return
-
-    // If not restored, use ResizeObserver to wait for content to render
-    let attempts = 0
-    const maxAttempts = 15 // More attempts for slow renders
-
-    const resizeObserver = new ResizeObserver(() => {
-      attempts++
-      if (restoreScroll(`ResizeObserver(${attempts})`) || attempts >= maxAttempts) {
-        resizeObserver.disconnect()
+      if (hasAddedContent) {
+        requestAnimationFrame(() => {
+          isAutoScrollingRef.current = true
+          container.scrollTop = container.scrollHeight
+          requestAnimationFrame(() => {
+            isAutoScrollingRef.current = false
+          })
+        })
       }
     })
 
-    resizeObserver.observe(container)
-
-    // Also try with rAF chain as fallback
-    const tryWithRAF = (count: number) => {
-      if (scrollRestoredRef.current || count >= 5) return
-
-      requestAnimationFrame(() => {
-        if (restoreScroll(`rAF(${count})`)) return
-        tryWithRAF(count + 1)
-      })
-    }
-
-    requestAnimationFrame(() => tryWithRAF(0))
+    observer.observe(container, { childList: true, subtree: true })
 
     return () => {
-      resizeObserver.disconnect()
+      observer.disconnect()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subChatId]) // Only trigger on sub-chat change, not on messages change
+  }, [subChatId, isActive])
 
   // Attach scroll listener (separate effect)
   useEffect(() => {
@@ -1928,53 +3045,98 @@ function ChatViewInner({
     }
   }, [handleScroll])
 
-  // Track previous subChatId to skip auto-scroll on tab switch
-  const prevSubChatIdForAutoScrollRef = useRef<string | null>(null)
-
-  // Auto scroll to bottom when messages change (only if user is at bottom)
-  // Skip on tab switch and right after restore
+  // Auto scroll to bottom when messages change during streaming
+  // Only kicks in after content fills the viewport (overflow behavior)
   useEffect(() => {
-    const isTabSwitch =
-      prevSubChatIdForAutoScrollRef.current !== null &&
-      prevSubChatIdForAutoScrollRef.current !== subChatId
-    prevSubChatIdForAutoScrollRef.current = subChatId
+    // Skip if not active (keep-alive: don't scroll hidden tabs)
+    if (!isActive) return
+    // Skip if scroll not yet initialized
+    if (!scrollInitializedRef.current) return
 
-    if (isTabSwitch) return
-
-    // Skip if we just restored scroll position (prevents interference with restoration)
-    if (justRestoredRef.current) {
-      justRestoredRef.current = false
-      return
-    }
-
-    // Skip if scroll restoration is still in progress (ResizeObserver may still be working)
-    if (!scrollRestoredRef.current) return
-
-    // Only auto-scroll during active streaming when user is at bottom
+    // Auto-scroll during streaming if user hasn't scrolled up
     if (shouldAutoScrollRef.current && status === "streaming") {
       const container = chatContainerRef.current
       if (container) {
+        // Always scroll during streaming if auto-scroll is enabled
+        // (user can disable by scrolling up)
         requestAnimationFrame(() => {
+          isAutoScrollingRef.current = true
           container.scrollTop = container.scrollHeight
+          requestAnimationFrame(() => {
+            isAutoScrollingRef.current = false
+          })
         })
       }
     }
-  }, [messages, status, subChatId]) // Note: shouldAutoScroll intentionally not in deps - we only want to scroll on message/status changes, not when user scrolls to bottom
+  }, [isActive, messages, status, subChatId])
 
   // Auto-focus input when switching to this chat (any sub-chat change)
   // Skip on mobile to prevent keyboard from opening automatically
   useEffect(() => {
+    // Skip if not active (keep-alive: don't focus hidden tabs)
+    if (!isActive) return
     if (isMobile) return // Don't autofocus on mobile
 
     // Use requestAnimationFrame to ensure DOM is ready after render
     requestAnimationFrame(() => {
       editorRef.current?.focus()
     })
-  }, [subChatId, isMobile])
+  }, [isActive, subChatId, isMobile])
 
-  const handleSend = async () => {
+  // Refs for handleSend to avoid recreating callback on every messages change
+  const messagesLengthRef = useRef(messages.length)
+  messagesLengthRef.current = messages.length
+  const isPlanModeRef = useRef(isPlanMode)
+  isPlanModeRef.current = isPlanMode
+  const imagesRef = useRef(images)
+  imagesRef.current = images
+  const filesRef = useRef(files)
+  filesRef.current = files
+
+  const handleSend = useCallback(async () => {
     // Block sending while sandbox is still being set up
     if (sandboxSetupStatus !== "ready") {
+      return
+    }
+
+    // Get value from uncontrolled editor
+    const inputValue = editorRef.current?.getValue() || ""
+    const hasText = inputValue.trim().length > 0
+    const currentImages = imagesRef.current
+    const currentFiles = filesRef.current
+    const currentTextContexts = textContextsRef.current
+    const hasImages =
+      currentImages.filter((img) => !img.isLoading && img.url).length > 0
+    const hasTextContexts = currentTextContexts.length > 0
+
+    if (!hasText && !hasImages && !hasTextContexts) return
+
+    // If streaming, add to queue instead of sending directly
+    if (isStreamingRef.current) {
+      const queuedImages = currentImages
+        .filter((img) => !img.isLoading && img.url)
+        .map(toQueuedImage)
+      const queuedFiles = currentFiles
+        .filter((f) => !f.isLoading && f.url)
+        .map(toQueuedFile)
+      const queuedTextContexts = currentTextContexts.map(toQueuedTextContext)
+
+      const item = createQueueItem(
+        generateQueueId(),
+        inputValue.trim(),
+        queuedImages.length > 0 ? queuedImages : undefined,
+        queuedFiles.length > 0 ? queuedFiles : undefined,
+        queuedTextContexts.length > 0 ? queuedTextContexts : undefined
+      )
+      addToQueue(subChatId, item)
+
+      // Clear input and attachments
+      editorRef.current?.clear()
+      if (parentChatId) {
+        clearSubChatDraft(parentChatId, subChatId)
+      }
+      clearAll()
+      clearTextContexts()
       return
     }
 
@@ -1983,18 +3145,9 @@ function ChatViewInner({
       onRestoreWorkspace()
     }
 
-    // Get value from uncontrolled editor
-    const inputValue = editorRef.current?.getValue() || ""
-    const hasText = inputValue.trim().length > 0
-    const hasImages =
-      images.filter((img) => !img.isLoading && img.url).length > 0
-
-    if (!hasText && !hasImages) return
-
     const text = inputValue.trim()
     // Clear editor and draft from localStorage
     editorRef.current?.clear()
-    currentDraftTextRef.current = ""
     if (parentChatId) {
       clearSubChatDraft(parentChatId, subChatId)
     }
@@ -2003,11 +3156,11 @@ function ChatViewInner({
     trackMessageSent({
       workspaceId: subChatId,
       messageLength: text.length,
-      mode: isPlanMode ? "plan" : "agent",
+      mode: isPlanModeRef.current ? "plan" : "agent",
     })
 
     // Trigger auto-rename on first message in a new sub-chat
-    if (messages.length === 0 && !hasTriggeredRenameRef.current) {
+    if (messagesLengthRef.current === 0 && !hasTriggeredRenameRef.current) {
       hasTriggeredRenameRef.current = true
       onAutoRename(text || "Image message", subChatId)
     }
@@ -2015,7 +3168,7 @@ function ChatViewInner({
     // Build message parts: images first, then files, then text
     // Include base64Data for API transmission
     const parts: any[] = [
-      ...images
+      ...currentImages
         .filter((img) => !img.isLoading && img.url)
         .map((img) => ({
           type: "data-image" as const,
@@ -2026,36 +3179,59 @@ function ChatViewInner({
             base64Data: img.base64Data, // Include base64 data for Claude API
           },
         })),
-      ...files
+      ...currentFiles
         .filter((f) => !f.isLoading && f.url)
         .map((f) => ({
           type: "data-file" as const,
           data: {
             url: f.url,
-            mediaType: f.mediaType,
+            mediaType: (f as any).mediaType,
             filename: f.filename,
             size: f.size,
           },
         })),
     ]
 
-    if (text) {
-      parts.push({ type: "text", text })
+    // Add text contexts as mention tokens
+    const currentDiffTextContexts = diffTextContextsRef.current
+    let mentionPrefix = ""
+
+    if (currentTextContexts.length > 0 || currentDiffTextContexts.length > 0) {
+      const quoteMentions = currentTextContexts.map((tc) => {
+        const preview = tc.preview.replace(/[:\[\]]/g, "") // Sanitize preview
+        const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
+        return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
+      })
+
+      const diffMentions = currentDiffTextContexts.map((dtc) => {
+        const preview = dtc.preview.replace(/[:\[\]]/g, "") // Sanitize preview
+        const encodedText = utf8ToBase64(dtc.text) // Base64 encode full text
+        const lineNum = dtc.lineNumber || 0
+        return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
+      })
+
+      mentionPrefix = [...quoteMentions, ...diffMentions].join(" ") + " "
+    }
+
+    if (text || mentionPrefix) {
+      parts.push({ type: "text", text: mentionPrefix + (text || "") })
     }
 
     clearAll()
+    clearTextContexts()
+    clearDiffTextContexts()
 
     // Optimistic update: immediately update chat's updated_at and resort array for instant sidebar resorting
     if (teamId) {
       const now = new Date()
-      utils.agents.getAgentChats.setData({ teamId }, (old) => {
+      utils.agents.getAgentChats.setData({ teamId }, (old: any) => {
         if (!old) return old
         // Update the timestamp and sort by updated_at descending
-        const updated = old.map((c) =>
+        const updated = old.map((c: any) =>
           c.id === parentChatId ? { ...c, updated_at: now } : c,
         )
         return updated.sort(
-          (a, b) =>
+          (a: any, b: any) =>
             new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
         )
       })
@@ -2090,136 +3266,195 @@ function ChatViewInner({
     // Optimistically update sub-chat timestamp to move it to top
     useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
 
-    // Force scroll to bottom when sending a message
+    // Enable auto-scroll and immediately scroll to bottom
     shouldAutoScrollRef.current = true
-    const container = chatContainerRef.current
-    if (container) {
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight
+    scrollToBottom()
+
+    await sendMessageRef.current({ role: "user", parts })
+  }, [
+    sandboxSetupStatus,
+    isArchived,
+    onRestoreWorkspace,
+    parentChatId,
+    subChatId,
+    onAutoRename,
+    clearAll,
+    clearTextContexts,
+    teamId,
+    addToQueue,
+  ])
+
+  // Queue handlers for sending queued messages
+  const handleSendFromQueue = useCallback(async (itemId: string) => {
+    const item = popItemFromQueue(subChatId, itemId)
+    if (!item) return
+
+    // Build message parts from queued item
+    const parts: any[] = [
+      ...(item.images || []).map((img) => ({
+        type: "data-image" as const,
+        data: {
+          url: img.url,
+          mediaType: img.mediaType,
+          filename: img.filename,
+          base64Data: img.base64Data,
+        },
+      })),
+      ...(item.files || []).map((f) => ({
+        type: "data-file" as const,
+        data: {
+          url: f.url,
+          mediaType: f.mediaType,
+          filename: f.filename,
+          size: f.size,
+        },
+      })),
+    ]
+
+    // Add text contexts as mention tokens
+    let mentionPrefix = ""
+    if (item.textContexts && item.textContexts.length > 0) {
+      const quoteMentions = item.textContexts.map((tc) => {
+        const preview = tc.text.slice(0, 50).replace(/[:\[\]]/g, "") // Create and sanitize preview
+        const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
+        return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
       })
+      mentionPrefix = quoteMentions.join(" ") + " "
     }
 
-    await sendMessage({ role: "user", parts })
-  }
-
-  const handleMentionSelect = useCallback((mention: FileMentionOption) => {
-    // Category navigation - enter subpage instead of inserting mention
-    if (mention.type === "category") {
-      if (mention.id === "files") {
-        setShowingFilesList(true)
-        return
-      }
-      if (mention.id === "skills") {
-        setShowingSkillsList(true)
-        return
-      }
-      if (mention.id === "agents") {
-        setShowingAgentsList(true)
-        return
-      }
-      if (mention.id === "tools") {
-        setShowingToolsList(true)
-        return
-      }
+    // Add diff text contexts as mention tokens
+    if (item.diffTextContexts && item.diffTextContexts.length > 0) {
+      const diffMentions = item.diffTextContexts.map((dtc) => {
+        const preview = dtc.text.slice(0, 50).replace(/[:\[\]]/g, "") // Create and sanitize preview
+        const encodedText = utf8ToBase64(dtc.text) // Base64 encode full text
+        const lineNum = dtc.lineNumber || 0
+        return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
+      })
+      mentionPrefix += diffMentions.join(" ") + " "
     }
 
-    // Otherwise: insert mention as normal
-    editorRef.current?.insertMention(mention)
-    setShowMentionDropdown(false)
-    // Reset subpage state
-    setShowingFilesList(false)
-    setShowingSkillsList(false)
-    setShowingAgentsList(false)
-    setShowingToolsList(false)
-  }, [])
+    if (item.message || mentionPrefix) {
+      parts.push({ type: "text", text: mentionPrefix + (item.message || "") })
+    }
 
-  // Slash command handlers
-  const handleSlashTrigger = useCallback(
-    ({ searchText, rect }: { searchText: string; rect: DOMRect }) => {
-      setSlashSearchText(searchText)
-      setSlashPosition({ top: rect.top, left: rect.left })
-      setShowSlashDropdown(true)
-    },
-    [],
-  )
+    // Track message sent
+    trackMessageSent({
+      workspaceId: subChatId,
+      messageLength: item.message.length,
+      mode: isPlanModeRef.current ? "plan" : "agent",
+    })
 
-  const handleCloseSlashTrigger = useCallback(() => {
-    setShowSlashDropdown(false)
-  }, [])
+    // Update timestamps
+    useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
 
-  const handleSlashSelect = useCallback(
-    (command: SlashCommandOption) => {
-      // Clear the slash command text from editor
-      editorRef.current?.clearSlashCommand()
-      setShowSlashDropdown(false)
+    // Enable auto-scroll and immediately scroll to bottom
+    shouldAutoScrollRef.current = true
+    scrollToBottom()
 
-      // Handle builtin commands
-      if (command.category === "builtin") {
-        switch (command.name) {
-          case "clear":
-            // Create a new sub-chat (fresh conversation)
-            if (onCreateNewSubChat) {
-              onCreateNewSubChat()
-            }
-            break
-          case "plan":
-            if (!isPlanMode) {
-              setIsPlanMode(true)
-            }
-            break
-          case "agent":
-            if (isPlanMode) {
-              setIsPlanMode(false)
-            }
-            break
-          case "compact":
-            // Trigger context compaction
-            handleCompact()
-            break
-          // Prompt-based commands - auto-send to agent
-          case "review":
-          case "pr-comments":
-          case "release-notes":
-          case "security-review": {
-            const prompt =
-              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
-            if (prompt) {
-              editorRef.current?.setValue(prompt)
-              // Auto-send the prompt to agent
-              setTimeout(() => handleSend(), 0)
-            }
-            break
-          }
-        }
-        return
-      }
+    await sendMessageRef.current({ role: "user", parts })
+  }, [subChatId, popItemFromQueue])
 
-      // Handle repository commands - auto-send to agent
-      if (command.prompt) {
-        editorRef.current?.setValue(command.prompt)
-        setTimeout(() => handleSend(), 0)
-      }
-    },
-    [isPlanMode, setIsPlanMode, handleSend, onCreateNewSubChat, handleCompact],
-  )
+  const handleRemoveFromQueue = useCallback((itemId: string) => {
+    removeFromQueue(subChatId, itemId)
+  }, [subChatId, removeFromQueue])
 
-  // Paste handler for images and plain text
-  // Uses async text insertion to prevent UI freeze with large text
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => handlePasteEvent(e, handleAddAttachments),
-    [handleAddAttachments],
-  )
+  // Force send - stop stream and send immediately, bypassing queue (Opt+Enter)
+  const handleForceSend = useCallback(async () => {
+    // Block sending while sandbox is still being set up
+    if (sandboxSetupStatus !== "ready") {
+      return
+    }
 
-  // Drag/drop handlers
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }, [])
+    // Get value from uncontrolled editor
+    const inputValue = editorRef.current?.getValue() || ""
+    const hasText = inputValue.trim().length > 0
+    const currentImages = imagesRef.current
+    const currentFiles = filesRef.current
+    const hasImages =
+      currentImages.filter((img) => !img.isLoading && img.url).length > 0
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-  }, [])
+    if (!hasText && !hasImages) return
+
+    // Stop current stream if streaming
+    if (isStreamingRef.current) {
+      await handleStop()
+      // Small delay to ensure stop completes
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+
+    // Auto-restore archived workspace when sending a message
+    if (isArchived && onRestoreWorkspace) {
+      onRestoreWorkspace()
+    }
+
+    const text = inputValue.trim()
+    // Clear editor and draft from localStorage
+    editorRef.current?.clear()
+    if (parentChatId) {
+      clearSubChatDraft(parentChatId, subChatId)
+    }
+
+    // Track message sent
+    trackMessageSent({
+      workspaceId: subChatId,
+      messageLength: text.length,
+      mode: isPlanModeRef.current ? "plan" : "agent",
+    })
+
+    // Build message parts
+    const parts: any[] = [
+      ...currentImages
+        .filter((img) => !img.isLoading && img.url)
+        .map((img) => ({
+          type: "data-image" as const,
+          data: {
+            url: img.url,
+            mediaType: img.mediaType,
+            filename: img.filename,
+            base64Data: img.base64Data,
+          },
+        })),
+      ...currentFiles
+        .filter((f) => !f.isLoading && f.url)
+        .map((f) => ({
+          type: "data-file" as const,
+          data: {
+            url: f.url,
+            mediaType: f.mediaType,
+            filename: f.filename,
+            size: f.size,
+          },
+        })),
+    ]
+
+    if (text) {
+      parts.push({ type: "text", text })
+    }
+
+    // Clear attachments
+    clearAll()
+
+    // Update timestamps
+    useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
+
+    // Force scroll to bottom
+    shouldAutoScrollRef.current = true
+    scrollToBottom()
+
+    await sendMessageRef.current({ role: "user", parts })
+  }, [
+    sandboxSetupStatus,
+    isArchived,
+    onRestoreWorkspace,
+    parentChatId,
+    subChatId,
+    handleStop,
+    clearAll,
+  ])
+
+  // NOTE: Auto-processing of queue is now handled globally by QueueProcessor
+  // component in agents-layout.tsx. This ensures queues continue processing
+  // even when user navigates to different sub-chats or workspaces.
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -2284,16 +3519,17 @@ function ChatViewInner({
     }
   }
 
-  // Check if there's an unapproved plan (ExitPlanMode without subsequent "Implement plan")
+  // Check if there's an unapproved plan (ExitPlanMode without subsequent "Build plan" or "Implement plan")
   const hasUnapprovedPlan = useMemo(() => {
     // Traverse messages from end to find unapproved ExitPlanMode
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
 
-      // If user message says "Implement plan", plan is already approved
+      // If user message says "Build plan" or "Implement plan", plan is already approved
       if (msg.role === "user") {
         const text = msg.parts?.find((p: any) => p.type === "text")?.text || ""
-        if (text.trim().toLowerCase() === "implement plan") {
+        const normalizedText = text.trim().toLowerCase()
+        if (normalizedText === "build plan" || normalizedText === "implement plan") {
           return false
         }
       }
@@ -2310,6 +3546,9 @@ function ChatViewInner({
     }
     return false
   }, [messages])
+
+  // Keep ref in sync for use in initializeScroll (which runs in useLayoutEffect)
+  hasUnapprovedPlanRef.current = hasUnapprovedPlan
 
   // Update pending plan approvals atom for sidebar indicators
   const setPendingPlanApprovals = useSetAtom(pendingPlanApprovalsAtom)
@@ -2348,6 +3587,31 @@ function ChatViewInner({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [hasUnapprovedPlan, isStreaming, handleApprovePlan])
 
+  // Cmd/Ctrl + Arrow Down to scroll to bottom (works even when focused in input)
+  // But don't intercept if input has content - let native cursor navigation work
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === "ArrowDown" &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey
+      ) {
+        // Don't intercept if input has content - let native cursor navigation work
+        const inputValue = editorRef.current?.getValue() || ""
+        if (inputValue.trim().length > 0) {
+          return
+        }
+
+        e.preventDefault()
+        scrollToBottom()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [scrollToBottom])
+
   // Clean up pending plan approval when unmounting
   useEffect(() => {
     return () => {
@@ -2362,43 +3626,113 @@ function ChatViewInner({
     }
   }, [subChatId, setPendingPlanApprovals])
 
-  // Group messages into pairs: [userMsg, ...assistantMsgs]
-  // Each group is a "conversation turn" where user message is sticky within the group
-  const messageGroups = useMemo(() => {
-    const groups: {
-      userMsg: (typeof messages)[0]
-      assistantMsgs: (typeof messages)[0][]
-    }[] = []
-    let currentGroup: {
-      userMsg: (typeof messages)[0]
-      assistantMsgs: (typeof messages)[0][]
-    } | null = null
+  // Compute sticky top class for user messages
+  const stickyTopClass = isMobile
+    ? CHAT_LAYOUT.stickyTopMobile
+    : isSubChatsSidebarOpen
+      ? CHAT_LAYOUT.stickyTopSidebarOpen
+      : CHAT_LAYOUT.stickyTopSidebarClosed
 
-    for (const msg of messages) {
-      if (msg.role === "user") {
-        // Start a new group
-        if (currentGroup) {
-          groups.push(currentGroup)
-        }
-        currentGroup = { userMsg: msg, assistantMsgs: [] }
-      } else if (currentGroup) {
-        // Add assistant message to current group
-        currentGroup.assistantMsgs.push(msg)
-      }
-    }
+  // Sync messages to Jotai store for isolated rendering
+  // CRITICAL: Only sync from the ACTIVE tab to prevent overwriting global atoms
+  // Each tab has its own useChat() instance, but global atoms (messageIdsAtom, etc.) are shared.
+  // Only the active tab should update these global atoms.
+  const syncMessages = useSetAtom(syncMessagesWithStatusAtom)
+  useLayoutEffect(() => {
+    // Skip syncing for inactive tabs - they shouldn't update global atoms
+    if (!isActive) return
+    syncMessages({ messages, status, subChatId })
+  }, [messages, status, subChatId, syncMessages, isActive])
 
-    // Push the last group
-    if (currentGroup) {
-      groups.push(currentGroup)
-    }
+  // Sync status to global streaming status store for queue processing
+  const setStreamingStatus = useStreamingStatusStore((s) => s.setStatus)
+  useEffect(() => {
+    setStreamingStatus(subChatId, status as "ready" | "streaming" | "submitted" | "error")
+  }, [subChatId, status, setStreamingStatus])
 
-    return groups
-  }, [messages])
+  // Chat search - scroll to current match
+  // Use ref to track scroll lock and prevent race conditions
+  const searchScrollLockRef = useRef<number>(0)
+  const currentSearchMatch = useAtomValue(chatSearchCurrentMatchAtom)
+  useEffect(() => {
+    if (!currentSearchMatch) return
+
+    const container = chatContainerRef.current
+    if (!container) return
+
+    // Increment lock to cancel any pending scroll operations
+    const currentLock = ++searchScrollLockRef.current
+
+    // Use double requestAnimationFrame + small delay to ensure DOM has updated with new highlights
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          // Check if this scroll operation is still valid (not superseded by newer one)
+          if (searchScrollLockRef.current !== currentLock) return
+
+          // First try to find the highlight mark
+          let targetElement: Element | null = container.querySelector(".search-highlight-current")
+
+          // If no highlight mark, find the message element with matching data attributes
+          if (!targetElement) {
+            const selector = `[data-message-id="${currentSearchMatch.messageId}"][data-part-index="${currentSearchMatch.partIndex}"]`
+            targetElement = container.querySelector(selector)
+          }
+
+          if (targetElement) {
+            // Check if this is inside a sticky user message container
+            const stickyParent = targetElement.closest("[data-user-message-id]")
+            if (stickyParent) {
+              const messageGroupWrapper = stickyParent.parentElement
+              if (messageGroupWrapper) {
+                messageGroupWrapper.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+                return
+              }
+            }
+
+            targetElement.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            })
+          }
+        }, 50)
+      })
+    })
+  }, [currentSearchMatch])
+
+  // Calculate top offset for search bar based on sub-chat selector
+  const searchBarTopOffset = isSubChatsSidebarOpen ? "52px" : undefined
 
   return (
-    <>
-      {/* Chat title - flex above scroll area (desktop only) */}
-      {!isMobile && (
+    <TextSelectionProvider>
+    <SearchHighlightProvider>
+      <div className="flex flex-col flex-1 min-h-0 relative">
+        {/* Text selection popover for adding text to context */}
+        <TextSelectionPopover
+          onAddToContext={addTextContext}
+          onQuickComment={handleQuickComment}
+          onFocusInput={handleFocusInput}
+        />
+
+        {/* Quick comment input */}
+        {quickCommentState && (
+          <QuickCommentInput
+            selectedText={quickCommentState.selectedText}
+            source={quickCommentState.source}
+            rect={quickCommentState.rect}
+            onSubmit={handleQuickCommentSubmit}
+            onCancel={handleQuickCommentCancel}
+          />
+        )}
+
+        {/* Chat search bar */}
+        <ChatSearchBar messages={messages} topOffset={searchBarTopOffset} />
+
+        {/* Chat title - flex above scroll area (desktop only) */}
+        {!isMobile && (
         <div
           className={cn(
             "flex-shrink-0 pb-2",
@@ -2425,661 +3759,29 @@ function ChatViewInner({
         tabIndex={-1}
         data-chat-container
       >
-        <div className="px-2 max-w-2xl mx-auto -mb-4 pb-8 space-y-4">
+        <div
+          className="px-2 max-w-2xl mx-auto -mb-4 space-y-4"
+          style={{
+            paddingBottom: "32px",
+          }}
+        >
           <div>
-            {/* Render message groups - each group has user message sticky within it */}
-            {messageGroups.map((group, groupIndex) => {
-              const msg = group.userMsg
-              const isLastUserMessage = groupIndex === messageGroups.length - 1
-
-              // User message data
-              const textContent = msg.parts
-                ?.filter((p: any) => p.type === "text")
-                .map((p: any) => p.text)
-                .join("\n")
-
-              const imageParts =
-                msg.parts?.filter((p: any) => p.type === "data-image") || []
-
-              // Show cloning when sandbox is being set up (only for last user message with no responses)
-              const shouldShowCloning =
-                sandboxSetupStatus === "cloning" &&
-                isLastUserMessage &&
-                group.assistantMsgs.length === 0
-
-              // Show setup error if sandbox setup failed
-              const shouldShowSetupError =
-                sandboxSetupStatus === "error" &&
-                isLastUserMessage &&
-                group.assistantMsgs.length === 0
-
-              return (
-                <MessageGroup key={msg.id}>
-                      {/* Attachments - NOT sticky, scroll normally */}
-                      {imageParts.length > 0 && (
-                        <motion.div
-                          className="mb-2 pointer-events-auto"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.1, ease: "easeOut" }}
-                        >
-                          <AgentUserMessageBubble
-                            messageId={msg.id}
-                            textContent=""
-                            imageParts={imageParts}
-                          />
-                        </motion.div>
-                      )}
-                      {/* User message text - sticky WITHIN this group */}
-                      <div
-                        data-user-message-id={msg.id}
-                        className={cn(
-                          "[&>div]:!mb-4 pointer-events-auto",
-                          // Sticky within the group container
-                          // No z-index here to avoid blocking dropdowns/tooltips
-                          "sticky",
-                          isMobile
-                            ? CHAT_LAYOUT.stickyTopMobile
-                            : isSubChatsSidebarOpen
-                              ? CHAT_LAYOUT.stickyTopSidebarOpen
-                              : CHAT_LAYOUT.stickyTopSidebarClosed,
-                        )}
-                      >
-                        <AgentUserMessageBubble
-                          messageId={msg.id}
-                          textContent={textContent || ""}
-                          imageParts={[]}
-                        />
-                        {/* Cloning indicator - shown while sandbox is being set up */}
-                        {shouldShowCloning && (
-                          <div className="mt-4">
-                            <AgentToolCall
-                              icon={AgentToolRegistry["tool-cloning"].icon}
-                              title={AgentToolRegistry["tool-cloning"].title({})}
-                              isPending={true}
-                              isError={false}
-                            />
-                          </div>
-                        )}
-                        {/* Setup error with retry */}
-                        {shouldShowSetupError && (
-                          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                            <div className="flex items-center gap-2 text-destructive text-sm">
-                              <span>
-                                Failed to set up sandbox
-                                {sandboxSetupError ? `: ${sandboxSetupError}` : ""}
-                              </span>
-                              {onRetrySetup && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={onRetrySetup}
-                                >
-                                  Retry
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Assistant messages in this group */}
-                      {group.assistantMsgs.map((assistantMsg) => {
-                        const isLastMessage =
-                          assistantMsg.id === messages[messages.length - 1]?.id
-
-                    // Assistant message - flat layout, no bubble (like Canvas)
-                    const contentParts =
-                      assistantMsg.parts?.filter(
-                        (p: any) => p.type !== "step-start",
-                      ) || []
-
-                    // Show planning when streaming but no content yet (like Canvas)
-                    // Only show after sandbox is ready
-                    const shouldShowPlanning =
-                      sandboxSetupStatus === "ready" &&
-                      isStreaming &&
-                      isLastMessage &&
-                      contentParts.length === 0
-
-                    // Check if message has text content (for copy button)
-                    const hasTextContent = assistantMsg.parts?.some(
-                      (p: any) => p.type === "text" && p.text?.trim(),
-                    )
-
-                    // Build map of nested tools per parent Task
-                    const nestedToolsMap = new Map<string, any[]>()
-                    const nestedToolIds = new Set<string>()
-                    const taskPartIds = new Set(
-                      (assistantMsg.parts || [])
-                        .filter(
-                          (p: any) => p.type === "tool-Task" && p.toolCallId,
-                        )
-                        .map((p: any) => p.toolCallId),
-                    )
-                    const orphanTaskGroups = new Map<
-                      string,
-                      { parts: any[]; firstToolCallId: string }
-                    >()
-                    const orphanToolCallIds = new Set<string>()
-                    const orphanFirstToolCallIds = new Set<string>()
-
-                    for (const part of assistantMsg.parts || []) {
-                      if (part.toolCallId?.includes(":")) {
-                        const parentId = part.toolCallId.split(":")[0]
-                        if (taskPartIds.has(parentId)) {
-                          if (!nestedToolsMap.has(parentId)) {
-                            nestedToolsMap.set(parentId, [])
-                          }
-                          nestedToolsMap.get(parentId)!.push(part)
-                          nestedToolIds.add(part.toolCallId)
-                        } else {
-                          let group = orphanTaskGroups.get(parentId)
-                          if (!group) {
-                            group = {
-                              parts: [],
-                              firstToolCallId: part.toolCallId,
-                            }
-                            orphanTaskGroups.set(parentId, group)
-                            orphanFirstToolCallIds.add(part.toolCallId)
-                          }
-                          group.parts.push(part)
-                          orphanToolCallIds.add(part.toolCallId)
-                        }
-                      }
-                    }
-
-                    // Get metadata for usage display
-                    const msgMetadata =
-                      assistantMsg.metadata as AgentMessageMetadata
-
-                    // Detect final text by structure: last text part after any tool parts
-                    // This works locally without needing metadata.finalTextId
-                    const allParts = assistantMsg.parts || []
-
-                    // Find the last tool index and last text index
-                    let lastToolIndex = -1
-                    let lastTextIndex = -1
-                    for (let i = 0; i < allParts.length; i++) {
-                      const part = allParts[i]
-                      if (part.type?.startsWith("tool-")) {
-                        lastToolIndex = i
-                      }
-                      if (part.type === "text" && part.text?.trim()) {
-                        lastTextIndex = i
-                      }
-                    }
-
-                    // Final text exists if: there are tools AND the last text comes AFTER the last tool
-                    // For streaming messages, don't show as final until streaming completes
-                    const hasToolsAndFinalText =
-                      lastToolIndex !== -1 && lastTextIndex > lastToolIndex
-
-                    const finalTextIndex = hasToolsAndFinalText
-                      ? lastTextIndex
-                      : -1
-
-                    // Separate parts into steps (before final) and final text
-                    // For non-last messages, show final text even while streaming (they're already complete)
-                    const hasFinalText =
-                      finalTextIndex !== -1 && (!isStreaming || !isLastMessage)
-
-                    // Check if message has a plan (ExitPlanMode tool)
-                    const exitPlanPart = allParts.find(
-                      (p: any) => p.type === "tool-ExitPlanMode",
-                    )
-                    const planText = typeof exitPlanPart?.output?.plan === "string"
-                      ? exitPlanPart.output.plan
-                      : ""
-                    const hasPlan = !!planText
-
-                    // If has plan, treat everything before plan as steps to collapse
-                    const stepParts = hasFinalText
-                      ? (assistantMsg.parts || []).slice(0, finalTextIndex)
-                      : hasPlan
-                        ? allParts.filter((p: any) => p.type !== "tool-ExitPlanMode") // All parts except plan are steps
-                        : []
-                    const finalParts = hasFinalText
-                      ? (assistantMsg.parts || []).slice(finalTextIndex)
-                      : hasPlan
-                        ? [] // Plan is rendered separately, no final parts
-                        : assistantMsg.parts || []
-
-                    // Count visible step items (for the toggle label)
-                    const visibleStepsCount = stepParts.filter((p: any) => {
-                      if (p.type === "step-start") return false
-                      if (p.type === "tool-TaskOutput") return false
-                      if (p.toolCallId && nestedToolIds.has(p.toolCallId))
-                        return false
-                      if (
-                        p.toolCallId &&
-                        orphanToolCallIds.has(p.toolCallId) &&
-                        !orphanFirstToolCallIds.has(p.toolCallId)
-                      )
-                        return false
-                      if (p.type === "text" && !p.text?.trim()) return false
-                      return true
-                    }).length
-
-                    // Helper function to render a single part
-                    const renderPart = (
-                      part: any,
-                      idx: number,
-                      isFinal = false,
-                    ) => {
-                      // Skip step-start parts
-                      if (part.type === "step-start") {
-                        return null
-                      }
-
-                      // Skip TaskOutput - internal tool with meta info not useful for UI
-                      if (part.type === "tool-TaskOutput") {
-                        return null
-                      }
-
-                      if (
-                        part.toolCallId &&
-                        orphanToolCallIds.has(part.toolCallId)
-                      ) {
-                        if (!orphanFirstToolCallIds.has(part.toolCallId)) {
-                          return null
-                        }
-                        const parentId = part.toolCallId.split(":")[0]
-                        const group = orphanTaskGroups.get(parentId)
-                        if (group) {
-                          return (
-                            <AgentTaskTool
-                              key={idx}
-                              part={{
-                                type: "tool-Task",
-                                toolCallId: parentId,
-                                input: {
-                                  subagent_type: "unknown-agent",
-                                  description: "Incomplete task",
-                                },
-                              }}
-                              nestedTools={group.parts}
-                              chatStatus={status}
-                            />
-                          )
-                        }
-                      }
-
-                      // Skip nested tools - they're rendered within their parent Task
-                      if (
-                        part.toolCallId &&
-                        nestedToolIds.has(part.toolCallId)
-                      ) {
-                        return null
-                      }
-
-                      // Exploring group - grouped Read/Grep/Glob tools
-                      // NOTE: isGroupStreaming is calculated in the map() call below
-                      // because we need to know if this is the last element
-                      if (part.type === "exploring-group") {
-                        return null // Handled separately in map with isLast info
-                      }
-
-                      // Text parts - with px-2 like Canvas
-                      if (part.type === "text") {
-                        if (!part.text?.trim()) return null
-                        // Check if this is the final text by comparing index (parts don't have IDs)
-                        const isFinalText = isFinal && idx === finalTextIndex
-
-                        return (
-                          <div
-                            key={idx}
-                            className={cn(
-                              "text-foreground px-2",
-                              // Only show Summary styling if there are steps to collapse
-                              isFinalText &&
-                                visibleStepsCount > 0 &&
-                                "pt-3 border-t border-border/50",
-                            )}
-                          >
-                            {/* Only show Summary label if there are steps to collapse */}
-                            {isFinalText && visibleStepsCount > 0 && (
-                              <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium mb-1">
-                                Response
-                              </div>
-                            )}
-                            <ChatMarkdownRenderer
-                              content={part.text}
-                              size="sm"
-                            />
-                          </div>
-                        )
-                      }
-
-                      // Special handling for tool-Task - render with nested tools
-                      if (part.type === "tool-Task") {
-                        const nestedTools =
-                          nestedToolsMap.get(part.toolCallId) || []
-                        return (
-                          <AgentTaskTool
-                            key={idx}
-                            part={part}
-                            nestedTools={nestedTools}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-Bash - render with full command and output
-                      if (part.type === "tool-Bash") {
-                        return (
-                          <AgentBashTool
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-Thinking - Extended Thinking
-                      if (part.type === "tool-Thinking") {
-                        return (
-                          <AgentThinkingTool
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-Edit - render with file icon and diff stats
-                      if (part.type === "tool-Edit") {
-                        return (
-                          <AgentEditTool
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-Write - render with file preview (reuses AgentEditTool)
-                      if (part.type === "tool-Write") {
-                        return (
-                          <AgentEditTool
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-WebSearch - collapsible results list
-                      if (part.type === "tool-WebSearch") {
-                        return (
-                          <AgentWebSearchCollapsible
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-WebFetch - expandable content preview
-                      if (part.type === "tool-WebFetch") {
-                        return (
-                          <AgentWebFetchTool
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-PlanWrite - plan with steps
-                      if (part.type === "tool-PlanWrite") {
-                        return (
-                          <AgentPlanTool
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-ExitPlanMode - show simple indicator inline
-                      // Full plan card is rendered at end of message
-                      if (part.type === "tool-ExitPlanMode") {
-                        const { isPending, isError } = getToolStatus(
-                          part,
-                          status,
-                        )
-                        return (
-                          <AgentToolCall
-                            key={idx}
-                            icon={AgentToolRegistry["tool-ExitPlanMode"].icon}
-                            title={AgentToolRegistry["tool-ExitPlanMode"].title(
-                              part,
-                            )}
-                            isPending={isPending}
-                            isError={isError}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-TodoWrite - todo list with progress
-                      // All todos render inline - sticky behavior is handled by IntersectionObserver
-                      if (part.type === "tool-TodoWrite") {
-                        return (
-                          <AgentTodoTool
-                            key={idx}
-                            part={part}
-                            chatStatus={status}
-                            subChatId={subChatId}
-                          />
-                        )
-                      }
-
-                      // Special handling for tool-AskUserQuestion
-                      if (part.type === "tool-AskUserQuestion") {
-                        const { isPending, isError } = getToolStatus(
-                          part,
-                          status,
-                        )
-                        return (
-                          <AgentAskUserQuestionTool
-                            key={idx}
-                            input={part.input}
-                            result={part.result}
-                            errorText={
-                              (part as any).errorText || (part as any).error
-                            }
-                            state={isPending ? "call" : "result"}
-                            isError={isError}
-                            isStreaming={isStreaming && isLastMessage}
-                            toolCallId={part.toolCallId}
-                          />
-                        )
-                      }
-
-                      // Tool parts - check registry
-                      if (part.type in AgentToolRegistry) {
-                        const meta = AgentToolRegistry[part.type]
-                        const { isPending, isError } = getToolStatus(
-                          part,
-                          status,
-                        )
-                        return (
-                          <AgentToolCall
-                            key={idx}
-                            icon={meta.icon}
-                            title={meta.title(part)}
-                            subtitle={meta.subtitle?.(part)}
-                            isPending={isPending}
-                            isError={isError}
-                          />
-                        )
-                      }
-
-                      // Fallback for unknown tool types
-                      if (part.type?.startsWith("tool-")) {
-                        return (
-                          <div
-                            key={idx}
-                            className="text-xs text-muted-foreground py-0.5 px-2"
-                          >
-                            {part.type.replace("tool-", "")}
-                          </div>
-                        )
-                      }
-
-                      return null
-                    }
-
-                    return (
-                      <motion.div
-                        key={assistantMsg.id}
-                        data-assistant-message-id={assistantMsg.id}
-                        className="group/message w-full mb-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.1, ease: "easeOut" }}
-                      >
-                        <div className="flex flex-col gap-1.5">
-                          {/* Collapsible steps section - show when we have final text OR a plan */}
-                          {(hasFinalText || hasPlan) && visibleStepsCount > 0 && (
-                            <CollapsibleSteps stepsCount={visibleStepsCount}>
-                              {(() => {
-                                const grouped = groupExploringTools(
-                                  stepParts,
-                                  nestedToolIds,
-                                )
-                                return grouped.map((part: any, idx: number) => {
-                                  // Handle exploring-group with isLast check
-                                  if (part.type === "exploring-group") {
-                                    const isLast = idx === grouped.length - 1
-                                    const isGroupStreaming =
-                                      isStreaming && isLastMessage && isLast
-                                    return (
-                                      <AgentExploringGroup
-                                        key={idx}
-                                        parts={part.parts}
-                                        chatStatus={status}
-                                        isStreaming={isGroupStreaming}
-                                      />
-                                    )
-                                  }
-                                  return renderPart(part, idx, false)
-                                })
-                              })()}
-                            </CollapsibleSteps>
-                          )}
-
-                          {/* Final parts (or all parts if no final text yet) */}
-                          {(() => {
-                            const grouped = groupExploringTools(
-                              finalParts,
-                              nestedToolIds,
-                            )
-                            return grouped.map((part: any, idx: number) => {
-                              // Handle exploring-group with isLast check
-                              if (part.type === "exploring-group") {
-                                const isLast = idx === grouped.length - 1
-                                const isGroupStreaming =
-                                  isStreaming && isLastMessage && isLast
-                                return (
-                                  <AgentExploringGroup
-                                    key={idx}
-                                    parts={part.parts}
-                                    chatStatus={status}
-                                    isStreaming={isGroupStreaming}
-                                  />
-                                )
-                              }
-                              return renderPart(
-                                part,
-                                hasFinalText ? finalTextIndex + idx : idx,
-                                hasFinalText,
-                              )
-                            })
-                          })()}
-
-                          {/* Plan card at end of message - if ExitPlanMode tool has plan content */}
-                          {hasPlan && exitPlanPart && (
-                            <AgentExitPlanModeTool
-                              part={exitPlanPart}
-                              chatStatus={status}
-                            />
-                          )}
-
-                          {/* Planning indicator - like Canvas */}
-                          {shouldShowPlanning && (
-                            <AgentToolCall
-                              icon={AgentToolRegistry["tool-planning"].icon}
-                              title={AgentToolRegistry["tool-planning"].title(
-                                {},
-                              )}
-                              isPending={true}
-                              isError={false}
-                            />
-                          )}
-                        </div>
-
-                        {/* Copy, Play, and Usage buttons bar - shows on hover (always visible on mobile) */}
-                        {(hasTextContent || hasPlan) && (!isStreaming || !isLastMessage) && (
-                          <div className="flex justify-between items-center h-6 px-2 mt-1">
-                            <div className="flex items-center gap-0.5">
-                              <CopyButton
-                                onCopy={() => {
-                                  // If has plan, copy plan text; otherwise copy message content
-                                  if (hasPlan) {
-                                    navigator.clipboard.writeText(planText)
-                                  } else {
-                                    copyMessageContent(assistantMsg)
-                                  }
-                                }}
-                                isMobile={isMobile}
-                              />
-                              {/* Play button - plays plan if exists, otherwise final text or full message */}
-                              <PlayButton
-                                text={
-                                  hasPlan
-                                    ? planText
-                                    : hasFinalText
-                                      ? allParts[finalTextIndex]?.text || ""
-                                      : getMessageTextContent(assistantMsg)
-                                }
-                                isMobile={isMobile}
-                                playbackRate={ttsPlaybackRate}
-                                onPlaybackRateChange={handlePlaybackRateChange}
-                              />
-                            </div>
-                            {/* Token usage info - right side */}
-                            <AgentMessageUsage
-                              metadata={
-                                assistantMsg.metadata as AgentMessageMetadata
-                              }
-                              isStreaming={isStreaming}
-                              isMobile={isMobile}
-                            />
-                          </div>
-                        )}
-                      </motion.div>
-                    )
-                  })}
-
-                  {/* Planning indicator - shown when streaming starts but no assistant message yet */}
-                  {isStreaming &&
-                    isLastUserMessage &&
-                    group.assistantMsgs.length === 0 &&
-                        sandboxSetupStatus === "ready" && (
-                          <div className="mt-4">
-                            <AgentToolCall
-                              icon={AgentToolRegistry["tool-planning"].icon}
-                              title={AgentToolRegistry["tool-planning"].title({})}
-                              isPending={true}
-                              isError={false}
-                            />
-                          </div>
-                        )}
-                </MessageGroup>
-              )
-            })}
+            {/* ISOLATED: Messages rendered via Jotai atom subscription
+                Each component subscribes to specific atoms and only re-renders when those change
+                KEY: Force remount on subChatId change to ensure fresh atom reads after syncMessages */}
+            <IsolatedMessagesSection
+              key={subChatId}
+              subChatId={subChatId}
+              isMobile={isMobile}
+              sandboxSetupStatus={sandboxSetupStatus}
+              stickyTopClass={stickyTopClass}
+              sandboxSetupError={sandboxSetupError}
+              onRetrySetup={onRetrySetup}
+              UserBubbleComponent={AgentUserMessageBubble}
+              ToolCallComponent={AgentToolCall}
+              MessageGroupWrapper={MessageGroup}
+              toolRegistry={AgentToolRegistry}
+            />
           </div>
         </div>
       </div>
@@ -3090,496 +3792,100 @@ function ChatViewInner({
         <div className="px-4 relative z-20">
           <div className="w-full px-2 max-w-2xl mx-auto">
             <AgentUserQuestion
+              ref={questionRef}
               pendingQuestions={pendingQuestions}
               onAnswer={handleQuestionsAnswer}
               onSkip={handleQuestionsSkip}
+              hasCustomText={inputHasContent}
             />
           </div>
         </div>
       )}
 
-      {/* Sub-chat status card - pinned above input */}
-      {(isStreaming || changedFilesForSubChat.length > 0) &&
-        !(pendingQuestions?.subChatId === subChatId) && (
-          <div className="px-2 -mb-6 relative z-0">
+      {/* Stacked cards container - queue + status */}
+      {!(pendingQuestions?.subChatId === subChatId) &&
+        (queue.length > 0 || changedFilesForSubChat.length > 0) && (
+          <div className="px-2 -mb-6 relative z-10">
             <div className="w-full max-w-2xl mx-auto px-2">
-              <SubChatStatusCard
-                chatId={parentChatId}
-                isStreaming={isStreaming}
-                isCompacting={isCompacting}
-                changedFiles={changedFilesForSubChat}
-                worktreePath={projectPath}
-                onStop={async () => {
-                  // Mark as manually aborted to prevent completion sound
-                  agentChatStore.setManuallyAborted(subChatId, true)
-                  await stop()
-                  // Call DELETE endpoint to cancel server-side stream
-                  await fetch(
-                    `/api/agents/chat?id=${encodeURIComponent(subChatId)}`,
-                    {
-                      method: "DELETE",
-                      credentials: "include",
-                    },
-                  )
-                }}
-              />
+              {/* Queue indicator card - top card */}
+              {queue.length > 0 && (
+                <AgentQueueIndicator
+                  queue={queue}
+                  onRemoveItem={handleRemoveFromQueue}
+                  onSendNow={handleSendFromQueue}
+                  isStreaming={isStreaming}
+                  hasStatusCardBelow={changedFilesForSubChat.length > 0}
+                />
+              )}
+              {/* Status card - bottom card, only when there are changed files */}
+              {changedFilesForSubChat.length > 0 && (
+                <SubChatStatusCard
+                  chatId={parentChatId}
+                  subChatId={subChatId}
+                  isStreaming={isStreaming}
+                  isCompacting={isCompacting}
+                  changedFiles={changedFilesForSubChat}
+                  worktreePath={projectPath}
+                  onStop={handleStop}
+                  hasQueueCardAbove={queue.length > 0}
+                />
+              )}
             </div>
           </div>
         )}
 
-      {/* Input */}
-      <div
-        className={cn(
-          "px-2 pb-2 shadow-sm shadow-background relative z-10",
-          (isStreaming || changedFilesForSubChat.length > 0) &&
-            !(pendingQuestions?.subChatId === subChatId) &&
-            "-mt-3 pt-3",
-        )}
-      >
-        <div className="w-full max-w-2xl mx-auto">
-          <div
-            className="relative w-full"
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div
-              className="relative w-full cursor-text"
-              onClick={() => editorRef.current?.focus()}
-            >
-              <PromptInput
-                className={cn(
-                  "border bg-input-background relative z-10 p-2 rounded-xl transition-[border-color,box-shadow] duration-150",
-                  isDragOver && "ring-2 ring-primary/50 border-primary/50",
-                  isFocused && !isDragOver && "ring-2 ring-primary/50",
-                )}
-                maxHeight={200}
-                onSubmit={handleSend}
-                contextItems={
-                  images.length > 0 || files.length > 0 ? (
-                    <div className="flex flex-wrap gap-[6px]">
-                      {(() => {
-                        // Build allImages array for gallery navigation
-                        const allImages = images
-                          .filter((img) => img.url && !img.isLoading)
-                          .map((img) => ({
-                            id: img.id,
-                            filename: img.filename,
-                            url: img.url,
-                          }))
+      {/* Input - isolated component to prevent re-renders */}
+      <ChatInputArea
+        editorRef={editorRef}
+        fileInputRef={fileInputRef}
+        onSend={handleSend}
+        onForceSend={handleForceSend}
+        onStop={handleStop}
+        onApprovePlan={handleApprovePlan}
+        onCompact={handleCompact}
+        onCreateNewSubChat={onCreateNewSubChat}
+        isStreaming={isStreaming}
+        hasUnapprovedPlan={hasUnapprovedPlan}
+        isCompacting={isCompacting}
+        images={images}
+        files={files}
+        onAddAttachments={handleAddAttachments}
+        onRemoveImage={removeImage}
+        onRemoveFile={removeFile}
+        isUploading={isUploading}
+        textContexts={textContexts}
+        onRemoveTextContext={removeTextContext}
+        diffTextContexts={diffTextContexts}
+        onRemoveDiffTextContext={removeDiffTextContext}
+        messageTokenData={messageTokenData}
+        subChatId={subChatId}
+        parentChatId={parentChatId}
+        teamId={teamId}
+        repository={repository}
+        sandboxId={sandboxId}
+        projectPath={projectPath}
+        changedFiles={changedFilesForSubChat}
+        isMobile={isMobile}
+        queueLength={queue.length}
+        onSendFromQueue={handleSendFromQueue}
+        firstQueueItemId={queue[0]?.id}
+        onInputContentChange={setInputHasContent}
+        onSubmitWithQuestionAnswer={submitWithQuestionAnswerCallback}
+      />
 
-                        return images.map((img, idx) => (
-                          <AgentImageItem
-                            key={img.id}
-                            id={img.id}
-                            filename={img.filename}
-                            url={img.url}
-                            isLoading={img.isLoading}
-                            onRemove={() => removeImage(img.id)}
-                            allImages={allImages}
-                            imageIndex={idx}
-                          />
-                        ))
-                      })()}
-                      {files.map((f) => (
-                        <AgentFileItem
-                          key={f.id}
-                          id={f.id}
-                          filename={f.filename}
-                          url={f.url}
-                          size={f.size}
-                          isLoading={f.isLoading}
-                          onRemove={() => removeFile(f.id)}
-                        />
-                      ))}
-                    </div>
-                  ) : null
-                }
-              >
-                <PromptInputContextItems />
-                <div className="relative">
-                  <AgentsMentionsEditor
-                    ref={editorRef}
-                    onTrigger={({ searchText, rect }) => {
-                      // Desktop: use projectPath for local file search
-                      if (projectPath || repository) {
-                        setMentionSearchText(searchText)
-                        setMentionPosition({ top: rect.top, left: rect.left })
-                        setShowMentionDropdown(true)
-                      }
-                    }}
-                    onCloseTrigger={() => {
-                      setShowMentionDropdown(false)
-                      // Reset subpage state when closing
-                      setShowingFilesList(false)
-                      setShowingSkillsList(false)
-                      setShowingAgentsList(false)
-                      setShowingToolsList(false)
-                    }}
-                    onSlashTrigger={handleSlashTrigger}
-                    onCloseSlashTrigger={handleCloseSlashTrigger}
-                    onContentChange={handleContentChange}
-                    onSubmit={handleSend}
-                    onShiftTab={() => setIsPlanMode((prev) => !prev)}
-                    placeholder="Plan, @ for context, / for commands"
-                    className={cn(
-                      "bg-transparent max-h-[200px] overflow-y-auto p-1",
-                      isMobile && "min-h-[56px]",
-                    )}
-                    onPaste={handlePaste}
-                    onFocus={() => setIsFocused(true)}
-                    onBlur={handleEditorBlur}
-                  />
-                </div>
-                <PromptInputActions className="w-full">
-                  <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                    {/* Mode toggle (Agent/Plan) */}
-                    <DropdownMenu
-                      open={modeDropdownOpen}
-                      onOpenChange={(open) => {
-                        setModeDropdownOpen(open)
-                        if (!open) {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          hasShownTooltipRef.current = false
-                        }
-                      }}
-                    >
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                          {isPlanMode ? (
-                            <PlanIcon className="h-3.5 w-3.5" />
-                          ) : (
-                            <AgentIcon className="h-3.5 w-3.5" />
-                          )}
-                          <span>{isPlanMode ? "Plan" : "Agent"}</span>
-                          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="start"
-                        sideOffset={6}
-                        className="!min-w-[116px] !w-[116px]"
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                      >
-                        <DropdownMenuItem
-                          onClick={() => {
-                            // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
-                            }
-                            setModeTooltip(null)
-                            setIsPlanMode(false)
-                            setModeDropdownOpen(false)
-                          }}
-                          className="justify-between gap-2"
-                          onMouseEnter={(e) => {
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
-                            }
-                            const rect = e.currentTarget.getBoundingClientRect()
-                            const showTooltip = () => {
-                              setModeTooltip({
-                                visible: true,
-                                position: {
-                                  top: rect.top,
-                                  left: rect.right + 8,
-                                },
-                                mode: "agent",
-                              })
-                              hasShownTooltipRef.current = true
-                              tooltipTimeoutRef.current = null
-                            }
-                            if (hasShownTooltipRef.current) {
-                              showTooltip()
-                            } else {
-                              tooltipTimeoutRef.current = setTimeout(
-                                showTooltip,
-                                1000,
-                              )
-                            }
-                          }}
-                          onMouseLeave={() => {
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
-                            }
-                            setModeTooltip(null)
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                            <span>Agent</span>
-                          </div>
-                          {!isPlanMode && (
-                            <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
-                            }
-                            setModeTooltip(null)
-                            setIsPlanMode(true)
-                            setModeDropdownOpen(false)
-                          }}
-                          className="justify-between gap-2"
-                          onMouseEnter={(e) => {
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
-                            }
-                            const rect = e.currentTarget.getBoundingClientRect()
-                            const showTooltip = () => {
-                              setModeTooltip({
-                                visible: true,
-                                position: {
-                                  top: rect.top,
-                                  left: rect.right + 8,
-                                },
-                                mode: "plan",
-                              })
-                              hasShownTooltipRef.current = true
-                              tooltipTimeoutRef.current = null
-                            }
-                            if (hasShownTooltipRef.current) {
-                              showTooltip()
-                            } else {
-                              tooltipTimeoutRef.current = setTimeout(
-                                showTooltip,
-                                1000,
-                              )
-                            }
-                          }}
-                          onMouseLeave={() => {
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
-                            }
-                            setModeTooltip(null)
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                            <span>Plan</span>
-                          </div>
-                          {isPlanMode && (
-                            <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                          )}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                      {modeTooltip?.visible &&
-                        createPortal(
-                          <div
-                            className="fixed z-[100000]"
-                            style={{
-                              top: modeTooltip.position.top + 14,
-                              left: modeTooltip.position.left,
-                              transform: "translateY(-50%)",
-                            }}
-                          >
-                            <div
-                              data-tooltip="true"
-                              className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
-                            >
-                              <span>
-                                {modeTooltip.mode === "agent"
-                                  ? "Apply changes directly without a plan"
-                                  : "Create a plan before making changes"}
-                              </span>
-                            </div>
-                          </div>,
-                          document.body,
-                        )}
-                    </DropdownMenu>
-
-                    {/* Model selector */}
-                    <DropdownMenu
-                      open={isModelDropdownOpen}
-                      onOpenChange={setIsModelDropdownOpen}
-                    >
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                          <ClaudeCodeIcon className="h-3.5 w-3.5" />
-                          <span>
-                            {selectedModel?.name}{" "}
-                            <span className="text-muted-foreground">4.5</span>
-                          </span>
-                          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[150px]">
-                        {claudeModels.map((model) => {
-                          const isSelected = selectedModel?.id === model.id
-                          return (
-                            <DropdownMenuItem
-                              key={model.id}
-                              onClick={() => {
-                                setSelectedModel(model)
-                                setLastSelectedModelId(model.id)
-                              }}
-                              className="gap-2 justify-between"
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span>
-                                  {model.name}{" "}
-                                  <span className="text-muted-foreground">
-                                    4.5
-                                  </span>
-                                </span>
-                              </div>
-                              {isSelected && (
-                                <CheckIcon className="h-3.5 w-3.5 shrink-0" />
-                              )}
-                            </DropdownMenuItem>
-                          )
-                        })}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
-                    {/* Hidden file input - accepts images and text/code files */}
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      hidden
-                      accept="image/jpeg,image/png,.txt,.md,.markdown,.json,.yaml,.yml,.xml,.csv,.tsv,.log,.ini,.cfg,.conf,.js,.ts,.jsx,.tsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.cpp,.h,.hpp,.cs,.php,.html,.css,.scss,.sass,.less,.sql,.sh,.bash,.zsh,.ps1,.bat,.env,.gitignore,.dockerignore,.editorconfig,.prettierrc,.eslintrc,.babelrc,.nvmrc,.pdf"
-                      multiple
-                      onChange={(e) => {
-                        const inputFiles = Array.from(e.target.files || [])
-                        handleAddAttachments(inputFiles)
-                        e.target.value = ""
-                      }}
-                    />
-
-                    {/* Context window indicator - click to compact */}
-                    <AgentContextIndicator
-                      messages={messages}
-                      onCompact={handleCompact}
-                      isCompacting={isCompacting}
-                      disabled={isStreaming}
-                    />
-
-                    {/* Attachment button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={
-                        isStreaming ||
-                        (images.length >= 5 && files.length >= 10)
-                      }
-                    >
-                      <AttachIcon className="h-4 w-4" />
-                    </Button>
-
-                    {/* Send/Stop button or Implement Plan button */}
-                    <div className="ml-1">
-                      {/* Show "Implement plan" button when plan is ready and input is empty */}
-                      {hasUnapprovedPlan &&
-                      !hasContent &&
-                      images.length === 0 &&
-                      files.length === 0 &&
-                      !isStreaming ? (
-                        <Button
-                          onClick={handleApprovePlan}
-                          size="sm"
-                          className="h-7 gap-1.5 rounded-lg"
-                        >
-                          Implement plan
-                          <Kbd className="text-primary-foreground/70">
-                            ⌘↵
-                          </Kbd>
-                        </Button>
-                      ) : (
-                        <AgentSendButton
-                          isStreaming={isStreaming}
-                          isSubmitting={false}
-                          disabled={
-                            (!hasContent &&
-                              images.length === 0 &&
-                              files.length === 0) ||
-                            isUploading ||
-                            isStreaming
-                          }
-                          onClick={handleSend}
-                          onStop={async () => {
-                            // Mark as manually aborted to prevent completion sound
-                            agentChatStore.setManuallyAborted(subChatId, true)
-                            await stop()
-                            // Call DELETE endpoint to cancel server-side stream
-                            await fetch(
-                              `/api/agents/chat?id=${encodeURIComponent(subChatId)}`,
-                              { method: "DELETE", credentials: "include" },
-                            )
-                          }}
-                          isPlanMode={isPlanMode}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </PromptInputActions>
-              </PromptInput>
-            </div>
-          </div>
-        </div>
-
-        {/* File mention dropdown */}
-        {/* Desktop: use projectPath for local file search */}
-        <AgentsFileMention
-          isOpen={
-            showMentionDropdown &&
-            (!!projectPath || !!repository || !!sandboxId)
-          }
-          onClose={() => {
-            setShowMentionDropdown(false)
-            // Reset subpage state when closing
-            setShowingFilesList(false)
-            setShowingSkillsList(false)
-            setShowingAgentsList(false)
-            setShowingToolsList(false)
-          }}
-          onSelect={handleMentionSelect}
-          searchText={mentionSearchText}
-          position={mentionPosition}
-          teamId={teamId}
-          repository={repository}
-          sandboxId={sandboxId}
-          projectPath={projectPath}
-          changedFiles={changedFilesForSubChat}
-          // Subpage navigation state
-          showingFilesList={showingFilesList}
-          showingSkillsList={showingSkillsList}
-          showingAgentsList={showingAgentsList}
-          showingToolsList={showingToolsList}
-        />
-
-        {/* Slash command dropdown */}
-        <AgentsSlashCommand
-          isOpen={showSlashDropdown}
-          onClose={handleCloseSlashTrigger}
-          onSelect={handleSlashSelect}
-          searchText={slashSearchText}
-          position={slashPosition}
-          teamId={teamId}
-          repository={repository}
-          isPlanMode={isPlanMode}
+        {/* Scroll to bottom button - isolated component to avoid re-renders during streaming */}
+        <ScrollToBottomButton
+          containerRef={chatContainerRef}
+          onScrollToBottom={scrollToBottom}
+          hasStackedCards={!(pendingQuestions?.subChatId === subChatId) && (queue.length > 0 || changedFilesForSubChat.length > 0)}
+          subChatId={subChatId}
+          isActive={isActive}
         />
       </div>
-    </>
+    </SearchHighlightProvider>
+    </TextSelectionProvider>
   )
-}
+})
 
 // Chat View wrapper - handles loading and creates chat object
 export function ChatView({
@@ -3608,6 +3914,12 @@ export function ChatView({
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedModelId] = useAtom(lastSelectedModelIdAtom)
   const [isPlanMode] = useAtom(isPlanModeAtom)
+  const isDesktop = useAtomValue(isDesktopAtom)
+  const isFullscreen = useAtomValue(isFullscreenAtom)
+  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
+  const normalizedCustomClaudeConfig =
+    normalizeCustomClaudeConfig(customClaudeConfig)
+  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
   const setLoadingSubChats = useSetAtom(loadingSubChatsAtom)
   const unseenChanges = useAtomValue(agentsUnseenChangesAtom)
   const setUnseenChanges = useSetAtom(agentsUnseenChangesAtom)
@@ -3657,25 +3969,62 @@ export function ChatView({
   )
   const [isFileViewerSidebarOpen, setIsFileViewerSidebarOpen] = useAtom(fileViewerSidebarAtom)
   const [viewedSourceFile, setViewedSourceFile] = useAtom(viewedSourceFileAtom)
-  const [diffStats, setDiffStats] = useState({
+  const [diffStats, setDiffStatsRaw] = useState({
     fileCount: 0,
     additions: 0,
     deletions: 0,
     isLoading: true,
     hasChanges: false,
   })
+  // Smart setter that only updates if values actually changed
+  const setDiffStats = useCallback((val: any) => {
+    setDiffStatsRaw((prev: typeof diffStats) => {
+      // Handle function updates
+      const newVal = typeof val === 'function' ? val(prev) : val
+      // Only update if something changed
+      if (
+        prev.fileCount === newVal.fileCount &&
+        prev.additions === newVal.additions &&
+        prev.deletions === newVal.deletions &&
+        prev.isLoading === newVal.isLoading &&
+        prev.hasChanges === newVal.hasChanges
+      ) {
+        return prev // Return same reference to prevent re-render
+      }
+      return newVal
+    })
+  }, [])
   // Store raw diff content to pass to AgentDiffView (avoids double fetch)
   const [diffContent, setDiffContent] = useState<string | null>(null)
   // Store pre-parsed file diffs (avoids double parsing in AgentDiffView)
-  const [parsedFileDiffs, setParsedFileDiffs] = useState<ReturnType<
-    typeof splitUnifiedDiffByFile
-  > | null>(null)
+  // Server returns extended type with fileLang, isNewFile, isDeletedFile
+  const [parsedFileDiffs, setParsedFileDiffs] = useState<ParsedDiffFile[] | null>(null)
   // Store prefetched file contents for instant diff view opening
   const [prefetchedFileContents, setPrefetchedFileContents] = useState<
     Record<string, string>
   >({})
   const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
+  const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
   const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
+
+
+  // Force narrow width when switching to side-peek mode (from dialog/fullscreen)
+  useEffect(() => {
+    if (diffDisplayMode === "side-peek") {
+      // Set to narrow width (400px) to ensure correct layout
+      appStore.set(agentsDiffSidebarWidthAtom, 400)
+    }
+  }, [diffDisplayMode])
+
+  // Hide traffic lights when full-page diff is open (they would overlap with content)
+  useEffect(() => {
+    if (!isDesktop || isFullscreen) return
+    if (typeof window === "undefined" || !window.desktopApi?.setTrafficLightVisibility) return
+
+    if (isDiffSidebarOpen && diffDisplayMode === "full-page") {
+      window.desktopApi.setTrafficLightVisibility(false)
+    }
+  }, [isDiffSidebarOpen, diffDisplayMode, isDesktop, isFullscreen])
 
   // Track diff sidebar width for responsive header
   const storedDiffSidebarWidth = useAtomValue(agentsDiffSidebarWidthAtom)
@@ -3689,6 +4038,9 @@ export function ChatView({
     allCollapsed: false,
     allExpanded: true,
   })
+
+  // Compute isNarrow for filtering logic (same threshold as DiffSidebarContent)
+  const isDiffSidebarNarrow = diffSidebarWidth < 500
 
   // ResizeObserver to track diff sidebar width in real-time (atom only updates after resize ends)
   useEffect(() => {
@@ -3749,8 +4101,10 @@ export function ChatView({
     })
   }, [chatId, setUnseenChanges])
 
-  // Get sub-chat state from store
-  const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
+  // Get sub-chat state from store (using getState() to avoid re-renders on state changes)
+  const activeSubChatId = useAgentSubChatStore.getState().activeSubChatId
+  const openSubChatIds = useAgentSubChatStore.getState().openSubChatIds
+  const pinnedSubChatIds = useAgentSubChatStore.getState().pinnedSubChatIds
 
   // Clear sub-chat "unseen changes" indicator when sub-chat becomes active
   useEffect(() => {
@@ -3764,7 +4118,7 @@ export function ChatView({
       return prev
     })
   }, [activeSubChatId, setSubChatUnseenChanges])
-  const allSubChats = useAgentSubChatStore((state) => state.allSubChats)
+  const allSubChats = useAgentSubChatStore.getState().allSubChats
 
   // tRPC utils for optimistic cache updates
   const utils = api.useUtils()
@@ -3775,10 +4129,12 @@ export function ChatView({
   const generateSubChatNameMutation =
     api.agents.generateSubChatName.useMutation()
 
-  // PR creation loading state
-  const [isCreatingPr, setIsCreatingPr] = useState(false)
+  // PR creation loading state - using atom to allow ChatViewInner to reset it
+  const [isCreatingPr, setIsCreatingPr] = useAtom(isCreatingPrAtom)
   // Review loading state
   const [isReviewing, setIsReviewing] = useState(false)
+  // Subchat filter setter - used by handleReview to filter by active subchat
+  const setFilteredSubChatId = useSetAtom(filteredSubChatIdAtom)
 
   const { data: agentChat, isLoading } = api.agents.getAgentChat.useQuery(
     { chatId },
@@ -3794,6 +4150,52 @@ export function ChatView({
     stream_id?: string | null
   }>
 
+  // Workspace isolation: limit mounted tabs to prevent memory growth
+  // CRITICAL: Filter by workspace to prevent rendering sub-chats from other workspaces
+  // Always render: active + pinned, then fill with recent up to limit
+  const MAX_MOUNTED_TABS = 5
+  const tabsToRender = useMemo(() => {
+    if (!activeSubChatId) return []
+
+    // Use allSubChats from Zustand store for validation (not agentSubChats from tRPC)
+    // allSubChats is updated optimistically when creating new sub-chats,
+    // while agentSubChats from tRPC query may be stale during race conditions
+    const validSubChatIds = new Set(allSubChats.map(sc => sc.id))
+
+    // If active sub-chat doesn't belong to this workspace → return []
+    // This prevents rendering sub-chats from another workspace during race condition
+    if (!validSubChatIds.has(activeSubChatId)) {
+      return []
+    }
+
+    // Filter openSubChatIds and pinnedSubChatIds to only valid IDs for this workspace
+    const validOpenIds = openSubChatIds.filter(id => validSubChatIds.has(id))
+    const validPinnedIds = pinnedSubChatIds.filter(id => validSubChatIds.has(id))
+
+    // Start with active (must always be mounted)
+    const mustRender = new Set([activeSubChatId])
+
+    // Add pinned tabs (only valid ones)
+    for (const id of validPinnedIds) {
+      mustRender.add(id)
+    }
+
+    // If we have room, add recent tabs from openSubChatIds (only valid ones)
+    if (mustRender.size < MAX_MOUNTED_TABS) {
+      const remaining = MAX_MOUNTED_TABS - mustRender.size
+      const recentTabs = validOpenIds
+        .filter(id => !mustRender.has(id))
+        .slice(-remaining) // Take the most recent (end of array)
+
+      for (const id of recentTabs) {
+        mustRender.add(id)
+      }
+    }
+
+    // Return in validOpenIds order for consistent rendering
+    return validOpenIds.filter(id => mustRender.has(id))
+  }, [activeSubChatId, pinnedSubChatIds, openSubChatIds, allSubChats])
+
   // Get PR status when PR exists (for checking if it's open/merged/closed)
   const hasPrNumber = !!agentChat?.prNumber
   const { data: prStatusData, isLoading: isPrStatusLoading } = trpc.chats.getPrStatus.useQuery(
@@ -3804,12 +4206,27 @@ export function ChatView({
     }
   )
   const prState = prStatusData?.pr?.state as "open" | "draft" | "merged" | "closed" | undefined
+  const prMergeable = prStatusData?.pr?.mergeable
+  const hasMergeConflicts = prMergeable === "CONFLICTING"
   // PR is open if state is explicitly "open" or "draft"
   // When PR status is still loading, assume open to avoid showing wrong button
   const isPrOpen = hasPrNumber && (isPrStatusLoading || prState === "open" || prState === "draft")
 
   // Merge PR mutation
   const trpcUtils = trpc.useUtils()
+
+  // Sync from main mutation (for resolving merge conflicts)
+  const mergeFromDefaultMutation = trpc.changes.mergeFromDefault.useMutation({
+    onSuccess: () => {
+      toast.success("Branch synced with main. You can now merge the PR.", { position: "top-center" })
+      // Invalidate PR status to refresh mergeability
+      trpcUtils.chats.getPrStatus.invalidate({ chatId })
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to sync with main", { position: "top-center" })
+    },
+  })
+
   const mergePrMutation = trpc.chats.mergePr.useMutation({
     onSuccess: () => {
       toast.success("PR merged successfully!", { position: "top-center" })
@@ -3817,7 +4234,26 @@ export function ChatView({
       trpcUtils.chats.getPrStatus.invalidate({ chatId })
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to merge PR", { position: "top-center" })
+      const errorMsg = error.message || "Failed to merge PR"
+
+      // Check if it's a merge conflict error
+      if (errorMsg.includes("MERGE_CONFLICT")) {
+        toast.error(
+          "PR has merge conflicts. Sync with main to resolve.",
+          {
+            position: "top-center",
+            duration: 8000,
+            action: worktreePath ? {
+              label: "Sync with Main",
+              onClick: () => {
+                mergeFromDefaultMutation.mutate({ worktreePath, useRebase: false })
+              },
+            } : undefined,
+          }
+        )
+      } else {
+        toast.error(errorMsg, { position: "top-center" })
+      }
     },
   })
 
@@ -3864,6 +4300,12 @@ export function ChatView({
   // Desktop uses worktreePath, web uses sandboxUrl
   const chatWorkingDir = worktreePath || sandboxUrl
 
+  // Listen for file changes from Claude Write/Edit tools and invalidate git status
+  useFileChangeListener(worktreePath)
+
+  // Subscribe to GitWatcher for real-time file system monitoring (chokidar on main process)
+  useGitWatcher(worktreePath)
+
   // Extract port, repository, and quick setup flag from meta
   const meta = agentChat?.meta as {
     sandboxConfig?: { port?: number }
@@ -3887,6 +4329,42 @@ export function ChatView({
   // Check if diff can be opened (worktree for desktop, sandbox for web)
   const canOpenDiff = !!worktreePath || !!sandboxId
 
+  // Create list of subchats with changed files for filtering
+  // Only include subchats that have uncommitted changes, sorted by most recent first
+  const subChatsWithFiles = useMemo(() => {
+    const result: Array<{
+      id: string
+      name: string
+      filePaths: string[]
+      fileCount: number
+      updatedAt: string
+    }> = []
+
+    // Only include subchats that have files (uncommitted changes)
+    for (const subChat of allSubChats) {
+      const files = subChatFiles.get(subChat.id) || []
+      if (files.length > 0) {
+        result.push({
+          id: subChat.id,
+          name: subChat.name || "New Chat",
+          filePaths: files.map((f) => f.filePath),
+          fileCount: files.length,
+          updatedAt: subChat.updated_at || subChat.created_at || "",
+        })
+      }
+    }
+
+    // Sort by most recent first
+    result.sort((a, b) => {
+      if (!a.updatedAt && !b.updatedAt) return 0
+      if (!a.updatedAt) return 1
+      if (!b.updatedAt) return -1
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
+
+    return result
+  }, [allSubChats, subChatFiles])
+
   // Close preview sidebar if preview becomes unavailable
   useEffect(() => {
     if (!canOpenPreview && isPreviewSidebarOpen) {
@@ -3898,23 +4376,15 @@ export function ChatView({
   // The sidebar render is guarded by canOpenDiff, so it naturally hides.
   // Per-chat state (diffSidebarOpenAtomFamily) preserves each chat's preference.
 
-  // DEBUG: Early return to isolate infinite loop - PHASE 3
-
   // Fetch diff stats - extracted as callback for reuse in onFinish
   const fetchDiffStatsDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const isFetchingDiffRef = useRef(false)
 
   const fetchDiffStats = useCallback(async () => {
     // Desktop uses worktreePath, web uses sandboxId
+    // Don't reset stats if worktreePath is temporarily undefined - just skip the fetch
+    // This prevents the button from becoming disabled when component re-renders
     if (!worktreePath && !sandboxId) {
-      setDiffStats({
-        fileCount: 0,
-        additions: 0,
-        deletions: 0,
-        isLoading: false,
-        hasChanges: false,
-      })
-      setDiffContent(null)
       return
     }
 
@@ -3925,109 +4395,97 @@ export function ChatView({
     isFetchingDiffRef.current = true
 
     try {
-      let rawDiff: string | null = null
-
-      // Desktop: use tRPC to get diff from worktree
+      // Desktop: use new getParsedDiff endpoint (all-in-one: parsing + file contents)
       if (worktreePath && chatId) {
-        const result = await trpcClient.chats.getDiff.query({ chatId })
-        rawDiff = result.diff
+        const result = await trpcClient.chats.getParsedDiff.query({ chatId })
+
+        if (result.files.length > 0) {
+          // Store parsed files directly (already parsed on server)
+          setParsedFileDiffs(result.files)
+
+          // Store prefetched file contents
+          setPrefetchedFileContents(result.fileContents)
+
+          // Set diff content to null since we have parsed files
+          // (AgentDiffView will use parsedFileDiffs when available)
+          setDiffContent(null)
+
+          setDiffStats({
+            fileCount: result.files.length,
+            additions: result.totalAdditions,
+            deletions: result.totalDeletions,
+            isLoading: false,
+            hasChanges: result.files.length > 0,
+          })
+        } else {
+          setDiffStats({
+            fileCount: 0,
+            additions: 0,
+            deletions: 0,
+            isLoading: false,
+            hasChanges: false,
+          })
+          // Use empty array instead of null to signal "no changes" vs "still loading"
+          setParsedFileDiffs([])
+          setPrefetchedFileContents({})
+          setDiffContent(null)
+        }
+        return
       }
-      // Web fallback: use sandbox API
-      else if (sandboxId) {
+
+      // Desktop without chat (viewing main repo directly)
+      if (worktreePath && !chatId) {
+        // TODO: Need to add endpoint that accepts worktreePath directly
+        return
+      }
+
+      // Web fallback: use sandbox API (still uses old flow)
+      if (sandboxId) {
         const response = await fetch(`/api/agents/sandbox/${sandboxId}/diff`)
         if (!response.ok) {
           setDiffStats((prev) => ({ ...prev, isLoading: false }))
           return
         }
         const data = await response.json()
-        rawDiff = data.diff || null
-      }
+        const rawDiff = data.diff || null
 
-      // Store raw diff for AgentDiffView
-      setDiffContent(rawDiff)
+        // Store raw diff for AgentDiffView
+        setDiffContent(rawDiff)
 
-      if (rawDiff && rawDiff.trim()) {
-        // Parse diff to get file list and stats
-        const parsedFiles = splitUnifiedDiffByFile(rawDiff)
+        if (rawDiff && rawDiff.trim()) {
+          // Parse diff to get file list and stats (client-side for web)
+          const parsedFiles = splitUnifiedDiffByFile(rawDiff)
+          setParsedFileDiffs(parsedFiles)
 
-        // Store parsed files to avoid re-parsing in AgentDiffView
-        setParsedFileDiffs(parsedFiles)
-
-        let additions = 0
-        let deletions = 0
-        for (const file of parsedFiles) {
-          additions += file.additions
-          deletions += file.deletions
-        }
-
-        setDiffStats({
-          fileCount: parsedFiles.length,
-          additions,
-          deletions,
-          isLoading: false,
-          hasChanges: additions > 0 || deletions > 0,
-        })
-
-        // Desktop: prefetch file contents for instant diff view opening
-        // Limit prefetch to prevent overwhelming the system with too many files
-        const MAX_PREFETCH_FILES = 20
-        const filesToPrefetch = parsedFiles.slice(0, MAX_PREFETCH_FILES)
-
-        if (worktreePath && filesToPrefetch.length > 0) {
-          // Capture current chatId for race condition check
-          const currentChatId = chatId
-
-          // Build list of files to fetch (filter out /dev/null)
-          const filesToFetch = filesToPrefetch
-            .map((file) => {
-              const filePath =
-                file.newPath && file.newPath !== "/dev/null"
-                  ? file.newPath
-                  : file.oldPath
-              if (!filePath || filePath === "/dev/null") return null
-              return { key: file.key, filePath }
-            })
-            .filter((f): f is { key: string; filePath: string } => f !== null)
-
-          if (filesToFetch.length > 0) {
-            // Single batch IPC call instead of multiple individual calls
-            trpcClient.changes.readMultipleWorkingFiles
-              .query({
-                worktreePath,
-                files: filesToFetch,
-              })
-              .then((results) => {
-                // Check if we're still on the same chat (prevent race condition)
-                // Note: sub-chat doesn't matter - file contents are same for whole chat
-                if (currentChatId !== chatId) {
-                  return
-                }
-
-                const contents: Record<string, string> = {}
-                for (const [key, result] of Object.entries(results)) {
-                  if (result.ok) {
-                    contents[key] = result.content
-                  }
-                }
-                setPrefetchedFileContents(contents)
-              })
-              .catch((err) => {
-                console.warn("[prefetch] Failed to batch prefetch files:", err)
-              })
+          let additions = 0
+          let deletions = 0
+          for (const file of parsedFiles) {
+            additions += file.additions
+            deletions += file.deletions
           }
+
+          setDiffStats({
+            fileCount: parsedFiles.length,
+            additions,
+            deletions,
+            isLoading: false,
+            hasChanges: parsedFiles.length > 0,
+          })
+        } else {
+          setDiffStats({
+            fileCount: 0,
+            additions: 0,
+            deletions: 0,
+            isLoading: false,
+            hasChanges: false,
+          })
+          // Use empty array instead of null to signal "no changes" vs "still loading"
+          setParsedFileDiffs([])
+          setPrefetchedFileContents({})
         }
-      } else {
-        setDiffStats({
-          fileCount: 0,
-          additions: 0,
-          deletions: 0,
-          isLoading: false,
-          hasChanges: false,
-        })
-        setParsedFileDiffs(null)
-        setPrefetchedFileContents({})
       }
-    } catch {
+    } catch (error) {
+      console.error("[fetchDiffStats] Error:", error)
       setDiffStats((prev) => ({ ...prev, isLoading: false }))
     } finally {
       isFetchingDiffRef.current = false
@@ -4054,6 +4512,15 @@ export function ChatView({
   useEffect(() => {
     fetchDiffStats()
   }, [fetchDiffStats])
+
+  // Refresh diff stats when diff sidebar opens (background refresh - don't block UI)
+  // Keep existing data visible while fetching, only update if data changed
+  useEffect(() => {
+    if (isDiffSidebarOpen) {
+      // Fetch in background - existing parsedFileDiffs will be shown immediately
+      fetchDiffStats()
+    }
+  }, [isDiffSidebarOpen, fetchDiffStats])
 
   // Calculate total file count across all sub-chats for change detection
   const totalSubChatFileCount = useMemo(() => {
@@ -4103,18 +4570,19 @@ export function ChatView({
       const context = await trpcClient.chats.getPrContext.query({ chatId })
       if (!context) {
         toast.error("Could not get git context", { position: "top-center" })
+        setIsCreatingPr(false)
         return
       }
 
       // Generate message and set it for ChatViewInner to send
       const message = generatePrMessage(context)
       setPendingPrMessage(message)
+      // Don't reset isCreatingPr here - it will be reset after message is sent
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to prepare PR request",
         { position: "top-center" },
       )
-    } finally {
       setIsCreatingPr(false)
     }
   }, [chatId, setPendingPrMessage])
@@ -4165,6 +4633,11 @@ export function ChatView({
         return
       }
 
+      // Set filter to show only files from the active subchat
+      if (activeSubChatId) {
+        setFilteredSubChatId(activeSubChatId)
+      }
+
       // Generate review message and set it for ChatViewInner to send
       const message = generateReviewMessage(context)
       setPendingReviewMessage(message)
@@ -4176,7 +4649,98 @@ export function ChatView({
     } finally {
       setIsReviewing(false)
     }
-  }, [chatId, setPendingReviewMessage])
+  }, [chatId, activeSubChatId, setPendingReviewMessage, setFilteredSubChatId])
+
+  // Handle Fix Conflicts - sends a message to Claude to sync with main and fix merge conflicts
+  const setPendingConflictResolutionMessage = useSetAtom(pendingConflictResolutionMessageAtom)
+
+  const handleFixConflicts = useCallback(() => {
+    const message = `This PR has merge conflicts with the main branch. Please:
+
+1. First, fetch and merge the latest changes from main branch using git commands
+2. If there are any merge conflicts, resolve them carefully by keeping the correct code from both branches
+3. After resolving conflicts, commit the merge
+4. Push the changes to update the PR
+
+Make sure to preserve all functionality from both branches when resolving conflicts.`
+
+    setPendingConflictResolutionMessage(message)
+  }, [setPendingConflictResolutionMessage])
+
+  // Fetch branch data for diff sidebar header
+  const { data: branchData } = trpc.changes.getBranches.useQuery(
+    { worktreePath: worktreePath || "" },
+    { enabled: !!worktreePath }
+  )
+
+  // Fetch git status for sync counts (pushCount, pullCount, hasUpstream)
+  const { data: gitStatus, refetch: refetchGitStatus, isLoading: isGitStatusLoading } = trpc.changes.getStatus.useQuery(
+    { worktreePath: worktreePath || "" },
+    { enabled: !!worktreePath && isDiffSidebarOpen, staleTime: 30000 }
+  )
+
+  // Refetch git status and diff stats when window gains focus
+  useEffect(() => {
+    if (!worktreePath || !isDiffSidebarOpen) return
+
+    const handleWindowFocus = () => {
+      // Refetch git status
+      refetchGitStatus()
+      // Refetch diff stats to get latest changes
+      fetchDiffStats()
+    }
+
+    window.addEventListener('focus', handleWindowFocus)
+    return () => window.removeEventListener('focus', handleWindowFocus)
+  }, [worktreePath, isDiffSidebarOpen, refetchGitStatus, fetchDiffStats])
+
+  // Sync parsedFileDiffs with git status - clear diff data when all files are committed
+  // This fixes the issue where diff sidebar shows stale files after external git commit
+  useEffect(() => {
+    if (!gitStatus || isGitStatusLoading) return
+
+    // Check if git status shows no uncommitted changes
+    const hasUncommittedChanges =
+      (gitStatus.staged?.length ?? 0) > 0 ||
+      (gitStatus.unstaged?.length ?? 0) > 0 ||
+      (gitStatus.untracked?.length ?? 0) > 0
+
+    // If git shows no changes but we still have parsedFileDiffs, clear them
+    if (!hasUncommittedChanges && parsedFileDiffs && parsedFileDiffs.length > 0) {
+      console.log('[active-chat] Git status empty but parsedFileDiffs has files, refreshing diff data')
+      setParsedFileDiffs([])
+      setPrefetchedFileContents({})
+      setDiffContent(null)
+      setDiffStats({
+        fileCount: 0,
+        additions: 0,
+        deletions: 0,
+        isLoading: false,
+        hasChanges: false,
+      })
+    }
+  }, [gitStatus, isGitStatusLoading, parsedFileDiffs])
+
+  // Stable callbacks for DiffSidebarHeader to prevent re-renders
+  const handleRefreshGitStatus = useCallback(() => {
+    refetchGitStatus()
+  }, [refetchGitStatus])
+
+  const handleExpandAll = useCallback(() => {
+    diffViewRef.current?.expandAll()
+  }, [])
+
+  const handleCollapseAll = useCallback(() => {
+    diffViewRef.current?.collapseAll()
+  }, [])
+
+  const handleMarkAllViewed = useCallback(() => {
+    diffViewRef.current?.markAllViewed()
+  }, [])
+
+  const handleMarkAllUnviewed = useCallback(() => {
+    diffViewRef.current?.markAllUnviewed()
+  }, [])
 
   // Initialize store when chat data loads
   useEffect(() => {
@@ -4304,10 +4868,16 @@ export function ChatView({
         id: subChatId,
         messages,
         transport,
+        onError: () => {
+          // Sync status to global store on error (allows queue to continue)
+          useStreamingStatusStore.getState().setStatus(subChatId, "ready")
+        },
         // Clear loading when streaming completes (works even if component unmounted)
         onFinish: () => {
-          console.log(`[SD] C:FINISH sub=${subChatId.slice(-8)}`)
           clearLoading(setLoadingSubChats, subChatId)
+
+          // Sync status to global store for queue processing (even when component unmounted)
+          useStreamingStatusStore.getState().setStatus(subChatId, "ready")
 
           // Check if this was a manual abort (ESC/Ctrl+C) - skip sound if so
           const wasManuallyAborted =
@@ -4396,6 +4966,29 @@ export function ChatView({
       mode: subChatMode,
     })
     const newId = newSubChat.id
+    utils.agents.getAgentChat.invalidate({ chatId })
+
+    // Optimistic update: add new sub-chat to React Query cache immediately
+    // This is CRITICAL for workspace isolation - without this, the new sub-chat
+    // won't be in validSubChatIds and will be filtered out by tabsToRender
+    utils.agents.getAgentChat.setData({ chatId }, (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        subChats: [
+          ...(old.subChats || []),
+          {
+            id: newId,
+            name: "New Chat",
+            mode: subChatMode,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            messages: null,
+            stream_id: null,
+          },
+        ],
+      }
+    })
 
     // Track this subchat as just created for typewriter effect
     setJustCreatedIds((prev) => new Set([...prev, newId]))
@@ -4430,10 +5023,16 @@ export function ChatView({
         id: newId,
         messages: [],
         transport,
+        onError: () => {
+          // Sync status to global store on error (allows queue to continue)
+          useStreamingStatusStore.getState().setStatus(newId, "ready")
+        },
         // Clear loading when streaming completes
         onFinish: () => {
-          console.log(`[SD] C:FINISH sub=${newId.slice(-8)}`)
           clearLoading(setLoadingSubChats, newId)
+
+          // Sync status to global store for queue processing (even when component unmounted)
+          useStreamingStatusStore.getState().setStatus(newId, "ready")
 
           // Check if this was a manual abort (ESC/Ctrl+C) - skip sound if so
           const wasManuallyAborted = agentChatStore.wasManuallyAborted(newId)
@@ -4496,6 +5095,7 @@ export function ChatView({
     worktreePath,
     chatId,
     isPlanMode,
+    utils,
     setSubChatUnseenChanges,
     selectedChatId,
     setUnseenChanges,
@@ -5038,8 +5638,6 @@ export function ChatView({
                         isDiffSidebarOpen={isDiffSidebarOpen}
                         diffStats={diffStats}
                       />
-                      {/* MCP Servers indicator */}
-                      <McpServersIndicator projectPath={originalProjectPath} />
                     </>
                   )}
                 </div>
@@ -5146,26 +5744,62 @@ export function ChatView({
             </div>
           )}
 
-          {/* Chat Content */}
-          {activeChat && activeSubChatId ? (
-            <ChatViewInner
-              key={activeSubChatId}
-              chat={activeChat}
-              subChatId={activeSubChatId}
-              parentChatId={chatId}
-              isFirstSubChat={isFirstSubChatActive}
-              onAutoRename={handleAutoRename}
-              onCreateNewSubChat={handleCreateNewSubChat}
-              teamId={selectedTeamId || undefined}
-              repository={repository}
-              streamId={agentChatStore.getStreamId(activeSubChatId)}
-              isMobile={isMobileFullscreen}
-              isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
-              sandboxId={sandboxId || undefined}
-              projectPath={worktreePath || undefined}
-              isArchived={isArchived}
-              onRestoreWorkspace={handleRestoreWorkspace}
-            />
+          {/* Chat Content - Keep-alive: render all open tabs, hide inactive with CSS */}
+          {tabsToRender.length > 0 && agentChat ? (
+            <div className="relative flex-1 min-h-0">
+              {tabsToRender.map(subChatId => {
+                const chat = getOrCreateChat(subChatId)
+                const isActive = subChatId === activeSubChatId
+                const isFirstSubChat = getFirstSubChatId(agentSubChats) === subChatId
+
+                // Defense in depth: double-check workspace ownership
+                // Use allSubChats (Zustand) instead of agentSubChats (tRPC) because
+                // new sub-chats are added to Zustand immediately but tRPC query may be stale
+                const belongsToWorkspace = allSubChats.some(sc => sc.id === subChatId)
+
+                if (!chat || !belongsToWorkspace) return null
+
+                return (
+                  <div
+                    key={subChatId}
+                    className="absolute inset-0 flex flex-col"
+                    style={{
+                      // GPU-accelerated visibility switching (нативное ощущение)
+                      // transform + opacity быстрее чем visibility для GPU
+                      transform: isActive ? "translateZ(0)" : "translateZ(0) scale(0.98)",
+                      opacity: isActive ? 1 : 0,
+                      // Prevent pointer events on hidden tabs
+                      pointerEvents: isActive ? "auto" : "none",
+                      // GPU layer hints
+                      willChange: "transform, opacity",
+                      // Изолируем layout - изменения внутри не влияют на другие табы
+                      contain: "layout style paint",
+                    }}
+                    aria-hidden={!isActive}
+                  >
+                    <ChatViewInner
+                      chat={chat}
+                      subChatId={subChatId}
+                      parentChatId={chatId}
+                      isFirstSubChat={isFirstSubChat}
+                      onAutoRename={handleAutoRename}
+                      onCreateNewSubChat={handleCreateNewSubChat}
+                      teamId={selectedTeamId || undefined}
+                      repository={repository}
+                      streamId={agentChatStore.getStreamId(subChatId)}
+                      isMobile={isMobileFullscreen}
+                      isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
+                      sandboxId={sandboxId || undefined}
+                      projectPath={worktreePath || undefined}
+                      isArchived={isArchived}
+                      onRestoreWorkspace={handleRestoreWorkspace}
+                      existingPrUrl={agentChat?.prUrl}
+                      isActive={isActive}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <>
               {/* Empty chat area - no loading indicator */}
@@ -5201,8 +5835,16 @@ export function ChatView({
                           >
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
                             <span>
-                              Sonnet{" "}
-                              <span className="text-muted-foreground">4.5</span>
+                              {hasCustomClaudeConfig ? (
+                                "Custom Model"
+                              ) : (
+                                <>
+                                  Sonnet{" "}
+                                  <span className="text-muted-foreground">
+                                    4.5
+                                  </span>
+                                </>
+                              )}
                             </span>
                             <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                           </button>
@@ -5235,337 +5877,66 @@ export function ChatView({
           )}
         </div>
 
-        {/* Diff Sidebar - hidden on mobile fullscreen and when diff is not available */}
+        {/* Diff View - hidden on mobile fullscreen and when diff is not available */}
+        {/* Supports three display modes: side-peek (sidebar), center-peek (dialog), full-page */}
+        {/* Wrapped in DiffStateProvider to isolate diff state and prevent ChatView re-renders */}
         {canOpenDiff && !isMobileFullscreen && (
-          <ResizableSidebar
-            isOpen={isDiffSidebarOpen}
-            onClose={() => setIsDiffSidebarOpen(false)}
-            widthAtom={agentsDiffSidebarWidthAtom}
-            minWidth={350}
-            side="right"
-            animationDuration={0}
-            initialWidth={0}
-            exitWidth={0}
-            showResizeTooltip={true}
-            className="bg-background border-l"
-            style={{ borderLeftWidth: "0.5px", overflow: "hidden" }}
+          <DiffStateProvider
+            isDiffSidebarOpen={isDiffSidebarOpen}
+            parsedFileDiffs={parsedFileDiffs}
+            isDiffSidebarNarrow={isDiffSidebarNarrow}
+            setIsDiffSidebarOpen={setIsDiffSidebarOpen}
+            setDiffStats={setDiffStats}
+            setDiffContent={setDiffContent}
+            setParsedFileDiffs={setParsedFileDiffs}
+            setPrefetchedFileContents={setPrefetchedFileContents}
+            fetchDiffStats={fetchDiffStats}
           >
-            <div
-              ref={diffSidebarRef}
-              className="flex flex-col h-full min-w-0 overflow-hidden"
-            >
-              {/* Header with stats, toggle and close button */}
-              <div className="flex items-center justify-between pl-3 pr-1.5 h-10 bg-background flex-shrink-0 border-b border-border/50 overflow-hidden">
-                {/* Left: Stats - truncates when space is limited */}
-                <div className="flex items-center gap-2 min-w-0 flex-shrink overflow-hidden">
-                  {!diffStats.isLoading && diffStats.hasChanges && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap overflow-hidden">
-                      <span className="font-mono truncate">
-                        {diffStats.fileCount} file
-                        {diffStats.fileCount !== 1 ? "s" : ""}
-                      </span>
-                      {(diffStats.additions > 0 || diffStats.deletions > 0) && (
-                        <span className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className="text-emerald-600 dark:text-emerald-400">
-                            +{diffStats.additions}
-                          </span>
-                          <span className="text-red-600 dark:text-red-400">
-                            -{diffStats.deletions}
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {/* Right: Review (when space) + Create PR + View toggle + More menu + Close button */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {/* Review button - visible when sidebar is wide enough (>=420px) */}
-                  {diffStats.hasChanges && diffSidebarWidth >= 420 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          onClick={handleReview}
-                          disabled={isReviewing}
-                          className="h-7 px-2.5 text-xs gap-1.5 transition-transform duration-150 active:scale-[0.97] rounded-md"
-                        >
-                          {isReviewing ? (
-                            <IconSpinner className="w-3.5 h-3.5" />
-                          ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                          )}
-                          <span>{isReviewing ? "Reviewing..." : "Review"}</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent sideOffset={8}>
-                        <span>Get AI code review</span>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {/* Create PR / Merge / Commit button - dynamic based on PR state */}
-                  {/*
-                    Button logic:
-                    1. No PR exists + has changes → "Create PR"
-                    2. PR is open/draft + no changes → "Merge"
-                    3. PR is open/draft + has changes → "Commit" (to push to existing PR)
-                    4. PR is merged/closed + has changes → "Create PR" (for new PR)
-                    5. PR is merged/closed + no changes → nothing (just show status in PrStatusBar)
-                  */}
-                  {/* Show Create PR when: no PR exists, OR PR is merged/closed with new changes */}
-                  {diffStats.hasChanges && (!hasPrNumber || (hasPrNumber && !isPrOpen)) && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={handleCreatePr}
-                          disabled={isCreatingPr}
-                          className="h-7 px-2.5 text-xs gap-1.5 transition-transform duration-150 active:scale-[0.97] rounded-md"
-                        >
-                          {isCreatingPr ? (
-                            <IconSpinner className="w-3.5 h-3.5" />
-                          ) : (
-                            <PullRequestIcon className="w-3.5 h-3.5" />
-                          )}
-                          <span className="whitespace-nowrap">
-                            {isCreatingPr ? "Creating..." : "Create PR"}
-                          </span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent sideOffset={8}>
-                        Create a Pull Request
-                        <Kbd>{getShortcutKey("preview")}</Kbd>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {/* Show Merge when PR is open/draft and no new changes */}
-                  {hasPrNumber && isPrOpen && !diffStats.hasChanges && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={handleMergePr}
-                          disabled={mergePrMutation.isPending}
-                          className="h-7 px-2.5 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white transition-transform duration-150 active:scale-[0.97] rounded-md"
-                        >
-                          {mergePrMutation.isPending ? (
-                            <IconSpinner className="w-3.5 h-3.5" />
-                          ) : (
-                            <GitMerge className="w-3.5 h-3.5" />
-                          )}
-                          <span className="whitespace-nowrap">
-                            {mergePrMutation.isPending ? "Merging..." : "Merge"}
-                          </span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent sideOffset={8}>
-                        Merge Pull Request (squash)
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {/* Show Commit when PR is open/draft but there are new uncommitted changes */}
-                  {hasPrNumber && isPrOpen && diffStats.hasChanges && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={handleCommitToPr}
-                          disabled={isCommittingToPr}
-                          className="h-7 px-2.5 text-xs gap-1.5 transition-transform duration-150 active:scale-[0.97] rounded-md"
-                        >
-                          {isCommittingToPr ? (
-                            <IconSpinner className="w-3.5 h-3.5" />
-                          ) : (
-                            <GitCommitHorizontal className="w-3.5 h-3.5" />
-                          )}
-                          <span className="whitespace-nowrap">
-                            {isCommittingToPr ? "Committing..." : "Commit"}
-                          </span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent sideOffset={8}>
-                        Commit changes and push to PR
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {/* View toggle - visible when sidebar is wide enough (>=480px) */}
-                  {diffSidebarWidth >= 480 && (
-                    <div className="relative bg-muted rounded-md h-7 p-0.5 flex">
-                      <div
-                        className="absolute inset-y-0.5 rounded bg-background shadow transition-all duration-200 ease-in-out"
-                        style={{
-                          width: "calc(50% - 2px)",
-                          left:
-                            diffMode === DiffModeEnum.Split
-                              ? "2px"
-                              : "calc(50%)",
-                        }}
-                      />
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={() => setDiffMode(DiffModeEnum.Split)}
-                            className="relative z-[2] px-1.5 h-full flex items-center justify-center transition-colors duration-200 rounded text-muted-foreground"
-                          >
-                            <Columns2 className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={8}>
-                          Split view
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={() => setDiffMode(DiffModeEnum.Unified)}
-                            className="relative z-[2] px-1.5 h-full flex items-center justify-center transition-colors duration-200 rounded text-muted-foreground"
-                          >
-                            <Rows2 className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={8}>
-                          Unified view
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  )}
-                  {/* More menu (three dots) - shown when sidebar is narrow or many files */}
-                  {(diffSidebarWidth < 480 || diffStats.fileCount > 10) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          className="h-7 w-7 p-0 hover:bg-muted transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md flex-shrink-0"
-                        >
-                          <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        sideOffset={4}
-                        className="w-40"
-                      >
-                        {/* Review option - shown only when hidden in header (<420px) */}
-                        {diffStats.hasChanges && diffSidebarWidth < 420 && (
-                          <DropdownMenuItem
-                            onClick={handleReview}
-                            disabled={isReviewing}
-                            className="gap-2"
-                          >
-                            {isReviewing ? (
-                              <IconSpinner className="w-3.5 h-3.5" />
-                            ) : (
-                              <Eye className="w-3.5 h-3.5" />
-                            )}
-                            <span>
-                              {isReviewing ? "Reviewing..." : "Review"}
-                            </span>
-                          </DropdownMenuItem>
-                        )}
-                        {/* View mode submenu - only show when toggle is hidden in header */}
-                        {diffSidebarWidth < 480 && (
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger className="gap-2">
-                              {diffMode === DiffModeEnum.Split ? (
-                                <Columns2 className="w-3.5 h-3.5" />
-                              ) : (
-                                <Rows2 className="w-3.5 h-3.5" />
-                              )}
-                              <span>View</span>
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent
-                              sideOffset={6}
-                              alignOffset={-4}
-                              className="min-w-0"
-                            >
-                              <DropdownMenuItem
-                                onClick={() => setDiffMode(DiffModeEnum.Split)}
-                                className="relative pl-6 gap-1.5"
-                              >
-                                {diffMode === DiffModeEnum.Split && (
-                                  <span className="absolute left-1.5 flex h-3.5 w-3.5 items-center justify-center">
-                                    <CheckIcon className="h-3 w-3" />
-                                  </span>
-                                )}
-                                <Columns2 className="w-3.5 h-3.5" />
-                                <span>Split</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  setDiffMode(DiffModeEnum.Unified)
-                                }
-                                className="relative pl-6 gap-1.5"
-                              >
-                                {diffMode === DiffModeEnum.Unified && (
-                                  <span className="absolute left-1.5 flex h-3.5 w-3.5 items-center justify-center">
-                                    <CheckIcon className="h-3 w-3" />
-                                  </span>
-                                )}
-                                <Rows2 className="w-3.5 h-3.5" />
-                                <span>Unified</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                        )}
-                        {/* Expand/Collapse - shown when many files */}
-                        {diffStats.fileCount > 10 && (
-                          <>
-                            <DropdownMenuItem
-                              onClick={() => diffViewRef.current?.expandAll()}
-                              disabled={diffCollapseState.allExpanded}
-                              className="gap-2"
-                            >
-                              <ExpandIcon className="w-3.5 h-3.5" />
-                              <span>Expand all</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => diffViewRef.current?.collapseAll()}
-                              disabled={diffCollapseState.allCollapsed}
-                              className="gap-2"
-                            >
-                              <CollapseIcon className="w-3.5 h-3.5" />
-                              <span>Collapse all</span>
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  {/* Close button */}
-                  <Button
-                    variant="ghost"
-                    className="h-7 w-7 p-0 hover:bg-muted transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md flex-shrink-0"
-                    onClick={() => setIsDiffSidebarOpen(false)}
-                  >
-                    <IconCloseSidebarRight className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </div>
-              </div>
-              {/* Diff Content */}
-              <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
-                {/* PR Status Bar - show when PR exists */}
-                {agentChat?.prUrl && agentChat?.prNumber && (
-                  <PrStatusBar
-                    chatId={chatId}
-                    prUrl={agentChat.prUrl}
-                    prNumber={agentChat.prNumber}
-                  />
-                )}
-                {/* Diff View */}
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <AgentDiffView
-                    ref={diffViewRef}
-                    chatId={chatId}
-                    sandboxId={sandboxId}
-                    worktreePath={worktreePath || undefined}
-                    repository={repository}
-                    onStatsChange={setDiffStats}
-                    initialDiff={diffContent}
-                    initialParsedFiles={parsedFileDiffs}
-                    prefetchedFileContents={prefetchedFileContents}
-                    showFooter={true}
-                    onCollapsedStateChange={setDiffCollapseState}
-                  />
-                </div>
-              </div>
-            </div>
-          </ResizableSidebar>
+            <DiffSidebarRenderer
+              worktreePath={worktreePath}
+              chatId={chatId}
+              sandboxId={sandboxId}
+              repository={repository}
+              diffStats={diffStats}
+              diffContent={diffContent}
+              parsedFileDiffs={parsedFileDiffs}
+              prefetchedFileContents={prefetchedFileContents}
+              setDiffCollapseState={setDiffCollapseState}
+              diffViewRef={diffViewRef}
+              diffSidebarRef={diffSidebarRef}
+              agentChat={agentChat}
+              branchData={branchData}
+              gitStatus={gitStatus}
+              isGitStatusLoading={isGitStatusLoading}
+              isDiffSidebarOpen={isDiffSidebarOpen}
+              diffDisplayMode={diffDisplayMode}
+              diffSidebarWidth={diffSidebarWidth}
+              handleReview={handleReview}
+              isReviewing={isReviewing}
+              handleCreatePr={handleCreatePr}
+              isCreatingPr={isCreatingPr}
+              handleMergePr={handleMergePr}
+              mergePrMutation={mergePrMutation}
+              handleRefreshGitStatus={handleRefreshGitStatus}
+              hasPrNumber={hasPrNumber}
+              isPrOpen={isPrOpen}
+              hasMergeConflicts={hasMergeConflicts}
+              handleFixConflicts={handleFixConflicts}
+              handleExpandAll={handleExpandAll}
+              handleCollapseAll={handleCollapseAll}
+              diffMode={diffMode}
+              setDiffMode={setDiffMode}
+              handleMarkAllViewed={handleMarkAllViewed}
+              handleMarkAllUnviewed={handleMarkAllUnviewed}
+              isDesktop={isDesktop}
+              isFullscreen={isFullscreen}
+              setDiffDisplayMode={setDiffDisplayMode}
+              handleCommitToPr={handleCommitToPr}
+              isCommittingToPr={isCommittingToPr}
+              subChatsWithFiles={subChatsWithFiles}
+              setDiffStats={setDiffStats}
+            />
+          </DiffStateProvider>
         )}
 
         {/* Preview Sidebar - hidden on mobile fullscreen and when preview is not available */}

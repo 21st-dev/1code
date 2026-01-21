@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, memo } from "react"
 import { useAtomValue } from "jotai"
 import { cn } from "../../../lib/utils"
 import { TypewriterText } from "../../../components/ui/typewriter-text"
@@ -16,7 +16,22 @@ interface ChatTitleEditorProps {
   hasMessages?: boolean
 }
 
-export function ChatTitleEditor({
+// Custom comparison to prevent re-renders during streaming
+function areTitlePropsEqual(
+  prev: ChatTitleEditorProps,
+  next: ChatTitleEditorProps,
+): boolean {
+  return (
+    prev.name === next.name &&
+    prev.placeholder === next.placeholder &&
+    prev.isMobile === next.isMobile &&
+    prev.disabled === next.disabled &&
+    prev.chatId === next.chatId &&
+    prev.hasMessages === next.hasMessages
+  )
+}
+
+export const ChatTitleEditor = memo(function ChatTitleEditor({
   name,
   placeholder = "New Chat",
   onSave,
@@ -172,4 +187,4 @@ export function ChatTitleEditor({
       )}
     </div>
   )
-}
+}, areTitlePropsEqual)

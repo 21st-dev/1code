@@ -19,20 +19,33 @@ const STRIPPED_ENV_KEYS = [
   "CLAUDE_CODE_USE_VERTEX",
 ]
 
+// Cache the bundled binary path (only compute once)
+let cachedBinaryPath: string | null = null
+let binaryPathComputed = false
+
 /**
  * Get path to the bundled Claude binary.
  * Returns the path to the native Claude executable bundled with the app.
+ * CACHED - only computes path once and logs verbose info on first call.
  */
 export function getBundledClaudeBinaryPath(): string {
+  // Return cached path if already computed
+  if (binaryPathComputed) {
+    return cachedBinaryPath!
+  }
+
   const isDev = !app.isPackaged
   const platform = process.platform
   const arch = process.arch
 
-  console.log("[claude-binary] ========== BUNDLED BINARY PATH ==========")
-  console.log("[claude-binary] isDev:", isDev)
-  console.log("[claude-binary] platform:", platform)
-  console.log("[claude-binary] arch:", arch)
-  console.log("[claude-binary] appPath:", app.getAppPath())
+  // Only log verbose info on first call
+  if (process.env.DEBUG_CLAUDE_BINARY) {
+    console.log("[claude-binary] ========== BUNDLED BINARY PATH ==========")
+    console.log("[claude-binary] isDev:", isDev)
+    console.log("[claude-binary] platform:", platform)
+    console.log("[claude-binary] arch:", arch)
+    console.log("[claude-binary] appPath:", app.getAppPath())
+  }
 
   // In dev: apps/desktop/resources/bin/{platform}-{arch}/claude
   // In production: {resourcesPath}/bin/claude
@@ -40,29 +53,37 @@ export function getBundledClaudeBinaryPath(): string {
     ? path.join(app.getAppPath(), "resources/bin", `${platform}-${arch}`)
     : path.join(process.resourcesPath, "bin")
 
-  console.log("[claude-binary] resourcesPath:", resourcesPath)
+  if (process.env.DEBUG_CLAUDE_BINARY) {
+    console.log("[claude-binary] resourcesPath:", resourcesPath)
+  }
 
   const binaryName = platform === "win32" ? "claude.exe" : "claude"
   const binaryPath = path.join(resourcesPath, binaryName)
 
-  console.log("[claude-binary] binaryPath:", binaryPath)
+  if (process.env.DEBUG_CLAUDE_BINARY) {
+    console.log("[claude-binary] binaryPath:", binaryPath)
+  }
 
   // Check if binary exists
   const exists = fs.existsSync(binaryPath)
-  console.log("[claude-binary] exists:", exists)
 
-  if (exists) {
+  // Always log if binary doesn't exist (critical error)
+  if (!exists) {
+    console.error("[claude-binary] WARNING: Binary not found at path:", binaryPath)
+    console.error("[claude-binary] Run 'bun run claude:download' to download it")
+  } else if (process.env.DEBUG_CLAUDE_BINARY) {
     const stats = fs.statSync(binaryPath)
     const sizeMB = (stats.size / 1024 / 1024).toFixed(1)
     const isExecutable = (stats.mode & fs.constants.X_OK) !== 0
+    console.log("[claude-binary] exists:", exists)
     console.log("[claude-binary] size:", sizeMB, "MB")
     console.log("[claude-binary] isExecutable:", isExecutable)
-  } else {
-    console.error("[claude-binary] WARNING: Binary not found at path!")
-    console.error("[claude-binary] Run 'bun run claude:download' to download it")
+    console.log("[claude-binary] ===========================================")
   }
 
-  console.log("[claude-binary] ===========================================")
+  // Cache the result
+  cachedBinaryPath = binaryPath
+  binaryPathComputed = true
 
   return binaryPath
 }

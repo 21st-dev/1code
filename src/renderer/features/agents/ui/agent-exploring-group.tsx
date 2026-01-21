@@ -4,6 +4,7 @@ import { memo, useState, useEffect, useRef } from "react"
 import { ChevronRight } from "lucide-react"
 import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
 import { AgentToolCall } from "./agent-tool-call"
+import { areExploringGroupPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 
 interface AgentExploringGroupProps {
@@ -145,4 +146,4 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
       )}
     </div>
   )
-})
+}, areExploringGroupPropsEqual)

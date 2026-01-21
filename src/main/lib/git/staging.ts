@@ -4,8 +4,10 @@ import {
 	gitCheckoutFile,
 	gitStageAll,
 	gitStageFile,
+	gitStageFiles,
 	gitUnstageAll,
 	gitUnstageFile,
+	gitUnstageFiles,
 	secureFs,
 } from "./security";
 
@@ -58,6 +60,30 @@ export const createStagingRouter = () => {
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
 				await gitUnstageAll(input.worktreePath);
+				return { success: true };
+			}),
+
+		stageFiles: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					filePaths: z.array(z.string()),
+				}),
+			)
+			.mutation(async ({ input }): Promise<{ success: boolean }> => {
+				await gitStageFiles(input.worktreePath, input.filePaths);
+				return { success: true };
+			}),
+
+		unstageFiles: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					filePaths: z.array(z.string()),
+				}),
+			)
+			.mutation(async ({ input }): Promise<{ success: boolean }> => {
+				await gitUnstageFiles(input.worktreePath, input.filePaths);
 				return { success: true };
 			}),
 

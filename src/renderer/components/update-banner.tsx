@@ -60,8 +60,11 @@ export function UpdateBanner() {
 
   // Get current app version for display
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
+  // Track if app is packaged (official build) - default to true to avoid flash
+  const [isPackaged, setIsPackaged] = useState(true)
   useEffect(() => {
     window.desktopApi?.getVersion().then(setCurrentVersion)
+    window.desktopApi?.isPackaged().then(setIsPackaged)
   }, [])
 
   // Use current version for display (or the just updated version if available)
@@ -148,6 +151,11 @@ export function UpdateBanner() {
     } else {
       dismissJustUpdated()
     }
+  }
+
+  // For open source builds (!isPackaged), hide all update banners
+  if (!isPackaged) {
+    return null
   }
 
   // Show "What's New" banner if app was just updated

@@ -5,6 +5,7 @@ import { ChevronRight } from "lucide-react"
 import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
 import { AgentToolCall } from "./agent-tool-call"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { areTaskToolPropsEqual } from "./agent-tool-utils"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
 
@@ -36,24 +37,17 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 }: AgentTaskToolProps) {
   const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
 
-  // Default: expanded while streaming, collapsed when done
-  const [isExpanded, setIsExpanded] = useState(isPending)
+  // Default: collapsed
+  const [isExpanded, setIsExpanded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const wasStreamingRef = useRef(isPending)
 
   // Track elapsed time for running tasks
   const [elapsedMs, setElapsedMs] = useState(0)
   const startTimeRef = useRef<number | null>(null)
+  // Track if time became inaccurate due to window being hidden
+  const [isTimeInaccurate, setIsTimeInaccurate] = useState(false)
 
   const description = part.input?.description || ""
-
-  // Auto-collapse when streaming ends (transition from true -> false)
-  useEffect(() => {
-    if (wasStreamingRef.current && !isPending) {
-      setIsExpanded(false)
-    }
-    wasStreamingRef.current = isPending
-  }, [isPending])
 
   // Track elapsed time while task is running
   useEffect(() => {
@@ -71,10 +65,29 @@ export const AgentTaskTool = memo(function AgentTaskTool({
     }
   }, [isPending])
 
+  // Detect when window visibility changes - time becomes inaccurate when hidden
+  useEffect(() => {
+    if (!isPending) return
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Window became hidden while task is running - time will be inaccurate
+        setIsTimeInaccurate(true)
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [isPending])
+
   // Use output duration from Claude Code if available, otherwise use our tracked time
   const outputDuration = part.output?.duration || part.output?.duration_ms
   const displayMs = !isPending && outputDuration ? outputDuration : elapsedMs
-  const elapsedTimeDisplay = formatElapsedTime(displayMs)
+  // Hide time if it became inaccurate while running, but show final time from output
+  const shouldShowTime = !isPending || !isTimeInaccurate
+  const elapsedTimeDisplay = shouldShowTime ? formatElapsedTime(displayMs) : ""
 
   // Auto-scroll to bottom when streaming and new nested tools added
   useEffect(() => {
@@ -212,4 +225,4 @@ export const AgentTaskTool = memo(function AgentTaskTool({
       )}
     </div>
   )
-})
+}, areTaskToolPropsEqual)

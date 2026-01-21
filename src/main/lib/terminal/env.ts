@@ -1,9 +1,24 @@
-import { execSync } from "node:child_process"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import os from "node:os"
+
+const execFileAsync = promisify(execFile)
 
 export const FALLBACK_SHELL = os.platform() === "win32" ? "cmd.exe" : "/bin/sh"
 export const SHELL_CRASH_THRESHOLD_MS = 1000
 
+// Global cache for shell detection (computed once per process lifetime)
+let cachedDefaultShell: string | null = null
+let shellDetectionPromise: Promise<string> | null = null
+
+// Global cache for locale detection
+let cachedLocale: string | null = null
+let localeDetectionPromise: Promise<string> | null = null
+
+/**
+ * Get default shell (sync, uses cached value if available)
+ * For hot paths - returns cached value or fast fallback
+ */
 export function getDefaultShell(): string {
   const platform = os.platform()
 
@@ -16,14 +31,35 @@ export function getDefaultShell(): string {
     return process.env.SHELL
   }
 
-  // Fallback: try to detect from /etc/passwd on macOS/Linux
+  // Return cached value if available
+  if (cachedDefaultShell) {
+    return cachedDefaultShell
+  }
+
+  // Start async detection in background (don't block)
+  if (!shellDetectionPromise) {
+    shellDetectionPromise = detectShellAsync()
+    shellDetectionPromise.then((shell) => {
+      cachedDefaultShell = shell
+    })
+  }
+
+  // Return fast fallback - detection will update cache for next call
+  return "/bin/zsh"
+}
+
+/**
+ * Async shell detection (used to populate cache)
+ */
+async function detectShellAsync(): Promise<string> {
   try {
     const uid = process.getuid?.()
     if (uid !== undefined) {
-      const passwd = execSync(`getent passwd ${uid} 2>/dev/null || dscl . -read /Users/$(whoami) UserShell 2>/dev/null`, {
-        encoding: "utf-8",
-        timeout: 1000,
-      })
+      const { stdout: passwd } = await execFileAsync(
+        "sh",
+        ["-c", `getent passwd ${uid} 2>/dev/null || dscl . -read /Users/$(whoami) UserShell 2>/dev/null`],
+        { timeout: 1000 },
+      )
       // getent format: user:x:uid:gid:name:home:shell
       // dscl format: UserShell: /bin/zsh
       const match = passwd.match(/UserShell:\s*(.+)/) || passwd.match(/:([^:]+)$/)
@@ -38,6 +74,10 @@ export function getDefaultShell(): string {
   return "/bin/zsh"
 }
 
+/**
+ * Get locale (sync, uses cached value if available)
+ * For hot paths - returns cached value or fast fallback
+ */
 export function getLocale(baseEnv: Record<string, string>): string {
   if (baseEnv.LANG?.includes("UTF-8")) {
     return baseEnv.LANG
@@ -47,19 +87,62 @@ export function getLocale(baseEnv: Record<string, string>): string {
     return baseEnv.LC_ALL
   }
 
+  // Return cached value if available
+  if (cachedLocale) {
+    return cachedLocale
+  }
+
+  // Start async detection in background (don't block)
+  if (!localeDetectionPromise) {
+    localeDetectionPromise = detectLocaleAsync()
+    localeDetectionPromise.then((locale) => {
+      cachedLocale = locale
+    })
+  }
+
+  // Return fast fallback - detection will update cache for next call
+  return "en_US.UTF-8"
+}
+
+/**
+ * Async locale detection (used to populate cache)
+ */
+async function detectLocaleAsync(): Promise<string> {
   try {
-    const result = execSync("locale 2>/dev/null | grep LANG= | cut -d= -f2", {
-      encoding: "utf-8",
-      timeout: 1000,
-    }).trim()
-    if (result?.includes("UTF-8")) {
-      return result
+    const { stdout: result } = await execFileAsync(
+      "sh",
+      ["-c", "locale 2>/dev/null | grep LANG= | cut -d= -f2"],
+      { timeout: 1000 },
+    )
+    const trimmed = result.trim()
+    if (trimmed?.includes("UTF-8")) {
+      return trimmed
     }
   } catch {
     // Ignore - will use fallback
   }
 
   return "en_US.UTF-8"
+}
+
+/**
+ * Pre-warm the shell and locale caches (call at startup)
+ * Non-blocking - populates caches for later use
+ */
+export function prewarmEnvCaches(): void {
+  // Trigger async detection if not already started
+  if (!shellDetectionPromise && !cachedDefaultShell) {
+    shellDetectionPromise = detectShellAsync()
+    shellDetectionPromise.then((shell) => {
+      cachedDefaultShell = shell
+    })
+  }
+  if (!localeDetectionPromise && !cachedLocale) {
+    localeDetectionPromise = detectLocaleAsync()
+    localeDetectionPromise.then((locale) => {
+      cachedLocale = locale
+    })
+  }
 }
 
 export function sanitizeEnv(

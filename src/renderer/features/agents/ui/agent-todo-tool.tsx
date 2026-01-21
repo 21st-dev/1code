@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect } from "react"
+import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useAtom } from "jotai"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import {
@@ -13,6 +13,7 @@ import {
   IconArrowRight,
 } from "../../../components/ui/icons"
 import { getToolStatus } from "./agent-tool-registry"
+import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 import { Circle } from "lucide-react"
 import { AgentToolCall } from "./agent-tool-call"
@@ -235,6 +236,75 @@ const TodoStatusIcon = ({
   }
 }
 
+// Memoized status icon map to avoid recreating on each render
+// For compact change items (multiple updates view)
+const STATUS_ICONS = {
+  completed: CheckIcon,
+  in_progress: IconDoubleChevronRight,
+  pending: Circle,
+} as const
+
+// For AgentToolCall icon (single update view) - use IconSpinner for in_progress
+const TOOL_CALL_ICONS = {
+  completed: CheckIcon,
+  in_progress: IconSpinner,
+  pending: Circle,
+} as const
+
+// Memoized component for rendering individual todo change items
+const TodoChangeItem = memo(function TodoChangeItem({
+  change,
+  showSeparator,
+}: {
+  change: TodoChange
+  showSeparator: boolean
+}) {
+  const StatusIcon = STATUS_ICONS[change.newStatus] || STATUS_ICONS.pending
+  return (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <StatusIcon className="w-3 h-3" />
+      <span className="truncate">{change.todo.content}</span>
+      {showSeparator && <span className="mx-0.5">,</span>}
+    </div>
+  )
+})
+
+// Memoized component for rendering individual todo list items in expanded view
+const TodoListItem = memo(function TodoListItem({
+  todo,
+  isPending,
+  isLast,
+}: {
+  todo: TodoItem
+  isPending: boolean
+  isLast: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 px-2.5 py-1.5",
+        !isLast && "border-b border-border/30",
+      )}
+    >
+      <TodoStatusIcon status={todo.status} isPending={isPending} />
+      <span
+        className={cn(
+          "text-xs truncate",
+          isPending
+            ? "text-muted-foreground"
+            : todo.status === "completed"
+              ? "line-through text-muted-foreground"
+              : todo.status === "pending"
+                ? "text-muted-foreground"
+                : "text-foreground",
+        )}
+      >
+        {todo.content}
+      </span>
+    </div>
+  )
+})
+
 export const AgentTodoTool = memo(function AgentTodoTool({
   part,
   chatStatus,
@@ -249,6 +319,11 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   const [todoState, setTodoState] = useAtom(todosAtom)
   const syncedTodos = todoState.todos
   const creationToolCallId = todoState.creationToolCallId
+
+  // Use ref to track syncedTodos without triggering effect re-runs
+  // This prevents infinite loops when the effect updates the atom
+  const syncedTodosRef = useRef(syncedTodos)
+  syncedTodosRef.current = syncedTodos
 
   // Get todos from input or output.newTodos
   const rawOldTodos = part.output?.oldTodos || []
@@ -289,22 +364,53 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   const [isExpanded, setIsExpanded] = useState(false)
   const { isPending } = getToolStatus(part, chatStatus)
 
+  // Memoized click handlers to prevent inline function re-creation
+  const handleToggleExpand = useCallback(() => {
+    setIsExpanded(prev => !prev)
+  }, [])
+
+  const handleExpand = useCallback(() => {
+    setIsExpanded(true)
+  }, [])
+
+  const handleCollapse = useCallback(() => {
+    setIsExpanded(false)
+  }, [])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      setIsExpanded(prev => !prev)
+    }
+  }, [])
+
   // Update synced todos whenever newTodos change
   // This keeps the creation tool in sync with all updates
   useEffect(() => {
     if (newTodos.length > 0) {
+      // Use ref to get current syncedTodos without adding it to dependencies
+      // This prevents infinite loops: effect updates atom -> syncedTodos changes -> effect runs again
+      const currentSyncedTodos = syncedTodosRef.current
+
       // Only update if:
       // 1. This is the creation tool call (always update), OR
       // 2. newTodos has at least as many items as syncedTodos (prevents partial streaming overwrites)
       // During streaming, JSON parsing may return partial arrays, causing temporary drops in length
-      const shouldUpdate = isCreationToolCall || newTodos.length >= syncedTodos.length
+      const shouldUpdate = isCreationToolCall || newTodos.length >= currentSyncedTodos.length
 
       if (shouldUpdate) {
-        const newCreationId = creationToolCallId === null ? part.toolCallId : creationToolCallId
-        setTodoState({ todos: newTodos, creationToolCallId: newCreationId })
+        // Prevent infinite loop: check if todos actually changed before updating
+        // Compare by serializing to JSON - if content is the same, skip update
+        const newTodosJson = JSON.stringify(newTodos)
+        const syncedTodosJson = JSON.stringify(currentSyncedTodos)
+
+        if (newTodosJson !== syncedTodosJson) {
+          const newCreationId = creationToolCallId === null ? part.toolCallId : creationToolCallId
+          setTodoState({ todos: newTodos, creationToolCallId: newCreationId })
+        }
       }
     }
-  }, [newTodos, setTodoState, creationToolCallId, part.toolCallId, isCreationToolCall, syncedTodos.length])
+  }, [newTodos, setTodoState, creationToolCallId, part.toolCallId, isCreationToolCall])
 
   // Check if we're still streaming input (data not yet complete)
   const isStreaming = part.state === "input-streaming"
@@ -372,7 +478,8 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   // COMPACT MODE: Single update - render as simple tool call
   if (changes.type === "single") {
     const change = changes.items[0]
-    const IconComponent = getStatusIconComponent(change.newStatus)
+    // Use stable icon reference from TOOL_CALL_ICONS map
+    const IconComponent = TOOL_CALL_ICONS[change.newStatus] || TOOL_CALL_ICONS.pending
 
     // For in_progress status with activeForm, use activeForm as the title text
     // to avoid duplication (content + activeForm both shown)
@@ -433,28 +540,13 @@ export const AgentTodoTool = memo(function AgentTodoTool({
               )}
             </span>
             <div className="flex items-center gap-1 text-muted-foreground/60 font-normal truncate min-w-0">
-              {visibleItems.map((c, idx) => {
-                // Choose icon based on status
-                const StatusIcon =
-                  c.newStatus === "completed"
-                    ? CheckIcon
-                    : c.newStatus === "in_progress"
-                      ? IconDoubleChevronRight
-                      : Circle
-
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-1 flex-shrink-0"
-                  >
-                    <StatusIcon className="w-3 h-3" />
-                    <span className="truncate">{c.todo.content}</span>
-                    {idx < visibleItems.length - 1 && (
-                      <span className="mx-0.5">,</span>
-                    )}
-                  </div>
-                )
-              })}
+              {visibleItems.map((c, idx) => (
+                <TodoChangeItem
+                  key={idx}
+                  change={c}
+                  showSeparator={idx < visibleItems.length - 1}
+                />
+              ))}
               {remainingCount > 0 && (
                 <span className="text-muted-foreground/60 whitespace-nowrap flex-shrink-0">
                   +{remainingCount} more
@@ -498,23 +590,14 @@ export const AgentTodoTool = memo(function AgentTodoTool({
       } : undefined}
     >
       {/* TOP BLOCK - Plan title with expand/collapse button */}
-      {/* z-[9] - UNDER user message (user message has z-10) */}
       <div
-        className={cn(
-          "rounded-t-lg border border-b-0 border-border bg-muted/30 px-2.5 py-1.5 cursor-pointer hover:bg-muted/40 transition-colors duration-150",
-          isCreationToolCall && "relative z-[9]"
-        )}
-        onClick={() => setIsExpanded(!isExpanded)}
+        className="rounded-t-lg border border-b-0 border-border bg-muted/30 px-2.5 py-1.5 cursor-pointer hover:bg-muted/40 transition-colors duration-150"
+        onClick={handleToggleExpand}
         role="button"
         aria-expanded={isExpanded}
         aria-label={`Todo list with ${totalTodos} items. Click to ${isExpanded ? "collapse" : "expand"}`}
         tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            setIsExpanded(!isExpanded)
-          }
-        }}
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-center gap-1.5">
           <PlanIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
@@ -543,16 +626,12 @@ export const AgentTodoTool = memo(function AgentTodoTool({
       </div>
 
       {/* BOTTOM BLOCK - Current task + progress (expandable) */}
-      {/* z-20 - ABOVE user message shadow */}
-      <div className={cn(
-        "rounded-b-lg border border-border bg-muted/20 shadow-xl shadow-background",
-        isCreationToolCall && "relative z-20"
-      )}>
+      <div className="rounded-b-lg border border-border bg-muted/20 shadow-xl shadow-background">
         {/* Collapsed view - progress circle + current task + count */}
         {!isExpanded && (
           <div
             className="flex items-center gap-2.5 px-2.5 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors duration-150"
-            onClick={() => setIsExpanded(true)}
+            onClick={handleExpand}
           >
             {/* Progress circle or checkmark when all completed */}
             {completedCount === totalTodos && totalTodos > 0 ? (
@@ -595,36 +674,19 @@ export const AgentTodoTool = memo(function AgentTodoTool({
         {isExpanded && (
           <div
             className="max-h-[300px] overflow-y-auto cursor-pointer"
-            onClick={() => setIsExpanded(false)}
+            onClick={handleCollapse}
           >
             {displayTodos.map((todo, idx) => (
-              <div
+              <TodoListItem
                 key={idx}
-                className={cn(
-                  "flex items-center gap-2 px-2.5 py-1.5",
-                  idx !== displayTodos.length - 1 && "border-b border-border/30",
-                )}
-              >
-                <TodoStatusIcon status={todo.status} isPending={isPending} />
-                <span
-                  className={cn(
-                    "text-xs truncate",
-                    isPending
-                      ? "text-muted-foreground"
-                      : todo.status === "completed"
-                        ? "line-through text-muted-foreground"
-                        : todo.status === "pending"
-                          ? "text-muted-foreground"
-                          : "text-foreground",
-                  )}
-                >
-                  {todo.content}
-                </span>
-              </div>
+                todo={todo}
+                isPending={isPending}
+                isLast={idx === displayTodos.length - 1}
+              />
             ))}
           </div>
         )}
       </div>
     </div>
   )
-})
+}, areToolPropsEqual)

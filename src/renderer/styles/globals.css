@@ -1,5 +1,7 @@
 @import "./agents-styles.css";
 
+@source "../../../node_modules/streamdown/dist/*.js";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -83,6 +85,18 @@
       "rlig" 1,
       "calt" 1;
   }
+}
+
+/* Search highlight styles */
+.search-highlight {
+  background-color: rgb(250 204 21 / 0.35) !important;
+  color: inherit !important;
+  border-radius: 2px;
+}
+
+.search-highlight-current {
+  background-color: rgb(250 204 21 / 0.85) !important;
+  color: hsl(0 0% 5%) !important;
 }
 
 /* Custom scrollbar */

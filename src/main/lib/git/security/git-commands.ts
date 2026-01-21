@@ -1,8 +1,8 @@
-import simpleGit from "simple-git";
 import {
 	assertRegisteredWorktree,
 	assertValidGitPath,
 } from "./path-validation";
+import { createGit, withLockRetry } from "../git-factory";
 
 /**
  * Git command helpers with semantic naming.
@@ -40,23 +40,25 @@ export async function gitSwitchBranch(
 		throw new Error("Invalid branch name: cannot be empty");
 	}
 
-	const git = simpleGit(worktreePath);
+	const git = createGit(worktreePath);
 
-	try {
-		// Prefer `git switch` - unambiguous branch operation (git 2.23+)
-		await git.raw(["switch", branch]);
-	} catch (switchError) {
-		// Check if it's because `switch` command doesn't exist (old git < 2.23)
-		// Git outputs: "git: 'switch' is not a git command. See 'git --help'."
-		const errorMessage = String(switchError);
-		if (errorMessage.includes("is not a git command")) {
-			// Fallback for older git versions
-			// Note: checkout WITHOUT -- is correct for branches
-			await git.checkout(branch);
-		} else {
-			throw switchError;
+	await withLockRetry(worktreePath, async () => {
+		try {
+			// Prefer `git switch` - unambiguous branch operation (git 2.23+)
+			await git.raw(["switch", branch]);
+		} catch (switchError) {
+			// Check if it's because `switch` command doesn't exist (old git < 2.23)
+			// Git outputs: "git: 'switch' is not a git command. See 'git --help'."
+			const errorMessage = String(switchError);
+			if (errorMessage.includes("is not a git command")) {
+				// Fallback for older git versions
+				// Note: checkout WITHOUT -- is correct for branches
+				await git.checkout(branch);
+			} else {
+				throw switchError;
+			}
 		}
-	}
+	});
 }
 
 /**
@@ -72,9 +74,9 @@ export async function gitCheckoutFile(
 	assertRegisteredWorktree(worktreePath);
 	assertValidGitPath(filePath);
 
-	const git = simpleGit(worktreePath);
+	const git = createGit(worktreePath);
 	// `--` is correct here - we want path semantics
-	await git.checkout(["--", filePath]);
+	await withLockRetry(worktreePath, () => git.checkout(["--", filePath]));
 }
 
 /**
@@ -90,8 +92,8 @@ export async function gitStageFile(
 	assertRegisteredWorktree(worktreePath);
 	assertValidGitPath(filePath);
 
-	const git = simpleGit(worktreePath);
-	await git.add(["--", filePath]);
+	const git = createGit(worktreePath);
+	await withLockRetry(worktreePath, () => git.add(["--", filePath]));
 }
 
 /**
@@ -102,8 +104,37 @@ export async function gitStageFile(
 export async function gitStageAll(worktreePath: string): Promise<void> {
 	assertRegisteredWorktree(worktreePath);
 
-	const git = simpleGit(worktreePath);
-	await git.add("-A");
+	const git = createGit(worktreePath);
+	await withLockRetry(worktreePath, () => git.add("-A"));
+}
+
+/**
+ * Stage multiple files for commit in a single git operation.
+ *
+ * Uses `git add -- <paths...>` to stage multiple files at once,
+ * avoiding multiple sequential git calls and lock conflicts.
+ */
+/** Maximum files per batch to avoid command line length limits */
+const BATCH_SIZE = 100;
+
+export async function gitStageFiles(
+	worktreePath: string,
+	filePaths: string[],
+): Promise<void> {
+	assertRegisteredWorktree(worktreePath);
+	for (const filePath of filePaths) {
+		assertValidGitPath(filePath);
+	}
+
+	if (filePaths.length === 0) return;
+
+	const git = createGit(worktreePath);
+
+	// Process in batches to avoid command line length limits
+	for (let i = 0; i < filePaths.length; i += BATCH_SIZE) {
+		const batch = filePaths.slice(i, i + BATCH_SIZE);
+		await withLockRetry(worktreePath, () => git.add(["--", ...batch]));
+	}
 }
 
 /**
@@ -119,8 +150,8 @@ export async function gitUnstageFile(
 	assertRegisteredWorktree(worktreePath);
 	assertValidGitPath(filePath);
 
-	const git = simpleGit(worktreePath);
-	await git.reset(["HEAD", "--", filePath]);
+	const git = createGit(worktreePath);
+	await withLockRetry(worktreePath, () => git.reset(["HEAD", "--", filePath]));
 }
 
 /**
@@ -132,6 +163,32 @@ export async function gitUnstageFile(
 export async function gitUnstageAll(worktreePath: string): Promise<void> {
 	assertRegisteredWorktree(worktreePath);
 
-	const git = simpleGit(worktreePath);
-	await git.reset(["HEAD"]);
+	const git = createGit(worktreePath);
+	await withLockRetry(worktreePath, () => git.reset(["HEAD"]));
+}
+
+/**
+ * Unstage multiple files in a single git operation.
+ *
+ * Uses `git reset HEAD -- <paths...>` to unstage multiple files at once,
+ * avoiding multiple sequential git calls and lock conflicts.
+ */
+export async function gitUnstageFiles(
+	worktreePath: string,
+	filePaths: string[],
+): Promise<void> {
+	assertRegisteredWorktree(worktreePath);
+	for (const filePath of filePaths) {
+		assertValidGitPath(filePath);
+	}
+
+	if (filePaths.length === 0) return;
+
+	const git = createGit(worktreePath);
+
+	// Process in batches
+	for (let i = 0; i < filePaths.length; i += BATCH_SIZE) {
+		const batch = filePaths.slice(i, i + BATCH_SIZE);
+		await withLockRetry(worktreePath, () => git.reset(["HEAD", "--", ...batch]));
+	}
 }

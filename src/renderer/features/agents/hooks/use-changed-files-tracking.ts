@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSetAtom } from "jotai"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { subChatFilesAtom, subChatToChatMapAtom, type SubChatFileChange } from "../atoms"
 // import { REPO_ROOT_PATH } from "@/lib/codesandbox-constants"
 const REPO_ROOT_PATH = "/workspace" // Desktop mock
@@ -33,7 +33,7 @@ export function useChangedFilesTracking(
   const setSubChatFiles = useSetAtom(subChatFilesAtom)
   const setSubChatToChatMap = useSetAtom(subChatToChatMapAtom)
 
-  // Helper to get display path (removes sandbox prefixes)
+  // Helper to get display path (removes sandbox prefixes and worktree paths)
   const getDisplayPath = useCallback((filePath: string): string => {
     if (!filePath) return ""
 
@@ -44,6 +44,13 @@ export function useChangedFilesTracking(
       if (filePath.startsWith(prefix)) {
         return filePath.slice(prefix.length)
       }
+    }
+
+    // Handle worktree paths: /Users/.../.21st/worktrees/{chatId}/{subChatId}/relativePath
+    // Extract everything after the subChatId directory
+    const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
+    if (worktreeMatch) {
+      return worktreeMatch[1]
     }
 
     // Heuristic: find common root directories
@@ -101,23 +108,24 @@ export function useChangedFilesTracking(
   }, [])
 
   // Calculate changed files from messages
-  const calculateChangedFiles = useCallback(() => {
-    // Track file states: originalContent (first old_string) and currentContent (latest new_string)
-    const fileStates = new Map<
-      string,
-      {
-        originalContent: string | null // null means file didn't exist before
-        currentContent: string
-        displayPath: string
-      }
-    >()
+  const calculateChangedFiles = useCallback(
+    (inputMessages: Message[] = messages) => {
+      // Track file states: originalContent (first old_string) and currentContent (latest new_string)
+      const fileStates = new Map<
+        string,
+        {
+          originalContent: string | null // null means file didn't exist before
+          currentContent: string
+          displayPath: string
+        }
+      >()
 
-    for (const msg of messages) {
-      if (msg.role !== "assistant") continue
-      for (const part of msg.parts || []) {
-        if (part.type === "tool-Edit" || part.type === "tool-Write") {
-          const filePath = part.input?.file_path
-          if (!filePath) continue
+      for (const msg of inputMessages) {
+        if (msg.role !== "assistant") continue
+        for (const part of msg.parts || []) {
+          if (part.type === "tool-Edit" || part.type === "tool-Write") {
+            const filePath = part.input?.file_path
+            if (!filePath) continue
 
           // Skip session/plan files stored in local app storage
           if (isSessionFile(filePath)) continue
@@ -125,44 +133,57 @@ export function useChangedFilesTracking(
           const oldString = part.input?.old_string || ""
           const newString = part.input?.new_string || part.input?.content || ""
 
-          const existing = fileStates.get(filePath)
-          if (existing) {
-            // Update current content only (preserve original)
-            existing.currentContent = newString
-          } else {
-            // First time seeing this file - record original state
-            fileStates.set(filePath, {
-              // For Write (new file), original is null; for Edit, it's the old_string
-              originalContent: part.type === "tool-Write" ? null : oldString,
-              currentContent: newString,
-              displayPath: getDisplayPath(filePath),
-            })
+            const existing = fileStates.get(filePath)
+            if (existing) {
+              // Update current content only (preserve original)
+              existing.currentContent = newString
+            } else {
+              // First time seeing this file - record original state
+              fileStates.set(filePath, {
+                // For Write (new file), original is null; for Edit, it's the old_string
+                originalContent: part.type === "tool-Write" ? null : oldString,
+                currentContent: newString,
+                displayPath: getDisplayPath(filePath),
+              })
+            }
           }
         }
       }
-    }
 
-    // Calculate NET diff from original to current state
-    const result: SubChatFileChange[] = []
-    for (const [filePath, state] of fileStates) {
-      const originalContent = state.originalContent || ""
+      // Calculate NET diff from original to current state
+      const result: SubChatFileChange[] = []
+      for (const [filePath, state] of fileStates) {
+        const originalContent = state.originalContent || ""
 
-      // Skip if file returned to original state (net change = 0)
-      if (originalContent === state.currentContent) {
-        continue
+        // Skip if file returned to original state (net change = 0)
+        if (originalContent === state.currentContent) {
+          continue
+        }
+
+        const stats = calculateDiffStats(originalContent, state.currentContent)
+        result.push({
+          filePath,
+          displayPath: state.displayPath,
+          additions: stats.additions,
+          deletions: stats.deletions,
+        })
       }
 
-      const stats = calculateDiffStats(originalContent, state.currentContent)
-      result.push({
-        filePath,
-        displayPath: state.displayPath,
-        additions: stats.additions,
-        deletions: stats.deletions,
-      })
-    }
+      return result
+    },
+    [messages, getDisplayPath, calculateDiffStats, isSessionFile],
+  )
 
-    return result
-  }, [messages, getDisplayPath, calculateDiffStats, isSessionFile])
+  const recomputeChangedFiles = useCallback(
+    (overrideMessages?: Message[]) => {
+      const newChangedFiles = calculateChangedFiles(
+        overrideMessages ?? messages,
+      )
+      setChangedFiles(newChangedFiles)
+      isInitializedRef.current = true
+    },
+    [calculateChangedFiles, messages],
+  )
 
   // Only recalculate when streaming ends (transition from true to false)
   // Also calculate on initial mount if not streaming
@@ -203,5 +224,5 @@ export function useChangedFilesTracking(
     }
   }, [subChatId, chatId, setSubChatToChatMap])
 
-  return { changedFiles }
+  return { changedFiles, recomputeChangedFiles }
 }

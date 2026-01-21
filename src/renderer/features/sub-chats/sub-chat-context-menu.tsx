@@ -20,10 +20,13 @@ const useCloseTabShortcut = () => {
 }
 
 interface SubChatContextMenuProps {
-  subChat: SubChatMeta
+  // Support both object and primitive props for backwards compatibility
+  subChat?: SubChatMeta
+  subChatId?: string
+  subChatName?: string
   isPinned: boolean
   onTogglePin: (subChatId: string) => void
-  onRename: (subChat: SubChatMeta) => void
+  onRename: ((subChat: SubChatMeta) => void) | ((subChatId: string, subChatName: string) => void)
   onArchive: (subChatId: string) => void
   onArchiveOthers: (subChatId: string) => void
   onArchiveAllBelow?: (subChatId: string) => void
@@ -41,6 +44,8 @@ interface SubChatContextMenuProps {
 
 export function SubChatContextMenu({
   subChat,
+  subChatId: subChatIdProp,
+  subChatName: subChatNameProp,
   isPinned,
   onTogglePin,
   onRename,
@@ -60,12 +65,26 @@ export function SubChatContextMenu({
 }: SubChatContextMenuProps) {
   const closeTabShortcut = useCloseTabShortcut()
 
+  // Support both object and primitive props
+  const id = subChatIdProp ?? subChat?.id ?? ""
+  const name = subChatNameProp ?? subChat?.name ?? ""
+
+  const handleRename = () => {
+    if (subChat) {
+      // Legacy: pass object
+      ;(onRename as (subChat: SubChatMeta) => void)(subChat)
+    } else {
+      // New: pass primitives
+      ;(onRename as (id: string, name: string) => void)(id, name)
+    }
+  }
+
   return (
     <ContextMenuContent className="w-48">
-      <ContextMenuItem onClick={() => onTogglePin(subChat.id)}>
+      <ContextMenuItem onClick={() => onTogglePin(id)}>
         {isPinned ? "Unpin chat" : "Pin chat"}
       </ContextMenuItem>
-      <ContextMenuItem onClick={() => onRename(subChat)}>
+      <ContextMenuItem onClick={handleRename}>
         Rename chat
       </ContextMenuItem>
       <ContextMenuSeparator />
@@ -73,7 +92,7 @@ export function SubChatContextMenu({
       {showCloseTabOptions ? (
         <>
           <ContextMenuItem
-            onClick={() => onCloseTab?.(subChat.id)}
+            onClick={() => onCloseTab?.(id)}
             className="justify-between"
             disabled={isOnlyChat}
           >
@@ -81,13 +100,13 @@ export function SubChatContextMenu({
             {!isOnlyChat && <Kbd>{closeTabShortcut}</Kbd>}
           </ContextMenuItem>
           <ContextMenuItem
-            onClick={() => onCloseOtherTabs?.(subChat.id)}
+            onClick={() => onCloseOtherTabs?.(id)}
             disabled={!canCloseOtherTabs}
           >
             Close other chats
           </ContextMenuItem>
           <ContextMenuItem
-            onClick={() => onCloseTabsToRight?.(subChat.id, visualIndex)}
+            onClick={() => onCloseTabsToRight?.(id, visualIndex)}
             disabled={!hasTabsToRight}
           >
             Close chats to the right
@@ -96,7 +115,7 @@ export function SubChatContextMenu({
       ) : (
         <>
           <ContextMenuItem
-            onClick={() => onArchive(subChat.id)}
+            onClick={() => onArchive(id)}
             className="justify-between"
             disabled={isOnlyChat}
           >
@@ -104,7 +123,7 @@ export function SubChatContextMenu({
             {!isOnlyChat && <Kbd>{closeTabShortcut}</Kbd>}
           </ContextMenuItem>
           <ContextMenuItem
-            onClick={() => onArchiveAllBelow?.(subChat.id)}
+            onClick={() => onArchiveAllBelow?.(id)}
             disabled={
               currentIndex === undefined ||
               currentIndex >= (totalCount || 0) - 1
@@ -113,7 +132,7 @@ export function SubChatContextMenu({
             Archive chats below
           </ContextMenuItem>
           <ContextMenuItem
-            onClick={() => onArchiveOthers(subChat.id)}
+            onClick={() => onArchiveOthers(id)}
             disabled={isOnlyChat}
           >
             Archive other chats

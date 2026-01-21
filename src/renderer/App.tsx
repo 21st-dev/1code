@@ -1,19 +1,24 @@
-import { useEffect, useMemo } from "react"
-import { Provider as JotaiProvider, useAtomValue } from "jotai"
+import { Provider as JotaiProvider, useAtomValue, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
+import { useEffect, useMemo } from "react"
 import { Toaster } from "sonner"
+import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
+import { selectedProjectAtom } from "./features/agents/atoms"
 import { AgentsLayout } from "./features/layout/agents-layout"
 import {
   AnthropicOnboardingPage,
+  ApiKeyOnboardingPage,
+  BillingMethodPage,
   SelectRepoPage,
 } from "./features/onboarding"
-import { TooltipProvider } from "./components/ui/tooltip"
+import { identify, initAnalytics, shutdown } from "./lib/analytics"
+import {
+  anthropicOnboardingCompletedAtom, apiKeyOnboardingCompletedAtom,
+  billingMethodAtom
+} from "./lib/atoms"
 import { appStore } from "./lib/jotai-store"
-import { initAnalytics, identify, shutdown } from "./lib/analytics"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
-import { anthropicOnboardingCompletedAtom } from "./lib/atoms"
-import { selectedProjectAtom } from "./features/agents/atoms"
 import { trpc } from "./lib/trpc"
 
 /**
@@ -35,10 +40,21 @@ function ThemedToaster() {
  * Main content router - decides which page to show based on onboarding state
  */
 function AppContent() {
+  const billingMethod = useAtomValue(billingMethodAtom)
+  const setBillingMethod = useSetAtom(billingMethodAtom)
   const anthropicOnboardingCompleted = useAtomValue(
     anthropicOnboardingCompletedAtom
   )
+  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
+
+  // Migration: If user already completed Anthropic onboarding but has no billing method set,
+  // automatically set it to "claude-subscription" (legacy users before billing method was added)
+  useEffect(() => {
+    if (!billingMethod && anthropicOnboardingCompleted) {
+      setBillingMethod("claude-subscription")
+    }
+  }, [billingMethod, anthropicOnboardingCompleted, setBillingMethod])
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
@@ -56,11 +72,24 @@ function AppContent() {
   }, [selectedProject, projects, isLoadingProjects])
 
   // Determine which page to show:
-  // 1. Anthropic onboarding not completed -> AnthropicOnboardingPage
-  // 2. No valid project selected -> SelectRepoPage
-  // 3. Otherwise -> AgentsLayout
-  if (!anthropicOnboardingCompleted) {
+  // 1. No billing method selected -> BillingMethodPage
+  // 2. Claude subscription selected but not completed -> AnthropicOnboardingPage
+  // 3. API key or custom model selected but not completed -> ApiKeyOnboardingPage
+  // 4. No valid project selected -> SelectRepoPage
+  // 5. Otherwise -> AgentsLayout
+  if (!billingMethod) {
+    return <BillingMethodPage />
+  }
+
+  if (billingMethod === "claude-subscription" && !anthropicOnboardingCompleted) {
     return <AnthropicOnboardingPage />
+  }
+
+  if (
+    (billingMethod === "api-key" || billingMethod === "custom-model") &&
+    !apiKeyOnboardingCompleted
+  ) {
+    return <ApiKeyOnboardingPage />
   }
 
   if (!validatedProject && !isLoadingProjects) {

@@ -2,7 +2,6 @@
 // All components are designed to work with mocked data for parallel development
 
 // Chat components
-export { AgentSendButton } from "./agent-send-button"
 export { AgentUserMessageBubble } from "./agent-user-message-bubble"
 
 // Content components

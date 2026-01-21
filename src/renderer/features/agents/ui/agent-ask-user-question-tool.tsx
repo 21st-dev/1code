@@ -4,7 +4,13 @@ import { memo } from "react"
 import { useAtomValue } from "jotai"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { QuestionIcon } from "../../../components/ui/icons"
-import { QUESTIONS_SKIPPED_MESSAGE, QUESTIONS_TIMED_OUT_MESSAGE, askUserQuestionResultsAtom, pendingUserQuestionsAtom } from "../atoms"
+import {
+  QUESTIONS_SKIPPED_MESSAGE,
+  QUESTIONS_TIMED_OUT_MESSAGE,
+  askUserQuestionResultsAtom,
+  pendingUserQuestionsAtom,
+} from "../atoms"
+import { areAskUserQuestionPropsEqual } from "./agent-tool-utils"
 
 interface AgentAskUserQuestionToolProps {
   input: {
@@ -173,4 +179,4 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
       <span>Interrupted</span>
     </div>
   )
-})
+}, areAskUserQuestionPropsEqual)

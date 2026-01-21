@@ -10,6 +10,7 @@ import {
   CheckIcon,
 } from "../../../components/ui/icons"
 import { getToolStatus } from "./agent-tool-registry"
+import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 import { Circle, SkipForward, FileCode2 } from "lucide-react"
 
@@ -311,4 +312,4 @@ export const AgentPlanTool = memo(function AgentPlanTool({
       )}
     </div>
   )
-})
+}, areToolPropsEqual)

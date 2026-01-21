@@ -3,8 +3,12 @@ import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
   agentsLoginModalOpenAtom,
+  customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
+  historyEnabledAtom,
   sessionInfoAtom,
+  type CustomClaudeConfig,
+  normalizeCustomClaudeConfig,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
@@ -46,12 +50,26 @@ const ERROR_TOAST_CONFIG: Record<
       "Your Claude API key is invalid. Check your CLI configuration.",
   },
   RATE_LIMIT_SDK: {
-    title: "Rate limited",
-    description: "Too many requests. Please wait a moment and try again.",
+    title: "Session limit reached",
+    description: "You've hit the Claude Code usage limit.",
+    action: {
+      label: "View usage",
+      onClick: () =>
+        trpcClient.external.openExternal.mutate(
+          "https://claude.ai/settings/usage",
+        ),
+    },
   },
   RATE_LIMIT: {
-    title: "Rate limited",
-    description: "Too many requests. Please wait a moment and try again.",
+    title: "Session limit reached",
+    description: "You've hit the Claude Code usage limit.",
+    action: {
+      label: "View usage",
+      onClick: () =>
+        trpcClient.external.openExternal.mutate(
+          "https://claude.ai/settings/usage",
+        ),
+    },
   },
   OVERLOADED_SDK: {
     title: "Claude is busy",
@@ -61,7 +79,7 @@ const ERROR_TOAST_CONFIG: Record<
   PROCESS_CRASH: {
     title: "Claude crashed",
     description:
-      "The Claude process exited unexpectedly. Try sending your message again.",
+      "The Claude process exited unexpectedly. Try sending your message again or rollback.",
   },
   EXECUTABLE_NOT_FOUND: {
     title: "Claude CLI not found",
@@ -126,10 +144,16 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
     const maxThinkingTokens = thinkingEnabled ? 128_000 : undefined
+    const historyEnabled = appStore.get(historyEnabledAtom)
 
     // Read model selection dynamically (so model changes apply to existing chats)
     const selectedModelId = appStore.get(lastSelectedModelIdAtom)
     const modelString = MODEL_ID_MAP[selectedModelId]
+
+    const storedCustomConfig = appStore.get(
+      customClaudeConfigAtom,
+    ) as CustomClaudeConfig
+    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
 
     const currentMode =
       useAgentSubChatStore
@@ -141,7 +165,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"}`)
+    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
 
     return new ReadableStream({
       start: (controller) => {
@@ -156,6 +180,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             sessionId,
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
+            ...(customConfig && { customConfig }),
+            historyEnabled,
             ...(images.length > 0 && { images }),
           },
           {
@@ -253,6 +279,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 // Use controller.error() instead of controller.close() so that
                 // the SDK Chat properly resets status from "streaming" to "ready"
                 // This allows user to retry sending messages after failed auth
+                console.log(`[SD] R:AUTH_ERR sub=${subId}`)
                 controller.error(new Error("Authentication required"))
                 return
               }

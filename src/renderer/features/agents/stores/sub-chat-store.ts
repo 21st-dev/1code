@@ -1,4 +1,7 @@
 import { create } from "zustand"
+import { useMessageQueueStore } from "./message-queue-store"
+import { useStreamingStatusStore } from "./streaming-status-store"
+import { agentChatStore } from "./agent-chat-store"
 
 export interface SubChatMeta {
   id: string
@@ -129,6 +132,12 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
       saveToLS(chatId, "open", newIds)
       saveToLS(chatId, "active", newActive)
     }
+
+    // Cleanup queue, streaming status, and Chat instance to prevent memory leaks
+    // and race conditions (QueueProcessor sending to closed subChat)
+    useMessageQueueStore.getState().clearQueue(subChatId)
+    useStreamingStatusStore.getState().clearStatus(subChatId)
+    agentChatStore.delete(subChatId)
   },
 
   togglePinSubChat: (subChatId) => {

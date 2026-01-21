@@ -450,25 +450,8 @@ export function TerminalSidebar({
           className="flex items-center gap-1 pl-1 pr-2 py-1.5 flex-shrink-0"
           style={{ backgroundColor: terminalBg }}
         >
-          {/* Terminal Tabs */}
-          {terminals.length > 0 && (
-            <TerminalTabs
-              terminals={terminals}
-              activeTerminalId={activeTerminalId}
-              cwds={terminalCwds}
-              initialCwd={cwd}
-              terminalBg={terminalBg}
-              onSelectTerminal={selectTerminal}
-              onCloseTerminal={closeTerminal}
-              onCloseOtherTerminals={closeOtherTerminals}
-              onCloseTerminalsToRight={closeTerminalsToRight}
-              onCreateTerminal={createTerminal}
-              onRenameTerminal={renameTerminal}
-            />
-          )}
-
-          {/* Close button */}
-          <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Close button - on the left */}
+          <div className="flex items-center flex-shrink-0">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -487,6 +470,23 @@ export function TerminalSidebar({
               </TooltipContent>
             </Tooltip>
           </div>
+
+          {/* Terminal Tabs */}
+          {terminals.length > 0 && (
+            <TerminalTabs
+              terminals={terminals}
+              activeTerminalId={activeTerminalId}
+              cwds={terminalCwds}
+              initialCwd={cwd}
+              terminalBg={terminalBg}
+              onSelectTerminal={selectTerminal}
+              onCloseTerminal={closeTerminal}
+              onCloseOtherTerminals={closeOtherTerminals}
+              onCloseTerminalsToRight={closeTerminalsToRight}
+              onCreateTerminal={createTerminal}
+              onRenameTerminal={renameTerminal}
+            />
+          )}
         </div>
 
         {/* Terminal Content */}

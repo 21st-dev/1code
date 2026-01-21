@@ -112,6 +112,9 @@ export const setLoading = (
   parentChatId: string,
 ) => {
   setter((prev) => {
+    // Only create new Map if value actually changed
+    // This prevents unnecessary re-renders
+    if (prev.get(subChatId) === parentChatId) return prev
     const next = new Map(prev)
     next.set(subChatId, parentChatId)
     return next
@@ -124,6 +127,9 @@ export const clearLoading = (
   subChatId: string,
 ) => {
   setter((prev) => {
+    // Only create new Map if subChatId was actually in loading state
+    // This prevents unnecessary re-renders when switching between non-loading sub-chats
+    if (!prev.has(subChatId)) return prev
     const next = new Map(prev)
     next.delete(subChatId)
     return next
@@ -227,7 +233,23 @@ export const agentsPreviewSidebarOpenAtom = atomWithStorage<boolean>(
 // Diff sidebar (right) width (global - same width for all chats)
 export const agentsDiffSidebarWidthAtom = atomWithStorage<number>(
   "agents-diff-sidebar-width",
-  500,
+  800,
+  undefined,
+  { getOnInit: true },
+)
+
+// Changes panel (file list) width within the diff sidebar
+export const agentsChangesPanelWidthAtom = atomWithStorage<number>(
+  "agents-changes-panel-width",
+  280,
+  undefined,
+  { getOnInit: true },
+)
+
+// Changes panel collapsed state in narrow view (collapsed by default)
+export const agentsChangesPanelCollapsedAtom = atomWithStorage<boolean>(
+  "agents-changes-panel-collapsed",
+  true, // collapsed by default
   undefined,
   { getOnInit: true },
 )
@@ -263,6 +285,20 @@ export const agentsDiffSidebarOpenAtom = atomWithStorage<boolean>(
 // Focused file path in diff sidebar (for scroll-to-file feature)
 // Set by AgentEditTool on click, consumed by AgentDiffView
 export const agentsFocusedDiffFileAtom = atom<string | null>(null)
+
+// Collapsed state for diff files per chat - preserved across narrow/wide layout changes
+// Map<fileKey, isCollapsed>
+const diffFilesCollapsedStorageAtom = atom<Record<string, Record<string, boolean>>>({})
+
+export const diffFilesCollapsedAtomFamily = atomFamily((chatId: string) =>
+  atom(
+    (get) => get(diffFilesCollapsedStorageAtom)[chatId] ?? {},
+    (get, set, collapsed: Record<string, boolean>) => {
+      const current = get(diffFilesCollapsedStorageAtom)
+      set(diffFilesCollapsedStorageAtom, { ...current, [chatId]: collapsed })
+    },
+  ),
+)
 
 // Sub-chats display mode - tabs (horizontal) or sidebar (vertical list)
 export const agentsSubChatsSidebarModeAtom = atomWithStorage<
@@ -333,42 +369,6 @@ export const lastChatModesAtom = atom<Map<string, "plan" | "agent">>(
 export type AgentsMobileViewMode = "chats" | "chat" | "preview" | "diff" | "terminal"
 export const agentsMobileViewModeAtom = atom<AgentsMobileViewMode>("chat")
 
-// Scroll position persistence per sub-chat
-// Maps subChatId to scroll data with validation metadata
-export interface ScrollPositionData {
-  scrollTop: number // Saved scroll position in pixels
-  scrollHeight: number // Total scrollable height at save time (for validation)
-  messageCount: number // Number of messages at save time (for validation)
-  wasStreaming: boolean // Was chat streaming when we left?
-  lastAssistantMsgId?: string // ID of last assistant message when we left
-}
-
-export const agentsScrollPositionsAtom = atomWithStorage<
-  Record<string, ScrollPositionData>
->("agents-scroll-positions-v2", {}, undefined, { getOnInit: true })
-
-// Module-level cache for SYNCHRONOUS scroll position access during tab switches.
-// The Jotai atom is async (state updates are batched), so we need this cache
-// to ensure we always read the latest saved position immediately.
-const scrollPositionsCache = new Map<string, ScrollPositionData>()
-
-export const scrollPositionsCacheStore = {
-  get: (subChatId: string): ScrollPositionData | undefined =>
-    scrollPositionsCache.get(subChatId),
-
-  set: (subChatId: string, data: ScrollPositionData) => {
-    scrollPositionsCache.set(subChatId, data)
-  },
-
-  delete: (subChatId: string) => {
-    scrollPositionsCache.delete(subChatId)
-  },
-
-  clear: () => {
-    scrollPositionsCache.clear()
-  },
-}
-
 // Debug mode for testing first-time user experience
 // Only works in development mode
 export interface AgentsDebugMode {
@@ -425,6 +425,30 @@ export const subChatToChatMapAtom = atom<Map<string, string>>(new Map())
 // When set, AgentDiffView will only show files matching these paths
 export const filteredDiffFilesAtom = atom<string[] | null>(null)
 
+// Selected file path in diff sidebar (for highlighting in file list and showing in diff view)
+// Using atom instead of useState to prevent re-renders of unrelated components
+export const selectedDiffFilePathAtom = atom<string | null>(null)
+
+// PR creation loading state - atom to allow ChatViewInner to reset it after sending message
+export const isCreatingPrAtom = atom<boolean>(false)
+
+// Filter by subchat ID for diff sidebar and changes panel (null = show all)
+// When set by Review button, both diff view and file list filter to this subchat's files
+export const filteredSubChatIdAtom = atom<string | null>(null)
+
+// Selected commit for viewing in diff view
+// null = show working tree diff (current behavior)
+// When set, diff view shows files from this commit instead of working tree
+export type SelectedCommit = {
+	hash: string
+	shortHash: string
+	message: string
+	description?: string
+	author?: string
+	date?: Date
+} | null
+export const selectedCommitAtom = atom<SelectedCommit>(null)
+
 // Pending PR message to send to chat
 // Set by ChatView when "Create PR" is clicked, consumed by ChatViewInner
 export const pendingPrMessageAtom = atom<string | null>(null)
@@ -432,6 +456,10 @@ export const pendingPrMessageAtom = atom<string | null>(null)
 // Pending Review message to send to chat
 // Set by ChatView when "Review" is clicked, consumed by ChatViewInner
 export const pendingReviewMessageAtom = atom<string | null>(null)
+
+// Pending merge conflict resolution message to send to chat
+// Set when user clicks "Fix Conflicts" button, consumed by ChatViewInner
+export const pendingConflictResolutionMessageAtom = atom<string | null>(null)
 
 // Pending auth retry - stores failed message when auth-error occurs
 // After successful OAuth flow, this triggers automatic retry of the message
@@ -494,6 +522,16 @@ export const pendingUserQuestionsAtom = atom<PendingUserQuestions | null>(null)
 // Set<subChatId>
 export const pendingPlanApprovalsAtom = atom<Set<string>>(new Set())
 
+// Diff view display mode - sidebar (side peek), center dialog, or fullscreen
+export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
+
+export const diffViewDisplayModeAtom = atomWithStorage<DiffViewDisplayMode>(
+  "agents:diffViewDisplayMode",
+  "side-peek", // default to current behavior
+  undefined,
+  { getOnInit: true },
+)
+
 // Store AskUserQuestion results by toolUseId for real-time updates
 // Map<toolUseId, result>
 export const askUserQuestionResultsAtom = atom<Map<string, unknown>>(new Map())
@@ -505,6 +543,35 @@ export type UndoItem =
   | { type: "subchat"; subChatId: string; chatId: string; timeoutId: ReturnType<typeof setTimeout> }
 
 export const undoStackAtom = atom<UndoItem[]>([])
+
+// Viewed files state for diff review (GitHub-style "Viewed" checkbox)
+// Tracks which files have been reviewed with content hash to detect changes
+export type ViewedFileState = {
+  viewed: boolean
+  contentHash: string // Hash of diffText when marked as viewed
+}
+
+// Storage atom for viewed files per chat
+// Structure: { [chatId]: { [fileKey]: ViewedFileState } }
+const viewedFilesStorageAtom = atomWithStorage<
+  Record<string, Record<string, ViewedFileState>>
+>(
+  "agents:viewedFiles",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set viewed files per chatId
+export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
+  atom(
+    (get) => get(viewedFilesStorageAtom)[chatId] ?? {},
+    (get, set, newState: Record<string, ViewedFileState>) => {
+      const current = get(viewedFilesStorageAtom)
+      set(viewedFilesStorageAtom, { ...current, [chatId]: newState })
+    },
+  ),
+)
 
 // File tree sidebar state
 export const agentsFileTreeSidebarOpenAtom = atomWithStorage<boolean>(
