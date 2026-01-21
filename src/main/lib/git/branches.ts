@@ -252,6 +252,17 @@ export const createBranchesRouter = () => {
 
 				return { orphanedBranches, deleted };
 			}),
+
+		fetchRemote: publicProcedure
+			.input(z.object({ worktreePath: z.string() }))
+			.mutation(async ({ input }): Promise<{ success: boolean }> => {
+				assertRegisteredWorktree(input.worktreePath);
+				return withGitLock(input.worktreePath, async () => {
+					const git = createGitForNetwork(input.worktreePath);
+					await git.fetch(["--prune", "--all"]);
+					return { success: true };
+				});
+			}),
 	});
 };
 

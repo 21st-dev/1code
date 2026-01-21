@@ -124,6 +124,7 @@ export const chatsRouter = router({
           )
           .optional(),
         baseBranch: z.string().optional(), // Branch to base the worktree off
+        branchType: z.enum(["local", "remote"]).optional(), // Whether baseBranch is local or remote
         useWorktree: z.boolean().default(true), // If false, work directly in project dir
         mode: z.enum(["plan", "agent"]).default("agent"),
       }),
@@ -194,12 +195,15 @@ export const chatsRouter = router({
         console.log(
           "[chats.create] creating worktree with baseBranch:",
           input.baseBranch,
+          "type:",
+          input.branchType,
         )
         const result = await createWorktreeForChat(
           project.path,
           project.id,
           chat.id,
           input.baseBranch,
+          input.branchType,
         )
         console.log("[chats.create] worktree result:", result)
 

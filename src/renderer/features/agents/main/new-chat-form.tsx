@@ -269,18 +269,22 @@ export function NewChatForm({
     lastSelectedBranchesAtom,
   )
   const [branchSearch, setBranchSearch] = useState("")
+  const [selectedBranchType, setSelectedBranchType] = useState<
+    "local" | "remote" | undefined
+  >(undefined)
 
   // Get/set selected branch for current project (persisted per project)
   const selectedBranch = validatedProject?.id
     ? lastSelectedBranches[validatedProject.id] || ""
     : ""
   const setSelectedBranch = useCallback(
-    (branch: string) => {
+    (branch: string, type?: "local" | "remote") => {
       if (validatedProject?.id) {
         setLastSelectedBranches((prev) => ({
           ...prev,
           [validatedProject.id]: branch,
         }))
+        setSelectedBranchType(type)
       }
     },
     [validatedProject?.id, setLastSelectedBranches],
@@ -419,39 +423,44 @@ export function NewChatForm({
     },
   )
 
+  const fetchRemoteMutation = trpc.changes.fetchRemote.useMutation()
+
+  // Manual refresh branches
+  const handleRefreshBranches = useCallback(() => {
+    if (validatedProject?.path) {
+      fetchRemoteMutation.mutate(
+        { worktreePath: validatedProject.path },
+        {
+          onSuccess: () => {
+            branchesQuery.refetch()
+          },
+          onError: (error) => {
+            console.error("Failed to fetch remote branches:", error)
+          },
+        },
+      )
+    }
+  }, [validatedProject?.path, fetchRemoteMutation, branchesQuery])
+
   // Transform branch data to match web app format
   const branches = useMemo(() => {
     if (!branchesQuery.data) return []
 
     const { local, remote, defaultBranch } = branchesQuery.data
+    const result: Array<{
+      name: string
+      type: "local" | "remote"
+      protected: boolean
+      isDefault: boolean
+      committedAt: string | null
+      authorName: null
+    }> = []
 
-    // Combine local and remote branches, preferring local info
-    const branchMap = new Map<
-      string,
-      {
-        name: string
-        protected: boolean
-        isDefault: boolean
-        committedAt: string | null
-        authorName: null
-      }
-    >()
-
-    // Add remote branches first
-    for (const name of remote) {
-      branchMap.set(name, {
-        name,
-        protected: false,
-        isDefault: name === defaultBranch,
-        committedAt: null,
-        authorName: null,
-      })
-    }
-
-    // Override with local branches (they have commit dates)
+    // Add local branches
     for (const { branch, lastCommitDate } of local) {
-      branchMap.set(branch, {
+      result.push({
         name: branch,
+        type: "local",
         protected: false,
         isDefault: branch === defaultBranch,
         committedAt: lastCommitDate
@@ -461,18 +470,23 @@ export function NewChatForm({
       })
     }
 
-    // Sort: default first, then by commit date
-    return Array.from(branchMap.values()).sort((a, b) => {
+    // Add remote branches
+    for (const name of remote) {
+      result.push({
+        name: name,
+        type: "remote",
+        protected: false,
+        isDefault: name === defaultBranch,
+        committedAt: null,
+        authorName: null,
+      })
+    }
+
+    // Sort: default first, then local, then remote, alphabetically
+    return result.sort((a, b) => {
       if (a.isDefault && !b.isDefault) return -1
       if (!a.isDefault && b.isDefault) return 1
-      // Sort by commit date (most recent first)
-      if (a.committedAt && b.committedAt) {
-        return (
-          new Date(b.committedAt).getTime() - new Date(a.committedAt).getTime()
-        )
-      }
-      if (a.committedAt) return -1
-      if (b.committedAt) return 1
+      if (a.type !== b.type) return a.type === "local" ? -1 : 1
       return a.name.localeCompare(b.name)
     })
   }, [branchesQuery.data])
@@ -517,13 +531,21 @@ export function NewChatForm({
       validatedProject?.id &&
       !selectedBranch
     ) {
-      setSelectedBranch(branchesQuery.data.defaultBranch)
+      // Find the default branch in the branches list to get its type
+      const defaultBranchObj = branches.find(
+        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault,
+      )
+      setSelectedBranch(
+        branchesQuery.data.defaultBranch,
+        defaultBranchObj?.type,
+      )
     }
   }, [
     branchesQuery.data?.defaultBranch,
     validatedProject?.id,
     selectedBranch,
     setSelectedBranch,
+    branches,
   ])
 
   // Auto-focus input when NewChatForm is shown (when clicking "New Chat")
@@ -559,6 +581,11 @@ export function NewChatForm({
         editorRef.current.clear()
         setHasContent(false)
       }
+
+      // Fetch remote branches in background when starting new workspace
+      if (hadDraftBefore && validatedProject?.path) {
+        handleRefreshBranches()
+      }
       return
     }
 
@@ -581,7 +608,7 @@ export function NewChatForm({
         return () => clearTimeout(timeoutId)
       }
     }
-  }, [selectedDraftId])
+  }, [selectedDraftId, handleRefreshBranches, validatedProject?.path])
 
   // Mark draft as visible when component unmounts (user navigates away)
   // This ensures the draft only appears in the sidebar after leaving the form
@@ -734,6 +761,8 @@ export function NewChatForm({
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         workMode === "worktree" ? selectedBranch || undefined : undefined,
+      branchType:
+        workMode === "worktree" ? selectedBranchType : undefined,
       useWorktree: workMode === "worktree",
       mode: isPlanMode ? "plan" : "agent",
     })
@@ -1471,13 +1500,14 @@ export function NewChatForm({
                                   const branch =
                                     filteredBranches[virtualItem.index]
                                   const isSelected =
-                                    selectedBranch === branch.name ||
+                                    (selectedBranch === branch.name &&
+                                      selectedBranchType === branch.type) ||
                                     (!selectedBranch && branch.isDefault)
                                   return (
                                     <button
-                                      key={branch.name}
+                                      key={`${branch.type}-${branch.name}`}
                                       onClick={() => {
-                                        setSelectedBranch(branch.name)
+                                        setSelectedBranch(branch.name, branch.type)
                                         setBranchPopoverOpen(false)
                                         setBranchSearch("")
                                       }}
@@ -1495,6 +1525,16 @@ export function NewChatForm({
                                       <BranchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                                       <span className="truncate flex-1">
                                         {branch.name}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "text-[10px] px-1.5 py-0.5 rounded shrink-0",
+                                          branch.type === "local"
+                                            ? "bg-blue-500/10 text-blue-500"
+                                            : "bg-orange-500/10 text-orange-500",
+                                        )}
+                                      >
+                                        {branch.type}
                                       </span>
                                       {branch.committedAt && (
                                         <span className="text-xs text-muted-foreground/70 shrink-0">
@@ -1532,7 +1572,7 @@ export function NewChatForm({
                         branchesQuery.data?.defaultBranch || "main"
                       }
                       onBranchCreated={(branchName) => {
-                        setSelectedBranch(branchName)
+                        setSelectedBranch(branchName, "local")
                       }}
                     />
                   )}
