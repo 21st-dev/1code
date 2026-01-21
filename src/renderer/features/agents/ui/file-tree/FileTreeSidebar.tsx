@@ -21,7 +21,6 @@ import {
 } from "../../atoms"
 import { buildFileTree, countFiles, countFolders, filterTree, flattenVisibleTree } from "./build-file-tree"
 import { useAtomValue, useSetAtom } from "jotai"
-import { dirname } from "../../../../lib/utils/path"
 import { FileTreeNodeRow, type GitStatusMap } from "./FileTreeNode"
 import { Download } from "lucide-react"
 import { toast } from "sonner"
