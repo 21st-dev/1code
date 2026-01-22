@@ -41,6 +41,7 @@ interface OAuthState {
   server: Server | null
   port: number | null
   pkce: PKCEChallenge | null
+  state: string | null
   resolveCallback: ((result: OAuthResult) => void) | null
   rejectCallback: ((error: Error) => void) | null
   timeoutId: NodeJS.Timeout | null
@@ -51,6 +52,7 @@ let oauthState: OAuthState = {
   server: null,
   port: null,
   pkce: null,
+  state: null,
   resolveCallback: null,
   rejectCallback: null,
   timeoutId: null,
@@ -198,6 +200,7 @@ async function handleCallback(
   url: URL
 ): Promise<void> {
   const code = url.searchParams.get("code")
+  const state = url.searchParams.get("state")
   const error = url.searchParams.get("error")
   const errorDescription = url.searchParams.get("error_description")
 
@@ -205,6 +208,17 @@ async function handleCallback(
   if (error) {
     const message = errorDescription || error
     console.error("[OAuth] Authorization error:", message)
+    res.writeHead(200, { "Content-Type": "text/html" })
+    res.end(getErrorHTML(message))
+    cleanup()
+    oauthState.rejectCallback?.(new Error(message))
+    return
+  }
+
+  // Validate state parameter to prevent CSRF
+  if (!state || state !== oauthState.state) {
+    const message = "Invalid state parameter - possible CSRF attack"
+    console.error("[OAuth]", message)
     res.writeHead(200, { "Content-Type": "text/html" })
     res.end(getErrorHTML(message))
     cleanup()
@@ -344,6 +358,7 @@ function cleanup(): void {
 
   oauthState.port = null
   oauthState.pkce = null
+  oauthState.state = null
   oauthState.resolveCallback = null
   oauthState.rejectCallback = null
 }
@@ -371,6 +386,10 @@ export async function startOAuthFlow(
       const pkce = generatePKCE()
       console.log("[OAuth] PKCE generated")
 
+      // Generate state parameter for CSRF protection
+      const state = crypto.randomBytes(32).toString("base64url")
+      console.log("[OAuth] State generated")
+
       // Create server
       const server = createOAuthServer(port)
 
@@ -379,6 +398,7 @@ export async function startOAuthFlow(
         server,
         port,
         pkce,
+        state,
         resolveCallback: resolve,
         rejectCallback: reject,
         timeoutId: null,
@@ -410,10 +430,12 @@ export async function startOAuthFlow(
       authUrl.searchParams.set("response_type", "code")
       authUrl.searchParams.set("redirect_uri", redirectUri)
       authUrl.searchParams.set("scope", OAUTH_CONFIG.scopes)
+      authUrl.searchParams.set("state", state)
       authUrl.searchParams.set("code_challenge", pkce.challenge)
       authUrl.searchParams.set("code_challenge_method", "S256")
 
       console.log("[OAuth] Opening browser for authorization...")
+      console.log("[OAuth] Auth URL:", authUrl.toString())
 
       // Open browser
       await shell.openExternal(authUrl.toString())
