@@ -16,7 +16,7 @@ import {
 } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
-import { agentsFocusedDiffFileAtom, filteredDiffFilesAtom } from "../atoms"
+import { agentsFocusedDiffFileAtom, filteredDiffFilesAtom, diffListModeAtom } from "../atoms"
 import { DiffModeEnum, DiffView, DiffFile } from "@git-diff-view/react"
 import "@git-diff-view/react/styles/diff-view-pure.css"
 import { useTheme } from "next-themes"
@@ -27,6 +27,8 @@ import {
   ChevronDown,
   Columns2,
   Rows2,
+  List,
+  FolderTree,
 } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
@@ -111,6 +113,28 @@ export type ParsedDiffFile = {
   deletions: number
   isValid?: boolean // Whether the diff format is valid/complete
 }
+
+// Tree structure for hierarchical diff view
+export interface DiffFileTreeNode {
+  id: string              // Unique path identifier
+  name: string            // Display name (folder or file name)
+  type: "file" | "folder"
+  path: string            // Full path
+  depth: number           // Nesting level for indentation
+  additions: number       // Aggregated for folders
+  deletions: number       // Aggregated for folders
+  fileCount: number       // Total files in folder (recursive)
+  file?: ParsedDiffFile   // For files only
+  children?: DiffFileTreeNode[] // For folders only
+}
+
+// Flattened row for virtualizer
+export type FlatDiffRow =
+  | { type: "folder"; node: DiffFileTreeNode; isExpanded: boolean }
+  | { type: "file"; node: DiffFileTreeNode; file: ParsedDiffFile }
+
+// View mode for diff list
+export type DiffListMode = "flat" | "tree"
 
 type DiffViewData = {
   oldFile?: {
@@ -298,6 +322,75 @@ const fileDiffCardAreEqual = (
     return false
   return true
 }
+
+// ============ DIFF FOLDER ROW COMPONENT ============
+
+interface DiffFolderRowProps {
+  node: DiffFileTreeNode
+  isExpanded: boolean
+  onToggle: () => void
+}
+
+const DiffFolderRow = memo(function DiffFolderRow({
+  node,
+  isExpanded,
+  onToggle,
+}: DiffFolderRowProps) {
+  return (
+    <div
+      className="flex items-center gap-1.5 px-3 py-2 cursor-pointer hover:bg-accent/50 transition-colors bg-muted/30 border-b border-border/50"
+      onClick={onToggle}
+      style={{ paddingLeft: `${12 + node.depth * 16}px` }}
+    >
+      {/* Chevron */}
+      <ChevronDown
+        className={cn(
+          "w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0",
+          !isExpanded && "-rotate-90"
+        )}
+      />
+
+      {/* Folder icon */}
+      <svg
+        className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+        />
+      </svg>
+
+      {/* Folder name */}
+      <span className="flex-1 font-mono text-xs truncate">{node.name}</span>
+
+      {/* File count badge */}
+      <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 bg-muted rounded-full">
+        {node.fileCount} file{node.fileCount !== 1 ? "s" : ""}
+      </span>
+
+      {/* Aggregated statistics */}
+      <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
+        {node.additions > 0 && (
+          <span className="mr-1.5 text-emerald-600 dark:text-emerald-400">
+            +{node.additions}
+          </span>
+        )}
+        {node.deletions > 0 && (
+          <span className="text-red-600 dark:text-red-400">
+            -{node.deletions}
+          </span>
+        )}
+      </span>
+    </div>
+  )
+})
+
+// ============ FILE DIFF CARD COMPONENT ============
 
 const FileDiffCard = memo(function FileDiffCard({
   file,
@@ -577,6 +670,114 @@ interface AgentDiffViewProps {
   }) => void
 }
 
+// ============ TREE VIEW HELPERS ============
+
+/**
+ * Build a hierarchical tree from flat file list with aggregated statistics
+ * Adapted from FileListTree.tsx buildFileTree() pattern
+ */
+function buildDiffFileTree(files: ParsedDiffFile[]): DiffFileTreeNode[] {
+  type TreeNodeInternal = Omit<DiffFileTreeNode, "children"> & {
+    children?: Record<string, TreeNodeInternal>
+  }
+
+  const root: Record<string, TreeNodeInternal> = {}
+
+  // Build tree structure with stats accumulation
+  for (const file of files) {
+    const displayPath = file.newPath !== "/dev/null" ? file.newPath : file.oldPath
+    const parts = displayPath.split("/")
+    let current = root
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      const isLast = i === parts.length - 1
+      const pathSoFar = parts.slice(0, i + 1).join("/")
+
+      if (!current[part]) {
+        current[part] = {
+          id: pathSoFar,
+          name: part,
+          type: isLast ? "file" : "folder",
+          path: pathSoFar,
+          depth: i,
+          additions: 0,
+          deletions: 0,
+          fileCount: 0,
+          file: isLast ? file : undefined,
+          children: isLast ? undefined : {},
+        }
+      }
+
+      // Accumulate statistics up the tree
+      current[part].additions += file.additions
+      current[part].deletions += file.deletions
+
+      if (!isLast && current[part].children) {
+        current = current[part].children!
+      }
+    }
+  }
+
+  // Convert to sorted array with file counts
+  function convertToArray(
+    nodes: Record<string, TreeNodeInternal>,
+    depth: number = 0
+  ): DiffFileTreeNode[] {
+    return Object.values(nodes)
+      .map((node) => {
+        const children = node.children
+          ? convertToArray(node.children, depth + 1)
+          : undefined
+
+        const fileCount = children
+          ? children.reduce((sum, c) => sum + c.fileCount, 0)
+          : 1
+
+        return {
+          ...node,
+          depth,
+          fileCount,
+          children,
+        } as DiffFileTreeNode
+      })
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === "folder" ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+  }
+
+  return convertToArray(root)
+}
+
+/**
+ * Flatten tree to array for virtualizer, respecting folder collapse state
+ */
+function flattenTreeForVirtualizer(
+  tree: DiffFileTreeNode[],
+  expandedFolders: Set<string>
+): FlatDiffRow[] {
+  const result: FlatDiffRow[] = []
+
+  function traverse(nodes: DiffFileTreeNode[]) {
+    for (const node of nodes) {
+      if (node.type === "folder") {
+        const isExpanded = expandedFolders.has(node.id)
+        result.push({ type: "folder", node, isExpanded })
+
+        if (isExpanded && node.children) {
+          traverse(node.children)
+        }
+      } else if (node.file) {
+        result.push({ type: "file", node, file: node.file })
+      }
+    }
+  }
+
+  traverse(tree)
+  return result
+}
+
 /** Ref handle for controlling AgentDiffView from parent */
 export interface AgentDiffViewRef {
   expandAll: () => void
@@ -652,6 +853,22 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       Record<string, boolean>
     >({})
     const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
+    const [listMode, setListMode] = useAtom(diffListModeAtom)
+
+    // Tree view: folder collapse state
+    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set())
+
+    const toggleFolder = useCallback((folderId: string) => {
+      setExpandedFolders((prev) => {
+        const next = new Set(prev)
+        if (next.has(folderId)) {
+          next.delete(folderId)
+        } else {
+          next.add(folderId)
+        }
+        return next
+      })
+    }, [])
 
     // Pre-fetched file contents for expand functionality
     // Use prefetched data if available, otherwise start empty
@@ -827,6 +1044,35 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         )
       })
     }, [allFileDiffs, filteredDiffFiles])
+
+    // Build tree structure if in tree mode
+    const diffTree = useMemo(() => {
+      if (listMode === "flat") return null
+      return buildDiffFileTree(fileDiffs)
+    }, [fileDiffs, listMode])
+
+    // Flatten tree for virtualizer (respects folder collapse state)
+    const flatRows = useMemo(() => {
+      if (listMode === "flat" || !diffTree) {
+        // Flat mode: wrap files in flat row format
+        return fileDiffs.map((file) => ({
+          type: "file" as const,
+          node: {
+            id: file.key,
+            name: file.newPath || file.oldPath,
+            type: "file" as const,
+            path: file.newPath || file.oldPath,
+            depth: 0,
+            additions: file.additions,
+            deletions: file.deletions,
+            fileCount: 1,
+            file,
+          },
+          file,
+        }))
+      }
+      return flattenTreeForVirtualizer(diffTree, expandedFolders)
+    }, [diffTree, expandedFolders, fileDiffs, listMode])
 
     // Threshold for auto-collapsing files
     const AUTO_COLLAPSE_THRESHOLD = 10
@@ -1100,18 +1346,26 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     }, [])
 
     // Virtualizer for efficient rendering of many files
+    const FOLDER_ROW_HEIGHT = 36
     const virtualizer = useVirtualizer({
-      count: fileDiffs.length,
+      count: flatRows.length,
       getScrollElement: () => scrollContainerRef.current,
       estimateSize: (index) => {
-        const file = fileDiffs[index]
-        if (!file) return COLLAPSED_HEIGHT
-        const isCollapsed = !!collapsedByFileKey[file.key]
+        const row = flatRows[index]
+        if (!row) return COLLAPSED_HEIGHT
+
+        // Folder row: fixed height
+        if (row.type === "folder") {
+          return FOLDER_ROW_HEIGHT
+        }
+
+        // File row: check if collapsed
+        const isCollapsed = !!collapsedByFileKey[row.file.key]
         if (isCollapsed) {
           return COLLAPSED_HEIGHT
         }
         // Estimate based on line count
-        const lineCount = file.additions + file.deletions
+        const lineCount = row.file.additions + row.file.deletions
         return Math.min(Math.max(lineCount * 22 + COLLAPSED_HEIGHT, 150), 800)
       },
       overscan: 5,
@@ -1269,6 +1523,27 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                 )}
               </div>
 
+              {/* Tree/Flat view toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setListMode(listMode === "flat" ? "tree" : "flat")}
+                  >
+                    {listMode === "flat" ? (
+                      <FolderTree className="h-3.5 w-3.5" />
+                    ) : (
+                      <List className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {listMode === "flat" ? "Switch to tree view" : "Switch to flat view"}
+                </TooltipContent>
+              </Tooltip>
+
               {/* Split/Unified toggle */}
               <div className="relative bg-muted rounded-md h-7 p-0.5 flex">
                 <div
@@ -1349,10 +1624,10 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
               }}
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
-                const file = fileDiffs[virtualRow.index]!
+                const row = flatRows[virtualRow.index]!
                 return (
                   <div
-                    key={file.key}
+                    key={row.type === "folder" ? `folder-${row.node.id}` : row.file.key}
                     data-index={virtualRow.index}
                     ref={virtualizer.measureElement}
                     style={{
@@ -1363,21 +1638,29 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                   >
-                    <div className="pb-2">
-                      <FileDiffCard
-                        file={file}
-                        data={diffViewDataByKey[file.key]!}
-                        isLight={isLight}
-                        isCollapsed={!!collapsedByFileKey[file.key]}
-                        toggleCollapsed={toggleFileCollapsed}
-                        isFullExpanded={!!fullExpandedByFileKey[file.key]}
-                        toggleFullExpanded={toggleFileFullExpanded}
-                        hasContent={!!fileContents[file.key]}
-                        isLoadingContent={isLoadingFileContents}
-                        diffMode={diffMode}
-                        shikiHighlighter={shikiHighlighter}
+                    {row.type === "folder" ? (
+                      <DiffFolderRow
+                        node={row.node}
+                        isExpanded={row.isExpanded}
+                        onToggle={() => toggleFolder(row.node.id)}
                       />
-                    </div>
+                    ) : (
+                      <div className="pb-2">
+                        <FileDiffCard
+                          file={row.file}
+                          data={diffViewDataByKey[row.file.key]!}
+                          isLight={isLight}
+                          isCollapsed={!!collapsedByFileKey[row.file.key]}
+                          toggleCollapsed={toggleFileCollapsed}
+                          isFullExpanded={!!fullExpandedByFileKey[row.file.key]}
+                          toggleFullExpanded={toggleFileFullExpanded}
+                          hasContent={!!fileContents[row.file.key]}
+                          isLoadingContent={isLoadingFileContents}
+                          diffMode={diffMode}
+                          shikiHighlighter={shikiHighlighter}
+                        />
+                      </div>
+                    )}
                   </div>
                 )
               })}

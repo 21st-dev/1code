@@ -246,6 +246,14 @@ export const diffSidebarOpenAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
+// Diff list view mode (flat or tree)
+export const diffListModeAtom = atomWithStorage<"flat" | "tree">(
+  "agents-diff:list-mode",
+  "flat", // Default to flat for backwards compatibility
+  undefined,
+  { getOnInit: true },
+)
+
 // Legacy global atom - kept for backwards compatibility, maps to empty string key
 // TODO: Remove after migration
 export const agentsDiffSidebarOpenAtom = atomWithStorage<boolean>(
