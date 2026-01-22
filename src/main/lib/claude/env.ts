@@ -40,8 +40,8 @@ export interface AwsCredentials {
 export function getAwsCredentials(): AwsCredentials | null {
   try {
     // Lazy import to avoid circular dependencies
-    const { getDatabase, claudeCodeSettings } = require("../db")
-    const { decrypt } = require("../aws/sso-service")
+    const { getDatabase, claudeCodeSettings } = require("../../db")
+    const { decrypt } = require("../../aws/sso-service")
 
     const db = getDatabase()
     const settings = db
