@@ -11,6 +11,7 @@ import {
   getBundledClaudeBinaryPath,
   logClaudeEnv,
   logRawClaudeMessage,
+  TextDeltaBuffer,
   type UIMessageChunk,
 } from "../../claude"
 import { chats, claudeCodeCredentials, claudeCodeSettings, getDatabase, subChats } from "../../db"
@@ -789,6 +790,9 @@ export const claudeRouter = router({
 
             // Note: lastError, planCompleted, exitPlanModeToolCallId declared outside loop (line 349-351)
 
+            // Create buffer for text deltas (reduces IPC overhead)
+            const deltaBuffer = new TextDeltaBuffer((chunk) => safeEmit(chunk))
+
             try {
               for await (const msg of stream) {
                 if (abortController.signal.aborted) break
@@ -867,13 +871,13 @@ export const claudeRouter = router({
                   currentSessionId = msgAny.session_id // Share with cleanup
                 }
 
-                // Transform and emit + accumulate
+                // Transform and emit + accumulate (with buffering to reduce IPC overhead)
                 for (const chunk of transform(msg)) {
                   chunkCount++
                   lastChunkType = chunk.type
 
-                  // Use safeEmit to prevent throws when observer is closed
-                  if (!safeEmit(chunk)) {
+                  // Use buffer to reduce IPC overhead (automatically flushes critical chunks)
+                  if (!deltaBuffer.write(chunk)) {
                     // Observer closed (user clicked Stop), break out of loop
                     console.log(`[SD] M:EMIT_CLOSED sub=${subId} type=${chunk.type} n=${chunkCount}`)
                     break
@@ -952,7 +956,14 @@ export const claudeRouter = router({
                   break
                 }
               }
+
+              // Flush any remaining buffered chunks after stream completes
+              deltaBuffer.flush()
+
             } catch (streamError) {
+              // Flush buffer before handling error
+              deltaBuffer.dispose()
+
               // This catches errors during streaming (like process exit)
               const err = streamError as Error
               const stderrOutput = stderrLines.join("\n")
@@ -1109,6 +1120,7 @@ export const claudeRouter = router({
 
             // 6. Check if we got any response
             if (messageCount === 0 && !abortController.signal.aborted) {
+              deltaBuffer.dispose() // Flush buffer before error
               emitError(
                 new Error("No response received from Claude"),
                 "Empty response",

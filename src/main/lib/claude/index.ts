@@ -12,3 +12,4 @@ export {
   logClaudeEnv,
   getBundledClaudeBinaryPath,
 } from "./env"
+export { TextDeltaBuffer } from "./text-delta-buffer"
