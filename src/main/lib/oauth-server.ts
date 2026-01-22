@@ -272,28 +272,31 @@ async function exchangeCodeForTokens(code: string): Promise<OAuthResult> {
 
   const redirectUri = `http://localhost:${oauthState.port}/callback`
 
-  const body = {
+  // Use URLSearchParams for application/x-www-form-urlencoded format
+  const params = new URLSearchParams({
     grant_type: "authorization_code",
     code,
     client_id: OAUTH_CONFIG.clientId,
     redirect_uri: redirectUri,
     code_verifier: oauthState.pkce.verifier,
-  }
+  })
 
   console.log("[OAuth] Exchanging code for tokens...")
+  console.log("[OAuth] Token endpoint:", OAUTH_CONFIG.tokenEndpoint)
+  console.log("[OAuth] Request params:", params.toString())
 
   const response = await fetch(OAUTH_CONFIG.tokenEndpoint, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: JSON.stringify(body),
+    body: params.toString(),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
     console.error("[OAuth] Token exchange failed:", response.status, errorText)
-    throw new Error(`Token exchange failed: ${response.status}`)
+    throw new Error(`Token exchange failed: ${response.status} - ${errorText}`)
   }
 
   const data = (await response.json()) as {
