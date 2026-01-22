@@ -954,6 +954,7 @@ export async function getWorktreeDiff(
 				"--cached",
 				"HEAD",
 				"--no-color",
+				"--relative",
 				"--",
 				":!*.lock",
 				":!*-lock.*",
@@ -974,6 +975,7 @@ export async function getWorktreeDiff(
 			const diff = await git.diff([
 				`origin/${targetBranch}...HEAD`,
 				"--no-color",
+				"--relative",
 				"--",
 				":!*.lock",
 				":!*-lock.*",
