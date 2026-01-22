@@ -186,13 +186,13 @@ console.log("Next steps:")
 console.log("1. Upload the following files to cdn.21st.dev/releases/desktop/:")
 if (arm64Manifest) {
   console.log(`   - latest-mac.yml`)
-  console.log(`   - Agents-${version}-arm64-mac.zip`)
-  console.log(`   - Agents-${version}-arm64.dmg (for manual download)`)
+  console.log(`   - Intelligence Interface-${version}-arm64-mac.zip`)
+  console.log(`   - Intelligence Interface-${version}-arm64.dmg (for manual download)`)
 }
 if (x64Manifest) {
   console.log(`   - latest-mac-x64.yml`)
-  console.log(`   - Agents-${version}-mac.zip`)
-  console.log(`   - Agents-${version}.dmg (for manual download)`)
+  console.log(`   - Intelligence Interface-${version}-mac.zip`)
+  console.log(`   - Intelligence Interface-${version}.dmg (for manual download)`)
 }
 console.log("2. Create a release entry in the admin dashboard")
 console.log("=".repeat(50))

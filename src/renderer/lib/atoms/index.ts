@@ -638,3 +638,19 @@ export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
   undefined,
   { getOnInit: true },
 )
+
+// ============================================
+// DOCUMENT VIEWER ATOMS
+// ============================================
+
+export {
+  documentsPanelOpenAtomFamily,
+  documentsPanelWidthAtom,
+  activeDocumentAtomFamily,
+  workspaceFileTreeHeightAtom,
+  workspaceFileTreeCollapsedAtom,
+  workspaceFileTreeAtomFamily,
+  expandedFoldersAtomFamily,
+  type FileTreeNode,
+  type ActiveDocument,
+} from "./documents"

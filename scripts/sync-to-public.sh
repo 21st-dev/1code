@@ -14,10 +14,10 @@ ROOT_DIR="$(cd "$DESKTOP_DIR/../.." && pwd)"
 VERSION=$(node -p "require('$DESKTOP_DIR/package.json').version")
 TAG="v$VERSION"
 
-PUBLIC_REPO="git@github.com:21st-dev/1code.git"
-PUBLIC_REPO_HTTPS="https://github.com/21st-dev/1code"
-PRIVATE_REPO="21st-dev/21st"
-TEMP_DIR="/tmp/1code-sync-$$"
+PUBLIC_REPO="git@github.com:CaronexLabs/ii.git"
+PUBLIC_REPO_HTTPS="https://github.com/CaronexLabs/ii"
+PRIVATE_REPO="CaronexLabs/ii"
+TEMP_DIR="/tmp/ii-sync-$$"
 
 echo "🔄 Syncing desktop app to public repository..."
 echo "   Version: $VERSION"
@@ -106,7 +106,7 @@ if gh release view "$TAG" --repo "$PUBLIC_REPO_HTTPS" &>/dev/null; then
     echo "   Release $TAG already exists, updating..."
     gh release edit "$TAG" \
         --repo "$PUBLIC_REPO_HTTPS" \
-        --title "1Code $TAG" \
+        --title "Intelligence Interface $TAG" \
         --notes "$RELEASE_NOTES"
 else
     echo "   Creating new release $TAG..."
@@ -116,7 +116,7 @@ else
 
     gh release create "$TAG" \
         --repo "$PUBLIC_REPO_HTTPS" \
-        --title "1Code $TAG" \
+        --title "Intelligence Interface $TAG" \
         --notes "$RELEASE_NOTES"
 fi
 

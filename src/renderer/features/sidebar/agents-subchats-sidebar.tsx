@@ -86,6 +86,8 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { useSubChatDraftsCache, getSubChatDraftKey } from "../agents/lib/drafts"
 import { Checkbox } from "../../components/ui/checkbox"
 import { TypewriterText } from "../../components/ui/typewriter-text"
+import { workspaceFileTreeHeightAtom } from "../../lib/atoms"
+import { WorkspaceFileTree } from "../workspace-files"
 
 // Isolated Search History Popover for sidebar - prevents parent re-renders when popover opens/closes
 interface SidebarSearchHistoryPopoverProps {
@@ -296,6 +298,46 @@ export function AgentsSubChatsSidebar({
   // Global desktop/fullscreen state from atoms (initialized in AgentsLayout)
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
+
+  // File tree resize state
+  const [fileTreeHeight, setFileTreeHeight] = useAtom(workspaceFileTreeHeightAtom)
+  const [isResizingFileTree, setIsResizingFileTree] = useState(false)
+  const fileTreeResizeStartYRef = useRef<number>(0)
+  const fileTreeHeightStartRef = useRef<number>(0)
+
+  // Handle file tree resize
+  const handleFileTreeResizeStart = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    setIsResizingFileTree(true)
+    fileTreeResizeStartYRef.current = e.clientY
+    fileTreeHeightStartRef.current = fileTreeHeight
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }, [fileTreeHeight])
+
+  const handleFileTreeResizeMove = useCallback((e: PointerEvent) => {
+    if (!isResizingFileTree) return
+    const deltaY = fileTreeResizeStartYRef.current - e.clientY
+    const newHeight = Math.min(
+      Math.max(fileTreeHeightStartRef.current + deltaY, 100), // Min 100px
+      window.innerHeight * 0.5 // Max 50% of window height
+    )
+    setFileTreeHeight(newHeight)
+  }, [isResizingFileTree, setFileTreeHeight])
+
+  const handleFileTreeResizeEnd = useCallback(() => {
+    setIsResizingFileTree(false)
+  }, [])
+
+  useEffect(() => {
+    if (isResizingFileTree) {
+      window.addEventListener("pointermove", handleFileTreeResizeMove)
+      window.addEventListener("pointerup", handleFileTreeResizeEnd)
+      return () => {
+        window.removeEventListener("pointermove", handleFileTreeResizeMove)
+        window.removeEventListener("pointerup", handleFileTreeResizeEnd)
+      }
+    }
+  }, [isResizingFileTree, handleFileTreeResizeMove, handleFileTreeResizeEnd])
 
   // Map open IDs to metadata and sort by updated_at (most recent first)
   const openSubChats = useMemo(() => {
@@ -1125,14 +1167,17 @@ export function AgentsSubChatsSidebar({
         </div>
       </div>
 
-      {/* Scrollable Sub-Chats List */}
-      <div
-        className="flex-1 min-h-0 relative z-10"
-        style={{
-          // @ts-expect-error - WebKit-specific property
-          WebkitAppRegion: "no-drag",
-        }}
-      >
+      {/* Resizable content container */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Scrollable Sub-Chats List */}
+        <div
+          className="relative z-10 overflow-hidden"
+          style={{
+            height: `calc(100% - ${fileTreeHeight}px - 4px)`,
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        >
         {/* Loading state - centered spinner */}
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
@@ -1721,6 +1766,29 @@ export function AgentsSubChatsSidebar({
             </div>
           </>
         )}
+        </div>
+
+        {/* Horizontal resize handle */}
+        <div
+          className="h-1 bg-border cursor-row-resize hover:bg-foreground/20 flex-shrink-0 relative z-10"
+          onPointerDown={handleFileTreeResizeStart}
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        />
+
+        {/* File Tree */}
+        <div
+          className="overflow-hidden relative z-10"
+          style={{
+            height: `${fileTreeHeight}px`,
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        >
+          {parentChatId && <WorkspaceFileTree chatId={parentChatId} />}
+        </div>
       </div>
 
       {/* Multi-select Footer Toolbar */}

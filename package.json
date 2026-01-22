@@ -2,10 +2,10 @@
   "name": "21st-desktop",
   "version": "0.0.30",
   "private": true,
-  "description": "1Code - UI for parallel work with AI agents",
+  "description": "Intelligence Interface - Workflow automation wrapper for Claude Code",
   "author": {
-    "name": "21st.dev",
-    "email": "support@21st.dev"
+    "name": "CaronexLabs",
+    "email": "support@caronexlabs.com"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -125,13 +125,13 @@
   },
   "build": {
     "appId": "dev.21st.agents",
-    "productName": "1Code",
+    "productName": "Intelligence Interface",
     "npmRebuild": true,
     "protocols": [
       {
-        "name": "1Code",
+        "name": "Intelligence Interface",
         "schemes": [
-          "twentyfirst-agents"
+          "ii-agents"
         ]
       }
     ],

@@ -236,6 +236,16 @@ export const chatsRouter = router({
         worktreeResult = { worktreePath: project.path }
       }
 
+      // Create workspace directory for documents
+      try {
+        const workspaceDir = path.join(project.path, ".ii", "workspaces", chat.id)
+        await fs.mkdir(workspaceDir, { recursive: true })
+        console.log("[chats.create] created workspace directory:", workspaceDir)
+      } catch (error) {
+        console.error("[chats.create] failed to create workspace directory:", error)
+        // Don't fail the entire chat creation if workspace dir fails
+      }
+
       const response = {
         ...chat,
         worktreePath: worktreeResult.worktreePath || project.path,

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is this?
 
-**21st Agents** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**1Code** (formerly 21st Agents) - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+
+**Platforms:** macOS (native), Linux (native), Windows (experimental since v0.0.29)
 
 ## Commands
 
@@ -30,37 +32,55 @@ bun run db:push          # Push schema directly (dev only)
 src/
 ├── main/                    # Electron main process
 │   ├── index.ts             # App entry, window lifecycle
-│   ├── auth-manager.ts      # OAuth flow, token refresh
-│   ├── auth-store.ts        # Encrypted credential storage (safeStorage)
-│   ├── windows/main.ts      # Window creation, IPC handlers
+│   ├── windows/main.ts      # Window creation, IPC handlers, platform-specific handling
 │   └── lib/
 │       ├── db/              # Drizzle + SQLite
 │       │   ├── index.ts     # DB init, auto-migrate on startup
 │       │   ├── schema/      # Drizzle table definitions
 │       │   └── utils.ts     # ID generation
-│       └── trpc/routers/    # tRPC routers (projects, chats, claude)
+│       ├── trpc/routers/    # tRPC routers
+│       │   ├── projects.ts  # Project management
+│       │   ├── chats.ts     # Chat and subchat operations
+│       │   ├── claude.ts    # Claude SDK integration
+│       │   ├── claude-code.ts # Claude Code OAuth
+│       │   └── commands.ts  # Custom slash commands (NEW in v0.0.30)
+│       ├── git/             # Git operations (worktree, stash, etc.)
+│       └── terminal/        # Terminal session management
 │
 ├── preload/                 # IPC bridge (context isolation)
 │   └── index.ts             # Exposes desktopApi + tRPC bridge
 │
 └── renderer/                # React 19 UI
     ├── App.tsx              # Root with providers
+    ├── components/
+    │   ├── ui/              # Radix UI wrappers (button, dialog, etc.)
+    │   ├── dialogs/         # Settings, shortcuts, agents dialogs
+    │   │   └── settings-tabs/
+    │   │       ├── agents-keyboard-tab.tsx  # NEW: Keyboard shortcuts config
+    │   │       └── agents-appearance-tab.tsx
+    │   └── windows-title-bar.tsx  # NEW: Windows platform title bar
     ├── features/
     │   ├── agents/          # Main chat interface
-    │   │   ├── main/        # active-chat.tsx, new-chat-form.tsx
+    │   │   ├── main/        # active-chat.tsx, new-chat-form.tsx, chat-input-area.tsx
     │   │   ├── ui/          # Tool renderers, preview, diff view
-    │   │   ├── commands/    # Slash commands (/plan, /agent, /clear)
+    │   │   │   ├── agent-diff-text-context-item.tsx  # NEW: Text selection from diffs
+    │   │   │   └── quick-comment-input.tsx  # NEW: Fast question responses
+    │   │   ├── commands/    # Slash commands (/plan, /agent, /clear, custom)
+    │   │   ├── mentions/    # File mentions and text selection
+    │   │   ├── context/     # Text selection context provider
     │   │   ├── atoms/       # Jotai atoms for agent state
     │   │   └── stores/      # Zustand store for sub-chats
     │   ├── sidebar/         # Chat list, archive, navigation
-    │   ├── sub-chats/       # Tab/sidebar sub-chat management
+    │   ├── changes/         # Git changes view with file tracking
     │   └── layout/          # Main layout with resizable panels
-    ├── components/ui/       # Radix UI wrappers (button, dialog, etc.)
     └── lib/
         ├── atoms/           # Global Jotai atoms
         ├── stores/          # Global Zustand stores
-        ├── trpc.ts          # Real tRPC client
-        └── mock-api.ts      # DEPRECATED - being replaced with real tRPC
+        ├── hotkeys/         # NEW: Configurable keyboard shortcuts system
+        │   ├── types.ts
+        │   ├── shortcut-registry.ts
+        │   └── use-hotkey-recorder.ts
+        └── trpc.ts          # tRPC client
 ```
 
 ## Database (Drizzle ORM)
@@ -106,6 +126,81 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 - Session resume via `sessionId` stored in SubChat
 - Message streaming via tRPC subscription (`claude.onMessage`)
 
+### Custom Slash Commands (v0.0.30+)
+
+Users can create custom slash commands by placing markdown files in:
+- **User-level**: `~/.claude/commands/` (available in all projects)
+- **Project-level**: `{projectPath}/.claude/commands/` (project-specific)
+
+**File structure:**
+```markdown
+---
+description: "Brief description shown in autocomplete"
+argument-hint: "Optional hint for arguments"
+---
+
+Your custom prompt goes here.
+Use {{argument}} to reference user-provided arguments.
+```
+
+**Namespaces:**
+- Organize commands in subdirectories: `git/commit.md` becomes `/git:commit`
+- Nested directories create namespace chains: `ops/deploy/staging.md` → `/ops:deploy:staging`
+
+**Example:**
+```markdown
+---
+description: "Write comprehensive tests for this code"
+argument-hint: "file path or code selection"
+---
+
+Please write comprehensive unit tests for the following code, including:
+- Edge cases
+- Error handling
+- Mock external dependencies
+
+{{argument}}
+```
+
+**Implementation:**
+- Scanned via `src/main/lib/trpc/routers/commands.ts`
+- Frontmatter parsed with `gray-matter`
+- Security: Path traversal prevention, filename validation
+- Merged with built-in commands in renderer
+
+### Keyboard Shortcuts (v0.0.30+)
+
+Fully customizable keyboard shortcuts system with conflict detection.
+
+**Categories:**
+- **General**: Settings, shortcuts panel, sidebar toggle, undo archive
+- **Workspaces**: New workspace, search, archive, quick switch
+- **Agents**: New chat, search, stop generation, model selector, terminal, diff view, PR creation
+
+**Configuration:**
+- Access via Settings → Keyboard tab
+- Record new shortcuts with visual feedback
+- Conflict detection shows which actions conflict
+- Reset individual shortcuts or all to defaults
+- Stored in localStorage: `custom-hotkeys-config` key
+
+**Implementation:**
+- `src/renderer/lib/hotkeys/shortcut-registry.ts` - Registry of all shortcuts
+- `src/renderer/lib/hotkeys/use-hotkey-recorder.ts` - Recording hook
+- `src/renderer/lib/hotkeys/types.ts` - Type definitions
+- `src/renderer/components/dialogs/settings-tabs/agents-keyboard-tab.tsx` - UI
+
+**Storage format:**
+```typescript
+{
+  version: 1,
+  bindings: {
+    "new-agent": "cmd+shift+n",  // Custom binding
+    "stop-generation": null      // Use default
+  }
+}
+```
+
 ## Tech Stack
 
 | Layer | Tech |
@@ -127,12 +222,29 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 
 ## Important Files
 
+### Core
 - `electron.vite.config.ts` - Build config (main/preload/renderer entries)
 - `src/main/lib/db/schema/index.ts` - Drizzle schema (source of truth)
 - `src/main/lib/db/index.ts` - DB initialization + auto-migrate
-- `src/renderer/features/agents/atoms/index.ts` - Agent UI state atoms
-- `src/renderer/features/agents/main/active-chat.tsx` - Main chat component
+- `src/main/windows/main.ts` - Window management, platform-specific handling
+
+### tRPC Routers
 - `src/main/lib/trpc/routers/claude.ts` - Claude SDK integration
+- `src/main/lib/trpc/routers/claude-code.ts` - Claude Code OAuth
+- `src/main/lib/trpc/routers/commands.ts` - Custom slash commands (v0.0.30+)
+- `src/main/lib/trpc/routers/chats.ts` - Chat and subchat operations
+
+### UI Components
+- `src/renderer/features/agents/main/active-chat.tsx` - Main chat component
+- `src/renderer/features/agents/main/chat-input-area.tsx` - Input with model selector
+- `src/renderer/features/agents/atoms/index.ts` - Agent UI state atoms
+- `src/renderer/components/dialogs/settings-tabs/agents-keyboard-tab.tsx` - Keyboard shortcuts config
+
+### New Features (v0.0.27+)
+- `src/renderer/features/agents/context/text-selection-context.tsx` - Text selection from code blocks
+- `src/renderer/features/agents/ui/agent-diff-text-context-item.tsx` - Diff text selection UI
+- `src/renderer/lib/hotkeys/shortcut-registry.ts` - Keyboard shortcuts registry
+- `src/renderer/lib/hotkeys/use-hotkey-recorder.ts` - Shortcut recording hook
 
 ## Debugging First Install Issues
 
@@ -216,18 +328,29 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 3. User clicks Download → downloads ZIP in background
 4. User clicks "Restart Now" → installs update and restarts
 
-## Current Status (WIP)
+## Current Status
 
-**Done:**
-- Drizzle ORM setup with schema (projects, chats, sub_chats)
-- Auto-migration on app startup
-- tRPC routers structure
+**Stable Features (v0.0.30):**
+- ✅ Full Claude Code integration with streaming
+- ✅ Git worktree isolation per chat
+- ✅ Plan and Agent modes
+- ✅ Real-time diff view with text selection
+- ✅ Viewed files tracking (GitHub-style)
+- ✅ Custom slash commands
+- ✅ Configurable keyboard shortcuts
+- ✅ Model selector (Opus 4.5, Sonnet 4.5, etc.)
+- ✅ Integrated terminal
+- ✅ Auto-updates system
+- ✅ macOS, Linux, Windows support
 
-**In Progress:**
-- Replacing `mock-api.ts` with real tRPC calls in renderer
-- ProjectSelector component (local folder picker)
+**Recent Additions (v0.0.27-0.0.30):**
+- Text selection from code blocks and diffs
+- Custom slash commands with namespaces
+- Keyboard shortcuts configuration
+- Extended thinking toggle
+- Windows platform support
+- Desktop notifications
 
-**Planned:**
-- Git worktree per chat (isolation)
-- Claude Code execution in worktree path
-- Full feature parity with web app
+**Known Limitations:**
+- Windows support is experimental (some features may not work perfectly)
+- Auto-updates require manual upload of manifests to CDN

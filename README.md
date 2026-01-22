@@ -51,6 +51,11 @@ Claude asks clarifying questions, builds structured plans, and shows clean markd
 
 ### More Features
 
+- **Custom Slash Commands** - Create your own slash commands with custom prompts
+- **Configurable Keyboard Shortcuts** - Customize all shortcuts to match your workflow
+- **Multiple AI Models** - Choose between Claude Opus 4.5, Sonnet 4.5, and more
+- **Text Selection from Code** - Select and reference text from any code block or diff
+- **Viewed Files Tracking** - Mark files as reviewed with GitHub-style checkmarks
 - **Plan & Agent Modes** - Read-only analysis or full code execution permissions
 - **Project Management** - Link local folders with automatic Git remote detection
 - **Integrated Terminal** - Full terminal access within the app

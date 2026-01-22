@@ -12,6 +12,7 @@ import { skillsRouter } from "./skills"
 import { agentsRouter } from "./agents"
 import { worktreeConfigRouter } from "./worktree-config"
 import { commandsRouter } from "./commands"
+import { workspaceFilesRouter } from "./workspace-files"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -34,6 +35,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     agents: agentsRouter,
     worktreeConfig: worktreeConfigRouter,
     commands: commandsRouter,
+    workspaceFiles: workspaceFilesRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

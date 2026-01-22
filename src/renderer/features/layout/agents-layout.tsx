@@ -12,6 +12,8 @@ import {
   isFullscreenAtom,
   anthropicOnboardingCompletedAtom,
   customHotkeysAtom,
+  documentsPanelOpenAtomFamily,
+  documentsPanelWidthAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
@@ -28,6 +30,7 @@ import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
+import { WorkspaceDocumentViewer } from "../workspace-files"
 
 // ============================================================================
 // Constants
@@ -90,6 +93,14 @@ export function AgentsLayout() {
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+
+  // Documents panel state
+  const documentsOpen = useAtomValue(
+    documentsPanelOpenAtomFamily(selectedChatId ?? "")
+  )
+  const setDocumentsOpen = useSetAtom(
+    documentsPanelOpenAtomFamily(selectedChatId ?? "")
+  )
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
@@ -268,6 +279,24 @@ export function AgentsLayout() {
           <div className="flex-1 overflow-hidden flex flex-col min-w-0">
             <AgentsContent />
           </div>
+
+          {/* Documents Panel (Right) */}
+          {selectedChatId && (
+            <ResizableSidebar
+              isOpen={documentsOpen}
+              onClose={() => setDocumentsOpen(false)}
+              widthAtom={documentsPanelWidthAtom}
+              minWidth={400}
+              maxWidth={1000}
+              side="right"
+              animationDuration={150}
+              showResizeTooltip={true}
+              className="overflow-hidden bg-background border-l"
+              style={{ borderLeftWidth: "0.5px" }}
+            >
+              <WorkspaceDocumentViewer chatId={selectedChatId} />
+            </ResizableSidebar>
+          )}
         </div>
 
         {/* Update Banner */}

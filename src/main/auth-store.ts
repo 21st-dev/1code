@@ -139,12 +139,8 @@ export class AuthStore {
    * Check if user is authenticated
    */
   isAuthenticated(): boolean {
-    const data = this.load()
-    if (!data) return false
-
-    // Check if token is expired
-    const expiresAt = new Date(data.expiresAt).getTime()
-    return expiresAt > Date.now()
+    // Authentication bypassed for Intelligence Interface
+    return true
   }
 
   /**
