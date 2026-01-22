@@ -468,6 +468,13 @@ export const claudeRouter = router({
     )
     .subscription(({ input }) => {
       return observable<UIMessageChunk>((emit) => {
+        // Abort any existing session for this subChatId before starting a new one
+        // This prevents race conditions if two messages are sent in quick succession
+        const existingController = activeSessions.get(input.subChatId)
+        if (existingController) {
+          existingController.abort()
+        }
+
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
         activeSessions.set(input.subChatId, abortController)
@@ -1332,9 +1339,9 @@ export const claudeRouter = router({
                         // Emit finish chunk so Chat hook properly resets its state
                         console.log(`[SD] M:PLAN_FINISH sub=${subId} - emitting finish chunk`)
                         safeEmit({ type: "finish" } as UIMessageChunk)
-                        // Abort the Claude process so it doesn't keep running
-                        console.log(`[SD] M:PLAN_ABORT sub=${subId} - aborting claude process`)
-                        abortController.abort()
+                        // NOTE: We intentionally do NOT abort here. Aborting corrupts the session state,
+                        // which breaks follow-up messages in plan mode. The stream will complete naturally
+                        // via the planCompleted flag breaking out of the loops below.
                       }
                       break
                     case "message-metadata":
