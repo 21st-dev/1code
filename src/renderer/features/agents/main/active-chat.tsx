@@ -5570,6 +5570,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                         canOpenDiff={canOpenDiff}
                         isDiffSidebarOpen={isDiffSidebarOpen}
                         diffStats={diffStats}
+                        currentBranch={branchData?.current}
                       />
                     </>
                   )}

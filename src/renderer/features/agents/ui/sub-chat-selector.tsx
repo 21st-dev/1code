@@ -9,7 +9,7 @@ import {
   pendingUserQuestionsAtom,
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
-import { X, Plus, AlignJustify, Play } from "lucide-react"
+import { X, Plus, AlignJustify, Play, GitBranch } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -168,6 +168,7 @@ interface SubChatSelectorProps {
   canOpenDiff?: boolean
   isDiffSidebarOpen?: boolean
   diffStats?: DiffStats
+  currentBranch?: string
 }
 
 export function SubChatSelector({
@@ -180,6 +181,7 @@ export function SubChatSelector({
   canOpenDiff = false,
   isDiffSidebarOpen = false,
   diffStats,
+  currentBranch,
 }: SubChatSelectorProps) {
   // Use shallow comparison to prevent re-renders when arrays have same content
   const { activeSubChatId, openSubChatIds, pinnedSubChatIds, allSubChats, parentChatId, togglePinSubChat } = useAgentSubChatStore(
@@ -879,10 +881,19 @@ export function SubChatSelector({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
                 onClick={() => onOpenDiff?.()}
-                className="h-6 w-6 p-0 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center hover:bg-foreground/10"
+                className="h-6 px-2 gap-1.5 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md inline-flex items-center hover:bg-foreground/10"
               >
+                {/* Branch pill with icon and name */}
+                {currentBranch && (
+                  <>
+                    <GitBranch className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                    <span className="text-xs font-medium whitespace-nowrap text-foreground">
+                      {currentBranch}
+                    </span>
+                  </>
+                )}
+                {/* Diff icon */}
                 {diffStats?.isLoading ? (
                   <IconSpinner className="h-4 w-4" />
                 ) : (
