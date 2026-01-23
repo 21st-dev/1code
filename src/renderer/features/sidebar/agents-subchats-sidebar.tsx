@@ -1426,6 +1426,7 @@ export function AgentsSubChatsSidebar({
                                   isOnlyChat={openSubChats.length === 1}
                                   currentIndex={globalIndex}
                                   totalCount={filteredSubChats.length}
+                                  chatId={parentChatId}
                                 />
                               )}
                             </ContextMenu>
@@ -1699,6 +1700,7 @@ export function AgentsSubChatsSidebar({
                                   isOnlyChat={openSubChats.length === 1}
                                   currentIndex={globalIndex}
                                   totalCount={filteredSubChats.length}
+                                  chatId={parentChatId}
                                 />
                               )}
                             </ContextMenu>
