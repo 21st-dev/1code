@@ -1,29 +1,28 @@
 import { useAtom } from "jotai"
-import { useEffect, useState, useMemo } from "react"
-import { createPortal } from "react-dom"
+import { ChevronLeft, ChevronRight, FolderOpen, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import { X, ChevronLeft, ChevronRight, FolderOpen } from "lucide-react"
-import { cn } from "../../lib/utils"
-import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
+import { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import {
-  ProfileIconFilled,
   EyeOpenFilledIcon,
-  SlidersFilledIcon,
-  SettingsIcon,
+  ProfileIconFilled,
+  SlidersFilledIcon
 } from "../../icons"
-import { SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon, BrainFilledIcon, FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
-import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
-import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
-import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
-import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
-import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
-import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
-import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
-import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
-import { AgentsMcpTab } from "./settings-tabs/agents-mcp-tab"
-import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
-import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
+import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
+import { cn } from "../../lib/utils"
+import { BrainFilledIcon, BugFilledIcon, CustomAgentIconFilled, FlaskFilledIcon, KeyboardFilledIcon, OriginalMCPIcon, SkillIconFilled } from "../ui/icons"
+import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
+import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
+import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
+import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
+import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
+import { AgentsMcpTab } from "./settings-tabs/agents-mcp-tab"
+import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
+import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
+import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
+import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
+import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -516,7 +515,7 @@ export function AgentsSettingsDialog({
                 </div>
 
                 {/* Right Content Area */}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 h-full overflow-hidden">
                   <div className="flex flex-col relative h-full bg-tl-background rounded-xl w-full transition-all duration-300 overflow-y-auto">
                     {renderTabContent()}
                   </div>

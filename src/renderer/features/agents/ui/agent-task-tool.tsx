@@ -111,9 +111,9 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 
   const subtitle = getSubtitle()
 
-  // Get title text - always use "Task"
+  // Get title text based on status
   const getTitle = () => {
-    return isPending ? "Running Task" : "Task"
+    return isPending ? "Running Task" : "Completed Task"
   }
 
   // Show interrupted state if task was interrupted without completing

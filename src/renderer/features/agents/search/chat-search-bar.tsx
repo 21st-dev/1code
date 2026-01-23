@@ -52,6 +52,19 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
     }
   }, [isOpen])
 
+  // Handle select all event (when Cmd+F is pressed while search is already open)
+  useEffect(() => {
+    const handleSelectAll = () => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+        inputRef.current.select()
+      }
+    }
+
+    window.addEventListener("chat-search-select-all", handleSelectAll)
+    return () => window.removeEventListener("chat-search-select-all", handleSelectAll)
+  }, [])
+
   // Debounced search
   useEffect(() => {
     // Mark search as not completed when input changes

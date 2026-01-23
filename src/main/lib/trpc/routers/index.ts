@@ -3,6 +3,7 @@ import { projectsRouter } from "./projects"
 import { chatsRouter } from "./chats"
 import { claudeRouter } from "./claude"
 import { claudeCodeRouter } from "./claude-code"
+import { claudeSettingsRouter } from "./claude-settings"
 import { ollamaRouter } from "./ollama"
 import { terminalRouter } from "./terminal"
 import { externalRouter } from "./external"
@@ -26,6 +27,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     chats: chatsRouter,
     claude: claudeRouter,
     claudeCode: claudeCodeRouter,
+    claudeSettings: claudeSettingsRouter,
     ollama: ollamaRouter,
     terminal: terminalRouter,
     external: externalRouter,

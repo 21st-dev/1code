@@ -38,7 +38,7 @@ interface IsolatedMessagesSectionProps {
     isPending: boolean
     isError: boolean
   }>
-  MessageGroupWrapper: React.ComponentType<{ children: React.ReactNode }>
+  MessageGroupWrapper: React.ComponentType<{ children: React.ReactNode; isLastGroup?: boolean }>
   toolRegistry: Record<string, { icon: any; title: (args: any) => string }>
 }
 

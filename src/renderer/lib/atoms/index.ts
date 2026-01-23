@@ -194,7 +194,27 @@ export type ModelProfile = {
   isOffline?: boolean // Mark as offline/Ollama profile
 }
 
-// Predefined offline profile for Ollama
+// Selected Ollama model for offline mode
+export const selectedOllamaModelAtom = atomWithStorage<string | null>(
+  "agents:selected-ollama-model",
+  null, // null = use recommended model
+  undefined,
+  { getOnInit: true },
+)
+
+// Helper to get offline profile with selected model
+export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
+  id: 'offline-ollama',
+  name: 'Offline (Ollama)',
+  isOffline: true,
+  config: {
+    model: modelName || 'qwen2.5-coder:7b',
+    token: 'ollama',
+    baseUrl: 'http://localhost:11434',
+  },
+})
+
+// Predefined offline profile for Ollama (legacy, uses default model)
 export const OFFLINE_PROFILE: ModelProfile = {
   id: 'offline-ollama',
   name: 'Offline (Ollama)',

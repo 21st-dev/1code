@@ -95,18 +95,30 @@ export function AgentSendButton({
       )
     if (isStreaming && hasContent)
       return (
-        <span className="flex items-center">
+        <span className="flex items-center gap-1">
           Add to queue
-          <Kbd className="-me-1 ms-1">
+          <Kbd className="ms-0.5">
+            <EnterIcon className="size-2.5 inline" />
+          </Kbd>
+          <span className="text-muted-foreground/60">or</span>
+          Send now
+          <Kbd className="ms-0.5">Alt</Kbd>
+          <Kbd className="-me-1">
             <EnterIcon className="size-2.5 inline" />
           </Kbd>
         </span>
       )
     if (isSubmitting) return "Generating..."
     return (
-      <span className="flex items-center">
+      <span className="flex items-center gap-1">
         Send
-        <Kbd className="-me-1 ms-1">
+        <Kbd className="ms-0.5">
+          <EnterIcon className="size-2.5 inline" />
+        </Kbd>
+        <span className="text-muted-foreground/60">or</span>
+        Send now
+        <Kbd className="ms-0.5">Alt</Kbd>
+        <Kbd className="-me-1">
           <EnterIcon className="size-2.5 inline" />
         </Kbd>
       </span>

@@ -4,8 +4,7 @@ import { Button } from "../../ui/button"
 import { Switch } from "../../ui/switch"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
-import { Copy, FolderOpen, RefreshCw, Terminal, Check, Scan, WifiOff, Eye } from "lucide-react"
-import { showOfflineModeFeaturesAtom } from "../../../lib/atoms"
+import { Copy, FolderOpen, RefreshCw, Terminal, Check, Scan, WifiOff } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -86,8 +85,6 @@ export function AgentsDebugTab() {
     onError: (error) => toast.error(error.message),
   })
 
-  // Show offline mode features toggle
-  const [showOfflineFeatures, setShowOfflineFeatures] = useAtom(showOfflineModeFeaturesAtom)
 
   // Fetch DB stats
   const { data: dbStats, isLoading: isLoadingDb, refetch: refetchDb } =
@@ -277,31 +274,6 @@ export function AgentsDebugTab() {
                 checked={reactScanEnabled}
                 onCheckedChange={handleReactScanToggle}
                 disabled={reactScanLoading}
-              />
-            </div>
-            <div className="flex items-center justify-between p-3">
-              <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <span className="text-sm">Show Offline Mode Features</span>
-                  <p className="text-xs text-muted-foreground">
-                    Enable offline mode UI and Ollama integration
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={showOfflineFeatures}
-                onCheckedChange={(enabled) => {
-                  setShowOfflineFeatures(enabled)
-                  toast.success(
-                    enabled ? "Offline features enabled" : "Offline features hidden",
-                    {
-                      description: enabled
-                        ? "Offline mode options now visible in settings and model picker"
-                        : "Offline mode UI hidden from settings and model picker"
-                    }
-                  )
-                }}
               />
             </div>
             <div className="flex items-center justify-between p-3">

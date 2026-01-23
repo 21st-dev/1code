@@ -8,6 +8,26 @@ By [21st.dev](https://21st.dev) team
 
 > **Platforms:** macOS, Linux, and Windows. Windows support improved thanks to community contributions from [@jesus-mgtc](https://github.com/jesus-mgtc) and [@evgyur](https://github.com/evgyur).
 
+## 1Code vs Claude Code
+
+| Feature | 1Code | Claude Code |
+|---------|-------|-------------|
+| **Visual UI** | ✅ Cursor-like desktop app | ✅ |
+| **Git Worktree Isolation** | ✅ Each chat runs in isolated worktree | ✅ |
+| **Background Execution** | ✅ Run multiple agents in parallel | ✅ |
+| **Built-in Git Client** | ✅ Visual staging, commits, branches | ❌ CLI git commands only |
+| **Integrated Terminal** | ✅ | ❌ |
+| **Plan Mode** | ✅ | ✅ |
+| **MCP Support** | ✅ | ✅ |
+| **Memory (CLAUDE.md)** | ✅ | ✅ |
+| **Skills & Slash Commands** | ✅ | ✅ |
+| **Custom Subagents** | ✅ | ✅ |
+| **Subscription & API Key Support** | ✅ | ✅ |
+| **Custom Models & Providers (BYOK)** | ✅ | ✅ |
+| **Checkpointing** | 🚧 Beta | ✅ |
+| **Tool Approve** | 📋 Backlog | ✅ |
+| **Hooks** | ❌ | ✅ |
+
 ## Features
 
 ### Run Claude agents the right way
