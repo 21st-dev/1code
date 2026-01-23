@@ -86,9 +86,15 @@ export function AgentsModelsTab() {
   }
 
   const handleClaudeCodeSetup = () => {
-    disconnectClaudeCode.mutate()
-    setSettingsOpen(false)
-    setAnthropicOnboardingCompleted(false)
+    if (isClaudeCodeConnected) {
+      // Already connected - disconnect
+      disconnectClaudeCode.mutate()
+      setAnthropicOnboardingCompleted(false)
+    } else {
+      // Not connected - trigger OAuth flow
+      setSettingsOpen(false)
+      setAnthropicOnboardingCompleted(false)
+    }
   }
 
   return (
