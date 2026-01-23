@@ -285,6 +285,35 @@ export const agentsDiffSidebarOpenAtom = atomWithStorage<boolean>(
 // Set by AgentEditTool on click, consumed by AgentDiffView
 export const agentsFocusedDiffFileAtom = atom<string | null>(null)
 
+// ===== Artifact Sidebar State =====
+
+// Artifact sidebar width (global - same width for all chats)
+export const agentsArtifactSidebarWidthAtom = atomWithStorage<number>(
+  "agents-artifact-sidebar-width",
+  500,
+  undefined,
+  { getOnInit: true },
+)
+
+// Artifact sidebar open state storage - stores per chatId
+const artifactSidebarOpenStorageAtom = atomWithStorage<Record<string, boolean>>(
+  "agents:artifactSidebarOpen",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set artifact sidebar open state per chatId
+export const artifactSidebarOpenAtomFamily = atomFamily((chatId: string) =>
+  atom(
+    (get) => get(artifactSidebarOpenStorageAtom)[chatId] ?? false,
+    (get, set, isOpen: boolean) => {
+      const current = get(artifactSidebarOpenStorageAtom)
+      set(artifactSidebarOpenStorageAtom, { ...current, [chatId]: isOpen })
+    },
+  ),
+)
+
 // Collapsed state for diff files per chat - preserved across narrow/wide layout changes
 // Map<fileKey, isCollapsed>
 const diffFilesCollapsedStorageAtom = atom<Record<string, Record<string, boolean>>>({})
