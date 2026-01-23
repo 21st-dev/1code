@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react"
-import { useAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { FolderOpen } from "lucide-react"
+import { showOfflineModeFeaturesAtom } from "../../../lib/atoms"
 import {
   Popover,
   PopoverContent,
@@ -31,12 +32,15 @@ function ProjectIcon({
   gitOwner,
   gitProvider,
   className = "h-4 w-4",
+  isOffline = false,
 }: {
   gitOwner?: string | null
   gitProvider?: string | null
   className?: string
+  isOffline?: boolean
 }) {
-  if (gitOwner && gitProvider === "github") {
+  // In offline mode, don't try to load remote images
+  if (!isOffline && gitOwner && gitProvider === "github") {
     return (
       <img
         src={`https://github.com/${gitOwner}.png?size=64`}
@@ -58,6 +62,13 @@ export function ProjectSelector() {
   const [searchQuery, setSearchQuery] = useState("")
   const [githubDialogOpen, setGithubDialogOpen] = useState(false)
   const [githubUrl, setGithubUrl] = useState("")
+
+  // Check if offline mode is enabled and if we're actually offline
+  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
+  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
+    enabled: showOfflineFeatures,
+  })
+  const isOffline = showOfflineFeatures && ollamaStatus ? !ollamaStatus.internet.online : false
 
   // Fetch projects from DB
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
@@ -217,6 +228,7 @@ export function ProjectSelector() {
           <ProjectIcon
             gitOwner={validSelection?.gitOwner}
             gitProvider={validSelection?.gitProvider}
+            isOffline={isOffline}
           />
           <span className="truncate max-w-[120px]">
             {validSelection?.name || "Select repo"}
@@ -250,6 +262,7 @@ export function ProjectSelector() {
                       <ProjectIcon
                         gitOwner={project.gitOwner}
                         gitProvider={project.gitProvider}
+                        isOffline={isOffline}
                       />
                       <span className="truncate flex-1">{project.name}</span>
                       {isSelected && (

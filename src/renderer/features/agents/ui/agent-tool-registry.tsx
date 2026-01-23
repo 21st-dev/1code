@@ -109,7 +109,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
         part.state !== "output-available" && part.state !== "output-error"
       const isInputStreaming = part.state === "input-streaming"
       if (isInputStreaming) return "Preparing task"
-      return isPending ? "Running Task" : "Task completed"
+      return isPending ? "Running Task" : "Completed Task"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming

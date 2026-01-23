@@ -1,23 +1,25 @@
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
+import { readFileSync } from "fs"
 import * as fs from "fs/promises"
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync } from "fs"
 import * as os from "os"
-import path, { dirname, join } from "path"
+import path, { join } from "path"
 import { z } from "zod"
 import {
   buildClaudeEnv,
+  checkOfflineFallback,
   createTransformer,
   getBundledClaudeBinaryPath,
   logClaudeEnv,
   logRawClaudeMessage,
-  checkOfflineFallback,
   type UIMessageChunk,
 } from "../../claude"
+import { getProjectMcpServers, GLOBAL_MCP_PATH, readClaudeConfig, type McpServerConfig } from "../../claude-config"
 import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
-import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../../ollama"
+import { ensureMcpTokensFresh, fetchMcpTools, fetchMcpToolsStdio, getMcpAuthStatus, startMcpOAuth } from "../../mcp-auth"
+import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 
@@ -148,28 +150,6 @@ const mcpConfigCache = new Map<string, {
   mtime: number
 }>()
 
-// Cache for MCP server statuses (to filter out failed/needs-auth servers)
-// Maps project path -> server name -> status
-const mcpServerStatusCache = new Map<string, Map<string, string>>()
-
-// Disk cache types and configuration for MCP server statuses
-interface CachedMcpStatus {
-  status: string
-  cachedAt: number
-}
-
-interface McpCacheData {
-  version: number
-  entries: Record<string, {
-    servers: Record<string, CachedMcpStatus>
-    updatedAt: number
-  }>
-}
-
-const MCP_STATUS_TTL = 5 * 60 * 1000 // 5 minutes
-const MCP_CACHE_PATH = join(app.getPath("userData"), "cache", "mcp-status.json")
-let diskCacheLastLoadTime = 0 // Track when disk cache was last loaded
-
 const pendingToolApprovals = new Map<
   string,
   {
@@ -205,130 +185,52 @@ const imageAttachmentSchema = z.object({
 export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
 
 /**
- * Load MCP status cache from disk
- * Reloads if cache was updated on disk since last load (for concurrent requests)
- */
-function loadMcpStatusFromDisk(): void {
-  try {
-    if (!existsSync(MCP_CACHE_PATH)) {
-      diskCacheLastLoadTime = Date.now()
-      return
-    }
-
-    // Check if file was modified since last load (handles concurrent requests)
-    const stats = statSync(MCP_CACHE_PATH)
-    const fileModTime = stats.mtimeMs
-
-    if (diskCacheLastLoadTime > 0 && fileModTime <= diskCacheLastLoadTime) {
-      // File hasn't changed since last load, skip
-      return
-    }
-
-    const data: McpCacheData = JSON.parse(readFileSync(MCP_CACHE_PATH, "utf-8"))
-
-    if (data.version !== 1) {
-      console.warn(`[MCP Cache] Unknown version ${data.version}, ignoring`)
-      diskCacheLastLoadTime = Date.now()
-      return
-    }
-
-    const now = Date.now()
-    let loadedCount = 0
-    let expiredCount = 0
-
-    for (const [projectPath, entry] of Object.entries(data.entries)) {
-      const serverMap = new Map<string, string>()
-
-      for (const [serverName, cached] of Object.entries(entry.servers)) {
-        if (now - cached.cachedAt < MCP_STATUS_TTL) {
-          serverMap.set(serverName, cached.status)
-          loadedCount++
-        } else {
-          expiredCount++
-        }
-      }
-
-      if (serverMap.size > 0) {
-        mcpServerStatusCache.set(projectPath, serverMap)
-      }
-    }
-
-    diskCacheLastLoadTime = Date.now()
-    if (loadedCount > 0) {
-      console.log(`[MCP Cache] Loaded ${loadedCount} cached server statuses`)
-    }
-  } catch (error) {
-    console.warn("[MCP Cache] Failed to load from disk:", error)
-    diskCacheLastLoadTime = Date.now()
-    try {
-      if (existsSync(MCP_CACHE_PATH)) {
-        unlinkSync(MCP_CACHE_PATH)
-      }
-    } catch {}
-  }
-}
-
-/**
- * Save MCP status cache to disk (write-through)
- */
-function saveMcpStatusToDisk(): void {
-  try {
-    const cacheDir = dirname(MCP_CACHE_PATH)
-    if (!existsSync(cacheDir)) {
-      mkdirSync(cacheDir, { recursive: true })
-    }
-
-    const data: McpCacheData = {
-      version: 1,
-      entries: Object.fromEntries(
-        Array.from(mcpServerStatusCache.entries()).map(([projectPath, serverMap]) => [
-          projectPath,
-          {
-            servers: Object.fromEntries(
-              Array.from(serverMap.entries()).map(([name, status]) => [
-                name,
-                { status, cachedAt: Date.now() }
-              ])
-            ),
-            updatedAt: Date.now()
-          }
-        ])
-      )
-    }
-
-    const tempPath = MCP_CACHE_PATH + ".tmp"
-    writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8")
-    renameSync(tempPath, MCP_CACHE_PATH)
-
-    const totalServers = Array.from(mcpServerStatusCache.values())
-      .reduce((sum, map) => sum + map.size, 0)
-    console.log(`[MCP Cache] Saved ${totalServers} statuses to disk`)
-  } catch (error) {
-    console.error("[MCP Cache] Failed to save to disk:", error)
-  }
-}
-
-/**
  * Clear all performance caches (for testing/debugging)
  */
 export function clearClaudeCaches() {
   cachedClaudeQuery = null
   symlinksCreated.clear()
   mcpConfigCache.clear()
-  mcpServerStatusCache.clear()
-  diskCacheLastLoadTime = 0
+  console.log("[claude] All caches cleared")
+}
 
-  // Clear disk cache
-  try {
-    if (existsSync(MCP_CACHE_PATH)) {
-      unlinkSync(MCP_CACHE_PATH)
-      console.log("[MCP Cache] Cleared disk cache")
-    }
-  } catch (error) {
-    console.error("[MCP Cache] Failed to clear disk cache:", error)
+/**
+ * Determine server status based on config
+ * - If authType is "none" -> "connected" (no auth required)
+ * - If has Authorization header -> "connected" (OAuth completed, SDK can use it)
+ * - If has _oauth but no headers -> "needs-auth" (legacy config, needs re-auth to migrate)
+ * - If HTTP server (has URL) with explicit authType -> "needs-auth"
+ * - HTTP server without authType -> "connected" (assume public)
+ * - Local stdio server -> "connected"
+ */
+function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
+  const headers = serverConfig.headers as Record<string, string> | undefined
+  const { _oauth: oauth, authType } = serverConfig
+
+  // If authType is explicitly "none", no auth required
+  if (authType === "none") {
+    return "connected"
   }
 
-  console.log("[claude] All caches cleared")
+  // If has Authorization header, it's ready for SDK to use
+  if (headers?.Authorization) {
+    return "connected"
+  }
+
+  // If has _oauth but no headers, this is a legacy config that needs re-auth
+  // (old format that SDK can't use)
+  if (oauth?.accessToken && !headers?.Authorization) {
+    return "needs-auth"
+  }
+
+  // If HTTP server with explicit authType (oauth/bearer), needs auth
+  if (serverConfig.url && (["oauth", "bearer"].includes(authType ?? ""))) {
+    return "needs-auth"
+  }
+
+  // HTTP server without authType - assume no auth required (public endpoint)
+  // Local stdio server - also connected
+  return "connected"
 }
 
 /**
@@ -413,7 +315,7 @@ export async function warmupMcpCache(): Promise<void> {
                 statusMap.set(server.name, server.status)
               }
             }
-            mcpServerStatusCache.set(project.path, statusMap)
+            //mcpServerStatusCache.set(project.path, statusMap)
             gotInit = true
             break // We only need the init message
           }
@@ -428,12 +330,14 @@ export async function warmupMcpCache(): Promise<void> {
     }
 
     // Save all cached statuses to disk
-    saveMcpStatusToDisk()
+    //saveMcpStatusToDisk()
 
-    const totalServers = Array.from(mcpServerStatusCache.values())
-      .reduce((sum, map) => sum + map.size, 0)
-    const warmupDuration = Date.now() - warmupStart
-    console.log(`[MCP Warmup] Initialized ${totalServers} servers across ${projectsWithMcp.length} projects in ${warmupDuration}ms`)
+    // const totalServers = Array.from(mcpServerStatusCache.values())
+    //   .reduce((sum, map) => sum + map.size, 0)
+    // const warmupDuration = Date.now() - warmupStart
+    // console.log(`[MCP Warmup] Initialized ${totalServers} servers across ${projectsWithMcp.length} projects in ${warmupDuration}ms`)
+
+    console.log(`[MCP Warmup] Initialized ${projectsWithMcp.length} projects in ${Date.now() - warmupStart}ms`)
   } catch (error) {
     console.error("[MCP Warmup] Warmup failed:", error)
   }
@@ -468,6 +372,13 @@ export const claudeRouter = router({
     )
     .subscription(({ input }) => {
       return observable<UIMessageChunk>((emit) => {
+        // Abort any existing session for this subChatId before starting a new one
+        // This prevents race conditions if two messages are sent in quick succession
+        const existingController = activeSessions.get(input.subChatId)
+        if (existingController) {
+          existingController.abort()
+        }
+
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
         activeSessions.set(input.subChatId, abortController)
@@ -779,28 +690,20 @@ export const claudeRouter = router({
                   const cached = mcpConfigCache.get(claudeJsonSource)
                   const lookupPath = input.projectPath || input.cwd
 
-                  // Check if we have a valid cache entry
+                  // Get or refresh cached config
+                  let claudeConfig: any
                   if (cached && cached.mtime === currentMtime) {
-                    mcpServersForSdk = cached.config?.[lookupPath]
+                    claudeConfig = cached.config
                   } else {
-                    // Read and parse config
-                    const originalConfig = JSON.parse(await fs.readFile(claudeJsonSource, "utf-8"))
-
-                    // Cache the projects config by lookup path
-                    const projectsConfig: Record<string, any> = {}
-                    for (const [projPath, projConfig] of Object.entries(originalConfig.projects || {})) {
-                      if ((projConfig as any)?.mcpServers) {
-                        projectsConfig[projPath] = (projConfig as any).mcpServers
-                      }
-                    }
-
-                    mcpConfigCache.set(claudeJsonSource, {
-                      config: projectsConfig,
-                      mtime: currentMtime,
-                    })
-
-                    mcpServersForSdk = projectsConfig[lookupPath]
+                    claudeConfig = JSON.parse(await fs.readFile(claudeJsonSource, "utf-8"))
+                    mcpConfigCache.set(claudeJsonSource, { config: claudeConfig, mtime: currentMtime })
                   }
+
+                  // Merge global + project servers (project overrides global)
+                  // getProjectMcpServers resolves worktree paths internally
+                  const globalServers = claudeConfig.mcpServers || {}
+                  const projectServers = getProjectMcpServers(claudeConfig, lookupPath) || {}
+                  mcpServersForSdk = { ...globalServers, ...projectServers }
                 }
               } catch (configErr) {
                 console.error(`[claude] Failed to read MCP config:`, configErr)
@@ -869,41 +772,21 @@ export const claudeRouter = router({
               }
             }
 
-            // Filter MCP servers: skip ONLY non-working servers (failed, needs-auth)
-            // Pass working/unknown servers in options so Claude can see them
-            // OPTIMIZATION: Cache is populated at app startup via warmupMcpCache()
+            // Skip MCP servers entirely in offline mode (Ollama) - they slow down initialization by 60+ seconds
+            // Otherwise pass all MCP servers - the SDK will handle connection
             let mcpServersFiltered: Record<string, any> | undefined
 
-            // Skip MCP servers entirely in offline mode (Ollama) - they slow down initialization by 60+ seconds
-            if (mcpServersForSdk && !isUsingOllama) {
-              const lookupPath = input.projectPath || input.cwd
-
-              // Load cached statuses from disk if needed
-              if (!mcpServerStatusCache.has(lookupPath)) {
-                loadMcpStatusFromDisk()
-              }
-
-              const cachedStatuses = mcpServerStatusCache.get(lookupPath)
-              const hasCachedInfo = cachedStatuses && cachedStatuses.size > 0
-
-              if (hasCachedInfo) {
-                // We have cached statuses - filter OUT only failed/needs-auth servers
-                mcpServersFiltered = Object.fromEntries(
-                  Object.entries(mcpServersForSdk).filter(([name]) => {
-                    const status = cachedStatuses.get(name)
-                    // Unknown servers (undefined status) are included to allow discovery
-                    if (status === undefined) return true
-                    return status !== "failed" && status !== "needs-auth"
-                  })
-                )
-              } else {
-                // No cache yet (warmup hasn't completed or ~/.claude.json changed)
-                // Skip MCP servers to avoid delays - they'll be available after warmup completes
-                mcpServersFiltered = undefined
-              }
-            } else if (isUsingOllama) {
+            if (isUsingOllama) {
               console.log('[Ollama] Skipping MCP servers to speed up initialization')
               mcpServersFiltered = undefined
+            } else {
+              // Ensure MCP tokens are fresh (refresh if within 5 min of expiry)
+              if (mcpServersForSdk && Object.keys(mcpServersForSdk).length > 0) {
+                const lookupPath = input.projectPath || input.cwd
+                mcpServersFiltered = await ensureMcpTokensFresh(mcpServersForSdk, lookupPath)
+              } else {
+                mcpServersFiltered = mcpServersForSdk
+              }
             }
 
             // Log SDK configuration for debugging
@@ -925,17 +808,126 @@ export const claudeRouter = router({
               })
             }
 
+            // For Ollama: embed context AND history directly in prompt
+            // Ollama doesn't have server-side sessions, so we must include full history
+            let finalQueryPrompt: string | AsyncIterable<any> = prompt
+            if (isUsingOllama && typeof prompt === 'string') {
+              // Format conversation history from existingMessages (excluding current message)
+              // IMPORTANT: Include tool calls info so model knows what files were read/edited
+              let historyText = ''
+              if (existingMessages.length > 0) {
+                const historyParts: string[] = []
+                for (const msg of existingMessages) {
+                  if (msg.role === 'user') {
+                    // Extract text from user message parts
+                    const textParts = msg.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text) || []
+                    if (textParts.length > 0) {
+                      historyParts.push(`User: ${textParts.join('\n')}`)
+                    }
+                  } else if (msg.role === 'assistant') {
+                    // Extract text AND tool calls from assistant message parts
+                    const parts = msg.parts || []
+                    const textParts: string[] = []
+                    const toolSummaries: string[] = []
+
+                    for (const p of parts) {
+                      if (p.type === 'text' && p.text) {
+                        textParts.push(p.text)
+                      } else if (p.type === 'tool_use' || p.type === 'tool-use') {
+                        // Include brief tool call info - this is critical for context!
+                        const toolName = p.name || p.tool || 'unknown'
+                        const toolInput = p.input || {}
+                        // Extract key info based on tool type
+                        let toolInfo = `[Used ${toolName}`
+                        if (toolName === 'Read' && (toolInput.file_path || toolInput.file)) {
+                          toolInfo += `: ${toolInput.file_path || toolInput.file}`
+                        } else if (toolName === 'Edit' && toolInput.file_path) {
+                          toolInfo += `: ${toolInput.file_path}`
+                        } else if (toolName === 'Write' && toolInput.file_path) {
+                          toolInfo += `: ${toolInput.file_path}`
+                        } else if (toolName === 'Glob' && toolInput.pattern) {
+                          toolInfo += `: ${toolInput.pattern}`
+                        } else if (toolName === 'Grep' && toolInput.pattern) {
+                          toolInfo += `: "${toolInput.pattern}"`
+                        } else if (toolName === 'Bash' && toolInput.command) {
+                          const cmd = String(toolInput.command).slice(0, 50)
+                          toolInfo += `: ${cmd}${toolInput.command.length > 50 ? '...' : ''}`
+                        }
+                        toolInfo += ']'
+                        toolSummaries.push(toolInfo)
+                      }
+                    }
+
+                    // Combine text and tool summaries
+                    let assistantContent = ''
+                    if (textParts.length > 0) {
+                      assistantContent = textParts.join('\n')
+                    }
+                    if (toolSummaries.length > 0) {
+                      if (assistantContent) {
+                        assistantContent += '\n' + toolSummaries.join(' ')
+                      } else {
+                        assistantContent = toolSummaries.join(' ')
+                      }
+                    }
+                    if (assistantContent) {
+                      historyParts.push(`Assistant: ${assistantContent}`)
+                    }
+                  }
+                }
+                if (historyParts.length > 0) {
+                  // Limit history to last ~10000 chars to avoid context overflow
+                  let history = historyParts.join('\n\n')
+                  if (history.length > 10000) {
+                    history = '...(earlier messages truncated)...\n\n' + history.slice(-10000)
+                  }
+                  historyText = `[CONVERSATION HISTORY]
+${history}
+[/CONVERSATION HISTORY]
+
+`
+                  console.log(`[Ollama] Added ${historyParts.length} messages to history (${history.length} chars)`)
+                }
+              }
+
+              const ollamaContext = `[CONTEXT]
+You are a coding assistant in OFFLINE mode (Ollama model: ${resolvedModel || 'unknown'}).
+Project: ${input.projectPath || input.cwd}
+Working directory: ${input.cwd}
+
+IMPORTANT: When using tools, use these EXACT parameter names:
+- Read: use "file_path" (not "file")
+- Write: use "file_path" and "content"
+- Edit: use "file_path", "old_string", "new_string"
+- Glob: use "pattern" (e.g. "**/*.ts") and optionally "path"
+- Grep: use "pattern" and optionally "path"
+- Bash: use "command"
+
+When asked about the project, use Glob to find files and Read to examine them.
+Be concise and helpful.
+[/CONTEXT]
+
+${historyText}[CURRENT REQUEST]
+${prompt}
+[/CURRENT REQUEST]`
+              finalQueryPrompt = ollamaContext
+              console.log('[Ollama] Context prefix added to prompt')
+            }
+
+            // System prompt config - use preset for both Claude and Ollama
+            const systemPromptConfig = {
+              type: "preset" as const,
+              preset: "claude_code" as const,
+            }
+
             const queryOptions = {
-              prompt,
+              prompt: finalQueryPrompt,
               options: {
                 abortController, // Must be inside options!
                 cwd: input.cwd,
-                systemPrompt: {
-                  type: "preset" as const,
-                  preset: "claude_code" as const,
-                },
-                // Register mentioned agents with SDK via options.agents
-                ...(Object.keys(agentsOption).length > 0 && { agents: agentsOption }),
+                systemPrompt: systemPromptConfig,
+                // Register mentioned agents with SDK via options.agents (skip for Ollama - not supported)
+                ...(!isUsingOllama && Object.keys(agentsOption).length > 0 && { agents: agentsOption }),
                 // Pass filtered MCP servers (only working/unknown ones, skip failed/needs-auth)
                 ...(mcpServersFiltered && Object.keys(mcpServersFiltered).length > 0 && { mcpServers: mcpServersFiltered }),
                 env: finalEnv,
@@ -947,13 +939,68 @@ export const claudeRouter = router({
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,
-                // Load skills from project and user directories (native Claude Code skills)
-                settingSources: ["project" as const, "user" as const],
+                // Load skills from project and user directories (skip for Ollama - not supported)
+                ...(!isUsingOllama && { settingSources: ["project" as const, "user" as const] }),
                 canUseTool: async (
                   toolName: string,
                   toolInput: Record<string, unknown>,
                   options: { toolUseID: string },
                 ) => {
+                  // Fix common parameter mistakes from Ollama models
+                  // Local models often use slightly wrong parameter names
+                  if (isUsingOllama) {
+                    // Read: "file" -> "file_path"
+                    if (toolName === "Read" && toolInput.file && !toolInput.file_path) {
+                      toolInput.file_path = toolInput.file
+                      delete toolInput.file
+                      console.log('[Ollama] Fixed Read tool: file -> file_path')
+                    }
+                    // Write: "file" -> "file_path", "content" is usually correct
+                    if (toolName === "Write" && toolInput.file && !toolInput.file_path) {
+                      toolInput.file_path = toolInput.file
+                      delete toolInput.file
+                      console.log('[Ollama] Fixed Write tool: file -> file_path')
+                    }
+                    // Edit: "file" -> "file_path"
+                    if (toolName === "Edit" && toolInput.file && !toolInput.file_path) {
+                      toolInput.file_path = toolInput.file
+                      delete toolInput.file
+                      console.log('[Ollama] Fixed Edit tool: file -> file_path')
+                    }
+                    // Glob: "path" might be passed as "directory" or "dir"
+                    if (toolName === "Glob") {
+                      if (toolInput.directory && !toolInput.path) {
+                        toolInput.path = toolInput.directory
+                        delete toolInput.directory
+                        console.log('[Ollama] Fixed Glob tool: directory -> path')
+                      }
+                      if (toolInput.dir && !toolInput.path) {
+                        toolInput.path = toolInput.dir
+                        delete toolInput.dir
+                        console.log('[Ollama] Fixed Glob tool: dir -> path')
+                      }
+                    }
+                    // Grep: "query" -> "pattern", "directory" -> "path"
+                    if (toolName === "Grep") {
+                      if (toolInput.query && !toolInput.pattern) {
+                        toolInput.pattern = toolInput.query
+                        delete toolInput.query
+                        console.log('[Ollama] Fixed Grep tool: query -> pattern')
+                      }
+                      if (toolInput.directory && !toolInput.path) {
+                        toolInput.path = toolInput.directory
+                        delete toolInput.directory
+                        console.log('[Ollama] Fixed Grep tool: directory -> path')
+                      }
+                    }
+                    // Bash: "cmd" -> "command"
+                    if (toolName === "Bash" && toolInput.cmd && !toolInput.command) {
+                      toolInput.command = toolInput.cmd
+                      delete toolInput.cmd
+                      console.log('[Ollama] Fixed Bash tool: cmd -> command')
+                    }
+                  }
+
                   if (input.mode === "plan") {
                     if (toolName === "Edit" || toolName === "Write") {
                       const filePath =
@@ -1179,6 +1226,12 @@ export const claudeRouter = router({
                     errorContext =
                       "Authentication failed - not logged into Claude Code CLI"
                   } else if (
+                    String(sdkError).includes("invalid_token") ||
+                    String(sdkError).includes("Invalid access token")
+                  ) {
+                    errorCategory = "MCP_INVALID_TOKEN"
+                    errorContext = "Invalid access token. Update MCP settings"
+                  } else if (
                     sdkError === "invalid_api_key" ||
                     sdkError.includes("api_key")
                   ) {
@@ -1218,6 +1271,14 @@ export const claudeRouter = router({
                   }
 
                   console.log(`[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`)
+                  console.error(`[SD] SDK Error details:`, {
+                    errorCategory,
+                    errorContext,
+                    sdkError,
+                    sessionId: msgAny.session_id,
+                    messageId: msgAny.message?.id,
+                    fullMessage: JSON.stringify(msgAny, null, 2),
+                  })
                   safeEmit({ type: "finish" } as UIMessageChunk)
                   safeComplete()
                   return
@@ -1239,22 +1300,6 @@ export const claudeRouter = router({
                     plugins: msgAny.plugins,
                     permissionMode: msgAny.permissionMode,
                   }, null, 2))
-
-                  // Cache MCP server statuses for next request
-                  if (msgAny.subtype === "init" && msgAny.mcp_servers) {
-                    const lookupPath = input.projectPath || input.cwd
-                    const statusMap = new Map<string, string>()
-
-                    for (const server of msgAny.mcp_servers) {
-                      if (server.name && server.status) {
-                        statusMap.set(server.name, server.status)
-                      }
-                    }
-
-                    mcpServerStatusCache.set(lookupPath, statusMap)
-                    // Persist to disk immediately (write-through)
-                    saveMcpStatusToDisk()
-                  }
                 }
 
                 // Transform and emit + accumulate
@@ -1332,9 +1377,9 @@ export const claudeRouter = router({
                         // Emit finish chunk so Chat hook properly resets its state
                         console.log(`[SD] M:PLAN_FINISH sub=${subId} - emitting finish chunk`)
                         safeEmit({ type: "finish" } as UIMessageChunk)
-                        // Abort the Claude process so it doesn't keep running
-                        console.log(`[SD] M:PLAN_ABORT sub=${subId} - aborting claude process`)
-                        abortController.abort()
+                        // NOTE: We intentionally do NOT abort here. Aborting corrupts the session state,
+                        // which breaks follow-up messages in plan mode. The stream will complete naturally
+                        // via the planCompleted flag breaking out of the loops below.
                       }
                       break
                     case "message-metadata":
@@ -1635,36 +1680,31 @@ export const claudeRouter = router({
   /**
    * Get MCP servers configuration for a project
    * This allows showing MCP servers in UI before starting a chat session
+   * NOTE: Does NOT fetch OAuth metadata here - that's done lazily when user clicks Auth
    */
   getMcpConfig: publicProcedure
     .input(z.object({ projectPath: z.string() }))
     .query(async ({ input }) => {
-      const claudeJsonPath = path.join(os.homedir(), ".claude.json")
-
       try {
-        const exists = await fs.stat(claudeJsonPath).then(() => true).catch(() => false)
-        if (!exists) {
+        const config = await readClaudeConfig()
+        const projectMcpServers = getProjectMcpServers(config, input.projectPath)
+
+        if (!projectMcpServers) {
           return { mcpServers: [], projectPath: input.projectPath }
         }
 
-        const configContent = await fs.readFile(claudeJsonPath, "utf-8")
-        const config = JSON.parse(configContent)
+        // Convert to array format - determine status from config (no caching)
+        const mcpServers = Object.entries(projectMcpServers).map(([name, serverConfig]) => {
+          const configObj = serverConfig as Record<string, unknown>
+          const status = getServerStatusFromConfig(configObj)
+          const hasUrl = !!configObj.url
 
-        // Look for project-specific MCP config
-        const projectConfig = config.projects?.[input.projectPath]
-
-        if (!projectConfig?.mcpServers) {
-          return { mcpServers: [], projectPath: input.projectPath }
-        }
-
-        // Convert to array format with names
-        const mcpServers = Object.entries(projectConfig.mcpServers).map(([name, serverConfig]) => ({
-          name,
-          // Status will be "pending" until SDK actually connects
-          status: "pending" as const,
-          // Include config details for display (command, args, etc)
-          config: serverConfig as Record<string, unknown>,
-        }))
+          return {
+            name,
+            status,
+            config: { ...configObj, _hasUrl: hasUrl },
+          }
+        })
 
         return { mcpServers, projectPath: input.projectPath }
       } catch (error) {
@@ -1672,6 +1712,128 @@ export const claudeRouter = router({
         return { mcpServers: [], projectPath: input.projectPath, error: String(error) }
       }
     }),
+
+  /**
+   * Get ALL MCP servers configuration (global + all projects)
+   * Returns grouped data for display in settings
+   */
+  getAllMcpConfig: publicProcedure.query(async () => {
+    try {
+      const config = await readClaudeConfig()
+
+      // Helper to fetch tools for a connected server
+      const fetchToolsForServer = async (serverConfig: McpServerConfig): Promise<string[]> => {
+        // HTTP transport
+        if (serverConfig.url) {
+          const oauth = serverConfig._oauth as { accessToken?: string } | undefined
+          const headers = serverConfig.headers as { Authorization?: string } | undefined
+          const accessToken = headers?.Authorization?.replace('Bearer ', '') || oauth?.accessToken
+          try {
+            return await fetchMcpTools(serverConfig.url, accessToken)
+          } catch {
+            return []
+          }
+        }
+
+        // Stdio transport
+        const command = (serverConfig as any).command as string | undefined
+        if (command) {
+          try {
+            return await fetchMcpToolsStdio({
+              command,
+              args: (serverConfig as any).args,
+              env: (serverConfig as any).env,
+            })
+          } catch {
+            return []
+          }
+        }
+
+        return []
+      }
+
+      const convertServers = async (servers: Record<string, McpServerConfig> | undefined) => {
+        if (!servers) return []
+
+        const results = await Promise.all(
+          Object.entries(servers).map(async ([name, serverConfig]) => {
+            const configObj = serverConfig as Record<string, unknown>
+            let status = getServerStatusFromConfig(serverConfig)
+            const hasUrl = !!serverConfig.url
+            const headers = serverConfig.headers as Record<string, string> | undefined
+
+            // Determine if server needs auth by checking OAuth metadata endpoint
+            // Only probe if it's an HTTP server without explicit authType
+            let needsAuth = false
+            if (hasUrl && !serverConfig.authType) {
+              try {
+                const baseUrl = getMcpBaseUrl(serverConfig.url!)
+                const metadata = await fetchOAuthMetadata(baseUrl)
+                needsAuth = !!metadata && !!metadata.authorization_endpoint
+              } catch {
+                // If probe fails, assume no auth needed
+              }
+            } else if (serverConfig.authType === "oauth" || serverConfig.authType === "bearer") {
+              needsAuth = true
+            }
+
+            // Update status if OAuth probe found auth is needed but we don't have credentials
+            if (needsAuth && status === "connected" && !headers?.Authorization) {
+              status = "needs-auth"
+            }
+
+            // Fetch tools for connected servers
+            let tools: string[] = []
+            if (status === "connected") {
+              tools = await fetchToolsForServer(serverConfig)
+            }
+
+            return { name, status, tools, needsAuth, config: configObj }
+          })
+        )
+
+        return results
+      }
+
+      const groups: Array<{
+        groupName: string
+        projectPath: string | null
+        mcpServers: Array<{ name: string; status: string; tools: string[]; needsAuth: boolean; config: Record<string, unknown> }>
+      }> = []
+
+      // Global MCPs first (user-scope: root level mcpServers in ~/.claude.json)
+      // Ensure tokens are fresh before fetching tools
+      const globalMcpServers = config.mcpServers
+        ? await ensureMcpTokensFresh(config.mcpServers, GLOBAL_MCP_PATH)
+        : undefined
+      groups.push({
+        groupName: "Global",
+        projectPath: null,
+        mcpServers: await convertServers(globalMcpServers)
+      })
+
+      // Local-scope MCPs (per-project in ~/.claude.json)
+      if (config.projects) {
+        for (const [projectPath, projectConfig] of Object.entries(config.projects)) {
+          if (projectConfig.mcpServers && Object.keys(projectConfig.mcpServers).length > 0) {
+            const groupName = projectPath.split('/').pop() || projectPath
+            // Ensure tokens are fresh before fetching tools
+            const freshServers = await ensureMcpTokensFresh(projectConfig.mcpServers, projectPath)
+            groups.push({
+              groupName,
+              projectPath,
+              mcpServers: await convertServers(freshServers)
+            })
+          }
+        }
+      }
+
+      return { groups }
+    } catch (error) {
+      console.error("[getAllMcpConfig] Error:", error)
+      return { groups: [], error: String(error) }
+    }
+  }),
 
   /**
    * Cancel active session
@@ -1716,5 +1878,64 @@ export const claudeRouter = router({
       })
       pendingToolApprovals.delete(input.toolUseId)
       return { ok: true }
+    }),
+
+  /**
+   * Start MCP OAuth flow for a server
+   * Fetches OAuth metadata internally when needed
+   */
+  startMcpOAuth: publicProcedure
+    .input(z.object({
+      serverName: z.string(),
+      projectPath: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      return startMcpOAuth(input.serverName, input.projectPath)
+    }),
+
+  /**
+   * Get MCP auth status for a server
+   */
+  getMcpAuthStatus: publicProcedure
+    .input(z.object({
+      serverName: z.string(),
+      projectPath: z.string(),
+    }))
+    .query(async ({ input }) => {
+      return getMcpAuthStatus(input.serverName, input.projectPath)
+    }),
+
+  /**
+   * Refresh MCP servers for a project - re-reads config from ~/.claude.json
+   */
+  refreshMcpServers: publicProcedure
+    .input(z.object({ projectPath: z.string() }))
+    .mutation(async ({ input }) => {
+      // Clear the config cache so we read fresh from disk
+      mcpConfigCache.clear()
+
+      // Read fresh config from ~/.claude.json
+      const config = await readClaudeConfig()
+      const projectMcpServers = getProjectMcpServers(config, input.projectPath)
+
+      if (!projectMcpServers) {
+        return { mcpServers: [], projectPath: input.projectPath }
+      }
+
+      // Convert to array format - determine status from config (no caching)
+      const mcpServers = Object.entries(projectMcpServers).map(([name, serverConfig]) => {
+        const configObj = serverConfig as Record<string, unknown>
+        const status = getServerStatusFromConfig(configObj)
+        const hasUrl = !!configObj.url
+
+        return {
+          name,
+          status,
+          config: { ...configObj, _hasUrl: hasUrl },
+        }
+      })
+
+      console.log(`[refreshMcpServers] Reloaded ${mcpServers.length} servers for ${input.projectPath}`)
+      return { mcpServers, projectPath: input.projectPath }
     }),
 })

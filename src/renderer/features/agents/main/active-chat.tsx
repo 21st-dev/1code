@@ -63,7 +63,9 @@ import { apiFetch } from "../../../lib/api-fetch"
 import {
   customClaudeConfigAtom,
   isDesktopAtom, isFullscreenAtom,
-  normalizeCustomClaudeConfig, soundNotificationsEnabledAtom
+  normalizeCustomClaudeConfig,
+  selectedOllamaModelAtom,
+  soundNotificationsEnabledAtom
 } from "../../../lib/atoms"
 import { useFileChangeListener, useGitWatcher } from "../../../lib/hooks/use-file-change-listener"
 import { appStore } from "../../../lib/jotai-store"
@@ -94,7 +96,6 @@ import {
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   isCreatingPrAtom,
-  selectedDiffFilePathAtom,
   isPlanModeAtom,
   justCreatedIdsAtom,
   lastSelectedModelIdAtom,
@@ -108,6 +109,7 @@ import {
   QUESTIONS_SKIPPED_MESSAGE,
   selectedAgentChatIdAtom,
   selectedCommitAtom,
+  selectedDiffFilePathAtom,
   setLoading,
   subChatFilesAtom,
   undoStackAtom,
@@ -115,6 +117,7 @@ import {
 } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
 import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
+import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
@@ -136,8 +139,8 @@ import {
   toQueuedTextContext,
 } from "../lib/queue-utils"
 import {
-  type AgentsMentionsEditorHandle,
   MENTION_PREFIXES,
+  type AgentsMentionsEditorHandle,
 } from "../mentions"
 import {
   ChatSearchBar,
@@ -168,11 +171,10 @@ import { AgentUserQuestion, type AgentUserQuestionHandle } from "../ui/agent-use
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
+import { QuickCommentInput } from "../ui/quick-comment-input"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
 import { TextSelectionPopover } from "../ui/text-selection-popover"
-import { QuickCommentInput } from "../ui/quick-comment-input"
-import type { TextSelectionSource } from "../context/text-selection-context"
 import { autoRenameAgentChat } from "../utils/auto-rename"
 import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
 import { ChatInputArea } from "./chat-input-area"
@@ -814,9 +816,10 @@ const ScrollToBottomButton = memo(function ScrollToBottomButton({
 // Message group wrapper - measures user message height for sticky todo positioning
 interface MessageGroupProps {
   children: React.ReactNode
+  isLastGroup?: boolean
 }
 
-function MessageGroup({ children }: MessageGroupProps) {
+function MessageGroup({ children, isLastGroup }: MessageGroupProps) {
   const groupRef = useRef<HTMLDivElement>(null)
   const userMessageRef = useRef<HTMLDivElement | null>(null)
 
@@ -854,7 +857,10 @@ function MessageGroup({ children }: MessageGroupProps) {
         contentVisibility: "auto",
         // Примерная высота для правильного скроллбара до рендеринга
         containIntrinsicSize: "auto 200px",
+        // Последняя группа имеет минимальную высоту контейнера чата (минус отступ)
+        ...(isLastGroup && { minHeight: "calc(var(--chat-container-height) - 32px)" }),
       }}
+      data-last-group={isLastGroup || undefined}
     >
       {children}
     </div>
@@ -1848,6 +1854,10 @@ const ChatViewInner = memo(function ChatViewInner({
       isAutoScrollingRef.current = false
     }
   }, [])
+
+  // Track chat container height via CSS custom property (no re-renders)
+  const chatContainerObserverRef = useRef<ResizeObserver | null>(null)
+
   const editorRef = useRef<AgentsMentionsEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const questionRef = useRef<AgentUserQuestionHandle>(null)
@@ -2792,9 +2802,6 @@ const ChatViewInner = memo(function ChatViewInner({
         trpcClient.chats.updatePrInfo
           .mutate({ chatId: parentChatId, prUrl, prNumber })
           .then(() => {
-            toast.success(`PR #${prNumber} created!`, {
-              position: "top-center",
-            })
             // Invalidate the agentChat query to refetch with new PR info
             utils.agents.getAgentChat.invalidate({ chatId: parentChatId })
           })
@@ -3562,6 +3569,8 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // Keyboard shortcut: Cmd+Enter to approve plan
   useEffect(() => {
+    if (!isActive) return
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.key === "Enter" &&
@@ -3577,7 +3586,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [hasUnapprovedPlan, isStreaming, handleApprovePlan])
+  }, [isActive, hasUnapprovedPlan, isStreaming, handleApprovePlan])
 
   // Cmd/Ctrl + Arrow Down to scroll to bottom (works even when focused in input)
   // But don't intercept if input has content - let native cursor navigation work
@@ -3745,7 +3754,23 @@ const ChatViewInner = memo(function ChatViewInner({
       {/* Messages */}
       <div
         ref={(el) => {
+          // Cleanup previous observer
+          if (chatContainerObserverRef.current) {
+            chatContainerObserverRef.current.disconnect()
+            chatContainerObserverRef.current = null
+          }
+
           chatContainerRef.current = el
+
+          // Setup ResizeObserver for --chat-container-height CSS variable
+          if (el) {
+            const observer = new ResizeObserver((entries) => {
+              const height = entries[0]?.contentRect.height ?? 0
+              el.style.setProperty("--chat-container-height", `${height}px`)
+            })
+            observer.observe(el)
+            chatContainerObserverRef.current = observer
+          }
         }}
         className="flex-1 overflow-y-auto w-full relative allow-text-selection outline-none"
         tabIndex={-1}
@@ -3909,6 +3934,7 @@ export function ChatView({
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
+  const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom)
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
@@ -5368,7 +5394,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         userMessage,
         isFirstSubChat: isFirst,
         generateName: async (msg) => {
-          return generateSubChatNameMutation.mutateAsync({ userMessage: msg })
+          return generateSubChatNameMutation.mutateAsync({ userMessage: msg, ollamaModel: selectedOllamaModel })
         },
         renameSubChat: async (input) => {
           await renameSubChatMutation.mutateAsync(input)
@@ -5444,6 +5470,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       renameSubChatMutation,
       renameChatMutation,
       selectedTeamId,
+      selectedOllamaModel,
       utils.agents.getAgentChats,
       utils.agents.getAgentChat,
     ],

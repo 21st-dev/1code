@@ -21,6 +21,7 @@ import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
+import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
 
@@ -31,6 +32,149 @@ function getFallbackName(userMessage: string): string {
     return trimmed || "New Chat"
   }
   return trimmed.substring(0, 25) + "..."
+}
+
+/**
+ * Generate text using local Ollama model
+ * Used for chat title generation in offline mode
+ * @param userMessage - The user message to generate a title for
+ * @param model - Optional model to use (if not provided, uses recommended model)
+ */
+async function generateChatNameWithOllama(
+  userMessage: string,
+  model?: string | null
+): Promise<string | null> {
+  try {
+    const ollamaStatus = await checkOllamaStatus()
+    if (!ollamaStatus.available) {
+      return null
+    }
+
+    // Use provided model, or recommended, or first available
+    const modelToUse = model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
+    if (!modelToUse) {
+      console.error("[Ollama] No model available")
+      return null
+    }
+
+    const prompt = `Generate a very short (2-5 words) title for a coding chat that starts with this message. Only output the title, nothing else. No quotes, no explanations.
+
+User message: "${userMessage.slice(0, 500)}"
+
+Title:`
+
+    const response = await fetch("http://localhost:11434/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelToUse,
+        prompt,
+        stream: false,
+        options: {
+          temperature: 0.3,
+          num_predict: 50,
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      console.error("[Ollama] Generate chat name failed:", response.status)
+      return null
+    }
+
+    const data = await response.json()
+    const result = data.response?.trim()
+    if (result) {
+      // Clean up the result - remove quotes, trim, limit length
+      const cleaned = result
+        .replace(/^["']|["']$/g, "")
+        .replace(/^title:\s*/i, "")
+        .trim()
+        .slice(0, 50)
+      if (cleaned.length > 0) {
+        return cleaned
+      }
+    }
+    return null
+  } catch (error) {
+    console.error("[Ollama] Generate chat name error:", error)
+    return null
+  }
+}
+
+/**
+ * Generate commit message using local Ollama model
+ * Used for commit message generation in offline mode
+ * @param diff - The diff text
+ * @param fileCount - Number of files changed
+ * @param additions - Lines added
+ * @param deletions - Lines deleted
+ * @param model - Optional model to use (if not provided, uses recommended model)
+ */
+async function generateCommitMessageWithOllama(
+  diff: string,
+  fileCount: number,
+  additions: number,
+  deletions: number,
+  model?: string | null
+): Promise<string | null> {
+  try {
+    const ollamaStatus = await checkOllamaStatus()
+    if (!ollamaStatus.available) {
+      return null
+    }
+
+    // Use provided model, or recommended, or first available
+    const modelToUse = model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
+    if (!modelToUse) {
+      console.error("[Ollama] No model available")
+      return null
+    }
+
+    const prompt = `Generate a conventional commit message for these changes. Use format: type: short description
+
+Types: feat (new feature), fix (bug fix), docs, style, refactor, test, chore
+
+Changes: ${fileCount} files, +${additions}/-${deletions} lines
+
+Diff (truncated):
+${diff.slice(0, 3000)}
+
+Commit message:`
+
+    const response = await fetch("http://localhost:11434/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelToUse,
+        prompt,
+        stream: false,
+        options: {
+          temperature: 0.3,
+          num_predict: 50,
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      console.error("[Ollama] Generate commit message failed:", response.status)
+      return null
+    }
+
+    const data = await response.json()
+    const result = data.response?.trim()
+    if (result) {
+      // Clean up - get just the first line
+      const firstLine = result.split("\n")[0]?.trim()
+      if (firstLine && firstLine.length > 0 && firstLine.length < 100) {
+        return firstLine
+      }
+    }
+    return null
+  } catch (error) {
+    console.error("[Ollama] Generate commit message error:", error)
+    return null
+  }
 }
 
 export const chatsRouter = router({
@@ -805,11 +949,13 @@ export const chatsRouter = router({
    * Generate a commit message using AI based on the diff
    * @param chatId - The chat ID to get worktree path from
    * @param filePaths - Optional list of file paths to generate message for (if not provided, uses all changed files)
+   * @param ollamaModel - Optional Ollama model for offline generation
    */
   generateCommitMessage: publicProcedure
     .input(z.object({
       chatId: z.string(),
       filePaths: z.array(z.string()).optional(),
+      ollamaModel: z.string().nullish(), // Optional model for offline mode
     }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
@@ -854,47 +1000,73 @@ export const chatsRouter = router({
 
       // Build filtered diff text for API (only selected files)
       const filteredDiff = files.map(f => f.diffText).join('\n')
+      const additions = files.reduce((sum, f) => sum + f.additions, 0)
+      const deletions = files.reduce((sum, f) => sum + f.deletions, 0)
 
-      // Call web API to generate commit message
-      let apiError: string | null = null
-      try {
-        const authManager = getAuthManager()
-        const token = await authManager.getValidToken()
-        // Use localhost in dev, production otherwise
-        const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://21st.dev"
+      // Check internet first - if offline, use Ollama
+      const hasInternet = await checkInternetConnection()
 
-        if (!token) {
-          apiError = "No auth token available"
-        } else {
-          const response = await fetch(
-            `${apiUrl}/api/agents/generate-commit-message`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Desktop-Token": token,
-              },
-              body: JSON.stringify({
-                diff: filteredDiff.slice(0, 10000), // Limit diff size, use filtered diff
-                fileCount: files.length,
-                additions: files.reduce((sum, f) => sum + f.additions, 0),
-                deletions: files.reduce((sum, f) => sum + f.deletions, 0),
-              }),
-            },
-          )
-
-          if (response.ok) {
-            const data = await response.json()
-            if (data.message) {
-              return { message: data.message }
-            }
-            apiError = "API returned ok but no message in response"
-          } else {
-            apiError = `API returned ${response.status}`
-          }
+      if (!hasInternet) {
+        console.log("[generateCommitMessage] Offline - trying Ollama...")
+        const ollamaMessage = await generateCommitMessageWithOllama(
+          filteredDiff,
+          files.length,
+          additions,
+          deletions,
+          input.ollamaModel
+        )
+        if (ollamaMessage) {
+          console.log("[generateCommitMessage] Generated via Ollama:", ollamaMessage)
+          return { message: ollamaMessage }
         }
-      } catch (error) {
-        apiError = `API call failed: ${error instanceof Error ? error.message : String(error)}`
+        console.log("[generateCommitMessage] Ollama failed, using heuristic fallback")
+        // Fall through to heuristic fallback below
+      } else {
+        // Online - call web API to generate commit message
+        let apiError: string | null = null
+        try {
+          const authManager = getAuthManager()
+          const token = await authManager.getValidToken()
+          // Use localhost in dev, production otherwise
+          const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://21st.dev"
+
+          if (!token) {
+            apiError = "No auth token available"
+          } else {
+            const response = await fetch(
+              `${apiUrl}/api/agents/generate-commit-message`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Desktop-Token": token,
+                },
+                body: JSON.stringify({
+                  diff: filteredDiff.slice(0, 10000), // Limit diff size, use filtered diff
+                  fileCount: files.length,
+                  additions,
+                  deletions,
+                }),
+              },
+            )
+
+            if (response.ok) {
+              const data = await response.json()
+              if (data.message) {
+                return { message: data.message }
+              }
+              apiError = "API returned ok but no message in response"
+            } else {
+              apiError = `API returned ${response.status}`
+            }
+          }
+        } catch (error) {
+          apiError = `API call failed: ${error instanceof Error ? error.message : String(error)}`
+        }
+
+        if (apiError) {
+          console.log("[generateCommitMessage] API error:", apiError)
+        }
       }
 
       // Fallback: Generate commit message with conventional commits style
@@ -953,25 +1125,38 @@ export const chatsRouter = router({
     }),
 
   /**
-   * Generate a name for a sub-chat using AI (calls web API)
-   * Always uses production API since it's a lightweight call
+   * Generate a name for a sub-chat using AI
+   * Uses Ollama when offline, otherwise calls web API
    */
   generateSubChatName: publicProcedure
-    .input(z.object({ userMessage: z.string() }))
+    .input(z.object({
+      userMessage: z.string(),
+      ollamaModel: z.string().nullish(), // Optional model for offline mode
+    }))
     .mutation(async ({ input }) => {
       try {
+        // Check internet first - if offline, use Ollama
+        const hasInternet = await checkInternetConnection()
+
+        if (!hasInternet) {
+          console.log("[generateSubChatName] Offline - trying Ollama...")
+          const ollamaName = await generateChatNameWithOllama(input.userMessage, input.ollamaModel)
+          if (ollamaName) {
+            console.log("[generateSubChatName] Generated name via Ollama:", ollamaName)
+            return { name: ollamaName }
+          }
+          console.log("[generateSubChatName] Ollama failed, using fallback")
+          return { name: getFallbackName(input.userMessage) }
+        }
+
+        // Online - use web API
         const authManager = getAuthManager()
         const token = await authManager.getValidToken()
-        // Always use production API for name generation
         const apiUrl = "https://21st.dev"
 
         console.log(
-          "[generateSubChatName] Calling API with token:",
+          "[generateSubChatName] Online - calling API with token:",
           token ? "present" : "missing",
-        )
-        console.log(
-          "[generateSubChatName] URL:",
-          `${apiUrl}/api/agents/sub-chat/generate-name`,
         )
 
         const response = await fetch(

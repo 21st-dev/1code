@@ -49,7 +49,7 @@ interface IsolatedMessageGroupProps {
     isPending: boolean
     isError: boolean
   }>
-  MessageGroupWrapper: React.ComponentType<{ children: React.ReactNode }>
+  MessageGroupWrapper: React.ComponentType<{ children: React.ReactNode; isLastGroup?: boolean }>
   toolRegistry: Record<string, { icon: any; title: (args: any) => string }>
 }
 
@@ -122,7 +122,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
   const isImageOnlyMessage = imageParts.length > 0 && !textContent.trim() && textMentions.length === 0
 
   return (
-    <MessageGroupWrapper>
+    <MessageGroupWrapper isLastGroup={isLastGroup}>
       {/* Attachments - NOT sticky (only when there's also text) */}
       {imageParts.length > 0 && !isImageOnlyMessage && (
         <div className="mb-2 pointer-events-auto">

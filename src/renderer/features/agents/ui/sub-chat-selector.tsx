@@ -653,6 +653,21 @@ export function SubChatSelector({
                             onSwitch(subChat.id)
                           }
                         }}
+                        onMouseDown={(e) => {
+                          // Middle-click to close tab (like Chrome)
+                          if (e.button === 1 && openSubChats.length > 1) {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            onCloseTab(subChat.id)
+                          }
+                        }}
+                        onAuxClick={(e) => {
+                          // Prevent context menu on middle-click
+                          if (e.button === 1) {
+                            e.preventDefault()
+                            e.stopPropagation()
+                          }
+                        }}
                         onDoubleClick={(e) => {
                           e.stopPropagation()
                           e.preventDefault()

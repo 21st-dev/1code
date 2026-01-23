@@ -22,10 +22,15 @@ export type OfflineCheckResult = {
  * 1. If customConfig provided → use it
  * 2. If OFFLINE → use Ollama (ignore auth token)
  * 3. If online + auth → use Claude API
+ *
+ * @param customConfig - Custom config from user settings
+ * @param claudeCodeToken - Claude Code auth token
+ * @param selectedOllamaModel - User-selected Ollama model (optional)
  */
 export async function checkOfflineFallback(
   customConfig: CustomClaudeConfig | undefined,
   claudeCodeToken: string | null,
+  selectedOllamaModel?: string | null,
 ): Promise<OfflineCheckResult> {
   // If custom config is provided, use it (highest priority)
   if (customConfig) {
@@ -63,10 +68,12 @@ export async function checkOfflineFallback(
       }
     }
 
-    // Use Ollama!
-    const config = getOllamaConfig(ollamaStatus.recommendedModel)
+    // Use Ollama with selected model or recommended model
+    console.log(`[Offline] selectedOllamaModel param: ${selectedOllamaModel || "(null/undefined)"}, recommendedModel: ${ollamaStatus.recommendedModel}`)
+    const modelToUse = selectedOllamaModel || ollamaStatus.recommendedModel
+    const config = getOllamaConfig(modelToUse)
 
-    console.log(`[Offline] Switching to Ollama (model: ${ollamaStatus.recommendedModel})`)
+    console.log(`[Offline] Switching to Ollama (model: ${modelToUse})`)
 
     return {
       config,

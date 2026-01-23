@@ -7,6 +7,7 @@ import {
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
   sessionInfoAtom,
+  selectedOllamaModelAtom,
   type CustomClaudeConfig,
   normalizeCustomClaudeConfig,
 } from "../../../lib/atoms"
@@ -155,6 +156,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     ) as CustomClaudeConfig
     const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
 
+    // Get selected Ollama model for offline mode
+    const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
+    console.log(`[SD] selectedOllamaModel from atom: ${selectedOllamaModel || "(null)"}`)
+
     const currentMode =
       useAgentSubChatStore
         .getState()
@@ -181,6 +186,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
+            ...(selectedOllamaModel && { selectedOllamaModel }),
             historyEnabled,
             ...(images.length > 0 && { images }),
           },

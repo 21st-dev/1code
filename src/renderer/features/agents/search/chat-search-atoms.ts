@@ -159,11 +159,15 @@ export const openSearchAtom = atom(null, (_get, set) => {
   set(chatSearchOpenAtom, true)
 })
 
-// Toggle search
+/**
+ * Toggle search - if already open, select all text instead of closing
+ * This allows users to press Cmd+F again to quickly start a new search
+ */
 export const toggleSearchAtom = atom(null, (get, set) => {
   const isOpen = get(chatSearchOpenAtom)
   if (isOpen) {
-    set(closeSearchAtom)
+    // Dispatch custom event to select all text in search input
+    window.dispatchEvent(new CustomEvent("chat-search-select-all"))
   } else {
     set(openSearchAtom)
   }

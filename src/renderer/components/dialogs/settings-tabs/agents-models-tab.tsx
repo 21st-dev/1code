@@ -1,19 +1,16 @@
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
   customClaudeConfigAtom,
-  autoOfflineModeAtom,
-  showOfflineModeFeaturesAtom,
   type CustomClaudeConfig,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
-import { Switch } from "../../ui/switch"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -43,7 +40,6 @@ export function AgentsModelsTab() {
   const [model, setModel] = useState(storedConfig.model)
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
-  const [autoOffline, setAutoOffline] = useAtom(autoOfflineModeAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom,
   )
@@ -53,14 +49,6 @@ export function AgentsModelsTab() {
   const { data: claudeCodeIntegration, isLoading: isClaudeCodeLoading } =
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
-
-  // Get Ollama status
-  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
-    refetchInterval: 30000, // Refresh every 30s
-  })
-
-  // Check if offline features should be visible (debug flag)
-  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
 
   useEffect(() => {
     setModel(storedConfig.model)
@@ -112,73 +100,6 @@ export function AgentsModelsTab() {
           <p className="text-xs text-muted-foreground">
             Configure model overrides and Claude Code authentication
           </p>
-        </div>
-      )}
-
-      {/* Offline Mode Section - only show if debug flag enabled */}
-      {showOfflineFeatures && (
-        <div className="space-y-2">
-          <div className="pb-2">
-            <h4 className="text-sm font-medium text-foreground">Offline Mode</h4>
-          </div>
-
-          <div className="bg-background rounded-lg border border-border overflow-hidden">
-            <div className="p-4 space-y-4">
-              {/* Status */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <span className="text-sm font-medium text-foreground">
-                    Ollama Status
-                  </span>
-                  <p className="text-xs text-muted-foreground">
-                    {ollamaStatus?.ollama.available
-                      ? `Running - ${ollamaStatus.ollama.models.length} model${ollamaStatus.ollama.models.length !== 1 ? 's' : ''} installed`
-                      : 'Not running or not installed'}
-                  </p>
-                  {ollamaStatus?.ollama.recommendedModel && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Recommended: {ollamaStatus.ollama.recommendedModel}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {ollamaStatus?.ollama.available ? (
-                    <span className="text-green-600 text-sm font-medium">● Available</span>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">○ Unavailable</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Auto-fallback toggle */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <span className="text-sm font-medium text-foreground">
-                    Auto Offline Mode
-                  </span>
-                  <p className="text-xs text-muted-foreground">
-                    Automatically use Ollama when internet is unavailable
-                  </p>
-                </div>
-                <Switch
-                  checked={autoOffline}
-                  onCheckedChange={setAutoOffline}
-                />
-              </div>
-
-              {/* Info message */}
-              {!ollamaStatus?.ollama.available && (
-                <div className="text-xs text-muted-foreground bg-muted p-3 rounded">
-                  <p className="font-medium mb-1">To enable offline mode:</p>
-                  <ol className="list-decimal list-inside space-y-1 ml-2">
-                    <li>Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="underline">ollama.com</a></li>
-                    <li>Run: <code className="bg-background px-1 py-0.5 rounded">ollama pull qwen2.5-coder:7b</code></li>
-                    <li>Ollama will run automatically in the background</li>
-                  </ol>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       )}
 

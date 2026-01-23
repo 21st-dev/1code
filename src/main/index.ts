@@ -1,25 +1,26 @@
-import { app, BrowserWindow, session, Menu } from "electron"
-import { join } from "path"
-import { createServer } from "http"
-import { readFileSync, existsSync, unlinkSync, readlinkSync } from "fs"
 import * as Sentry from "@sentry/electron/main"
-import { initDatabase, closeDatabase } from "./lib/db"
-import { createMainWindow, getWindow, showLoginPage } from "./windows/main"
+import { app, BrowserWindow, Menu, session } from "electron"
+import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
+import { createServer } from "http"
+import { join } from "path"
 import { AuthManager } from "./auth-manager"
 import {
-  initAnalytics,
   identify,
+  initAnalytics,
+  shutdown as shutdownAnalytics,
   trackAppOpened,
   trackAuthCompleted,
-  shutdown as shutdownAnalytics,
 } from "./lib/analytics"
 import {
-  initAutoUpdater,
   checkForUpdates,
   downloadUpdate,
+  initAutoUpdater,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
+import { closeDatabase, initDatabase } from "./lib/db"
 import { cleanupGitWatchers } from "./lib/git/watcher"
+import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
+import { createMainWindow, getWindow } from "./windows/main"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -134,11 +135,21 @@ function handleDeepLink(url: string): void {
   try {
     const parsed = new URL(url)
 
-    // Handle auth callback: twentyfirstdev://auth?code=xxx
+    // Handle auth callback: twentyfirst-agents://auth?code=xxx
     if (parsed.pathname === "/auth" || parsed.host === "auth") {
       const code = parsed.searchParams.get("code")
       if (code) {
         handleAuthCode(code)
+        return
+      }
+    }
+
+    // Handle MCP OAuth callback: twentyfirst-agents://mcp-oauth?code=xxx&state=yyy
+    if (parsed.pathname === "/mcp-oauth" || parsed.host === "mcp-oauth") {
+      const code = parsed.searchParams.get("code")
+      const state = parsed.searchParams.get("state")
+      if (code && state) {
+        handleMcpOAuthCallback(code, state)
         return
       }
     }
@@ -219,10 +230,9 @@ console.log("[Protocol] =============================================")
 const FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="1024" height="1024" fill="#0033FF"/><path fill-rule="evenodd" clip-rule="evenodd" d="M800.165 148C842.048 148 876 181.952 876 223.835V686.415C876 690.606 872.606 694 868.415 694H640.915C636.729 694 633.335 697.394 633.335 701.585V868.415C633.335 872.606 629.936 876 625.75 876H223.835C181.952 876 148 842.048 148 800.165V702.59C148 697.262 150.807 692.326 155.376 689.586L427.843 526.1C434.031 522.388 431.956 513.238 425.327 512.118L423.962 512H155.585C151.394 512 148 508.606 148 504.415V337.585C148 333.394 151.394 330 155.585 330H443.75C447.936 330 451.335 326.606 451.335 322.415V155.585C451.335 151.394 454.729 148 458.915 148H800.165ZM458.915 330C454.729 330 451.335 333.394 451.335 337.585V686.415C451.335 690.606 454.729 694 458.915 694H625.75C629.936 694 633.335 690.606 633.335 686.415V337.585C633.335 333.394 629.936 330 625.75 330H458.915Z" fill="#F4F4F4"/></svg>`
 const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
 
-// Dev mode: Start local HTTP server for auth callback
-// This catches http://localhost:21321/auth/callback?code=xxx
-if (process.env.ELECTRON_RENDERER_URL) {
-  const server = createServer((req, res) => {
+// Start local HTTP server for auth callbacks
+// This catches http://localhost:21321/auth/callback?code=xxx and /mcp-oauth/callback
+const server = createServer((req, res) => {
     const url = new URL(req.url || "", "http://localhost:21321")
 
     // Serve favicon
@@ -312,16 +322,99 @@ if (process.env.ELECTRON_RENDERER_URL) {
         res.writeHead(400, { "Content-Type": "text/plain" })
         res.end("Missing code parameter")
       }
+    } else if (url.pathname === "/mcp-oauth/callback") {
+      // Handle MCP OAuth callback in dev mode
+      const code = url.searchParams.get("code")
+      const state = url.searchParams.get("state")
+      console.log(
+        "[Auth Server] Received MCP OAuth callback with code:",
+        code?.slice(0, 8) + "...",
+        "state:",
+        state?.slice(0, 8) + "...",
+      )
+
+      if (code && state) {
+        // Handle the MCP OAuth callback
+        handleMcpOAuthCallback(code, state)
+
+        // Send success response and close the browser tab
+        res.writeHead(200, { "Content-Type": "text/html" })
+        res.end(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
+  <title>1Code - MCP Authentication</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #09090b;
+      --text: #fafafa;
+      --text-muted: #71717a;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --text: #09090b;
+        --text-muted: #71717a;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo {
+      width: 24px;
+      height: 24px;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <svg class="logo" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M14.3333 0C15.2538 0 16 0.746192 16 1.66667V11.8333C16 11.9254 15.9254 12 15.8333 12H10.8333C10.7413 12 10.6667 12.0746 10.6667 12.1667V15.8333C10.6667 15.9254 10.592 16 10.5 16H1.66667C0.746192 16 0 15.2538 0 14.3333V12.1888C0 12.0717 0.0617409 11.9632 0.162081 11.903L6.15043 8.30986C6.28644 8.22833 6.24077 8.02716 6.09507 8.00256L6.06511 8H0.166667C0.0746186 8 0 7.92538 0 7.83333V4.16667C0 4.07462 0.0746193 4 0.166667 4H6.5C6.59205 4 6.66667 3.92538 6.66667 3.83333V0.166667C6.66667 0.0746193 6.74129 0 6.83333 0H14.3333ZM6.83333 4C6.74129 4 6.66667 4.07462 6.66667 4.16667V11.8333C6.66667 11.9254 6.74129 12 6.83333 12H10.5C10.592 12 10.6667 11.9254 10.6667 11.8333V4.16667C10.6667 4.07462 10.592 4 10.5 4H6.83333Z" fill="#0033FF"/>
+    </svg>
+    <h1>MCP Server authenticated</h1>
+    <p>You can close this tab</p>
+  </div>
+  <script>setTimeout(() => window.close(), 1000)</script>
+</body>
+</html>`)
+      } else {
+        res.writeHead(400, { "Content-Type": "text/plain" })
+        res.end("Missing code or state parameter")
+      }
     } else {
       res.writeHead(404, { "Content-Type": "text/plain" })
       res.end("Not found")
     }
   })
 
-  server.listen(21321, () => {
-    console.log("[Auth Server] Listening on http://localhost:21321")
-  })
-}
+server.listen(21321, () => {
+  console.log("[Auth Server] Listening on http://localhost:21321")
+})
 
 // Clean up stale lock files from crashed instances
 // Returns true if locks were cleaned, false otherwise
@@ -670,6 +763,7 @@ if (gotTheLock) {
   // Cleanup before quit
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
+    cancelAllPendingOAuth()
     await cleanupGitWatchers()
     await shutdownAnalytics()
     await closeDatabase()

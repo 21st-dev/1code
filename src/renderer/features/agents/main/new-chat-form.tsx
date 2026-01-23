@@ -2,7 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { AlignJustify, Plus, WifiOff } from "lucide-react"
+import { AlignJustify, Plus, Zap } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Button } from "../../../components/ui/button"
@@ -53,6 +53,7 @@ import {
   customClaudeConfigAtom,
   normalizeCustomClaudeConfig,
   showOfflineModeFeaturesAtom,
+  selectedOllamaModelAtom,
 } from "../../../lib/atoms"
 // Desktop uses real tRPC
 import { toast } from "sonner"
@@ -104,7 +105,7 @@ const CodexIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 )
 
-// Hook to get available models (including offline model if Ollama is available and debug enabled)
+// Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
   const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
     refetchInterval: 30000,
@@ -114,21 +115,19 @@ function useAvailableModels() {
   const baseModels = CLAUDE_MODELS
 
   const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && !!ollamaStatus.ollama.recommendedModel
+  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
+  const ollamaModels = ollamaStatus?.ollama.models || []
+  const recommendedModel = ollamaStatus?.ollama.recommendedModel
 
-  // Only show offline model if:
+  // Only show offline models if:
   // 1. Debug flag is enabled (showOfflineFeatures)
-  // 2. Ollama is available
+  // 2. Ollama is available with models
   // 3. User is actually offline
   if (showOfflineFeatures && hasOllama && isOffline) {
     return {
-      models: [
-        ...baseModels,
-        {
-          id: "offline",
-          name: ollamaStatus.ollama.recommendedModel,
-        },
-      ],
+      models: baseModels,
+      ollamaModels,
+      recommendedModel,
       isOffline,
       hasOllama: true,
     }
@@ -136,6 +135,8 @@ function useAvailableModels() {
 
   return {
     models: baseModels,
+    ollamaModels: [] as string[],
+    recommendedModel: undefined as string | undefined,
     isOffline,
     hasOllama: false,
   }
@@ -262,11 +263,15 @@ export function NewChatForm({
 
   // Get available models (with offline support)
   const availableModels = useAvailableModels()
+  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
 
   const [selectedModel, setSelectedModel] = useState(
     () =>
       availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[1],
   )
+
+  // Determine current Ollama model (selected or recommended)
+  const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
   const [lastSelectedBranches, setLastSelectedBranches] = useAtom(
@@ -1307,95 +1312,111 @@ export function NewChatForm({
                           )}
                       </DropdownMenu>
 
-                      {/* Model selector */}
-                      <DropdownMenu
-                        open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
-                        onOpenChange={(open) => {
-                          if (!hasCustomClaudeConfig) {
-                            setIsModelDropdownOpen(open)
-                          }
-                        }}
-                      >
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            disabled={hasCustomClaudeConfig}
-                            className={cn(
-                              "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-[background-color,color] duration-150 ease-out rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                              hasCustomClaudeConfig
-                                ? "opacity-70 cursor-not-allowed"
-                                : "hover:text-foreground hover:bg-muted/50",
-                            )}
-                          >
-                            {hasCustomClaudeConfig ? (
-                              <ClaudeCodeIcon className="h-3.5 w-3.5" />
-                            ) : selectedModel?.id === "offline" ? (
-                              <WifiOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <ClaudeCodeIcon className="h-3.5 w-3.5" />
-                            )}
-                            <span>
-                              {hasCustomClaudeConfig ? (
-                                "Custom Model"
-                              ) : selectedModel?.id === "offline" ? (
-                                selectedModel.name
-                              ) : (
-                                <>
-                                  {selectedModel?.name}{" "}
-                                  <span className="text-muted-foreground">4.5</span>
-                                </>
-                              )}
-                            </span>
-                            <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="w-[200px]"
+                      {/* Model selector - shows Ollama models when offline, Claude models when online */}
+                      {availableModels.isOffline && availableModels.hasOllama ? (
+                        // Offline mode: show Ollama model selector
+                        <DropdownMenu
+                          open={isModelDropdownOpen}
+                          onOpenChange={setIsModelDropdownOpen}
                         >
-                          {availableModels.models.map((model) => {
-                            const isSelected = selectedModel?.id === model.id
-                            const isOfflineModel = model.id === "offline"
-                            // Disable non-offline models when offline
-                            const isDisabled = availableModels.isOffline && !isOfflineModel
-                            return (
-                              <DropdownMenuItem
-                                key={model.id}
-                                onClick={() => {
-                                  if (!isDisabled) {
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 border border-border"
+                            >
+                              <Zap className="h-4 w-4" />
+                              <span>{currentOllamaModel || "Select model"}</span>
+                              <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-[240px]">
+                            {availableModels.ollamaModels.map((model) => {
+                              const isSelected = model === currentOllamaModel
+                              const isRecommended = model === availableModels.recommendedModel
+                              return (
+                                <DropdownMenuItem
+                                  key={model}
+                                  onClick={() => setSelectedOllamaModel(model)}
+                                  className="gap-2 justify-between"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span>
+                                      {model}
+                                      {isRecommended && (
+                                        <span className="text-muted-foreground ml-1">(recommended)</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                  {isSelected && (
+                                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        // Online mode: show Claude model selector
+                        <DropdownMenu
+                          open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
+                          onOpenChange={(open) => {
+                            if (!hasCustomClaudeConfig) {
+                              setIsModelDropdownOpen(open)
+                            }
+                          }}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              disabled={hasCustomClaudeConfig}
+                              className={cn(
+                                "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-[background-color,color] duration-150 ease-out rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                                hasCustomClaudeConfig
+                                  ? "opacity-70 cursor-not-allowed"
+                                  : "hover:text-foreground hover:bg-muted/50",
+                              )}
+                            >
+                              <ClaudeCodeIcon className="h-3.5 w-3.5" />
+                              <span>
+                                {hasCustomClaudeConfig ? (
+                                  "Custom Model"
+                                ) : (
+                                  <>
+                                    {selectedModel?.name}{" "}
+                                    <span className="text-muted-foreground">4.5</span>
+                                  </>
+                                )}
+                              </span>
+                              <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-[200px]">
+                            {availableModels.models.map((model) => {
+                              const isSelected = selectedModel?.id === model.id
+                              return (
+                                <DropdownMenuItem
+                                  key={model.id}
+                                  onClick={() => {
                                     setSelectedModel(model)
                                     setLastSelectedModelId(model.id)
-                                  }
-                                }}
-                                className="gap-2 justify-between"
-                                disabled={isDisabled}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  {isOfflineModel ? (
-                                    <WifiOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  ) : (
+                                  }}
+                                  className="gap-2 justify-between"
+                                >
+                                  <div className="flex items-center gap-1.5">
                                     <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span>
+                                      {model.name}{" "}
+                                      <span className="text-muted-foreground">4.5</span>
+                                    </span>
+                                  </div>
+                                  {isSelected && (
+                                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
                                   )}
-                                  <span>
-                                    {isOfflineModel ? (
-                                      model.name
-                                    ) : (
-                                      <>
-                                        {model.name}{" "}
-                                        <span className="text-muted-foreground">
-                                          4.5
-                                        </span>
-                                      </>
-                                    )}
-                                  </span>
-                                </div>
-                                {isSelected && (
-                                  <CheckIcon className="h-3.5 w-3.5 shrink-0" />
-                                )}
-                              </DropdownMenuItem>
-                            )
-                          })}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
