@@ -303,9 +303,17 @@ export function buildClaudeEnv(options?: {
   // 6. Add AWS Bedrock credentials if in AWS mode
   const awsCreds = getAwsCredentials()
   if (awsCreds) {
+    env.CLAUDE_CODE_API_PROVIDER = "bedrock"
     env.CLAUDE_CODE_USE_BEDROCK = "1"
     env.AWS_REGION = awsCreds.region
     env.AWS_DEFAULT_REGION = awsCreds.region
+
+    // Bedrock model defaults (cross-region inference enabled with [1m] suffix)
+    env.ANTHROPIC_DEFAULT_OPUS_MODEL = "global.anthropic.claude-opus-4-5-20251101-v1:0"
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"
+    env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"
+    env.MAX_MCP_OUTPUT_TOKENS = "200000"
+    env.MAX_THINKING_TOKENS = "1000000"
 
     // Only set credentials if available (SSO mode)
     // Profile mode will use AWS SDK's default credential chain
