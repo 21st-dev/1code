@@ -20,6 +20,7 @@ import { createRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../../ollama"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
+import { systemPromptExtensions } from "../../system-prompt-extensions"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -925,6 +926,12 @@ export const claudeRouter = router({
               })
             }
 
+            // Build system prompt extensions with workspace context
+            const promptExtensions = systemPromptExtensions.buildExtensions({
+              chatId: input.chatId || null,
+              workspacePath: input.chatId ? `.ii/workspaces/${input.chatId}` : undefined,
+            })
+
             const queryOptions = {
               prompt,
               options: {
@@ -933,6 +940,7 @@ export const claudeRouter = router({
                 systemPrompt: {
                   type: "preset" as const,
                   preset: "claude_code" as const,
+                  append: promptExtensions,
                 },
                 // Register mentioned agents with SDK via options.agents
                 ...(Object.keys(agentsOption).length > 0 && { agents: agentsOption }),

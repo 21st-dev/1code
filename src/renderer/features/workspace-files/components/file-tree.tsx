@@ -62,6 +62,27 @@ export function WorkspaceFileTree({ chatId }: WorkspaceFileTreeProps) {
         <div className="text-xs text-muted-foreground">
           Agents can create documents in this workspace
         </div>
+        <button
+          onClick={() => refetch()}
+          className="mt-2 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Refresh"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+          >
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M3 21v-5h5" />
+          </svg>
+        </button>
       </div>
     )
   }
@@ -115,8 +136,8 @@ function FileTreeNode({ node, depth, chatId }: FileTreeNodeProps) {
   const setDocumentsOpen = useSetAtom(documentsPanelOpenAtomFamily(chatId))
   const isExpanded = expanded.has(node.path)
 
-  // tRPC mutation to read file
-  const readFileMutation = trpc.workspaceFiles.readFile.useMutation()
+  // tRPC utils for manual query execution
+  const utils = trpc.useUtils()
 
   const handleClick = async () => {
     if (node.type === "folder") {
@@ -131,7 +152,7 @@ function FileTreeNode({ node, depth, chatId }: FileTreeNodeProps) {
     } else {
       // Read and open file
       try {
-        const result = await readFileMutation.mutateAsync({
+        const result = await utils.workspaceFiles.readFile.fetch({
           chatId,
           filePath: node.path,
         })

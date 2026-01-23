@@ -94,12 +94,16 @@ export function AgentsLayout() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
 
-  // Documents panel state
+  // Get parent chat ID from sub-chat store for workspace context
+  const parentChatId = useAgentSubChatStore((state) => state.chatId)
+
+  // Documents panel state - use parent chat ID for workspace context
+  const effectiveChatId = parentChatId || selectedChatId || ""
   const documentsOpen = useAtomValue(
-    documentsPanelOpenAtomFamily(selectedChatId ?? "")
+    documentsPanelOpenAtomFamily(effectiveChatId)
   )
   const setDocumentsOpen = useSetAtom(
-    documentsPanelOpenAtomFamily(selectedChatId ?? "")
+    documentsPanelOpenAtomFamily(effectiveChatId)
   )
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
@@ -294,7 +298,7 @@ export function AgentsLayout() {
               className="overflow-hidden bg-background border-l"
               style={{ borderLeftWidth: "0.5px" }}
             >
-              <WorkspaceDocumentViewer chatId={selectedChatId} />
+              <WorkspaceDocumentViewer chatId={effectiveChatId} />
             </ResizableSidebar>
           )}
         </div>
