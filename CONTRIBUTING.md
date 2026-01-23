@@ -13,9 +13,9 @@ bun run package:mac  # Create distributable
 
 ## Open Source vs Hosted Version
 
-This is the open-source version of KCode. Some features require the hosted backend at 1code.dev:
+This is the open-source version of kCode. Some features require the hosted backend:
 
-| Feature | Open Source | Hosted (1code.dev) |
+| Feature | Open Source | Hosted |
 |---------|-------------|-------------------|
 | Local AI chat | Yes | Yes |
 | Claude Code integration | Yes | Yes |

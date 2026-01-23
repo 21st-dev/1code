@@ -36,12 +36,12 @@ export function AgentsHelpPopover({
     {
       icon: RoadmapIcon,
       label: "Roadmap",
-      onClick: () => window.open("https://agentsby21st.featurebase.app/roadmap", "_blank"),
+      onClick: () => window.open("https://github.com/anthropics/claude-code/issues", "_blank"),
     },
     {
       icon: TicketIcon,
       label: "Feature Request",
-      onClick: () => window.open("https://agentsby21st.featurebase.app", "_blank"),
+      onClick: () => window.open("https://github.com/anthropics/claude-code/issues", "_blank"),
     },
   ]
 

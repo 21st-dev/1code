@@ -11,7 +11,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 
 interface PreviewUrlInputProps {
-  /** The base host (e.g., "sandbox-3000.21st.sh") */
+  /** The base host (e.g., "localhost:3000") */
   baseHost: string | null
   /** Current path (e.g., "/dashboard") */
   currentPath: string
@@ -121,7 +121,7 @@ export function PreviewUrlInput({
         const url = new URL(input)
         newPath = url.pathname + url.search + url.hash
       } else if (input.includes(".") && input.includes("/")) {
-        // It's host + path like "sandbox-3000.21st.sh/some/path"
+        // It's host + path like "localhost:3000/some/path"
         const slashIndex = input.indexOf("/")
         newPath = input.slice(slashIndex)
       } else if (input.startsWith("/")) {

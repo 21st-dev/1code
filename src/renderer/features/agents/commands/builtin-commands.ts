@@ -50,7 +50,7 @@ Please think step by step and explain your reasoning thoroughly.`,
 
 Your task:
 1. Analyze the project to understand what's needed to set up a working copy
-2. Create the file .1code/worktree.json with setup commands
+2. Create the file .kcode/worktree.json with setup commands
 
 The goal is to reproduce the EXACT same working state as the original repo in the new worktree.
 
@@ -61,7 +61,7 @@ Rules:
 - Use $ROOT_WORKTREE_PATH to reference the main repo path
 - Don't include build steps unless absolutely necessary for the project to work
 
-Example output for .1code/worktree.json:
+Example output for .kcode/worktree.json:
 {
   "setup-worktree": [
     "bun install",
@@ -70,7 +70,7 @@ Example output for .1code/worktree.json:
   ]
 }
 
-Now analyze this project and create .1code/worktree.json with the appropriate setup commands.`,
+Now analyze this project and create .kcode/worktree.json with the appropriate setup commands.`,
 }
 
 /**

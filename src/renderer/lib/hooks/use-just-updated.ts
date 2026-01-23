@@ -52,7 +52,7 @@ export function useJustUpdated() {
     if (api) {
       // Link to changelog with anchor to current version
       const version = justUpdatedVersion ? `#v${justUpdatedVersion}` : ""
-      api.openExternal(`https://1code.dev/changelog${version}`)
+      api.openExternal(`https://kcode.kosal.io/changelog${version}`)
     }
     dismissJustUpdated()
   }, [justUpdatedVersion, dismissJustUpdated])

@@ -136,7 +136,7 @@ export function UpdateBanner() {
 
   const handleOpenChangelog = () => {
     // Open changelog URL
-    window.desktopApi?.openExternal("https://1code.dev/changelog")
+    window.desktopApi?.openExternal("https://kcode.kosal.io/changelog")
     // Dismiss the banner
     if (isMocking) {
       setMockStatus("dismissed")

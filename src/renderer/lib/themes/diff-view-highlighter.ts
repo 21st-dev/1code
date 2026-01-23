@@ -24,8 +24,8 @@ const SHIKI_THEMES: BundledTheme[] = [
  * Map our custom theme IDs to Shiki bundled themes
  */
 const THEME_TO_SHIKI_MAP: Record<string, BundledTheme> = {
-  "21st-dark": "github-dark",
-  "21st-light": "github-light",
+  "kcode-dark": "github-dark",
+  "kcode-light": "github-light",
   "claude-dark": "github-dark",
   "claude-light": "github-light",
   "vesper-dark": "vesper",
@@ -87,7 +87,7 @@ export type DiffHighlighter = {
 }
 
 // Current theme state - updated by the component
-let currentThemeId: string = "21st-dark"
+let currentThemeId: string = "kcode-dark"
 
 /**
  * Set the current theme ID for highlighting

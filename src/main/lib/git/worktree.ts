@@ -906,7 +906,7 @@ export async function createWorktreeForChat(
 		const baseBranch = selectedBaseBranch || await getDefaultBranch(projectPath);
 
 		const branch = generateBranchName();
-		const worktreesDir = join(process.env.HOME || "", ".21st", "worktrees");
+		const worktreesDir = join(process.env.HOME || "", ".kcode", "worktrees");
 		const worktreePath = join(worktreesDir, projectId, chatId);
 
 		await createWorktree(projectPath, branch, worktreePath, `origin/${baseBranch}`);

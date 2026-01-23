@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Sync desktop app to public 1code repository
+# Sync desktop app to public kcode repository
 # Usage: ./scripts/sync-to-public.sh
 #
 # This script:
@@ -14,10 +14,11 @@ ROOT_DIR="$(cd "$DESKTOP_DIR/../.." && pwd)"
 VERSION=$(node -p "require('$DESKTOP_DIR/package.json').version")
 TAG="v$VERSION"
 
-PUBLIC_REPO="git@github.com:21st-dev/1code.git"
-PUBLIC_REPO_HTTPS="https://github.com/21st-dev/1code"
-PRIVATE_REPO="21st-dev/21st"
-TEMP_DIR="/tmp/1code-sync-$$"
+# TODO: Update these to your repository URLs
+PUBLIC_REPO="git@github.com:kosal-io/kcode.git"
+PUBLIC_REPO_HTTPS="https://github.com/kosal-io/kcode"
+PRIVATE_REPO="kosal-io/kcode"
+TEMP_DIR="/tmp/kcode-sync-$$"
 
 echo "🔄 Syncing desktop app to public repository..."
 echo "   Version: $VERSION"
@@ -31,7 +32,7 @@ RELEASE_NOTES=$(gh release view "$TAG" --repo "$PRIVATE_REPO" --json body -q '.b
 if [ -z "$RELEASE_NOTES" ]; then
     echo "⚠️  No release found for $TAG in private repo"
     echo "   Please create a release in the private repo first:"
-    echo "   gh release create $TAG --title \"KCode $TAG\" --notes \"...\""
+    echo "   gh release create $TAG --title \"kCode $TAG\" --notes \"...\""
     echo ""
     read -p "Continue without release notes? (y/N) " -n 1 -r
     echo
@@ -106,7 +107,7 @@ if gh release view "$TAG" --repo "$PUBLIC_REPO_HTTPS" &>/dev/null; then
     echo "   Release $TAG already exists, updating..."
     gh release edit "$TAG" \
         --repo "$PUBLIC_REPO_HTTPS" \
-        --title "KCode $TAG" \
+        --title "kCode $TAG" \
         --notes "$RELEASE_NOTES"
 else
     echo "   Creating new release $TAG..."
@@ -116,7 +117,7 @@ else
 
     gh release create "$TAG" \
         --repo "$PUBLIC_REPO_HTTPS" \
-        --title "KCode $TAG" \
+        --title "kCode $TAG" \
         --notes "$RELEASE_NOTES"
 fi
 

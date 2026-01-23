@@ -851,7 +851,7 @@ export const chatsRouter = router({
         const authManager = getAuthManager()
         const token = await authManager.getValidToken()
         // Use localhost in dev, production otherwise
-        const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://21st.dev"
+        const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://api.kosal.io"
 
         if (!token) {
           apiError = "No auth token available"
@@ -953,7 +953,7 @@ export const chatsRouter = router({
         const authManager = getAuthManager()
         const token = await authManager.getValidToken()
         // Always use production API for name generation
-        const apiUrl = "https://21st.dev"
+        const apiUrl = "https://api.kosal.io"
 
         console.log(
           "[generateSubChatName] Calling API with token:",

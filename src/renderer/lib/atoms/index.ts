@@ -401,13 +401,57 @@ export type VSCodeFullTheme = {
 }
 
 /**
+ * Migration map for renamed theme IDs
+ * Maps old theme IDs to new ones for backward compatibility
+ */
+const THEME_ID_MIGRATIONS: Record<string, string> = {
+  "21st-dark": "kcode-dark",
+  "21st-light": "kcode-light",
+}
+
+/**
+ * Migrate old theme ID to new one if needed
+ */
+function migrateThemeId(themeId: string | null): string | null {
+  if (themeId === null) return null
+  return THEME_ID_MIGRATIONS[themeId] ?? themeId
+}
+
+/**
+ * Custom storage for theme IDs that handles migration
+ */
+const createThemeStorage = <T extends string | null>(defaultValue: T) => ({
+  getItem: (key: string, initialValue: T): T => {
+    try {
+      const stored = localStorage.getItem(key)
+      if (stored === null) return initialValue
+      const parsed = JSON.parse(stored) as T
+      const migrated = migrateThemeId(parsed as string | null) as T
+      // If migrated, update localStorage
+      if (migrated !== parsed) {
+        localStorage.setItem(key, JSON.stringify(migrated))
+      }
+      return migrated
+    } catch {
+      return initialValue
+    }
+  },
+  setItem: (key: string, value: T): void => {
+    localStorage.setItem(key, JSON.stringify(value))
+  },
+  removeItem: (key: string): void => {
+    localStorage.removeItem(key)
+  },
+})
+
+/**
  * Selected full theme ID
  * When null, uses system light/dark mode with the themes specified in systemLightThemeIdAtom/systemDarkThemeIdAtom
  */
 export const selectedFullThemeIdAtom = atomWithStorage<string | null>(
   "preferences:selected-full-theme-id",
   null, // null means use system default
-  undefined,
+  createThemeStorage<string | null>(null),
   { getOnInit: true },
 )
 
@@ -416,8 +460,8 @@ export const selectedFullThemeIdAtom = atomWithStorage<string | null>(
  */
 export const systemLightThemeIdAtom = atomWithStorage<string>(
   "preferences:system-light-theme-id",
-  "21st-light", // Default light theme
-  undefined,
+  "kcode-light", // Default light theme
+  createThemeStorage<string>("kcode-light"),
   { getOnInit: true },
 )
 
@@ -426,8 +470,8 @@ export const systemLightThemeIdAtom = atomWithStorage<string>(
  */
 export const systemDarkThemeIdAtom = atomWithStorage<string>(
   "preferences:system-dark-theme-id",
-  "21st-dark", // Default dark theme
-  undefined,
+  "kcode-dark", // Default dark theme
+  createThemeStorage<string>("kcode-dark"),
   { getOnInit: true },
 )
 
@@ -534,7 +578,7 @@ export const billingMethodAtom = atomWithStorage<BillingMethod>(
 )
 
 // Whether user has completed Anthropic OAuth during onboarding
-// This is used to show the onboarding screen after 21st.dev sign-in
+// This is used to show the onboarding screen after sign-in
 // Reset on logout
 export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:anthropic-completed",
@@ -580,7 +624,7 @@ export type SessionInfo = {
 // Persisted to localStorage so MCP tools are visible after page refresh
 // Updated when a new chat session starts
 export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
-  "21st-session-info",
+  "kcode-session-info",
   null,
   undefined,
   { getOnInit: true },
