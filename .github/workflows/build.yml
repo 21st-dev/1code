@@ -24,6 +24,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install setuptools (for distutils)
+        run: pip install setuptools
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -34,6 +42,11 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY: ${{ secrets.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY }}
+          MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL }}
 
       - name: Package macOS
         run: bun run package:mac
@@ -78,6 +91,11 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY: ${{ secrets.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY }}
+          MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL }}
 
       - name: Package Windows
         run: bun run package:win
@@ -98,6 +116,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install setuptools (for distutils)
+        run: pip install setuptools
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -108,6 +134,11 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY: ${{ secrets.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY }}
+          MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL }}
 
       - name: Package Linux
         run: bun run package:linux
