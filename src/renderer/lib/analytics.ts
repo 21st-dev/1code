@@ -1,5 +1,5 @@
 /**
- * PostHog analytics for 1Code Desktop - Renderer Process
+ * PostHog analytics for KCode Desktop - Renderer Process
  * Uses PostHog JS SDK for client-side tracking
  */
 

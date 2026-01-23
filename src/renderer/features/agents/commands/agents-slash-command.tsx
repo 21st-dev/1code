@@ -24,6 +24,13 @@ import {
   ShieldCheck,
   Eye,
   FolderGit2,
+  HelpCircle,
+  Settings,
+  Bug,
+  FileCode,
+  Brain,
+  Bookmark,
+  Coins,
 } from "lucide-react"
 import type { SlashCommandOption, SlashTriggerPayload } from "./types"
 import {
@@ -40,6 +47,20 @@ function getCommandIcon(commandName: string) {
       return PlanIcon
     case "agent":
       return AgentIcon
+    case "help":
+      return HelpCircle
+    case "config":
+      return Settings
+    case "bug":
+      return Bug
+    case "cost":
+      return Coins
+    case "init":
+      return FileCode
+    case "memory":
+      return Bookmark
+    case "think":
+      return Brain
     case "review":
       return Eye
     case "pr-comments":

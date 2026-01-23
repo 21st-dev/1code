@@ -1,0 +1,348 @@
+# kcode Web App Migration Plan
+
+## Overview
+
+Convert kcode from an Electron desktop app to a **Multi-user SaaS web application** with GitHub OAuth integration and shared platform API keys.
+
+## Requirements Summary
+
+| Requirement | Decision |
+|-------------|----------|
+| Deployment Model | Multi-user SaaS |
+| Project Access | GitHub OAuth (browse & clone repos) |
+| API Keys | Shared platform keys (you provide Azure Foundry access) |
+| Terminal | Not needed (simplifies architecture) |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    BROWSER (React Frontend)                     │
+│  ┌───────────────┐ ┌────────────┐ ┌─────────────────────────┐  │
+│  │ React 19 UI   │ │ Jotai/     │ │ tRPC Client            │  │
+│  │ (95% reused)  │ │ Zustand    │ │ (httpLink + wsLink)    │  │
+│  └───────────────┘ └────────────┘ └─────────────────────────┘  │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ HTTPS / WebSocket
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    BACKEND (Node.js + Fastify)                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │              tRPC Server (HTTP + WebSocket)                 ││
+│  └─────────────────────────────────────────────────────────────┘│
+│           │              │              │              │        │
+│           ▼              ▼              ▼              ▼        │
+│  ┌──────────────┐ ┌────────────┐ ┌───────────┐ ┌────────────┐  │
+│  │ Auth Service │ │ Claude     │ │ GitHub    │ │ File       │  │
+│  │ (Sessions +  │ │ Executor   │ │ Service   │ │ Service    │  │
+│  │  GitHub OAuth)│ │ (SDK spawn)│ │ (API)     │ │            │  │
+│  └──────────────┘ └────────────┘ └───────────┘ └────────────┘  │
+│           │              │              │              │        │
+│           ▼              ▼              ▼              ▼        │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │              PostgreSQL (Multi-tenant DB)                   ││
+│  │  users | projects | chats | sub_chats | sessions            ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                            │                                    │
+│                            ▼                                    │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │         File System (Per-user workspaces)                   ││
+│  │         /data/workspaces/{userId}/{projectId}/              ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| Frontend | React 19, Vite | Reuse 95% of renderer code |
+| State | Jotai, Zustand, React Query | 100% compatible |
+| Transport | tRPC (httpBatchLink + wsLink) | Replace ipcLink |
+| Backend | Fastify + @trpc/server | High performance |
+| Database | PostgreSQL + Drizzle ORM | Multi-tenant |
+| Auth | Passport.js + GitHub OAuth | Session-based |
+| Real-time | WebSocket (ws) | Claude streaming |
+| File Storage | Local filesystem or S3 | Per-user isolation |
+
+---
+
+## Project Structure
+
+```
+kcode-web/
+├── apps/
+│   ├── web/                      # React frontend (from src/renderer)
+│   │   ├── src/
+│   │   │   ├── features/         # Reuse from src/renderer/features
+│   │   │   ├── components/       # Reuse from src/renderer/components
+│   │   │   ├── lib/
+│   │   │   │   ├── trpc.ts       # Updated: httpLink + wsLink
+│   │   │   │   └── auth.ts       # New: auth utilities
+│   │   │   └── ...
+│   │   └── vite.config.ts
+│   │
+│   └── server/                   # Node.js backend (from src/main)
+│       ├── src/
+│       │   ├── index.ts          # Fastify entry point
+│       │   ├── trpc/
+│       │   │   ├── router.ts     # Main router
+│       │   │   └── context.ts    # Request context
+│       │   ├── routers/          # Port from src/main/lib/trpc/routers
+│       │   │   ├── claude.ts
+│       │   │   ├── projects.ts
+│       │   │   ├── chats.ts
+│       │   │   ├── files.ts
+│       │   │   └── github.ts     # New: GitHub API integration
+│       │   ├── auth/
+│       │   │   ├── session.ts
+│       │   │   └── github.ts     # GitHub OAuth
+│       │   ├── claude/
+│       │   │   ├── executor.ts   # Claude CLI spawning
+│       │   │   └── stream.ts     # WebSocket streaming
+│       │   ├── db/
+│       │   │   ├── index.ts      # PostgreSQL connection
+│       │   │   └── schema.ts     # Multi-tenant schema
+│       │   └── services/
+│       │       ├── github.ts     # GitHub API client
+│       │       └── workspace.ts  # File management
+│       └── Dockerfile
+│
+├── packages/
+│   └── shared/                   # Shared types
+│       └── src/
+│           └── types.ts
+│
+├── docker-compose.yml
+├── turbo.json
+└── package.json
+```
+
+---
+
+## Implementation Phases
+
+### Phase 1: Backend Foundation (Week 1-2)
+
+**1.1 Project Setup**
+- Initialize monorepo with Turborepo
+- Setup Fastify server with TypeScript
+- Configure PostgreSQL + Drizzle ORM
+- Create multi-tenant database schema
+
+**1.2 Authentication**
+- Implement session management (secure cookies)
+- GitHub OAuth flow (passport-github2)
+- User registration/login endpoints
+- Protected route middleware
+
+**Key Files to Create:**
+```
+apps/server/src/index.ts
+apps/server/src/auth/session.ts
+apps/server/src/auth/github.ts
+apps/server/src/db/schema.ts
+```
+
+### Phase 2: tRPC Migration (Week 2)
+
+**2.1 Server-side tRPC**
+- Port routers from `src/main/lib/trpc/routers/`
+- Add user context to all procedures
+- Setup WebSocket adapter for subscriptions
+
+**2.2 Client-side tRPC**
+- Replace `ipcLink` with `httpBatchLink` + `wsLink`
+- Configure CORS and credentials
+- Update subscription handling
+
+**Key Files to Modify:**
+```
+# Port these (add user context):
+src/main/lib/trpc/routers/claude.ts    → apps/server/src/routers/claude.ts
+src/main/lib/trpc/routers/projects.ts  → apps/server/src/routers/projects.ts
+src/main/lib/trpc/routers/chats.ts     → apps/server/src/routers/chats.ts
+src/main/lib/trpc/routers/files.ts     → apps/server/src/routers/files.ts
+
+# Update transport:
+src/renderer/lib/trpc.ts               → apps/web/src/lib/trpc.ts
+```
+
+### Phase 3: GitHub Integration (Week 3)
+
+**3.1 GitHub API Service**
+- List user repositories
+- Clone repository to workspace
+- Fetch file contents via API
+- Commit and push changes
+
+**3.2 Workspace Management**
+- Per-user workspace directories
+- Project isolation
+- File CRUD operations
+
+**Key Files to Create:**
+```
+apps/server/src/services/github.ts
+apps/server/src/services/workspace.ts
+apps/server/src/routers/github.ts
+```
+
+### Phase 4: Claude Integration (Week 3-4)
+
+**4.1 Claude Executor**
+- Port Claude SDK integration
+- Process spawning with user isolation
+- Stream responses via WebSocket
+- Handle Azure Foundry credentials (platform-wide)
+
+**4.2 Token Management**
+- Apply Azure Foundry limits (maxThinkingTokens: 16000, maxOutputTokens: 48000)
+- Rate limiting per user
+- Usage tracking
+
+**Key Files to Port:**
+```
+src/main/lib/trpc/routers/claude.ts  → apps/server/src/routers/claude.ts
+src/main/lib/claude/env.ts           → apps/server/src/claude/env.ts
+```
+
+### Phase 5: Frontend Migration (Week 4-5)
+
+**5.1 Remove Electron Dependencies**
+- Remove `window.desktopApi` calls
+- Replace with tRPC/API calls
+- Remove preload dependencies
+
+**5.2 Update Components**
+- Remove traffic light spacer (macOS)
+- Replace native notifications with Web Notifications API
+- Update platform detection utilities
+
+**Key Files to Modify:**
+```
+# Remove Electron APIs from these:
+src/renderer/features/agents/main/active-chat.tsx
+src/renderer/features/sidebar/agents-sidebar.tsx
+src/renderer/components/dialogs/*.tsx
+
+# Delete:
+src/preload/index.ts
+```
+
+### Phase 6: Deployment (Week 5-6)
+
+**6.1 Containerization**
+- Dockerfile for backend
+- Docker Compose for local dev
+- Environment configuration
+
+**6.2 Cloud Deployment**
+- Frontend: Vercel or Cloudflare Pages
+- Backend: Railway, Render, or Fly.io
+- Database: Neon or Supabase (managed PostgreSQL)
+
+---
+
+## Database Schema Changes
+
+```sql
+-- Add users table
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  github_id TEXT UNIQUE NOT NULL,
+  username TEXT NOT NULL,
+  email TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Add user_id to existing tables
+ALTER TABLE projects ADD COLUMN user_id TEXT REFERENCES users(id);
+ALTER TABLE chats ADD COLUMN user_id TEXT REFERENCES users(id);
+
+-- Add usage tracking
+CREATE TABLE usage (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id),
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  cost_usd DECIMAL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+---
+
+## Security Considerations
+
+1. **Process Isolation**: Each Claude session runs in isolated process
+2. **Workspace Isolation**: Users can only access their own `/data/workspaces/{userId}/`
+3. **API Key Security**: Platform Azure keys stored as env vars, never exposed to clients
+4. **Rate Limiting**: Per-user limits on API calls
+5. **HTTPS Only**: All traffic over TLS
+6. **Session Security**: HttpOnly, Secure, SameSite=Strict cookies
+
+---
+
+## Verification Steps
+
+1. **Auth Flow**: Register → GitHub OAuth → Session created → Dashboard access
+2. **Project Flow**: Connect GitHub → List repos → Clone repo → View files
+3. **Chat Flow**: Create chat → Send message → Claude streams response → Save to DB
+4. **Multi-user**: Two users can't see each other's projects/chats
+
+---
+
+## Estimated Timeline
+
+| Phase | Duration | Dependencies |
+|-------|----------|--------------|
+| 1. Backend Foundation | 1-2 weeks | None |
+| 2. tRPC Migration | 1 week | Phase 1 |
+| 3. GitHub Integration | 1 week | Phase 1, 2 |
+| 4. Claude Integration | 1-2 weeks | Phase 1, 2 |
+| 5. Frontend Migration | 1-2 weeks | Phase 2 |
+| 6. Deployment | 1 week | All phases |
+
+**Total: 6-8 weeks** (single developer)
+
+---
+
+## Key Differences from Desktop App
+
+| Feature | Desktop (Electron) | Web (SaaS) |
+|---------|-------------------|------------|
+| Projects | Local filesystem | GitHub clone to server |
+| Database | SQLite (local) | PostgreSQL (server) |
+| Auth | Azure credentials (local) | GitHub OAuth + sessions |
+| Claude API | User's Azure keys | Platform's Azure keys |
+| Terminal | PTY (node-pty) | Not included |
+| Transport | IPC (trpc-electron) | HTTP/WebSocket |
+| Updates | Auto-updater | Always latest (web) |
+
+---
+
+## What Can Be Reused (95% of Frontend)
+
+### Fully Reusable (No Changes)
+- All React components in `src/renderer/components/ui/`
+- Feature components: chat interface, sidebar, layout
+- State management: Jotai atoms, Zustand stores
+- Tool renderers: diffs, file previews, markdown
+- Styling: Tailwind CSS, all CSS
+
+### Minor Changes Required
+- `src/renderer/lib/trpc.ts` - Replace ipcLink with httpLink
+- Platform detection utilities
+- Remove ~22 files with `window.desktopApi` calls
+
+### Not Reusable (Desktop Only)
+- `src/preload/index.ts` - Electron IPC bridge
+- `src/main/*` - Move to backend server
+- Auto-updater, native menus, traffic lights

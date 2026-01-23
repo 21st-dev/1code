@@ -118,6 +118,7 @@
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^3.0.0",
     "postcss": "^8.5.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.4.5",
     "vite": "^6.3.4"

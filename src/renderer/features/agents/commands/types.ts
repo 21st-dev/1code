@@ -34,6 +34,10 @@ export type BuiltinCommandAction =
   | { type: "plan" }
   | { type: "agent" }
   | { type: "compact" }
+  | { type: "help" }
+  | { type: "config" }
+  | { type: "bug" }
+  | { type: "cost" }
   // Prompt-based commands (send to agent)
   | { type: "review" }
   | { type: "pr-comments" }
@@ -41,6 +45,9 @@ export type BuiltinCommandAction =
   | { type: "security-review" }
   | { type: "commit" }
   | { type: "worktree-setup" }
+  | { type: "init" }
+  | { type: "memory" }
+  | { type: "think" }
 
 // Result of selecting a slash command
 export type SlashCommandSelection =

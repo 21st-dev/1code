@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown, WifiOff } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
@@ -54,6 +54,7 @@ import {
   activeConfigAtom,
   autoOfflineModeAtom,
   showOfflineModeFeaturesAtom,
+  agentsSettingsDialogOpenAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 
@@ -396,6 +397,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Plan mode - global atom
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
 
+  // Settings dialog - for /config command
+  const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
+
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
   const currentChatIdRef = useRef<string | null>(parentChatId)
@@ -550,12 +554,71 @@ export const ChatInputArea = memo(function ChatInputArea({
             // Trigger context compaction
             onCompact()
             break
+          case "help":
+            // Show help by displaying commands list in editor
+            editorRef.current?.setValue(
+              "Available commands:\n" +
+              "/clear - Start a new conversation\n" +
+              "/plan - Switch to Plan mode\n" +
+              "/agent - Switch to Agent mode\n" +
+              "/compact - Compact conversation context\n" +
+              "/config - Open settings\n" +
+              "/cost - Show token usage\n" +
+              "/bug - Report a bug\n" +
+              "/init - Initialize CLAUDE.md\n" +
+              "/memory - Save project info\n" +
+              "/think - Deep thinking mode\n" +
+              "/review - Code review\n" +
+              "/pr-comments - PR review comments\n" +
+              "/release-notes - Generate release notes\n" +
+              "/security-review - Security audit\n" +
+              "/commit - Commit staged changes\n" +
+              "/worktree-setup - Generate worktree config"
+            )
+            break
+          case "config":
+            // Open settings dialog
+            setSettingsDialogOpen(true)
+            break
+          case "bug":
+            // Open GitHub issues page
+            window.open("https://github.com/anthropics/claude-code/issues", "_blank")
+            break
+          case "cost": {
+            // Show token usage for current session
+            const formatTokenCount = (n: number | undefined) => {
+              if (n === undefined || n === null) return "0"
+              return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString()
+            }
+            const formatCost = (n: number | undefined) => {
+              if (n === undefined || n === null) return "$0.00"
+              return `$${n.toFixed(4)}`
+            }
+            const input = messageTokenData?.totalInputTokens ?? 0
+            const output = messageTokenData?.totalOutputTokens ?? 0
+            const cost = messageTokenData?.totalCostUsd ?? 0
+            const total = input + output
+            editorRef.current?.setValue(
+              `Session Token Usage:\n` +
+              `━━━━━━━━━━━━━━━━━━━━\n` +
+              `Input tokens:    ${formatTokenCount(input)}\n` +
+              `Output tokens:   ${formatTokenCount(output)}\n` +
+              `Total tokens:    ${formatTokenCount(total)}\n` +
+              `━━━━━━━━━━━━━━━━━━━━\n` +
+              `Estimated cost:  ${formatCost(cost)}`
+            )
+            break
+          }
           // Prompt-based commands - auto-send to agent
           case "review":
           case "pr-comments":
           case "release-notes":
           case "security-review":
-          case "commit": {
+          case "commit":
+          case "init":
+          case "memory":
+          case "think":
+          case "worktree-setup": {
             const prompt =
               COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
             if (prompt) {
@@ -575,7 +638,7 @@ export const ChatInputArea = memo(function ChatInputArea({
         setTimeout(() => onSend(), 0)
       }
     },
-    [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onCompact, editorRef],
+    [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onCompact, editorRef, setSettingsDialogOpen, messageTokenData],
   )
 
   // Paste handler for images and plain text

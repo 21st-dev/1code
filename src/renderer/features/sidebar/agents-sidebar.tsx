@@ -437,13 +437,13 @@ const AgentChatItem = React.memo(function AgentChatItem({
               : isFocused
                 ? "bg-foreground/5 text-foreground"
                 : // On mobile, no hover effect to prevent double-tap issue
-                  isMobileFullscreen
+                isMobileFullscreen
                   ? "text-muted-foreground"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
             isChecked &&
-              (isMobileFullscreen
-                ? "bg-primary/10"
-                : "bg-primary/10 hover:bg-primary/15"),
+            (isMobileFullscreen
+              ? "bg-primary/10"
+              : "bg-primary/10 hover:bg-primary/15"),
           )}
         >
           <div className="flex items-start gap-2.5">
@@ -979,7 +979,7 @@ const SidebarHeader = memo(function SidebarHeader({
                     </div>
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="text-sm font-medium text-foreground truncate">
-                        1Code
+                        KCode
                       </div>
                     </div>
                     {showOfflineFeatures && (
@@ -1247,7 +1247,7 @@ export function AgentsSidebar({
     email: "demo@example.com",
     name: "Demo User",
   },
-  onSignOut = () => {},
+  onSignOut = () => { },
   onToggleSidebar,
   isMobileFullscreen = false,
   onChatSelect,
@@ -1675,8 +1675,8 @@ export function AgentsSidebar({
 
     const filtered = searchQuery.trim()
       ? agentChats.filter((chat) =>
-          chat.name.toLowerCase().includes(searchQuery.toLowerCase()),
-        )
+        chat.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
       : agentChats
 
     const pinned = filtered.filter((chat) => pinnedChatIds.has(chat.id))
@@ -1815,7 +1815,7 @@ export function AgentsSidebar({
   const workspaceFileStats = useMemo(() => {
     const statsMap = new Map<string, { fileCount: number; additions: number; deletions: number }>()
     if (fileStatsData) {
-      
+
       for (const stat of fileStatsData) {
         statsMap.set(stat.chatId, {
           fileCount: stat.fileCount,

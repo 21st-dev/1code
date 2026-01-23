@@ -16,6 +16,36 @@ export const COMMAND_PROMPTS: Partial<
     "Perform a security audit of the code in the current context. Identify vulnerabilities, security risks, and suggest fixes.",
   commit:
     "Закоммить это аккуратно, не трогая больше ничего. Сделай коммит только для staged изменений, не добавляй никакие другие файлы и не вноси дополнительных изменений.",
+  init: `Initialize a CLAUDE.md file for this project.
+
+Analyze the codebase structure and create a comprehensive CLAUDE.md file that includes:
+1. Project overview - what the project does
+2. Tech stack and dependencies
+3. Key commands (build, test, run, lint)
+4. Architecture overview with folder structure
+5. Important files and their purposes
+6. Code conventions and patterns used
+7. Any environment setup requirements
+
+Make the CLAUDE.md concise but informative, focusing on what an AI assistant needs to know to work effectively with this codebase.`,
+  memory: `I want to save some information about this project for future reference.
+
+Please help me create a memory/note about this project that captures:
+- Key decisions made
+- Important context
+- Patterns or conventions to follow
+- Any gotchas or things to remember
+
+Ask me what specific information I'd like to remember, then format it clearly for future reference.`,
+  think: `I need you to think deeply about this problem before responding.
+
+Take your time to:
+1. Understand the full context and requirements
+2. Consider multiple approaches and their trade-offs
+3. Identify potential edge cases and issues
+4. Form a comprehensive plan before taking action
+
+Please think step by step and explain your reasoning thoroughly.`,
   "worktree-setup": `Create a worktree setup script for this project.
 
 Your task:
@@ -48,7 +78,7 @@ Now analyze this project and create .1code/worktree.json with the appropriate se
  */
 export function isPromptCommand(
   type: BuiltinCommandAction["type"],
-): type is "review" | "pr-comments" | "release-notes" | "security-review" | "commit" | "worktree-setup" {
+): type is "review" | "pr-comments" | "release-notes" | "security-review" | "commit" | "worktree-setup" | "init" | "memory" | "think" {
   return type in COMMAND_PROMPTS
 }
 
@@ -56,6 +86,7 @@ export function isPromptCommand(
  * Built-in slash commands that are handled client-side
  */
 export const BUILTIN_SLASH_COMMANDS: SlashCommandOption[] = [
+  // UI commands
   {
     id: "builtin:clear",
     name: "clear",
@@ -84,7 +115,56 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandOption[] = [
     description: "Compact conversation context to reduce token usage",
     category: "builtin",
   },
+  {
+    id: "builtin:help",
+    name: "help",
+    command: "/help",
+    description: "Show available commands and their descriptions",
+    category: "builtin",
+  },
+  {
+    id: "builtin:config",
+    name: "config",
+    command: "/config",
+    description: "Open settings and configuration",
+    category: "builtin",
+  },
+  {
+    id: "builtin:bug",
+    name: "bug",
+    command: "/bug",
+    description: "Report a bug or issue",
+    category: "builtin",
+  },
+  {
+    id: "builtin:cost",
+    name: "cost",
+    command: "/cost",
+    description: "Show token usage for current session",
+    category: "builtin",
+  },
   // Prompt-based commands
+  {
+    id: "builtin:init",
+    name: "init",
+    command: "/init",
+    description: "Initialize CLAUDE.md for this project",
+    category: "builtin",
+  },
+  {
+    id: "builtin:memory",
+    name: "memory",
+    command: "/memory",
+    description: "Save project information for future reference",
+    category: "builtin",
+  },
+  {
+    id: "builtin:think",
+    name: "think",
+    command: "/think",
+    description: "Ask agent to think deeply before responding",
+    category: "builtin",
+  },
   {
     id: "builtin:review",
     name: "review",

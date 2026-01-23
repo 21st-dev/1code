@@ -1,4 +1,4 @@
-# Contributing to 1Code
+# Contributing to KCode
 
 ## Building from Source
 
@@ -13,7 +13,7 @@ bun run package:mac  # Create distributable
 
 ## Open Source vs Hosted Version
 
-This is the open-source version of 1Code. Some features require the hosted backend at 1code.dev:
+This is the open-source version of KCode. Some features require the hosted backend at 1code.dev:
 
 | Feature | Open Source | Hosted (1code.dev) |
 |---------|-------------|-------------------|

@@ -893,11 +893,50 @@ export function NewChatForm({
               setIsPlanMode(false)
             }
             break
+          case "help":
+            // Show help by displaying commands list in editor
+            editorRef.current?.setValue(
+              "Available commands:\n" +
+              "/clear - Start a new conversation\n" +
+              "/plan - Switch to Plan mode\n" +
+              "/agent - Switch to Agent mode\n" +
+              "/compact - Compact conversation context\n" +
+              "/config - Open settings\n" +
+              "/cost - Show token usage\n" +
+              "/bug - Report a bug\n" +
+              "/init - Initialize CLAUDE.md\n" +
+              "/memory - Save project info\n" +
+              "/think - Deep thinking mode\n" +
+              "/review - Code review\n" +
+              "/pr-comments - PR review comments\n" +
+              "/release-notes - Generate release notes\n" +
+              "/security-review - Security audit\n" +
+              "/commit - Commit staged changes\n" +
+              "/worktree-setup - Generate worktree config"
+            )
+            break
+          case "config":
+            // Open settings dialog
+            setSettingsDialogOpen(true)
+            break
+          case "bug":
+            // Open GitHub issues page
+            window.open("https://github.com/anthropics/claude-code/issues", "_blank")
+            break
+          case "cost":
+            // No token usage in new chat form
+            editorRef.current?.setValue("No token usage yet - start a conversation first.")
+            break
           // Prompt-based commands - auto-send to agent
           case "review":
           case "pr-comments":
           case "release-notes":
-          case "security-review": {
+          case "security-review":
+          case "commit":
+          case "init":
+          case "memory":
+          case "think":
+          case "worktree-setup": {
             const prompt =
               COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
             if (prompt) {
@@ -917,7 +956,7 @@ export function NewChatForm({
         setTimeout(() => handleSend(), 0)
       }
     },
-    [isPlanMode, setIsPlanMode, handleSend],
+    [isPlanMode, setIsPlanMode, handleSend, setSettingsDialogOpen],
   )
 
   // Paste handler for images and plain text
