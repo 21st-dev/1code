@@ -32,16 +32,27 @@ export function AwsBedrockOnboardingPage() {
   const [userCode, setUserCode] = useState("")
   const [verificationUrl, setVerificationUrl] = useState("")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState<string>("")
+  const [selectedRole, setSelectedRole] = useState<string>("")
 
   // Check AWS connection status
   const { data: awsStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery(undefined, {
-    refetchInterval: isAuthenticated ? 2000 : false, // Poll after auth
+    refetchInterval: false,
   })
 
   // Fetch accounts after authentication
   const { data: accounts } = trpc.awsSso.listAccounts.useQuery(undefined, {
     enabled: isAuthenticated,
   })
+
+  // Fetch roles after account selection
+  const { data: roles } = trpc.awsSso.listRoles.useQuery(
+    { accountId: selectedAccount },
+    { enabled: !!selectedAccount }
+  )
+
+  // Get credentials mutation
+  const getCredentialsMutation = trpc.awsSso.getCredentials.useMutation()
 
   // Mutations
   const startDeviceAuthMutation = trpc.awsSso.startDeviceAuth.useMutation()
