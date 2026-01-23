@@ -1947,4 +1947,101 @@ ${prompt}
       console.log(`[refreshMcpServers] Reloaded ${mcpServers.length} servers for ${input.projectPath}`)
       return { mcpServers, projectPath: input.projectPath }
     }),
+
+  /**
+   * Get the current plan file path for a chat session
+   */
+  getPlanFilePath: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string(),
+        subChatId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const { chatId, subChatId } = input
+
+      // Get isolated config directory (same as startAgent)
+      const isolatedConfigDir = path.join(
+        app.getPath("userData"),
+        "claude-sessions",
+        subChatId
+      )
+
+      const plansDir = path.join(isolatedConfigDir, "plans")
+
+      // Check if plans directory exists
+      try {
+        await fs.access(plansDir)
+      } catch {
+        return { planFilePath: null, exists: false }
+      }
+
+      // Find the plan file (should be only one .md file in plans/)
+      const files = await fs.readdir(plansDir)
+      const planFiles = files.filter(f => f.endsWith(".md"))
+
+      if (planFiles.length === 0) {
+        return { planFilePath: null, exists: false }
+      }
+
+      // Return the first plan file found (usually there's only one)
+      const planFileName = planFiles[0]
+      const planFilePath = path.join(plansDir, planFileName)
+
+      try {
+        await fs.access(planFilePath)
+        return {
+          planFilePath,
+          planFileName,
+          exists: true,
+        }
+      } catch {
+        return { planFilePath: null, exists: false }
+      }
+    }),
+
+  /**
+   * Read the current plan file content
+   */
+  readPlanFile: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string(),
+        subChatId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const { chatId, subChatId } = input
+
+      const isolatedConfigDir = path.join(
+        app.getPath("userData"),
+        "claude-sessions",
+        subChatId
+      )
+
+      const plansDir = path.join(isolatedConfigDir, "plans")
+
+      try {
+        await fs.access(plansDir)
+      } catch {
+        throw new Error("No plans directory found for this chat")
+      }
+
+      const files = await fs.readdir(plansDir)
+      const planFiles = files.filter(f => f.endsWith(".md"))
+
+      if (planFiles.length === 0) {
+        throw new Error("No plan file found for this chat")
+      }
+
+      const planFilePath = path.join(plansDir, planFiles[0])
+      const content = await fs.readFile(planFilePath, "utf-8")
+
+      return {
+        content,
+        fileName: planFiles[0],
+        path: planFilePath,
+      }
+    }),
 })

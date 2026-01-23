@@ -17,7 +17,7 @@ export interface FileTreeNode {
 export interface ActiveDocument {
   path: string
   content: string
-  type: "markdown" | "code" | "text"
+  type: "markdown" | "code" | "text" | "todos"
 }
 
 // ============================================

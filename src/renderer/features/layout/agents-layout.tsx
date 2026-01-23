@@ -97,6 +97,7 @@ export function AgentsLayout() {
 
   // Get parent chat ID from sub-chat store for workspace context
   const parentChatId = useAgentSubChatStore((state) => state.chatId)
+  const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
 
   // Documents panel state - use parent chat ID for workspace context
   const effectiveChatId = parentChatId || selectedChatId || ""
@@ -302,7 +303,7 @@ export function AgentsLayout() {
               className="overflow-hidden bg-background border-l"
               style={{ borderLeftWidth: "0.5px" }}
             >
-              <WorkspaceDocumentViewer chatId={effectiveChatId} />
+              <WorkspaceDocumentViewer chatId={effectiveChatId} subChatId={activeSubChatId} />
             </ResizableSidebar>
           )}
         </div>

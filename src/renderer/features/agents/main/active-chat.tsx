@@ -39,6 +39,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   ArrowDown,
   ChevronDown,
+  FileText,
   ListTree,
   TerminalSquare
 } from "lucide-react"
@@ -62,6 +63,7 @@ import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
 import {
   customClaudeConfigAtom,
+  documentsPanelOpenAtomFamily,
   isDesktopAtom, isFullscreenAtom,
   normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
@@ -3962,6 +3964,12 @@ export function ChatView({
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(
     terminalSidebarOpenAtom,
   )
+  // Documents panel state - per-chat
+  const documentsPanelAtom = useMemo(
+    () => documentsPanelOpenAtomFamily(chatId),
+    [chatId],
+  )
+  const [isDocumentsPanelOpen, setIsDocumentsPanelOpen] = useAtom(documentsPanelAtom)
   const [diffStats, setDiffStatsRaw] = useState({
     fileCount: 0,
     additions: 0,
@@ -5622,6 +5630,29 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </TooltipContent>
                     </Tooltip>
                   )}
+                {/* Document button - desktop only */}
+                {!isMobileFullscreen && (
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsDocumentsPanelOpen(!isDocumentsPanelOpen)}
+                        className={cn(
+                          "h-6 w-6 p-0 hover:bg-foreground/10 transition-colors flex-shrink-0 rounded-md ml-2",
+                          isDocumentsPanelOpen ? "text-foreground" : "text-muted-foreground"
+                        )}
+                        aria-label="Toggle documents"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {isDocumentsPanelOpen ? "Close" : "Open"} documents
+                      <Kbd>⌘E</Kbd>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {/* Restore Button - shows when viewing archived workspace (desktop only) */}
                 {!isMobileFullscreen && isArchived && (
                   <Tooltip delayDuration={500}>
