@@ -292,7 +292,7 @@ export function AgentsLayout() {
           {/* Documents Panel (Right) */}
           {selectedChatId && (
             <ResizableSidebar
-              isOpen={documentsOpen && activeDoc !== null}
+              isOpen={documentsOpen}
               onClose={() => setDocumentsOpen(false)}
               widthAtom={documentsPanelWidthAtom}
               minWidth={400}

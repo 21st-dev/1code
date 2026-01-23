@@ -13,6 +13,7 @@ import { useAgentSubChatStore } from "../../../lib/stores/sub-chat-store"
 import { IconArrowRight } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
 import type { TodoItem } from "../../agents/ui/agent-todo-tool"
+import { appStore } from "../../../lib/jotai-store"
 
 // Todo status icon component
 const TodoStatusIcon = ({ status }: { status: TodoItem["status"] }) => {
@@ -172,7 +173,10 @@ export function WorkspaceDocumentViewer({ chatId, subChatId: propSubChatId }: Wo
     () => currentTodosAtomFamily(subChatId || "default"),
     [subChatId],
   )
-  const todoState = useAtomValue(todosAtom)
+  // Always call the hook (Rules of Hooks), but we only use the value when displaying todos
+  const todoStateFromAtom = useAtomValue(todosAtom)
+  // Use the atom value when displaying todos, otherwise use empty state
+  const todoState = activeDoc?.type === "todos" ? todoStateFromAtom : { todos: [], creationToolCallId: null }
 
   const handleOpenTodo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -186,8 +190,12 @@ export function WorkspaceDocumentViewer({ chatId, subChatId: propSubChatId }: Wo
       return
     }
 
+    // Read the current todo state from the store to check if todos exist
+    const todosAtomTemp = currentTodosAtomFamily(subChatId)
+    const currentTodoState = appStore.get(todosAtomTemp)
+
     // Check if there are any todos
-    if (!todoState.todos || todoState.todos.length === 0) {
+    if (!currentTodoState?.todos || currentTodoState.todos.length === 0) {
       setActiveDoc({
         path: "Todo List",
         content: "No todo list found for current chat.\n\nThe agent hasn't created a todo list yet.",
@@ -202,7 +210,7 @@ export function WorkspaceDocumentViewer({ chatId, subChatId: propSubChatId }: Wo
       content: "", // Not used for todos
       type: "todos" as any, // Special type to render todos
     })
-  }, [subChatId, todoState, setActiveDoc])
+  }, [subChatId, setActiveDoc])
 
   return (
     <div className="flex h-full flex-col bg-background">
