@@ -5,12 +5,11 @@ import {
   ipcMain,
   app,
   clipboard,
-  session,
 } from "electron"
 import { join } from "path"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
-import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
+import { getAuthManager, getBaseUrl } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 
 // Register IPC handlers for window operations (only once)
@@ -137,7 +136,7 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
       const parsed = new URL(senderUrl)
       if (parsed.protocol === "file:") return true
       const hostname = parsed.hostname.toLowerCase()
-      const trusted = ["21st.dev", "localhost", "127.0.0.1"]
+      const trusted = ["kosal.io", "code.kosal.io", "localhost", "127.0.0.1"]
       return trusted.some((h) => hostname === h || hostname.endsWith(`.${h}`))
     } catch {
       return false
@@ -199,25 +198,6 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
 // Current window reference
 let currentWindow: BrowserWindow | null = null
 
-/**
- * Show login page
- */
-export function showLoginPage(): void {
-  if (!currentWindow) return
-  console.log("[Main] Showing login page")
-
-  // In dev mode, login.html is in src/renderer, not out/renderer
-  if (process.env.ELECTRON_RENDERER_URL) {
-    // Dev mode: load from source directory
-    const loginPath = join(app.getAppPath(), "src/renderer/login.html")
-    console.log("[Main] Loading login from:", loginPath)
-    currentWindow.loadFile(loginPath)
-  } else {
-    // Production: load from built output
-    currentWindow.loadFile(join(__dirname, "../renderer/login.html"))
-  }
-}
-
 // Singleton IPC handler (prevents duplicate handlers on macOS window recreation)
 let ipcHandler: ReturnType<typeof createIPCHandler> | null = null
 
@@ -242,7 +222,7 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 500, // Allow narrow mobile-like mode
     minHeight: 600,
     show: false,
-    title: "1Code",
+    title: "kcode",
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#09090b" : "#ffffff",
     // hiddenInset shows native traffic lights inset in the window
     // Start with traffic lights off-screen (custom ones shown in normal mode)
@@ -323,35 +303,23 @@ export function createMainWindow(): BrowserWindow {
     currentWindow = null
   })
 
-  // Load the renderer - check auth first
+  // Load the renderer - always load main app, settings modal handles Azure config
   const devServerUrl = process.env.ELECTRON_RENDERER_URL
   const authManager = getAuthManager()
 
-  console.log("[Main] ========== AUTH CHECK ==========")
+  console.log("[Main] ========== CONFIG CHECK ==========")
   console.log("[Main] AuthManager exists:", !!authManager)
-  const isAuth = authManager.isAuthenticated()
-  console.log("[Main] isAuthenticated():", isAuth)
-  const user = authManager.getUser()
-  console.log("[Main] getUser():", user ? user.email : "null")
+  const isConfigured = authManager.isAuthenticated()
+  console.log("[Main] Azure configured:", isConfigured)
   console.log("[Main] ================================")
 
-  if (isAuth) {
-    console.log("[Main] ✓ User authenticated, loading app")
-    if (devServerUrl) {
-      window.loadURL(devServerUrl)
-      window.webContents.openDevTools()
-    } else {
-      window.loadFile(join(__dirname, "../renderer/index.html"))
-    }
+  // Always load the main app - it will show settings modal if not configured
+  console.log("[Main] Loading app...")
+  if (devServerUrl) {
+    window.loadURL(devServerUrl)
+    window.webContents.openDevTools()
   } else {
-    console.log("[Main] ✗ Not authenticated, showing login page")
-    // In dev mode, login.html is in src/renderer
-    if (devServerUrl) {
-      const loginPath = join(app.getAppPath(), "src/renderer/login.html")
-      window.loadFile(loginPath)
-    } else {
-      window.loadFile(join(__dirname, "../renderer/login.html"))
-    }
+    window.loadFile(join(__dirname, "../renderer/index.html"))
   }
 
   // Ensure traffic lights are visible after page load (covers reload/Cmd+R case)

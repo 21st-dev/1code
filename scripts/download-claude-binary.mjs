@@ -130,24 +130,21 @@ function calculateSha256(filePath) {
  * Get latest version from manifest
  */
 async function getLatestVersion() {
-  // Try to fetch version list or use known latest
-  // For now, we'll fetch the manifest for a known version
   console.log("Fetching latest Claude Code version...")
 
   try {
-    // The install script endpoint returns version info
-    const response = await fetch("https://claude.ai/install.sh")
-    const script = await response.text()
-    const versionMatch = script.match(/CLAUDE_CODE_VERSION="([^"]+)"/)
-    if (versionMatch) {
-      return versionMatch[1]
+    // Fetch the "latest" file from GCS which contains the current stable version
+    const response = await fetch(`${DIST_BASE}/latest`)
+    const version = (await response.text()).trim()
+    if (version && /^\d+\.\d+\.\d+$/.test(version)) {
+      return version
     }
   } catch {
     // Fallback
   }
 
   // Fallback to known version
-  return "2.1.5"
+  return "2.1.17"
 }
 
 /**

@@ -1,253 +1,80 @@
-import { AuthStore, AuthData, AuthUser } from "./auth-store"
-import { app, BrowserWindow } from "electron"
-
-// Get API URL - in packaged app always use production, in dev allow override
-function getApiBaseUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
-}
-
+/**
+ * Simplified Auth Manager for Microsoft Foundry Claude credentials
+ * Reads configuration from environment variables (via import.meta.env for electron-vite)
+ * See: https://code.claude.com/docs/en/microsoft-foundry
+ */
 export class AuthManager {
-  private store: AuthStore
-  private refreshTimer?: NodeJS.Timeout
-  private isDev: boolean
-  private onTokenRefresh?: (authData: AuthData) => void
-
-  constructor(isDev: boolean = false) {
-    this.store = new AuthStore(app.getPath("userData"))
-    this.isDev = isDev
-
-    // Schedule refresh if already authenticated
-    if (this.store.isAuthenticated()) {
-      this.scheduleRefresh()
-    }
+  constructor(_isDev: boolean = false) {
+    // No-op - we use environment variables now
   }
 
   /**
-   * Set callback to be called when token is refreshed
-   * This allows the main process to update cookies when tokens change
+   * Check if Foundry credentials are configured via environment variables
    */
-  setOnTokenRefresh(callback: (authData: AuthData) => void): void {
-    this.onTokenRefresh = callback
-  }
+  isAuthenticated(): boolean {
+    // In electron-vite, MAIN_VITE_ prefixed vars are available via import.meta.env
+    const useFoundry = import.meta.env.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY
+    const resource = import.meta.env.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE
+    const apiKey = import.meta.env.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY
 
-  private getApiUrl(): string {
-    return getApiBaseUrl()
-  }
+    console.log("[AuthManager] isAuthenticated() check:")
+    console.log("[AuthManager]   MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY:", useFoundry || "(not set)")
+    console.log("[AuthManager]   MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE:", resource || "(not set)")
+    console.log("[AuthManager]   MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY:", apiKey ? `${apiKey.slice(0, 8)}...` : "(not set)")
 
-  /**
-   * Exchange auth code for session tokens
-   * Called after receiving code via deep link
-   */
-  async exchangeCode(code: string): Promise<AuthData> {
-    const response = await fetch(`${this.getApiUrl()}/api/auth/desktop/exchange`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code,
-        deviceInfo: this.getDeviceInfo(),
-      }),
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }))
-      throw new Error(error.error || `Exchange failed: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    const authData: AuthData = {
-      token: data.token,
-      refreshToken: data.refreshToken,
-      expiresAt: data.expiresAt,
-      user: data.user,
-    }
-
-    this.store.save(authData)
-    this.scheduleRefresh()
-
-    return authData
+    const result = !!(useFoundry && resource && apiKey)
+    console.log("[AuthManager]   Result:", result ? "✓ Authenticated (Foundry)" : "✗ Not authenticated")
+    return result
   }
 
   /**
-   * Get device info for session tracking
+   * Get Foundry configuration from environment variables
    */
-  private getDeviceInfo(): string {
-    const platform = process.platform
-    const arch = process.arch
-    const version = app.getVersion()
-    return `21st Desktop ${version} (${platform} ${arch})`
-  }
+  getConfig(): { resource: string; apiKey: string; model: string } | null {
+    const useFoundry = import.meta.env.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY
+    const resource = import.meta.env.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE
+    const apiKey = import.meta.env.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY
+    const model = import.meta.env.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL
 
-  /**
-   * Get a valid token, refreshing if necessary
-   */
-  async getValidToken(): Promise<string | null> {
-    if (!this.store.isAuthenticated()) {
+    if (!useFoundry || !resource || !apiKey) {
       return null
     }
 
-    if (this.store.needsRefresh()) {
-      await this.refresh()
-    }
-
-    return this.store.getToken()
+    return { resource, apiKey, model: model || "claude-opus-4-5" }
   }
 
   /**
-   * Refresh the current session
+   * Get user info (stub for compatibility - returns null since we use API keys)
    */
-  async refresh(): Promise<boolean> {
-    const refreshToken = this.store.getRefreshToken()
-    if (!refreshToken) {
-      console.warn("No refresh token available")
-      return false
-    }
-
-    try {
-      const response = await fetch(`${this.getApiUrl()}/api/auth/desktop/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      })
-
-      if (!response.ok) {
-        console.error("Refresh failed:", response.status)
-        // If refresh fails, clear auth and require re-login
-        if (response.status === 401) {
-          this.logout()
-        }
-        return false
-      }
-
-      const data = await response.json()
-
-      const authData: AuthData = {
-        token: data.token,
-        refreshToken: data.refreshToken,
-        expiresAt: data.expiresAt,
-        user: data.user,
-      }
-
-      this.store.save(authData)
-      this.scheduleRefresh()
-
-      // Notify callback about token refresh (so cookie can be updated)
-      if (this.onTokenRefresh) {
-        this.onTokenRefresh(authData)
-      }
-
-      return true
-    } catch (error) {
-      console.error("Refresh error:", error)
-      return false
-    }
+  getUser(): null {
+    return null
   }
 
   /**
-   * Schedule token refresh before expiration
-   */
-  private scheduleRefresh(): void {
-    if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer)
-    }
-
-    const authData = this.store.load()
-    if (!authData) return
-
-    const expiresAt = new Date(authData.expiresAt).getTime()
-    const now = Date.now()
-
-    // Refresh 5 minutes before expiration
-    const refreshIn = Math.max(0, expiresAt - now - 5 * 60 * 1000)
-
-    this.refreshTimer = setTimeout(() => {
-      this.refresh()
-    }, refreshIn)
-
-    console.log(`Scheduled token refresh in ${Math.round(refreshIn / 1000 / 60)} minutes`)
-  }
-
-  /**
-   * Check if user is authenticated
-   */
-  isAuthenticated(): boolean {
-    return this.store.isAuthenticated()
-  }
-
-  /**
-   * Get current user
-   */
-  getUser(): AuthUser | null {
-    return this.store.getUser()
-  }
-
-  /**
-   * Get current auth data
-   */
-  getAuth(): AuthData | null {
-    return this.store.load()
-  }
-
-  /**
-   * Logout and clear stored credentials
+   * Logout - no-op since we use env vars
    */
   logout(): void {
-    if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer)
-      this.refreshTimer = undefined
-    }
-    this.store.clear()
+    console.log("[Auth] Logout called but using env vars - no action needed")
   }
 
-  /**
-   * Start auth flow by opening browser
-   */
-  startAuthFlow(mainWindow: BrowserWindow | null): void {
-    const { shell } = require("electron")
-
-    let authUrl = `${this.getApiUrl()}/auth/desktop?auto=true`
-
-    // In dev mode, use localhost callback (we run HTTP server on port 21321)
-    // Also pass the protocol so web knows which deep link to use as fallback
-    if (this.isDev) {
-      authUrl += `&callback=${encodeURIComponent("http://localhost:21321/auth/callback")}`
-      // Pass dev protocol so production web can use correct deep link if callback fails
-      authUrl += `&protocol=twentyfirst-agents-dev`
-    }
-
-    shell.openExternal(authUrl)
+  // Legacy methods for compatibility - these are no-ops now
+  setOnTokenRefresh(_callback: (authData: any) => void): void {
+    // No-op
   }
 
-  /**
-   * Update user profile on server and locally
-   */
-  async updateUser(updates: { name?: string }): Promise<AuthUser | null> {
-    const token = await this.getValidToken()
-    if (!token) {
-      throw new Error("Not authenticated")
-    }
+  startAuthFlow(_mainWindow: any): void {
+    console.log("[Auth] startAuthFlow called but using env vars - configure in .env.local")
+  }
 
-    // Update on server using X-Desktop-Token header
-    const response = await fetch(`${this.getApiUrl()}/api/user/profile`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Desktop-Token": token,
-      },
-      body: JSON.stringify({
-        display_name: updates.name,
-      }),
-    })
+  async getValidToken(): Promise<string | null> {
+    return import.meta.env.MAIN_VITE_AZURE_API_KEY || null
+  }
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }))
-      throw new Error(error.error || `Update failed: ${response.status}`)
-    }
+  async updateUser(_updates: { name?: string }): Promise<null> {
+    return null
+  }
 
-    // Update locally
-    return this.store.updateUser({ name: updates.name ?? null })
+  saveConfig(_config: any): void {
+    console.log("[Auth] saveConfig called but using env vars - configure in .env.local")
   }
 }

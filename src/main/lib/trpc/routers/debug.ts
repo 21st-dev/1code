@@ -7,7 +7,7 @@ import { clearNetworkCache } from "../../ollama/network-detector"
 
 // Protocol constant (must match main/index.ts)
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+const PROTOCOL = IS_DEV ? "kcode-dev" : "kcode"
 
 // Global flag for simulating offline mode (for testing)
 let simulateOfflineMode = false

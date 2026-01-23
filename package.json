@@ -1,11 +1,11 @@
 {
-  "name": "21st-desktop",
+  "name": "kcode-desktop",
   "version": "0.0.27",
   "private": true,
-  "description": "1Code - UI for parallel work with AI agents",
+  "description": "kcode - UI for parallel work with AI agents",
   "author": {
-    "name": "21st.dev",
-    "email": "support@21st.dev"
+    "name": "Kosal",
+    "email": "info@kosal.io"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -123,14 +123,14 @@
     "vite": "^6.3.4"
   },
   "build": {
-    "appId": "dev.21st.agents",
-    "productName": "1Code",
+    "appId": "io.kosal.kcode",
+    "productName": "kcode",
     "npmRebuild": true,
     "protocols": [
       {
-        "name": "1Code",
+        "name": "kcode",
         "schemes": [
-          "twentyfirst-agents"
+          "kcode"
         ]
       }
     ],
@@ -231,7 +231,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://cdn.21st.dev/releases/desktop"
+      "url": "https://cdn.kosal.io/releases/kcode"
     }
   }
 }

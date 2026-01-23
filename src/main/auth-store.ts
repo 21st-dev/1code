@@ -2,23 +2,14 @@ import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "
 import { join, dirname } from "path"
 import { safeStorage } from "electron"
 
-export interface AuthUser {
-  id: string
-  email: string
-  name: string | null
-  imageUrl: string | null
-  username: string | null
-}
-
-export interface AuthData {
-  token: string
-  refreshToken: string
-  expiresAt: string
-  user: AuthUser
+export interface AzureConfig {
+  endpoint: string     // https://your-resource.openai.azure.com
+  apiKey: string       // Azure API key
+  deploymentName: string // Claude deployment name
 }
 
 /**
- * Storage for desktop authentication tokens
+ * Storage for Azure Claude credentials
  * Uses Electron's safeStorage API to encrypt sensitive data using OS keychain
  * Falls back to plaintext only if encryption is unavailable (rare edge case)
  */
@@ -26,7 +17,7 @@ export class AuthStore {
   private filePath: string
 
   constructor(userDataPath: string) {
-    this.filePath = join(userDataPath, "auth.dat") // .dat for encrypted data
+    this.filePath = join(userDataPath, "azure-config.dat") // .dat for encrypted data
   }
 
   /**
@@ -37,36 +28,36 @@ export class AuthStore {
   }
 
   /**
-   * Save authentication data (encrypted if possible)
+   * Save Azure configuration (encrypted if possible)
    */
-  save(data: AuthData): void {
+  save(config: AzureConfig): void {
     try {
       const dir = dirname(this.filePath)
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true })
       }
 
-      const jsonData = JSON.stringify(data)
-      
+      const jsonData = JSON.stringify(config)
+
       if (this.isEncryptionAvailable()) {
         // Encrypt using OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
         const encrypted = safeStorage.encryptString(jsonData)
         writeFileSync(this.filePath, encrypted)
       } else {
         // Fallback: store with warning (should rarely happen)
-        console.warn("safeStorage not available - storing auth data without encryption")
+        console.warn("safeStorage not available - storing config without encryption")
         writeFileSync(this.filePath + ".json", jsonData, "utf-8")
       }
     } catch (error) {
-      console.error("Failed to save auth data:", error)
+      console.error("Failed to save Azure config:", error)
       throw error
     }
   }
 
   /**
-   * Load authentication data (decrypts if encrypted)
+   * Load Azure configuration (decrypts if encrypted)
    */
-  load(): AuthData | null {
+  load(): AzureConfig | null {
     try {
       // Try encrypted file first
       if (existsSync(this.filePath) && this.isEncryptionAvailable()) {
@@ -74,45 +65,31 @@ export class AuthStore {
         const decrypted = safeStorage.decryptString(encrypted)
         return JSON.parse(decrypted)
       }
-      
+
       // Fallback: try unencrypted file (for migration or when encryption unavailable)
       const fallbackPath = this.filePath + ".json"
       if (existsSync(fallbackPath)) {
         const content = readFileSync(fallbackPath, "utf-8")
-        const data = JSON.parse(content)
-        
+        const config = JSON.parse(content)
+
         // Migrate to encrypted storage if now available
         if (this.isEncryptionAvailable()) {
-          this.save(data)
+          this.save(config)
           unlinkSync(fallbackPath) // Remove unencrypted file after migration
         }
-        
-        return data
-      }
-      
-      // Legacy: check for old auth.json file and migrate
-      const legacyPath = join(dirname(this.filePath), "auth.json")
-      if (existsSync(legacyPath)) {
-        const content = readFileSync(legacyPath, "utf-8")
-        const data = JSON.parse(content)
-        
-        // Migrate to encrypted storage
-        this.save(data)
-        unlinkSync(legacyPath) // Remove legacy unencrypted file
-        console.log("Migrated auth data from plaintext to encrypted storage")
-        
-        return data
+
+        return config
       }
 
       return null
     } catch {
-      console.error("Failed to load auth data")
+      console.error("Failed to load Azure config")
       return null
     }
   }
 
   /**
-   * Clear all stored authentication data (both encrypted and fallback files)
+   * Clear stored Azure configuration
    */
   clear(): void {
     try {
@@ -125,78 +102,26 @@ export class AuthStore {
       if (existsSync(fallbackPath)) {
         unlinkSync(fallbackPath)
       }
-      // Remove legacy file if exists
-      const legacyPath = join(dirname(this.filePath), "auth.json")
-      if (existsSync(legacyPath)) {
-        unlinkSync(legacyPath)
-      }
     } catch (error) {
-      console.error("Failed to clear auth data:", error)
+      console.error("Failed to clear Azure config:", error)
     }
   }
 
   /**
-   * Check if user is authenticated
+   * Check if Azure credentials are configured
    */
-  isAuthenticated(): boolean {
-    const data = this.load()
-    if (!data) return false
-
-    // Check if token is expired
-    const expiresAt = new Date(data.expiresAt).getTime()
-    return expiresAt > Date.now()
+  isConfigured(): boolean {
+    const config = this.load()
+    return config !== null &&
+           config.endpoint.length > 0 &&
+           config.apiKey.length > 0 &&
+           config.deploymentName.length > 0
   }
 
   /**
-   * Get current user if authenticated
+   * Get current configuration
    */
-  getUser(): AuthUser | null {
-    const data = this.load()
-    return data?.user ?? null
-  }
-
-  /**
-   * Get current token if valid
-   */
-  getToken(): string | null {
-    const data = this.load()
-    if (!data) return null
-
-    const expiresAt = new Date(data.expiresAt).getTime()
-    if (expiresAt <= Date.now()) return null
-
-    return data.token
-  }
-
-  /**
-   * Get refresh token
-   */
-  getRefreshToken(): string | null {
-    const data = this.load()
-    return data?.refreshToken ?? null
-  }
-
-  /**
-   * Check if token needs refresh (expires in less than 5 minutes)
-   */
-  needsRefresh(): boolean {
-    const data = this.load()
-    if (!data) return false
-
-    const expiresAt = new Date(data.expiresAt).getTime()
-    const fiveMinutes = 5 * 60 * 1000
-    return expiresAt - Date.now() < fiveMinutes
-  }
-
-  /**
-   * Update user data (e.g., after profile update)
-   */
-  updateUser(updates: Partial<AuthUser>): AuthUser | null {
-    const data = this.load()
-    if (!data) return null
-
-    data.user = { ...data.user, ...updates }
-    this.save(data)
-    return data.user
+  getConfig(): AzureConfig | null {
+    return this.load()
   }
 }

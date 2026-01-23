@@ -1,16 +1,14 @@
-import { app, BrowserWindow, session, Menu } from "electron"
+import { app, BrowserWindow, Menu } from "electron"
 import { join } from "path"
 import { createServer } from "http"
 import { readFileSync, existsSync, unlinkSync, readlinkSync } from "fs"
 import * as Sentry from "@sentry/electron/main"
 import { initDatabase, closeDatabase } from "./lib/db"
-import { createMainWindow, getWindow, showLoginPage } from "./windows/main"
+import { createMainWindow, getWindow } from "./windows/main"
 import { AuthManager } from "./auth-manager"
 import {
   initAnalytics,
-  identify,
   trackAppOpened,
-  trackAuthCompleted,
   shutdown as shutdownAnalytics,
 } from "./lib/analytics"
 import {
@@ -26,13 +24,13 @@ const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
 
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+const PROTOCOL = IS_DEV ? "kcode-dev" : "kcode"
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
 if (IS_DEV) {
   const { join } = require("path")
-  const devUserData = join(app.getPath("userData"), "..", "Agents Dev")
+  const devUserData = join(app.getPath("userData"), "..", "kcode Dev")
   app.setPath("userData", devUserData)
   console.log("[Dev] Using separate userData path:", devUserData)
 }
@@ -57,17 +55,13 @@ if (app.isPackaged && !IS_DEV) {
 }
 
 // URL configuration (exported for use in other modules)
-// In packaged app, ALWAYS use production URL to prevent localhost leaking into releases
-// In dev mode, allow override via MAIN_VITE_API_URL env variable
+// These are now deprecated as we use local Azure credentials
 export function getBaseUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
+  return "https://code.kosal.io"
 }
 
 export function getAppUrl(): string {
-  return process.env.ELECTRON_RENDERER_URL || "https://21st.dev/agents"
+  return process.env.ELECTRON_RENDERER_URL || "https://code.kosal.io"
 }
 
 // Auth manager singleton
@@ -77,74 +71,17 @@ export function getAuthManager(): AuthManager {
   return authManager
 }
 
-// Handle auth code from deep link (exported for IPC handlers)
-export async function handleAuthCode(code: string): Promise<void> {
-  console.log("[Auth] Handling auth code:", code.slice(0, 8) + "...")
-
-  try {
-    const authData = await authManager.exchangeCode(code)
-    console.log("[Auth] Success for user:", authData.user.email)
-
-    // Track successful authentication
-    trackAuthCompleted(authData.user.id, authData.user.email)
-
-    // Set desktop token cookie using persist:main partition
-    const ses = session.fromPartition("persist:main")
-    try {
-      // First remove any existing cookie to avoid HttpOnly conflict
-      await ses.cookies.remove(getBaseUrl(), "x-desktop-token")
-      await ses.cookies.set({
-        url: getBaseUrl(),
-        name: "x-desktop-token",
-        value: authData.token,
-        expirationDate: Math.floor(
-          new Date(authData.expiresAt).getTime() / 1000,
-        ),
-        httpOnly: false,
-        secure: getBaseUrl().startsWith("https"),
-        sameSite: "lax" as const,
-      })
-      console.log("[Auth] Desktop token cookie set")
-    } catch (cookieError) {
-      // Cookie setting is optional - auth data is already saved to disk
-      console.warn("[Auth] Cookie set failed (non-critical):", cookieError)
-    }
-
-    // Notify renderer
-    const win = getWindow()
-    win?.webContents.send("auth:success", authData.user)
-
-    // Reload window to show app
-    if (process.env.ELECTRON_RENDERER_URL) {
-      win?.loadURL(process.env.ELECTRON_RENDERER_URL)
-    } else {
-      win?.loadFile(join(__dirname, "../renderer/index.html"))
-    }
-    win?.focus()
-  } catch (error) {
-    console.error("[Auth] Exchange failed:", error)
-    getWindow()?.webContents.send("auth:error", (error as Error).message)
-  }
+// Handle auth code from deep link - deprecated, now uses settings UI
+export async function handleAuthCode(_code: string): Promise<void> {
+  console.log("[Auth] handleAuthCode called but OAuth is no longer used")
+  console.log("[Auth] Please configure Azure credentials in Settings")
 }
 
-// Handle deep link
+// Handle deep link - simplified since we don't use OAuth anymore
 function handleDeepLink(url: string): void {
   console.log("[DeepLink] Received:", url)
-
-  try {
-    const parsed = new URL(url)
-
-    // Handle auth callback: twentyfirstdev://auth?code=xxx
-    if (parsed.pathname === "/auth" || parsed.host === "auth") {
-      const code = parsed.searchParams.get("code")
-      if (code) {
-        handleAuthCode(code)
-        return
-      }
-    }
-  } catch (e) {
-    console.error("[DeepLink] Failed to parse:", e)
-  }
+  // Deep links are no longer used for auth
+  // Could be extended for other purposes in the future
 }
 
 // Register protocol BEFORE app is ready
@@ -250,7 +187,7 @@ if (process.env.ELECTRON_RENDERER_URL) {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - Authentication</title>
+  <title>kcode - Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -400,7 +337,7 @@ if (gotTheLock) {
   app.whenReady().then(async () => {
     // Set dev mode app name (userData path was already set before requestSingleInstanceLock)
     if (IS_DEV) {
-      app.name = "Agents Dev"
+      app.name = "kcode Dev"
     }
 
     // Register protocol handler (must be after app is ready)
@@ -415,10 +352,10 @@ if (gotTheLock) {
 
     // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
     if (process.platform === "win32") {
-      app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
+      app.setAppUserModelId(IS_DEV ? "io.kosal.kcode.dev" : "io.kosal.kcode")
     }
 
-    console.log(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
+    console.log(`[App] Starting kcode${IS_DEV ? " (DEV)" : ""}...`)
 
     // Verify protocol registration after app is ready
     // This helps diagnose first-install issues where the protocol isn't recognized yet
@@ -442,10 +379,10 @@ if (gotTheLock) {
 
     // Set About panel options with Claude Code version
     app.setAboutPanelOptions({
-      applicationName: "1Code",
+      applicationName: "kcode",
       applicationVersion: app.getVersion(),
       version: `Claude Code ${claudeCodeVersion}`,
-      copyright: "Copyright © 2026 21st.dev",
+      copyright: "Copyright © 2026 Kosal",
     })
 
     // Track update availability for menu
@@ -458,7 +395,7 @@ if (gotTheLock) {
         {
           label: app.name,
           submenu: [
-            { role: "about", label: "About 1Code" },
+            { role: "about", label: "About kcode" },
             {
               label: updateAvailable
                 ? `Update to v${availableVersion}...`
@@ -548,7 +485,7 @@ if (gotTheLock) {
               label: "Learn More",
               click: async () => {
                 const { shell } = await import("electron")
-                await shell.openExternal("https://21st.dev")
+                await shell.openExternal("https://code.kosal.io")
               },
             },
           ],
@@ -570,46 +507,15 @@ if (gotTheLock) {
     // Build initial menu
     buildMenu()
 
-    // Initialize auth manager
+    // Initialize auth manager (Azure credentials)
     authManager = new AuthManager(!!process.env.ELECTRON_RENDERER_URL)
     console.log("[App] Auth manager initialized")
 
-    // Initialize analytics after auth manager so we can identify user
+    // Initialize analytics
     initAnalytics()
 
-    // If user already authenticated from previous session, identify them
-    if (authManager.isAuthenticated()) {
-      const user = authManager.getUser()
-      if (user) {
-        identify(user.id, { email: user.email })
-        console.log("[Analytics] User identified from saved session:", user.id)
-      }
-    }
-
-    // Track app opened (now with correct user ID if authenticated)
+    // Track app opened
     trackAppOpened()
-
-    // Set up callback to update cookie when token is refreshed
-    authManager.setOnTokenRefresh(async (authData) => {
-      console.log("[Auth] Token refreshed, updating cookie...")
-      const ses = session.fromPartition("persist:main")
-      try {
-        await ses.cookies.set({
-          url: getBaseUrl(),
-          name: "x-desktop-token",
-          value: authData.token,
-          expirationDate: Math.floor(
-            new Date(authData.expiresAt).getTime() / 1000,
-          ),
-          httpOnly: false,
-          secure: getBaseUrl().startsWith("https"),
-          sameSite: "lax" as const,
-        })
-        console.log("[Auth] Desktop token cookie updated after refresh")
-      } catch (err) {
-        console.error("[Auth] Failed to update cookie:", err)
-      }
-    })
 
     // Initialize database
     try {

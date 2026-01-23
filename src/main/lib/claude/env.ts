@@ -12,6 +12,7 @@ let cachedShellEnv: Record<string, string> | null = null
 const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
 
 // Keys to strip (prevent auth interference)
+// NOTE: Do NOT strip CLAUDE_CODE_USE_FOUNDRY or ANTHROPIC_FOUNDRY_* - these are needed for Azure
 const STRIPPED_ENV_KEYS = [
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
@@ -258,7 +259,16 @@ export function logClaudeEnv(
   console.log(
     `${prefix}[claude-env] PATH includes /usr/local/bin: ${env.PATH?.includes("/usr/local/bin")}`,
   )
-  console.log(
-    `${prefix}[claude-env] ANTHROPIC_AUTH_TOKEN: ${env.ANTHROPIC_AUTH_TOKEN ? "set" : "not set"}`,
-  )
+  // Log Foundry vars if present
+  if (env.CLAUDE_CODE_USE_FOUNDRY) {
+    console.log(`${prefix}[claude-env] CLAUDE_CODE_USE_FOUNDRY: ${env.CLAUDE_CODE_USE_FOUNDRY}`)
+    console.log(`${prefix}[claude-env] ANTHROPIC_FOUNDRY_RESOURCE: ${env.ANTHROPIC_FOUNDRY_RESOURCE || "not set"}`)
+    console.log(`${prefix}[claude-env] ANTHROPIC_FOUNDRY_API_KEY: ${env.ANTHROPIC_FOUNDRY_API_KEY ? "set" : "not set"}`)
+    console.log(`${prefix}[claude-env] CLAUDE_CODE_MAX_OUTPUT_TOKENS: ${env.CLAUDE_CODE_MAX_OUTPUT_TOKENS || "not set"}`)
+    console.log(`${prefix}[claude-env] MAX_THINKING_TOKENS: ${env.MAX_THINKING_TOKENS || "not set"}`)
+  } else {
+    console.log(
+      `${prefix}[claude-env] ANTHROPIC_AUTH_TOKEN: ${env.ANTHROPIC_AUTH_TOKEN ? "set" : "not set"}`,
+    )
+  }
 }

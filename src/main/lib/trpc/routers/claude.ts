@@ -1,6 +1,6 @@
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
-import { app, BrowserWindow, safeStorage } from "electron"
+import { app, BrowserWindow } from "electron"
 import * as fs from "fs/promises"
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync } from "fs"
 import * as os from "os"
@@ -15,7 +15,7 @@ import {
   checkOfflineFallback,
   type UIMessageChunk,
 } from "../../claude"
-import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
+import { chats, getDatabase, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../../ollama"
 import { publicProcedure, router } from "../index"
@@ -89,38 +89,43 @@ function parseMentions(prompt: string): {
 }
 
 /**
- * Decrypt token using Electron's safeStorage
+ * Get Microsoft Foundry configuration from environment variables
+ * Uses the official Claude Code Foundry integration env vars
+ * See: https://code.claude.com/docs/en/microsoft-foundry
  */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
-}
+function getFoundryConfig(): {
+  useFoundry: boolean
+  resource: string
+  apiKey: string
+  defaultOpusModel: string
+} | null {
+  // In electron-vite, MAIN_VITE_ prefixed vars are available via import.meta.env
+  const useFoundry = import.meta.env.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY
+  const resource = import.meta.env.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE
+  const apiKey = import.meta.env.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY
+  const defaultOpusModel = import.meta.env.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL
 
-/**
- * Get Claude Code OAuth token from local SQLite
- * Returns null if not connected
- */
-function getClaudeCodeToken(): string | null {
-  try {
-    const db = getDatabase()
-    const cred = db
-      .select()
-      .from(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .get()
+  console.log("[claude] ========== FOUNDRY CONFIG CHECK ==========")
+  console.log("[claude] Reading from import.meta.env:")
+  console.log("[claude]   MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY:", useFoundry || "(not set)")
+  console.log("[claude]   MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE:", resource || "(not set)")
+  console.log("[claude]   MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY:", apiKey ? `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}` : "(not set)")
+  console.log("[claude]   MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL:", defaultOpusModel || "(not set)")
 
-    if (!cred?.oauthToken) {
-      console.log("[claude] No Claude Code credentials found")
-      return null
-    }
-
-    return decryptToken(cred.oauthToken)
-  } catch (error) {
-    console.error("[claude] Error getting Claude Code token:", error)
+  if (!useFoundry || !resource || !apiKey) {
+    console.log("[claude] ✗ Foundry config incomplete - missing env vars")
+    console.log("[claude] =============================================")
     return null
+  }
+
+  console.log("[claude] ✓ Foundry config loaded successfully")
+  console.log("[claude] =============================================")
+
+  return {
+    useFoundry: useFoundry === "1" || useFoundry === "true",
+    resource,
+    apiKey,
+    defaultOpusModel: defaultOpusModel || "claude-opus-4-5",
   }
 }
 
@@ -582,8 +587,33 @@ export const claudeRouter = router({
             }
 
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
-            const claudeCodeToken = getClaudeCodeToken()
-            const offlineResult = await checkOfflineFallback(input.customConfig, claudeCodeToken)
+            // Get Foundry config - uses native Claude Code Foundry integration
+            console.log("[claude] ========== CONFIG RESOLUTION ==========")
+            console.log("[claude] Input customConfig from renderer:", input.customConfig ? {
+              model: input.customConfig.model,
+              baseUrl: input.customConfig.baseUrl,
+              tokenPreview: input.customConfig.token ? `${input.customConfig.token.slice(0, 8)}...` : "(none)",
+            } : "(none)")
+
+            const foundryConfig = getFoundryConfig()
+
+            // When Foundry is configured via env vars, we don't use customConfig
+            // The SDK handles Foundry natively via environment variables
+            let effectiveCustomConfig = foundryConfig ? undefined : input.customConfig
+
+            if (foundryConfig) {
+              console.log("[claude] ✓ Using Microsoft Foundry (native SDK integration)")
+              console.log("[claude]   Resource:", foundryConfig.resource)
+              console.log("[claude]   Model:", foundryConfig.defaultOpusModel)
+            } else if (effectiveCustomConfig) {
+              console.log("[claude] Using customConfig from renderer (localStorage) - no Foundry env vars set")
+            } else {
+              console.log("[claude] ✗ No config available - will use default Claude API")
+            }
+
+            console.log("[claude] ================================================")
+
+            const offlineResult = await checkOfflineFallback(effectiveCustomConfig, foundryConfig?.apiKey || null)
 
             if (offlineResult.error) {
               emitError(new Error(offlineResult.error), 'Offline mode unavailable')
@@ -592,8 +622,8 @@ export const claudeRouter = router({
               return
             }
 
-            // Use offline config if available
-            const finalCustomConfig = offlineResult.config || input.customConfig
+            // Use offline config if available, otherwise use effective config
+            const finalCustomConfig = offlineResult.config || effectiveCustomConfig
             const isUsingOllama = offlineResult.isUsingOllama
 
             // Offline status is shown in sidebar, no need to emit message here
@@ -698,16 +728,58 @@ export const claudeRouter = router({
             }
 
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
+            // For Foundry, we pass BOTH the native Foundry env vars AND the constructed base URL
+            // This ensures compatibility with older SDK/binary versions
+            let customEnvForSdk: Record<string, string> | undefined
+
+            if (foundryConfig && !isUsingOllama) {
+              // Foundry mode: pass native Foundry env vars - let SDK construct the URL
+              // DO NOT manually construct ANTHROPIC_BASE_URL - the SDK handles this
+              // See: https://code.claude.com/docs/en/microsoft-foundry
+              customEnvForSdk = {
+                // Native Foundry env vars - required for SDK's built-in Foundry support
+                CLAUDE_CODE_USE_FOUNDRY: "1",
+                ANTHROPIC_FOUNDRY_RESOURCE: foundryConfig.resource,
+                ANTHROPIC_FOUNDRY_API_KEY: foundryConfig.apiKey,
+                ANTHROPIC_DEFAULT_OPUS_MODEL: foundryConfig.defaultOpusModel,
+                // Also set default Sonnet/Haiku models in case SDK tries to use them
+                ANTHROPIC_DEFAULT_SONNET_MODEL: foundryConfig.defaultOpusModel,
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: foundryConfig.defaultOpusModel,
+                // Azure Foundry has a max_tokens limit of 64000 TOTAL (thinking + output)
+                // The CLI calculates: max_tokens = thinking_budget + output_budget
+                // We pass SDK options (maxThinkingTokens, maxOutputTokens) which take precedence
+                // Env vars are backup: 16000 thinking + 48000 output = 64000 total
+                CLAUDE_CODE_MAX_OUTPUT_TOKENS: "48000",
+                MAX_THINKING_TOKENS: "16000",
+              }
+              console.log("[claude] Passing Foundry env vars to SDK (native mode)")
+              console.log("[claude]   Resource:", foundryConfig.resource)
+              console.log("[claude]   Model:", foundryConfig.defaultOpusModel)
+              console.log("[claude]   Token budget: 16000 thinking + 48000 output = 64000 total (Azure limit)")
+            } else if (finalCustomConfig) {
+              // Legacy custom config mode (Ollama or renderer localStorage)
+              customEnvForSdk = {
+                ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
+                ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
+              }
+              console.log("[claude] Passing custom config env vars to SDK")
+            }
+
             const claudeEnv = buildClaudeEnv(
-              finalCustomConfig
-                ? {
-                    customEnv: {
-                      ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
-                      ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
-                    },
-                  }
-                : undefined,
+              customEnvForSdk ? { customEnv: customEnvForSdk } : undefined,
             )
+
+            // Debug logging for Foundry env vars - ALWAYS log these to diagnose issues
+            console.log("[claude] ========== FINAL ENV VARS FOR SDK ==========")
+            console.log("[claude] CLAUDE_CODE_USE_FOUNDRY:", claudeEnv.CLAUDE_CODE_USE_FOUNDRY || "(not set)")
+            console.log("[claude] ANTHROPIC_FOUNDRY_RESOURCE:", claudeEnv.ANTHROPIC_FOUNDRY_RESOURCE || "(not set)")
+            console.log("[claude] ANTHROPIC_FOUNDRY_API_KEY:", claudeEnv.ANTHROPIC_FOUNDRY_API_KEY ? `${claudeEnv.ANTHROPIC_FOUNDRY_API_KEY.slice(0, 8)}...` : "(not set)")
+            console.log("[claude] ANTHROPIC_DEFAULT_OPUS_MODEL:", claudeEnv.ANTHROPIC_DEFAULT_OPUS_MODEL || "(not set)")
+            console.log("[claude] ANTHROPIC_DEFAULT_SONNET_MODEL:", claudeEnv.ANTHROPIC_DEFAULT_SONNET_MODEL || "(not set)")
+            console.log("[claude] ANTHROPIC_DEFAULT_HAIKU_MODEL:", claudeEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || "(not set)")
+            console.log("[claude] CLAUDE_CODE_MAX_OUTPUT_TOKENS:", claudeEnv.CLAUDE_CODE_MAX_OUTPUT_TOKENS || "(not set)")
+            console.log("[claude] MAX_THINKING_TOKENS:", claudeEnv.MAX_THINKING_TOKENS || "(not set)")
+            console.log("[claude] ==============================================")
 
             // Debug logging in dev
             if (process.env.NODE_ENV !== "production") {
@@ -809,12 +881,9 @@ export const claudeRouter = router({
               console.error(`[claude] Failed to setup isolated config dir:`, mkdirErr)
             }
 
-            // Build final env - only add OAuth token if we have one
-            const finalEnv = {
+            // Build final env - Azure credentials are passed via customConfig
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
-              ...(claudeCodeToken && {
-                CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
-              }),
               // Re-enable CLAUDE_CONFIG_DIR now that we properly map MCP configs
               CLAUDE_CONFIG_DIR: isolatedConfigDir,
             }
@@ -962,14 +1031,14 @@ export const claudeRouter = router({
                           : ""
                       if (!/\.md$/i.test(filePath)) {
                         return {
-                          behavior: "deny",
+                          behavior: "deny" as const,
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
@@ -1026,9 +1095,9 @@ export const claudeRouter = router({
                         type: "ask-user-question-result",
                         toolUseId: toolUseID,
                         result: errorMessage,
-                      } as UIMessageChunk)
+                      } as unknown as UIMessageChunk)
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: errorMessage,
                       }
                     }
@@ -1045,15 +1114,15 @@ export const claudeRouter = router({
                       type: "ask-user-question-result",
                       toolUseId: toolUseID,
                       result: answerResult,
-                    } as UIMessageChunk)
+                    } as unknown as UIMessageChunk)
                     return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      behavior: "allow" as const,
+                      updatedInput: response.updatedInput as Record<string, unknown> | undefined,
                     }
                   }
                   return {
-                    behavior: "allow",
-                    updatedInput: toolInput,
+                    behavior: "allow" as const,
+                    updatedInput: toolInput as Record<string, unknown>,
                   }
                 },
                 stderr: (data: string) => {
@@ -1078,22 +1147,58 @@ export const claudeRouter = router({
                 // For first message in chat (no session ID yet), use continue mode
                 ...(!resumeSessionId && { continue: true }),
                 ...(resolvedModel && { model: resolvedModel }),
-                // fallbackModel: "claude-opus-4-5-20251101",
-                ...(input.maxThinkingTokens && {
-                  maxThinkingTokens: input.maxThinkingTokens,
-                }),
+                // Azure Foundry has a max_tokens limit of 64000 TOTAL (thinking + output combined)
+                // The CLI calculates: max_tokens = thinking_budget + output_budget
+                // We must ensure: thinking + output <= 64000
+                // Strategy: 16000 thinking + 48000 output = 64000 total (leaves room for extended thinking)
+                ...(foundryConfig && !isUsingOllama && { maxOutputTokens: 48000 }),
+                // For Azure Foundry: ALWAYS set maxThinkingTokens to override CLI defaults
+                // CLI defaults to high values for Opus 4.5 which exceed Azure's 64000 limit
+                ...(foundryConfig && !isUsingOllama
+                  ? { maxThinkingTokens: input.maxThinkingTokens ? Math.min(input.maxThinkingTokens, 16000) : 16000 }
+                  : input.maxThinkingTokens ? { maxThinkingTokens: input.maxThinkingTokens } : {}
+                ),
               },
             }
 
             // 5. Run Claude SDK
+            console.log("[claude] ========== SDK INVOCATION ==========")
+            console.log("[claude] About to call claudeQuery with:")
+            console.log("[claude]   cwd:", input.cwd)
+            console.log("[claude]   mode:", input.mode)
+            console.log("[claude]   model:", resolvedModel)
+            console.log("[claude]   usingFoundry:", !!foundryConfig)
+            console.log("[claude]   hasCustomConfig:", !!finalCustomConfig)
+            if (foundryConfig) {
+              console.log("[claude]   CLAUDE_CODE_USE_FOUNDRY:", finalEnv.CLAUDE_CODE_USE_FOUNDRY || "(not set)")
+              console.log("[claude]   ANTHROPIC_FOUNDRY_RESOURCE:", finalEnv.ANTHROPIC_FOUNDRY_RESOURCE || "(not set)")
+              console.log("[claude]   ANTHROPIC_FOUNDRY_API_KEY:", finalEnv.ANTHROPIC_FOUNDRY_API_KEY ? `${finalEnv.ANTHROPIC_FOUNDRY_API_KEY.slice(0, 8)}...` : "(not set)")
+              console.log("[claude]   ANTHROPIC_DEFAULT_OPUS_MODEL:", finalEnv.ANTHROPIC_DEFAULT_OPUS_MODEL || "(not set)")
+              const cappedThinking = input.maxThinkingTokens ? Math.min(input.maxThinkingTokens, 16000) : 16000
+              const cappedOutput = 48000
+              console.log("[claude]   maxThinkingTokens (requested):", input.maxThinkingTokens || "(not set)")
+              console.log("[claude]   maxThinkingTokens (capped for Foundry):", cappedThinking)
+              console.log("[claude]   maxOutputTokens (capped for Foundry):", cappedOutput)
+              console.log("[claude]   Total max_tokens:", cappedThinking + cappedOutput, "(Azure limit: 64000)")
+            } else if (finalCustomConfig) {
+              console.log("[claude]   customConfig.model:", finalCustomConfig.model)
+              console.log("[claude]   customConfig.baseUrl:", finalCustomConfig.baseUrl)
+              console.log("[claude]   customConfig.token:", finalCustomConfig.token ? `${finalCustomConfig.token.slice(0, 8)}...${finalCustomConfig.token.slice(-4)}` : "(none)")
+            }
+            console.log("[claude] ======================================")
+
             let stream
             try {
               stream = claudeQuery(queryOptions)
-            } catch (queryError) {
-              console.error(
-                "[CLAUDE] ✗ Failed to create SDK query:",
-                queryError,
-              )
+              console.log("[claude] ✓ claudeQuery() returned stream successfully")
+            } catch (queryError: any) {
+              console.error("[claude] ========== SDK QUERY ERROR ==========")
+              console.error("[claude] ✗ Failed to create SDK query")
+              console.error("[claude] Error name:", queryError?.name)
+              console.error("[claude] Error message:", queryError?.message)
+              console.error("[claude] Error stack:", queryError?.stack)
+              console.error("[claude] Full error:", JSON.stringify(queryError, Object.getOwnPropertyNames(queryError), 2))
+              console.error("[claude] ========================================")
               emitError(queryError, "Failed to start Claude query")
               console.log(`[SD] M:END sub=${subId} reason=query_error n=${chunkCount}`)
               safeEmit({ type: "finish" } as UIMessageChunk)
@@ -1108,12 +1213,13 @@ export const claudeRouter = router({
             let firstMessageReceived = false
             const streamIterationStart = Date.now()
 
+            console.log("[claude] ===== STARTING STREAM ITERATION =====")
+            console.log(`[claude] Model: ${finalCustomConfig?.model || resolvedModel}`)
+            console.log(`[claude] Base URL: ${finalCustomConfig?.baseUrl || "(default)"}`)
+            console.log(`[claude] Prompt: "${typeof input.prompt === 'string' ? input.prompt.slice(0, 100) : 'N/A'}..."`)
+            console.log(`[claude] CWD: ${input.cwd}`)
             if (isUsingOllama) {
-              console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
-              console.log(`[Ollama] Model: ${finalCustomConfig?.model}`)
-              console.log(`[Ollama] Base URL: ${finalCustomConfig?.baseUrl}`)
-              console.log(`[Ollama] Prompt: "${typeof input.prompt === 'string' ? input.prompt.slice(0, 100) : 'N/A'}..."`)
-              console.log(`[Ollama] CWD: ${input.cwd}`)
+              console.log(`[Ollama] Using offline Ollama mode`)
             }
 
             try {
@@ -1163,40 +1269,71 @@ export const claudeRouter = router({
                 // Check for error messages from SDK (error can be embedded in message payload!)
                 const msgAny = msg as any
                 if (msgAny.type === "error" || msgAny.error) {
+                  console.error("[claude] ========== SDK STREAM ERROR ==========")
+                  console.error("[claude] Error message type:", msgAny.type)
+                  console.error("[claude] Error payload:", JSON.stringify(msgAny, null, 2))
+                  console.error("[claude] msgAny.error:", msgAny.error)
+                  console.error("[claude] msgAny.message:", msgAny.message)
+                  console.error("[claude] msgAny.errorMessage:", msgAny.errorMessage)
+                  console.error("[claude] msgAny.details:", msgAny.details)
+                  console.error("[claude] ==========================================")
+
                   const sdkError =
-                    msgAny.error || msgAny.message || "Unknown SDK error"
-                  lastError = new Error(sdkError)
+                    msgAny.error || msgAny.errorMessage || msgAny.message || "Unknown SDK error"
+                  lastError = new Error(typeof sdkError === 'string' ? sdkError : JSON.stringify(sdkError))
 
                   // Categorize SDK-level errors
                   let errorCategory = "SDK_ERROR"
                   let errorContext = "Claude SDK error"
+                  const errorStr = typeof sdkError === 'string' ? sdkError : JSON.stringify(sdkError)
 
                   if (
-                    sdkError === "authentication_failed" ||
-                    sdkError.includes("authentication")
+                    errorStr === "authentication_failed" ||
+                    errorStr.includes("authentication") ||
+                    errorStr.includes("401")
                   ) {
                     errorCategory = "AUTH_FAILED_SDK"
                     errorContext =
-                      "Authentication failed - not logged into Claude Code CLI"
+                      "Authentication failed - check your API key"
                   } else if (
-                    sdkError === "invalid_api_key" ||
-                    sdkError.includes("api_key")
+                    errorStr === "invalid_api_key" ||
+                    errorStr.includes("api_key") ||
+                    errorStr.includes("API key")
                   ) {
                     errorCategory = "INVALID_API_KEY_SDK"
-                    errorContext = "Invalid API key in Claude Code CLI"
+                    errorContext = "Invalid API key"
                   } else if (
-                    sdkError === "rate_limit_exceeded" ||
-                    sdkError.includes("rate")
+                    errorStr === "rate_limit_exceeded" ||
+                    errorStr.includes("rate") ||
+                    errorStr.includes("429")
                   ) {
                     errorCategory = "RATE_LIMIT_SDK"
-                    errorContext = "Session limit reached"
+                    errorContext = "Rate limit exceeded"
                   } else if (
-                    sdkError === "overloaded" ||
-                    sdkError.includes("overload")
+                    errorStr === "overloaded" ||
+                    errorStr.includes("overload") ||
+                    errorStr.includes("529")
                   ) {
                     errorCategory = "OVERLOADED_SDK"
                     errorContext = "Claude is overloaded, try again later"
+                  } else if (
+                    errorStr.includes("404") ||
+                    errorStr.includes("not found") ||
+                    errorStr.includes("Not Found")
+                  ) {
+                    errorCategory = "NOT_FOUND"
+                    errorContext = "Endpoint or model not found - check your Azure configuration"
+                  } else if (
+                    errorStr.includes("connection") ||
+                    errorStr.includes("ECONNREFUSED") ||
+                    errorStr.includes("ETIMEDOUT")
+                  ) {
+                    errorCategory = "CONNECTION_ERROR"
+                    errorContext = "Connection error - check endpoint URL"
                   }
+
+                  console.error(`[claude] Error categorized as: ${errorCategory}`)
+                  console.error(`[claude] Error context: ${errorContext}`)
 
                   // Emit auth-error for authentication failures, regular error otherwise
                   if (errorCategory === "AUTH_FAILED_SDK") {
@@ -1401,10 +1538,33 @@ export const claudeRouter = router({
               } else if (messageCount === 1 && isUsingOllama) {
                 console.warn(`[Ollama] Only received 1 message (likely just init). No actual content generated.`)
               }
-            } catch (streamError) {
+            } catch (streamError: any) {
               // This catches errors during streaming (like process exit)
               const err = streamError as Error
               const stderrOutput = stderrLines.join("\n")
+
+              console.error("[claude] ========== STREAM ITERATION ERROR ==========")
+              console.error("[claude] Error name:", err?.name)
+              console.error("[claude] Error message:", err?.message)
+              console.error("[claude] Error stack:", err?.stack)
+              console.error("[claude] Messages received before error:", messageCount)
+              console.error("[claude] Time elapsed:", Date.now() - streamIterationStart, "ms")
+              if (stderrOutput) {
+                console.error("[claude] Claude binary stderr:", stderrOutput)
+              }
+              // Try to get more details from the error object
+              if (streamError && typeof streamError === 'object') {
+                const errorKeys = Object.keys(streamError)
+                if (errorKeys.length > 0) {
+                  console.error("[claude] Error object keys:", errorKeys)
+                  try {
+                    console.error("[claude] Full error object:", JSON.stringify(streamError, Object.getOwnPropertyNames(streamError), 2))
+                  } catch (e) {
+                    console.error("[claude] Could not stringify error object")
+                  }
+                }
+              }
+              console.error("[claude] ==============================================")
 
               if (isUsingOllama) {
                 console.error(`[Ollama] ===== STREAM ERROR =====`)
