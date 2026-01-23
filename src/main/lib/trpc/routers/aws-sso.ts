@@ -4,6 +4,12 @@ import { eq } from "drizzle-orm"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { AwsSsoService, decrypt } from "../../aws/sso-service"
+import {
+  OAuthCallbackServer,
+  generateCodeVerifier,
+  generateCodeChallenge,
+  generateState,
+} from "../../aws/oauth-server"
 
 // Cached service instance
 let ssoService: AwsSsoService | null = null
@@ -15,9 +21,187 @@ function getSsoService(region: string): AwsSsoService {
   return ssoService
 }
 
+// Temporary storage for OAuth state (in-memory)
+interface OAuthState {
+  state: string
+  codeVerifier: string
+  redirectUri: string
+  server: OAuthCallbackServer
+}
+let pendingOAuthState: OAuthState | null = null
+
 export const awsSsoRouter = router({
   /**
-   * Start SSO device authorization flow
+   * Start browser-based OAuth flow (AWS CLI style)
+   * This is the preferred method - no code copying required!
+   */
+  startBrowserAuth: publicProcedure
+    .input(
+      z.object({
+        ssoStartUrl: z.string().url(),
+        ssoRegion: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const service = getSsoService(input.ssoRegion)
+      const db = getDatabase()
+
+      // Get or register OIDC client
+      let settings = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      let clientId = settings?.ssoClientId
+      let clientSecret = settings?.ssoClientSecret
+      let clientExpiresAt = settings?.ssoClientExpiresAt
+
+      // Register new client if needed
+      const now = new Date()
+      if (!clientId || !clientSecret || !clientExpiresAt || clientExpiresAt < now) {
+        console.log("[aws-sso] Registering new OIDC client for browser auth")
+        const registration = await service.registerClient()
+        clientId = registration.clientId
+        clientSecret = registration.clientSecret
+        clientExpiresAt = registration.expiresAt
+
+        // Save client registration
+        if (settings) {
+          db.update(claudeCodeSettings)
+            .set({
+              ssoClientId: clientId,
+              ssoClientSecret: clientSecret,
+              ssoClientExpiresAt: clientExpiresAt,
+              ssoStartUrl: input.ssoStartUrl,
+              ssoRegion: input.ssoRegion,
+              updatedAt: new Date(),
+            })
+            .where(eq(claudeCodeSettings.id, "default"))
+            .run()
+        } else {
+          db.insert(claudeCodeSettings)
+            .values({
+              id: "default",
+              customEnvVars: "{}",
+              mcpServerSettings: "{}",
+              authMode: "aws",
+              bedrockRegion: "us-east-1",
+              ssoClientId: clientId,
+              ssoClientSecret: clientSecret,
+              ssoClientExpiresAt: clientExpiresAt,
+              ssoStartUrl: input.ssoStartUrl,
+              ssoRegion: input.ssoRegion,
+            })
+            .run()
+        }
+      }
+
+      // Clean up any previous OAuth state
+      if (pendingOAuthState?.server) {
+        pendingOAuthState.server.close()
+      }
+
+      // Start local HTTP server for callback
+      const server = new OAuthCallbackServer()
+      const port = await server.start()
+      const redirectUri = server.getRedirectUri()
+
+      // Generate PKCE parameters
+      const state = generateState()
+      const codeVerifier = generateCodeVerifier()
+      const codeChallenge = await generateCodeChallenge(codeVerifier)
+
+      // Store state for later verification
+      pendingOAuthState = {
+        state,
+        codeVerifier,
+        redirectUri,
+        server,
+      }
+
+      // Build authorization URL
+      const authUrl = service.buildAuthorizationUrl(
+        clientId,
+        input.ssoStartUrl,
+        redirectUri,
+        state,
+        codeChallenge
+      )
+
+      console.log("[aws-sso] Opening browser for OAuth:", authUrl)
+
+      // Open browser
+      shell.openExternal(authUrl)
+
+      // Wait for callback (5 minute timeout)
+      try {
+        const callbackResult = await server.waitForCallback(300000)
+
+        // Check for error in callback
+        if (callbackResult.error) {
+          throw new Error(
+            `OAuth error: ${callbackResult.error}${
+              callbackResult.errorDescription ? ` - ${callbackResult.errorDescription}` : ""
+            }`
+          )
+        }
+
+        // Verify state to prevent CSRF
+        if (callbackResult.state !== pendingOAuthState.state) {
+          throw new Error("State mismatch - possible CSRF attack")
+        }
+
+        // Exchange code for tokens
+        const tokens = await service.exchangeCodeForToken(
+          clientId,
+          clientSecret,
+          callbackResult.code,
+          pendingOAuthState.redirectUri,
+          pendingOAuthState.codeVerifier
+        )
+
+        // Save tokens to database
+        db.update(claudeCodeSettings)
+          .set({
+            ssoAccessToken: tokens.accessToken,
+            ssoRefreshToken: tokens.refreshToken || null,
+            ssoTokenExpiresAt: tokens.expiresAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(claudeCodeSettings.id, "default"))
+          .run()
+
+        // Clear pending state
+        pendingOAuthState = null
+
+        return {
+          success: true,
+          expiresAt: tokens.expiresAt.toISOString(),
+        }
+      } catch (error) {
+        // Clean up on error
+        if (pendingOAuthState?.server) {
+          pendingOAuthState.server.close()
+        }
+        pendingOAuthState = null
+        throw error
+      }
+    }),
+
+  /**
+   * Cancel pending OAuth flow
+   */
+  cancelBrowserAuth: publicProcedure.mutation(() => {
+    if (pendingOAuthState?.server) {
+      pendingOAuthState.server.close()
+    }
+    pendingOAuthState = null
+    return { success: true }
+  }),
+
+  /**
+   * Start SSO device authorization flow (legacy - use startBrowserAuth instead)
    */
   startDeviceAuth: publicProcedure
     .input(

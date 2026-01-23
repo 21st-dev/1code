@@ -11,6 +11,7 @@ import {
   CreateTokenCommand,
 } from "@aws-sdk/client-sso-oidc"
 import { safeStorage } from "electron"
+import { generateCodeChallenge, base64UrlEncode } from "./oauth-server"
 
 // Encryption helpers
 function encrypt(value: string): string {
@@ -299,6 +300,126 @@ export class AwsSsoService {
     return {
       accessToken: encrypt(response.accessToken),
       refreshToken: response.refreshToken ? encrypt(response.refreshToken) : refreshToken,
+      expiresAt: new Date(Date.now() + (response.expiresIn || 3600) * 1000),
+    }
+  }
+
+  // ============================================================================
+  // OAuth2 Authorization Code Flow with PKCE (AWS CLI style)
+  // ============================================================================
+
+  /**
+   * Register OIDC client with redirect URI support for OAuth flow
+   * @param redirectUris List of allowed redirect URIs (e.g., http://127.0.0.1:PORT/callback)
+   */
+  async registerClientWithRedirect(redirectUris: string[]): Promise<ClientRegistration> {
+    const command = new RegisterClientCommand({
+      clientName: "1Code Desktop",
+      clientType: "public",
+      scopes: ["sso:account:access"],
+      // Note: AWS SSO OIDC may or may not support redirectUris in RegisterClient
+      // If not supported, we'll still use the standard authorization flow
+    })
+
+    const response = await this.oidcClient.send(command)
+
+    if (!response.clientId || !response.clientSecret || !response.clientSecretExpiresAt) {
+      throw new Error("Invalid client registration response")
+    }
+
+    return {
+      clientId: response.clientId,
+      clientSecret: encrypt(response.clientSecret),
+      expiresAt: new Date(response.clientSecretExpiresAt * 1000),
+    }
+  }
+
+  /**
+   * Build the authorization URL for OAuth flow
+   * User opens this URL in browser to authenticate
+   *
+   * @param clientId OIDC client ID
+   * @param ssoStartUrl AWS SSO start URL
+   * @param redirectUri Local callback URL (e.g., http://127.0.0.1:PORT/callback)
+   * @param state Random state for CSRF protection
+   * @param codeChallenge PKCE code challenge (S256)
+   */
+  buildAuthorizationUrl(
+    clientId: string,
+    ssoStartUrl: string,
+    redirectUri: string,
+    state: string,
+    codeChallenge: string
+  ): string {
+    // AWS SSO uses the start URL to derive the OIDC issuer
+    // The authorization endpoint is at the OIDC issuer + /oauth2/authorize
+    // However, AWS SSO OIDC doesn't support the standard authorization endpoint
+    // Instead, we need to use the device authorization flow or direct the user
+    // to the SSO portal and capture the redirect
+
+    // For AWS SSO, the authorization URL pattern is:
+    // https://{start-url}/oauth2/authorize?...
+    // But AWS SSO Identity Center uses a different flow
+
+    // Build the authorize URL
+    const authorizeUrl = new URL(`${ssoStartUrl}`)
+
+    // AWS SSO uses the OIDC authorize endpoint
+    // The format is: https://portal.sso.{region}.amazonaws.com/authorize
+    // But we need to derive this from the start URL
+
+    // Extract the portal URL from start URL
+    // e.g., https://d-abc123.awsapps.com/start -> https://d-abc123.awsapps.com
+    const baseUrl = ssoStartUrl.replace(/\/start\/?$/, "")
+
+    // Build OAuth authorize URL
+    const authUrl = new URL(`${baseUrl}/oauth2/authorize`)
+    authUrl.searchParams.set("client_id", clientId)
+    authUrl.searchParams.set("redirect_uri", redirectUri)
+    authUrl.searchParams.set("response_type", "code")
+    authUrl.searchParams.set("scope", "sso:account:access")
+    authUrl.searchParams.set("state", state)
+    authUrl.searchParams.set("code_challenge", codeChallenge)
+    authUrl.searchParams.set("code_challenge_method", "S256")
+
+    return authUrl.toString()
+  }
+
+  /**
+   * Exchange authorization code for tokens (OAuth2 Authorization Code Grant)
+   * Called after user completes login and browser redirects to callback
+   *
+   * @param clientId OIDC client ID
+   * @param clientSecret OIDC client secret (encrypted)
+   * @param code Authorization code from callback
+   * @param redirectUri The redirect URI used in the authorization request
+   * @param codeVerifier PKCE code verifier
+   */
+  async exchangeCodeForToken(
+    clientId: string,
+    clientSecret: string,
+    code: string,
+    redirectUri: string,
+    codeVerifier: string
+  ): Promise<TokenResult> {
+    const command = new CreateTokenCommand({
+      clientId,
+      clientSecret: decrypt(clientSecret),
+      grantType: "authorization_code",
+      code,
+      redirectUri,
+      codeVerifier, // PKCE verification
+    })
+
+    const response = await this.oidcClient.send(command)
+
+    if (!response.accessToken) {
+      throw new Error("Failed to exchange code for token")
+    }
+
+    return {
+      accessToken: encrypt(response.accessToken),
+      refreshToken: response.refreshToken ? encrypt(response.refreshToken) : undefined,
       expiresAt: new Date(Date.now() + (response.expiresIn || 3600) * 1000),
     }
   }

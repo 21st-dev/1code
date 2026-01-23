@@ -12,14 +12,7 @@ import { billingMethodAtom, awsBedrockOnboardingCompletedAtom } from "../../lib/
 import { trpc } from "../../lib/trpc"
 import { toast } from "sonner"
 import { IconSpinner } from "../../components/ui/icons"
-import { Copy, ExternalLink } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../../components/ui/dialog"
+import { ExternalLink, Check } from "lucide-react"
 
 export function AwsBedrockOnboardingPage() {
   const setBillingMethod = useSetAtom(billingMethodAtom)
@@ -27,37 +20,15 @@ export function AwsBedrockOnboardingPage() {
 
   const [ssoStartUrl, setSsoStartUrl] = useState("https://d-9067694978.awsapps.com/start")
   const [isAuthenticating, setIsAuthenticating] = useState(false)
-  const [showDeviceCode, setShowDeviceCode] = useState(false)
-  const [deviceCode, setDeviceCode] = useState("")
-  const [userCode, setUserCode] = useState("")
-  const [verificationUrl, setVerificationUrl] = useState("")
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [selectedAccount, setSelectedAccount] = useState<string>("")
-  const [selectedRole, setSelectedRole] = useState<string>("")
 
   // Check AWS connection status
   const { data: awsStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery(undefined, {
     refetchInterval: false,
   })
 
-  // Fetch accounts after authentication
-  const { data: accounts } = trpc.awsSso.listAccounts.useQuery(undefined, {
-    enabled: isAuthenticated,
-  })
-
-  // Fetch roles after account selection
-  const { data: roles } = trpc.awsSso.listRoles.useQuery(
-    { accountId: selectedAccount },
-    { enabled: !!selectedAccount }
-  )
-
-  // Get credentials mutation
-  const getCredentialsMutation = trpc.awsSso.getCredentials.useMutation()
-
-  // Mutations
-  const startDeviceAuthMutation = trpc.awsSso.startDeviceAuth.useMutation()
+  // Browser auth mutation - the new seamless flow
+  const startBrowserAuthMutation = trpc.awsSso.startBrowserAuth.useMutation()
   const updateSettingsMutation = trpc.claudeSettings.updateSettings.useMutation()
-  const pollDeviceAuthMutation = trpc.awsSso.pollDeviceAuth.useMutation()
 
   // Auto-complete onboarding when AWS is connected and has credentials
   useEffect(() => {
@@ -68,46 +39,6 @@ export function AwsBedrockOnboardingPage() {
 
   const handleBack = () => {
     setBillingMethod(null)
-  }
-
-  // Poll for device auth completion
-  useEffect(() => {
-    if (!showDeviceCode || !deviceCode) return
-
-    const interval = setInterval(async () => {
-      try {
-        const result = await pollDeviceAuthMutation.mutateAsync({ deviceCode })
-
-        if (result.status === "success") {
-          clearInterval(interval)
-          setShowDeviceCode(false)
-          setIsAuthenticated(true)
-          toast.success("Successfully authenticated with AWS!")
-
-          // Complete onboarding - user can configure account/role in Settings
-          setTimeout(() => {
-            setAwsBedrockOnboardingCompleted(true)
-          }, 1000)
-        } else if (result.status === "expired" || result.status === "denied") {
-          clearInterval(interval)
-          setShowDeviceCode(false)
-          toast.error(`Device authorization ${result.status}. Please try again.`)
-        }
-      } catch (error) {
-        // Polling will continue until success or user closes dialog
-      }
-    }, 5000) // Poll every 5 seconds
-
-    return () => clearInterval(interval)
-  }, [showDeviceCode, deviceCode, pollDeviceAuthMutation])
-
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(userCode)
-    toast.success("Code copied to clipboard")
-  }
-
-  const handleOpenUrl = () => {
-    window.open(verificationUrl, "_blank")
   }
 
   const handleConnect = async () => {
@@ -124,19 +55,26 @@ export function AwsBedrockOnboardingPage() {
         authMode: "aws",
       })
 
-      // Start device authorization
-      const result = await startDeviceAuthMutation.mutateAsync({
+      // Start browser-based OAuth flow
+      // This opens the browser, user logs in, and it automatically completes!
+      await startBrowserAuthMutation.mutateAsync({
         ssoStartUrl: ssoStartUrl.trim(),
         ssoRegion: "us-east-1",
       })
 
-      // Show device code dialog
-      setDeviceCode(result.deviceCode)
-      setUserCode(result.userCode)
-      setVerificationUrl(result.verificationUri)
-      setShowDeviceCode(true)
+      // Success - browser auth completed automatically
+      toast.success("Successfully connected to AWS!")
+
+      // Refetch status to update UI
+      await refetchStatus()
+
+      // Complete onboarding - user can configure account/role in Settings
+      setTimeout(() => {
+        setAwsBedrockOnboardingCompleted(true)
+      }, 1000)
     } catch (error) {
-      toast.error(`Failed to start authentication: ${error instanceof Error ? error.message : "Unknown error"}`)
+      const message = error instanceof Error ? error.message : "Failed to authenticate"
+      toast.error(message)
     } finally {
       setIsAuthenticating(false)
     }
@@ -190,6 +128,7 @@ export function AwsBedrockOnboardingPage() {
                 value={ssoStartUrl}
                 onChange={(e) => setSsoStartUrl(e.target.value)}
                 className="font-mono text-xs"
+                disabled={isAuthenticating}
               />
               <p className="text-xs text-muted-foreground">
                 This is your AWS SSO portal URL from IAM Identity Center
@@ -201,17 +140,33 @@ export function AwsBedrockOnboardingPage() {
               disabled={isAuthenticating || !ssoStartUrl.trim()}
               className="w-full"
             >
-              {isAuthenticating && <IconSpinner className="mr-2 h-4 w-4" />}
-              Connect with AWS SSO
+              {isAuthenticating ? (
+                <>
+                  <IconSpinner className="mr-2 h-4 w-4" />
+                  Waiting for browser...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Connect with AWS SSO
+                </>
+              )}
             </Button>
+
+            {isAuthenticating && (
+              <p className="text-xs text-center text-muted-foreground">
+                Complete the sign-in in your browser. This window will update automatically.
+              </p>
+            )}
           </div>
 
           {/* Connection Status */}
           {awsStatus?.configured && (
             <div className="text-center">
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                ✓ Connected to AWS
-              </p>
+              <div className="flex items-center justify-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                <Check className="w-4 h-4" />
+                Connected to AWS
+              </div>
               {awsStatus.accountName && (
                 <p className="text-xs text-muted-foreground mt-1">
                   {awsStatus.accountName} ({awsStatus.accountId})
@@ -228,69 +183,6 @@ export function AwsBedrockOnboardingPage() {
           </div>
         </div>
       </div>
-
-      {/* Device Code Dialog */}
-      <Dialog open={showDeviceCode} onOpenChange={setShowDeviceCode}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>AWS SSO Device Authorization</DialogTitle>
-            <DialogDescription>
-              Complete the sign-in process in your browser using the code below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* User Code Display */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Verification Code</Label>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 p-3 bg-muted rounded-md text-center">
-                  <span className="text-2xl font-mono font-bold tracking-widest">
-                    {userCode}
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyCode}
-                  title="Copy code"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Verification URL */}
-            <div className="space-y-2">
-              <Button
-                onClick={handleOpenUrl}
-                className="w-full"
-                variant="default"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open AWS Sign-In Page
-              </Button>
-            </div>
-
-            {/* Instructions */}
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p className="font-medium">Instructions:</p>
-              <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Click "Open AWS Sign-In Page" or manually visit the URL</li>
-                <li>Copy the verification code above</li>
-                <li>Paste the code in the AWS sign-in page</li>
-                <li>Complete the authentication</li>
-                <li>Return here - the app will automatically detect completion</li>
-              </ol>
-            </div>
-
-            {/* Polling indicator */}
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-2">
-              <IconSpinner className="h-4 w-4" />
-              <span>Waiting for authorization...</span>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

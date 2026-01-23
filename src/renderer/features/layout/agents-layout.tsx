@@ -25,6 +25,7 @@ import { AgentsSidebar } from "../sidebar/agents-sidebar"
 import { AgentsContent } from "../agents/ui/agents-content"
 import { UpdateBanner } from "../../components/update-banner"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
+import { AwsStatusBar } from "../../components/aws-status-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
@@ -272,6 +273,9 @@ export function AgentsLayout() {
 
         {/* Update Banner */}
         <UpdateBanner />
+
+        {/* AWS Status Bar (shows when authenticated with AWS) */}
+        <AwsStatusBar />
       </div>
     </TooltipProvider>
   )

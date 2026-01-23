@@ -5,7 +5,7 @@ import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { IconSpinner } from "../../../components/ui/icons"
-import { Check, X, ExternalLink, Copy, LogOut, RefreshCw, AlertCircle } from "lucide-react"
+import { Check, ExternalLink, LogOut, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import {
   Select,
@@ -14,13 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog"
+import { trpc } from "../../../lib/trpc"
 
 interface AwsSsoSectionProps {
   bedrockRegion: string
@@ -40,19 +34,6 @@ interface SsoAccount {
 interface SsoRole {
   roleName: string
   accountId: string
-}
-
-interface SsoStatus {
-  configured: boolean
-  authenticated: boolean
-  hasCredentials: boolean
-  ssoStartUrl?: string
-  ssoRegion?: string
-  accountId?: string
-  accountName?: string
-  roleName?: string
-  tokenExpiresAt?: string
-  credentialsExpiresAt?: string
 }
 
 // AWS Regions with Bedrock availability
@@ -87,19 +68,13 @@ export function AwsSsoSection({
   onSave,
   isSaving,
 }: AwsSsoSectionProps) {
-  const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>("profile")
+  const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>("sso")
   const [ssoStartUrl, setSsoStartUrl] = useState("")
   const [ssoRegion, setSsoRegion] = useState("us-east-1")
   const [awsProfileName, setAwsProfileName] = useState("")
 
   // SSO login state
-  const [showLoginModal, setShowLoginModal] = useState(false)
-  const [deviceCode, setDeviceCode] = useState("")
-  const [userCode, setUserCode] = useState("")
-  const [verificationUrl, setVerificationUrl] = useState("")
-  const [isPolling, setIsPolling] = useState(false)
-  const [pollError, setPollError] = useState<string | null>(null)
-  const [isStartingAuth, setIsStartingAuth] = useState(false)
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [isSelectingProfile, setIsSelectingProfile] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -107,41 +82,40 @@ export function AwsSsoSection({
   // Account/role selection
   const [selectedAccountId, setSelectedAccountId] = useState("")
   const [selectedRoleName, setSelectedRoleName] = useState("")
-
-  // SSO status state
-  const [ssoStatus, setSsoStatus] = useState<SsoStatus>({
-    configured: false,
-    authenticated: false,
-    hasCredentials: false,
-  })
   const [accounts, setAccounts] = useState<SsoAccount[]>([])
   const [roles, setRoles] = useState<SsoRole[]>([])
 
-  // Backend availability - will be true once backend is implemented
-  const [backendAvailable, setBackendAvailable] = useState(false)
+  // tRPC queries and mutations
+  const { data: ssoStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery()
+  const startBrowserAuthMutation = trpc.awsSso.startBrowserAuth.useMutation()
+  const selectProfileMutation = trpc.awsSso.selectProfile.useMutation()
+  const refreshCredentialsMutation = trpc.awsSso.refreshCredentials.useMutation()
+  const logoutMutation = trpc.awsSso.logout.useMutation()
+  const { data: accountsData, refetch: refetchAccounts } = trpc.awsSso.listAccounts.useQuery(
+    undefined,
+    { enabled: !!ssoStatus?.authenticated }
+  )
+  const { data: rolesData, refetch: refetchRoles } = trpc.awsSso.listRoles.useQuery(
+    { accountId: selectedAccountId },
+    { enabled: !!selectedAccountId }
+  )
 
-  // Try to use tRPC hooks dynamically to avoid TypeScript errors
-  // when the awsSso router doesn't exist yet
+  // Sync accounts and roles from queries
   useEffect(() => {
-    // Check if awsSso router exists by attempting to import trpc
-    const checkBackend = async () => {
-      try {
-        const { trpc } = await import("../../../lib/trpc")
-        // Check if awsSso exists on the trpc object
-        if (trpc && "awsSso" in trpc) {
-          setBackendAvailable(true)
-        }
-      } catch (error) {
-        console.log("[aws-sso] Backend not available:", error)
-        setBackendAvailable(false)
-      }
+    if (accountsData?.accounts) {
+      setAccounts(accountsData.accounts)
     }
-    checkBackend()
-  }, [])
+  }, [accountsData])
+
+  useEffect(() => {
+    if (rolesData?.roles) {
+      setRoles(rolesData.roles)
+    }
+  }, [rolesData])
 
   // Sync from status
   useEffect(() => {
-    if (ssoStatus.configured) {
+    if (ssoStatus?.configured) {
       setSsoStartUrl(ssoStatus.ssoStartUrl || "")
       setSsoRegion(ssoStatus.ssoRegion || "us-east-1")
       if (ssoStatus.accountId) setSelectedAccountId(ssoStatus.accountId)
@@ -164,114 +138,23 @@ export function AwsSsoSection({
       return
     }
 
-    if (!backendAvailable) {
-      toast.error("AWS SSO backend not available. Please wait for backend implementation.")
-      return
-    }
-
-    setIsStartingAuth(true)
-    setPollError(null)
+    setIsAuthenticating(true)
 
     try {
-      const { trpcClient } = await import("../../../lib/trpc")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (trpcClient as any).awsSso.startDeviceAuth.mutate({
+      // Start browser-based OAuth flow
+      await startBrowserAuthMutation.mutateAsync({
         ssoStartUrl,
         ssoRegion,
       })
 
-      setDeviceCode(result.deviceCode)
-      setUserCode(result.userCode)
-      setVerificationUrl(result.verificationUriComplete || result.verificationUri)
-      setShowLoginModal(true)
-
-      // Open browser
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (trpcClient as any).awsSso.openVerificationUrl.mutate({
-          url: result.verificationUriComplete || result.verificationUri,
-        })
-      } catch (e) {
-        console.error("Failed to open browser:", e)
-      }
-
-      // Start polling
-      setIsPolling(true)
-      startPolling(result.deviceCode)
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to start SSO login"
-      toast.error(errorMessage)
-      setBackendAvailable(false)
+      toast.success("Successfully connected to AWS!")
+      await refetchStatus()
+      await refetchAccounts()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to authenticate"
+      toast.error(message)
     } finally {
-      setIsStartingAuth(false)
-    }
-  }
-
-  const startPolling = async (code: string) => {
-    if (!code) return
-
-    const poll = async () => {
-      try {
-        const { trpcClient } = await import("../../../lib/trpc")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (trpcClient as any).awsSso.pollDeviceAuth.mutate({ deviceCode: code })
-
-        if (result.status === "success") {
-          setIsPolling(false)
-          setShowLoginModal(false)
-          setPollError(null)
-          toast.success("SSO login successful!")
-          setSsoStatus((prev) => ({
-            ...prev,
-            authenticated: true,
-          }))
-          // Refresh accounts
-          fetchAccounts()
-        } else if (result.status === "expired") {
-          setIsPolling(false)
-          setPollError("Authorization request expired. Please try again.")
-          toast.error("SSO login expired")
-        } else if (result.status === "denied") {
-          setIsPolling(false)
-          setPollError("Authorization was denied. Please try again.")
-          toast.error("SSO login denied")
-        } else {
-          // Continue polling
-          setTimeout(poll, 5000)
-        }
-      } catch (error: unknown) {
-        console.error("Polling error:", error)
-        // Continue polling on transient errors
-        setTimeout(poll, 5000)
-      }
-    }
-
-    poll()
-  }
-
-  const fetchAccounts = async () => {
-    try {
-      const { trpcClient } = await import("../../../lib/trpc")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (trpcClient as any).awsSso.listAccounts.query()
-      if (result.accounts) {
-        setAccounts(result.accounts)
-      }
-    } catch (error: unknown) {
-      console.error("Failed to fetch accounts:", error)
-    }
-  }
-
-  const fetchRoles = async (accountId: string) => {
-    try {
-      const { trpcClient } = await import("../../../lib/trpc")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (trpcClient as any).awsSso.listRoles.query({ accountId })
-      if (result.roles) {
-        setRoles(result.roles)
-      }
-    } catch (error: unknown) {
-      console.error("Failed to fetch roles:", error)
+      setIsAuthenticating(false)
     }
   }
 
@@ -279,9 +162,6 @@ export function AwsSsoSection({
     setSelectedAccountId(accountId)
     setSelectedRoleName("")
     setRoles([])
-    if (accountId) {
-      fetchRoles(accountId)
-    }
   }
 
   const handleSelectProfile = async () => {
@@ -290,103 +170,56 @@ export function AwsSsoSection({
       return
     }
 
-    if (!backendAvailable) {
-      toast.error("AWS SSO backend not available")
-      return
-    }
-
     const account = accounts.find((a) => a.accountId === selectedAccountId)
     setIsSelectingProfile(true)
 
     try {
-      const { trpcClient } = await import("../../../lib/trpc")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (trpcClient as any).awsSso.selectProfile.mutate({
+      await selectProfileMutation.mutateAsync({
         accountId: selectedAccountId,
         accountName: account?.accountName || selectedAccountId,
         roleName: selectedRoleName,
       })
       toast.success("AWS profile selected")
-      setSsoStatus((prev) => ({
-        ...prev,
-        hasCredentials: true,
-        accountId: selectedAccountId,
-        accountName: account?.accountName || selectedAccountId,
-        roleName: selectedRoleName,
-      }))
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to select profile"
-      toast.error(errorMessage)
+      await refetchStatus()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to select profile"
+      toast.error(message)
     } finally {
       setIsSelectingProfile(false)
     }
   }
 
   const handleRefreshCredentials = async () => {
-    if (!backendAvailable) {
-      toast.error("AWS SSO backend not available")
-      return
-    }
-
     setIsRefreshing(true)
     try {
-      const { trpcClient } = await import("../../../lib/trpc")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (trpcClient as any).awsSso.refreshCredentials.mutate()
+      await refreshCredentialsMutation.mutateAsync()
       toast.success("Credentials refreshed")
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to refresh credentials"
-      toast.error(errorMessage)
+      await refetchStatus()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to refresh credentials"
+      toast.error(message)
     } finally {
       setIsRefreshing(false)
     }
   }
 
   const handleLogout = async () => {
-    if (!backendAvailable) {
-      toast.error("AWS SSO backend not available")
-      return
-    }
-
     setIsLoggingOut(true)
     try {
-      const { trpcClient } = await import("../../../lib/trpc")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (trpcClient as any).awsSso.logout.mutate()
+      await logoutMutation.mutateAsync()
       toast.success("Logged out from AWS SSO")
       setSelectedAccountId("")
       setSelectedRoleName("")
-      setSsoStatus({
-        configured: false,
-        authenticated: false,
-        hasCredentials: false,
-      })
       setAccounts([])
       setRoles([])
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to logout"
-      toast.error(errorMessage)
+      await refetchStatus()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to logout"
+      toast.error(message)
     } finally {
       setIsLoggingOut(false)
     }
   }
-
-  const handleCopyCode = useCallback(() => {
-    navigator.clipboard.writeText(userCode)
-    toast.success("Code copied to clipboard")
-  }, [userCode])
-
-  const handleOpenBrowser = useCallback(async () => {
-    if (verificationUrl && backendAvailable) {
-      try {
-        const { trpcClient } = await import("../../../lib/trpc")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (trpcClient as any).awsSso.openVerificationUrl.mutate({ url: verificationUrl })
-      } catch (error: unknown) {
-        console.error("Failed to open browser:", error)
-      }
-    }
-  }, [backendAvailable, verificationUrl])
 
   const formatExpirationTime = (isoString?: string) => {
     if (!isoString) return "Unknown"
@@ -405,46 +238,8 @@ export function AwsSsoSection({
     return date.toLocaleString()
   }
 
-  const handleSsoStartUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setSsoStartUrl(e.target.value)
-  }
-
-  const handleAwsProfileNameChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setAwsProfileName(e.target.value)
-  }
-
-  const handleModalOpenChange = (open: boolean) => {
-    setShowLoginModal(open)
-    if (!open) {
-      setIsPolling(false)
-      setPollError(null)
-    }
-  }
-
-  const handleCancelModal = () => {
-    setShowLoginModal(false)
-    setIsPolling(false)
-    setPollError(null)
-  }
-
   return (
     <div className="space-y-4">
-      {/* Backend Missing Warning */}
-      {!backendAvailable && (
-        <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-          <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
-          <div className="text-sm">
-            <p className="font-medium text-yellow-600 dark:text-yellow-400">
-              AWS SSO Backend Not Available
-            </p>
-            <p className="text-muted-foreground mt-1">
-              The AWS SSO tRPC router is not yet implemented. SSO functionality will be available once the backend is complete.
-              You can still configure AWS Profile mode.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Connection Method Toggle */}
       <div className="space-y-2">
         <Label className="text-sm font-medium">Connection Method</Label>
@@ -471,17 +266,17 @@ export function AwsSsoSection({
       {/* SSO Configuration */}
       {connectionMethod === "sso" && (
         <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-          {!ssoStatus.authenticated ? (
+          {!ssoStatus?.authenticated ? (
             <>
               {/* SSO URL Input */}
               <div className="space-y-2">
                 <Label className="text-sm">SSO Start URL</Label>
                 <Input
                   value={ssoStartUrl}
-                  onChange={handleSsoStartUrlChange}
+                  onChange={(e) => setSsoStartUrl(e.target.value)}
                   placeholder="https://d-abc123.awsapps.com/start"
                   className="font-mono text-sm"
-                  disabled={!backendAvailable}
+                  disabled={isAuthenticating}
                 />
                 <p className="text-xs text-muted-foreground">
                   Your organization&apos;s AWS IAM Identity Center start URL
@@ -494,7 +289,7 @@ export function AwsSsoSection({
                 <Select
                   value={ssoRegion}
                   onValueChange={setSsoRegion}
-                  disabled={!backendAvailable}
+                  disabled={isAuthenticating}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -515,11 +310,26 @@ export function AwsSsoSection({
               {/* Login Button */}
               <Button
                 onClick={handleStartSsoLogin}
-                disabled={!backendAvailable || isStartingAuth || !ssoStartUrl}
+                disabled={isAuthenticating || !ssoStartUrl}
               >
-                {isStartingAuth && <IconSpinner className="h-4 w-4 mr-2" />}
-                Start SSO Login
+                {isAuthenticating ? (
+                  <>
+                    <IconSpinner className="h-4 w-4 mr-2" />
+                    Waiting for browser...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Connect with AWS SSO
+                  </>
+                )}
               </Button>
+
+              {isAuthenticating && (
+                <p className="text-xs text-muted-foreground">
+                  Complete the sign-in in your browser. This will update automatically.
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -585,7 +395,7 @@ export function AwsSsoSection({
               )}
 
               {/* Current Selection Status */}
-              {ssoStatus.hasCredentials && (
+              {ssoStatus?.hasCredentials && (
                 <div className="p-3 bg-background rounded-lg space-y-1.5 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Account:</span>
@@ -649,7 +459,7 @@ export function AwsSsoSection({
             <Label className="text-sm">AWS Profile Name</Label>
             <Input
               value={awsProfileName}
-              onChange={handleAwsProfileNameChange}
+              onChange={(e) => setAwsProfileName(e.target.value)}
               placeholder="default"
               className="font-mono text-sm"
             />
@@ -696,68 +506,6 @@ export function AwsSsoSection({
           Save Settings
         </Button>
       </div>
-
-      {/* SSO Login Modal */}
-      <Dialog open={showLoginModal} onOpenChange={handleModalOpenChange}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>AWS SSO Login</DialogTitle>
-            <DialogDescription>
-              A browser window will open for authentication.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-2">
-                Enter this code when prompted:
-              </p>
-              <div className="text-2xl font-mono font-bold tracking-widest bg-muted p-4 rounded-lg select-all">
-                {userCode}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={handleCopyCode}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Code
-              </Button>
-            </div>
-
-            {pollError && (
-              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <X className="h-4 w-4 text-destructive" />
-                <span className="text-sm text-destructive">{pollError}</span>
-              </div>
-            )}
-
-            {isPolling && !pollError && (
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                <IconSpinner className="h-4 w-4" />
-                Waiting for authentication...
-              </div>
-            )}
-
-            <div className="flex justify-between">
-              <Button
-                variant="outline"
-                onClick={handleOpenBrowser}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open Browser
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleCancelModal}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
