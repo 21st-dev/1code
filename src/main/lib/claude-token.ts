@@ -2,6 +2,7 @@ import { execSync, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { refreshOAuthToken, isTokenExpired as checkTokenExpired } from "./oauth-utils";
 
 interface ClaudeCredentials {
   claudeAiOauth?: {
@@ -189,55 +190,22 @@ export function getExistingClaudeToken(): string | null {
 
 /**
  * Refresh Claude OAuth token using refresh token
- * Uses the Anthropic API token endpoint
+ * Delegates to shared oauth-utils.ts implementation
  */
 export async function refreshClaudeToken(refreshToken: string): Promise<{
   accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
 }> {
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: 'claude-desktop',
-  });
-
-  const response = await fetch('https://api.anthropic.com/v1/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to refresh Claude token: ${error}`);
-  }
-
-  const data = await response.json() as {
-    access_token: string;
-    refresh_token?: string;
-    expires_in?: number;
-    token_type?: string;
-  };
-
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token || refreshToken,
-    expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
-  };
+  return refreshOAuthToken(refreshToken);
 }
 
 /**
  * Check if a token is expired or will expire soon (within 5 minutes)
+ * Delegates to shared oauth-utils.ts implementation
  */
 export function isTokenExpired(expiresAt?: number): boolean {
-  if (!expiresAt) {
-    // If no expiry, assume token is still valid
-    return false;
-  }
-  // Consider expired if less than 5 minutes remaining
-  const bufferMs = 5 * 60 * 1000;
-  return Date.now() + bufferMs >= expiresAt;
+  return checkTokenExpired(expiresAt);
 }
 
 /**
@@ -283,81 +251,93 @@ export function isClaudeCliInstalled(): boolean {
 }
 
 /**
- * Run `claude setup-token` to authenticate with Claude
- * Returns a promise that resolves when the process completes
+ * Run `claude setup-token` in a new terminal window
+ * Returns a promise that resolves when setup is complete
  *
- * Note: Uses pipe for stdio instead of inherit to prevent hanging in non-TTY
- * environments (like Electron apps launched from Finder/Dock)
+ * This approach opens a new terminal window where the user can complete
+ * the OAuth flow with proper TTY support, then checks for the token
  */
 export function runClaudeSetupToken(
   onStatus: (message: string) => void
 ): Promise<{ success: boolean; token?: string; error?: string }> {
   return new Promise((resolve) => {
-    onStatus('Starting Claude setup-token...');
+    onStatus('Opening terminal for authentication...');
 
     const fullPath = getExtendedPath();
 
-    const child = spawn('claude', ['setup-token'], {
-      // Don't use 'inherit' - it causes hang in non-TTY environments
-      // Use 'ignore' for stdin and 'pipe' for stdout/stderr
-      stdio: ['ignore', 'pipe', 'pipe'],
+    // Script that runs claude setup-token and signals completion
+    const script = `
+      export PATH="${fullPath}"
+      echo "=== Claude Code Authentication ==="
+      echo ""
+      echo "Please complete the authentication in your browser."
+      echo "This terminal will close automatically when done."
+      echo ""
+
+      if claude setup-token; then
+        echo ""
+        echo "✓ Authentication successful!"
+        sleep 1
+      else
+        echo ""
+        echo "✗ Authentication failed"
+        sleep 2
+      fi
+    `;
+
+    let terminalCommand: string;
+
+    if (process.platform === 'darwin') {
+      // macOS: Use Terminal.app or iTerm2
+      terminalCommand = `osascript -e 'tell application "Terminal" to do script "${script.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"'`;
+    } else if (process.platform === 'win32') {
+      // Windows: Use cmd or Windows Terminal
+      terminalCommand = `start cmd /k "${script.replace(/\n/g, ' && ')}"`;
+    } else {
+      // Linux: Try various terminal emulators
+      terminalCommand = `x-terminal-emulator -e bash -c '${script}'`;
+    }
+
+    const child = spawn(terminalCommand, {
       shell: true,
+      detached: true,
+      stdio: 'ignore',
       env: { ...process.env, PATH: fullPath },
     });
 
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout?.on('data', (data: Buffer) => {
-      const text = data.toString();
-      stdout += text;
-      onStatus(text.trim());
-    });
-
-    child.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    // Timeout after 2 minutes to prevent indefinite hang
-    const timeout = setTimeout(() => {
-      child.kill();
-      resolve({
-        success: false,
-        error: 'Authentication timed out after 2 minutes. Please try again.',
-      });
-    }, 120000);
+    child.unref(); // Allow the parent process to exit independently
 
     child.on('error', (err) => {
-      clearTimeout(timeout);
       resolve({
         success: false,
-        error: `Failed to start claude setup-token: ${err.message}`,
+        error: `Failed to open terminal: ${err.message}`,
       });
     });
 
-    child.on('close', (code) => {
-      clearTimeout(timeout);
+    // Poll for token appearance (user might take time to complete OAuth)
+    onStatus('Waiting for authentication to complete...');
 
-      if (code === 0) {
-        // Wait a moment for the token to be written to keychain
-        setTimeout(() => {
-          const token = getExistingClaudeToken();
-          if (token) {
-            resolve({ success: true, token });
-          } else {
-            resolve({
-              success: false,
-              error: 'Token not found after setup. The authentication may have failed.',
-            });
-          }
-        }, 500);
-      } else {
-        const errorDetail = stderr.trim() || `Process exited with code ${code}`;
+    let attempts = 0;
+    const maxAttempts = 60; // 2 minutes (60 * 2 seconds)
+
+    const checkInterval = setInterval(() => {
+      attempts++;
+
+      const token = getExistingClaudeToken();
+      if (token) {
+        clearInterval(checkInterval);
+        onStatus('Authentication complete!');
+        resolve({ success: true, token });
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(checkInterval);
         resolve({
           success: false,
-          error: errorDetail,
+          error: 'Authentication timed out. Please run "claude setup-token" in your terminal manually.',
         });
       }
-    });
+    }, 2000); // Check every 2 seconds
   });
 }

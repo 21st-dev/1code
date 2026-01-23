@@ -2,7 +2,7 @@
 
 import { useAtom, useSetAtom } from "jotai"
 import { X } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
 import {
   agentsLoginModalOpenAtom,
@@ -19,105 +19,31 @@ import {
 } from "../ui/alert-dialog"
 import { Button } from "../ui/button"
 import { ClaudeCodeIcon, IconSpinner } from "../ui/icons"
-import { Input } from "../ui/input"
 import { Logo } from "../ui/logo"
 
 type AuthFlowState =
   | { step: "idle" }
-  | { step: "starting" }
-  | {
-      step: "waiting_url"
-      sandboxId: string
-      sandboxUrl: string
-      sessionId: string
-    }
-  | {
-      step: "has_url"
-      sandboxId: string
-      oauthUrl: string
-      sandboxUrl: string
-      sessionId: string
-    }
-  | { step: "submitting" }
-  | { step: "error"; message: string }
+  | { step: "authenticating" }
+  | { step: "cli-setup" }
+  | { step: "success" }
+  | { step: "error"; message: string; recoverable: boolean }
 
 export function ClaudeLoginModal() {
   const [open, setOpen] = useAtom(agentsLoginModalOpenAtom)
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
-  const [authCode, setAuthCode] = useState("")
-  const [userClickedConnect, setUserClickedConnect] = useState(false)
-  const [urlOpened, setUrlOpened] = useState(false)
-  const [savedOauthUrl, setSavedOauthUrl] = useState<string | null>(null)
-  const urlOpenedRef = useRef(false)
 
   // tRPC mutations
-  const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
-  const submitCodeMutation = trpc.claudeCode.submitCode.useMutation()
-  const openOAuthUrlMutation = trpc.claudeCode.openOAuthUrl.useMutation()
-
-  // Poll for OAuth URL
-  const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(
-    {
-      sandboxUrl: flowState.step === "waiting_url" ? flowState.sandboxUrl : "",
-      sessionId: flowState.step === "waiting_url" ? flowState.sessionId : "",
-    },
-    {
-      enabled: flowState.step === "waiting_url",
-      refetchInterval: 1500,
-    }
-  )
-
-  // Update flow state when we get the OAuth URL
-  useEffect(() => {
-    if (
-      flowState.step === "waiting_url" &&
-      pollStatusQuery.data?.oauthUrl
-    ) {
-      setSavedOauthUrl(pollStatusQuery.data.oauthUrl)
-      setFlowState({
-        step: "has_url",
-        sandboxId: flowState.sandboxId,
-        oauthUrl: pollStatusQuery.data.oauthUrl,
-        sandboxUrl: flowState.sandboxUrl,
-        sessionId: flowState.sessionId,
-      })
-    } else if (
-      flowState.step === "waiting_url" &&
-      pollStatusQuery.data?.state === "error"
-    ) {
-      setFlowState({
-        step: "error",
-        message: pollStatusQuery.data.error || "Failed to get OAuth URL",
-      })
-    }
-  }, [pollStatusQuery.data, flowState])
-
-  // Open URL in browser when ready (after user clicked Connect)
-  useEffect(() => {
-    if (
-      flowState.step === "has_url" &&
-      userClickedConnect &&
-      !urlOpenedRef.current
-    ) {
-      urlOpenedRef.current = true
-      setUrlOpened(true)
-      openOAuthUrlMutation.mutate(flowState.oauthUrl)
-    }
-  }, [flowState, userClickedConnect, openOAuthUrlMutation])
+  const startLocalAuthMutation = trpc.claudeCode.startLocalAuth.useMutation()
+  const cancelLocalAuthMutation = trpc.claudeCode.cancelLocalAuth.useMutation()
+  const setupTokenWithCliMutation = trpc.claudeCode.setupTokenWithCli.useMutation()
+  const cliInstalledQuery = trpc.claudeCode.isClaudeCliInstalled.useQuery()
 
   // Reset state when modal closes
   useEffect(() => {
     if (!open) {
       setFlowState({ step: "idle" })
-      setAuthCode("")
-      setUserClickedConnect(false)
-      setUrlOpened(false)
-      setSavedOauthUrl(null)
-      urlOpenedRef.current = false
-      // Clear pending retry if modal closed without success (user cancelled)
-      // Note: We don't clear here because success handler sets readyToRetry=true first
     }
   }, [open])
 
@@ -139,119 +65,45 @@ export function ClaudeLoginModal() {
     }
   }
 
-  // Check if the code looks like a valid Claude auth code (format: XXX#YYY)
-  const isValidCodeFormat = (code: string) => {
-    const trimmed = code.trim()
-    return trimmed.length > 50 && trimmed.includes("#")
-  }
+  const handleConnect = async () => {
+    if (flowState.step === "authenticating") return
 
-  const handleConnectClick = async () => {
-    setUserClickedConnect(true)
-
-    if (flowState.step === "has_url") {
-      // URL is ready, open it immediately
-      urlOpenedRef.current = true
-      setUrlOpened(true)
-      openOAuthUrlMutation.mutate(flowState.oauthUrl)
-    } else if (flowState.step === "error") {
-      // Retry on error
-      urlOpenedRef.current = false
-      setUrlOpened(false)
-      setFlowState({ step: "starting" })
-      try {
-        const result = await startAuthMutation.mutateAsync()
-        setFlowState({
-          step: "waiting_url",
-          sandboxId: result.sandboxId,
-          sandboxUrl: result.sandboxUrl,
-          sessionId: result.sessionId,
-        })
-      } catch (err) {
-        setFlowState({
-          step: "error",
-          message: err instanceof Error ? err.message : "Failed to start authentication",
-        })
-      }
-    } else if (flowState.step === "idle") {
-      // Start auth
-      setFlowState({ step: "starting" })
-      try {
-        const result = await startAuthMutation.mutateAsync()
-        setFlowState({
-          step: "waiting_url",
-          sandboxId: result.sandboxId,
-          sandboxUrl: result.sandboxUrl,
-          sessionId: result.sessionId,
-        })
-      } catch (err) {
-        setFlowState({
-          step: "error",
-          message: err instanceof Error ? err.message : "Failed to start authentication",
-        })
-      }
-    }
-  }
-
-  const handleSubmitCode = async () => {
-    if (!authCode.trim() || flowState.step !== "has_url") return
-
-    const { sandboxUrl, sessionId } = flowState
-    setFlowState({ step: "submitting" })
+    setFlowState({ step: "authenticating" })
 
     try {
-      await submitCodeMutation.mutateAsync({
-        sandboxUrl,
-        sessionId,
-        code: authCode.trim(),
-      })
-      // Success - trigger retry and close modal
+      await startLocalAuthMutation.mutateAsync()
+      setFlowState({ step: "success" })
+      // Trigger retry and close modal after brief success state
       triggerAuthRetry()
-      setOpen(false)
-    } catch (err) {
-      setFlowState({
-        step: "error",
-        message: err instanceof Error ? err.message : "Failed to submit code",
-      })
+      setTimeout(() => setOpen(false), 500)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Authentication failed"
+      const recoverable = !message.includes("unexpected") && !message.includes("internal")
+      setFlowState({ step: "error", message, recoverable })
     }
   }
 
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setAuthCode(value)
-
-    // Auto-submit if the pasted value looks like a valid auth code
-    if (isValidCodeFormat(value) && flowState.step === "has_url") {
-      const { sandboxUrl, sessionId } = flowState
-      setTimeout(async () => {
-        setFlowState({ step: "submitting" })
-        try {
-          await submitCodeMutation.mutateAsync({
-            sandboxUrl,
-            sessionId,
-            code: value.trim(),
-          })
-          // Success - trigger retry and close modal
-          triggerAuthRetry()
-          setOpen(false)
-        } catch (err) {
-          setFlowState({
-            step: "error",
-            message: err instanceof Error ? err.message : "Failed to submit code",
-          })
-        }
-      }, 100)
-    }
+  const handleCancel = () => {
+    cancelLocalAuthMutation.mutate()
+    setFlowState({ step: "idle" })
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && authCode.trim()) {
-      handleSubmitCode()
-    }
-  }
+  const handleSetupWithCli = async () => {
+    if (flowState.step === "cli-setup") return
 
-  const handleOpenFallbackUrl = () => {
-    if (savedOauthUrl) {
-      openOAuthUrlMutation.mutate(savedOauthUrl)
+    setFlowState({ step: "cli-setup" })
+
+    try {
+      await setupTokenWithCliMutation.mutateAsync()
+      setFlowState({ step: "success" })
+      triggerAuthRetry()
+      setTimeout(() => setOpen(false), 500)
+    } catch (error) {
+      if (flowState.step !== "cli-setup") return
+
+      const message = error instanceof Error ? error.message : "CLI setup failed"
+      const recoverable = !message.includes("not installed")
+      setFlowState({ step: "error", message, recoverable })
     }
   }
 
@@ -262,10 +114,6 @@ export function ClaudeLoginModal() {
     setOpen(false)
   }
 
-  const isLoadingAuth =
-    flowState.step === "starting" || flowState.step === "waiting_url"
-  const isSubmitting = flowState.step === "submitting"
-
   // Handle modal open/close - clear pending retry if closing without success
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -273,6 +121,10 @@ export function ClaudeLoginModal() {
     }
     setOpen(newOpen)
   }
+
+  const isAuthenticating = flowState.step === "authenticating"
+  const isCliSetup = flowState.step === "cli-setup"
+  const isClaudeCliInstalled = cliInstalledQuery.data?.installed ?? false
 
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
@@ -306,56 +158,100 @@ export function ClaudeLoginModal() {
 
           {/* Content */}
           <div className="space-y-6">
-            {/* Connect Button - shows loader only if user clicked AND loading */}
-            {!urlOpened && flowState.step !== "has_url" && flowState.step !== "error" && (
-              <Button
-                onClick={handleConnectClick}
-                className="w-full"
-                disabled={userClickedConnect && isLoadingAuth}
-              >
-                {userClickedConnect && isLoadingAuth ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  "Connect"
+            {/* Auth Options - Idle state */}
+            {flowState.step === "idle" && (
+              <div className="w-full space-y-3">
+                {/* Primary: Import from Claude CLI (if installed) */}
+                {isClaudeCliInstalled && (
+                  <Button onClick={handleSetupWithCli} className="w-full">
+                    Import from Claude CLI
+                  </Button>
                 )}
-              </Button>
+
+                {/* Secondary: OAuth (only show if CLI not installed) */}
+                {!isClaudeCliInstalled && (
+                  <Button onClick={handleConnect} className="w-full">
+                    Connect with OAuth
+                  </Button>
+                )}
+
+                {/* Divider */}
+                {isClaudeCliInstalled && (
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-border"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">Or</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tertiary: OAuth (if CLI is installed) */}
+                {isClaudeCliInstalled && (
+                  <Button variant="secondary" onClick={handleConnect} className="w-full">
+                    Connect with OAuth
+                  </Button>
+                )}
+              </div>
             )}
 
-            {/* Code Input - Show after URL is opened or if has_url */}
-            {(urlOpened ||
-              flowState.step === "has_url" ||
-              flowState.step === "submitting") && (
-              <div className="space-y-4">
-                <Input
-                  value={authCode}
-                  onChange={handleCodeChange}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Paste your authentication code here..."
-                  className="font-mono text-center"
-                  autoFocus
-                  disabled={isSubmitting}
-                />
-                <Button
-                  onClick={handleSubmitCode}
-                  className="w-full"
-                  disabled={!authCode.trim() || isSubmitting}
-                >
-                  {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Continue"}
+            {/* Authenticating state */}
+            {isAuthenticating && (
+              <div className="space-y-4 text-center">
+                <div className="flex justify-center">
+                  <IconSpinner className="h-8 w-8" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Authenticating with Anthropic...</p>
+                  <p className="text-xs text-muted-foreground">
+                    A browser window has opened. Please complete authentication there.
+                  </p>
+                </div>
+                <Button variant="secondary" onClick={handleCancel} className="w-full">
+                  Cancel
                 </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  A new tab has opened for authentication.
-                  {savedOauthUrl && (
-                    <>
-                      {" "}
-                      <button
-                        onClick={handleOpenFallbackUrl}
-                        className="text-primary hover:underline"
-                      >
-                        Didn't open? Click here
-                      </button>
-                    </>
-                  )}
-                </p>
+              </div>
+            )}
+
+            {/* CLI Setup state */}
+            {isCliSetup && (
+              <div className="space-y-4 text-center">
+                <div className="flex justify-center">
+                  <IconSpinner className="h-8 w-8" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Setting up with Claude CLI...</p>
+                  <p className="text-xs text-muted-foreground">
+                    A browser window has opened. Please complete authentication there.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Success state */}
+            {flowState.step === "success" && (
+              <div className="space-y-2 text-center">
+                <div className="flex justify-center">
+                  <svg
+                    className="h-8 w-8 text-green-500"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path
+                      d="M22 11.08V12a10 10 0 1 1-5.93-9.14"
+                      strokeLinecap="round"
+                    />
+                    <polyline
+                      points="22 4 12 14.01 9 11.01"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+                <p className="text-sm font-medium">Authentication successful!</p>
               </div>
             )}
 
@@ -365,13 +261,11 @@ export function ClaudeLoginModal() {
                 <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                   <p className="text-sm text-destructive">{flowState.message}</p>
                 </div>
-                <Button
-                  variant="secondary"
-                  onClick={handleConnectClick}
-                  className="w-full"
-                >
-                  Try Again
-                </Button>
+                {flowState.recoverable && (
+                  <Button variant="secondary" onClick={handleConnect} className="w-full">
+                    Try Again
+                  </Button>
+                )}
               </div>
             )}
 

@@ -1,19 +1,10 @@
 import { eq } from "drizzle-orm"
-import { safeStorage, shell } from "electron"
+import { safeStorage } from "electron"
 import { z } from "zod"
-import { getAuthManager } from "../../../index"
-import { getExistingClaudeToken } from "../../claude-token"
-import { getApiUrl } from "../../config"
+import { getExistingClaudeToken, runClaudeSetupToken, isClaudeCliInstalled } from "../../claude-token"
 import { claudeCodeCredentials, getDatabase } from "../../db"
+import { startOAuthFlow, cancelOAuthFlow, isOAuthFlowInProgress } from "../../oauth-server"
 import { publicProcedure, router } from "../index"
-
-/**
- * Get desktop auth token for server API calls
- */
-async function getDesktopToken(): Promise<string | null> {
-  const authManager = getAuthManager()
-  return authManager.getValidToken()
-}
 
 /**
  * Encrypt token using Electron's safeStorage
@@ -38,9 +29,6 @@ function decryptToken(encrypted: string): string {
 }
 
 function storeOAuthToken(oauthToken: string) {
-  const authManager = getAuthManager()
-  const user = authManager.getUser()
-
   const encryptedToken = encryptToken(oauthToken)
   const db = getDatabase()
 
@@ -53,14 +41,14 @@ function storeOAuthToken(oauthToken: string) {
       id: "default",
       oauthToken: encryptedToken,
       connectedAt: new Date(),
-      userId: user?.id ?? null,
+      userId: null,
     })
     .run()
 }
 
 /**
  * Claude Code OAuth router for desktop
- * Uses server only for sandbox creation, stores token locally
+ * Uses local OAuth server for authentication - no external dependencies
  */
 export const claudeCodeRouter = router({
   /**
@@ -81,123 +69,48 @@ export const claudeCodeRouter = router({
   }),
 
   /**
-   * Start OAuth flow - calls server to create sandbox
+   * Start local OAuth flow - opens browser directly to Anthropic
+   * This replaces the old startAuth/pollStatus/submitCode flow
    */
-  startAuth: publicProcedure.mutation(async () => {
-    const token = await getDesktopToken()
-    if (!token) {
-      throw new Error("Not authenticated with 21st.dev")
+  startLocalAuth: publicProcedure.mutation(async () => {
+    // Check if flow is already in progress
+    if (isOAuthFlowInProgress()) {
+      throw new Error("OAuth flow already in progress")
     }
 
-    // Server creates sandbox (has CodeSandbox SDK)
-    const response = await fetch(`${getApiUrl()}/api/auth/claude-code/start`, {
-      method: "POST",
-      headers: { "x-desktop-token": token },
-    })
+    try {
+      const result = await startOAuthFlow()
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }))
-      throw new Error(error.error || `Start auth failed: ${response.status}`)
-    }
+      // Store the token
+      storeOAuthToken(result.accessToken)
 
-    return (await response.json()) as {
-      sandboxId: string
-      sandboxUrl: string
-      sessionId: string
+      console.log("[ClaudeCode] Token stored via local OAuth")
+
+      return {
+        success: true,
+        expiresAt: result.expiresAt,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "OAuth flow failed"
+      console.error("[ClaudeCode] Local auth error:", message)
+      throw new Error(message)
     }
   }),
 
   /**
-   * Poll for OAuth URL - calls sandbox directly
+   * Cancel in-progress OAuth flow
    */
-  pollStatus: publicProcedure
-    .input(
-      z.object({
-        sandboxUrl: z.string(),
-        sessionId: z.string(),
-      })
-    )
-    .query(async ({ input }) => {
-      try {
-        const response = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
-
-        if (!response.ok) {
-          return { state: "error" as const, oauthUrl: null, error: "Failed to poll status" }
-        }
-
-        const data = await response.json()
-        return {
-          state: data.state as string,
-          oauthUrl: data.oauthUrl ?? null,
-          error: data.error ?? null,
-        }
-      } catch (error) {
-        console.error("[ClaudeCode] Poll status error:", error)
-        return { state: "error" as const, oauthUrl: null, error: "Connection failed" }
-      }
-    }),
+  cancelLocalAuth: publicProcedure.mutation(() => {
+    cancelOAuthFlow()
+    return { success: true }
+  }),
 
   /**
-   * Submit OAuth code - calls sandbox directly, stores token locally
+   * Check if OAuth flow is in progress
    */
-  submitCode: publicProcedure
-    .input(
-      z.object({
-        sandboxUrl: z.string(),
-        sessionId: z.string(),
-        code: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
-      // Submit code to sandbox
-      const codeRes = await fetch(
-        `${input.sandboxUrl}/api/auth/${input.sessionId}/code`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: input.code }),
-        }
-      )
-
-      if (!codeRes.ok) {
-        throw new Error(`Code submission failed: ${codeRes.statusText}`)
-      }
-
-      // Poll for OAuth token (max 10 seconds)
-      let oauthToken: string | null = null
-
-      for (let i = 0; i < 10; i++) {
-        await new Promise((r) => setTimeout(r, 1000))
-
-        const statusRes = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
-
-        if (!statusRes.ok) continue
-
-        const status = await statusRes.json()
-
-        if (status.state === "success" && status.oauthToken) {
-          oauthToken = status.oauthToken
-          break
-        }
-
-        if (status.state === "error") {
-          throw new Error(status.error || "Authentication failed")
-        }
-      }
-
-      if (!oauthToken) {
-        throw new Error("Timeout waiting for OAuth token")
-      }
-
-      storeOAuthToken(oauthToken)
-
-      console.log("[ClaudeCode] Token stored locally")
-      return { success: true }
-    }),
+  isAuthInProgress: publicProcedure.query(() => {
+    return { inProgress: isOAuthFlowInProgress() }
+  }),
 
   /**
    * Import an existing OAuth token from the local machine
@@ -240,6 +153,37 @@ export const claudeCodeRouter = router({
   }),
 
   /**
+   * Check if Claude CLI is installed
+   */
+  isClaudeCliInstalled: publicProcedure.query(() => {
+    return { installed: isClaudeCliInstalled() }
+  }),
+
+  /**
+   * Run Claude CLI setup-token to authenticate
+   */
+  setupTokenWithCli: publicProcedure.mutation(async () => {
+    if (!isClaudeCliInstalled()) {
+      throw new Error("Claude CLI is not installed. Please install it from https://claude.ai/code")
+    }
+
+    const result = await runClaudeSetupToken((message) => {
+      console.log("[ClaudeCode] Setup:", message)
+    })
+
+    if (!result.success) {
+      throw new Error(result.error || "Failed to setup token with Claude CLI")
+    }
+
+    if (result.token) {
+      storeOAuthToken(result.token)
+      console.log("[ClaudeCode] Token stored from Claude CLI")
+    }
+
+    return { success: true }
+  }),
+
+  /**
    * Get decrypted OAuth token (local)
    */
   getToken: publicProcedure.query(() => {
@@ -276,13 +220,61 @@ export const claudeCodeRouter = router({
     return { success: true }
   }),
 
+  // ============================================================
+  // DEPRECATED: Old 21st.dev-based OAuth flow
+  // These are kept for backwards compatibility but will throw errors
+  // ============================================================
+
   /**
-   * Open OAuth URL in browser
+   * @deprecated Use startLocalAuth instead
+   */
+  startAuth: publicProcedure.mutation(async () => {
+    throw new Error(
+      "startAuth is deprecated. Use startLocalAuth instead which handles OAuth directly."
+    )
+  }),
+
+  /**
+   * @deprecated No longer needed with local OAuth
+   */
+  pollStatus: publicProcedure
+    .input(
+      z.object({
+        sandboxUrl: z.string(),
+        sessionId: z.string(),
+      })
+    )
+    .query(async () => {
+      throw new Error(
+        "pollStatus is deprecated. Use startLocalAuth instead which handles the entire OAuth flow."
+      )
+    }),
+
+  /**
+   * @deprecated No longer needed with local OAuth
+   */
+  submitCode: publicProcedure
+    .input(
+      z.object({
+        sandboxUrl: z.string(),
+        sessionId: z.string(),
+        code: z.string().min(1),
+      })
+    )
+    .mutation(async () => {
+      throw new Error(
+        "submitCode is deprecated. Use startLocalAuth instead which handles the entire OAuth flow."
+      )
+    }),
+
+  /**
+   * @deprecated No longer needed with local OAuth
    */
   openOAuthUrl: publicProcedure
     .input(z.string())
-    .mutation(async ({ input: url }) => {
-      await shell.openExternal(url)
-      return { success: true }
+    .mutation(async () => {
+      throw new Error(
+        "openOAuthUrl is deprecated. Use startLocalAuth instead which opens the browser automatically."
+      )
     }),
 })

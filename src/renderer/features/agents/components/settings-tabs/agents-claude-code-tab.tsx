@@ -1,39 +1,21 @@
 "use client"
 
 import { trpc } from "../../../../lib/trpc"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "../../../../components/ui/button"
-import { Input } from "../../../../components/ui/input"
-import { Label } from "../../../../components/ui/label"
 import { IconSpinner } from "../../../../components/ui/icons"
-import { ExternalLink, Check, X, Copy } from "lucide-react"
+import { Check, X } from "lucide-react"
 import { toast } from "sonner"
-import { useHaptic } from "../../hooks/use-haptic"
 
 type AuthFlowState =
   | { step: "idle" }
-  | { step: "starting" }
-  | {
-      step: "waiting_url"
-      sandboxId: string
-      sandboxUrl: string
-      sessionId: string
-    }
-  | {
-      step: "has_url"
-      sandboxId: string
-      oauthUrl: string
-      sandboxUrl: string
-      sessionId: string
-    }
-  | { step: "submitting" }
-  | { step: "error"; message: string }
+  | { step: "authenticating" }
+  | { step: "cli-setup" }
+  | { step: "success" }
+  | { step: "error"; message: string; recoverable: boolean }
 
 export function AgentsClaudeCodeTab() {
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
-  const [authCode, setAuthCode] = useState("")
-  const [copied, setCopied] = useState(false)
-  const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
 
@@ -45,47 +27,44 @@ export function AgentsClaudeCodeTab() {
     refetch,
   } = trpc.claudeCode.getIntegration.useQuery()
 
-  // Start auth mutation
-  const startAuth = trpc.claudeCode.startAuth.useMutation({
-    onSuccess: (data) => {
-      setFlowState({
-        step: "waiting_url",
-        sandboxId: data.sandboxId,
-        sandboxUrl: data.sandboxUrl,
-        sessionId: data.sessionId,
-      })
+  // Query CLI installation status
+  const cliInstalledQuery = trpc.claudeCode.isClaudeCliInstalled.useQuery()
+
+  // Start local auth mutation
+  const startLocalAuth = trpc.claudeCode.startLocalAuth.useMutation({
+    onSuccess: () => {
+      setFlowState({ step: "success" })
+      toast.success("Claude Code connected successfully!")
+      refetch()
+      utils.claudeCode.getIntegration.invalidate()
+      // Reset to idle after showing success
+      setTimeout(() => setFlowState({ step: "idle" }), 1500)
     },
     onError: (error) => {
-      setFlowState({ step: "error", message: error.message })
-      toast.error(error.message || "Failed to start authentication")
+      const message = error.message || "Failed to authenticate"
+      const recoverable = !message.includes("unexpected") && !message.includes("internal")
+      setFlowState({ step: "error", message, recoverable })
+      toast.error(message)
     },
   })
 
-  // Poll for auth status (directly from sandbox)
-  const { data: authStatus } = trpc.claudeCode.pollStatus.useQuery(
-    {
-      sandboxUrl: flowState.step === "waiting_url" ? flowState.sandboxUrl : "",
-      sessionId: flowState.step === "waiting_url" ? flowState.sessionId : "",
-    },
-    {
-      enabled: flowState.step === "waiting_url",
-      refetchInterval: 1500,
-      refetchIntervalInBackground: true,
-    }
-  )
+  // Cancel local auth mutation
+  const cancelLocalAuth = trpc.claudeCode.cancelLocalAuth.useMutation()
 
-  // Submit code mutation
-  const submitCode = trpc.claudeCode.submitCode.useMutation({
+  // Setup with CLI mutation
+  const setupTokenWithCli = trpc.claudeCode.setupTokenWithCli.useMutation({
     onSuccess: () => {
+      setFlowState({ step: "success" })
       toast.success("Claude Code connected successfully!")
-      setFlowState({ step: "idle" })
-      setAuthCode("")
       refetch()
       utils.claudeCode.getIntegration.invalidate()
+      setTimeout(() => setFlowState({ step: "idle" }), 1500)
     },
     onError: (error) => {
-      setFlowState({ step: "error", message: error.message })
-      toast.error(error.message || "Failed to complete authentication")
+      const message = error.message || "Failed to setup with CLI"
+      const recoverable = !message.includes("not installed")
+      setFlowState({ step: "error", message, recoverable })
+      toast.error(message)
     },
   })
 
@@ -101,61 +80,26 @@ export function AgentsClaudeCodeTab() {
     },
   })
 
-  // Open URL mutation (uses Electron shell.openExternal)
-  const openOAuthUrl = trpc.claudeCode.openOAuthUrl.useMutation()
-
-  // Update flow state when OAuth URL is ready
-  useEffect(() => {
-    if (
-      flowState.step === "waiting_url" &&
-      authStatus?.oauthUrl
-    ) {
-      setFlowState({
-        step: "has_url",
-        sandboxId: flowState.sandboxId,
-        oauthUrl: authStatus.oauthUrl,
-        sandboxUrl: flowState.sandboxUrl,
-        sessionId: flowState.sessionId,
-      })
-    }
-  }, [authStatus, flowState])
-
   const handleStartAuth = () => {
-    setFlowState({ step: "starting" })
-    startAuth.mutate()
-  }
-
-  const handleSubmitCode = () => {
-    if (!authCode.trim() || flowState.step !== "has_url") return
-
-    setFlowState({ step: "submitting" })
-    submitCode.mutate({
-      sandboxUrl: flowState.sandboxUrl,
-      sessionId: flowState.sessionId,
-      code: authCode.trim(),
-    })
+    setFlowState({ step: "authenticating" })
+    startLocalAuth.mutate()
   }
 
   const handleCancel = () => {
+    cancelLocalAuth.mutate()
     setFlowState({ step: "idle" })
-    setAuthCode("")
-  }
-
-  const handleCopyUrl = async (url: string) => {
-    await navigator.clipboard.writeText(url)
-    triggerHaptic("medium")
-    setCopied(true)
-    toast.success("URL copied to clipboard")
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const handleOpenUrl = (url: string) => {
-    openOAuthUrl.mutate(url)
   }
 
   const handleDisconnect = () => {
     disconnect.mutate()
   }
+
+  const handleSetupWithCli = () => {
+    setFlowState({ step: "cli-setup" })
+    setupTokenWithCli.mutate()
+  }
+
+  const isClaudeCliInstalled = cliInstalledQuery.data?.installed ?? false
 
   if (isLoading) {
     return (
@@ -240,84 +184,88 @@ export function AgentsClaudeCodeTab() {
                   <p className="text-sm text-muted-foreground">Not connected</p>
                 </div>
 
-                <Button onClick={handleStartAuth}>Connect Claude Code</Button>
-              </div>
-            )}
+                <div className="space-y-2">
+                  {/* Primary: Import from Claude CLI (if installed) */}
+                  {isClaudeCliInstalled && (
+                    <Button onClick={handleSetupWithCli} className="w-full">
+                      Import from Claude CLI
+                    </Button>
+                  )}
 
-            {/* Starting State */}
-            {flowState.step === "starting" && (
-              <div className="flex items-center gap-3">
-                <IconSpinner className="h-5 w-5" />
-                <p className="text-sm text-muted-foreground">
-                  Setting up authentication...
-                </p>
-              </div>
-            )}
+                  {/* Secondary: OAuth (only show if CLI not installed) */}
+                  {!isClaudeCliInstalled && (
+                    <Button onClick={handleStartAuth} className="w-full">
+                      Connect with OAuth
+                    </Button>
+                  )}
 
-            {/* Waiting for URL State */}
-            {flowState.step === "waiting_url" && (
-              <div className="flex items-center gap-3">
-                <IconSpinner className="h-5 w-5" />
-                <p className="text-sm text-muted-foreground">
-                  Preparing authentication URL...
-                </p>
-              </div>
-            )}
-
-            {/* Has URL State - Auth Flow */}
-            {flowState.step === "has_url" && (
-              <div className="space-y-6">
-                {/* Step 1: Open URL */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">
-                    1. Open this URL to authenticate with Claude
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 p-2 bg-muted rounded-md text-xs font-mono truncate">
-                      {flowState.oauthUrl}
+                  {/* Divider */}
+                  {isClaudeCliInstalled && (
+                    <div className="relative py-2">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-border"></div>
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-background px-2 text-muted-foreground">Or</span>
+                      </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleCopyUrl(flowState.oauthUrl)}
-                    >
-                      {copied ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
+                  )}
+
+                  {/* Tertiary: OAuth (if CLI is installed) */}
+                  {isClaudeCliInstalled && (
+                    <Button variant="outline" onClick={handleStartAuth} className="w-full">
+                      Connect with OAuth
                     </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleOpenUrl(flowState.oauthUrl)}
-                    >
-                      <ExternalLink className="h-4 w-4 mr-1" />
-                      Open
-                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Authenticating State */}
+            {flowState.step === "authenticating" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <IconSpinner className="h-5 w-5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Authenticating with Anthropic...
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      A browser window has opened. Please complete authentication there.
+                    </p>
                   </div>
                 </div>
+                <Button variant="outline" onClick={handleCancel}>
+                  Cancel
+                </Button>
+              </div>
+            )}
 
-                {/* Step 2: Enter Code */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">
-                    2. After logging in, paste the code you received
-                  </Label>
-                  <Input
-                    value={authCode}
-                    onChange={(e) => setAuthCode(e.target.value)}
-                    placeholder="Paste your authentication code here..."
-                    className="font-mono"
-                  />
+            {/* CLI Setup State */}
+            {flowState.step === "cli-setup" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <IconSpinner className="h-5 w-5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Setting up with Claude CLI...
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      A browser window has opened. Please complete authentication there.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Submitting State */}
-            {flowState.step === "submitting" && (
+            {/* Success State */}
+            {flowState.step === "success" && (
               <div className="flex items-center gap-3">
-                <IconSpinner className="h-5 w-5" />
-                <p className="text-sm text-muted-foreground">
-                  Verifying authentication...
+                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                </div>
+                <p className="text-sm font-medium text-foreground">
+                  Authentication successful!
                 </p>
               </div>
             )}
@@ -328,25 +276,12 @@ export function AgentsClaudeCodeTab() {
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
                   <p className="text-sm text-destructive">{flowState.message}</p>
                 </div>
-                <Button onClick={handleStartAuth}>Try Again</Button>
+                {flowState.recoverable && (
+                  <Button onClick={handleStartAuth}>Try Again</Button>
+                )}
               </div>
             )}
           </div>
-
-          {/* Footer with Action Buttons */}
-          {flowState.step === "has_url" && (
-            <div className="bg-muted p-3 rounded-b-lg flex justify-end gap-3 border-t">
-              <Button variant="outline" onClick={handleCancel}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSubmitCode}
-                disabled={!authCode.trim()}
-              >
-                Submit Code
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </div>
