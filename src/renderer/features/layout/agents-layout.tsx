@@ -12,6 +12,7 @@ import {
   isFullscreenAtom,
   anthropicOnboardingCompletedAtom,
   customHotkeysAtom,
+  activeDocumentAtomFamily,
   documentsPanelOpenAtomFamily,
   documentsPanelWidthAtom,
 } from "../../lib/atoms"
@@ -105,6 +106,9 @@ export function AgentsLayout() {
   const setDocumentsOpen = useSetAtom(
     documentsPanelOpenAtomFamily(effectiveChatId)
   )
+  // Get active document to check if panel should be visible
+  const activeDoc = useAtomValue(activeDocumentAtomFamily(effectiveChatId))
+
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
@@ -287,13 +291,13 @@ export function AgentsLayout() {
           {/* Documents Panel (Right) */}
           {selectedChatId && (
             <ResizableSidebar
-              isOpen={documentsOpen}
+              isOpen={documentsOpen && activeDoc !== null}
               onClose={() => setDocumentsOpen(false)}
               widthAtom={documentsPanelWidthAtom}
               minWidth={400}
               maxWidth={1000}
               side="right"
-              animationDuration={150}
+              animationDuration={100}
               showResizeTooltip={true}
               className="overflow-hidden bg-background border-l"
               style={{ borderLeftWidth: "0.5px" }}

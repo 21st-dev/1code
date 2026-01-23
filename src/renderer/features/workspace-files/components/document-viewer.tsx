@@ -1,3 +1,4 @@
+import { useCallback } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { X, FileText } from "lucide-react"
 import {
@@ -14,6 +15,16 @@ interface WorkspaceDocumentViewerProps {
 export function WorkspaceDocumentViewer({ chatId }: WorkspaceDocumentViewerProps) {
   const activeDoc = useAtomValue(activeDocumentAtomFamily(chatId))
   const setDocumentsOpen = useSetAtom(documentsPanelOpenAtomFamily(chatId))
+  const setActiveDoc = useSetAtom(activeDocumentAtomFamily(chatId))
+
+  const handleClose = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setDocumentsOpen(false)
+      setActiveDoc(null)
+    },
+    [setDocumentsOpen, setActiveDoc]
+  )
 
   if (!activeDoc) {
     return (
@@ -37,8 +48,10 @@ export function WorkspaceDocumentViewer({ chatId }: WorkspaceDocumentViewerProps
             <span className="truncate text-sm font-medium">{activeDoc.path}</span>
           </div>
           <button
-            onClick={() => setDocumentsOpen(false)}
-            className="flex-shrink-0 rounded p-1 hover:bg-accent"
+            type="button"
+            onClick={handleClose}
+            className="relative z-20 flex-shrink-0 rounded p-1 hover:bg-accent hover:text-foreground transition-[color,transform] duration-150 ease-out active:scale-[0.97]"
+            aria-label="Close"
             title="Close"
           >
             <X className="h-4 w-4" />

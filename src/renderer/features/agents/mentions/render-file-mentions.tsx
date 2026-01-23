@@ -211,10 +211,13 @@ function parseMention(id: string): ParsedMention | null {
   }
 }
 
+import { useOpenFile } from "../../workspace-files/hooks/use-open-file"
+
 /**
  * Component to render a single file/folder/skill/agent/tool/quote/diff mention chip (matching canvas style)
  */
 function MentionChip({ mention }: { mention: ParsedMention }) {
+  const { openFile } = useOpenFile()
   // Quote and diff mentions render as block cards
   if (mention.type === "quote") {
     // Get a short title from the label
@@ -280,9 +283,24 @@ function MentionChip({ mention }: { mention: ParsedMention }) {
         ? `MCP Tool: ${mention.path}`
         : `${mention.repository}:${mention.path}`
 
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (mention.type === "file" && mention.path) {
+      // Open file in document viewer
+      await openFile(mention.path, mention.label)
+    } else if (mention.type === "folder") {
+      // TODO: Could show folder contents in future
+      console.log("Folder click:", mention.path)
+    }
+  }
+
+  const isClickable = mention.type === "file" || mention.type === "folder"
+
   return (
     <span
-      className="inline-flex items-center gap-1 px-[6px] rounded-[6px] text-sm align-middle bg-black/[0.04] dark:bg-white/[0.08] text-foreground/80 select-none"
+      onClick={isClickable ? handleClick : undefined}
+      className={`inline-flex items-center gap-1 px-[6px] rounded-[6px] text-sm align-middle bg-black/[0.04] dark:bg-white/[0.08] text-foreground/80 select-none ${isClickable ? "cursor-pointer hover:bg-black/[0.08] dark:hover:bg-white/[0.12] transition-colors" : ""}`}
       title={title}
     >
       <Icon className={mention.type === "tool" ? "h-3.5 w-3.5 text-muted-foreground flex-shrink-0" : "h-3 w-3 text-muted-foreground flex-shrink-0"} />

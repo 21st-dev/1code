@@ -21,6 +21,8 @@ import { areToolPropsEqual } from "./agent-tool-utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom } from "../atoms"
 import { cn } from "../../../lib/utils"
+import { useOpenFile } from "../../workspace-files/hooks/use-open-file"
+import { FileText } from "lucide-react"
 
 interface AgentEditToolProps {
   part: any
@@ -277,12 +279,23 @@ export const AgentEditTool = memo(function AgentEditTool({
     return filePath
   }, [filePath])
 
+  // Hook for opening files in document viewer
+  const { openFile } = useOpenFile()
+
   // Handler to open diff sidebar and focus on this file
   const handleOpenInDiff = useCallback(() => {
     if (!displayPath) return
     setDiffSidebarOpen(true)
     setFocusedDiffFile(displayPath)
   }, [displayPath, setDiffSidebarOpen, setFocusedDiffFile])
+
+  // Handler to open file in document viewer
+  const handleOpenInDocumentViewer = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!displayPath) return
+
+    await openFile(displayPath, filename)
+  }, [displayPath, filename, openFile])
 
   // Memoized click handlers to prevent inline function re-creation
   const handleHeaderClick = useCallback(() => {
@@ -575,6 +588,23 @@ export const AgentEditTool = memo(function AgentEditTool({
               </>
             ) : null}
           </div>
+
+          {/* Open in viewer button - show when not pending */}
+          {!isPending && !isInputStreaming && displayPath && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleOpenInDocumentViewer}
+                  className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+                >
+                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="px-2 py-1.5">
+                <span className="text-xs">Open in viewer</span>
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           {/* Expand/Collapse button - show when has visible content and not streaming */}
           {hasVisibleContent && !isPending && !isInputStreaming && (

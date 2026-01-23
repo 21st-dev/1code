@@ -367,7 +367,7 @@ export function ResizableSidebar({
               opacity: 0,
             }}
             transition={{
-              duration: isResizing ? 0 : animationDuration,
+              duration: isResizing ? 0 : animationDuration / 1000,
               ease: [0.4, 0, 0.2, 1],
             }}
             className={`bg-transparent flex flex-col text-xs h-full relative ${className}`}
