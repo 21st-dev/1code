@@ -72,6 +72,7 @@ import { appStore } from "../../../lib/jotai-store"
 import { api } from "../../../lib/mock-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { BUILTIN_SLASH_COMMANDS } from "../commands"
 import { isDesktopApp } from "../../../lib/utils/platform"
 import { ChangesPanel } from "../../changes"
 import { DiffCenterPeekDialog } from "../../changes/components/diff-center-peek-dialog"
@@ -3287,6 +3288,36 @@ const ChatViewInner = memo(function ChatViewInner({
     }
 
     const text = inputValue.trim()
+
+    // Expand custom slash commands with arguments (e.g. "/Apex my argument")
+    // This mirrors the logic in new-chat-form.tsx
+    let finalText = text
+    const slashMatch = text.match(/^\/(\S+)\s*(.*)$/s)
+    if (slashMatch) {
+      const [, commandName, args] = slashMatch
+      const builtinNames = new Set(
+        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
+      )
+      if (!builtinNames.has(commandName)) {
+        try {
+          const commands = await trpcClient.commands.list.query({
+            projectPath,
+          })
+          const cmd = commands.find(
+            (c) => c.name.toLowerCase() === commandName.toLowerCase(),
+          )
+          if (cmd) {
+            const { content } = await trpcClient.commands.getContent.query({
+              path: cmd.path,
+            })
+            finalText = content.replace(/\$ARGUMENTS/g, args.trim())
+          }
+        } catch (error) {
+          console.error("Failed to expand custom slash command:", error)
+        }
+      }
+    }
+
     // Clear editor and draft from localStorage
     editorRef.current?.clear()
     if (parentChatId) {
@@ -3296,14 +3327,14 @@ const ChatViewInner = memo(function ChatViewInner({
     // Track message sent
     trackMessageSent({
       workspaceId: subChatId,
-      messageLength: text.length,
+      messageLength: finalText.length,
       mode: isPlanModeRef.current ? "plan" : "agent",
     })
 
     // Trigger auto-rename on first message in a new sub-chat
     if (messagesLengthRef.current === 0 && !hasTriggeredRenameRef.current) {
       hasTriggeredRenameRef.current = true
-      onAutoRename(text || "Image message", subChatId)
+      onAutoRename(finalText || "Image message", subChatId)
     }
 
     // Build message parts: images first, then files, then text
@@ -3361,8 +3392,8 @@ const ChatViewInner = memo(function ChatViewInner({
       mentionPrefix = [...quoteMentions, ...diffMentions, ...pastedTextMentions].join(" ") + " "
     }
 
-    if (text || mentionPrefix) {
-      parts.push({ type: "text", text: mentionPrefix + (text || "") })
+    if (finalText || mentionPrefix) {
+      parts.push({ type: "text", text: mentionPrefix + (finalText || "") })
     }
 
     clearAll()
@@ -3557,6 +3588,35 @@ const ChatViewInner = memo(function ChatViewInner({
     }
 
     const text = inputValue.trim()
+
+    // Expand custom slash commands with arguments (e.g. "/Apex my argument")
+    let finalText = text
+    const slashMatch = text.match(/^\/(\S+)\s*(.*)$/s)
+    if (slashMatch) {
+      const [, commandName, args] = slashMatch
+      const builtinNames = new Set(
+        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
+      )
+      if (!builtinNames.has(commandName)) {
+        try {
+          const commands = await trpcClient.commands.list.query({
+            projectPath,
+          })
+          const cmd = commands.find(
+            (c) => c.name.toLowerCase() === commandName.toLowerCase(),
+          )
+          if (cmd) {
+            const { content } = await trpcClient.commands.getContent.query({
+              path: cmd.path,
+            })
+            finalText = content.replace(/\$ARGUMENTS/g, args.trim())
+          }
+        } catch (error) {
+          console.error("Failed to expand custom slash command:", error)
+        }
+      }
+    }
+
     // Clear editor and draft from localStorage
     editorRef.current?.clear()
     if (parentChatId) {
@@ -3566,7 +3626,7 @@ const ChatViewInner = memo(function ChatViewInner({
     // Track message sent
     trackMessageSent({
       workspaceId: subChatId,
-      messageLength: text.length,
+      messageLength: finalText.length,
       mode: isPlanModeRef.current ? "plan" : "agent",
     })
 
@@ -3596,8 +3656,8 @@ const ChatViewInner = memo(function ChatViewInner({
         })),
     ]
 
-    if (text) {
-      parts.push({ type: "text", text })
+    if (finalText) {
+      parts.push({ type: "text", text: finalText })
     }
 
     // Clear attachments

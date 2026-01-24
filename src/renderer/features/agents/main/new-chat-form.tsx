@@ -776,7 +776,8 @@ export function NewChatForm({
     }
 
     // Check if message is a slash command with arguments (e.g. "/hello world")
-    const slashMatch = message.match(/^\/(\S+)\s*(.*)$/)
+    // Note: 's' flag makes '.' match newlines, so multi-line arguments are captured
+    const slashMatch = message.match(/^\/(\S+)\s*(.*)$/s)
     if (slashMatch) {
       const [, commandName, args] = slashMatch
 
@@ -790,7 +791,7 @@ export function NewChatForm({
           const commands = await trpcUtils.commands.list.fetch({
             projectPath: validatedProject?.path,
           })
-          const cmd = commands.find((c) => c.name === commandName)
+          const cmd = commands.find((c) => c.name.toLowerCase() === commandName.toLowerCase())
 
           if (cmd) {
             const { content } = await trpcUtils.commands.getContent.fetch({
