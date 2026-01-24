@@ -75,6 +75,7 @@
     "date-fns": "^3.6.0",
     "drizzle-orm": "^0.45.1",
     "electron-log": "^5.4.3",
+    "electron-store": "^11.0.2",
     "electron-updater": "^6.7.3",
     "gray-matter": "^4.0.3",
     "jotai": "^2.11.1",

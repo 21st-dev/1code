@@ -77,11 +77,41 @@ export async function handleAuthCode(_code: string): Promise<void> {
   console.log("[Auth] Please configure Azure credentials in Settings")
 }
 
-// Handle deep link - simplified since we don't use OAuth anymore
+// Handle deep link - supports Clerk auth callback
 function handleDeepLink(url: string): void {
   console.log("[DeepLink] Received:", url)
-  // Deep links are no longer used for auth
-  // Could be extended for other purposes in the future
+  
+  try {
+    const parsedUrl = new URL(url)
+    
+    // Handle Clerk auth callback: kcode://auth/callback?token=xxx&refresh=yyy
+    if (parsedUrl.host === "auth" && parsedUrl.pathname === "/callback") {
+      console.log("[DeepLink] Clerk auth callback detected")
+      
+      // Import and use Clerk auth service
+      import("./clerk-auth-service").then(({ getClerkAuthService }) => {
+        const authService = getClerkAuthService()
+        authService.handleAuthCallback(url).then((success) => {
+          const window = getWindow()
+          if (window) {
+            if (success) {
+              console.log("[DeepLink] Auth successful, notifying renderer")
+              window.webContents.send("clerk:auth-success", {
+                userId: authService.getUser()?.id,
+              })
+            } else {
+              console.error("[DeepLink] Auth failed")
+              window.webContents.send("clerk:auth-error", {
+                error: "Authentication failed",
+              })
+            }
+          }
+        })
+      })
+    }
+  } catch (error) {
+    console.error("[DeepLink] Failed to parse URL:", error)
+  }
 }
 
 // Register protocol BEFORE app is ready

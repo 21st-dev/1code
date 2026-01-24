@@ -3,6 +3,8 @@ import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { IconSpinner } from "../../../icons"
+import { useClerkAuth } from "../../../lib/hooks/use-clerk-auth"
+import { LogOut, User } from "lucide-react"
 import { toast } from "sonner"
 
 // Hook to detect narrow screen
@@ -31,48 +33,33 @@ interface DesktopUser {
 }
 
 export function AgentsProfileTab() {
+  const { user: clerkUser, logout: clerkLogout, isLoading: isClerkLoading } = useClerkAuth()
   const [user, setUser] = useState<DesktopUser | null>(null)
-  const [fullName, setFullName] = useState("")
-  const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const isNarrowScreen = useIsNarrowScreen()
 
-  // Fetch real user data from desktop API
+  // Fetch real user data from desktop API (legacy auth)
   useEffect(() => {
     async function fetchUser() {
       if (window.desktopApi?.getUser) {
         const userData = await window.desktopApi.getUser()
         setUser(userData)
-        setFullName(userData?.name || "")
       }
       setIsLoading(false)
     }
     fetchUser()
   }, [])
 
-  const handleSave = async () => {
-    setIsSaving(true)
-    try {
-      if (window.desktopApi?.updateUser) {
-        const updatedUser = await window.desktopApi.updateUser({ name: fullName })
-        if (updatedUser) {
-          setUser(updatedUser)
-          toast.success("Profile updated successfully")
-        }
-      } else {
-        throw new Error("Desktop API not available")
-      }
-    } catch (error) {
-      console.error("Error updating profile:", error)
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update profile"
-      )
-    } finally {
-      setIsSaving(false)
-    }
+  // Compute display values from clerk user or legacy user
+  const displayName = clerkUser?.name || user?.name || ""
+  const profileImageUrl = clerkUser?.imageUrl || user?.imageUrl || null
+
+  const handleLogout = () => {
+    clerkLogout()
+    toast.success("Signed out successfully")
   }
 
-  if (isLoading) {
+  if (isLoading || isClerkLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <IconSpinner className="h-6 w-6" />
@@ -92,20 +79,86 @@ export function AgentsProfileTab() {
         )}
         <div className="bg-background rounded-lg border border-border overflow-hidden">
           <div className="p-4 space-y-6">
-            {/* Full Name Field */}
+            {/* Clerk User Info */}
+            {clerkUser && (
+              <>
+                <div className="flex items-center justify-between pb-4 border-b">
+                  <div className="flex-1">
+                    <Label className="text-sm font-medium">Authentication</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Signed in with Clerk
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <Button
+                      onClick={handleLogout}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Subscription Tier */}
+                {clerkUser.subscriptionTier && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <Label className="text-sm font-medium">Subscription</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Your current plan
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0 w-80">
+                      <div className="px-3 py-2 bg-muted rounded-md">
+                        <span className="text-sm font-medium capitalize">
+                          {clerkUser.subscriptionTier}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Profile Picture Field */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Profile Picture</Label>
+                <p className="text-sm text-muted-foreground">
+                  Your avatar from authentication provider
+                </p>
+              </div>
+              <div className="flex-shrink-0">
+                {profileImageUrl ? (
+                  <img
+                    src={profileImageUrl}
+                    alt={displayName || "Profile"}
+                    className="w-12 h-12 rounded-full object-cover border border-border"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center border border-border">
+                    <User className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Full Name Field (read-only) */}
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <Label className="text-sm font-medium">Full Name</Label>
                 <p className="text-sm text-muted-foreground">
-                  This is your display name
+                  Your display name
                 </p>
               </div>
               <div className="flex-shrink-0 w-80">
                 <Input
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full"
-                  placeholder="Enter your name"
+                  value={displayName}
+                  disabled
+                  className="w-full opacity-60"
                 />
               </div>
             </div>
@@ -120,33 +173,15 @@ export function AgentsProfileTab() {
               </div>
               <div className="flex-shrink-0 w-80">
                 <Input
-                  value={user?.email || ""}
+                  value={clerkUser?.email || user?.email || ""}
                   disabled
                   className="w-full opacity-60"
                 />
               </div>
             </div>
           </div>
-
-          {/* Save Button Footer */}
-          <div className="bg-muted p-3 rounded-b-lg flex justify-end gap-3 border-t">
-            <Button
-              onClick={handleSave}
-              disabled={isSaving}
-              size="sm"
-              className="text-xs"
-            >
-              <div className="flex items-center justify-center gap-2">
-                {isSaving && (
-                  <IconSpinner className="h-3.5 w-3.5 text-current" />
-                )}
-                Save
-              </div>
-            </Button>
-          </div>
         </div>
       </div>
-
     </div>
   )
 }

@@ -133,6 +133,18 @@ contextBridge.exposeInMainWorld("desktopApi", {
     return () => ipcRenderer.removeListener("auth:error", handler)
   },
 
+  // Clerk auth events
+  onClerkAuthSuccess: (callback: (data: { userId: string }) => void) => {
+    const handler = (_event: unknown, data: { userId: string }) => callback(data)
+    ipcRenderer.on("clerk:auth-success", handler)
+    return () => ipcRenderer.removeListener("clerk:auth-success", handler)
+  },
+  onClerkAuthError: (callback: (data: { error: string }) => void) => {
+    const handler = (_event: unknown, data: { error: string }) => callback(data)
+    ipcRenderer.on("clerk:auth-error", handler)
+    return () => ipcRenderer.removeListener("clerk:auth-error", handler)
+  },
+
   // Shortcut events (from main process menu accelerators)
   onShortcutNewAgent: (callback: () => void) => {
     const handler = () => callback()
@@ -231,6 +243,9 @@ export interface DesktopApi {
   } | null>
   onAuthSuccess: (callback: (user: any) => void) => () => void
   onAuthError: (callback: (error: string) => void) => () => void
+  // Clerk auth
+  onClerkAuthSuccess: (callback: (data: { userId: string }) => void) => () => void
+  onClerkAuthError: (callback: (data: { error: string }) => void) => () => void
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   // File changes

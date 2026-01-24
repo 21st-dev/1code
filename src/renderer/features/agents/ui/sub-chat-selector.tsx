@@ -171,6 +171,8 @@ interface SubChatSelectorProps {
   diffStats?: DiffStats
   onOpenArtifact?: () => void
   canOpenArtifact?: boolean
+  hasArtifactContent?: boolean
+  isArtifactSidebarOpen?: boolean
   isArtifactStreaming?: boolean
 }
 
@@ -186,6 +188,8 @@ export function SubChatSelector({
   diffStats,
   onOpenArtifact,
   canOpenArtifact = false,
+  hasArtifactContent = false,
+  isArtifactSidebarOpen = false,
   isArtifactStreaming = false,
 }: SubChatSelectorProps) {
   // Use shallow comparison to prevent re-renders when arrays have same content
@@ -897,7 +901,7 @@ export function SubChatSelector({
       )}
 
       {/* Artifact button - visible on desktop when artifact content exists */}
-      {!isMobile && canOpenArtifact && (
+      {!isMobile && canOpenArtifact && !isArtifactSidebarOpen && (
         <div
           className="rounded-md bg-background/10 backdrop-blur-[10px] flex items-center justify-center"
           style={{
@@ -922,8 +926,14 @@ export function SubChatSelector({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              View plan
-              <Kbd>⌘⇧A</Kbd>
+              {hasArtifactContent ? (
+                <>
+                  View plan
+                  <Kbd>⌘⇧A</Kbd>
+                </>
+              ) : (
+                "No artifact"
+              )}
             </TooltipContent>
           </Tooltip>
         </div>

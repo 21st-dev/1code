@@ -550,6 +550,11 @@ export const pendingUserQuestionsAtom = atom<PendingUserQuestions | null>(null)
 // Set<subChatId>
 export const pendingPlanApprovalsAtom = atom<Set<string>>(new Set())
 
+// Atom to share unapproved plan state from ChatViewInner to ChatView
+// Used by ArtifactSidebar which is rendered in ChatView but needs state from ChatViewInner
+export const hasUnapprovedPlanAtom = atom(false)
+export const approvePlanCallbackAtom = atom<(() => void) | null>(null)
+
 // Diff view display mode - sidebar (side peek), center dialog, or fullscreen
 export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
 

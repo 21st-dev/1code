@@ -3,6 +3,7 @@ import { ThemeProvider, useTheme } from "next-themes"
 import { useEffect, useMemo } from "react"
 import { Toaster } from "sonner"
 import { TooltipProvider } from "./components/ui/tooltip"
+import { ClerkLoginScreen } from "./components/clerk-login-screen"
 import { TRPCProvider } from "./contexts/TRPCProvider"
 import { selectedProjectAtom } from "./features/agents/atoms"
 import { AgentsLayout } from "./features/layout/agents-layout"
@@ -18,6 +19,7 @@ import {
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
 import { trpc } from "./lib/trpc"
+import { useClerkAuth } from "./lib/hooks/use-clerk-auth"
 
 /**
  * Custom Toaster that adapts to theme
@@ -38,6 +40,9 @@ function ThemedToaster() {
  * Main content router - decides which page to show based on onboarding state
  */
 function AppContent() {
+  // Check Clerk authentication first
+  const { isAuthenticated, isLoading: isAuthLoading, user: clerkUser } = useClerkAuth()
+
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const anthropicOnboardingCompleted = useAtomValue(
@@ -50,6 +55,16 @@ function AppContent() {
 
   // Check if Azure Foundry is configured via environment variables
   const { data: foundryConfig, isLoading: isLoadingFoundry } = trpc.debug.isFoundryConfigured.useQuery()
+
+  // Identify user with analytics when authenticated
+  useEffect(() => {
+    if (clerkUser?.id) {
+      identify(clerkUser.id, { 
+        email: clerkUser.email, 
+        name: clerkUser.name 
+      })
+    }
+  }, [clerkUser])
 
   // Auto-skip onboarding when Foundry is configured
   useEffect(() => {
@@ -92,9 +107,14 @@ function AppContent() {
     return exists ? selectedProject : null
   }, [selectedProject, projects, isLoadingProjects])
 
-  // Show loading while checking Foundry config
-  if (isLoadingFoundry) {
+  // Show loading while checking auth or Foundry config
+  if (isAuthLoading || isLoadingFoundry) {
     return null // Or a loading spinner
+  }
+
+  // FIRST GATE: Clerk Authentication
+  if (!isAuthenticated) {
+    return <ClerkLoginScreen />
   }
 
   // If Foundry is configured, skip all billing/onboarding checks

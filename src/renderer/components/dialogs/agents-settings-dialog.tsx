@@ -69,12 +69,7 @@ const MAIN_TABS = [
     icon: SlidersFilledIcon,
     description: "Claude behavior settings",
   },
-  {
-    id: "models" as SettingsTab,
-    label: "Models",
-    icon: BrainFilledIcon,
-    description: "Model overrides and Claude Code auth",
-  },
+
 ]
 
 // Advanced/experimental tabs

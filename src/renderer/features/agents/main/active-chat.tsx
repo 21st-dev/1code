@@ -107,6 +107,8 @@ import {
   pendingReviewMessageAtom,
   pendingUserQuestionsAtom,
   QUESTIONS_SKIPPED_MESSAGE,
+  hasUnapprovedPlanAtom,
+  approvePlanCallbackAtom,
   selectedAgentChatIdAtom,
   selectedCommitAtom,
   setLoading,
@@ -3509,6 +3511,28 @@ const ChatViewInner = memo(function ChatViewInner({
     })
   }, [hasUnapprovedPlan, subChatId, setPendingPlanApprovals])
 
+  // Sync hasUnapprovedPlan and handleApprovePlan to atoms for ArtifactSidebar
+  // (ArtifactSidebar is rendered in ChatView parent but needs these values from ChatViewInner)
+  const setHasUnapprovedPlanAtom = useSetAtom(hasUnapprovedPlanAtom)
+  const setApprovePlanCallbackAtom = useSetAtom(approvePlanCallbackAtom)
+
+  // Only sync from active tab to prevent stale data
+  useEffect(() => {
+    if (!isActive) return
+    setHasUnapprovedPlanAtom(hasUnapprovedPlan)
+  }, [hasUnapprovedPlan, isActive, setHasUnapprovedPlanAtom])
+
+  useEffect(() => {
+    if (!isActive) return
+    setApprovePlanCallbackAtom(() => handleApprovePlan)
+    return () => {
+      // Only clear if we're the active tab being unmounted
+      if (isActive) {
+        setApprovePlanCallbackAtom(null)
+      }
+    }
+  }, [handleApprovePlan, isActive, setApprovePlanCallbackAtom])
+
   // Keyboard shortcut: Cmd+Enter to approve plan
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -3782,11 +3806,9 @@ const ChatViewInner = memo(function ChatViewInner({
         onSend={handleSend}
         onForceSend={handleForceSend}
         onStop={handleStop}
-        onApprovePlan={handleApprovePlan}
         onCompact={handleCompact}
         onCreateNewSubChat={onCreateNewSubChat}
         isStreaming={isStreaming}
-        hasUnapprovedPlan={hasUnapprovedPlan}
         isCompacting={isCompacting}
         images={images}
         files={files}
@@ -3855,6 +3877,9 @@ export function ChatView({
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedModelId] = useAtom(lastSelectedModelIdAtom)
   const [isPlanMode] = useAtom(isPlanModeAtom)
+  // Read shared plan state from atoms (synced from ChatViewInner)
+  const hasUnapprovedPlanValue = useAtomValue(hasUnapprovedPlanAtom)
+  const approvePlanCallback = useAtomValue(approvePlanCallbackAtom)
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
@@ -5563,7 +5588,9 @@ Make sure to preserve all functionality from both branches when resolving confli
                         isDiffSidebarOpen={isDiffSidebarOpen}
                         diffStats={diffStats}
                         onOpenArtifact={() => setIsArtifactSidebarOpen(true)}
-                        canOpenArtifact={!!artifactContent}
+                        canOpenArtifact={true}
+                        hasArtifactContent={!!artifactContent}
+                        isArtifactSidebarOpen={isArtifactSidebarOpen}
                         isArtifactStreaming={isArtifactStreaming}
                       />
                     </>
@@ -5864,6 +5891,9 @@ Make sure to preserve all functionality from both branches when resolving confli
               content={artifactContent}
               isStreaming={isArtifactStreaming}
               onClose={() => setIsArtifactSidebarOpen(false)}
+              isPlanMode={isPlanMode}
+              hasUnapprovedPlan={hasUnapprovedPlanValue}
+              onApprovePlan={approvePlanCallback || undefined}
             />
           </ResizableSidebar>
         )}

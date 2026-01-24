@@ -19,21 +19,8 @@ interface AgentExitPlanModeToolProps {
 }
 
 export const AgentExitPlanModeTool = memo(function AgentExitPlanModeTool({
-  part,
+  part: _part,
 }: AgentExitPlanModeToolProps) {
-  // Get plan text from output.plan
-  const planText = typeof part.output?.plan === "string" ? part.output.plan : ""
-
-  if (!planText) {
-    return null
-  }
-
-  return (
-    <div className="text-foreground px-2 pt-3 border-t border-border/50" data-plan-section="true">
-      <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium mb-1">
-        Plan
-      </div>
-      <ChatMarkdownRenderer content={planText} size="sm" />
-    </div>
-  )
+  // Plan content is now shown in the artifact sidebar, not inline in chat
+  return null
 }, areToolPropsEqual)
