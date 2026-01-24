@@ -26,6 +26,7 @@ import {
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
+import { ClustersSidebarSection } from "../clusters"
 import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../mcp/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
@@ -2654,6 +2655,9 @@ export function AgentsSidebar({
 
       {/* MCP Servers Section */}
       <McpSidebarSection />
+
+      {/* Clusters Section */}
+      <ClustersSidebarSection />
 
       {/* Footer - Multi-select toolbar or normal footer */}
       <AnimatePresence mode="wait">

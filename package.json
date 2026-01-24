@@ -33,8 +33,10 @@
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",
     "@anthropic-ai/claude-agent-sdk": "^0.2.12",
+    "@aws-sdk/client-eks": "^3.975.0",
     "@aws-sdk/client-sso": "^3.974.0",
     "@aws-sdk/client-sso-oidc": "^3.974.0",
+    "@aws-sdk/client-sts": "^3.975.0",
     "@aws-sdk/credential-provider-sso": "^3.972.1",
     "@git-diff-view/react": "^0.0.35",
     "@git-diff-view/shiki": "^0.0.36",
@@ -80,6 +82,7 @@
     "elkjs": "^0.11.0",
     "gray-matter": "^4.0.3",
     "jotai": "^2.11.1",
+    "kubernetesjs": "^0.7.6",
     "lucide-react": "^0.468.0",
     "motion": "^11.15.0",
     "next-themes": "^0.4.4",

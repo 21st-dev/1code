@@ -52,6 +52,8 @@ import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { WorkflowsContent } from "../../workflows/ui/workflows-content"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { McpContent } from "../../mcp/ui/mcp-content"
+import { selectedClustersCategoryAtom } from "../../clusters/atoms"
+import { ClustersContent } from "../../clusters/ui/clusters-content"
 import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
@@ -64,6 +66,7 @@ export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
+  const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
 
   // Debug logging
   useEffect(() => {
@@ -877,6 +880,11 @@ export function AgentsContent() {
   }
 
   // Desktop layout
+  // If Clusters category is selected, show clusters view
+  if (selectedClustersCategory === "clusters") {
+    return <ClustersContent />
+  }
+
   // If MCP category is selected, show MCP servers view (takes priority over chat)
   if (selectedMcpCategory === "mcp") {
     return <McpContent />

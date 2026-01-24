@@ -670,3 +670,26 @@ export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
   undefined,
   { getOnInit: true },
 )
+
+// ============================================
+// CLUSTERS FEATURE ATOMS
+// ============================================
+
+// Feature flag for Kubernetes Clusters feature - OFF by default
+// Enable via Settings > Beta tab
+export const clustersFeatureEnabledAtom = atomWithStorage<boolean>(
+  "preferences:clusters-feature-enabled",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+// Default namespace override for Kubernetes clusters
+// When null, uses derived value from DEVELOPER_EMAIL/GITHUB_EMAIL/git config
+// User can override in Settings > Beta tab
+export const clustersDefaultNamespaceAtom = atomWithStorage<string | null>(
+  "preferences:clusters-default-namespace",
+  null,
+  undefined,
+  { getOnInit: true },
+)
