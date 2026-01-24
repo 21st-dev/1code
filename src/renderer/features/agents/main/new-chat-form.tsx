@@ -1000,51 +1000,30 @@ export function NewChatForm({
       editorRef.current?.clearSlashCommand()
       setShowSlashDropdown(false)
 
-      // Handle builtin commands
+      // Handle builtin commands that change app state (no text input needed)
       if (command.category === "builtin") {
         switch (command.name) {
           case "clear":
             editorRef.current?.clear()
-            break
+            return
           case "plan":
             if (!isPlanMode) {
               setIsPlanMode(true)
             }
-            break
+            return
           case "agent":
             if (isPlanMode) {
               setIsPlanMode(false)
             }
-            break
-          // Prompt-based commands - auto-send to agent
-          case "review":
-          case "pr-comments":
-          case "release-notes":
-          case "security-review": {
-            const prompt =
-              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
-            if (prompt) {
-              editorRef.current?.setValue(prompt)
-              // Auto-send the prompt to agent
-              setTimeout(() => handleSend(), 0)
-            }
-            break
-          }
+            return
         }
-        return
       }
 
-      // Handle custom commands
-      if (command.argumentHint) {
-        // Command expects arguments - insert command and let user add args
-        editorRef.current?.setValue(`/${command.name} `)
-      } else if (command.prompt) {
-        // Command without arguments - send immediately
-        editorRef.current?.setValue(command.prompt)
-        setTimeout(() => handleSend(), 0)
-      }
+      // For all other commands (builtin prompts and custom):
+      // insert the command and let user add arguments or press Enter to send
+      editorRef.current?.setValue(`/${command.name} `)
     },
-    [isPlanMode, setIsPlanMode, handleSend],
+    [isPlanMode, setIsPlanMode],
   )
 
   // Paste handler for images, plain text, and large text (saved as files)

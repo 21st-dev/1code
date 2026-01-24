@@ -39,7 +39,7 @@ import {
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { isPlanModeAtom, lastSelectedModelIdAtom, type SubChatFileChange } from "../atoms"
-import { AgentsSlashCommand, COMMAND_PROMPTS, type SlashCommandOption } from "../commands"
+import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import {
@@ -540,7 +540,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       editorRef.current?.clearSlashCommand()
       setShowSlashDropdown(false)
 
-      // Handle builtin commands
+      // Handle builtin commands that change app state (no text input needed)
       if (command.category === "builtin") {
         switch (command.name) {
           case "clear":
@@ -548,51 +548,29 @@ export const ChatInputArea = memo(function ChatInputArea({
             if (onCreateNewSubChat) {
               onCreateNewSubChat()
             }
-            break
+            return
           case "plan":
             if (!isPlanMode) {
               setIsPlanMode(true)
             }
-            break
+            return
           case "agent":
             if (isPlanMode) {
               setIsPlanMode(false)
             }
-            break
+            return
           case "compact":
             // Trigger context compaction
             onCompact()
-            break
-          // Prompt-based commands - auto-send to agent
-          case "review":
-          case "pr-comments":
-          case "release-notes":
-          case "security-review":
-          case "commit": {
-            const prompt =
-              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
-            if (prompt) {
-              editorRef.current?.setValue(prompt)
-              // Auto-send the prompt to agent
-              setTimeout(() => onSend(), 0)
-            }
-            break
-          }
+            return
         }
-        return
       }
 
-      // Handle custom commands
-      if (command.argumentHint) {
-        // Command expects arguments - insert command and let user add args
-        editorRef.current?.setValue(`/${command.name} `)
-      } else if (command.prompt) {
-        // Command without arguments - send immediately
-        editorRef.current?.setValue(command.prompt)
-        setTimeout(() => onSend(), 0)
-      }
+      // For all other commands (builtin prompts and custom):
+      // insert the command and let user add arguments or press Enter to send
+      editorRef.current?.setValue(`/${command.name} `)
     },
-    [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onCompact, editorRef],
+    [isPlanMode, setIsPlanMode, onCreateNewSubChat, onCompact, editorRef],
   )
 
   // Paste handler for images, plain text, and large text (saved as files)
