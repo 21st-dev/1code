@@ -55,6 +55,7 @@ export type AgentsMentionsEditorHandle = {
   focus: () => void
   blur: () => void
   insertMention: (option: FileMentionOption) => void
+  insertColonMention: (option: FileMentionOption) => void // Insert mention from : trigger
   getValue: () => string
   setValue: (value: string) => void
   clear: () => void
@@ -68,6 +69,8 @@ type AgentsMentionsEditorProps = {
   onCloseTrigger: () => void
   onSlashTrigger?: (payload: TriggerPayload) => void // Slash command trigger
   onCloseSlashTrigger?: () => void // Close slash command dropdown
+  onColonTrigger?: (payload: TriggerPayload) => void // Colon trigger for agents
+  onCloseColonTrigger?: () => void // Close colon trigger dropdown
   onContentChange?: (hasContent: boolean) => void // lightweight callback for send button state
   placeholder?: string
   className?: string
@@ -266,6 +269,9 @@ interface TreeWalkResult {
   // Slash command trigger info
   slashPosition: { node: Node; offset: number } | null
   slashIndex: number
+  // Colon trigger info (for agent mentions)
+  colonPosition: { node: Node; offset: number } | null
+  colonIndex: number
 }
 
 // Single O(n) tree walk that computes all needed data
@@ -277,6 +283,8 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
   let atIndex = -1
   let slashPosition: { node: Node; offset: number } | null = null
   let slashIndex = -1
+  let colonPosition: { node: Node; offset: number } | null = null
+  let colonIndex = -1
 
   // Handle case where cursor is in root element (not in a text node)
   // This happens when the editor is empty or cursor is at element boundary
@@ -334,12 +342,35 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
             const afterAt = textBeforeCursor.slice(
               textBeforeCursor.lastIndexOf("@") + 1,
             )
-            // Close on newline or double-space (not single space - allow multi-word search)
+            // Close on newline, double-space, or immediate space after @
             const hasNewline = afterAt.includes("\n")
             const hasDoubleSpace = afterAt.includes("  ")
-            if (!hasNewline && !hasDoubleSpace) {
+            const startsWithSpace = afterAt.startsWith(" ")
+            if (!hasNewline && !hasDoubleSpace && !startsWithSpace) {
               atIndex = globalAtIdx
               atPosition = { node, offset: localAtIdx }
+            }
+          }
+        }
+
+        // Find : in text before cursor for agent trigger
+        const localColonIdx = textBeforeInNode.lastIndexOf(":")
+        if (localColonIdx !== -1) {
+          const globalColonIdx = serialized.length + localColonIdx
+          const textUpToColon = serialized + textBeforeInNode.slice(0, localColonIdx)
+          const charBefore = globalColonIdx > 0 ? textUpToColon.charAt(globalColonIdx - 1) : null
+          const isStandaloneColon = charBefore === null || /\s/.test(charBefore)
+
+          if (isStandaloneColon && globalColonIdx > colonIndex) {
+            const afterColon = textBeforeCursor.slice(
+              textBeforeCursor.lastIndexOf(":") + 1,
+            )
+            const hasNewline = afterColon.includes("\n")
+            const hasDoubleSpace = afterColon.includes("  ")
+            const startsWithSpace = afterColon.startsWith(" ")
+            if (!hasNewline && !hasDoubleSpace && !startsWithSpace) {
+              colonIndex = globalColonIdx
+              colonPosition = { node, offset: localColonIdx }
             }
           }
         }
@@ -384,6 +415,19 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
           if (isStandaloneAt) {
             atIndex = globalAtIdx
             atPosition = { node, offset: localAtIdx }
+          }
+        }
+        // Track : positions as we go (only if standalone)
+        const localColonIdx = text.lastIndexOf(":")
+        if (localColonIdx !== -1) {
+          const globalColonIdx = serialized.length + localColonIdx
+          const textUpToColon = serialized + text.slice(0, localColonIdx)
+          const charBefore = globalColonIdx > 0 ? textUpToColon.charAt(globalColonIdx - 1) : null
+          const isStandaloneColon = charBefore === null || /\s/.test(charBefore)
+
+          if (isStandaloneColon) {
+            colonIndex = globalColonIdx
+            colonPosition = { node, offset: localColonIdx }
           }
         }
       }
@@ -480,6 +524,8 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
     atIndex,
     slashPosition,
     slashIndex,
+    colonPosition,
+    colonIndex,
   }
 }
 
@@ -493,6 +539,8 @@ export const AgentsMentionsEditor = memo(
         onCloseTrigger,
         onSlashTrigger,
         onCloseSlashTrigger,
+        onColonTrigger,
+        onCloseColonTrigger,
         onContentChange,
         placeholder,
         className,
@@ -512,6 +560,9 @@ export const AgentsMentionsEditor = memo(
       // Slash command trigger state
       const slashTriggerActive = useRef(false)
       const slashTriggerStartIndex = useRef<number | null>(null)
+      // Colon trigger state (for agent mentions)
+      const colonTriggerActive = useRef(false)
+      const colonTriggerStartIndex = useRef<number | null>(null)
       // Track if editor has content for placeholder (updated via DOM, no React state)
       const [hasContent, setHasContent] = useState(false)
 
@@ -696,19 +747,26 @@ export const AgentsMentionsEditor = memo(
               slashTriggerStartIndex.current = null
               onCloseSlashTrigger?.()
             }
+            if (colonTriggerActive.current) {
+              colonTriggerActive.current = false
+              colonTriggerStartIndex.current = null
+              onCloseColonTrigger?.()
+            }
             return
           }
 
-          // Single tree walk for @ and / trigger detection
+          // Single tree walk for @, : and / trigger detection
           const {
             textBeforeCursor,
             atPosition,
             atIndex,
             slashPosition,
             slashIndex,
+            colonPosition,
+            colonIndex,
           } = walkTreeOnce(editorRef.current, range)
 
-          // Handle @ trigger (takes priority over /)
+          // Handle @ trigger (takes priority over : and /)
           if (atIndex !== -1 && atPosition) {
             triggerActive.current = true
             triggerStartIndex.current = atIndex
@@ -718,6 +776,12 @@ export const AgentsMentionsEditor = memo(
               slashTriggerActive.current = false
               slashTriggerStartIndex.current = null
               onCloseSlashTrigger?.()
+            }
+            // Close colon trigger if active
+            if (colonTriggerActive.current) {
+              colonTriggerActive.current = false
+              colonTriggerStartIndex.current = null
+              onCloseColonTrigger?.()
             }
 
             const afterAt = textBeforeCursor.slice(atIndex + 1)
@@ -761,7 +825,47 @@ export const AgentsMentionsEditor = memo(
             onCloseTrigger()
           }
 
-          // Handle / trigger (only if @ trigger is not active)
+          // Handle : trigger (only if @ trigger is not active, takes priority over /)
+          if (colonIndex !== -1 && colonPosition && onColonTrigger) {
+            colonTriggerActive.current = true
+            colonTriggerStartIndex.current = colonIndex
+
+            // Close slash trigger if active
+            if (slashTriggerActive.current) {
+              slashTriggerActive.current = false
+              slashTriggerStartIndex.current = null
+              onCloseSlashTrigger?.()
+            }
+
+            const afterColon = textBeforeCursor.slice(colonIndex + 1)
+
+            // Get position for dropdown
+            if (range && editorRef.current) {
+              const tempRange = document.createRange()
+              tempRange.setStart(range.endContainer, range.endOffset)
+              tempRange.setEnd(range.endContainer, range.endOffset)
+              const cursorRect = tempRange.getBoundingClientRect()
+
+              const rect = new DOMRect(
+                cursorRect.left,
+                cursorRect.top,
+                0,
+                cursorRect.height
+              )
+
+              onColonTrigger({ searchText: afterColon, rect })
+              return
+            }
+          }
+
+          // Close : trigger if no : found
+          if (colonTriggerActive.current) {
+            colonTriggerActive.current = false
+            colonTriggerStartIndex.current = null
+            onCloseColonTrigger?.()
+          }
+
+          // Handle / trigger (only if @ and : triggers are not active)
           if (slashIndex !== -1 && slashPosition && onSlashTrigger) {
             slashTriggerActive.current = true
             slashTriggerStartIndex.current = slashIndex
@@ -804,7 +908,7 @@ export const AgentsMentionsEditor = memo(
           cancelAnimationFrame(triggerDetectionTimeout.current)
         }
         triggerDetectionTimeout.current = requestAnimationFrame(runTriggerDetection)
-      }, [onContentChange, onTrigger, onCloseTrigger, onSlashTrigger, onCloseSlashTrigger])
+      }, [onContentChange, onTrigger, onCloseTrigger, onSlashTrigger, onCloseSlashTrigger, onColonTrigger, onCloseColonTrigger])
 
       // Cleanup on unmount
       useEffect(() => {
@@ -820,7 +924,7 @@ export const AgentsMentionsEditor = memo(
         (e: React.KeyboardEvent) => {
           // Prevent submission during IME composition (e.g., Chinese/Japanese/Korean input)
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-            if (triggerActive.current || slashTriggerActive.current) {
+            if (triggerActive.current || slashTriggerActive.current || colonTriggerActive.current) {
               // Let dropdown handle Enter
               return
             }
@@ -839,6 +943,14 @@ export const AgentsMentionsEditor = memo(
               triggerActive.current = false
               triggerStartIndex.current = null
               onCloseTrigger()
+              return
+            }
+            // Close colon (agent) dropdown
+            if (colonTriggerActive.current) {
+              e.preventDefault()
+              colonTriggerActive.current = false
+              colonTriggerStartIndex.current = null
+              onCloseColonTrigger?.()
               return
             }
             // Close command dropdown
@@ -919,6 +1031,8 @@ export const AgentsMentionsEditor = memo(
             triggerStartIndex.current = null
             slashTriggerActive.current = false
             slashTriggerStartIndex.current = null
+            colonTriggerActive.current = false
+            colonTriggerStartIndex.current = null
           },
 
           // Clear slash command text after selection (removes /command from input)
@@ -1089,6 +1203,86 @@ export const AgentsMentionsEditor = memo(
             triggerActive.current = false
             triggerStartIndex.current = null
             onCloseTrigger()
+          },
+
+          insertColonMention: (option: FileMentionOption) => {
+            if (!editorRef.current) return
+
+            const sel = window.getSelection()
+            if (!sel || sel.rangeCount === 0) return
+
+            const range = sel.getRangeAt(0)
+            const node = range.startContainer
+
+            // Remove : and search text
+            if (
+              node.nodeType === Node.TEXT_NODE &&
+              colonTriggerStartIndex.current !== null
+            ) {
+              const text = node.textContent || ""
+
+              // Find local position of : within THIS text node
+              let localColonPosition = 0
+              let serializedCharCount = 0
+
+              const walker = document.createTreeWalker(
+                editorRef.current,
+                NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+              )
+              let walkNode: Node | null = walker.nextNode()
+
+              while (walkNode) {
+                if (walkNode === node) {
+                  localColonPosition =
+                    colonTriggerStartIndex.current - serializedCharCount
+                  break
+                }
+
+                if (walkNode.nodeType === Node.TEXT_NODE) {
+                  serializedCharCount += (walkNode.textContent || "").length
+                } else if (walkNode.nodeType === Node.ELEMENT_NODE) {
+                  const el = walkNode as HTMLElement
+                  if (el.hasAttribute("data-mention-id")) {
+                    const id = el.getAttribute("data-mention-id") || ""
+                    serializedCharCount += `@[${id}]`.length
+                    let next: Node | null = el.nextSibling
+                    if (next) {
+                      walker.currentNode = next
+                      walkNode = next
+                      continue
+                    }
+                  }
+                }
+                walkNode = walker.nextNode()
+              }
+
+              const beforeColon = text.slice(0, localColonPosition)
+              const afterCursor = text.slice(range.startOffset)
+              node.textContent = beforeColon + afterCursor
+
+              // Insert mention node
+              const mentionNode = createMentionNode(option)
+              const newRange = document.createRange()
+              newRange.setStart(node, localColonPosition)
+              newRange.collapse(true)
+              newRange.insertNode(mentionNode)
+
+              // Add space after and move cursor
+              const space = document.createTextNode(" ")
+              mentionNode.after(space)
+              newRange.setStartAfter(space)
+              newRange.collapse(true)
+              sel.removeAllRanges()
+              sel.addRange(newRange)
+
+              // Update hasContent
+              setHasContent(true)
+            }
+
+            // Close trigger
+            colonTriggerActive.current = false
+            colonTriggerStartIndex.current = null
+            onCloseColonTrigger?.()
           },
         }),
         [onCloseTrigger, onCloseSlashTrigger, resolveMention, onContentChange],

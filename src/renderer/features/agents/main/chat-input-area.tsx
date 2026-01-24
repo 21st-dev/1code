@@ -346,6 +346,11 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [slashSearchText, setSlashSearchText] = useState("")
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 })
 
+  // Colon trigger dropdown state (for agent mentions)
+  const [showColonDropdown, setShowColonDropdown] = useState(false)
+  const [colonSearchText, setColonSearchText] = useState("")
+  const [colonPosition, setColonPosition] = useState({ top: 0, left: 0 })
+
   // Create-agent form trigger
   const setShowCreateAgentForm = useSetAtom(showCreateAgentFormAtom)
 
@@ -512,6 +517,12 @@ export const ChatInputArea = memo(function ChatInputArea({
     setShowingSkillsList(false)
     setShowingAgentsList(false)
     setShowingToolsList(false)
+  }, [editorRef])
+
+  // Colon trigger select handler (agents only)
+  const handleColonMentionSelect = useCallback((mention: FileMentionOption) => {
+    editorRef.current?.insertColonMention(mention)
+    setShowColonDropdown(false)
   }, [editorRef])
 
   // Slash command handlers
@@ -723,13 +734,21 @@ export const ChatInputArea = memo(function ChatInputArea({
                     setShowingAgentsList(false)
                     setShowingToolsList(false)
                   }}
+                  onColonTrigger={({ searchText, rect }) => {
+                    setColonSearchText(searchText)
+                    setColonPosition({ top: rect.top, left: rect.left })
+                    setShowColonDropdown(true)
+                  }}
+                  onCloseColonTrigger={() => {
+                    setShowColonDropdown(false)
+                  }}
                   onSlashTrigger={handleSlashTrigger}
                   onCloseSlashTrigger={handleCloseSlashTrigger}
                   onContentChange={handleContentChange}
                   onSubmit={onSubmitWithQuestionAnswer || handleEditorSubmit}
                   onForceSubmit={onForceSend}
                   onShiftTab={() => setIsPlanMode((prev) => !prev)}
-                  placeholder={isStreaming ? "Add follow up" : "Plan, @ for context, / for commands"}
+                  placeholder={isStreaming ? "Add follow up" : "Plan, @ for context, : for agents, / for commands"}
                   className={cn(
                     "bg-transparent max-h-[200px] overflow-y-auto p-1",
                     isMobile && "min-h-[56px]",
@@ -1118,6 +1137,24 @@ export const ChatInputArea = memo(function ChatInputArea({
         showingSkillsList={showingSkillsList}
         showingAgentsList={showingAgentsList}
         showingToolsList={showingToolsList}
+      />
+
+      {/* Colon trigger dropdown (agents only) */}
+      <AgentsFileMention
+        isOpen={showColonDropdown}
+        onClose={() => setShowColonDropdown(false)}
+        onSelect={handleColonMentionSelect}
+        searchText={colonSearchText}
+        position={colonPosition}
+        teamId={teamId}
+        repository={repository}
+        sandboxId={sandboxId}
+        projectPath={projectPath}
+        changedFiles={[]}
+        showingFilesList={false}
+        showingSkillsList={false}
+        showingAgentsList={true}
+        showingToolsList={false}
       />
 
       {/* Slash command dropdown */}
