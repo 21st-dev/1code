@@ -177,6 +177,104 @@ Commit message:`
   }
 }
 
+/**
+ * Select messages that fit within token budget
+ *
+ * Works backwards from most recent message, including complete messages
+ * until the budget is reached. Ensures clean message boundaries.
+ *
+ * @param messages - Full conversation history
+ * @param tokenBudget - Maximum tokens to include
+ * @returns Subset of messages within budget, in chronological order
+ */
+function selectMessagesWithinTokenBudget(
+  messages: any[],
+  tokenBudget: number
+): any[] {
+  if (messages.length === 0 || tokenBudget <= 0) {
+    return []
+  }
+
+  let accumulatedTokens = 0
+  const selectedMessages: any[] = []
+
+  // Work backwards from most recent message
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+
+    // Calculate message token cost
+    const msgTokens =
+      msg.metadata?.totalTokens ||
+      (msg.metadata?.inputTokens || 0) + (msg.metadata?.outputTokens || 0)
+
+    // Check if this message fits within budget
+    if (accumulatedTokens + msgTokens > tokenBudget) {
+      break // Would exceed budget - stop here
+    }
+
+    accumulatedTokens += msgTokens
+    selectedMessages.unshift(msg) // Prepend to maintain chronological order
+  }
+
+  console.log(
+    `[forkSubChat] Selected ${selectedMessages.length}/${messages.length} messages (${accumulatedTokens}/${tokenBudget} tokens)`
+  )
+
+  return selectedMessages
+}
+
+/**
+ * Strip SDK-specific metadata from messages when forking
+ *
+ * CONTEXT: When forking a chat, we copy message history but create a new independent session.
+ * The Claude SDK crashes if it receives messages with sdkMessageUuid/sessionId from a different
+ * session because it tries to resume at those UUIDs in a new session context.
+ *
+ * SAFE TO KEEP:
+ * - Message content (role, parts, text, tool calls)
+ * - Usage stats (inputTokens, outputTokens, totalTokens, totalCostUsd, durationMs)
+ * - UI metadata (resultSubtype, finalTextId)
+ *
+ * MUST STRIP:
+ * - sessionId: SDK session identifier from original session
+ * - sdkMessageUuid: SDK's internal message UUID for session resumption
+ *
+ * @param messagesJson - JSON string of messages from sourceSubChat
+ * @returns JSON string with SDK metadata stripped
+ */
+function stripSdkMetadata(messagesJson: string): string {
+  try {
+    const messages = JSON.parse(messagesJson)
+    if (!Array.isArray(messages)) {
+      return messagesJson // Return unchanged if not valid array
+    }
+
+    const sanitized = messages.map((msg: any) => {
+      // If no metadata, return as-is
+      if (!msg.metadata) {
+        return msg
+      }
+
+      // Create new metadata object, keeping only non-SDK fields
+      const { sessionId, sdkMessageUuid, ...safeMetadata } = msg.metadata
+
+      // Return message with sanitized metadata
+      // Only include metadata key if there are safe fields remaining
+      return {
+        ...msg,
+        ...(Object.keys(safeMetadata).length > 0 ? { metadata: safeMetadata } : {})
+      }
+    })
+
+    return JSON.stringify(sanitized)
+  } catch (error) {
+    // If parsing fails, log warning and return original
+    // This is defensive - prevents fork from completely failing
+    console.warn('[forkSubChat] Failed to parse messages for sanitization:', error)
+    return messagesJson
+  }
+}
+
 export const chatsRouter = router({
   /**
    * List all non-archived chats (optionally filter by project)
@@ -660,6 +758,8 @@ export const chatsRouter = router({
       z.object({
         subChatId: z.string(),
         name: z.string().optional(),
+        isSavedChatState: z.boolean().optional().default(false),
+        tokenBudget: z.number().optional(), // Current context usage from UI
       }),
     )
     .mutation(({ input }) => {
@@ -676,21 +776,131 @@ export const chatsRouter = router({
         throw new Error("SubChat not found")
       }
 
-      // Create forked sub-chat with copied messages
+      // Parse messages
+      const allMessages = JSON.parse(sourceSubChat.messages || "[]")
+
+      // Select messages within token budget (if specified)
+      const selectedMessages = input.tokenBudget
+        ? selectMessagesWithinTokenBudget(allMessages, input.tokenBudget)
+        : allMessages // No budget → include all (backward compatible)
+
+      // Create forked sub-chat with selected messages
       const forkedSubChat = db
         .insert(subChats)
         .values({
           chatId: sourceSubChat.chatId,
           name: input.name || `${sourceSubChat.name || "Chat"} (fork)`,
           mode: sourceSubChat.mode,
-          messages: sourceSubChat.messages, // Copy message history
+          messages: stripSdkMetadata(JSON.stringify(selectedMessages)), // Use selected subset
           sessionId: null, // New independent session
           streamId: null,
+          isSavedChatState: input.isSavedChatState,
         })
         .returning()
         .get()
 
       return forkedSubChat
+    }),
+
+  /**
+   * Copy filtered messages from source to target subchat
+   * Called AFTER empty subchat is created - used by handleForkSubChat
+   */
+  copyMessagesToFork: publicProcedure
+    .input(
+      z.object({
+        sourceSubChatId: z.string(),
+        targetSubChatId: z.string(),
+        tokenBudget: z.number().optional(),
+      }),
+    )
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      // Get source subchat
+      const sourceSubChat = db
+        .select()
+        .from(subChats)
+        .where(eq(subChats.id, input.sourceSubChatId))
+        .get()
+
+      if (!sourceSubChat) {
+        throw new Error("Source SubChat not found")
+      }
+
+      // Parse and filter messages
+      const allMessages = JSON.parse(sourceSubChat.messages || "[]")
+      const selectedMessages = input.tokenBudget
+        ? selectMessagesWithinTokenBudget(allMessages, input.tokenBudget)
+        : allMessages
+
+      console.log(
+        `[copyMessagesToFork] Selected ${selectedMessages.length}/${allMessages.length} messages ` +
+          `(within ${input.tokenBudget || "unlimited"} token budget)`,
+      )
+
+      // Strip SDK metadata (sessionId, sdkMessageUuid)
+      const cleanedMessages = stripSdkMetadata(JSON.stringify(selectedMessages))
+
+      // Update target subchat with messages
+      db.update(subChats)
+        .set({ messages: cleanedMessages })
+        .where(eq(subChats.id, input.targetSubChatId))
+        .run()
+
+      // Return messages for frontend
+      return {
+        messages: cleanedMessages,
+        count: selectedMessages.length,
+      }
+    }),
+
+  /**
+   * List saved chat states for a chat
+   */
+  listSavedChatStates: publicProcedure
+    .input(z.object({ chatId: z.string() }))
+    .query(({ input }) => {
+      const db = getDatabase()
+      return db
+        .select()
+        .from(subChats)
+        .where(
+          and(
+            eq(subChats.chatId, input.chatId),
+            eq(subChats.isSavedChatState, true),
+          ),
+        )
+        .orderBy(desc(subChats.createdAt))
+        .all()
+    }),
+
+  /**
+   * Delete a saved chat state
+   */
+  deleteSavedChatState: publicProcedure
+    .input(z.object({ subChatId: z.string() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      // Verify it's a saved chat state before deleting
+      const subChat = db
+        .select()
+        .from(subChats)
+        .where(eq(subChats.id, input.subChatId))
+        .get()
+
+      if (!subChat) {
+        throw new Error("Chat state not found")
+      }
+
+      if (!subChat.isSavedChatState) {
+        throw new Error("Can only delete saved chat states")
+      }
+
+      db.delete(subChats).where(eq(subChats.id, input.subChatId)).run()
+
+      return { success: true }
     }),
 
   /**
