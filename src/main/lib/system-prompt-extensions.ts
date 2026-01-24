@@ -35,6 +35,15 @@ export class SystemPromptExtensionsManager {
 **Workspace Path:** \`${workspacePath || '.ii/workspaces/' + chatId}\`
 **Files in Workspace:** ${filesCount}
 
+## CRITICAL REQUIREMENT - File Mentions
+
+When you reference workspace files in your text responses using @ mentions, you MUST ALWAYS include the full path from the project root:
+
+✅ **CORRECT:** \`@[file:local:.ii/workspaces/${chatId}/notes.md]\`
+❌ **WRONG:** \`@[file:local:notes.md]\`
+
+This applies to ALL workspace files you write, edit, or reference. The @ mention MUST contain the full path \`.ii/workspaces/${chatId}/filename\`, not just the filename.
+
 ## How to Use Workspace Files
 
 Workspace files are persistent documents that belong to this conversation. They are stored in the workspace directory and persist across sessions.
@@ -66,7 +75,8 @@ Use standard file writing tools to interact with workspace files:
    - Lists all files in the workspace
 
 ### Best Practices:
-- **Always use the full path:** \`.ii/workspaces/${chatId}/filename.md\`
+- **Always use the full path in Write/Read/Edit tools:** \`.ii/workspaces/${chatId}/filename.md\`
+- **CRITICAL - Always use full path in @ mentions:** After using Write/Edit tools, when you mention the file in your response, you MUST use: \`@[file:local:.ii/workspaces/${chatId}/filename.md]\` - never just the filename!
 - Use descriptive filenames (e.g., \`api-design.md\`, \`requirements.md\`, \`review.md\`)
 - Organize related content in separate files
 - Reference workspace files when user asks about previous work
@@ -80,7 +90,14 @@ Use standard file writing tools to interact with workspace files:
 - Tracking decisions or requirements
 - Building knowledge base for the conversation
 - Any temporary or task-specific files
-- Sharing structured data between sessions`
+- Sharing structured data between sessions
+
+### File Mentions:
+When referencing workspace files in your responses using @ mentions, you MUST use the full path:
+- **Correct:** \`@[file:local:.ii/workspaces/${chatId}/notes.md]\`
+- **Incorrect:** \`@[file:local:notes.md]\` ← This will NOT work!
+
+The file mention path must be relative to the project root, not just the filename. This allows the user to click the mention and open the file.`
   }
 
   /**

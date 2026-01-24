@@ -1,22 +1,27 @@
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronRight, Folder, FileText } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useAtom } from "jotai"
+import { ChevronRight, Folder } from "lucide-react"
+import { useEffect } from "react"
 import { trpc } from "../../../lib/trpc"
 import {
   type FileTreeNode,
   workspaceFileTreeAtomFamily,
   expandedFoldersAtomFamily,
-  activeDocumentAtomFamily,
-  documentsPanelOpenAtomFamily,
 } from "../../../lib/atoms"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
-import { getFileType } from "../utils/file-types"
+import { useOpenFile } from "../hooks/use-open-file"
+import { cn } from "../../../lib/utils"
 
 interface WorkspaceFileTreeProps {
   chatId: string
+  isCollapsed: boolean
+  onToggleCollapse: () => void
 }
 
-export function WorkspaceFileTree({ chatId }: WorkspaceFileTreeProps) {
+export function WorkspaceFileTree({
+  chatId,
+  isCollapsed,
+  onToggleCollapse,
+}: WorkspaceFileTreeProps) {
   const [files, setFiles] = useAtom(workspaceFileTreeAtomFamily(chatId))
 
   // Fetch files from tRPC
@@ -91,7 +96,25 @@ export function WorkspaceFileTree({ chatId }: WorkspaceFileTreeProps) {
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex-shrink-0 border-b px-3 py-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted-foreground">Files</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onToggleCollapse}
+              className="p-0.5 hover:bg-muted rounded transition-colors"
+              aria-label={
+                isCollapsed ? "Expand workspace files" : "Collapse workspace files"
+              }
+            >
+              <ChevronRight
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                  isCollapsed ? "rotate-0" : "rotate-90",
+                )}
+              />
+            </button>
+            <span className="text-xs font-medium text-muted-foreground">
+              Workspace Files
+            </span>
+          </div>
           <button
             onClick={() => refetch()}
             className="text-xs text-muted-foreground hover:text-foreground"
@@ -115,11 +138,13 @@ export function WorkspaceFileTree({ chatId }: WorkspaceFileTreeProps) {
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-2 py-2">
-        {files.map((node) => (
-          <FileTreeNode key={node.path} node={node} depth={0} chatId={chatId} />
-        ))}
-      </div>
+      {!isCollapsed && (
+        <div className="flex-1 overflow-y-auto px-2 py-2">
+          {files.map((node) => (
+            <FileTreeNode key={node.path} node={node} depth={0} chatId={chatId} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -132,12 +157,10 @@ interface FileTreeNodeProps {
 
 function FileTreeNode({ node, depth, chatId }: FileTreeNodeProps) {
   const [expanded, setExpanded] = useAtom(expandedFoldersAtomFamily(chatId))
-  const setActiveDoc = useSetAtom(activeDocumentAtomFamily(chatId))
-  const setDocumentsOpen = useSetAtom(documentsPanelOpenAtomFamily(chatId))
   const isExpanded = expanded.has(node.path)
 
-  // tRPC utils for manual query execution
-  const utils = trpc.useUtils()
+  // Use the openFile hook for file opening
+  const { openFile } = useOpenFile()
 
   const handleClick = async () => {
     if (node.type === "folder") {
@@ -150,28 +173,9 @@ function FileTreeNode({ node, depth, chatId }: FileTreeNodeProps) {
       }
       setExpanded(newExpanded)
     } else {
-      // Read and open file
-      try {
-        const result = await utils.workspaceFiles.readFile.fetch({
-          chatId,
-          filePath: node.path,
-        })
-
-        // Determine file type
-        const type = getFileType(node.name)
-
-        // Update active document
-        setActiveDoc({
-          path: node.path,
-          content: result.content,
-          type,
-        })
-
-        // Open documents panel
-        setDocumentsOpen(true)
-      } catch (error) {
-        console.error("[FileTreeNode] Failed to read file:", error)
-      }
+      // Open file using hook - workspace files need full path from project root
+      const workspacePath = `.ii/workspaces/${chatId}/${node.path}`
+      await openFile(workspacePath, node.name)
     }
   }
 

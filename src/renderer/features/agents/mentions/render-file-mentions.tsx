@@ -285,13 +285,14 @@ function MentionChip({ mention }: { mention: ParsedMention }) {
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
+    e.preventDefault()
 
     if (mention.type === "file" && mention.path) {
-      // Open file in document viewer
+      // File mentions use project-relative paths (e.g., "src/components/Button.tsx")
+      // The hook will use readProjectFile to read any file from the project
       await openFile(mention.path, mention.label)
     } else if (mention.type === "folder") {
-      // TODO: Could show folder contents in future
-      console.log("Folder click:", mention.path)
+      // Future: Handle folder clicks
     }
   }
 

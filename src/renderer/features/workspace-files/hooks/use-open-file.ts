@@ -27,8 +27,8 @@ export function useOpenFile() {
       }
 
       try {
-        // Read file content from workspace
-        const result = await utils.workspaceFiles.readFile.fetch({
+        // Read any file from project root (including workspace files)
+        const result = await utils.workspaceFiles.readProjectFile.fetch({
           chatId: effectiveChatId,
           filePath,
         })
@@ -46,8 +46,8 @@ export function useOpenFile() {
         // Show documents panel
         setDocumentsOpen(true)
       } catch (error) {
-        console.error("[useOpenFile] Failed to open file:", error)
-        // TODO: Show error toast notification
+        console.error("[useOpenFile] Failed to open file:", filePath, error)
+        // TODO: Show user-friendly error toast
       }
     },
     [effectiveChatId, setActiveDoc, setDocumentsOpen, utils]

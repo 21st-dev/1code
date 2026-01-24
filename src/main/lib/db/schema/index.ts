@@ -72,6 +72,9 @@ export const subChats = sqliteTable("sub_chats", {
   streamId: text("stream_id"), // Track in-progress streams
   mode: text("mode").notNull().default("agent"), // "plan" | "agent"
   messages: text("messages").notNull().default("[]"), // JSON array
+  isSavedChatState: integer("is_saved_chat_state", { mode: "boolean" })
+    .notNull()
+    .default(false), // Whether this is a saved chat state (not a regular chat)
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),

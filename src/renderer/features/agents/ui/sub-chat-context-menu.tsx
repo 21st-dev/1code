@@ -25,6 +25,7 @@ interface SubChatContextMenuProps {
   onTogglePin: (subChatId: string) => void
   onRename: (subChat: SubChatMeta) => void
   onFork?: (subChatId: string) => void
+  onSave?: (subChatId: string) => void
   onArchive: (subChatId: string) => void
   onArchiveOthers: (subChatId: string) => void
   onArchiveAllBelow?: (subChatId: string) => void
@@ -46,6 +47,7 @@ export function SubChatContextMenu({
   onTogglePin,
   onRename,
   onFork,
+  onSave,
   onArchive,
   onArchiveOthers,
   onArchiveAllBelow,
@@ -70,6 +72,11 @@ export function SubChatContextMenu({
       <ContextMenuItem onClick={() => onRename(subChat)}>
         Rename chat
       </ContextMenuItem>
+      {onSave && (
+        <ContextMenuItem onClick={() => onSave(subChat.id)}>
+          Save chat state
+        </ContextMenuItem>
+      )}
       {onFork && (
         <ContextMenuItem onClick={() => onFork(subChat.id)}>
           Fork chat

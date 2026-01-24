@@ -75,6 +75,46 @@ export const workspaceFileTreeCollapsedAtom = atomWithStorage(
 )
 
 /**
+ * Saved chat states collapsed state (shared across all chats)
+ */
+export const savedChatStatesCollapsedAtom = atomWithStorage(
+  "saved-chat-states-collapsed",
+  false,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Agents section collapsed state (shared across all chats)
+ */
+export const agentsSectionCollapsedAtom = atomWithStorage(
+  "agents-section-collapsed",
+  false,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Skills section collapsed state (shared across all chats)
+ */
+export const skillsSectionCollapsedAtom = atomWithStorage(
+  "skills-section-collapsed",
+  false,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Commands section collapsed state (shared across all chats)
+ */
+export const commandsSectionCollapsedAtom = atomWithStorage(
+  "commands-section-collapsed",
+  false,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
  * File tree data per chat
  */
 export const workspaceFileTreeAtomFamily = atomFamily((chatId: string) =>

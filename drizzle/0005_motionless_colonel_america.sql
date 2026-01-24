@@ -1,0 +1,1 @@
+ALTER TABLE `sub_chats` ADD `is_saved_chat_state` integer DEFAULT false NOT NULL;

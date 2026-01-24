@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a5b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "prevId": "1c211023-1270-4cdd-934d-4396e72557e9",
+  "id": "66326c52-d4ba-4325-8ae8-59d101c3ede7",
+  "prevId": "a5b2c3d4-e5f6-7890-abcd-ef1234567890",
   "tables": {
     "chats": {
       "name": "chats",
@@ -279,29 +279,13 @@
           "autoincrement": false,
           "default": "'[]'"
         },
-        "additions": {
-          "name": "additions",
+        "is_saved_chat_state": {
+          "name": "is_saved_chat_state",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false,
-          "default": 0
-        },
-        "deletions": {
-          "name": "deletions",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": 0
-        },
-        "file_count": {
-          "name": "file_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": 0
+          "default": false
         },
         "created_at": {
           "name": "created_at",

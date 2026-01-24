@@ -45,6 +45,8 @@ import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-uploa
 import {
   clearSubChatDraft,
   saveSubChatDraftWithAttachments,
+  INSERT_TEXT_EVENT,
+  type InsertTextPayload,
 } from "../lib/drafts"
 import { CLAUDE_MODELS } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
@@ -453,6 +455,33 @@ export const ChatInputArea = memo(function ChatInputArea({
     const draft = editorRef.current?.getValue() || ""
     currentDraftTextRef.current = draft
   }, [editorRef, onInputContentChange])
+
+  // Listen for insert text events from sidebar
+  useEffect(() => {
+    const handleInsertText = (e: Event) => {
+      const customEvent = e as CustomEvent<InsertTextPayload>
+      const { subChatId: targetSubChatId, text, prepend } = customEvent.detail
+
+      // Only handle if this is the active sub-chat
+      if (targetSubChatId !== subChatId) return
+
+      const editor = editorRef.current
+      if (!editor) return
+
+      const currentValue = editor.getValue() || ""
+      const newValue = prepend
+        ? currentValue ? `${text} ${currentValue}` : text
+        : currentValue ? `${currentValue} ${text}` : text
+
+      editor.setValue(newValue)
+      editor.focus()
+    }
+
+    window.addEventListener(INSERT_TEXT_EVENT, handleInsertText)
+    return () => {
+      window.removeEventListener(INSERT_TEXT_EVENT, handleInsertText)
+    }
+  }, [subChatId, editorRef])
 
   // Editor submit handler - handles Enter key with queue logic
   // If input is empty and queue has items, stop stream and send first from queue

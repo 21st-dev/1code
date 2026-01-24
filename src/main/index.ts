@@ -22,7 +22,7 @@ import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
 import { createMainWindow, getWindow } from "./windows/main"
 
-// Dev mode detection
+// Dev mode detection - checks if running in development environment
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
 
 // Deep link protocol (must match package.json build.protocols.schemes)

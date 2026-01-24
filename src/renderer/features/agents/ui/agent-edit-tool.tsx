@@ -247,55 +247,37 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Get structuredPatch from output (only available when complete)
   const structuredPatch = part.output?.structuredPatch
 
-  // Extract filename from path
+  // Extract filename from path for display
   const filename = filePath ? filePath.split("/").pop() || "file" : ""
 
-  // Get clean display path (remove sandbox prefix to show project-relative path)
-  const displayPath = useMemo(() => {
+  // Get full path (remove only sandbox prefix, keep workspace paths intact)
+  const fullPath = useMemo(() => {
     if (!filePath) return ""
-    // Remove common sandbox prefixes
-    const prefixes = [
-      "/project/sandbox/repo/",
-      "/project/sandbox/",
-      "/project/",
-    ]
-    for (const prefix of prefixes) {
-      if (filePath.startsWith(prefix)) {
-        return filePath.slice(prefix.length)
-      }
-    }
-    // If path starts with /, try to find a reasonable root
-    if (filePath.startsWith("/")) {
-      // Look for common project roots
-      const parts = filePath.split("/")
-      const rootIndicators = ["apps", "packages", "src", "lib", "components"]
-      const rootIndex = parts.findIndex((p: string) =>
-        rootIndicators.includes(p),
-      )
-      if (rootIndex > 0) {
-        return parts.slice(rootIndex).join("/")
-      }
-    }
-    return filePath
+
+    // Only remove sandbox prefix - keep workspace paths for Claude and file operations
+    return filePath.replace(/^\/project\/sandbox\/[^/]+\//, "")
   }, [filePath])
+
+  // Display name: just the filename for clean UI
+  const displayName = filename
 
   // Hook for opening files in document viewer
   const { openFile } = useOpenFile()
 
   // Handler to open diff sidebar and focus on this file
   const handleOpenInDiff = useCallback(() => {
-    if (!displayPath) return
+    if (!fullPath) return
     setDiffSidebarOpen(true)
-    setFocusedDiffFile(displayPath)
-  }, [displayPath, setDiffSidebarOpen, setFocusedDiffFile])
+    setFocusedDiffFile(fullPath)
+  }, [fullPath, setDiffSidebarOpen, setFocusedDiffFile])
 
   // Handler to open file in document viewer
   const handleOpenInDocumentViewer = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!displayPath) return
+    if (!fullPath) return
 
-    await openFile(displayPath, filename)
-  }, [displayPath, filename, openFile])
+    await openFile(fullPath, filename)
+  }, [fullPath, filename, openFile])
 
   // Memoized click handlers to prevent inline function re-creation
   const handleHeaderClick = useCallback(() => {
@@ -305,11 +287,11 @@ export const AgentEditTool = memo(function AgentEditTool({
   }, [isPending, isInputStreaming])
 
   const handleFilenameClick = useCallback((e: React.MouseEvent) => {
-    if (displayPath) {
+    if (fullPath) {
       e.stopPropagation()
       handleOpenInDiff()
     }
-  }, [displayPath, handleOpenInDiff])
+  }, [fullPath, handleOpenInDiff])
 
   const handleExpandButtonClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -522,7 +504,7 @@ export const AgentEditTool = memo(function AgentEditTool({
       data-message-id={messageId}
       data-part-index={partIndex}
       data-part-type={toolPrefix}
-      data-tool-file-path={displayPath}
+      data-tool-file-path={fullPath}
       className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2"
     >
       {/* Header - clickable to expand, fixed height to prevent layout shift */}
@@ -537,7 +519,7 @@ export const AgentEditTool = memo(function AgentEditTool({
           onClick={handleFilenameClick}
           className={cn(
             "flex items-center gap-1.5 text-xs truncate flex-1 min-w-0",
-            displayPath && "cursor-pointer hover:text-foreground",
+            fullPath && "cursor-pointer hover:text-foreground",
           )}
         >
           {FileIcon && (
@@ -552,10 +534,10 @@ export const AgentEditTool = memo(function AgentEditTool({
                   duration={1.2}
                   className="truncate"
                 >
-                  {filename}
+                  {displayName}
                 </TextShimmer>
               ) : (
-                <span className="truncate text-foreground">{filename}</span>
+                <span className="truncate text-foreground">{displayName}</span>
               )}
             </TooltipTrigger>
             <TooltipContent
@@ -563,7 +545,7 @@ export const AgentEditTool = memo(function AgentEditTool({
               className="px-2 py-1.5 max-w-none flex items-center justify-center"
             >
               <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap leading-none">
-                {displayPath}
+                {fullPath}
               </span>
             </TooltipContent>
           </Tooltip>
@@ -590,7 +572,7 @@ export const AgentEditTool = memo(function AgentEditTool({
           </div>
 
           {/* Open in viewer button - show when not pending */}
-          {!isPending && !isInputStreaming && displayPath && (
+          {!isPending && !isInputStreaming && fullPath && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
