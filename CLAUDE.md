@@ -106,6 +106,55 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 - Session resume via `sessionId` stored in SubChat
 - Message streaming via tRPC subscription (`claude.onMessage`)
 
+### Plugin Support
+
+1Code loads commands, skills, agents, and MCP servers from three sources (in priority order):
+
+| Source | Location | Priority |
+|--------|----------|----------|
+| Project | `.claude/commands/`, `.claude/skills/`, `.claude/agents/` | Highest |
+| User | `~/.claude/commands/`, `~/.claude/skills/`, `~/.claude/agents/` | Medium |
+| Plugin | `~/.claude/plugins/marketplaces/*/` | Lowest |
+
+**Plugin Components:**
+
+| Component | Plugin Location |
+|-----------|-----------------|
+| Commands | `commands/` |
+| Skills | `skills/` |
+| Agents | `agents/` |
+| MCP Servers | `.mcp.json` |
+
+**Plugin Discovery:** Plugins installed via `claude /plugin install <name>` are automatically discovered from `~/.claude/plugins/marketplaces/`. Each plugin can provide commands, skills, agents, and MCP servers.
+
+**MCP Servers:** Plugins can define MCP servers in a `.mcp.json` file at the plugin root:
+```json
+{
+  "mcpServers": {
+    "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp@latest"] },
+    "sequential-thinking": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"] }
+  }
+}
+```
+
+Plugin MCP servers appear in Settings → MCP as a separate group and are automatically available to Claude during chat sessions.
+
+**Disabling Plugins:** Add plugin identifiers to `~/.claude/settings.json`:
+```json
+{
+  "disabledPlugins": ["ccsetup:ccsetup"]
+}
+```
+
+Disabled plugins' commands, skills, agents, and MCP servers will not appear in the UI or be loaded.
+
+**Related Files:**
+- `src/main/lib/plugins/index.ts` - Plugin discovery utility (including MCP discovery)
+- `src/main/lib/trpc/routers/commands.ts` - Commands loading with plugin support
+- `src/main/lib/trpc/routers/skills.ts` - Skills loading with plugin support
+- `src/main/lib/trpc/routers/agents.ts` - Agents loading with plugin support
+- `src/main/lib/trpc/routers/claude.ts` - MCP server integration with plugin support
+
 ## Tech Stack
 
 | Layer | Tech |

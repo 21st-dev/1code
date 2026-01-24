@@ -21,6 +21,15 @@ async function readClaudeSettings(): Promise<Record<string, unknown>> {
 }
 
 /**
+ * Get list of disabled plugin identifiers from settings.json
+ * Returns empty array if no disabled plugins
+ */
+export async function getDisabledPlugins(): Promise<string[]> {
+  const settings = await readClaudeSettings()
+  return Array.isArray(settings.disabledPlugins) ? settings.disabledPlugins as string[] : []
+}
+
+/**
  * Write Claude settings.json file
  * Creates the .claude directory if it doesn't exist
  */
@@ -58,6 +67,41 @@ export const claudeSettingsRouter = router({
         settings.includeCoAuthoredBy = false
       }
 
+      await writeClaudeSettings(settings)
+      return { success: true }
+    }),
+
+  /**
+   * Get list of disabled plugins
+   */
+  getDisabledPlugins: publicProcedure.query(async () => {
+    return await getDisabledPlugins()
+  }),
+
+  /**
+   * Set a plugin's disabled state
+   */
+  setPluginDisabled: publicProcedure
+    .input(
+      z.object({
+        pluginSource: z.string(),
+        disabled: z.boolean(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = await readClaudeSettings()
+      const disabledPlugins = Array.isArray(settings.disabledPlugins)
+        ? (settings.disabledPlugins as string[])
+        : []
+
+      if (input.disabled && !disabledPlugins.includes(input.pluginSource)) {
+        disabledPlugins.push(input.pluginSource)
+      } else if (!input.disabled) {
+        const index = disabledPlugins.indexOf(input.pluginSource)
+        if (index > -1) disabledPlugins.splice(index, 1)
+      }
+
+      settings.disabledPlugins = disabledPlugins
       await writeClaudeSettings(settings)
       return { success: true }
     }),

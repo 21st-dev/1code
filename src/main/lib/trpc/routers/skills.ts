@@ -4,11 +4,14 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getDisabledPlugins } from "./claude-settings"
 
-interface FileSkill {
+export interface FileSkill {
   name: string
   description: string
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
+  pluginName?: string
   path: string
 }
 
@@ -33,7 +36,7 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
  */
 async function scanSkillsDirectory(
   dir: string,
-  source: "user" | "project",
+  source: "user" | "project" | "plugin",
   basePath?: string, // For project skills, the cwd to make paths relative to
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
@@ -112,13 +115,39 @@ const listSkillsProcedure = publicProcedure
       projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd)
     }
 
-    // Scan both directories in parallel
-    const [userSkills, projectSkills] = await Promise.all([
-      userSkillsPromise,
-      projectSkillsPromise,
+    // Get disabled plugins and discover installed plugins
+    const [disabledPlugins, installedPlugins] = await Promise.all([
+      getDisabledPlugins(),
+      discoverInstalledPlugins(),
     ])
 
-    return [...projectSkills, ...userSkills]
+    // Filter out disabled plugins before scanning
+    const enabledPlugins = installedPlugins.filter(
+      (p) => !disabledPlugins.includes(p.source)
+    )
+
+    // Scan enabled plugins for skills
+    const pluginSkillsPromises = enabledPlugins.map(async (plugin) => {
+      const paths = getPluginComponentPaths(plugin)
+      try {
+        const skills = await scanSkillsDirectory(paths.skills, "plugin")
+        return skills.map((skill) => ({ ...skill, pluginName: plugin.source }))
+      } catch {
+        return []
+      }
+    })
+
+    // Scan all directories in parallel
+    const [userSkills, projectSkills, ...pluginSkillsArrays] = await Promise.all([
+      userSkillsPromise,
+      projectSkillsPromise,
+      ...pluginSkillsPromises,
+    ])
+
+    const pluginSkills = pluginSkillsArrays.flat()
+
+    // Priority: project > user > plugin
+    return [...projectSkills, ...userSkills, ...pluginSkills]
   })
 
 export const skillsRouter = router({

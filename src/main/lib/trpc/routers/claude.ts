@@ -23,6 +23,8 @@ import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { setConnectionMethod } from "../../analytics"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
+import { discoverPluginMcpServers } from "../../plugins"
+import { getDisabledPlugins } from "./claude-settings"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -738,11 +740,31 @@ export const claudeRouter = router({
                     mcpConfigCache.set(claudeJsonSource, { config: claudeConfig, mtime: currentMtime })
                   }
 
-                  // Merge global + project servers (project overrides global)
+                  // Merge global + project + plugin servers (project > global > plugin priority)
                   // getProjectMcpServers resolves worktree paths internally
                   const globalServers = claudeConfig.mcpServers || {}
                   const projectServers = getProjectMcpServers(claudeConfig, lookupPath) || {}
-                  mcpServersForSdk = { ...globalServers, ...projectServers }
+
+                  // Load plugin MCP servers (filtered by disabled plugins)
+                  const [disabledPlugins, pluginMcpConfigs] = await Promise.all([
+                    getDisabledPlugins(),
+                    discoverPluginMcpServers(),
+                  ])
+
+                  const pluginServers: Record<string, McpServerConfig> = {}
+                  for (const config of pluginMcpConfigs) {
+                    if (!disabledPlugins.includes(config.pluginSource)) {
+                      // Add plugin servers (user/project take precedence)
+                      for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
+                        if (!globalServers[name] && !projectServers[name]) {
+                          pluginServers[name] = serverConfig
+                        }
+                      }
+                    }
+                  }
+
+                  // Priority: project > global > plugin
+                  mcpServersForSdk = { ...pluginServers, ...globalServers, ...projectServers }
                 }
               } catch (configErr) {
                 console.error(`[claude] Failed to read MCP config:`, configErr)
@@ -1939,6 +1961,71 @@ ${prompt}
               mcpServers: await convertServers(freshServers)
             })
           }
+        }
+      }
+
+      // Plugin MCPs (from installed plugins)
+      const [disabledPlugins, pluginMcpConfigs] = await Promise.all([
+        getDisabledPlugins(),
+        discoverPluginMcpServers(),
+      ])
+
+      for (const pluginConfig of pluginMcpConfigs) {
+        const isDisabled = disabledPlugins.includes(pluginConfig.pluginSource)
+
+        if (Object.keys(pluginConfig.mcpServers).length > 0) {
+          const pluginMcpServers = await Promise.all(
+            Object.entries(pluginConfig.mcpServers).map(async ([name, serverConfig]) => {
+              const configObj = serverConfig as Record<string, unknown>
+
+              // If plugin is disabled, mark all servers as disabled
+              if (isDisabled) {
+                return {
+                  name,
+                  status: "disabled",
+                  tools: [] as string[],
+                  needsAuth: false,
+                  config: configObj,
+                }
+              }
+
+              // Otherwise, try to get status and tools
+              let status = getServerStatusFromConfig(serverConfig)
+              let tools: string[] = []
+              let needsAuth = false
+
+              try {
+                tools = await fetchToolsForServer(serverConfig)
+                if (tools.length > 0) {
+                  status = "connected"
+                }
+              } catch {
+                // Failed to fetch tools
+              }
+
+              if (tools.length === 0 && serverConfig.url) {
+                try {
+                  const baseUrl = getMcpBaseUrl(serverConfig.url)
+                  const metadata = await fetchOAuthMetadata(baseUrl)
+                  needsAuth = !!metadata && !!metadata.authorization_endpoint
+                } catch {
+                  // If probe fails, assume no auth needed
+                }
+              }
+
+              if (needsAuth && !(serverConfig.headers as Record<string, string> | undefined)?.Authorization) {
+                status = "needs-auth"
+              }
+
+              return { name, status, tools, needsAuth, config: configObj }
+            })
+          )
+
+          groups.push({
+            groupName: `Plugin: ${pluginConfig.pluginSource}`,
+            projectPath: null,
+            mcpServers: pluginMcpServers,
+          })
         }
       }
 

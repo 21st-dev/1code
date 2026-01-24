@@ -10,6 +10,8 @@ import {
   VALID_AGENT_MODELS,
   type FileAgent,
 } from "./agent-utils"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getDisabledPlugins } from "./claude-settings"
 
 // Shared procedure for listing agents
 const listAgentsProcedure = publicProcedure
@@ -30,12 +32,39 @@ const listAgentsProcedure = publicProcedure
       projectAgentsPromise = scanAgentsDirectory(projectAgentsDir, "project", input.cwd)
     }
 
-    const [userAgents, projectAgents] = await Promise.all([
-      userAgentsPromise,
-      projectAgentsPromise,
+    // Get disabled plugins and discover installed plugins
+    const [disabledPlugins, installedPlugins] = await Promise.all([
+      getDisabledPlugins(),
+      discoverInstalledPlugins(),
     ])
 
-    return [...projectAgents, ...userAgents]
+    // Filter out disabled plugins before scanning
+    const enabledPlugins = installedPlugins.filter(
+      (p) => !disabledPlugins.includes(p.source)
+    )
+
+    // Scan enabled plugins for agents
+    const pluginAgentsPromises = enabledPlugins.map(async (plugin) => {
+      const paths = getPluginComponentPaths(plugin)
+      try {
+        const agents = await scanAgentsDirectory(paths.agents, "plugin")
+        return agents.map((agent) => ({ ...agent, pluginName: plugin.source }))
+      } catch {
+        return []
+      }
+    })
+
+    // Scan all directories in parallel
+    const [userAgents, projectAgents, ...pluginAgentsArrays] = await Promise.all([
+      userAgentsPromise,
+      projectAgentsPromise,
+      ...pluginAgentsPromises,
+    ])
+
+    const pluginAgents = pluginAgentsArrays.flat()
+
+    // Priority: project > user > plugin
+    return [...projectAgents, ...userAgents, ...pluginAgents]
   })
 
 export const agentsRouter = router({
@@ -57,10 +86,11 @@ export const agentsRouter = router({
   get: publicProcedure
     .input(z.object({ name: z.string(), cwd: z.string().optional() }))
     .query(async ({ input }) => {
-      const locations = [
+      // Search user and project directories first
+      const locations: { dir: string; source: "user" | "project" }[] = [
         {
           dir: path.join(os.homedir(), ".claude", "agents"),
-          source: "user" as const,
+          source: "user",
         },
         ...(input.cwd
           ? [
@@ -86,7 +116,39 @@ export const agentsRouter = router({
           continue
         }
       }
-      return null
+
+      // Search in plugin directories in parallel (respecting disabled plugins)
+      const [disabledPlugins, installedPlugins] = await Promise.all([
+        getDisabledPlugins(),
+        discoverInstalledPlugins(),
+      ])
+
+      const enabledPlugins = installedPlugins.filter(
+        (p) => !disabledPlugins.includes(p.source)
+      )
+
+      // Search all plugins in parallel and return first match
+      const pluginResults = await Promise.all(
+        enabledPlugins.map(async (plugin) => {
+          const paths = getPluginComponentPaths(plugin)
+          const agentPath = path.join(paths.agents, `${input.name}.md`)
+          try {
+            const content = await fs.readFile(agentPath, "utf-8")
+            const parsed = parseAgentMd(content, `${input.name}.md`)
+            return {
+              ...parsed,
+              source: "plugin" as const,
+              pluginName: plugin.source,
+              path: agentPath,
+            }
+          } catch {
+            return null
+          }
+        })
+      )
+
+      // Return first found plugin agent
+      return pluginResults.find((r) => r !== null) ?? null
     }),
 
   /**
