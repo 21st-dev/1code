@@ -92,6 +92,41 @@ function parseMentions(prompt: string): {
 }
 
 /**
+ * Convert stored message part to SDK content block format
+ *
+ * Handles transformation from our internal format to Anthropic SDK MessageParam:
+ * - Text parts: Direct conversion
+ * - Tool results: Convert to tool_result blocks
+ * - Tool calls: Skip (SDK regenerates from context)
+ */
+function convertStoredPartToSDKContent(part: any): Array<{
+  type: "text" | "tool_result"
+  text?: string
+  tool_use_id?: string
+  content?: string
+}> {
+  // Text parts: direct conversion
+  if (part.type === "text" && part.text) {
+    return [{ type: "text", text: part.text }]
+  }
+
+  // Tool results: convert to SDK format
+  // Only include results (state: "result"), skip calls (SDK regenerates)
+  if (part.type?.startsWith("tool-") && part.state === "result" && part.toolCallId) {
+    return [{
+      type: "tool_result",
+      tool_use_id: part.toolCallId,
+      content: typeof part.result === "string"
+        ? part.result
+        : JSON.stringify(part.result || {})
+    }]
+  }
+
+  // Skip tool calls, system messages, etc.
+  return []
+}
+
+/**
  * Decrypt token using Electron's safeStorage
  */
 function decryptToken(encrypted: string): string {
@@ -377,7 +412,10 @@ export const claudeRouter = router({
         // This prevents race conditions if two messages are sent in quick succession
         const existingController = activeSessions.get(input.subChatId)
         if (existingController) {
+          console.log(`[SD] Aborting existing session for sub=${input.subChatId.slice(-8)}`)
           existingController.abort()
+          // Remove from map immediately to prevent race conditions
+          activeSessions.delete(input.subChatId)
         }
 
         const abortController = new AbortController()
@@ -462,6 +500,32 @@ export const claudeRouter = router({
             const resumeAtUuid = lastAssistantMsg?.metadata?.sdkMessageUuid || null
             const historyEnabled = input.historyEnabled === true
 
+            // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
+            // This must happen BEFORE fork detection because fork detection uses isUsingOllama
+            const claudeCodeToken = getClaudeCodeToken()
+            const offlineResult = await checkOfflineFallback(input.customConfig, claudeCodeToken)
+
+            // Extract isUsingOllama immediately to avoid TDZ issues
+            const isUsingOllama = offlineResult.isUsingOllama
+
+            if (offlineResult.error) {
+              emitError(new Error(offlineResult.error), 'Offline mode unavailable')
+              safeEmit({ type: 'finish' } as UIMessageChunk)
+              safeComplete()
+              return
+            }
+
+            // Use offline config if available
+            const finalCustomConfig = offlineResult.config || input.customConfig
+
+            // Detect forked chat: no sessionId + has history + not using Ollama
+            const isForkedChat = !existingSessionId && existingMessages.length > 0
+            const needsMessageReplay = isForkedChat && !isUsingOllama
+
+            if (needsMessageReplay) {
+              console.log(`[claude] Forked chat detected - replaying ${existingMessages.length} messages`)
+            }
+
             // Check if last message is already this user message (avoid duplicate)
             const lastMsg = existingMessages[existingMessages.length - 1]
             const isDuplicate =
@@ -492,21 +556,6 @@ export const claudeRouter = router({
                 .where(eq(subChats.id, input.subChatId))
                 .run()
             }
-
-            // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
-            const claudeCodeToken = getClaudeCodeToken()
-            const offlineResult = await checkOfflineFallback(input.customConfig, claudeCodeToken)
-
-            if (offlineResult.error) {
-              emitError(new Error(offlineResult.error), 'Offline mode unavailable')
-              safeEmit({ type: 'finish' } as UIMessageChunk)
-              safeComplete()
-              return
-            }
-
-            // Use offline config if available
-            const finalCustomConfig = offlineResult.config || input.customConfig
-            const isUsingOllama = offlineResult.isUsingOllama
 
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
@@ -569,11 +618,18 @@ export const claudeRouter = router({
               finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
             }
 
-            // Build prompt: if there are images, create an AsyncIterable<SDKUserMessage>
-            // Otherwise use simple string prompt
+            // Build prompt: Three cases:
+            // 1. Forked chat - use message replay (with optional images)
+            // 2. New message with images - use image generator
+            // 3. Simple text - use string prompt
             let prompt: string | AsyncIterable<any> = finalPrompt
 
-            if (input.images && input.images.length > 0) {
+            // CASE 1: Forked chat (replay history + optional images)
+            if (needsMessageReplay) {
+              prompt = createReplayMessages(existingMessages, userMessage, input.images)
+            }
+            // CASE 2: New message with images (existing logic)
+            else if (input.images && input.images.length > 0) {
               // Create message content array with images first, then text
               const messageContent: any[] = [
                 ...input.images.map((img) => ({
@@ -607,6 +663,103 @@ export const claudeRouter = router({
               }
 
               prompt = createPromptWithImages()
+            }
+            // CASE 3: Simple text prompt (already set)
+
+            /**
+             * Create message replay stream for forked chats
+             *
+             * Replays conversation history by yielding SDK user messages in order,
+             * then yields the final new user message. This allows forked chats to
+             * start with full context in a new session.
+             *
+             * @param existingMessages - Conversation history from database
+             * @param finalUserMessage - New user message being sent
+             * @param images - Optional images to include in final message
+             */
+            async function* createReplayMessages(
+              existingMessages: any[],
+              finalUserMessage: { role: "user"; parts: any[] },
+              images?: Array<{ mediaType: string; base64Data: string }>
+            ): AsyncIterable<any> {
+              // Replay existing conversation history
+              // CRITICAL: Replay BOTH user and assistant messages to preserve full context
+              for (const msg of existingMessages) {
+                // Skip empty messages
+                if (!msg.parts || msg.parts.length === 0) {
+                  continue
+                }
+
+                // Convert all parts to SDK content format
+                const contentBlocks: any[] = []
+                for (const part of msg.parts) {
+                  contentBlocks.push(...convertStoredPartToSDKContent(part))
+                }
+
+                // Skip if no valid content after conversion
+                if (contentBlocks.length === 0) {
+                  continue
+                }
+
+                // Yield message with appropriate type based on role
+                if (msg.role === "user") {
+                  yield {
+                    type: "user" as const,
+                    message: {
+                      role: "user" as const,
+                      content: contentBlocks,
+                    },
+                    parent_tool_use_id: null,
+                    session_id: "", // Empty for replay (new session)
+                  }
+                } else if (msg.role === "assistant") {
+                  yield {
+                    type: "assistant" as const,
+                    message: {
+                      role: "assistant" as const,
+                      content: contentBlocks,
+                    },
+                    session_id: "", // Empty for replay (new session)
+                  }
+                }
+              }
+
+              // Finally, yield the new user message with optional images
+              const finalContent: any[] = []
+
+              // Add images first if present
+              if (images && images.length > 0) {
+                finalContent.push(
+                  ...images.map(img => ({
+                    type: "image" as const,
+                    source: {
+                      type: "base64" as const,
+                      media_type: img.mediaType,
+                      data: img.base64Data,
+                    },
+                  }))
+                )
+              }
+
+              // Add text/tool parts from final message
+              for (const part of finalUserMessage.parts) {
+                if (part.type === "text" && part.text) {
+                  finalContent.push({
+                    type: "text" as const,
+                    text: part.text,
+                  })
+                }
+              }
+
+              yield {
+                type: "user" as const,
+                message: {
+                  role: "user" as const,
+                  content: finalContent,
+                },
+                parent_tool_use_id: null,
+                session_id: "",
+              }
             }
 
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
@@ -1122,17 +1275,16 @@ ${prompt}
                 },
                 // Use bundled binary
                 pathToClaudeCodeExecutable: claudeBinaryPath,
-                // Session handling: For Ollama, use resume with session ID to maintain history
-                // For Claude API, use resume with rollback support
-                ...(resumeSessionId && {
+                // Session handling: Don't use resume/continue for message replay
+                ...(resumeSessionId && !needsMessageReplay && {
                   resume: resumeSessionId,
                   // Rollback support - resume at specific message UUID (from DB)
                   ...(resumeAtUuid && !isUsingOllama
                     ? { resumeSessionAt: resumeAtUuid }
                     : { continue: true }),
                 }),
-                // For first message in chat (no session ID yet), use continue mode
-                ...(!resumeSessionId && { continue: true }),
+                // For first message (no session) - use continue UNLESS replaying
+                ...(!resumeSessionId && !needsMessageReplay && { continue: true }),
                 ...(resolvedModel && { model: resolvedModel }),
                 // fallbackModel: "claude-opus-4-5-20251101",
                 ...(input.maxThinkingTokens && {
@@ -1258,6 +1410,13 @@ ${prompt}
                   ) {
                     errorCategory = "OVERLOADED_SDK"
                     errorContext = "Claude is overloaded, try again later"
+                  } else if (
+                    sdkError === "invalid_request" ||
+                    String(sdkError).includes("tool use concurrency") ||
+                    String(msgAny.message?.content?.[0]?.text || "").includes("tool use concurrency")
+                  ) {
+                    errorCategory = "TOOL_CONCURRENCY_SDK"
+                    errorContext = "API rejected request due to too many concurrent tool calls. This is a temporary issue - please try again."
                   }
 
                   // Emit auth-error for authentication failures, regular error otherwise
