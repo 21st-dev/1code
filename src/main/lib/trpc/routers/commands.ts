@@ -168,4 +168,42 @@ export const commandsRouter = router({
         return { content: "" }
       }
     }),
+
+  /**
+   * Delete a command file
+   */
+  delete: publicProcedure
+    .input(
+      z.object({
+        path: z.string(),
+        source: z.enum(["user", "project"]),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      // Security: prevent path traversal
+      if (input.path.includes("..")) {
+        throw new Error("Invalid path")
+      }
+
+      const homeDir = os.homedir()
+      const userCommandsDir = path.join(homeDir, ".claude", "commands")
+      const isUserCommand = input.path.startsWith(userCommandsDir)
+      const isProjectCommand = input.path.includes(".claude/commands") || input.path.includes(".claude\\commands")
+
+      if (!isUserCommand && !isProjectCommand) {
+        throw new Error("Invalid command path")
+      }
+
+      if (input.source === "user" && !isUserCommand) {
+        throw new Error("Path does not match user commands directory")
+      }
+
+      if (input.source === "project" && !isProjectCommand) {
+        throw new Error("Path does not match project commands directory")
+      }
+
+      await fs.unlink(input.path)
+
+      return { deleted: true }
+    }),
 })

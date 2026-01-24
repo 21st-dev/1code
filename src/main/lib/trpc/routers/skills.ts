@@ -120,4 +120,40 @@ export const skillsRouter = router({
    * Alias for list - used by @ mention
    */
   listEnabled: listSkillsProcedure,
+
+  /**
+   * Delete a skill directory
+   */
+  delete: publicProcedure
+    .input(
+      z.object({
+        name: z.string(),
+        source: z.enum(["user", "project"]),
+        cwd: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const skillName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-")
+
+      if (!skillName || skillName.includes("..") || skillName.includes("/")) {
+        throw new Error("Invalid skill name")
+      }
+
+      let targetDir: string
+      if (input.source === "project") {
+        if (!input.cwd) {
+          throw new Error("Project path (cwd) required for project skills")
+        }
+        targetDir = path.join(input.cwd, ".claude", "skills")
+      } else {
+        targetDir = path.join(os.homedir(), ".claude", "skills")
+      }
+
+      const skillPath = path.join(targetDir, skillName)
+
+      // Remove directory recursively
+      await fs.rm(skillPath, { recursive: true, force: true })
+
+      return { deleted: true }
+    }),
 })
