@@ -58,12 +58,12 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
   }
 
   getCliConfig(): CliConfig {
-    const localAppData =
-      process.env.LOCALAPPDATA ||
-      path.join(this.getHome(), "AppData", "Local")
+    // Install to ~/.local/bin which is already included in buildExtendedPath()
+    // This avoids needing to modify the system PATH
+    const home = this.getHome()
 
     return {
-      installPath: path.join(localAppData, "Programs", "1code", "1code.cmd"),
+      installPath: path.join(home, ".local", "bin", "1code.cmd"),
       scriptName: "1code.cmd",
       requiresAdmin: false, // Install to user directory, no admin needed
     }
@@ -134,7 +134,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
       // which ensures the CLI is found when running from the app.
       //
       // For terminal usage, users can manually add to PATH:
-      // $env:Path += ";{installDir}"
+      // $env:Path += ";${installDir}"
 
       console.log("[CLI] Installed 1code command to", installPath)
       console.log(
