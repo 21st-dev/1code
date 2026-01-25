@@ -119,7 +119,7 @@ function getPaneId(chatId: string): string {
 }
 
 // React Grab injection script - loads and activates the element selector
-// Only uses React Grab's plugin API - no fallback
+// Uses React Grab's plugin API with hooks for onCopySuccess
 const REACT_GRAB_INJECT_SCRIPT = `
 (function() {
   // Handler for element selection - called when user copies with Cmd+C
@@ -141,6 +141,8 @@ const REACT_GRAB_INJECT_SCRIPT = `
   function registerOurPlugin(api) {
     // Skip if already registered
     if (window.__CONDUCTOR_ELEMENT_PLUGIN_REGISTERED__) {
+      // Still signal ready since plugin is registered
+      console.log('__REACT_GRAB_READY__');
       return true;
     }
 
@@ -150,17 +152,26 @@ const REACT_GRAB_INJECT_SCRIPT = `
       return false;
     }
 
-    api.registerPlugin({
-      name: 'conductor-element-capture',
-      onCopySuccess: function(elements, content) {
-        if (elements && elements.length > 0) {
-          handleElementCapture(elements[0], content);
+    try {
+      // React Grab plugin API: callbacks go inside 'hooks' object
+      api.registerPlugin({
+        name: 'conductor-element-capture',
+        hooks: {
+          onCopySuccess: function(elements, content) {
+            if (elements && elements.length > 0) {
+              handleElementCapture(elements[0], content);
+            }
+          }
         }
-      }
-    });
-    window.__CONDUCTOR_ELEMENT_PLUGIN_REGISTERED__ = true;
-    console.log('__REACT_GRAB_READY__');
-    return true;
+      });
+      window.__CONDUCTOR_ELEMENT_PLUGIN_REGISTERED__ = true;
+      console.log('__REACT_GRAB_READY__');
+      return true;
+    } catch (err) {
+      console.error('[ReactGrab] Plugin registration failed:', err);
+      console.log('__REACT_GRAB_UNAVAILABLE__');
+      return false;
+    }
   }
 
   // Activate React Grab and register our plugin
