@@ -71,11 +71,18 @@ export const claudeCodeRouter = router({
    */
   hasExistingCliConfig: publicProcedure.query(() => {
     const shellEnv = getClaudeShellEnvironment()
-    const hasConfig = !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_BASE_URL)
+    // Check that values are non-empty after trimming (not just truthy)
+    const rawApiKey = shellEnv.ANTHROPIC_API_KEY
+    const rawBaseUrl = shellEnv.ANTHROPIC_BASE_URL
+    const apiKey = rawApiKey?.trim() || ""
+    const baseUrl = rawBaseUrl?.trim() || ""
+    // Require API key to be present - BASE_URL alone is not sufficient for authentication
+    const hasConfig = !!apiKey
+    
     return {
       hasConfig,
-      hasApiKey: !!shellEnv.ANTHROPIC_API_KEY,
-      baseUrl: shellEnv.ANTHROPIC_BASE_URL || null,
+      hasApiKey: !!apiKey,
+      baseUrl: baseUrl || null,
     }
   }),
 
@@ -90,8 +97,10 @@ export const claudeCodeRouter = router({
       .where(eq(claudeCodeCredentials.id, "default"))
       .get()
 
+    const isConnected = !!cred?.oauthToken
+
     return {
-      isConnected: !!cred?.oauthToken,
+      isConnected,
       connectedAt: cred?.connectedAt?.toISOString() ?? null,
     }
   }),

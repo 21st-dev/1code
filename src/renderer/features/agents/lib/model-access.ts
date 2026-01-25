@@ -67,12 +67,12 @@ export function useModelAccess(): ModelAccessStatus {
   // Disabled reasons
   let claudeDisabledReason: string | null = null
   if (!claudeEnabled) {
-    claudeDisabledReason = "Configure OAuth, CLI, or API key in Settings"
+    claudeDisabledReason = "Configure Anthropic provider in Settings"
   }
 
   let customDisabledReason: string | null = null
   if (!customEnabled) {
-    customDisabledReason = "Configure custom provider in Settings"
+    customDisabledReason = "Configure Custom provider in Settings"
   }
 
   const isLoading = isLoadingOAuth || isLoadingCli
