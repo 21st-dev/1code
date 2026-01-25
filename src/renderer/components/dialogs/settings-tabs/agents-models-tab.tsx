@@ -416,7 +416,7 @@ export function AgentsModelsTab() {
               disabled={!canResetOpenAI || setOpenAIKeyMutation.isPending}
               className="hover:bg-red-500/10 hover:text-red-600"
             >
-              Remove
+              Reset
             </Button>
             <Button
               size="sm"
