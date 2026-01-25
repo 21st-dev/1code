@@ -111,14 +111,98 @@ function parseEnvOutput(output: string): Record<string, string> {
   return env
 }
 
-/**
- * Load full shell environment using interactive login shell.
- * This captures PATH, HOME, and all shell profile configurations.
- * Results are cached for the lifetime of the process.
- */
+function normalizePathForComparison(p: string): string {
+  return path.resolve(p).toLowerCase().replace(/[/\\]+$/, "")
+}
+
+function buildWindowsPath(): string {
+  const paths: string[] = []
+  const pathSeparator = ";"
+
+  // Start with existing PATH from process.env
+  if (process.env.PATH) {
+    paths.push(...process.env.PATH.split(pathSeparator).filter(Boolean))
+  }
+
+  const commonPaths: string[] = [
+    path.join(os.homedir(), ".local", "bin"),
+    path.join(os.homedir(), "AppData", "Roaming", "npm"),
+    path.join(process.env.SystemRoot || "C:\\Windows", "System32"),
+    path.join(process.env.SystemRoot || "C:\\Windows"),
+  ]
+
+  const gitPaths = [
+    "C:\\Program Files\\Git\\cmd",
+    "C:\\Program Files\\Git\\bin",
+    path.join(os.homedir(), "AppData", "Local", "Programs", "Git", "cmd"),
+    path.join(os.homedir(), "AppData", "Local", "Programs", "Git", "bin"),
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "Git", "cmd"),
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "Git", "bin"),
+    "C:\\Program Files (x86)\\Git\\cmd",
+    "C:\\Program Files (x86)\\Git\\bin",
+  ]
+
+  for (const gitPath of gitPaths) {
+    try {
+      if (!gitPath || gitPath.includes("undefined")) continue
+      if (fs.existsSync(gitPath)) {
+        commonPaths.push(gitPath)
+      }
+    } catch {
+      // Ignore errors checking path existence
+    }
+  }
+
+  const normalizedPaths = new Set<string>()
+  for (const existingPath of paths) {
+    normalizedPaths.add(normalizePathForComparison(existingPath))
+  }
+
+  for (const commonPath of commonPaths) {
+    const normalized = normalizePathForComparison(commonPath)
+    if (!normalizedPaths.has(normalized)) {
+      normalizedPaths.add(normalized)
+      paths.push(path.resolve(commonPath))
+    }
+  }
+
+  return paths.join(pathSeparator)
+}
+
 export function getClaudeShellEnvironment(): Record<string, string> {
   if (cachedShellEnv !== null) {
     return { ...cachedShellEnv }
+  }
+
+  if (process.platform === "win32") {
+    console.log(
+      "[claude-env] Windows detected, deriving PATH without shell invocation",
+    )
+    const env: Record<string, string> = {}
+
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === "string") {
+        env[key] = value
+      }
+    }
+
+    env.PATH = buildWindowsPath()
+    env.HOME = os.homedir()
+    env.USER = os.userInfo().username
+    env.USERPROFILE = os.homedir()
+
+    for (const key of STRIPPED_ENV_KEYS) {
+      if (key in env) {
+        console.log(`[claude-env] Stripped ${key} from shell environment`)
+        delete env[key]
+      }
+    }
+
+    console.log(
+      `[claude-env] Built Windows environment with ${Object.keys(env).length} vars`,
+    )
+    cachedShellEnv = env
+    return { ...env }
   }
 
   const shell = process.env.SHELL || "/bin/zsh"

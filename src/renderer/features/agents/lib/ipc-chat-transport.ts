@@ -12,6 +12,10 @@ import {
   autoOfflineModeAtom,
   type CustomClaudeConfig,
   normalizeCustomClaudeConfig,
+  anthropicApiKeyConfigAtom,
+  customProviderConfigAtom,
+  normalizeAnthropicApiKeyConfig,
+  normalizeCustomProviderConfig,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
@@ -24,6 +28,91 @@ import {
   pendingUserQuestionsAtom,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+
+// ============================================
+// ROUTING PRECEDENCE (Unified Model Selector v2)
+// ============================================
+
+/**
+ * Compute the model routing payload based on selected model and available credentials.
+ *
+ * PRECEDENCE TABLE:
+ *
+ * Cloud model selected (opus|sonnet|haiku):
+ * 1. If anthropicApiKeyConfig exists → send customConfig with cloud model
+ * 2. Else if OAuth connected → send model only
+ * 3. Else if CLI config exists → send model only
+ * 4. Else → error
+ *
+ * Custom selected:
+ * 1. If customProviderConfig exists → send customConfig
+ * 2. Else → error
+ *
+ * CRITICAL: Never send both model AND customConfig.
+ */
+type ModelRoutingPayload =
+  | { type: "model"; model: string }
+  | { type: "customConfig"; customConfig: CustomClaudeConfig }
+  | { type: "error"; message: string }
+
+async function computeModelRouting(
+  selectedModelId: string,
+): Promise<ModelRoutingPayload> {
+  const isCloudModel = ["opus", "sonnet", "haiku"].includes(selectedModelId)
+  const isCustomModel = selectedModelId === "custom"
+
+  if (isCloudModel) {
+    // Check anthropicApiKeyConfig first (highest priority for cloud)
+    const anthropicConfig = appStore.get(anthropicApiKeyConfigAtom)
+    const normalizedAnthropicConfig = normalizeAnthropicApiKeyConfig(anthropicConfig)
+
+    if (normalizedAnthropicConfig) {
+      // Use Anthropic API key - send customConfig with cloud model string
+      const cloudModelString = MODEL_ID_MAP[selectedModelId]
+      return {
+        type: "customConfig",
+        customConfig: {
+          model: cloudModelString,
+          token: normalizedAnthropicConfig.token,
+          baseUrl: normalizedAnthropicConfig.baseUrl,
+        },
+      }
+    }
+
+    // Check OAuth/CLI - these don't need customConfig, just model
+    // We'll check this at runtime via trpc, but for now we trust the selection
+    // The transport is called after UI validation, so we assume it's valid
+    const cloudModelString = MODEL_ID_MAP[selectedModelId]
+    return {
+      type: "model",
+      model: cloudModelString,
+    }
+  }
+
+  if (isCustomModel) {
+    // Check customProviderConfig
+    const customConfig = appStore.get(customProviderConfigAtom)
+    const normalizedCustomConfig = normalizeCustomProviderConfig(customConfig)
+
+    if (normalizedCustomConfig) {
+      return {
+        type: "customConfig",
+        customConfig: normalizedCustomConfig,
+      }
+    }
+
+    return {
+      type: "error",
+      message: "Custom provider not configured. Configure it in Settings.",
+    }
+  }
+
+  // Unknown model ID - shouldn't happen but handle defensively
+  return {
+    type: "error",
+    message: `Unknown model: ${selectedModelId}`,
+  }
+}
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -165,12 +254,30 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read model selection dynamically (so model changes apply to existing chats)
     const selectedModelId = appStore.get(lastSelectedModelIdAtom)
-    const modelString = MODEL_ID_MAP[selectedModelId]
 
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
-    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+    // Compute model routing based on selected model and credentials
+    // This implements the precedence table from the plan
+    const routingPayload = await computeModelRouting(selectedModelId)
+
+    // Defensive validation: if routing failed, show error and abort
+    if (routingPayload.type === "error") {
+      toast.error("Model configuration error", {
+        description: routingPayload.message,
+      })
+      throw new Error(routingPayload.message)
+    }
+
+    // Extract model/customConfig based on routing - NEVER send both
+    const modelString = routingPayload.type === "model" ? routingPayload.model : undefined
+    const customConfig = routingPayload.type === "customConfig" ? routingPayload.customConfig : undefined
+
+    // Legacy fallback: check old customClaudeConfigAtom for backwards compatibility
+    // This handles cases where user hasn't migrated yet
+    let finalCustomConfig = customConfig
+    if (!finalCustomConfig && !modelString) {
+      const storedCustomConfig = appStore.get(customClaudeConfigAtom) as CustomClaudeConfig
+      finalCustomConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+    }
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
@@ -189,7 +296,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
+    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} routingType=${routingPayload.type} customConfig=${finalCustomConfig ? "set" : "not set"}`)
 
     return new ReadableStream({
       start: (controller) => {
@@ -203,8 +310,11 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             mode: currentMode,
             sessionId,
             ...(maxThinkingTokens && { maxThinkingTokens }),
-            ...(modelString && { model: modelString }),
-            ...(customConfig && { customConfig }),
+            // CRITICAL: Send model OR customConfig, NEVER both
+            // modelString is only set when using OAuth/CLI (no customConfig needed)
+            // finalCustomConfig is only set when using API key or custom provider
+            ...(modelString && !finalCustomConfig && { model: modelString }),
+            ...(finalCustomConfig && { customConfig: finalCustomConfig }),
             ...(selectedOllamaModel && { selectedOllamaModel }),
             historyEnabled,
             offlineModeEnabled,

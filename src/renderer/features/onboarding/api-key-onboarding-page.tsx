@@ -11,8 +11,10 @@ import { Logo } from "../../components/ui/logo"
 import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
-  customClaudeConfigAtom,
-  type CustomClaudeConfig,
+  anthropicApiKeyConfigAtom,
+  customProviderConfigAtom,
+  type AnthropicApiKeyConfig,
+  type CustomProviderConfig,
 } from "../../lib/atoms"
 import { cn } from "../../lib/utils"
 
@@ -23,55 +25,61 @@ const isValidApiKey = (key: string) => {
 }
 
 export function ApiKeyOnboardingPage() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
+  const [storedAnthropicConfig, setStoredAnthropicConfig] = useAtom(anthropicApiKeyConfigAtom)
+  const [storedCustomConfig, setStoredCustomConfig] = useAtom(customProviderConfigAtom)
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
 
   const isCustomModel = billingMethod === "custom-model"
 
-  // Default values for API key mode (not custom model)
-  const defaultModel = "claude-sonnet-4-20250514"
-  const defaultBaseUrl = "https://api.anthropic.com"
+  // API key mode state
+  const [apiKey, setApiKey] = useState(storedAnthropicConfig.token)
 
-  const [apiKey, setApiKey] = useState(storedConfig.token)
-  const [model, setModel] = useState(storedConfig.model || "")
-  const [token, setToken] = useState(storedConfig.token)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl || "")
+  // Custom model mode state
+  const [model, setModel] = useState(storedCustomConfig.model || "")
+  const [token, setToken] = useState(storedCustomConfig.token)
+  const [baseUrl, setBaseUrl] = useState(storedCustomConfig.baseUrl || "")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Sync from stored config on mount
   useEffect(() => {
-    if (storedConfig.token) {
-      setApiKey(storedConfig.token)
-      setToken(storedConfig.token)
+    if (storedAnthropicConfig.token) {
+      setApiKey(storedAnthropicConfig.token)
     }
-    if (storedConfig.model) setModel(storedConfig.model)
-    if (storedConfig.baseUrl) setBaseUrl(storedConfig.baseUrl)
-  }, [])
+  }, [storedAnthropicConfig.token])
+
+  useEffect(() => {
+    if (storedCustomConfig.token) {
+      setToken(storedCustomConfig.token)
+    }
+    if (storedCustomConfig.model) setModel(storedCustomConfig.model)
+    if (storedCustomConfig.baseUrl) setBaseUrl(storedCustomConfig.baseUrl)
+  }, [storedCustomConfig.token, storedCustomConfig.model, storedCustomConfig.baseUrl])
 
   const handleBack = () => {
     setBillingMethod(null)
   }
 
   // Submit for API key mode (simple - just the key)
+  // Writes to anthropicApiKeyConfigAtom (new atom)
   const submitApiKey = (key: string) => {
     if (!isValidApiKey(key)) return
 
     setIsSubmitting(true)
 
-    const config: CustomClaudeConfig = {
-      model: defaultModel,
+    const config: AnthropicApiKeyConfig = {
       token: key.trim(),
-      baseUrl: defaultBaseUrl,
+      baseUrl: "", // Will use default https://api.anthropic.com
     }
-    setStoredConfig(config)
+    setStoredAnthropicConfig(config)
     setApiKeyOnboardingCompleted(true)
 
     setIsSubmitting(false)
   }
 
   // Submit for custom model mode (all three fields)
+  // Writes to customProviderConfigAtom (new atom)
   const submitCustomModel = () => {
     const trimmedModel = model.trim()
     const trimmedToken = token.trim()
@@ -81,12 +89,12 @@ export function ApiKeyOnboardingPage() {
 
     setIsSubmitting(true)
 
-    const config: CustomClaudeConfig = {
+    const config: CustomProviderConfig = {
       model: trimmedModel,
       token: trimmedToken,
       baseUrl: trimmedBaseUrl,
     }
-    setStoredConfig(config)
+    setStoredCustomConfig(config)
     setApiKeyOnboardingCompleted(true)
 
     setIsSubmitting(false)

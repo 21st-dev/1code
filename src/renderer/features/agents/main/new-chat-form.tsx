@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import {
@@ -50,12 +51,11 @@ const selectedTeamIdAtom = atom<string | null>(null)
 import {
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
-  customClaudeConfigAtom,
-  normalizeCustomClaudeConfig,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
 } from "../../../lib/atoms"
+import { useModelAccess } from "../lib/model-access"
 // Desktop uses real tRPC
 import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
@@ -217,11 +217,11 @@ export function NewChatForm({
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
+
+  // Model access status for enabling/disabling dropdown items
+  const modelAccess = useModelAccess()
+
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const [repoSearchQuery, setRepoSearchQuery] = useState("")
@@ -284,6 +284,28 @@ export function NewChatForm({
 
   // Determine current Ollama model (selected or recommended)
   const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
+
+  // Selection sanitizer: if current selection is disabled, select first enabled option
+  useEffect(() => {
+    if (modelAccess.isLoading) return
+
+    const isCloudModel = ["opus", "sonnet", "haiku"].includes(lastSelectedModelId)
+    const isCustomModel = lastSelectedModelId === "custom"
+
+    if (isCloudModel && !modelAccess.cloudEnabled) {
+      // Cloud models disabled, switch to custom if enabled
+      if (modelAccess.customEnabled) {
+        setLastSelectedModelId("custom")
+      }
+    } else if (isCustomModel && !modelAccess.customEnabled) {
+      // Custom disabled, switch to sonnet if cloud enabled
+      if (modelAccess.cloudEnabled) {
+        setLastSelectedModelId("sonnet")
+        setSelectedModel(availableModels.models.find((m) => m.id === "sonnet") || availableModels.models[1])
+      }
+    }
+  }, [modelAccess.isLoading, modelAccess.cloudEnabled, modelAccess.customEnabled, lastSelectedModelId, setLastSelectedModelId, availableModels.models])
+
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
   const [lastSelectedBranches, setLastSelectedBranches] = useAtom(
@@ -1737,32 +1759,22 @@ export function NewChatForm({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : (
-                        // Online mode: show Claude model selector
+                        // Online mode: show unified model selector (Opus/Sonnet/Haiku/Custom)
                         <DropdownMenu
-                          open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
-                          onOpenChange={(open) => {
-                            if (!hasCustomClaudeConfig) {
-                              setIsModelDropdownOpen(open)
-                            }
-                          }}
+                          open={isModelDropdownOpen}
+                          onOpenChange={setIsModelDropdownOpen}
                         >
                           <DropdownMenuTrigger asChild>
                             <button
-                              disabled={hasCustomClaudeConfig}
-                              className={cn(
-                                "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-[background-color,color] duration-150 ease-out rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                                hasCustomClaudeConfig
-                                  ? "opacity-70 cursor-not-allowed"
-                                  : "hover:text-foreground hover:bg-muted/50",
-                              )}
+                              className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                             >
                               <ClaudeCodeIcon className="h-3.5 w-3.5" />
                               <span>
-                                {hasCustomClaudeConfig ? (
-                                  "Custom Model"
+                                {lastSelectedModelId === "custom" ? (
+                                  "Custom"
                                 ) : (
                                   <>
-                                    {selectedModel?.name}{" "}
+                                    {selectedModel?.name || "Sonnet"}{" "}
                                     <span className="text-muted-foreground">4.5</span>
                                   </>
                                 )}
@@ -1770,17 +1782,24 @@ export function NewChatForm({
                               <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-[200px]">
+                          <DropdownMenuContent align="start" className="w-[240px]">
+                            {/* Cloud models: Opus, Sonnet, Haiku */}
                             {availableModels.models.map((model) => {
-                              const isSelected = selectedModel?.id === model.id
+                              const isSelected = lastSelectedModelId === model.id
+                              const isDisabled = !modelAccess.cloudEnabled
                               return (
                                 <DropdownMenuItem
                                   key={model.id}
                                   onClick={() => {
+                                    if (isDisabled) return
                                     setSelectedModel(model)
                                     setLastSelectedModelId(model.id)
                                   }}
-                                  className="gap-2 justify-between"
+                                  className={cn(
+                                    "gap-2 justify-between",
+                                    isDisabled && "opacity-50 cursor-not-allowed"
+                                  )}
+                                  disabled={isDisabled}
                                 >
                                   <div className="flex items-center gap-1.5">
                                     <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -1789,12 +1808,55 @@ export function NewChatForm({
                                       <span className="text-muted-foreground">4.5</span>
                                     </span>
                                   </div>
-                                  {isSelected && (
+                                  {isSelected && !isDisabled && (
                                     <CheckIcon className="h-3.5 w-3.5 shrink-0" />
                                   )}
                                 </DropdownMenuItem>
                               )
                             })}
+
+                            {/* Show disabled reason for cloud models if applicable */}
+                            {!modelAccess.cloudEnabled && modelAccess.cloudDisabledReason && (
+                              <div className="px-2 py-1 text-xs text-muted-foreground">
+                                {modelAccess.cloudDisabledReason}
+                              </div>
+                            )}
+
+                            <DropdownMenuSeparator />
+
+                            {/* Custom model option */}
+                            {(() => {
+                              const isSelected = lastSelectedModelId === "custom"
+                              const isDisabled = !modelAccess.customEnabled
+                              return (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (isDisabled) return
+                                    setLastSelectedModelId("custom")
+                                  }}
+                                  className={cn(
+                                    "gap-2 justify-between",
+                                    isDisabled && "opacity-50 cursor-not-allowed"
+                                  )}
+                                  disabled={isDisabled}
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span>Custom</span>
+                                  </div>
+                                  {isSelected && !isDisabled && (
+                                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              )
+                            })()}
+
+                            {/* Show disabled reason for custom if applicable */}
+                            {!modelAccess.customEnabled && modelAccess.customDisabledReason && (
+                              <div className="px-2 py-1 text-xs text-muted-foreground">
+                                {modelAccess.customDisabledReason}
+                              </div>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}

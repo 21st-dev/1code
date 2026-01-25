@@ -19,6 +19,8 @@ export {
   setLoading,
   clearLoading,
   MODEL_ID_MAP,
+  ALL_MODEL_IDS,
+  type ModelId,
   lastChatModesAtom,
 
   // Sidebar atoms
@@ -185,6 +187,84 @@ export type CustomClaudeConfig = {
   token: string
   baseUrl: string
 }
+
+export type AnthropicApiKeyConfig = {
+  token: string
+  baseUrl: string
+}
+
+export const anthropicApiKeyConfigAtom = atomWithStorage<AnthropicApiKeyConfig>(
+  "agents:anthropic-api-key-config",
+  {
+    token: "",
+    baseUrl: "",
+  },
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Normalize Anthropic API key config
+ * Returns undefined if token is empty
+ * Defaults baseUrl to Anthropic's API if empty
+ */
+export function normalizeAnthropicApiKeyConfig(
+  config: AnthropicApiKeyConfig,
+): AnthropicApiKeyConfig | undefined {
+  const token = config.token.trim()
+  if (!token) return undefined
+
+  const baseUrl = config.baseUrl.trim() || "https://api.anthropic.com"
+  return { token, baseUrl }
+}
+
+/**
+ * Custom provider config - for custom model providers (proxies, alternative APIs)
+ * All three fields are required
+ */
+export type CustomProviderConfig = {
+  model: string
+  token: string
+  baseUrl: string
+}
+
+export const customProviderConfigAtom = atomWithStorage<CustomProviderConfig>(
+  "agents:custom-provider-config",
+  {
+    model: "",
+    token: "",
+    baseUrl: "",
+  },
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Normalize custom provider config
+ * Returns undefined unless all three fields are non-empty
+ */
+export function normalizeCustomProviderConfig(
+  config: CustomProviderConfig,
+): CustomProviderConfig | undefined {
+  const model = config.model.trim()
+  const token = config.token.trim()
+  const baseUrl = config.baseUrl.trim()
+
+  if (!model || !token || !baseUrl) return undefined
+
+  return { model, token, baseUrl }
+}
+
+/**
+ * Track if legacy config migration has been performed
+ * Prevents re-migration on every app load
+ */
+export const legacyConfigMigratedAtom = atomWithStorage<boolean>(
+  "agents:legacy-config-migrated",
+  false,
+  undefined,
+  { getOnInit: true },
+)
 
 // Model profile system - support multiple configs
 export type ModelProfile = {

@@ -4,9 +4,11 @@ import { toast } from "sonner"
 import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   openaiApiKeyAtom,
-  type CustomClaudeConfig,
+  anthropicApiKeyConfigAtom,
+  customProviderConfigAtom,
+  type AnthropicApiKeyConfig,
+  type CustomProviderConfig,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../ui/button"
@@ -30,17 +32,27 @@ function useIsNarrowScreen(): boolean {
   return isNarrow
 }
 
-const EMPTY_CONFIG: CustomClaudeConfig = {
+const EMPTY_ANTHROPIC_CONFIG: AnthropicApiKeyConfig = {
+  token: "",
+  baseUrl: "",
+}
+
+const EMPTY_CUSTOM_CONFIG: CustomProviderConfig = {
   model: "",
   token: "",
   baseUrl: "",
 }
 
 export function AgentsModelsTab() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
-  const [model, setModel] = useState(storedConfig.model)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
-  const [token, setToken] = useState(storedConfig.token)
+  const [storedAnthropicConfig, setStoredAnthropicConfig] = useAtom(anthropicApiKeyConfigAtom)
+  const [anthropicToken, setAnthropicToken] = useState(storedAnthropicConfig.token)
+  const [anthropicBaseUrl, setAnthropicBaseUrl] = useState(storedAnthropicConfig.baseUrl)
+
+  const [storedCustomConfig, setStoredCustomConfig] = useAtom(customProviderConfigAtom)
+  const [customModel, setCustomModel] = useState(storedCustomConfig.model)
+  const [customToken, setCustomToken] = useState(storedCustomConfig.token)
+  const [customBaseUrl, setCustomBaseUrl] = useState(storedCustomConfig.baseUrl)
+
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom,
   )
@@ -58,42 +70,71 @@ export function AgentsModelsTab() {
   const trpcUtils = trpc.useUtils()
 
   useEffect(() => {
-    setModel(storedConfig.model)
-    setBaseUrl(storedConfig.baseUrl)
-    setToken(storedConfig.token)
-  }, [storedConfig.model, storedConfig.baseUrl, storedConfig.token])
+    setAnthropicToken(storedAnthropicConfig.token)
+    setAnthropicBaseUrl(storedAnthropicConfig.baseUrl)
+  }, [storedAnthropicConfig.token, storedAnthropicConfig.baseUrl])
+
+  useEffect(() => {
+    setCustomModel(storedCustomConfig.model)
+    setCustomToken(storedCustomConfig.token)
+    setCustomBaseUrl(storedCustomConfig.baseUrl)
+  }, [storedCustomConfig.model, storedCustomConfig.token, storedCustomConfig.baseUrl])
 
   useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
   }, [storedOpenAIKey])
 
-  const trimmedModel = model.trim()
-  const trimmedBaseUrl = baseUrl.trim()
-  const trimmedToken = token.trim()
-  const canSave = Boolean(trimmedModel && trimmedBaseUrl && trimmedToken)
-  const canReset = Boolean(trimmedModel || trimmedBaseUrl || trimmedToken)
+  const trimmedAnthropicToken = anthropicToken.trim()
+  const trimmedAnthropicBaseUrl = anthropicBaseUrl.trim()
+  const canSaveAnthropic = Boolean(trimmedAnthropicToken)
+  const canResetAnthropic = Boolean(trimmedAnthropicToken || trimmedAnthropicBaseUrl)
 
-  const handleSave = () => {
-    if (!canSave) {
+  const handleSaveAnthropic = () => {
+    if (!canSaveAnthropic) {
+      toast.error("Enter an API token to save")
+      return
+    }
+    const nextConfig: AnthropicApiKeyConfig = {
+      token: trimmedAnthropicToken,
+      baseUrl: trimmedAnthropicBaseUrl,
+    }
+    setStoredAnthropicConfig(nextConfig)
+    toast.success("Anthropic API key saved")
+  }
+
+  const handleResetAnthropic = () => {
+    setStoredAnthropicConfig(EMPTY_ANTHROPIC_CONFIG)
+    setAnthropicToken("")
+    setAnthropicBaseUrl("")
+    toast.success("Anthropic API key removed")
+  }
+
+  const trimmedCustomModel = customModel.trim()
+  const trimmedCustomToken = customToken.trim()
+  const trimmedCustomBaseUrl = customBaseUrl.trim()
+  const canSaveCustom = Boolean(trimmedCustomModel && trimmedCustomToken && trimmedCustomBaseUrl)
+  const canResetCustom = Boolean(trimmedCustomModel || trimmedCustomToken || trimmedCustomBaseUrl)
+
+  const handleSaveCustom = () => {
+    if (!canSaveCustom) {
       toast.error("Fill model, token, and base URL to save")
       return
     }
-    const nextConfig: CustomClaudeConfig = {
-      model: trimmedModel,
-      token: trimmedToken,
-      baseUrl: trimmedBaseUrl,
+    const nextConfig: CustomProviderConfig = {
+      model: trimmedCustomModel,
+      token: trimmedCustomToken,
+      baseUrl: trimmedCustomBaseUrl,
     }
-
-    setStoredConfig(nextConfig)
-    toast.success("Model settings saved")
+    setStoredCustomConfig(nextConfig)
+    toast.success("Custom provider settings saved")
   }
 
-  const handleReset = () => {
-    setStoredConfig(EMPTY_CONFIG)
-    setModel("")
-    setBaseUrl("")
-    setToken("")
-    toast.success("Model settings reset")
+  const handleResetCustom = () => {
+    setStoredCustomConfig(EMPTY_CUSTOM_CONFIG)
+    setCustomModel("")
+    setCustomToken("")
+    setCustomBaseUrl("")
+    toast.success("Custom provider settings reset")
   }
 
   const handleClaudeCodeSetup = () => {
@@ -143,7 +184,7 @@ export function AgentsModelsTab() {
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">
           <h3 className="text-sm font-semibold text-foreground">Models</h3>
           <p className="text-xs text-muted-foreground">
-            Configure model overrides and Claude Code authentication
+            Configure model credentials and providers
           </p>
         </div>
       )}
@@ -199,79 +240,148 @@ export function AgentsModelsTab() {
       <div className="space-y-2">
         <div className="pb-2">
           <h4 className="text-sm font-medium text-foreground">
-            Override Model
+            Anthropic API Key
           </h4>
+          <p className="text-xs text-muted-foreground">
+            Use your own Anthropic API key for cloud models (Opus, Sonnet, Haiku)
+          </p>
         </div>
         <div className="bg-background rounded-lg border border-border overflow-hidden">
           <div className="p-4 space-y-6">
-
-          <div className="flex items-center justify-between gap-6">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Model name</Label>
-              <p className="text-xs text-muted-foreground">
-                Model identifier to use for requests
-              </p>
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">API token</Label>
+                <p className="text-xs text-muted-foreground">
+                  Your Anthropic API key (sk-ant-...)
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  type="password"
+                  value={anthropicToken}
+                  onChange={(e) => setAnthropicToken(e.target.value)}
+                  className="w-full"
+                  placeholder="sk-ant-..."
+                />
+              </div>
             </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full"
-                placeholder="claude-3-7-sonnet-20250219"
-              />
+
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Base URL (optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to use default (https://api.anthropic.com)
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  value={anthropicBaseUrl}
+                  onChange={(e) => setAnthropicBaseUrl(e.target.value)}
+                  className="w-full"
+                  placeholder="https://api.anthropic.com"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-6">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">API token</Label>
-              <p className="text-xs text-muted-foreground">
-                ANTHROPIC_AUTH_TOKEN env
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                type="password"
-                value={token}
-                onChange={(e) => {
-                  setToken(e.target.value)
-                }}
-                className="w-full"
-                placeholder="sk-ant-..."
-              />
-            </div>
+          <div className="bg-muted p-3 rounded-b-lg flex justify-end gap-2 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetAnthropic}
+              disabled={!canResetAnthropic}
+              className="hover:bg-red-500/10 hover:text-red-600"
+            >
+              Reset
+            </Button>
+            <Button size="sm" onClick={handleSaveAnthropic} disabled={!canSaveAnthropic}>
+              Save
+            </Button>
           </div>
-
-          <div className="flex items-center justify-between gap-6">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Base URL</Label>
-              <p className="text-xs text-muted-foreground">
-                ANTHROPIC_BASE_URL env
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                className="w-full"
-                placeholder="https://api.anthropic.com"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-muted p-3 rounded-b-lg flex justify-end gap-2 border-t">
-          <Button variant="ghost" size="sm" onClick={handleReset} disabled={!canReset} className="hover:bg-red-500/10 hover:text-red-600">
-            Reset
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={!canSave}>
-            Save
-          </Button>
-        </div>
         </div>
       </div>
 
-      {/* OpenAI API Key for Voice Input */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">
+            Custom Provider
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            Configure a custom model provider (e.g. API proxy, alternative providers)
+          </p>
+        </div>
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-6">
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Model name</Label>
+                <p className="text-xs text-muted-foreground">
+                  Model identifier to use for requests
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                  className="w-full"
+                  placeholder="claude-sonnet-4-20250514"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">API token</Label>
+                <p className="text-xs text-muted-foreground">
+                  API key or token for the provider
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  type="password"
+                  value={customToken}
+                  onChange={(e) => setCustomToken(e.target.value)}
+                  className="w-full"
+                  placeholder="sk-..."
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Base URL</Label>
+                <p className="text-xs text-muted-foreground">
+                  API endpoint URL
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  value={customBaseUrl}
+                  onChange={(e) => setCustomBaseUrl(e.target.value)}
+                  className="w-full"
+                  placeholder="https://api.example.com"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted p-3 rounded-b-lg flex justify-end gap-2 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetCustom}
+              disabled={!canResetCustom}
+              className="hover:bg-red-500/10 hover:text-red-600"
+            >
+              Reset
+            </Button>
+            <Button size="sm" onClick={handleSaveCustom} disabled={!canSaveCustom}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <div className="pb-2">
           <h4 className="text-sm font-medium text-foreground">Voice Input</h4>
