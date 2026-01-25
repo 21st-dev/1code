@@ -315,7 +315,7 @@ export function DetailsSidebar({
         </div>
 
         {/* Widget Cards - rendered in user-defined order */}
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
           {widgetOrder.map((widgetId) => {
             // Skip if widget is not visible
             if (!isWidgetVisible(widgetId)) return null

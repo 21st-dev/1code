@@ -257,7 +257,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
             transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
             className="overflow-hidden"
           >
-            <div className="border-t border-border max-h-[200px] overflow-y-auto">
+            <div className="border-t border-border max-h-[200px] overflow-y-auto scrollbar-thin">
               {uncommittedFiles.map((file) => {
                 const FileIcon = getFileIconByExtension(file.displayPath)
 

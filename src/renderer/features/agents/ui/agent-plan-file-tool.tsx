@@ -230,7 +230,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
           className={cn(
             "text-xs overflow-hidden transition-all duration-200",
             isExpanded
-              ? "max-h-[300px] overflow-y-auto"
+              ? "max-h-[300px] overflow-y-auto scrollbar-thin"
               : "h-[72px] cursor-pointer hover:bg-muted/50",
           )}
         >

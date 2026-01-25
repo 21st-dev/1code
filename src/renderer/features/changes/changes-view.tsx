@@ -640,7 +640,7 @@ export function ChangesView({
 						) : (
 							<div
 								ref={fileListRef}
-								className="flex-1 overflow-y-auto outline-none"
+								className="flex-1 overflow-y-auto scrollbar-thin outline-none"
 								tabIndex={0}
 								onKeyDown={handleKeyDown}
 							>

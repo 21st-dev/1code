@@ -488,7 +488,7 @@ export function AgentsKeyboardTab() {
           </div>
 
           {/* Shortcuts list - padding to prevent focus ring clipping */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-1">
+          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-1">
             {totalShortcuts === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
                 No shortcuts found

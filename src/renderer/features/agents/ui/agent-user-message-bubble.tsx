@@ -226,7 +226,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
               className={cn(
                 "relative bg-input-background border px-3 py-2 rounded-xl whitespace-pre-wrap text-sm transition-all duration-200 max-h-[100px]",
                 // When searching in this message, allow scroll; otherwise hide overflow
-                hasCurrentSearchHighlight ? "overflow-y-auto" : "overflow-hidden",
+                hasCurrentSearchHighlight ? "overflow-y-auto scrollbar-thin" : "overflow-hidden",
                 // Cursor and hover only when can expand (not during search)
                 showGradient && !hasCurrentSearchHighlight && "cursor-pointer hover:brightness-110",
               )}
@@ -271,7 +271,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
 
       {/* Full message dialog */}
       <Dialog open={isExpanded} onOpenChange={setIsExpanded}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto scrollbar-thin">
           <DialogHeader>
             <DialogTitle className="text-sm font-medium text-muted-foreground">
               Full message

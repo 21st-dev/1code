@@ -17,7 +17,14 @@ import {
 import { identify, initAnalytics, shutdown } from "./lib/analytics"
 import {
   anthropicOnboardingCompletedAtom, apiKeyOnboardingCompletedAtom,
-  billingMethodAtom
+  billingMethodAtom,
+  customClaudeConfigAtom,
+  anthropicApiKeyConfigAtom,
+  customProviderConfigAtom,
+  legacyConfigMigratedAtom,
+  normalizeCustomClaudeConfig,
+  normalizeAnthropicApiKeyConfig,
+  normalizeCustomProviderConfig,
 } from "./lib/atoms"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
@@ -53,6 +60,69 @@ function AppContent() {
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
+
+  const legacyConfig = useAtomValue(customClaudeConfigAtom)
+  const legacyMigrated = useAtomValue(legacyConfigMigratedAtom)
+  const setLegacyMigrated = useSetAtom(legacyConfigMigratedAtom)
+  const anthropicApiKeyConfig = useAtomValue(anthropicApiKeyConfigAtom)
+  const setAnthropicApiKeyConfig = useSetAtom(anthropicApiKeyConfigAtom)
+  const customProviderConfig = useAtomValue(customProviderConfigAtom)
+  const setCustomProviderConfig = useSetAtom(customProviderConfigAtom)
+
+  useEffect(() => {
+    if (legacyMigrated) return
+
+    const normalizedLegacy = normalizeCustomClaudeConfig(legacyConfig)
+    if (!normalizedLegacy) {
+      setLegacyMigrated(true)
+      return
+    }
+
+    const hasNewAnthropicConfig = !!normalizeAnthropicApiKeyConfig(anthropicApiKeyConfig)
+    const hasNewCustomConfig = !!normalizeCustomProviderConfig(customProviderConfig)
+
+    if (hasNewAnthropicConfig || hasNewCustomConfig) {
+      setLegacyMigrated(true)
+      return
+    }
+
+    if (billingMethod === "api-key") {
+      console.log("[Migration] Migrating legacy config to anthropicApiKeyConfigAtom")
+      setAnthropicApiKeyConfig({
+        token: normalizedLegacy.token,
+        baseUrl: normalizedLegacy.baseUrl,
+      })
+      setLegacyMigrated(true)
+    } else if (billingMethod === "custom-model") {
+      console.log("[Migration] Migrating legacy config to customProviderConfigAtom")
+      setCustomProviderConfig({
+        model: normalizedLegacy.model,
+        token: normalizedLegacy.token,
+        baseUrl: normalizedLegacy.baseUrl,
+      })
+      setLegacyMigrated(true)
+    } else {
+      if (billingMethod === null) {
+        console.log(
+          "[Migration] Billing method not yet selected, skipping migration. Will retry when billing method is set.",
+        )
+      } else {
+        console.log(
+          `[Migration] Billing method is "${billingMethod}" (OAuth), no migration needed.`,
+        )
+        setLegacyMigrated(true)
+      }
+    }
+  }, [
+    legacyMigrated,
+    legacyConfig,
+    billingMethod,
+    anthropicApiKeyConfig,
+    customProviderConfig,
+    setLegacyMigrated,
+    setAnthropicApiKeyConfig,
+    setCustomProviderConfig,
+  ])
 
   // Apply initial window params (chatId/subChatId) when opening via "Open in new window"
   useEffect(() => {

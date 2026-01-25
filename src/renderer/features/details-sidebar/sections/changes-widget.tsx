@@ -246,7 +246,7 @@ export const ChangesWidget = memo(function ChangesWidget({
             </div>
 
             {/* File list - using shared FileListItem component */}
-            <div className="max-h-[300px] overflow-y-auto">
+            <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
               {displayFiles.map((file) => {
                 const filePath = getDisplayPath(file)
                 const absolutePath = worktreePath ? `${worktreePath}/${filePath}` : null

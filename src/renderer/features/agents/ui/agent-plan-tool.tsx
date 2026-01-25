@@ -241,7 +241,7 @@ export const AgentPlanTool = memo(function AgentPlanTool({
           )}
 
           {/* Steps list */}
-          <div className="max-h-[300px] overflow-y-auto">
+          <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
             {steps.map((step, idx) => (
               <div
                 key={step.id}

@@ -132,7 +132,7 @@ export const HistoryView = memo(function HistoryView({
 	}
 
 	return (
-		<div className="flex-1 overflow-y-auto">
+		<div className="flex-1 overflow-y-auto scrollbar-thin">
 			{/* Worktree not registered warning */}
 			{isWorktreeRegistered === false && worktreePath && (
 				<div className="p-4 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 text-xs">

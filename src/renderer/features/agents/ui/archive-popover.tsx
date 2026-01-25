@@ -410,7 +410,7 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
         </div>
 
         {/* Archived Chats List */}
-        <div className="flex-1 overflow-y-auto py-1">
+        <div className="flex-1 overflow-y-auto scrollbar-thin py-1">
           {isLoading ? (
             <div className="flex items-center justify-center p-8 text-muted-foreground text-sm">
               Loading...

@@ -249,7 +249,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         </div>
 
         <div
-          className="max-h-64 overflow-y-auto py-1"
+          className="max-h-64 overflow-y-auto scrollbar-thin py-1"
           role="list"
           aria-labelledby="mcp-servers-title"
         >

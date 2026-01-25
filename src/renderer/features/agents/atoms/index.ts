@@ -197,11 +197,17 @@ export const isPlanModeAtom = atomWithStorage<boolean>(
 )
 
 // Model ID to full Claude model string mapping
+// "custom" is a special case - routes to customProviderConfig
 export const MODEL_ID_MAP: Record<string, string> = {
   opus: "opus",
   sonnet: "sonnet",
   haiku: "haiku",
+  custom: "custom", // Special: uses customProviderConfig
 }
+
+// All model IDs for iteration
+export const ALL_MODEL_IDS = ["opus", "sonnet", "haiku", "custom"] as const
+export type ModelId = (typeof ALL_MODEL_IDS)[number]
 
 // Sidebar state - window-scoped so each window has independent sidebar visibility
 export const agentsSidebarOpenAtom = atomWithWindowStorage<boolean>(

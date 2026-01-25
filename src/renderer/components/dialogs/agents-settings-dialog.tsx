@@ -469,7 +469,7 @@ export function AgentsSettingsDialog({
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto scrollbar-thin">
             {showContent ? (
               <div className="bg-tl-background min-h-full">
                 {renderTabContent()}
@@ -578,7 +578,7 @@ export function AgentsSettingsDialog({
 
                 {/* Right Content Area */}
                 <div className="flex-1 h-full overflow-hidden">
-                  <div className="flex flex-col relative h-full bg-tl-background rounded-xl w-full transition-all duration-300 overflow-y-auto">
+                  <div className="flex flex-col relative h-full bg-tl-background rounded-xl w-full transition-all duration-300 overflow-y-auto scrollbar-thin">
                     {renderTabContent()}
                   </div>
                 </div>

@@ -174,7 +174,7 @@ export const PlanSection = memo(function PlanSection({
 
         <div
           ref={contentRef}
-          className={`px-2 py-2 overflow-y-auto allow-text-selection ${isExpanded ? "" : "max-h-64"}`}
+          className={`px-2 py-2 overflow-y-auto scrollbar-thin allow-text-selection ${isExpanded ? "" : "max-h-64"}`}
           data-plan-path={planPath}
         >
           <ChatMarkdownRenderer content={displayContent} size="sm" />

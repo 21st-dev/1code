@@ -569,7 +569,11 @@ export const claudeRouter = router({
             // 4. Setup accumulation state
             const parts: any[] = []
             let currentText = ""
-            let metadata: any = {}
+            // Track model info for detecting provider switches (affects thinking block compatibility)
+            let metadata: any = {
+              modelId: finalCustomConfig?.model || input.model || 'claude',
+              isCustomModel: !!finalCustomConfig,
+            }
 
             // Capture stderr from Claude process for debugging
             const stderrLines: string[] = []
@@ -774,7 +778,29 @@ export const claudeRouter = router({
             // Get bundled Claude binary path
             const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-            const resumeSessionId = input.sessionId || existingSessionId || undefined
+            // Check if model has changed from last message - switching providers requires session reset
+            // to avoid invalid thinking block signatures from different models/providers
+            const previousModelWasCustom = lastAssistantMsg?.metadata?.isCustomModel === true
+            const currentModelIsCustom = !!finalCustomConfig
+
+            // Detect model/provider switch that requires session reset
+            const modelSwitched = previousModelWasCustom !== currentModelIsCustom ||
+              (lastAssistantMsg?.metadata?.modelId &&
+                lastAssistantMsg.metadata.modelId !== (finalCustomConfig?.model || input.model || 'default'))
+
+            // Reset session if model switched to avoid thinking block signature issues
+            const effectiveSessionId = modelSwitched ? null : existingSessionId
+
+            if (modelSwitched && existingSessionId) {
+              const direction = previousModelWasCustom ? 'Custom→Claude' : 'Claude→Custom'
+              console.log(`[claude] Model switched (${direction}) - clearing session to avoid thinking block conflicts`)
+              db.update(subChats)
+                .set({ sessionId: null })
+                .where(eq(subChats.id, input.subChatId))
+                .run()
+            }
+
+            const resumeSessionId = input.sessionId || effectiveSessionId || undefined
 
             console.log(`[claude] Session ID to resume: ${resumeSessionId} (Existing: ${existingSessionId})`)
             console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
