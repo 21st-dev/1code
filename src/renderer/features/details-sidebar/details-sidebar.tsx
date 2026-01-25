@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { ArrowUpRight, TerminalSquare, Box, ListTodo } from "lucide-react"
+import { ArrowUpRight, TerminalSquare, Box, ListTodo, FolderTree } from "lucide-react"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
 import {
@@ -32,6 +32,7 @@ import { TodoWidget } from "./sections/todo-widget"
 import { PlanWidget } from "./sections/plan-widget"
 import { TerminalWidget } from "./sections/terminal-widget"
 import { ChangesWidget } from "./sections/changes-widget"
+import { ExplorerWidget } from "./sections/explorer-widget"
 import type { ParsedDiffFile } from "./types"
 import type { AgentMode } from "../agents/atoms"
 
@@ -70,6 +71,9 @@ interface DetailsSidebarProps {
   onExpandTerminal?: () => void
   onExpandPlan?: () => void
   onExpandDiff?: () => void
+  onExpandExplorer?: () => void
+  /** Sidebar open states for explorer */
+  isExplorerSidebarOpen?: boolean
   /** Callback when a file is selected in Changes widget - opens diff with file selected */
   onFileSelect?: (filePath: string) => void
   /** Remote chat info for sandbox workspaces */
@@ -80,6 +84,8 @@ interface DetailsSidebarProps {
   } | null
   /** Whether this is a remote sandbox chat (no local worktree) */
   isRemoteChat?: boolean
+  /** Callback when a file is selected in Explorer widget */
+  onExplorerFileSelect?: (filePath: string) => void
 }
 
 export function DetailsSidebar({
@@ -103,9 +109,12 @@ export function DetailsSidebar({
   onExpandTerminal,
   onExpandPlan,
   onExpandDiff,
+  onExpandExplorer,
+  isExplorerSidebarOpen,
   onFileSelect,
   remoteInfo,
   isRemoteChat = false,
+  onExplorerFileSelect,
 }: DetailsSidebarProps) {
   // Global sidebar open state
   const [isOpen, setIsOpen] = useAtom(detailsSidebarOpenAtom)
@@ -145,9 +154,12 @@ export function DetailsSidebar({
         case "diff":
           onExpandDiff?.()
           break
+        case "explorer":
+          onExpandExplorer?.()
+          break
       }
     },
-    [onExpandTerminal, onExpandPlan, onExpandDiff],
+    [onExpandTerminal, onExpandPlan, onExpandDiff, onExpandExplorer],
   )
 
   // Check if a widget should be shown
@@ -195,6 +207,8 @@ export function DetailsSidebar({
         return TerminalSquare
       case "diff":
         return DiffIcon
+      case "explorer":
+        return FolderTree
       default:
         return Box
     }
@@ -396,6 +410,18 @@ export function DetailsSidebar({
                     onExpand={canOpenDiff ? onExpandDiff : undefined}
                     onFileSelect={canOpenDiff ? onFileSelect : undefined}
                     diffDisplayMode={diffDisplayMode}
+                  />
+                )
+
+              case "explorer":
+                // Hidden when Explorer sidebar is open
+                if (!worktreePath || isExplorerSidebarOpen) return null
+                return (
+                  <ExplorerWidget
+                    key="explorer"
+                    worktreePath={worktreePath}
+                    onExpand={onExpandExplorer}
+                    onFileSelect={onExplorerFileSelect}
                   />
                 )
 

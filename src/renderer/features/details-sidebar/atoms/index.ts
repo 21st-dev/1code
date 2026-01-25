@@ -2,13 +2,13 @@ import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { LucideIcon } from "lucide-react"
-import { Box, FileText, Terminal, FileDiff, ListTodo } from "lucide-react"
+import { Box, FileText, Terminal, FileDiff, ListTodo, FolderTree } from "lucide-react"
 
 // ============================================================================
 // Widget System Types & Registry
 // ============================================================================
 
-export type WidgetId = "info" | "todo" | "plan" | "terminal" | "diff"
+export type WidgetId = "info" | "todo" | "plan" | "terminal" | "diff" | "explorer"
 
 export interface WidgetConfig {
   id: WidgetId
@@ -24,6 +24,7 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
   { id: "plan", label: "Plan", icon: FileText, canExpand: true, defaultVisible: true },
   { id: "terminal", label: "Terminal", icon: Terminal, canExpand: true, defaultVisible: false },
   { id: "diff", label: "Changes", icon: FileDiff, canExpand: true, defaultVisible: true },
+  { id: "explorer", label: "Explorer", icon: FolderTree, canExpand: true, defaultVisible: true },
 ]
 
 // Helper to get default visible widgets

@@ -40,6 +40,7 @@ import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { lastSelectedModelIdAtom, subChatModeAtomFamily, getNextMode, type AgentMode, type SubChatFileChange } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import { pendingFileReferenceAtom } from "../../cowork/atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
@@ -465,6 +466,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   const customHotkeys = useAtomValue(customHotkeysAtom)
   const voiceInputHotkey = getResolvedHotkey("voice-input", customHotkeys)
 
+  // Pending file reference from file tree panel (@ button click)
+  const [pendingFileReference, setPendingFileReference] = useAtom(pendingFileReferenceAtom)
+
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
   const currentChatIdRef = useRef<string | null>(parentChatId)
@@ -649,6 +653,29 @@ export const ChatInputArea = memo(function ChatInputArea({
       window.removeEventListener("keyup", handleKeyUp, true)
     }
   }, [voiceInputHotkey, isVoiceRecording, isTranscribing, isStreaming, handleVoiceMouseDown, handleVoiceMouseUp])
+
+  // Handle pending file reference from file tree panel (@ button click)
+  useEffect(() => {
+    if (pendingFileReference && editorRef.current) {
+      // Construct mention option from pending reference
+      const mentionOption: FileMentionOption = {
+        id: `file:local:${pendingFileReference.path}`,
+        label: pendingFileReference.name,
+        path: pendingFileReference.path,
+        repository: "local",
+        type: pendingFileReference.type,
+      }
+
+      // Insert the mention into the editor
+      editorRef.current.insertMention(mentionOption)
+
+      // Clear the pending reference
+      setPendingFileReference(null)
+
+      // Focus the editor
+      editorRef.current.focus()
+    }
+  }, [pendingFileReference, setPendingFileReference, editorRef])
 
   // Save draft on blur (with attachments and text contexts)
   const handleEditorBlur = useCallback(async () => {
@@ -865,7 +892,6 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        // @ts-expect-error - Electron's webUtils API
         const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
 
         let mentionId: string

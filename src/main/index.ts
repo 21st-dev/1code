@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/electron/main"
-import { app, BrowserWindow, Menu, session } from "electron"
+import { app, BrowserWindow, Menu, net, session } from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
@@ -553,6 +553,124 @@ if (gotTheLock) {
 
     // Register protocol handler (must be after app is ready)
     initialRegistration = registerProtocol()
+
+    // Register local-file:// protocol for media file preview
+    // Supports Range requests for video/audio streaming
+    const mainSession = session.fromPartition("persist:main")
+    mainSession.protocol.handle("local-file", async (request) => {
+      try {
+        // Parse URL: local-file://localhost/C:/path/to/file.png
+        const url = new URL(request.url)
+        let filePath = decodeURIComponent(url.pathname)
+
+        // Windows path handling: /C:/path -> C:/path or /D:/path -> D:/path
+        if (process.platform === "win32" && filePath.startsWith("/")) {
+          filePath = filePath.slice(1)
+        }
+
+        // Convert forward slashes to backslashes on Windows
+        if (process.platform === "win32") {
+          filePath = filePath.replace(/\//g, "\\")
+        }
+
+        // Verify file exists
+        if (!existsSync(filePath)) {
+          console.error("[local-file] File not found:", filePath)
+          return new Response("File not found", { status: 404 })
+        }
+
+        // Get file stats for size
+        const { statSync, createReadStream } = await import("fs")
+        const stats = statSync(filePath)
+        const fileSize = stats.size
+
+        // Determine MIME type
+        const ext = filePath.split(".").pop()?.toLowerCase() || ""
+        const mimeTypes: Record<string, string> = {
+          // Images
+          png: "image/png",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          gif: "image/gif",
+          webp: "image/webp",
+          svg: "image/svg+xml",
+          ico: "image/x-icon",
+          bmp: "image/bmp",
+          // Video
+          mp4: "video/mp4",
+          webm: "video/webm",
+          ogg: "video/ogg",
+          mov: "video/quicktime",
+          avi: "video/x-msvideo",
+          mkv: "video/x-matroska",
+          // Audio
+          mp3: "audio/mpeg",
+          wav: "audio/wav",
+          flac: "audio/flac",
+          aac: "audio/aac",
+          m4a: "audio/mp4",
+          // Documents
+          pdf: "application/pdf",
+        }
+        const contentType = mimeTypes[ext] || "application/octet-stream"
+
+        // Check for Range header (needed for video/audio seeking)
+        const rangeHeader = request.headers.get("range")
+
+        if (rangeHeader) {
+          // Parse Range header: bytes=start-end
+          const match = rangeHeader.match(/bytes=(\d*)-(\d*)/)
+          if (match) {
+            const start = match[1] ? parseInt(match[1], 10) : 0
+            const end = match[2] ? parseInt(match[2], 10) : fileSize - 1
+            const chunkSize = end - start + 1
+
+            // Create readable stream for the range
+            const stream = createReadStream(filePath, { start, end })
+            const readable = new ReadableStream({
+              start(controller) {
+                stream.on("data", (chunk: Buffer) => controller.enqueue(chunk))
+                stream.on("end", () => controller.close())
+                stream.on("error", (err) => controller.error(err))
+              },
+            })
+
+            return new Response(readable, {
+              status: 206,
+              headers: {
+                "Content-Type": contentType,
+                "Content-Length": String(chunkSize),
+                "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+                "Accept-Ranges": "bytes",
+              },
+            })
+          }
+        }
+
+        // No Range header - return full file
+        const stream = createReadStream(filePath)
+        const readable = new ReadableStream({
+          start(controller) {
+            stream.on("data", (chunk: Buffer) => controller.enqueue(chunk))
+            stream.on("end", () => controller.close())
+            stream.on("error", (err) => controller.error(err))
+          },
+        })
+
+        return new Response(readable, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Content-Length": String(fileSize),
+            "Accept-Ranges": "bytes",
+          },
+        })
+      } catch (error) {
+        console.error("[local-file] Protocol error:", error)
+        return new Response("Internal error", { status: 500 })
+      }
+    })
+    console.log("[Protocol] Registered local-file:// protocol handler")
 
     // Handle deep link on macOS (app already running)
     app.on("open-url", (event, url) => {

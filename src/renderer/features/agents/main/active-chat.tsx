@@ -202,10 +202,14 @@ import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } f
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
 import { DetailsSidebar } from "../../details-sidebar/details-sidebar"
+import { ExpandedWidgetSidebar } from "../../details-sidebar/expanded-widget-sidebar"
 import {
   detailsSidebarOpenAtom,
   unifiedSidebarEnabledAtom,
+  expandedWidgetAtomFamily,
 } from "../../details-sidebar/atoms"
+import { ExplorerPanel } from "../../details-sidebar/sections/explorer-panel"
+import { explorerPanelOpenAtomFamily } from "../atoms"
 const clearSubChatSelectionAtom = atom(null, () => {})
 const isSubChatMultiSelectModeAtom = atom(false)
 const selectedSubChatIdsAtom = atom(new Set<string>())
@@ -4247,6 +4251,20 @@ export function ChatView({
   )
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
 
+  // Per-chat expanded widget state - for Explorer and other expandable widgets
+  const expandedWidgetAtom = useMemo(
+    () => expandedWidgetAtomFamily(chatId),
+    [chatId],
+  )
+  const [expandedWidget, setExpandedWidget] = useAtom(expandedWidgetAtom)
+
+  // Explorer panel state - separate from ExpandedWidgetSidebar (supports three display modes)
+  const explorerPanelOpenAtom = useMemo(
+    () => explorerPanelOpenAtomFamily(chatId),
+    [chatId],
+  )
+  const [isExplorerPanelOpen, setIsExplorerPanelOpen] = useAtom(explorerPanelOpenAtom)
+
   // Mutual exclusion: Details sidebar vs Plan/Terminal/Diff(side-peek) sidebars
   // When one opens, close the conflicting ones and remember for restoration
 
@@ -6761,6 +6779,8 @@ Make sure to preserve all functionality from both branches when resolving confli
             onExpandTerminal={() => setIsTerminalSidebarOpen(true)}
             onExpandPlan={() => setIsPlanSidebarOpen(true)}
             onExpandDiff={() => setIsDiffSidebarOpen(true)}
+            onExpandExplorer={() => setIsExplorerPanelOpen(true)}
+            isExplorerSidebarOpen={isExplorerPanelOpen}
             onFileSelect={(filePath) => {
               // Set the selected file path
               setSelectedFilePath(filePath)
@@ -6771,6 +6791,31 @@ Make sure to preserve all functionality from both branches when resolving confli
             }}
             remoteInfo={remoteInfo}
             isRemoteChat={!!remoteInfo}
+          />
+        )}
+
+        {/* Expanded Widget Sidebar - for Info, Plan, Terminal, Diff widgets */}
+        {isUnifiedSidebarEnabled && !isMobileFullscreen && worktreePath && (
+          <ExpandedWidgetSidebar
+            chatId={chatId}
+            worktreePath={worktreePath}
+            planPath={currentPlanPath}
+            planRefetchTrigger={planEditRefetchTrigger}
+            activeSubChatId={activeSubChatIdForPlan}
+            canOpenDiff={canOpenDiff}
+            isDiffSidebarOpen={isDiffSidebarOpen}
+            setIsDiffSidebarOpen={setIsDiffSidebarOpen}
+            diffStats={diffStats}
+          />
+        )}
+
+        {/* Explorer Panel - supports sidebar/dialog/fullscreen modes */}
+        {worktreePath && (
+          <ExplorerPanel
+            chatId={chatId}
+            worktreePath={worktreePath}
+            isOpen={isExplorerPanelOpen}
+            onClose={() => setIsExplorerPanelOpen(false)}
           />
         )}
       </div>

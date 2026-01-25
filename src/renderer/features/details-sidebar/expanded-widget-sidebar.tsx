@@ -21,6 +21,7 @@ import { InfoSection } from "./sections/info-section"
 import { PlanSection } from "./sections/plan-section"
 import { TerminalSection } from "./sections/terminal-section"
 import { DiffSection } from "./sections/diff-section"
+// Explorer is now handled by ExplorerPanel (supports three display modes)
 
 interface ExpandedWidgetSidebarProps {
   /** Workspace/chat ID */
@@ -122,6 +123,9 @@ export function ExpandedWidgetSidebar({
             isExpanded
           />
         )
+      // Explorer is handled by ExplorerPanel component (supports three display modes)
+      case "explorer":
+        return null
       default:
         return null
     }

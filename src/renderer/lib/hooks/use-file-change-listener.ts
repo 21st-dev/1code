@@ -59,6 +59,11 @@ export function useGitWatcher(worktreePath: string | null | undefined) {
           queryKey: [["changes", "getStatus"]],
         })
 
+        // Invalidate file tree queries to refresh file list
+        queryClient.invalidateQueries({
+          queryKey: [["files", "listDirectory"]],
+        })
+
         // Also invalidate parsed diff if files were modified
         const hasModifiedFiles = data.changes.some(
           (change) => change.type === "change" || change.type === "add"

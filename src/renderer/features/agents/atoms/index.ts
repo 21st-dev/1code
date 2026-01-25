@@ -813,3 +813,68 @@ export const workspaceDiffCacheAtomFamily = atomFamily((chatId: string) =>
     },
   ),
 )
+
+// ============================================================================
+// Explorer Panel State
+// ============================================================================
+
+// Explorer display mode - sidebar (side peek), center dialog, or fullscreen
+export type ExplorerDisplayMode = "side-peek" | "center-peek" | "full-page"
+
+export const explorerDisplayModeAtom = atomWithStorage<ExplorerDisplayMode>(
+    "agents:explorerDisplayMode",
+    "side-peek", // default to sidebar for existing behavior
+    undefined,
+    { getOnInit: true },
+)
+
+// Explorer sidebar width (persisted globally)
+export const explorerSidebarWidthAtom = atomWithStorage<number>(
+    "agents-explorer-sidebar-width",
+    350,
+    undefined,
+    { getOnInit: true },
+)
+
+// Explorer panel open state storage - window-scoped, stores per chatId
+const explorerPanelOpenStorageAtom = atomWithWindowStorage<Record<string, boolean>>(
+    "agents:explorerPanelOpen",
+    {},
+    { getOnInit: true },
+)
+
+// Runtime open state - not persisted, used for dialog/fullscreen modes
+const explorerPanelOpenRuntimeAtom = atom<Record<string, boolean>>({})
+
+// atomFamily to get/set explorer panel open state per chatId
+// Only restores persisted state when display mode is "side-peek" (sidebar mode)
+// For dialog/fullscreen modes, we use runtime state only (not auto-restored on page load)
+export const explorerPanelOpenAtomFamily = atomFamily((chatId: string) =>
+    atom(
+        (get) => {
+            const displayMode = get(explorerDisplayModeAtom)
+            const runtimeOpen = get(explorerPanelOpenRuntimeAtom)[chatId]
+
+            // If we have a runtime value, use it (user explicitly opened/closed)
+            if (runtimeOpen !== undefined) {
+                return runtimeOpen
+            }
+
+            // For initial load: only restore persisted state for sidebar mode
+            // Dialog and fullscreen should not auto-open on page load
+            if (displayMode !== "side-peek") {
+                return false
+            }
+            return get(explorerPanelOpenStorageAtom)[chatId] ?? false
+        },
+        (get, set, isOpen: boolean) => {
+            // Always update runtime state
+            const currentRuntime = get(explorerPanelOpenRuntimeAtom)
+            set(explorerPanelOpenRuntimeAtom, { ...currentRuntime, [chatId]: isOpen })
+
+            // Also persist for sidebar mode
+            const current = get(explorerPanelOpenStorageAtom)
+            set(explorerPanelOpenStorageAtom, { ...current, [chatId]: isOpen })
+        },
+    ),
+)
