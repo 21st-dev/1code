@@ -81,12 +81,14 @@ export const runningDevServersAtom = atom<Set<string>>(new Set())
 interface PreviewState {
   detectedUrls: DetectedUrl[]
   selectedUrl: string | null
+  currentUrl: string | null // Tracks where user navigated to (persists across worktree switches)
   output: string[]
 }
 
 const initialPreviewState: PreviewState = {
   detectedUrls: [],
   selectedUrl: null,
+  currentUrl: null,
   output: [],
 }
 
@@ -113,40 +115,95 @@ function getPaneId(chatId: string): string {
 }
 
 // React Grab injection script
+// Uses window.__REACT_GRAB__ which is the auto-initialized API from the library
 const REACT_GRAB_INJECT_SCRIPT = `
 (function() {
-  if (window.__REACT_GRAB_LOADED__) {
-    if (window.__REACT_GRAB_API__) {
-      window.__REACT_GRAB_API__.activate();
+  // If already loaded and API available, just activate
+  if (window.__REACT_GRAB__) {
+    console.log('[ReactGrab] Already loaded, activating...');
+    if (window.__REACT_GRAB__.activate) {
+      window.__REACT_GRAB__.activate();
+    }
+    // Register our plugin if not already registered
+    if (!window.__ELEMENT_CAPTURE_REGISTERED__ && window.__REACT_GRAB__.registerPlugin) {
+      window.__ELEMENT_CAPTURE_REGISTERED__ = true;
+      window.__REACT_GRAB__.registerPlugin({
+        name: 'element-capture',
+        hooks: {
+          onCopySuccess: function(elements, content) {
+            if (elements && elements.length > 0) {
+              const el = elements[0];
+              const data = {
+                html: el.outerHTML ? el.outerHTML.slice(0, 10000) : content.slice(0, 10000),
+                componentName: el.__reactGrabInfo?.componentName || el.__reactGrabInfo?.name || null,
+                filePath: el.__reactGrabInfo?.filePath || el.__reactGrabInfo?.source || null,
+              };
+              console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
+            }
+          }
+        }
+      });
     }
     return;
   }
 
+  console.log('[ReactGrab] Loading script...');
   const script = document.createElement('script');
   script.src = 'https://unpkg.com/react-grab/dist/index.global.js';
+  script.crossOrigin = 'anonymous';
+
+  // Listen for the custom init event that react-grab dispatches
+  window.addEventListener('react-grab:init', function(e) {
+    console.log('[ReactGrab] Init event received', e.detail);
+    const api = e.detail || window.__REACT_GRAB__;
+    if (api) {
+      // Register our plugin
+      if (api.registerPlugin && !window.__ELEMENT_CAPTURE_REGISTERED__) {
+        window.__ELEMENT_CAPTURE_REGISTERED__ = true;
+        api.registerPlugin({
+          name: 'element-capture',
+          hooks: {
+            onCopySuccess: function(elements, content) {
+              if (elements && elements.length > 0) {
+                const el = elements[0];
+                const data = {
+                  html: el.outerHTML ? el.outerHTML.slice(0, 10000) : content.slice(0, 10000),
+                  componentName: el.__reactGrabInfo?.componentName || el.__reactGrabInfo?.name || null,
+                  filePath: el.__reactGrabInfo?.filePath || el.__reactGrabInfo?.source || null,
+                };
+                console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
+              }
+            }
+          }
+        });
+      }
+      // Activate selection mode
+      if (api.activate) {
+        console.log('[ReactGrab] Activating...');
+        api.activate();
+      }
+    }
+  }, { once: true });
+
   script.onload = function() {
-    window.__REACT_GRAB_LOADED__ = true;
-
-    // Wait for React Grab to initialize
+    console.log('[ReactGrab] Script loaded');
+    // The react-grab:init event should fire, but fallback just in case
     setTimeout(function() {
-      if (window.ReactGrab) {
-        const api = window.ReactGrab.init ? window.ReactGrab.init() : window.ReactGrab;
-        window.__REACT_GRAB_API__ = api;
-
-        // Register plugin to capture selections
+      if (window.__REACT_GRAB__ && !window.__ELEMENT_CAPTURE_REGISTERED__) {
+        console.log('[ReactGrab] Fallback initialization');
+        const api = window.__REACT_GRAB__;
         if (api.registerPlugin) {
+          window.__ELEMENT_CAPTURE_REGISTERED__ = true;
           api.registerPlugin({
             name: 'element-capture',
             hooks: {
               onCopySuccess: function(elements, content) {
                 if (elements && elements.length > 0) {
                   const el = elements[0];
-                  // Try to get React component info from React Grab's data
-                  const reactInfo = el._reactGrabInfo || el.__reactGrabData || {};
                   const data = {
                     html: el.outerHTML ? el.outerHTML.slice(0, 10000) : content.slice(0, 10000),
-                    componentName: reactInfo.componentName || reactInfo.name || null,
-                    filePath: reactInfo.filePath || reactInfo.source || null,
+                    componentName: el.__reactGrabInfo?.componentName || el.__reactGrabInfo?.name || null,
+                    filePath: el.__reactGrabInfo?.filePath || el.__reactGrabInfo?.source || null,
                   };
                   console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
                 }
@@ -154,24 +211,26 @@ const REACT_GRAB_INJECT_SCRIPT = `
             }
           });
         }
-
         if (api.activate) {
           api.activate();
         }
       }
-    }, 100);
+    }, 200);
   };
-  script.onerror = function() {
-    console.error('Failed to load React Grab');
+
+  script.onerror = function(err) {
+    console.error('[ReactGrab] Failed to load:', err);
   };
+
   document.head.appendChild(script);
 })();
 `
 
 const REACT_GRAB_DEACTIVATE_SCRIPT = `
 (function() {
-  if (window.__REACT_GRAB_API__ && window.__REACT_GRAB_API__.deactivate) {
-    window.__REACT_GRAB_API__.deactivate();
+  if (window.__REACT_GRAB__ && window.__REACT_GRAB__.deactivate) {
+    console.log('[ReactGrab] Deactivating...');
+    window.__REACT_GRAB__.deactivate();
   }
 })();
 `
@@ -413,9 +472,13 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
   const setIsSelectorActiveRef = useRef(setIsSelectorActive)
   setIsSelectorActiveRef.current = setIsSelectorActive
 
-  // Ref to access current selectedUrl in webview creation effect
-  const selectedUrlRef = useRef(state.selectedUrl)
-  selectedUrlRef.current = state.selectedUrl
+  // Ref to access setState in event handlers (for persisting currentUrl)
+  const setStateRef = useRef(setState)
+  setStateRef.current = setState
+
+  // Ref to access current URL in webview creation effect (prefer currentUrl over selectedUrl)
+  const urlToLoadRef = useRef(state.currentUrl ?? state.selectedUrl)
+  urlToLoadRef.current = state.currentUrl ?? state.selectedUrl
 
   // Track pending URL navigation (for when webview isn't ready yet)
   const pendingUrlRef = useRef<string | null>(null)
@@ -440,7 +503,8 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
       webviewReadyRef.current = true
 
       // If there's a pending URL to navigate to, do it now
-      const urlToLoad = pendingUrlRef.current || selectedUrlRef.current
+      // Prefer currentUrl (where user navigated) over selectedUrl (base URL from dropdown)
+      const urlToLoad = pendingUrlRef.current || urlToLoadRef.current
       if (urlToLoad && webview.src !== urlToLoad) {
         baseUrlRef.current = urlToLoad
         pendingUrlRef.current = null
@@ -461,6 +525,17 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
       if (!isLocalUrl(event.url) && baseUrlRef.current) {
         window.desktopApi?.openExternal(event.url)
         webview.src = baseUrlRef.current
+      } else if (isLocalUrl(event.url) && event.url !== "about:blank") {
+        // Persist the current URL so it's restored when switching worktrees
+        setStateRef.current(s => ({ ...s, currentUrl: event.url }))
+      }
+    }
+
+    // Handle in-page navigation (hash changes, pushState for SPAs)
+    const handleDidNavigateInPage = (e: Event) => {
+      const event = e as unknown as { url: string; isMainFrame: boolean }
+      if (event.isMainFrame && isLocalUrl(event.url)) {
+        setStateRef.current(s => ({ ...s, currentUrl: event.url }))
       }
     }
 
@@ -500,6 +575,7 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
     webview.addEventListener("dom-ready", handleDomReady)
     webview.addEventListener("will-navigate", handleWillNavigate)
     webview.addEventListener("did-navigate", handleDidNavigate)
+    webview.addEventListener("did-navigate-in-page", handleDidNavigateInPage)
     webview.addEventListener("new-window", handleNewWindow)
     webview.addEventListener("console-message", handleConsoleMessage)
 
@@ -511,6 +587,7 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
       webview.removeEventListener("dom-ready", handleDomReady)
       webview.removeEventListener("will-navigate", handleWillNavigate)
       webview.removeEventListener("did-navigate", handleDidNavigate)
+      webview.removeEventListener("did-navigate-in-page", handleDidNavigateInPage)
       webview.removeEventListener("new-window", handleNewWindow)
       webview.removeEventListener("console-message", handleConsoleMessage)
       if (container.contains(webview)) {
@@ -522,12 +599,15 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
     }
   }, []) // Empty deps - create once
 
-  // Navigate when URL changes (handles both ready and pending states)
+  // Navigate when selectedUrl changes from dropdown (resets to base URL)
   useEffect(() => {
     if (!state.selectedUrl) return
 
     const webview = webviewRef.current
     if (!webview) return
+
+    // Clear currentUrl when user explicitly selects a new base URL
+    setState(s => ({ ...s, currentUrl: null }))
 
     // If webview is ready, navigate immediately
     if (webviewReadyRef.current) {
@@ -537,7 +617,7 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
       // Otherwise queue it for when dom-ready fires
       pendingUrlRef.current = state.selectedUrl
     }
-  }, [state.selectedUrl])
+  }, [state.selectedUrl, setState])
 
   // Resize handling for split position
   const handleResizeStart = useCallback(
