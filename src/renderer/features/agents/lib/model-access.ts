@@ -22,11 +22,11 @@ export type ModelAccessStatus = {
   hasCustomProvider: boolean
 
   // Aggregate statuses
-  cloudEnabled: boolean // Can use Opus/Sonnet/Haiku
+  claudeEnabled: boolean // Can use Opus/Sonnet/Haiku
   customEnabled: boolean // Can use Custom
 
   // Disabled reasons for UI
-  cloudDisabledReason: string | null
+  claudeDisabledReason: string | null
   customDisabledReason: string | null
 
   // Loading state
@@ -61,13 +61,13 @@ export function useModelAccess(): ModelAccessStatus {
   const hasCustomProvider = !!normalizedCustomProvider
 
   // Aggregate statuses
-  const cloudEnabled = hasClaudeOAuth || hasCliConfig || hasAnthropicApiKey
+  const claudeEnabled = hasClaudeOAuth || hasCliConfig || hasAnthropicApiKey
   const customEnabled = hasCustomProvider
 
   // Disabled reasons
-  let cloudDisabledReason: string | null = null
-  if (!cloudEnabled) {
-    cloudDisabledReason = "Configure OAuth, CLI, or API key in Settings"
+  let claudeDisabledReason: string | null = null
+  if (!claudeEnabled) {
+    claudeDisabledReason = "Configure OAuth, CLI, or API key in Settings"
   }
 
   let customDisabledReason: string | null = null
@@ -82,16 +82,16 @@ export function useModelAccess(): ModelAccessStatus {
     hasCliConfig,
     hasAnthropicApiKey,
     hasCustomProvider,
-    cloudEnabled,
+    claudeEnabled,
     customEnabled,
-    cloudDisabledReason,
+    claudeDisabledReason,
     customDisabledReason,
     isLoading,
   }
 }
 
 /**
- * Determine which credential source to use for cloud models.
+ * Determine which credential source to use for Claude models.
  * Returns the source type for routing decisions.
  *
  * Precedence (per plan):
@@ -99,9 +99,9 @@ export function useModelAccess(): ModelAccessStatus {
  * 2. OAuth connection
  * 3. CLI config
  */
-export type CloudCredentialSource = "anthropic-api-key" | "oauth" | "cli" | null
+export type ClaudeCredentialSource = "anthropic-api-key" | "oauth" | "cli" | null
 
-export function getCloudCredentialSource(access: ModelAccessStatus): CloudCredentialSource {
+export function getClaudeCredentialSource(access: ModelAccessStatus): ClaudeCredentialSource {
   // Anthropic API key takes priority (explicit user config)
   if (access.hasAnthropicApiKey) return "anthropic-api-key"
   // OAuth is next

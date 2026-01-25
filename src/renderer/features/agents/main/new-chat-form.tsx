@@ -289,22 +289,22 @@ export function NewChatForm({
   useEffect(() => {
     if (modelAccess.isLoading) return
 
-    const isCloudModel = ["opus", "sonnet", "haiku"].includes(lastSelectedModelId)
+    const isClaudeModel = ["opus", "sonnet", "haiku"].includes(lastSelectedModelId)
     const isCustomModel = lastSelectedModelId === "custom"
 
-    if (isCloudModel && !modelAccess.cloudEnabled) {
-      // Cloud models disabled, switch to custom if enabled
+    if (isClaudeModel && !modelAccess.claudeEnabled) {
+      // Claude models disabled, switch to custom if enabled
       if (modelAccess.customEnabled) {
         setLastSelectedModelId("custom")
       }
     } else if (isCustomModel && !modelAccess.customEnabled) {
-      // Custom disabled, switch to sonnet if cloud enabled
-      if (modelAccess.cloudEnabled) {
+      // Custom disabled, switch to sonnet if Claude enabled
+      if (modelAccess.claudeEnabled) {
         setLastSelectedModelId("sonnet")
         setSelectedModel(availableModels.models.find((m) => m.id === "sonnet") || availableModels.models[1])
       }
     }
-  }, [modelAccess.isLoading, modelAccess.cloudEnabled, modelAccess.customEnabled, lastSelectedModelId, setLastSelectedModelId, availableModels.models])
+  }, [modelAccess.isLoading, modelAccess.claudeEnabled, modelAccess.customEnabled, lastSelectedModelId, setLastSelectedModelId, availableModels.models])
 
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
@@ -1786,7 +1786,7 @@ export function NewChatForm({
                             {/* Cloud models: Opus, Sonnet, Haiku */}
                             {availableModels.models.map((model) => {
                               const isSelected = lastSelectedModelId === model.id
-                              const isDisabled = !modelAccess.cloudEnabled
+                              const isDisabled = !modelAccess.claudeEnabled
                               return (
                                 <DropdownMenuItem
                                   key={model.id}
@@ -1815,10 +1815,10 @@ export function NewChatForm({
                               )
                             })}
 
-                            {/* Show disabled reason for cloud models if applicable */}
-                            {!modelAccess.cloudEnabled && modelAccess.cloudDisabledReason && (
+                            {/* Show disabled reason for Claude models if applicable */}
+                            {!modelAccess.claudeEnabled && modelAccess.claudeDisabledReason && (
                               <div className="px-2 py-1 text-xs text-muted-foreground">
-                                {modelAccess.cloudDisabledReason}
+                                {modelAccess.claudeDisabledReason}
                               </div>
                             )}
 

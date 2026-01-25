@@ -243,7 +243,7 @@ export function AgentsModelsTab() {
             Anthropic API Key
           </h4>
           <p className="text-xs text-muted-foreground">
-            Use your own Anthropic API key for cloud models (Opus, Sonnet, Haiku)
+            Use your own Anthropic API key for Claude models (Opus, Sonnet, Haiku)
           </p>
         </div>
         <div className="bg-background rounded-lg border border-border overflow-hidden">

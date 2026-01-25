@@ -39,7 +39,7 @@ import { useAgentSubChatStore } from "../stores/sub-chat-store"
  * PRECEDENCE TABLE:
  *
  * Cloud model selected (opus|sonnet|haiku):
- * 1. If anthropicApiKeyConfig exists → send customConfig with cloud model
+ * 1. If anthropicApiKeyConfig exists → send customConfig with Claude model
  * 2. Else if OAuth connected → send model only
  * 3. Else if CLI config exists → send model only
  * 4. Else → error
@@ -58,21 +58,21 @@ type ModelRoutingPayload =
 async function computeModelRouting(
   selectedModelId: string,
 ): Promise<ModelRoutingPayload> {
-  const isCloudModel = ["opus", "sonnet", "haiku"].includes(selectedModelId)
+  const isClaudeModel = ["opus", "sonnet", "haiku"].includes(selectedModelId)
   const isCustomModel = selectedModelId === "custom"
 
-  if (isCloudModel) {
-    // Check anthropicApiKeyConfig first (highest priority for cloud)
+  if (isClaudeModel) {
+    // Check anthropicApiKeyConfig first (highest priority for Claude)
     const anthropicConfig = appStore.get(anthropicApiKeyConfigAtom)
     const normalizedAnthropicConfig = normalizeAnthropicApiKeyConfig(anthropicConfig)
 
     if (normalizedAnthropicConfig) {
-      // Use Anthropic API key - send customConfig with cloud model string
-      const cloudModelString = MODEL_ID_MAP[selectedModelId]
+      // Use Anthropic API key - send customConfig with Claude model string
+      const claudeModelString = MODEL_ID_MAP[selectedModelId]
       return {
         type: "customConfig",
         customConfig: {
-          model: cloudModelString,
+          model: claudeModelString,
           token: normalizedAnthropicConfig.token,
           baseUrl: normalizedAnthropicConfig.baseUrl,
         },
@@ -82,10 +82,10 @@ async function computeModelRouting(
     // Check OAuth/CLI - these don't need customConfig, just model
     // We'll check this at runtime via trpc, but for now we trust the selection
     // The transport is called after UI validation, so we assume it's valid
-    const cloudModelString = MODEL_ID_MAP[selectedModelId]
+    const claudeModelString = MODEL_ID_MAP[selectedModelId]
     return {
       type: "model",
-      model: cloudModelString,
+      model: claudeModelString,
     }
   }
 
