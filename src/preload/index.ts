@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 import { exposeElectronTRPC } from "trpc-electron/main"
 
 // Only initialize Sentry in production to avoid IPC errors in dev mode
@@ -10,6 +10,11 @@ if (process.env.NODE_ENV === "production") {
 
 // Expose tRPC IPC bridge for type-safe communication
 exposeElectronTRPC()
+
+// Expose webUtils for file path access in drag and drop
+contextBridge.exposeInMainWorld("webUtils", {
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+})
 
 // Expose analytics force flag for testing
 if (process.env.FORCE_ANALYTICS === "true") {
@@ -256,5 +261,8 @@ export interface DesktopApi {
 declare global {
   interface Window {
     desktopApi: DesktopApi
+    webUtils: {
+      getPathForFile: (file: File) => string
+    }
   }
 }

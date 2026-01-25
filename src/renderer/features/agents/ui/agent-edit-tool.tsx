@@ -256,11 +256,17 @@ export const AgentEditTool = memo(function AgentEditTool({
       "/project/sandbox/repo/",
       "/project/sandbox/",
       "/project/",
+      "/workspace/",
     ]
     for (const prefix of prefixes) {
       if (filePath.startsWith(prefix)) {
         return filePath.slice(prefix.length)
       }
+    }
+    // Handle worktree paths: /Users/.../.21st/worktrees/{chatId}/{subChatId}/relativePath
+    const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
+    if (worktreeMatch) {
+      return worktreeMatch[1]
     }
     // If path starts with /, try to find a reasonable root
     if (filePath.startsWith("/")) {

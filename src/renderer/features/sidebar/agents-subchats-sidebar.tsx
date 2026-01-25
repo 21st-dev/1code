@@ -54,6 +54,7 @@ import {
 } from "../../components/ui/tooltip"
 import { Kbd } from "../../components/ui/kbd"
 import { isDesktopApp, getShortcutKey } from "../../lib/utils/platform"
+import { useResolvedHotkeyDisplay } from "../../lib/hotkeys"
 import { TrafficLightSpacer } from "../agents/components/traffic-light-spacer"
 import { PopoverTrigger } from "../../components/ui/popover"
 import { AlignJustify } from "lucide-react"
@@ -255,6 +256,9 @@ export function AgentsSubChatsSidebar({
   })
   const subChatUnseenChanges = useAtomValue(agentsSubChatUnseenChangesAtom)
   const setSubChatUnseenChanges = useSetAtom(agentsSubChatUnseenChangesAtom)
+
+  // Resolved hotkey for tooltip
+  const newAgentHotkey = useResolvedHotkeyDisplay("new-agent")
   const [justCreatedIds, setJustCreatedIds] = useAtom(justCreatedIdsAtom)
   const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
 
@@ -1128,7 +1132,7 @@ export function AgentsSubChatsSidebar({
               </TooltipTrigger>
             <TooltipContent side="right">
               Create a new chat
-              <Kbd>{getShortcutKey("newTab")}</Kbd>
+              {newAgentHotkey && <Kbd>{newAgentHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
           </div>

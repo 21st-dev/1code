@@ -428,6 +428,16 @@ export function createMainWindow(): BrowserWindow {
     window.webContents.send("window:focus-change", false)
   })
 
+  // Disable Cmd+R / Ctrl+R to prevent accidental page refresh
+  // Users can still use Cmd+Shift+R / Ctrl+Shift+R for intentional reloads
+  window.webContents.on("before-input-event", (event, input) => {
+    const isMac = process.platform === "darwin"
+    const modifierKey = isMac ? input.meta : input.control
+    if (modifierKey && input.key.toLowerCase() === "r" && !input.shift) {
+      event.preventDefault()
+    }
+  })
+
   // Handle external links
   window.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)

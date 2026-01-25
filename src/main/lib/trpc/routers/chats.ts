@@ -264,6 +264,12 @@ export const chatsRouter = router({
                   base64Data: z.string().optional(),
                 }),
               }),
+              // Hidden file content - sent to agent but not displayed in UI
+              z.object({
+                type: z.literal("file-content"),
+                filePath: z.string(),
+                content: z.string(),
+              }),
             ]),
           )
           .optional(),

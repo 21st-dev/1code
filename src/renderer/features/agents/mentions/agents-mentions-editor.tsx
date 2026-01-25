@@ -517,6 +517,166 @@ export const AgentsMentionsEditor = memo(
       // Track if editor has content for placeholder (updated via DOM, no React state)
       const [hasContent, setHasContent] = useState(false)
 
+      // Custom undo/redo stack
+      // Browser's native undo doesn't work well with execCommand insertText and DOM manipulations
+      interface UndoState {
+        html: string
+        cursorOffset: number
+      }
+      const undoStack = useRef<UndoState[]>([])
+      const redoStack = useRef<UndoState[]>([])
+      const isUndoRedo = useRef(false)
+      const lastSavedHtml = useRef<string>("")
+      const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+      // Get current editor state (html + cursor position)
+      const getCurrentState = useCallback((): UndoState | null => {
+        if (!editorRef.current) return null
+        const html = editorRef.current.innerHTML
+        const sel = window.getSelection()
+        let cursorOffset = 0
+        if (sel && sel.rangeCount > 0 && editorRef.current.contains(sel.anchorNode)) {
+          const range = sel.getRangeAt(0)
+          // Calculate offset by walking through all nodes
+          const walker = document.createTreeWalker(
+            editorRef.current,
+            NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+          )
+          let node: Node | null = walker.nextNode()
+          while (node) {
+            if (node === range.startContainer) {
+              cursorOffset += range.startOffset
+              break
+            }
+            if (node.nodeType === Node.TEXT_NODE) {
+              cursorOffset += node.textContent?.length || 0
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              const el = node as HTMLElement
+              // Mention nodes count as their serialized length for consistency
+              if (el.hasAttribute("data-mention-id")) {
+                cursorOffset += 1 // Count mention as single unit
+                // Skip children of mention node - move walker to next sibling
+                const nextSibling = walker.nextSibling()
+                if (nextSibling) {
+                  node = nextSibling
+                  continue
+                }
+                // No sibling - break out and let nextNode handle it
+              }
+            }
+            node = walker.nextNode()
+          }
+        }
+        return { html, cursorOffset }
+      }, [])
+
+      // Save state to undo stack (call before making changes)
+      const saveUndoState = useCallback(() => {
+        if (!editorRef.current || isUndoRedo.current) return
+        const state = getCurrentState()
+        if (!state) return
+        // Don't save if nothing changed
+        if (state.html === lastSavedHtml.current) return
+        lastSavedHtml.current = state.html
+        undoStack.current.push(state)
+        // Clear redo stack when new action is performed
+        redoStack.current = []
+        // Limit stack size
+        if (undoStack.current.length > 100) {
+          undoStack.current.shift()
+        }
+      }, [getCurrentState])
+
+      // Debounced save for typing - saves state after 500ms of no typing
+      const debouncedSaveUndoState = useCallback(() => {
+        if (debounceTimer.current) {
+          clearTimeout(debounceTimer.current)
+        }
+        debounceTimer.current = setTimeout(() => {
+          saveUndoState()
+          debounceTimer.current = null
+        }, 500)
+      }, [saveUndoState])
+
+      // Immediate save (for paste, mentions) - also cancels any pending debounce
+      const immediateSaveUndoState = useCallback(() => {
+        if (debounceTimer.current) {
+          clearTimeout(debounceTimer.current)
+          debounceTimer.current = null
+        }
+        saveUndoState()
+      }, [saveUndoState])
+
+      // Restore cursor position after undo/redo
+      // Handles both text nodes and mention nodes
+      const restoreCursor = useCallback((offset: number) => {
+        if (!editorRef.current) return
+        const sel = window.getSelection()
+        if (!sel) return
+
+        let currentOffset = 0
+        const walker = document.createTreeWalker(
+          editorRef.current,
+          NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+        )
+        let node: Node | null = walker.nextNode()
+        let lastTextNode: Text | null = null
+        let lastTextNodeOffset = 0
+
+        while (node) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            const textNode = node as Text
+            const nodeLength = textNode.textContent?.length || 0
+            if (currentOffset + nodeLength >= offset) {
+              const range = document.createRange()
+              range.setStart(textNode, Math.min(offset - currentOffset, nodeLength))
+              range.collapse(true)
+              sel.removeAllRanges()
+              sel.addRange(range)
+              return
+            }
+            lastTextNode = textNode
+            lastTextNodeOffset = nodeLength
+            currentOffset += nodeLength
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement
+            if (el.hasAttribute("data-mention-id")) {
+              // Mention counts as 1 unit
+              if (currentOffset + 1 >= offset) {
+                // Place cursor after mention
+                const range = document.createRange()
+                range.setStartAfter(el)
+                range.collapse(true)
+                sel.removeAllRanges()
+                sel.addRange(range)
+                return
+              }
+              currentOffset += 1
+              // Skip to next sibling (don't traverse inside mention)
+              const nextSibling = walker.nextSibling()
+              if (nextSibling) {
+                node = nextSibling
+                continue
+              }
+            }
+          }
+          node = walker.nextNode()
+        }
+
+        // Fallback: move to end
+        sel.selectAllChildren(editorRef.current)
+        sel.collapseToEnd()
+      }, [])
+
+      // Cleanup debounce timer on unmount
+      useEffect(() => {
+        return () => {
+          if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current)
+          }
+        }
+      }, [])
+
       // Resolve mention from id for rendering
       const resolveMention = useCallback(
         (id: string): FileMentionOption | null => {
@@ -563,6 +723,11 @@ export const AgentsMentionsEditor = memo(
             resolveMention,
           )
           setHasContent(!!initialValue)
+        }
+        // Save initial state for undo (allows undo to empty)
+        if (editorRef.current) {
+          lastSavedHtml.current = editorRef.current.innerHTML
+          undoStack.current = [{ html: editorRef.current.innerHTML, cursorOffset: 0 }]
         }
       }, []) // Only on mount
 
@@ -647,6 +812,10 @@ export const AgentsMentionsEditor = memo(
       // Handle input - UNCONTROLLED: no onChange, just @ and / trigger detection
       const handleInput = useCallback(() => {
         if (!editorRef.current) return
+
+        // Save undo state with debounce (for typing)
+        // This captures state periodically during typing for proper undo
+        debouncedSaveUndoState()
 
         // Update placeholder visibility and notify parent IMMEDIATELY (cheap operation)
         // Use textContent without trim() so placeholder hides even with just spaces
@@ -795,7 +964,7 @@ export const AgentsMentionsEditor = memo(
           cancelAnimationFrame(triggerDetectionTimeout.current)
         }
         triggerDetectionTimeout.current = requestAnimationFrame(runTriggerDetection)
-      }, [onContentChange, onTrigger, onCloseTrigger, onSlashTrigger, onCloseSlashTrigger])
+      }, [onContentChange, onTrigger, onCloseTrigger, onSlashTrigger, onCloseSlashTrigger, debouncedSaveUndoState])
 
       // Cleanup on unmount
       useEffect(() => {
@@ -809,6 +978,62 @@ export const AgentsMentionsEditor = memo(
       // Handle keydown
       const handleKeyDown = useCallback(
         (e: React.KeyboardEvent) => {
+          // Custom undo (Cmd+Z / Ctrl+Z)
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+            if (undoStack.current.length > 0) {
+              e.preventDefault()
+              isUndoRedo.current = true
+
+              // Save current state to redo stack
+              const currentState = getCurrentState()
+              if (currentState) {
+                redoStack.current.push(currentState)
+              }
+
+              // Restore previous state
+              const state = undoStack.current.pop()!
+              if (editorRef.current) {
+                editorRef.current.innerHTML = state.html
+                lastSavedHtml.current = state.html
+                restoreCursor(state.cursorOffset)
+                const newHasContent = !!editorRef.current.textContent
+                setHasContent(newHasContent)
+                onContentChange?.(newHasContent)
+              }
+
+              isUndoRedo.current = false
+              return
+            }
+          }
+
+          // Custom redo (Cmd+Shift+Z / Ctrl+Shift+Z or Cmd+Y / Ctrl+Y)
+          if ((e.metaKey || e.ctrlKey) && ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y")) {
+            if (redoStack.current.length > 0) {
+              e.preventDefault()
+              isUndoRedo.current = true
+
+              // Save current state to undo stack
+              const currentState = getCurrentState()
+              if (currentState) {
+                undoStack.current.push(currentState)
+              }
+
+              // Restore redo state
+              const state = redoStack.current.pop()!
+              if (editorRef.current) {
+                editorRef.current.innerHTML = state.html
+                lastSavedHtml.current = state.html
+                restoreCursor(state.cursorOffset)
+                const newHasContent = !!editorRef.current.textContent
+                setHasContent(newHasContent)
+                onContentChange?.(newHasContent)
+              }
+
+              isUndoRedo.current = false
+              return
+            }
+          }
+
           // Prevent submission during IME composition (e.g., Chinese/Japanese/Korean input)
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             if (triggerActive.current || slashTriggerActive.current) {
@@ -849,7 +1074,7 @@ export const AgentsMentionsEditor = memo(
             onShiftTab?.()
           }
         },
-        [onSubmit, onForceSubmit, onCloseTrigger, onCloseSlashTrigger, onShiftTab],
+        [onSubmit, onForceSubmit, onCloseTrigger, onCloseSlashTrigger, onShiftTab, restoreCursor, onContentChange, getCurrentState],
       )
 
       // Expose methods via ref (UNCONTROLLED pattern)
@@ -1005,17 +1230,19 @@ export const AgentsMentionsEditor = memo(
           insertMention: (option: FileMentionOption) => {
             if (!editorRef.current) return
 
+            // Save state for undo before inserting mention (immediate, not debounced)
+            immediateSaveUndoState()
+
             const sel = window.getSelection()
-            if (!sel || sel.rangeCount === 0) return
+            const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null
 
-            const range = sel.getRangeAt(0)
-            const node = range.startContainer
-
-            // Remove @ and search text
+            // Case 1: Triggered by @ - remove @ and search text, then insert mention
             if (
-              node.nodeType === Node.TEXT_NODE &&
+              range &&
+              range.startContainer.nodeType === Node.TEXT_NODE &&
               triggerStartIndex.current !== null
             ) {
+              const node = range.startContainer
               const text = node.textContent || ""
 
               // Find local position of @ within THIS text node
@@ -1069,20 +1296,43 @@ export const AgentsMentionsEditor = memo(
               mentionNode.after(space)
               newRange.setStartAfter(space)
               newRange.collapse(true)
-              sel.removeAllRanges()
-              sel.addRange(newRange)
+              sel!.removeAllRanges()
+              sel!.addRange(newRange)
 
               // Update hasContent
               setHasContent(true)
-            }
 
-            // Close trigger
-            triggerActive.current = false
-            triggerStartIndex.current = null
-            onCloseTrigger()
+              // Close trigger
+              triggerActive.current = false
+              triggerStartIndex.current = null
+              onCloseTrigger()
+            }
+            // Case 2: Direct insertion (e.g., drag & drop) - just insert at end
+            else {
+              const mentionNode = createMentionNode(option)
+              const space = document.createTextNode(" ")
+
+              // Append to editor content
+              editorRef.current.appendChild(mentionNode)
+              editorRef.current.appendChild(space)
+
+              // Move cursor after the space
+              const newRange = document.createRange()
+              newRange.setStartAfter(space)
+              newRange.collapse(true)
+
+              if (sel) {
+                sel.removeAllRanges()
+                sel.addRange(newRange)
+              }
+
+              // Update hasContent
+              setHasContent(true)
+              onContentChange?.(true)
+            }
           },
         }),
-        [onCloseTrigger, onCloseSlashTrigger, resolveMention, onContentChange],
+        [onCloseTrigger, onCloseSlashTrigger, resolveMention, onContentChange, immediateSaveUndoState],
       )
 
       return (
@@ -1099,7 +1349,11 @@ export const AgentsMentionsEditor = memo(
             spellCheck={false}
             onInput={handleInput}
             onKeyDown={handleKeyDown}
-            onPaste={onPaste}
+            onPaste={(e) => {
+              // Save state for undo before paste (immediate, not debounced)
+              immediateSaveUndoState()
+              onPaste?.(e)
+            }}
             onFocus={onFocus}
             onBlur={onBlur}
             className={cn(

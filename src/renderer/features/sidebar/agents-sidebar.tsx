@@ -101,6 +101,7 @@ import { NetworkStatus } from "../../components/ui/network-status"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
+import { useResolvedHotkeyDisplay } from "../../lib/hotkeys"
 import { pluralize } from "../agents/utils/pluralize"
 import { useNewChatDrafts, deleteNewChatDraft, type NewChatDraft } from "../agents/lib/drafts"
 import {
@@ -1070,6 +1071,7 @@ const SidebarHeader = memo(function SidebarHeader({
 }: SidebarHeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
+  const toggleSidebarHotkey = useResolvedHotkeyDisplay("toggle-sidebar")
 
   return (
     <div
@@ -1126,7 +1128,7 @@ const SidebarHeader = memo(function SidebarHeader({
             </TooltipTrigger>
             <TooltipContent>
               Close sidebar
-              <Kbd>⌘\</Kbd>
+              {toggleSidebarHotkey && <Kbd>{toggleSidebarHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
         </div>

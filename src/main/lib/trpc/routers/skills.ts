@@ -34,6 +34,7 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
 async function scanSkillsDirectory(
   dir: string,
   source: "user" | "project",
+  basePath?: string, // For project skills, the cwd to make paths relative to
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
 
@@ -63,11 +64,23 @@ async function scanSkillsDirectory(
         const content = await fs.readFile(skillMdPath, "utf-8")
         const parsed = parseSkillMd(content)
 
+        // For project skills, show relative path; for user skills, show ~/.claude/... path
+        let displayPath: string
+        if (source === "project" && basePath) {
+          displayPath = path.relative(basePath, skillMdPath)
+        } else {
+          // For user skills, show ~/.claude/skills/... format
+          const homeDir = os.homedir()
+          displayPath = skillMdPath.startsWith(homeDir)
+            ? "~" + skillMdPath.slice(homeDir.length)
+            : skillMdPath
+        }
+
         skills.push({
           name: parsed.name || entry.name,
           description: parsed.description || "",
           source,
-          path: skillMdPath,
+          path: displayPath,
         })
       } catch (err) {
         // Skill directory doesn't have SKILL.md or read failed - skip it
@@ -96,7 +109,7 @@ const listSkillsProcedure = publicProcedure
     let projectSkillsPromise = Promise.resolve<FileSkill[]>([])
     if (input?.cwd) {
       const projectSkillsDir = path.join(input.cwd, ".claude", "skills")
-      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project")
+      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd)
     }
 
     // Scan both directories in parallel

@@ -338,6 +338,10 @@ export function NewChatForm({
     clearPastedTexts,
   } = usePastedTextFiles(tempPastedIdRef.current)
 
+  // File contents cache - stores content for file mentions (keyed by mentionId)
+  // This content gets added to the prompt when sending, without showing a separate card
+  const fileContentsRef = useRef<Map<string, string>>(new Map())
+
   // Mention dropdown state
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionSearchText, setMentionSearchText] = useState("")
@@ -687,10 +691,11 @@ export function NewChatForm({
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
     onSuccess: (data) => {
-      // Clear editor, images, and pasted texts only on success
+      // Clear editor, images, pasted texts, and file contents cache only on success
       editorRef.current?.clear()
       clearImages()
       clearPastedTexts()
+      fileContentsRef.current.clear()
       clearCurrentDraft()
       utils.chats.list.invalidate()
       setSelectedChatId(data.id)
@@ -807,7 +812,7 @@ export function NewChatForm({
       }
     }
 
-    // Build message parts array (images first, then text)
+    // Build message parts array (images first, then text, then hidden file contents)
     type MessagePart =
       | { type: "text"; text: string }
       | {
@@ -818,6 +823,11 @@ export function NewChatForm({
             filename?: string
             base64Data?: string
           }
+        }
+      | {
+          type: "file-content"
+          filePath: string
+          content: string
         }
 
     const parts: MessagePart[] = images
@@ -837,13 +847,31 @@ export function NewChatForm({
     let finalMessage = message.trim()
     if (pastedTexts.length > 0) {
       const pastedMentions = pastedTexts
-        .map((pt) => `@[${MENTION_PREFIXES.PASTED}${pt.size}:${pt.preview}|${pt.filePath}]`)
+        .map((pt) => {
+          // Sanitize preview to remove special characters that break mention parsing
+          const sanitizedPreview = pt.preview.replace(/[:\[\]|]/g, "")
+          return `@[${MENTION_PREFIXES.PASTED}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
+        })
         .join(" ")
       finalMessage = pastedMentions + (finalMessage ? " " + finalMessage : "")
     }
 
     if (finalMessage) {
       parts.push({ type: "text" as const, text: finalMessage })
+    }
+
+    // Add cached file contents as hidden parts (sent to agent but not displayed in UI)
+    // These are from dropped text files - content is embedded so agent sees it immediately
+    if (fileContentsRef.current.size > 0) {
+      for (const [mentionId, content] of fileContentsRef.current.entries()) {
+        // Extract file path from mentionId (file:local:path or file:external:path)
+        const filePath = mentionId.replace(/^file:(local|external):/, "")
+        parts.push({
+          type: "file-content" as const,
+          filePath,
+          content,
+        })
+      }
     }
 
     // Create chat with selected project, branch, and initial message
@@ -1050,14 +1078,107 @@ export function NewChatForm({
     setIsDragOver(false)
   }, [])
 
+  // Text file extensions that should have content read and attached
+  const TEXT_FILE_EXTENSIONS = new Set([
+    // Code
+    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+    ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h", ".hpp",
+    ".cs", ".php", ".lua", ".r", ".m", ".mm", ".scala", ".clj", ".ex", ".exs",
+    ".hs", ".elm", ".erl", ".fs", ".fsx", ".ml", ".v", ".vhdl", ".zig",
+    // Config/Data
+    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".env", ".conf", ".cfg",
+    ".properties", ".plist",
+    // Web
+    ".html", ".htm", ".css", ".scss", ".sass", ".less", ".vue", ".svelte", ".astro",
+    // Documentation
+    ".md", ".mdx", ".rst", ".txt", ".text",
+    // Graphics (text-based)
+    ".svg",
+    // Shell/Scripts
+    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+    // Other
+    ".sql", ".graphql", ".gql", ".prisma", ".dockerfile", ".makefile",
+    ".gitignore", ".gitattributes", ".editorconfig", ".eslintrc", ".prettierrc",
+  ])
+
+  const MAX_FILE_SIZE_FOR_CONTENT = 100 * 1024 // 100KB - files larger than this only get path mention
+
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragOver(false)
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith("image/"),
-      )
-      handleAddAttachments(files)
+      const droppedFiles = Array.from(e.dataTransfer.files)
+
+      // Process files - for text files, read content and add as pasted text
+      for (const file of droppedFiles) {
+        // Get file path using Electron's webUtils API (more reliable than file.path)
+        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+
+        let mentionId: string
+        let mentionPath: string
+
+        // Check if file is inside the project
+        if (
+          validatedProject?.path &&
+          filePath &&
+          filePath.startsWith(validatedProject.path)
+        ) {
+          // Project file: use relative path with file:local: prefix
+          const relativePath = filePath
+            .slice(validatedProject.path.length)
+            .replace(/^\//, "")
+          mentionId = `file:local:${relativePath}`
+          mentionPath = relativePath
+        } else if (filePath) {
+          // External file: use absolute path with file:external: prefix
+          mentionId = `file:external:${filePath}`
+          mentionPath = filePath
+        } else {
+          // Fallback: use filename only
+          mentionId = `file:external:${file.name}`
+          mentionPath = file.name
+        }
+
+        const fileName = file.name
+        const ext = fileName.includes(".") ? "." + fileName.split(".").pop()?.toLowerCase() : ""
+        // Files without extension are likely directories or special files - skip content reading
+        const hasExtension = ext !== ""
+        const isTextFile = hasExtension && TEXT_FILE_EXTENSIONS.has(ext)
+        const isSmallEnough = file.size <= MAX_FILE_SIZE_FOR_CONTENT
+
+        // For text files that are small enough, read content and store it
+        // Show file chip, content will be added to prompt on send
+        if (isTextFile && isSmallEnough && filePath) {
+          // Add file chip for visual representation
+          editorRef.current?.insertMention({
+            id: mentionId,
+            label: fileName,
+            path: mentionPath,
+            repository: "local",
+            type: "file",
+          })
+
+          // Read and cache content (will be added to prompt on send)
+          try {
+            const content = await trpcUtils.files.readFile.fetch({ filePath })
+            fileContentsRef.current.set(mentionId, content)
+          } catch (err) {
+            // If reading fails, chip is still there - agent can try to read via path
+            console.error(`[handleDrop] Failed to read file content ${filePath}:`, err)
+          }
+        } else {
+          // For binary files, large files - add as mention only
+          // mentionPath contains full absolute path for external files
+          editorRef.current?.insertMention({
+            id: mentionId,
+            label: fileName,
+            path: mentionPath,
+            repository: "local",
+            type: "file",
+          })
+        }
+      }
+
       // Focus after state update - use double rAF to wait for React render
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -1065,7 +1186,7 @@ export function NewChatForm({
         })
       })
     },
-    [handleAddAttachments],
+    [validatedProject?.path, addPastedText, trpcUtils],
   )
 
   // Context items for images and pasted text files

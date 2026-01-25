@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Kbd } from "@/components/ui/kbd"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { Terminal } from "@/features/terminal/terminal"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
 import { getDefaultTerminalBg } from "@/features/terminal/helpers"
@@ -74,6 +75,9 @@ export const TerminalWidget = memo(function TerminalWidget({
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
   const fullThemeData = useAtomValue(fullThemeDataAtom)
+
+  // Resolved hotkey for tooltip
+  const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
 
   const terminalBg = useMemo(() => {
     if (fullThemeData?.colors?.["terminal.background"]) {
@@ -323,7 +327,7 @@ export const TerminalWidget = memo(function TerminalWidget({
               </TooltipTrigger>
               <TooltipContent side="left">
                 Expand to sidebar
-                <Kbd>⌘J</Kbd>
+                {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>
           )}

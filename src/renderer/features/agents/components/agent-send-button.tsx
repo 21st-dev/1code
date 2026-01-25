@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
+import { useResolvedHotkeyDisplayWithAlt } from "../../../lib/hotkeys"
 
 interface AgentSendButtonProps {
   /** Whether the system is currently streaming */
@@ -48,6 +49,9 @@ export function AgentSendButton({
   isPlanMode = false,
   hasContent = false,
 }: AgentSendButtonProps) {
+  // Resolved hotkeys for stop-generation tooltip
+  const stopHotkey = useResolvedHotkeyDisplayWithAlt("stop-generation")
+
   // Note: Enter shortcut is now handled by input components directly
 
   // When streaming AND user has typed content, show arrow to add to queue
@@ -88,9 +92,13 @@ export function AgentSendButton({
       return (
         <span className="flex items-center gap-1">
           Stop
-          <Kbd className="ms-0.5">Esc</Kbd>
-          <span className="text-muted-foreground/60">or</span>
-          <Kbd className="-me-1">Ctrl C</Kbd>
+          {stopHotkey.primary && <Kbd className="ms-0.5">{stopHotkey.primary}</Kbd>}
+          {stopHotkey.alt && (
+            <>
+              <span className="text-muted-foreground/60">or</span>
+              <Kbd className="-me-1">{stopHotkey.alt}</Kbd>
+            </>
+          )}
         </span>
       )
     if (isStreaming && hasContent)

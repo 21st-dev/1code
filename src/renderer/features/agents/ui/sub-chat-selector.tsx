@@ -39,6 +39,7 @@ import {
 } from "../../../components/ui/tooltip"
 import { Kbd } from "../../../components/ui/kbd"
 import { getShortcutKey } from "../../../lib/utils/platform"
+import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -223,6 +224,10 @@ export function SubChatSelector({
   // 2. Unified sidebar is enabled but the widget is hidden by user
   const showDiffButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("diff")
   const showTerminalButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("terminal")
+
+  // Resolved hotkeys for tooltips
+  const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
+  const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
@@ -922,7 +927,7 @@ export function SubChatSelector({
               ) : diffStats?.hasChanges ? (
                 <>
                   <span>View changes</span>
-                  <Kbd>⌘D</Kbd>
+                  {openDiffHotkey && <Kbd>{openDiffHotkey}</Kbd>}
                 </>
               ) : (
                 "No changes"
@@ -955,7 +960,7 @@ export function SubChatSelector({
             </TooltipTrigger>
             <TooltipContent side="bottom">
               <span>Open terminal</span>
-              <Kbd>⌘J</Kbd>
+              {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
         </div>

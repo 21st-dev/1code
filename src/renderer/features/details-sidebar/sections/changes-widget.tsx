@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/tooltip"
 import { Kbd } from "@/components/ui/kbd"
 import { cn } from "@/lib/utils"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { viewedFilesAtomFamily } from "@/features/agents/atoms"
 import {
   FileListItem,
@@ -84,6 +85,9 @@ export const ChangesWidget = memo(function ChangesWidget({
     : diffDisplayMode === "center-peek"
       ? "Open in dialog"
       : "Open fullscreen"
+
+  // Resolved hotkey for tooltip
+  const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
 
   // Viewed files state (same atom as diff sidebar)
   const [viewedFiles] = useAtom(viewedFilesAtomFamily(chatId))
@@ -219,7 +223,7 @@ export const ChangesWidget = memo(function ChangesWidget({
               </TooltipTrigger>
               <TooltipContent side="left">
                 {expandTooltip}
-                <Kbd>⌘D</Kbd>
+                {openDiffHotkey && <Kbd>{openDiffHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>
           )}

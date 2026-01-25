@@ -95,6 +95,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
   const isStreaming = useAtomValue(isStreamingAtom)
 
   // Extract user message content
+  // Note: file-content parts are hidden from UI but sent to agent
   const rawTextContent =
     userMsg?.parts
       ?.filter((p: any) => p.type === "text")

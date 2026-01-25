@@ -670,7 +670,8 @@ if (gotTheLock) {
         {
           label: "View",
           submenu: [
-            { role: "reload" },
+            // Cmd+R is disabled to prevent accidental page refresh
+            // Use Cmd+Shift+R (Force Reload) for intentional reloads
             { role: "forceReload" },
             // Only show DevTools in dev mode or when unlocked via hidden feature
             ...(showDevTools ? [{ role: "toggleDevTools" as const }] : []),

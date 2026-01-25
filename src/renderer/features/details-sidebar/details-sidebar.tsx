@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
 import { cn } from "@/lib/utils"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import {
   detailsSidebarOpenAtom,
   detailsSidebarWidthAtom,
@@ -116,6 +117,9 @@ export function DetailsSidebar({
   const closeSidebar = useCallback(() => {
     setIsOpen(false)
   }, [setIsOpen])
+
+  // Resolved hotkey for tooltip
+  const toggleDetailsHotkey = useResolvedHotkeyDisplay("toggle-details")
 
   // Expand widget to legacy sidebar
   const handleExpandWidget = useCallback(
@@ -302,7 +306,7 @@ export function DetailsSidebar({
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 Close details
-                <Kbd>⌘⇧\</Kbd>
+                {toggleDetailsHotkey && <Kbd>{toggleDetailsHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>
             <span className="text-sm font-medium">Details</span>

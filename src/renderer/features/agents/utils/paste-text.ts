@@ -20,13 +20,14 @@ export type AddPastedTextFn = (text: string) => Promise<void>
  * Insert text at the current cursor position in a contentEditable element.
  * Truncates large text to prevent browser freeze.
  * Also accounts for existing content to prevent total size from exceeding limit.
+ * Uses execCommand to preserve browser's undo history.
  *
  * @param text - The text to insert
- * @param editableElement - The contentEditable element to dispatch input event to
+ * @param editableElement - The contentEditable element (used for size calculation)
  */
 export function insertTextAtCursor(text: string, editableElement: Element): void {
   // Check existing content size to prevent exceeding total limit
-  const existingLength = editableElement.textContent?.length || 0
+  const existingLength = editableElement?.textContent?.length || 0
   const availableSpace = Math.max(0, MAX_PASTE_LENGTH - existingLength)
 
   // Truncate based on available space (not just paste size)
@@ -57,22 +58,11 @@ export function insertTextAtCursor(text: string, editableElement: Element): void
     }
   }
 
-  // Insert synchronously - the text is already truncated to a safe size
-  const selection = window.getSelection()
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0)
-    range.deleteContents()
-    const textNode = document.createTextNode(textToInsert)
-    range.insertNode(textNode)
-    // Move cursor to end of inserted text
-    range.setStartAfter(textNode)
-    range.setEndAfter(textNode)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    // Trigger input event on the contentEditable element for editor to update state
-    const inputEvent = new Event("input", { bubbles: true })
-    editableElement.dispatchEvent(inputEvent)
-  }
+  // Insert using execCommand to preserve undo history
+  // execCommand is deprecated but it's the only way to properly integrate with
+  // the browser's undo stack in contenteditable elements
+  // eslint-disable-next-line deprecation/deprecation
+  document.execCommand("insertText", false, textToInsert)
 }
 
 /**

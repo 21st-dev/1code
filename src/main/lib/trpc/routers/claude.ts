@@ -27,6 +27,12 @@ import { buildAgentsOption } from "./agent-utils"
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
  * Returns the cleaned prompt and lists of mentioned agents/skills/tools
+ *
+ * File mention formats:
+ * - @[file:local:relative/path] - file inside project (relative path)
+ * - @[file:external:/absolute/path] - file outside project (absolute path)
+ * - @[file:owner/repo:path] - legacy web format (repo:path)
+ * - @[folder:local:path] or @[folder:external:path] - folder mentions
  */
 function parseMentions(prompt: string): {
   cleanedPrompt: string
@@ -78,6 +84,15 @@ function parseMentions(prompt: string): {
     .replace(/@\[skill:[^\]]+\]/g, "")
     .replace(/@\[tool:[^\]]+\]/g, "")
     .trim()
+
+  // Transform file mentions to readable paths for the agent
+  // @[file:local:path] -> path (relative to project)
+  // @[file:external:/abs/path] -> /abs/path (absolute)
+  cleanedPrompt = cleanedPrompt
+    .replace(/@\[file:local:([^\]]+)\]/g, "$1")
+    .replace(/@\[file:external:([^\]]+)\]/g, "$1")
+    .replace(/@\[folder:local:([^\]]+)\]/g, "$1")
+    .replace(/@\[folder:external:([^\]]+)\]/g, "$1")
 
   // Add tool usage hints if tools were mentioned
   // Tool names are already validated to contain only safe characters

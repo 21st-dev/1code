@@ -155,7 +155,8 @@ export async function loadAgent(
  */
 export async function scanAgentsDirectory(
   dir: string,
-  source: "user" | "project"
+  source: "user" | "project",
+  basePath?: string // For project agents, the cwd to make paths relative to
 ): Promise<FileAgent[]> {
   const agents: FileAgent[] = []
 
@@ -182,6 +183,18 @@ export async function scanAgentsDirectory(
           const parsed = parseAgentMd(content, entry.name)
 
           if (parsed.description && parsed.prompt) {
+            // For project agents, show relative path; for user agents, show ~/.claude/... path
+            let displayPath: string
+            if (source === "project" && basePath) {
+              displayPath = path.relative(basePath, agentPath)
+            } else {
+              // For user agents, show ~/.claude/agents/... format
+              const homeDir = os.homedir()
+              displayPath = agentPath.startsWith(homeDir)
+                ? "~" + agentPath.slice(homeDir.length)
+                : agentPath
+            }
+
             agents.push({
               name: parsed.name || entry.name.replace(".md", ""),
               description: parsed.description,
@@ -190,7 +203,7 @@ export async function scanAgentsDirectory(
               disallowedTools: parsed.disallowedTools,
               model: parsed.model,
               source,
-              path: agentPath,
+              path: displayPath,
             })
           }
         } catch (err) {

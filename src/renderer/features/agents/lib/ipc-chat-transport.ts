@@ -459,10 +459,23 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
   private extractText(msg: UIMessage | undefined): string {
     if (!msg) return ""
     if (msg.parts) {
-      return msg.parts
-        .filter((p): p is { type: "text"; text: string } => p.type === "text")
-        .map((p) => p.text)
-        .join("\n")
+      const textParts: string[] = []
+      const fileContents: string[] = []
+
+      for (const p of msg.parts) {
+        const partType = (p as any).type as string
+        if (partType === "text" && (p as any).text) {
+          textParts.push((p as any).text)
+        } else if (partType === "file-content") {
+          // Hidden file content - add to prompt but not displayed in UI
+          const fc = p as any
+          const fileName = fc.filePath?.split("/").pop() || fc.filePath || "file"
+          fileContents.push(`\n--- ${fileName} ---\n${fc.content}`)
+        }
+      }
+
+      // Combine text and file contents
+      return textParts.join("\n") + fileContents.join("")
     }
     return ""
   }
