@@ -30,14 +30,25 @@ export function usePreviewElementSelection(): UsePreviewElementSelectionReturn {
 
   const addPreviewElementContext = useCallback(
     (html: string, componentName: string | null, filePath: string | null) => {
+      console.log("[usePreviewElementSelection] addPreviewElementContext called:", {
+        componentName,
+        filePath,
+        htmlLength: html?.length,
+      })
       const trimmedHtml = html.trim()
-      if (!trimmedHtml) return
+      if (!trimmedHtml) {
+        console.log("[usePreviewElementSelection] Empty HTML, ignoring")
+        return
+      }
 
       // Prevent duplicates - check if same HTML already exists
       const isDuplicate = previewElementContextsRef.current.some(
         (ctx) => ctx.html === trimmedHtml
       )
-      if (isDuplicate) return
+      if (isDuplicate) {
+        console.log("[usePreviewElementSelection] Duplicate HTML, ignoring")
+        return
+      }
 
       const newContext: PreviewElementContext = {
         id: `pec_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -48,6 +59,7 @@ export function usePreviewElementSelection(): UsePreviewElementSelectionReturn {
         createdAt: new Date(),
       }
 
+      console.log("[usePreviewElementSelection] Adding new context:", newContext.id)
       setPreviewElementContexts((prev) => [...prev, newContext])
     },
     []

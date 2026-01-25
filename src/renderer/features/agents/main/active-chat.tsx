@@ -2367,19 +2367,37 @@ const ChatViewInner = memo(function ChatViewInner({
   // Only the active subchat should export its handler to avoid routing to wrong subchat
   const setAddPreviewElementContextFn = useSetAtom(addPreviewElementContextFnAtom)
   useEffect(() => {
-    if (!isActive) return
-    setAddPreviewElementContextFn(() => addPreviewElementContext)
-    return () => setAddPreviewElementContextFn(null)
-  }, [isActive, addPreviewElementContext, setAddPreviewElementContextFn])
+    console.log("[ChatViewInner] Element context atom effect:", { subChatId, isActive })
+    if (isActive) {
+      console.log("[ChatViewInner] Setting addPreviewElementContextFn for subchat:", subChatId)
+      setAddPreviewElementContextFn(() => addPreviewElementContext)
+    }
+    return () => {
+      // Only clear if we were the one who set it (i.e., we were active)
+      if (isActive) {
+        console.log("[ChatViewInner] Clearing addPreviewElementContextFn for subchat:", subChatId)
+        setAddPreviewElementContextFn(null)
+      }
+    }
+  }, [isActive, addPreviewElementContext, setAddPreviewElementContextFn, subChatId])
 
   // Share the handleAddAttachments function with ChatView via atom (for screenshot capture)
   // Only the active subchat should export its handler to avoid routing to wrong subchat
   const setHandleAddAttachmentsFn = useSetAtom(handleAddAttachmentsFnAtom)
   useEffect(() => {
-    if (!isActive) return
-    setHandleAddAttachmentsFn(() => handleAddAttachments)
-    return () => setHandleAddAttachmentsFn(null)
-  }, [isActive, handleAddAttachments, setHandleAddAttachmentsFn])
+    console.log("[ChatViewInner] Attachments atom effect:", { subChatId, isActive })
+    if (isActive) {
+      console.log("[ChatViewInner] Setting handleAddAttachmentsFn for subchat:", subChatId)
+      setHandleAddAttachmentsFn(() => handleAddAttachments)
+    }
+    return () => {
+      // Only clear if we were the one who set it (i.e., we were active)
+      if (isActive) {
+        console.log("[ChatViewInner] Clearing handleAddAttachmentsFn for subchat:", subChatId)
+        setHandleAddAttachmentsFn(null)
+      }
+    }
+  }, [isActive, handleAddAttachments, setHandleAddAttachmentsFn, subChatId])
 
   // Wrapper for addTextContext that handles TextSelectionSource
   const addTextContext = useCallback((text: string, source: TextSelectionSource) => {
@@ -4224,6 +4242,12 @@ export function ChatView({
   const addPreviewElementContextFn = useAtomValue(addPreviewElementContextFnAtom)
   const handlePreviewElementSelect = useCallback(
     (html: string, componentName: string | null, filePath: string | null) => {
+      console.log("[ChatView] handlePreviewElementSelect called:", {
+        hasFunction: !!addPreviewElementContextFn,
+        componentName,
+        filePath,
+        htmlLength: html?.length,
+      })
       addPreviewElementContextFn?.(html, componentName, filePath)
     },
     [addPreviewElementContextFn]

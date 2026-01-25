@@ -605,6 +605,7 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
     const handleConsoleMessage = (e: Event) => {
       const event = e as unknown as { message: string; level: number }
       if (event.message.startsWith("__ELEMENT_SELECTED__:")) {
+        console.log("[PreviewSidebar] Element selected, parsing...")
         try {
           const jsonStr = event.message.slice("__ELEMENT_SELECTED__:".length)
           const data = JSON.parse(jsonStr) as {
@@ -612,8 +613,15 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
             componentName: string | null
             filePath: string | null
           }
+          console.log("[PreviewSidebar] Parsed element:", {
+            componentName: data.componentName,
+            filePath: data.filePath,
+            htmlLength: data.html?.length,
+            hasCallback: !!onElementSelectRef.current,
+          })
           onElementSelectRef.current?.(data.html, data.componentName, data.filePath)
           // Deactivate selector mode after selection
+          console.log("[PreviewSidebar] Deactivating selector mode, setter exists:", !!setIsSelectorActiveRef.current)
           setIsSelectorActiveRef.current(false)
           webview.executeJavaScript(REACT_GRAB_DEACTIVATE_SCRIPT).catch(() => {
             // Ignore errors
