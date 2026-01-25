@@ -1,27 +1,38 @@
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
 import { z } from "zod"
+import { TRPCError } from "@trpc/server"
 import { devCredentials, getDatabase } from "../../db"
 import { publicProcedure, router } from "../index"
 
 /**
+ * Check if secure storage is available
+ */
+function ensureEncryptionAvailable(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Secure storage is not available. Credentials cannot be stored securely on this system.",
+    })
+  }
+}
+
+/**
  * Encrypt password using Electron's safeStorage
+ * Throws if encryption is not available - we never store passwords insecurely
  */
 function encryptPassword(password: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[DevCredentials] Encryption not available, storing as base64")
-    return Buffer.from(password).toString("base64")
-  }
+  ensureEncryptionAvailable()
   return safeStorage.encryptString(password).toString("base64")
 }
 
 /**
  * Decrypt password using Electron's safeStorage
+ * Throws if encryption is not available
  */
 function decryptPassword(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
+  ensureEncryptionAvailable()
   const buffer = Buffer.from(encrypted, "base64")
   return safeStorage.decryptString(buffer)
 }
@@ -31,6 +42,16 @@ function decryptPassword(encrypted: string): string {
  * Manages encrypted credentials for auto-filling login forms in preview
  */
 export const devCredentialsRouter = router({
+  /**
+   * Check if secure storage is available on this system
+   * UI should check this before offering credential storage
+   */
+  isAvailable: publicProcedure.query(() => {
+    return {
+      available: safeStorage.isEncryptionAvailable(),
+    }
+  }),
+
   /**
    * List all credentials (without passwords)
    */

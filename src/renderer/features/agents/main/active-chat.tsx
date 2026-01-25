@@ -4365,22 +4365,27 @@ export function ChatView({
   )
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
 
-  // Mutual exclusion: Details sidebar vs Plan/Terminal/Diff(side-peek) sidebars
+  // Mutual exclusion: Details sidebar vs Plan/Terminal/Diff(side-peek)/Preview sidebars
   // When one opens, close the conflicting ones and remember for restoration
 
   // Track what was auto-closed and by whom for restoration
   const autoClosedStateRef = useRef<{
     // What closed Details
-    detailsClosedBy: "plan" | "terminal" | "diff" | null
+    detailsClosedBy: "plan" | "terminal" | "diff" | "preview" | null
     // What Details closed
     planClosedByDetails: boolean
     terminalClosedByDetails: boolean
     diffClosedByDetails: boolean
+    previewClosedByDetails: boolean
+    // What closed Preview (non-Details sidebars)
+    previewClosedBy: "terminal" | "diff" | "plan" | null
   }>({
     detailsClosedBy: null,
     planClosedByDetails: false,
     terminalClosedByDetails: false,
     diffClosedByDetails: false,
+    previewClosedByDetails: false,
+    previewClosedBy: null,
   })
 
   // Track previous states to detect opens/closes
@@ -4388,6 +4393,7 @@ export function ChatView({
     details: isDetailsSidebarOpen,
     plan: isPlanSidebarOpen && !!currentPlanPath,
     terminal: isTerminalSidebarOpen,
+    preview: isNewPreviewSidebarOpen,
   })
 
   useEffect(() => {
@@ -4402,6 +4408,8 @@ export function ChatView({
     const planJustClosed = !isPlanOpen && prev.plan
     const terminalJustOpened = isTerminalSidebarOpen && !prev.terminal
     const terminalJustClosed = !isTerminalSidebarOpen && prev.terminal
+    const previewJustOpened = isNewPreviewSidebarOpen && !prev.preview
+    const previewJustClosed = !isNewPreviewSidebarOpen && prev.preview
 
     // Details opened → close conflicting sidebars and remember
     if (detailsJustOpened) {
@@ -4412,6 +4420,10 @@ export function ChatView({
       if (isTerminalSidebarOpen) {
         auto.terminalClosedByDetails = true
         setIsTerminalSidebarOpen(false)
+      }
+      if (isNewPreviewSidebarOpen) {
+        auto.previewClosedByDetails = true
+        setIsNewPreviewSidebarOpen(false)
       }
     }
     // Details closed → restore what it closed
@@ -4424,41 +4436,88 @@ export function ChatView({
         auto.terminalClosedByDetails = false
         setIsTerminalSidebarOpen(true)
       }
+      if (auto.previewClosedByDetails) {
+        auto.previewClosedByDetails = false
+        setIsNewPreviewSidebarOpen(true)
+      }
     }
-    // Plan opened → close Details and remember
-    else if (planJustOpened && isDetailsSidebarOpen) {
-      auto.detailsClosedBy = "plan"
-      setIsDetailsSidebarOpen(false)
+    // Preview opened → close Details/Terminal and remember
+    else if (previewJustOpened) {
+      if (isDetailsSidebarOpen) {
+        auto.detailsClosedBy = "preview"
+        setIsDetailsSidebarOpen(false)
+      }
+      if (isTerminalSidebarOpen) {
+        auto.previewClosedBy = null // Clear any pending restore
+        setIsTerminalSidebarOpen(false)
+      }
     }
-    // Plan closed → restore Details if we closed it
-    else if (planJustClosed && auto.detailsClosedBy === "plan") {
+    // Preview closed → restore Details if we closed it
+    else if (previewJustClosed && auto.detailsClosedBy === "preview") {
       auto.detailsClosedBy = null
       setIsDetailsSidebarOpen(true)
     }
-    // Terminal opened → close Details and remember
-    else if (terminalJustOpened && isDetailsSidebarOpen) {
-      auto.detailsClosedBy = "terminal"
-      setIsDetailsSidebarOpen(false)
+    // Plan opened → close Details and Preview, remember
+    else if (planJustOpened) {
+      if (isDetailsSidebarOpen) {
+        auto.detailsClosedBy = "plan"
+        setIsDetailsSidebarOpen(false)
+      }
+      if (isNewPreviewSidebarOpen) {
+        auto.previewClosedBy = "plan"
+        setIsNewPreviewSidebarOpen(false)
+      }
     }
-    // Terminal closed → restore Details if we closed it
-    else if (terminalJustClosed && auto.detailsClosedBy === "terminal") {
-      auto.detailsClosedBy = null
-      setIsDetailsSidebarOpen(true)
+    // Plan closed → restore Details/Preview if we closed them
+    else if (planJustClosed) {
+      if (auto.detailsClosedBy === "plan") {
+        auto.detailsClosedBy = null
+        setIsDetailsSidebarOpen(true)
+      }
+      if (auto.previewClosedBy === "plan") {
+        auto.previewClosedBy = null
+        setIsNewPreviewSidebarOpen(true)
+      }
+    }
+    // Terminal opened → close Details and Preview, remember
+    else if (terminalJustOpened) {
+      if (isDetailsSidebarOpen) {
+        auto.detailsClosedBy = "terminal"
+        setIsDetailsSidebarOpen(false)
+      }
+      if (isNewPreviewSidebarOpen) {
+        auto.previewClosedBy = "terminal"
+        setIsNewPreviewSidebarOpen(false)
+      }
+    }
+    // Terminal closed → restore Details/Preview if we closed them
+    else if (terminalJustClosed) {
+      if (auto.detailsClosedBy === "terminal") {
+        auto.detailsClosedBy = null
+        setIsDetailsSidebarOpen(true)
+      }
+      if (auto.previewClosedBy === "terminal") {
+        auto.previewClosedBy = null
+        setIsNewPreviewSidebarOpen(true)
+      }
     }
 
     prevSidebarStatesRef.current = {
       details: isDetailsSidebarOpen,
       plan: isPlanOpen,
       terminal: isTerminalSidebarOpen,
+      preview: isNewPreviewSidebarOpen,
     }
   }, [
     isDetailsSidebarOpen,
     isPlanSidebarOpen,
     currentPlanPath,
     isTerminalSidebarOpen,
+    isNewPreviewSidebarOpen,
     setIsDetailsSidebarOpen,
     setIsPlanSidebarOpen,
     setIsTerminalSidebarOpen,
+    setIsNewPreviewSidebarOpen,
   ])
 
   // Diff data cache - stored in atoms to persist across workspace switches
@@ -4553,10 +4612,21 @@ export function ChatView({
         setIsDetailsSidebarOpen(false)
       }
     }
-    // Diff side-peek closed → restore Details if we closed it
-    else if (diffSidePeekJustClosed && auto.detailsClosedBy === "diff") {
-      auto.detailsClosedBy = null
-      setIsDetailsSidebarOpen(true)
+    // Diff just opened in side-peek mode → close Preview sidebar
+    else if (isNowSidePeek && !wasSidePeek && isNewPreviewSidebarOpen) {
+      auto.previewClosedBy = "diff"
+      setIsNewPreviewSidebarOpen(false)
+    }
+    // Diff side-peek closed → restore Details/Preview if we closed them
+    else if (diffSidePeekJustClosed) {
+      if (auto.detailsClosedBy === "diff") {
+        auto.detailsClosedBy = null
+        setIsDetailsSidebarOpen(true)
+      }
+      if (auto.previewClosedBy === "diff") {
+        auto.previewClosedBy = null
+        setIsNewPreviewSidebarOpen(true)
+      }
     }
     // Details closed → restore Diff if we closed it (in side-peek mode, not switching to dialog)
     else if (detailsJustClosed && auto.diffClosedByDetails) {
@@ -4570,7 +4640,7 @@ export function ChatView({
     }
 
     prevDiffStateRef.current = { isOpen: isDiffSidebarOpen, mode: diffDisplayMode, detailsOpen: isDetailsSidebarOpen }
-  }, [isDiffSidebarOpen, diffDisplayMode, isDetailsSidebarOpen, setDiffDisplayMode, setIsDetailsSidebarOpen, setIsDiffSidebarOpen])
+  }, [isDiffSidebarOpen, diffDisplayMode, isDetailsSidebarOpen, isNewPreviewSidebarOpen, setDiffDisplayMode, setIsDetailsSidebarOpen, setIsDiffSidebarOpen, setIsNewPreviewSidebarOpen])
 
   // Hide traffic lights when full-page diff is open (they would overlap with content)
   useEffect(() => {

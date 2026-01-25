@@ -4,7 +4,7 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { observable } from "@trpc/server/observable"
 import { terminalManager } from "../../terminal/manager"
-import { portManager } from "../../terminal/port-manager"
+import { portManager, type PortSubscriptionMode } from "../../terminal/port-manager"
 import type { TerminalEvent, DetectedPort } from "../../terminal/types"
 import { TRPCError } from "@trpc/server"
 
@@ -261,26 +261,59 @@ export const terminalRouter = router({
 
 	/**
 	 * Subscribe to port changes (add/remove events)
+	 * Uses demand-based scanning - scanning only runs when there are subscribers
+	 * @param mode - "active" for fast scanning (popover open), "background" for slow scanning (badge only)
 	 */
-	portChanges: publicProcedure.subscription(() => {
-		return observable<{ type: "add" | "remove"; port: DetectedPort }>(
-			(emit) => {
-				const onPortAdd = (port: DetectedPort) => {
-					emit.next({ type: "add", port })
-				}
-
-				const onPortRemove = (port: DetectedPort) => {
-					emit.next({ type: "remove", port })
-				}
-
-				portManager.on("port:add", onPortAdd)
-				portManager.on("port:remove", onPortRemove)
-
-				return () => {
-					portManager.off("port:add", onPortAdd)
-					portManager.off("port:remove", onPortRemove)
-				}
-			},
+	portChanges: publicProcedure
+		.input(
+			z
+				.object({
+					mode: z.enum(["active", "background"]).default("background"),
+				})
+				.optional(),
 		)
-	}),
+		.subscription(({ input }) => {
+			const mode: PortSubscriptionMode = input?.mode ?? "background"
+
+			return observable<{ type: "add" | "remove"; port: DetectedPort }>(
+				(emit) => {
+					// Subscribe to port manager - this starts scanning if needed
+					const subscriberId = portManager.subscribe(mode)
+
+					const onPortAdd = (port: DetectedPort) => {
+						emit.next({ type: "add", port })
+					}
+
+					const onPortRemove = (port: DetectedPort) => {
+						emit.next({ type: "remove", port })
+					}
+
+					portManager.on("port:add", onPortAdd)
+					portManager.on("port:remove", onPortRemove)
+
+					return () => {
+						portManager.off("port:add", onPortAdd)
+						portManager.off("port:remove", onPortRemove)
+						// Unsubscribe - this stops scanning if no more subscribers
+						portManager.unsubscribe(subscriberId)
+					}
+				},
+			)
+		}),
+
+	/**
+	 * Update the scanning mode for an existing subscription
+	 * Called when popover opens/closes to adjust scan frequency
+	 */
+	setPortScanMode: publicProcedure
+		.input(
+			z.object({
+				subscriberId: z.string(),
+				mode: z.enum(["active", "background"]),
+			}),
+		)
+		.mutation(({ input }) => {
+			portManager.updateSubscriberMode(input.subscriberId, input.mode)
+			return { success: true }
+		}),
 })

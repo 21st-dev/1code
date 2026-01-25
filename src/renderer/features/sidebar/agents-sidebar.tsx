@@ -26,7 +26,7 @@ import {
   betaKanbanEnabledAtom,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { RunningServersSection } from "./running-servers-popover"
+import { RunningServersMenuItem } from "./running-servers-popover"
 import { McpServersSection } from "./mcp-servers-popover"
 import { ChevronDown, MoreHorizontal, Columns3 } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
@@ -1319,6 +1319,10 @@ const SidebarHeader = memo(function SidebarHeader({
                             <span className="flex-1">Shortcuts</span>
                           </DropdownMenuItem>
                         )}
+                        {/* Running Servers - desktop only */}
+                        {isDesktop && (
+                          <RunningServersMenuItem onCloseMenu={() => setIsDropdownOpen(false)} />
+                        )}
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
 
@@ -1419,6 +1423,10 @@ const SidebarHeader = memo(function SidebarHeader({
                             <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                             <span className="flex-1">Shortcuts</span>
                           </DropdownMenuItem>
+                        )}
+                        {/* Running Servers - desktop only */}
+                        {isDesktop && (
+                          <RunningServersMenuItem onCloseMenu={() => setIsDropdownOpen(false)} />
                         )}
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
@@ -2880,9 +2888,6 @@ export function AgentsSidebar({
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />
-
-                {/* Running Servers Button - desktop only */}
-                {isDesktop && <RunningServersSection isMobile={isMobileFullscreen} />}
 
                 {/* MCP Servers Button - desktop only */}
                 {isDesktop && <McpServersSection isMobile={isMobileFullscreen} />}

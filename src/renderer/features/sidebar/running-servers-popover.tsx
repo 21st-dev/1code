@@ -15,6 +15,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "../../components/ui/tooltip"
+import {
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "../../components/ui/dropdown-menu"
 import { cn } from "../../lib/utils"
 import { Square, ExternalLink, Search, X, Check } from "lucide-react"
 import { toast } from "sonner"
@@ -207,20 +212,25 @@ export const RunningServersPopover = memo(function RunningServersPopover({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch all ports
+  // Fetch all ports - no polling, subscription handles updates
   const { data: ports = [], refetch } = trpc.terminal.getAllPorts.useQuery(
     undefined,
     {
-      refetchInterval: 2500, // Match the scan interval
+      // No refetchInterval - subscription provides real-time updates
+      // This query is just for initial data and triggered refetches
     }
   )
 
-  // Subscribe to port changes for real-time updates
-  trpc.terminal.portChanges.useSubscription(undefined, {
-    onData: () => {
-      refetch()
-    },
-  })
+  // Subscribe to port changes with "active" mode when popover is open (fast scanning)
+  // Subscription automatically starts/stops scanning based on subscribers
+  trpc.terminal.portChanges.useSubscription(
+    { mode: open ? "active" : "background" },
+    {
+      onData: () => {
+        refetch()
+      },
+    }
+  )
 
   // Filter ports based on search query
   // Sort and filter ports - prioritize dev servers like Vite
@@ -483,17 +493,21 @@ export const RunningServersSection = memo(function RunningServersSection({
   const prevPopoverOpen = useRef(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
-  // Fetch port count for badge
-  const { data: ports = [] } = trpc.terminal.getAllPorts.useQuery(undefined, {
-    refetchInterval: 2500,
+  // Fetch port count for badge - no polling needed, subscription handles updates
+  const { data: ports = [], refetch } = trpc.terminal.getAllPorts.useQuery(undefined, {
+    // No refetchInterval - subscription provides updates with "background" mode (slow scanning)
   })
 
-  // Subscribe to port changes
-  trpc.terminal.portChanges.useSubscription(undefined, {
-    onData: () => {
-      // Query will auto-refetch
-    },
-  })
+  // Subscribe to port changes with "background" mode (slow scanning for badge)
+  // When popover opens, the RunningServersPopover's subscription will upgrade to "active" mode
+  trpc.terminal.portChanges.useSubscription(
+    { mode: "background" },
+    {
+      onData: () => {
+        refetch()
+      },
+    }
+  )
 
   // Handle tooltip blocking when popover closes
   useEffect(() => {
@@ -546,5 +560,181 @@ export const RunningServersSection = memo(function RunningServersSection({
           : "Running Servers"}
       </TooltipContent>
     </Tooltip>
+  )
+})
+
+// Dropdown menu item version for use in Help submenu
+interface RunningServersMenuItemProps {
+  onCloseMenu?: () => void
+}
+
+export const RunningServersMenuItem = memo(function RunningServersMenuItem({
+  onCloseMenu,
+}: RunningServersMenuItemProps) {
+  const [killingPids, setKillingPids] = useState<Set<number>>(new Set())
+
+  // Fetch all ports
+  const { data: ports = [], refetch } = trpc.terminal.getAllPorts.useQuery(undefined, {})
+
+  // Subscribe to port changes
+  trpc.terminal.portChanges.useSubscription(
+    { mode: "background" },
+    {
+      onData: () => {
+        refetch()
+      },
+    }
+  )
+
+  // Sort ports - prioritize dev servers like Vite
+  const sortedPorts = useMemo(() => {
+    const result = [...ports]
+    result.sort((a, b) => {
+      const priorityA = getServerPriority(a)
+      const priorityB = getServerPriority(b)
+      if (priorityA !== priorityB) return priorityA - priorityB
+      return b.detectedAt - a.detectedAt
+    })
+    return result
+  }, [ports])
+
+  // Kill process mutation
+  const killProcess = trpc.terminal.killProcessByPid.useMutation({
+    onSuccess: (_, variables) => {
+      setKillingPids((prev) => {
+        const next = new Set(prev)
+        next.delete(variables.pid)
+        return next
+      })
+    },
+    onError: (error, variables) => {
+      setKillingPids((prev) => {
+        const next = new Set(prev)
+        next.delete(variables.pid)
+        return next
+      })
+      toast.error(`Failed to stop server: ${error.message}`)
+    },
+  })
+
+  const handleStop = useCallback(
+    (e: React.MouseEvent, pid: number) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setKillingPids((prev) => new Set(prev).add(pid))
+      killProcess.mutate({ pid })
+    },
+    [killProcess]
+  )
+
+  const handleOpenInBrowser = useCallback((e: React.MouseEvent, address: string, port: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const url = `http://${formatAddress(address, port)}`
+    window.open(url, "_blank")
+  }, [])
+
+  const portCount = ports.length
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2">
+        <ServerIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className="flex-1">Running Servers</span>
+        {portCount > 0 && (
+          <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-medium bg-emerald-500 text-white rounded-full">
+            {portCount > 9 ? "9+" : portCount}
+          </span>
+        )}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent
+        className="w-[280px] p-0"
+        sideOffset={6}
+        alignOffset={-4}
+      >
+        <div className="flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+            <span className="text-sm font-medium text-foreground">
+              Running Servers
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {portCount} active
+            </span>
+          </div>
+
+          {/* Server list */}
+          <div className="max-h-[240px] overflow-y-auto">
+            {portCount === 0 ? (
+              <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+                No servers running
+              </div>
+            ) : (
+              <div className="py-1">
+                {sortedPorts.map((server) => {
+                  const serverKey = getServerKey(server)
+                  const address = formatAddress(server.address, server.port)
+                  const isKilling = killingPids.has(server.pid)
+
+                  return (
+                    <div
+                      key={serverKey}
+                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50 rounded-md group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground truncate">
+                            :{server.port}
+                          </span>
+                          <span className="text-xs text-muted-foreground truncate">
+                            {server.processName}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Open in browser */}
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenInBrowser(e, server.address, server.port)}
+                              className="flex items-center justify-center h-6 w-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Open in browser</TooltipContent>
+                        </Tooltip>
+
+                        {/* Stop server */}
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => handleStop(e, server.pid)}
+                              disabled={isKilling}
+                              className={cn(
+                                "flex items-center justify-center h-6 w-6 rounded transition-colors",
+                                isKilling
+                                  ? "text-muted-foreground cursor-not-allowed"
+                                  : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                              )}
+                            >
+                              <Square className="h-3 w-3 fill-current" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Stop server</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 })
