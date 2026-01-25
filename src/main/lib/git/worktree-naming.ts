@@ -20,11 +20,13 @@ function generateLandscapeName(): string {
 /**
  * Sanitize a project name for use as a filesystem directory name.
  * Lowercases, replaces spaces/underscores with hyphens, strips special characters.
- * Appends a short project ID suffix to avoid collisions when different names
- * normalize to the same slug (e.g., "My Project" and "my_project").
  * Truncates to 50 characters to stay within filesystem path length limits.
+ *
+ * Slug collisions (e.g., "My Project" and "my_project" both becoming "my-project")
+ * are safe because resolveProjectPathFromWorktree() looks up the full worktree path
+ * via the chats table, not just the project folder name.
  */
-export function sanitizeProjectName(name: string, projectId: string): string {
+export function sanitizeProjectName(name: string): string {
 	const sanitized = name
 		.toLowerCase()
 		.replace(/[\s_]+/g, "-")
@@ -33,9 +35,7 @@ export function sanitizeProjectName(name: string, projectId: string): string {
 		.replace(/^-+|-+$/g, "")
 		.slice(0, 50);
 
-	const base = sanitized || "project";
-	const suffix = projectId.slice(0, 6);
-	return `${base}-${suffix}`;
+	return sanitized || "project";
 }
 
 /**

@@ -345,7 +345,7 @@ export const chatsRouter = router({
         )
         const result = await createWorktreeForChat(
           project.path,
-          sanitizeProjectName(project.name, project.id),
+          sanitizeProjectName(project.name),
           chat.id,
           input.baseBranch,
           input.branchType,
