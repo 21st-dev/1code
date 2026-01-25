@@ -24,6 +24,10 @@ export interface AgentActionContext {
   setSettingsActiveTab?: (tab: SettingsTab) => void
   toggleChatSearch?: () => void
 
+  // Preview
+  isPreviewOpen?: boolean
+  toggleDevServer?: (() => void) | null
+
   // Data
   selectedChatId?: string | null
 }
@@ -122,12 +126,18 @@ const toggleChatSearchAction: AgentActionDefinition = {
 
 const togglePreviewAction: AgentActionDefinition = {
   id: "toggle-preview",
-  label: "Toggle preview",
-  description: "Show/hide preview sidebar",
+  label: "Toggle preview / Run dev server",
+  description: "Open preview or start/stop dev server",
   category: "view",
   hotkey: ["cmd+r"],
   handler: async (context) => {
-    context.setPreviewOpen?.((prev) => !prev)
+    // If preview is open, toggle the dev server (start/stop)
+    if (context.isPreviewOpen && context.toggleDevServer) {
+      context.toggleDevServer()
+      return { success: true }
+    }
+    // Otherwise, open the preview sidebar
+    context.setPreviewOpen?.(true)
     return { success: true }
   },
 }

@@ -14,7 +14,7 @@ import {
   customHotkeysAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
-import { previewSidebarOpenAtom } from "../preview-sidebar"
+import { previewSidebarOpenAtom, previewToggleDevServerFnAtom } from "../preview-sidebar"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -211,8 +211,9 @@ export function AgentsLayout() {
   // Chat search toggle
   const toggleChatSearch = useSetAtom(toggleSearchAtom)
 
-  // Preview sidebar toggle
-  const setPreviewOpen = useSetAtom(previewSidebarOpenAtom)
+  // Preview sidebar state and toggle
+  const [isPreviewOpen, setPreviewOpen] = useAtom(previewSidebarOpenAtom)
+  const toggleDevServer = useAtomValue(previewToggleDevServerFnAtom)
 
   // Custom hotkeys config
   const customHotkeysConfig = useAtomValue(customHotkeysAtom)
@@ -228,6 +229,8 @@ export function AgentsLayout() {
     selectedChatId,
     customHotkeysConfig,
     isDesktop,
+    isPreviewOpen,
+    toggleDevServer,
   })
 
   const handleCloseSidebar = useCallback(() => {

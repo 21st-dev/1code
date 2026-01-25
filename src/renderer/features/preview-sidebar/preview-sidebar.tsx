@@ -77,6 +77,9 @@ export const previewSplitPositionAtom = atomWithStorage<number>(
 // Track which chats have running dev servers (for sidebar indicator)
 export const runningDevServersAtom = atom<Set<string>>(new Set())
 
+// Expose the toggle start/stop function for hotkey access (cmd+R)
+export const previewToggleDevServerFnAtom = atom<(() => void) | null>(null)
+
 // Per-chat preview state (UI state only - backend is source of truth for running)
 interface PreviewState {
   detectedUrls: DetectedUrl[]
@@ -402,6 +405,26 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
     // Final isRunning state will be confirmed by 'exit' event from subscription
   }, [isRunning, paneId, signal, kill])
 
+  // Toggle start/stop - exposed for hotkey (cmd+R)
+  const handleToggleDevServer = useCallback(() => {
+    if (isRunning) {
+      handleStop()
+    } else {
+      handleStart()
+    }
+  }, [isRunning, handleStart, handleStop])
+
+  // Register toggle function to global atom for hotkey access
+  const setToggleDevServerFn = useSetAtom(previewToggleDevServerFnAtom)
+  useEffect(() => {
+    if (isOpen) {
+      setToggleDevServerFn(() => handleToggleDevServer)
+    }
+    return () => {
+      setToggleDevServerFn(null)
+    }
+  }, [isOpen, handleToggleDevServer, setToggleDevServerFn])
+
   const handleRefresh = useCallback(() => {
     if (webviewReadyRef.current && webviewRef.current) {
       webviewRef.current.reload()
@@ -619,10 +642,25 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
             htmlLength: data.html?.length,
             hasCallback: !!onElementSelectRef.current,
           })
-          onElementSelectRef.current?.(data.html, data.componentName, data.filePath)
+
+          // Call the element select callback
+          const callback = onElementSelectRef.current
+          if (callback) {
+            console.log("[PreviewSidebar] Calling onElementSelect callback")
+            callback(data.html, data.componentName, data.filePath)
+          } else {
+            console.warn("[PreviewSidebar] No onElementSelect callback available!")
+          }
+
           // Deactivate selector mode after selection
-          console.log("[PreviewSidebar] Deactivating selector mode, setter exists:", !!setIsSelectorActiveRef.current)
-          setIsSelectorActiveRef.current(false)
+          const setter = setIsSelectorActiveRef.current
+          console.log("[PreviewSidebar] Deactivating selector mode, setter exists:", !!setter)
+          if (setter) {
+            setter(false)
+          } else {
+            console.warn("[PreviewSidebar] No setIsSelectorActive setter available!")
+          }
+
           webview.executeJavaScript(REACT_GRAB_DEACTIVATE_SCRIPT).catch(() => {
             // Ignore errors
           })

@@ -2366,38 +2366,60 @@ const ChatViewInner = memo(function ChatViewInner({
   // Share the addPreviewElementContext function with ChatView via atom
   // Only the active subchat should export its handler to avoid routing to wrong subchat
   const setAddPreviewElementContextFn = useSetAtom(addPreviewElementContextFnAtom)
+
+  // Use ref to track if THIS instance set the atom (for cleanup)
+  const didSetElementContextAtomRef = useRef(false)
+
   useEffect(() => {
-    console.log("[ChatViewInner] Element context atom effect:", { subChatId, isActive })
     if (isActive) {
       console.log("[ChatViewInner] Setting addPreviewElementContextFn for subchat:", subChatId)
       setAddPreviewElementContextFn(() => addPreviewElementContext)
+      didSetElementContextAtomRef.current = true
+    } else if (didSetElementContextAtomRef.current) {
+      // We were active but now we're not - clear the atom
+      console.log("[ChatViewInner] Became inactive, clearing addPreviewElementContextFn for subchat:", subChatId)
+      setAddPreviewElementContextFn(null)
+      didSetElementContextAtomRef.current = false
     }
+
     return () => {
-      // Only clear if we were the one who set it (i.e., we were active)
-      if (isActive) {
-        console.log("[ChatViewInner] Clearing addPreviewElementContextFn for subchat:", subChatId)
+      // On unmount, only clear if we were the one who set it
+      if (didSetElementContextAtomRef.current) {
+        console.log("[ChatViewInner] Unmounting, clearing addPreviewElementContextFn for subchat:", subChatId)
         setAddPreviewElementContextFn(null)
+        didSetElementContextAtomRef.current = false
       }
     }
-  }, [isActive, addPreviewElementContext, setAddPreviewElementContextFn, subChatId])
+  }, [isActive, setAddPreviewElementContextFn, subChatId]) // Removed addPreviewElementContext - it's stable (empty deps)
 
   // Share the handleAddAttachments function with ChatView via atom (for screenshot capture)
   // Only the active subchat should export its handler to avoid routing to wrong subchat
   const setHandleAddAttachmentsFn = useSetAtom(handleAddAttachmentsFnAtom)
+
+  // Use ref to track if THIS instance set the atom (for cleanup)
+  const didSetAttachmentAtomRef = useRef(false)
+
   useEffect(() => {
-    console.log("[ChatViewInner] Attachments atom effect:", { subChatId, isActive })
     if (isActive) {
       console.log("[ChatViewInner] Setting handleAddAttachmentsFn for subchat:", subChatId)
       setHandleAddAttachmentsFn(() => handleAddAttachments)
+      didSetAttachmentAtomRef.current = true
+    } else if (didSetAttachmentAtomRef.current) {
+      // We were active but now we're not - clear the atom
+      console.log("[ChatViewInner] Became inactive, clearing handleAddAttachmentsFn for subchat:", subChatId)
+      setHandleAddAttachmentsFn(null)
+      didSetAttachmentAtomRef.current = false
     }
+
     return () => {
-      // Only clear if we were the one who set it (i.e., we were active)
-      if (isActive) {
-        console.log("[ChatViewInner] Clearing handleAddAttachmentsFn for subchat:", subChatId)
+      // On unmount, only clear if we were the one who set it
+      if (didSetAttachmentAtomRef.current) {
+        console.log("[ChatViewInner] Unmounting, clearing handleAddAttachmentsFn for subchat:", subChatId)
         setHandleAddAttachmentsFn(null)
+        didSetAttachmentAtomRef.current = false
       }
     }
-  }, [isActive, handleAddAttachments, setHandleAddAttachmentsFn, subChatId])
+  }, [isActive, setHandleAddAttachmentsFn, subChatId]) // Removed handleAddAttachments - it's stable
 
   // Wrapper for addTextContext that handles TextSelectionSource
   const addTextContext = useCallback((text: string, source: TextSelectionSource) => {

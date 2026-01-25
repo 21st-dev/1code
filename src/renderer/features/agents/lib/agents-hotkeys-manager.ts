@@ -109,6 +109,8 @@ export interface AgentsHotkeysManagerConfig {
   selectedChatId?: string | null
   customHotkeysConfig?: CustomHotkeysConfig
   isDesktop?: boolean
+  isPreviewOpen?: boolean
+  toggleDevServer?: (() => void) | null
 }
 
 export interface UseAgentsHotkeysOptions {
@@ -138,6 +140,8 @@ export function useAgentsHotkeys(
       setSettingsActiveTab: config.setSettingsActiveTab,
       toggleChatSearch: config.toggleChatSearch,
       selectedChatId: config.selectedChatId,
+      isPreviewOpen: config.isPreviewOpen,
+      toggleDevServer: config.toggleDevServer,
     }),
     [
       config.setSelectedChatId,
@@ -147,6 +151,8 @@ export function useAgentsHotkeys(
       config.setSettingsActiveTab,
       config.toggleChatSearch,
       config.selectedChatId,
+      config.isPreviewOpen,
+      config.toggleDevServer,
     ],
   )
 
