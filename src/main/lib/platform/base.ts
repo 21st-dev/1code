@@ -132,6 +132,16 @@ export abstract class BasePlatformProvider implements PlatformProvider {
     return env
   }
 
+  /**
+   * Execute a command safely using execFile (no shell interpolation).
+   *
+   * This is the preferred method for simple command execution as it:
+   * - Avoids shell injection vulnerabilities
+   * - Has predictable argument handling
+   *
+   * For complex shell commands (pipes, redirects, osascript with quotes),
+   * implementations may use exec/execSync directly as needed.
+   */
   async execCommand(
     command: string,
     args: string[],

@@ -2,12 +2,9 @@
  * Windows Platform Provider
  */
 
-import { exec } from "node:child_process"
-import { existsSync, lstatSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { copyFile, mkdir, unlink, rmdir } from "node:fs/promises"
 import * as path from "node:path"
-import { promisify } from "node:util"
-import { app } from "electron"
 import { BasePlatformProvider } from "./base"
 import type {
   ShellConfig,
@@ -15,8 +12,6 @@ import type {
   CliConfig,
   EnvironmentConfig,
 } from "./types"
-
-const execAsync = promisify(exec)
 
 export class WindowsPlatformProvider extends BasePlatformProvider {
   readonly platform = "win32" as const
@@ -118,7 +113,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
 
   async installCli(
     sourcePath: string
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; pathHint?: string }> {
     const cliConfig = this.getCliConfig()
     const installPath = cliConfig.installPath
     const installDir = path.dirname(installPath)
@@ -132,17 +127,25 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
       await mkdir(installDir, { recursive: true })
       await copyFile(sourcePath, installPath)
 
-      // Add to PATH via registry (user-level, no admin)
-      try {
-        await execAsync(`setx PATH "%PATH%;${installDir}"`, {
-          shell: "cmd.exe",
-        })
-      } catch {
-        // PATH update may fail if already present, that's okay
-      }
+      // Note: We intentionally do NOT use `setx PATH` here because:
+      // 1. setx has a 1024 character limit that silently truncates PATH
+      // 2. It can corrupt the user's PATH environment variable
+      // Instead, the install directory is included in buildExtendedPath()
+      // which ensures the CLI is found when running from the app.
+      //
+      // For terminal usage, users can manually add to PATH:
+      // $env:Path += ";{installDir}"
 
       console.log("[CLI] Installed 1code command to", installPath)
-      return { success: true }
+      console.log(
+        "[CLI] To use from terminal, add to PATH:",
+        `$env:Path += ";${installDir}"`
+      )
+
+      return {
+        success: true,
+        pathHint: `To use 1code from terminal, add to your PATH: ${installDir}`,
+      }
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Installation failed"
