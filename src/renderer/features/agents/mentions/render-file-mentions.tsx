@@ -535,7 +535,7 @@ export function TextMentionBlock({ mention }: { mention: ParsedMention }) {
       <HoverCardContent
         side="top"
         align="start"
-        className="w-80 max-h-48 overflow-y-auto"
+        className="w-80 max-h-48 overflow-y-auto scrollbar-thin"
       >
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

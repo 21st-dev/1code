@@ -618,7 +618,7 @@ export const AgentEditTool = memo(function AgentEditTool({
           className={cn(
             "border-t border-border transition-colors duration-150 font-mono text-xs",
             isOutputExpanded
-              ? "max-h-[200px] overflow-y-auto"
+              ? "max-h-[200px] overflow-y-auto scrollbar-thin"
               : "h-[72px] overflow-hidden", // Fixed height when collapsed
             !isOutputExpanded &&
               !isPending &&

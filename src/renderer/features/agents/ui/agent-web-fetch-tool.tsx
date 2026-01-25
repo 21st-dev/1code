@@ -119,7 +119,7 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
 
       {/* Content - expandable */}
       {hasContent && isExpanded && (
-        <div className="border-t border-border max-h-[300px] overflow-y-auto">
+        <div className="border-t border-border max-h-[300px] overflow-y-auto scrollbar-thin">
           <pre className="px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono">
             {result}
           </pre>

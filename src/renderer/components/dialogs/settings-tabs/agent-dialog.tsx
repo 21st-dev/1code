@@ -186,7 +186,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
               </div>
 
               {/* Content */}
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-5">
                 {/* Name */}
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-foreground">

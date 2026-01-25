@@ -41,7 +41,7 @@ export function AgentsSkillsTab() {
   }
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+    <div className="p-6 space-y-6 overflow-y-auto scrollbar-thin max-h-[70vh]">
       {/* Header - hidden on narrow screens */}
       {!isNarrowScreen && (
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">

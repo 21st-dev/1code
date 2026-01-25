@@ -131,7 +131,7 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
 
       {/* Results list - expandable */}
       {hasResults && isExpanded && (
-        <div className="border-t border-border max-h-[200px] overflow-y-auto">
+        <div className="border-t border-border max-h-[200px] overflow-y-auto scrollbar-thin">
           {results.map((result, idx) => (
             <a
               key={idx}

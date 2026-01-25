@@ -258,7 +258,7 @@ export function ProjectSelector() {
             value={searchQuery}
             onValueChange={setSearchQuery}
           />
-          <CommandList className="max-h-[300px] overflow-y-auto">
+          <CommandList className="max-h-[300px] overflow-y-auto scrollbar-thin">
             {isLoadingProjects ? (
               <div className="px-2.5 py-4 text-center text-sm text-muted-foreground">
                 Loading...

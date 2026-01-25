@@ -291,7 +291,7 @@ export const TodoWidget = memo(function TodoWidget({ subChatId }: TodoWidgetProp
         {/* Expanded content - full todo list */}
         {isExpanded && (
           <div
-            className="max-h-[300px] overflow-y-auto cursor-pointer"
+            className="max-h-[300px] overflow-y-auto scrollbar-thin cursor-pointer"
             onClick={() => setIsExpanded(false)}
           >
             {todos.map((todo, idx) => (

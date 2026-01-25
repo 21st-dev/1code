@@ -74,7 +74,7 @@ export const KanbanColumn = memo(function KanbanColumn({
       </div>
 
       {/* Cards container with scroll */}
-      <div className="flex-1 overflow-y-auto px-1 pb-4 space-y-2">
+      <div className="flex-1 overflow-y-auto scrollbar-thin px-1 pb-4 space-y-2">
         {sortedCards.length === 0 ? (
           <div className="px-3 py-8 text-center text-sm text-muted-foreground/60">
             No workspaces

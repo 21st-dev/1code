@@ -1237,7 +1237,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {/* History view - files in commit */}
           <div className={cn(
-            "absolute inset-0 overflow-y-auto",
+            "absolute inset-0 overflow-y-auto scrollbar-thin",
             activeTab === "history" && selectedCommit ? "z-10" : "z-0 invisible"
           )}>
             {selectedCommit && (
@@ -3983,7 +3983,7 @@ const ChatViewInner = memo(function ChatViewInner({
             chatContainerObserverRef.current = observer
           }
         }}
-        className="flex-1 overflow-y-auto w-full relative allow-text-selection outline-none"
+        className="flex-1 overflow-y-auto scrollbar-thin w-full relative allow-text-selection outline-none"
         tabIndex={-1}
         data-chat-container
       >

@@ -79,6 +79,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings:
@@ -118,6 +119,30 @@
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
+/* Thin scrollbar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  /* Firefox */
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 2px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
 /* Disable text selection on UI elements */
 .no-select {
   user-select: none;
@@ -126,12 +151,15 @@
 
 /* Hide scrollbar but keep scroll functionality */
 .scrollbar-hide {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;
+  /* Chrome, Safari, Opera */
 }
 
 /* Drag region for window */
@@ -148,31 +176,33 @@
   0% {
     background-position: 100% 0;
   }
+
   40% {
     background-position: 0% 0;
   }
+
   45% {
     background-position: 0% 0;
   }
+
   46% {
     background-position: 100% 0;
   }
+
   100% {
     background-position: 100% 0;
   }
 }
 
 .chroma-text {
-  background-image: linear-gradient(
-    90deg,
-    #0a0a0a 0%,
-    #0a0a0a 30%,
-    #6366f1 42%,
-    #8b5cf6 50%,
-    #a855f7 58%,
-    #0a0a0a 70%,
-    #0a0a0a 100%
-  );
+  background-image: linear-gradient(90deg,
+      #0a0a0a 0%,
+      #0a0a0a 30%,
+      #6366f1 42%,
+      #8b5cf6 50%,
+      #a855f7 58%,
+      #0a0a0a 70%,
+      #0a0a0a 100%);
   background-size: 300% 100%;
   background-position: 100% 0;
   background-clip: text;
@@ -187,16 +217,14 @@
 
 /* Dark theme chroma colors */
 .dark .chroma-text {
-  background-image: linear-gradient(
-    90deg,
-    #fafafa 0%,
-    #fafafa 30%,
-    #818cf8 42%,
-    #a78bfa 50%,
-    #c084fc 58%,
-    #fafafa 70%,
-    #fafafa 100%
-  );
+  background-image: linear-gradient(90deg,
+      #fafafa 0%,
+      #fafafa 30%,
+      #818cf8 42%,
+      #a78bfa 50%,
+      #c084fc 58%,
+      #fafafa 70%,
+      #fafafa 100%);
 }
 
 /* Sonner Toast Styling - Google-style layout */

@@ -1064,7 +1064,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onShiftTab={() => setIsPlanMode((prev) => !prev)}
                   placeholder={isStreaming ? "Add to the queue" : "Plan, @ for context, / for commands"}
                   className={cn(
-                    "bg-transparent max-h-[200px] overflow-y-auto p-1",
+                    "bg-transparent max-h-[200px] overflow-y-auto scrollbar-thin p-1",
                     isMobile && "min-h-[56px]",
                   )}
                   onPaste={handlePaste}

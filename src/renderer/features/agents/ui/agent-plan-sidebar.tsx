@@ -79,7 +79,7 @@ export function AgentPlanSidebar({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
             <IconSpinner className="h-8 w-8 text-muted-foreground mb-3" />

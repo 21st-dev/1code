@@ -84,7 +84,7 @@ export function SearchCombobox<T>({
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList className={`${maxHeight} overflow-y-auto`}>
+          <CommandList className={`${maxHeight} overflow-y-auto scrollbar-thin`}>
             {filteredItems.length === 0 && (
               <CommandEmpty>{emptyMessage}</CommandEmpty>
             )}

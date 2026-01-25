@@ -93,7 +93,7 @@ export function AgentPastedTextItem({
             <TextSelectIcon className="size-3" />
             <span>Pasted text · {formatSize(size)}</span>
           </div>
-          <pre className="text-sm whitespace-pre-wrap break-words font-mono max-h-32 overflow-y-auto">
+          <pre className="text-sm whitespace-pre-wrap break-words font-mono max-h-32 overflow-y-auto scrollbar-thin">
             {preview}
           </pre>
         </div>

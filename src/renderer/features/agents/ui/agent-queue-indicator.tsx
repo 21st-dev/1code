@@ -176,7 +176,7 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
             transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
             className="overflow-hidden"
           >
-            <div className="border-t border-border max-h-[200px] overflow-y-auto">
+            <div className="border-t border-border max-h-[200px] overflow-y-auto scrollbar-thin">
               {queue.map((item) => (
                 <QueueItemRow
                   key={item.id}
