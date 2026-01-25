@@ -21,6 +21,7 @@ export interface AgentActionContext {
 
   // UI states
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
+  setPreviewOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
   setSettingsDialogOpen?: (open: boolean) => void
   setSettingsActiveTab?: (tab: SettingsTab) => void
   toggleChatSearch?: () => void
@@ -137,6 +138,18 @@ const openKanbanAction: AgentActionDefinition = {
   },
 }
 
+const togglePreviewAction: AgentActionDefinition = {
+  id: "toggle-preview",
+  label: "Toggle preview",
+  description: "Show/hide preview sidebar",
+  category: "view",
+  hotkey: "cmd+r",
+  handler: async (context) => {
+    context.setPreviewOpen?.((prev) => !prev)
+    return { success: true }
+  },
+}
+
 // ============================================================================
 // ACTION REGISTRY
 // ============================================================================
@@ -148,6 +161,7 @@ export const AGENT_ACTIONS: Record<string, AgentActionDefinition> = {
   "toggle-sidebar": toggleSidebarAction,
   "toggle-chat-search": toggleChatSearchAction,
   "open-kanban": openKanbanAction,
+  "toggle-preview": togglePreviewAction,
 }
 
 export function getAgentAction(id: string): AgentActionDefinition | undefined {
