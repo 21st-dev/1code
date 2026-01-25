@@ -43,6 +43,13 @@
       "when": 1769310092745,
       "tag": "0005_marvelous_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1769324760843,
+      "tag": "0006_acoustic_luke_cage",
+      "breakpoints": true
     }
   ]
 }

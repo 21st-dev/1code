@@ -1,5 +1,5 @@
 import { useAtom } from "jotai"
-import { ChevronLeft, ChevronRight, FolderOpen, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, FolderOpen, Key, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
@@ -23,6 +23,7 @@ import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
+import { AgentsDevAccountsTab } from "./settings-tabs/agents-dev-accounts-tab"
 
 // GitHub avatar icon with loading placeholder
 function GitHubAvatarIcon({ gitOwner, className }: { gitOwner: string; className?: string }) {
@@ -134,6 +135,12 @@ const ADVANCED_TABS_BASE = [
     label: "MCP Servers",
     icon: OriginalMCPIcon,
     description: "Model Context Protocol servers",
+  },
+  {
+    id: "dev-accounts" as SettingsTab,
+    label: "Dev Accounts",
+    icon: Key,
+    description: "Login credentials for preview",
   },
   {
     id: "beta" as SettingsTab,
@@ -362,6 +369,8 @@ export function AgentsSettingsDialog({
         return <AgentsCustomAgentsTab />
       case "mcp":
         return <AgentsMcpTab />
+      case "dev-accounts":
+        return <AgentsDevAccountsTab />
       case "beta":
         return <AgentsBetaTab />
       case "debug":

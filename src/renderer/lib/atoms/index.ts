@@ -178,6 +178,7 @@ export type SettingsTab =
   | "debug"
   | "beta"
   | "keyboard"
+  | "dev-accounts"
   | `project-${string}` // Dynamic project tabs
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("profile")
 export const agentsSettingsDialogOpenAtom = atom<boolean>(false)

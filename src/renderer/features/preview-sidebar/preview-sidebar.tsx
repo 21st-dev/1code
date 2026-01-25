@@ -1,5 +1,3 @@
-"use client"
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { atom, useAtom, useSetAtom } from "jotai"
 import { atomWithStorage, atomFamily } from "jotai/utils"
@@ -14,6 +12,8 @@ import {
   Bug,
   Copy,
   MousePointer2,
+  Camera,
+  Key,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
@@ -108,134 +108,138 @@ interface PreviewSidebarProps {
     componentName: string | null,
     filePath: string | null
   ) => void
+  onScreenshotCapture?: (imageData: { url: string; filename: string; blob: Blob }) => void
 }
 
 function getPaneId(chatId: string): string {
   return `${chatId}:preview:dev`
 }
 
-// React Grab injection script
-// Uses window.__REACT_GRAB__ which is the auto-initialized API from the library
+// React Grab injection script - loads and activates the element selector
 const REACT_GRAB_INJECT_SCRIPT = `
 (function() {
-  // If already loaded and API available, just activate
+  // Handler for element selection on Cmd+C
+  function handleElementCapture(element) {
+    if (!element) return;
+    const data = {
+      html: (element.outerHTML || '').slice(0, 10000),
+      componentName: element.__reactGrabInfo?.componentName || element.__reactGrabInfo?.name || null,
+      filePath: element.__reactGrabInfo?.filePath || element.__reactGrabInfo?.source || null,
+    };
+    console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
+  }
+
+  // Listen for Cmd+C to capture selected element
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+      const api = window.__REACT_GRAB__;
+      if (!api) return;
+
+      const element = api.selectedElements?.[0] || api.hoveredElement || api.currentElement;
+      if (element) {
+        handleElementCapture(element);
+      }
+    }
+  });
+
+  // Activate if already loaded
   if (window.__REACT_GRAB__) {
-    console.log('[ReactGrab] Already loaded, activating...');
-    if (window.__REACT_GRAB__.activate) {
-      window.__REACT_GRAB__.activate();
-    }
-    // Register our plugin if not already registered
-    if (!window.__ELEMENT_CAPTURE_REGISTERED__ && window.__REACT_GRAB__.registerPlugin) {
-      window.__ELEMENT_CAPTURE_REGISTERED__ = true;
-      window.__REACT_GRAB__.registerPlugin({
-        name: 'element-capture',
-        hooks: {
-          onCopySuccess: function(elements, content) {
-            if (elements && elements.length > 0) {
-              const el = elements[0];
-              const data = {
-                html: el.outerHTML ? el.outerHTML.slice(0, 10000) : content.slice(0, 10000),
-                componentName: el.__reactGrabInfo?.componentName || el.__reactGrabInfo?.name || null,
-                filePath: el.__reactGrabInfo?.filePath || el.__reactGrabInfo?.source || null,
-              };
-              console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
-            }
-          }
-        }
-      });
-    }
+    window.__REACT_GRAB__.activate?.();
     return;
   }
 
-  console.log('[ReactGrab] Loading script...');
+  // Load react-grab script
   const script = document.createElement('script');
   script.src = 'https://unpkg.com/react-grab/dist/index.global.js';
   script.crossOrigin = 'anonymous';
-
-  // Listen for the custom init event that react-grab dispatches
-  window.addEventListener('react-grab:init', function(e) {
-    console.log('[ReactGrab] Init event received', e.detail);
-    const api = e.detail || window.__REACT_GRAB__;
-    if (api) {
-      // Register our plugin
-      if (api.registerPlugin && !window.__ELEMENT_CAPTURE_REGISTERED__) {
-        window.__ELEMENT_CAPTURE_REGISTERED__ = true;
-        api.registerPlugin({
-          name: 'element-capture',
-          hooks: {
-            onCopySuccess: function(elements, content) {
-              if (elements && elements.length > 0) {
-                const el = elements[0];
-                const data = {
-                  html: el.outerHTML ? el.outerHTML.slice(0, 10000) : content.slice(0, 10000),
-                  componentName: el.__reactGrabInfo?.componentName || el.__reactGrabInfo?.name || null,
-                  filePath: el.__reactGrabInfo?.filePath || el.__reactGrabInfo?.source || null,
-                };
-                console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
-              }
-            }
-          }
-        });
-      }
-      // Activate selection mode
-      if (api.activate) {
-        console.log('[ReactGrab] Activating...');
-        api.activate();
-      }
-    }
-  }, { once: true });
-
   script.onload = function() {
-    console.log('[ReactGrab] Script loaded');
-    // The react-grab:init event should fire, but fallback just in case
-    setTimeout(function() {
-      if (window.__REACT_GRAB__ && !window.__ELEMENT_CAPTURE_REGISTERED__) {
-        console.log('[ReactGrab] Fallback initialization');
-        const api = window.__REACT_GRAB__;
-        if (api.registerPlugin) {
-          window.__ELEMENT_CAPTURE_REGISTERED__ = true;
-          api.registerPlugin({
-            name: 'element-capture',
-            hooks: {
-              onCopySuccess: function(elements, content) {
-                if (elements && elements.length > 0) {
-                  const el = elements[0];
-                  const data = {
-                    html: el.outerHTML ? el.outerHTML.slice(0, 10000) : content.slice(0, 10000),
-                    componentName: el.__reactGrabInfo?.componentName || el.__reactGrabInfo?.name || null,
-                    filePath: el.__reactGrabInfo?.filePath || el.__reactGrabInfo?.source || null,
-                  };
-                  console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
-                }
-              }
-            }
-          });
-        }
-        if (api.activate) {
-          api.activate();
-        }
-      }
-    }, 200);
+    window.__REACT_GRAB__?.activate?.();
   };
-
-  script.onerror = function(err) {
-    console.error('[ReactGrab] Failed to load:', err);
-  };
-
   document.head.appendChild(script);
 })();
 `
 
 const REACT_GRAB_DEACTIVATE_SCRIPT = `
 (function() {
-  if (window.__REACT_GRAB__ && window.__REACT_GRAB__.deactivate) {
-    console.log('[ReactGrab] Deactivating...');
-    window.__REACT_GRAB__.deactivate();
-  }
+  window.__REACT_GRAB__?.deactivate?.();
 })();
 `
 
-export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: PreviewSidebarProps) {
+// Script to fill login form fields
+const createFillLoginScript = (email: string, password: string) => `
+(function() {
+  // Common selectors for email/username fields
+  const emailSelectors = [
+    'input[type="email"]',
+    'input[name="email"]',
+    'input[name="username"]',
+    'input[name="user"]',
+    'input[id="email"]',
+    'input[id="username"]',
+    'input[autocomplete="email"]',
+    'input[autocomplete="username"]',
+    'input[placeholder*="email" i]',
+    'input[placeholder*="username" i]',
+  ];
+
+  // Common selectors for password fields
+  const passwordSelectors = [
+    'input[type="password"]',
+    'input[name="password"]',
+    'input[id="password"]',
+    'input[autocomplete="current-password"]',
+    'input[autocomplete="new-password"]',
+  ];
+
+  function findElement(selectors) {
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el && el.offsetParent !== null) { // Check if visible
+        return el;
+      }
+    }
+    return null;
+  }
+
+  function setNativeValue(element, value) {
+    const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
+    const prototype = Object.getPrototypeOf(element);
+    const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+
+    if (valueSetter && valueSetter !== prototypeValueSetter) {
+      prototypeValueSetter?.call(element, value);
+    } else {
+      valueSetter?.call(element, value);
+    }
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  const emailField = findElement(emailSelectors);
+  const passwordField = findElement(passwordSelectors);
+
+  let filled = [];
+  if (emailField) {
+    setNativeValue(emailField, ${JSON.stringify(email)});
+    emailField.focus();
+    filled.push('email');
+  }
+  if (passwordField) {
+    setNativeValue(passwordField, ${JSON.stringify(password)});
+    filled.push('password');
+  }
+
+  if (filled.length === 0) {
+    console.log('[FillLogin] No form fields found');
+    return { success: false, message: 'No login form fields found' };
+  }
+
+  console.log('[FillLogin] Filled:', filled.join(', '));
+  return { success: true, filled };
+})();
+`
+
+export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreenshotCapture }: PreviewSidebarProps) {
   const [isOpen, setIsOpen] = useAtom(previewSidebarOpenAtom)
   const [splitPosition, setSplitPosition] = useAtom(previewSplitPositionAtom)
 
@@ -245,6 +249,12 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const webviewContainerRef = useRef<HTMLDivElement>(null)
   const panelContainerRef = useRef<HTMLDivElement>(null)
+
+  // Fetch dev credentials for fill login dropdown
+  const { data: credentials } = trpc.devCredentials.list.useQuery(undefined, {
+    enabled: isOpen,
+  })
+  const getCredential = trpc.devCredentials.get.useMutation()
 
   // Track if any resize is happening (blocks webview pointer events)
   const [isSplitResizing, setIsSplitResizing] = useState(false)
@@ -446,20 +456,85 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
   }, [state.output])
 
   const handleToggleSelector = useCallback(() => {
-    if (!webviewReadyRef.current || !webviewRef.current) return
+    if (!webviewReadyRef.current || !webviewRef.current) {
+      console.log("[PreviewSidebar] Cannot toggle selector - webview not ready")
+      return
+    }
 
     if (isSelectorActive) {
+      console.log("[PreviewSidebar] Deactivating element selector")
       setIsSelectorActive(false)
-      webviewRef.current.executeJavaScript(REACT_GRAB_DEACTIVATE_SCRIPT).catch(() => {
-        // Ignore errors if webview is not ready
+      webviewRef.current.executeJavaScript(REACT_GRAB_DEACTIVATE_SCRIPT).catch((err) => {
+        console.log("[PreviewSidebar] Deactivate script error:", err)
       })
     } else {
+      console.log("[PreviewSidebar] Activating element selector - injecting script")
       setIsSelectorActive(true)
-      webviewRef.current.executeJavaScript(REACT_GRAB_INJECT_SCRIPT).catch(() => {
-        // Ignore errors if webview is not ready
+      webviewRef.current.executeJavaScript(REACT_GRAB_INJECT_SCRIPT).then(() => {
+        console.log("[PreviewSidebar] Script injected successfully")
+      }).catch((err) => {
+        console.log("[PreviewSidebar] Inject script error:", err)
       })
     }
   }, [isSelectorActive])
+
+  // Screenshot capture handler
+  const handleScreenshotCapture = useCallback(async () => {
+    if (!webviewReadyRef.current || !webviewRef.current) {
+      console.log("[PreviewSidebar] Cannot capture screenshot - webview not ready")
+      return
+    }
+
+    try {
+      const webview = webviewRef.current
+      // capturePage returns a NativeImage
+      const nativeImage = await webview.capturePage()
+
+      // Convert to PNG buffer
+      const pngBuffer = nativeImage.toPNG()
+
+      // Create a Blob from the buffer
+      const blob = new Blob([pngBuffer], { type: "image/png" })
+
+      // Create a data URL for preview
+      const url = URL.createObjectURL(blob)
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+      const filename = `preview-screenshot-${timestamp}.png`
+
+      console.log("[PreviewSidebar] Screenshot captured:", filename)
+
+      // Call the callback with the captured image
+      onScreenshotCapture?.({ url, filename, blob })
+    } catch (err) {
+      console.error("[PreviewSidebar] Screenshot capture error:", err)
+    }
+  }, [onScreenshotCapture])
+
+  // Fill login form with saved credentials
+  const handleFillLogin = useCallback(async (credentialId: string) => {
+    if (!webviewReadyRef.current || !webviewRef.current) {
+      console.log("[PreviewSidebar] Cannot fill login - webview not ready")
+      return
+    }
+
+    try {
+      // Get the full credential with decrypted password
+      const cred = await getCredential.mutateAsync({ id: credentialId })
+      if (!cred) {
+        console.error("[PreviewSidebar] Credential not found")
+        return
+      }
+
+      const webview = webviewRef.current
+      const script = createFillLoginScript(cred.email, cred.password)
+      const result = await webview.executeJavaScript(script)
+      console.log("[PreviewSidebar] Fill login result:", result)
+    } catch (err) {
+      console.error("[PreviewSidebar] Fill login error:", err)
+    }
+  }, [getCredential])
 
   // Track the base URL for redirect handling
   const baseUrlRef = useRef<string | null>(null)
@@ -559,7 +634,14 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
     // Handle console messages from webview (for React Grab element selection)
     const handleConsoleMessage = (e: Event) => {
       const event = e as unknown as { message: string; level: number }
+      // Log ALL webview console messages for debugging (temporary)
+      console.log("[PreviewSidebar] WebView:", event.message.slice(0, 200))
+      // Log all [ReactGrab] messages for debugging
+      if (event.message.includes("[ReactGrab]")) {
+        console.log("[PreviewSidebar] >>> ReactGrab:", event.message)
+      }
       if (event.message.startsWith("__ELEMENT_SELECTED__:")) {
+        console.log("[PreviewSidebar] Element selected message received!")
         try {
           const jsonStr = event.message.slice("__ELEMENT_SELECTED__:".length)
           const data = JSON.parse(jsonStr) as {
@@ -567,6 +649,8 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
             componentName: string | null
             filePath: string | null
           }
+          console.log("[PreviewSidebar] Parsed data:", data.componentName, data.filePath, data.html.slice(0, 100))
+          console.log("[PreviewSidebar] onElementSelectRef.current exists:", !!onElementSelectRef.current)
           onElementSelectRef.current?.(data.html, data.componentName, data.filePath)
           // Deactivate selector mode after selection
           setIsSelectorActiveRef.current(false)
@@ -585,10 +669,12 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
     webview.addEventListener("did-navigate-in-page", handleDidNavigateInPage)
     webview.addEventListener("new-window", handleNewWindow)
     webview.addEventListener("console-message", handleConsoleMessage)
+    console.log("[PreviewSidebar] Console-message listener attached to webview")
 
     // Start with about:blank to trigger initial dom-ready
     webview.src = "about:blank"
     container.appendChild(webview)
+    console.log("[PreviewSidebar] Webview created and appended")
 
     return () => {
       webview.removeEventListener("dom-ready", handleDomReady)
@@ -837,6 +923,56 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
                 {isSelectorActive ? "Cancel element selection" : "Select element"}
               </TooltipContent>
             </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleScreenshotCapture}
+                  disabled={!state.selectedUrl}
+                  className="h-6 w-6 p-0 hover:bg-foreground/10"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Capture screenshot</TooltipContent>
+            </Tooltip>
+
+            {/* Fill Login dropdown */}
+            {credentials && credentials.length > 0 && (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={!state.selectedUrl}
+                        className="h-6 w-6 p-0 hover:bg-foreground/10"
+                      >
+                        <Key className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Fill login form</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" className="w-48">
+                  {credentials.map((cred) => (
+                    <DropdownMenuItem
+                      key={cred.id}
+                      onClick={() => handleFillLogin(cred.id)}
+                      className="text-xs"
+                    >
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="font-medium truncate">{cred.label}</span>
+                        <span className="text-muted-foreground truncate">{cred.email}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           {/* Preview - webview always mounted, visibility controlled */}
