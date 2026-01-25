@@ -7,7 +7,7 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { getDatabase } from "./db"
-import { projects } from "./db/schema"
+import { chats, projects } from "./db/schema"
 
 export const CLAUDE_CONFIG_PATH = path.join(os.homedir(), ".claude.json")
 
@@ -151,7 +151,8 @@ export function updateMcpServerConfig(
 
 /**
  * Resolve original project path from a worktree path.
- * Worktree paths follow: ~/.21st/worktrees/{projectId}/{chatId}/
+ * Supports legacy (~/.21st/worktrees/{projectId}/{chatId}/) and
+ * new format (~/.21st/worktrees/{projectName}/{worktreeFolder}/).
  *
  * @param pathToResolve - Either a worktree path or regular project path
  * @returns The original project path, or the input if not a worktree, or null if resolution fails
@@ -171,8 +172,8 @@ export function resolveProjectPathFromWorktree(
   }
 
   try {
-    // Extract projectId from path structure
-    // Path format: /Users/.../.21st/worktrees/{projectId}/{chatId}
+    // Extract segments from path structure
+    // Path format: /Users/.../.21st/worktrees/{projectSlug}/{worktreeFolder}
     const worktreeBase = path.join(os.homedir(), ".21st", "worktrees")
     const normalizedBase = worktreeBase.replace(/\\/g, "/")
     const relativePath = normalizedPath
@@ -184,17 +185,43 @@ export function resolveProjectPathFromWorktree(
       return null
     }
 
-    const projectId = parts[0]
-
-    // Look up original project path from database
     const db = getDatabase()
-    const project = db
+
+    // Strategy 1: Legacy lookup - folder name is a projectId
+    const projectById = db
       .select({ path: projects.path })
       .from(projects)
-      .where(eq(projects.id, projectId))
+      .where(eq(projects.id, parts[0]))
       .get()
 
-    return project?.path ?? null
+    if (projectById) {
+      return projectById.path
+    }
+
+    // Strategy 2: New format - folder name is the project name.
+    // Look up via chats.worktreePath which stores the full path.
+    if (parts.length >= 2) {
+      const expectedWorktreePath = path.join(worktreeBase, parts[0], parts[1])
+      const chat = db
+        .select({ projectId: chats.projectId })
+        .from(chats)
+        .where(eq(chats.worktreePath, expectedWorktreePath))
+        .get()
+
+      if (chat) {
+        const project = db
+          .select({ path: projects.path })
+          .from(projects)
+          .where(eq(projects.id, chat.projectId))
+          .get()
+
+        if (project) {
+          return project.path
+        }
+      }
+    }
+
+    return null
   } catch (error) {
     console.error("[worktree-utils] Failed to resolve project path:", error)
     return null

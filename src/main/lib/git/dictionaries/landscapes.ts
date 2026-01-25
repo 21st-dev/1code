@@ -1,0 +1,147 @@
+/**
+ * Nature/landscape themed nouns for human-readable worktree folder names.
+ * Used with adjectives from unique-names-generator to produce names like
+ * "golden-meadow", "quiet-ridge", "misty-canyon".
+ *
+ * ~120 words organized by category for easy maintenance.
+ */
+export const landscapes: string[] = [
+	// Water features
+	"brook",
+	"creek",
+	"delta",
+	"fjord",
+	"lagoon",
+	"marsh",
+	"pond",
+	"rapids",
+	"reef",
+	"river",
+	"shoal",
+	"spring",
+	"strait",
+	"stream",
+	"tide",
+	"bay",
+
+	// Elevated terrain
+	"bluff",
+	"butte",
+	"cliff",
+	"crag",
+	"crest",
+	"dune",
+	"hill",
+	"knoll",
+	"mesa",
+	"peak",
+	"ridge",
+	"summit",
+	"tor",
+
+	// Low terrain / depressions
+	"basin",
+	"canyon",
+	"cave",
+	"cove",
+	"dale",
+	"dell",
+	"glade",
+	"glen",
+	"gorge",
+	"grotto",
+	"gulch",
+	"hollow",
+	"ravine",
+	"vale",
+	"valley",
+
+	// Flat / open terrain
+	"field",
+	"heath",
+	"moor",
+	"plain",
+	"prairie",
+	"savanna",
+	"steppe",
+	"tundra",
+
+	// Forested / vegetated
+	"copse",
+	"forest",
+	"grove",
+	"jungle",
+	"meadow",
+	"orchard",
+	"thicket",
+	"woods",
+
+	// Geological
+	"arch",
+	"boulder",
+	"cairn",
+	"crater",
+	"ledge",
+	"quarry",
+	"shelf",
+	"spire",
+
+	// Coastal / island
+	"atoll",
+	"beach",
+	"harbor",
+	"inlet",
+	"isle",
+	"shore",
+
+	// Sky / weather / atmospheric
+	"aurora",
+	"breeze",
+	"cloud",
+	"dawn",
+	"dusk",
+	"ember",
+	"frost",
+	"glacier",
+	"haze",
+	"horizon",
+	"mist",
+	"shadow",
+	"snow",
+	"storm",
+	"sunset",
+	"twilight",
+	"wind",
+
+	// Other natural features
+	"cascade",
+	"clearing",
+	"crossing",
+	"falls",
+	"oasis",
+	"passage",
+	"plateau",
+	"terrace",
+	"trail",
+	"woodland",
+
+	// Extra for variety
+	"anchor",
+	"beacon",
+	"canopy",
+	"drift",
+	"echo",
+	"fern",
+	"haven",
+	"mirage",
+	"nectar",
+	"orbit",
+	"pebble",
+	"quartz",
+	"ripple",
+	"solstice",
+	"stone",
+	"timber",
+	"vertex",
+	"zenith",
+];

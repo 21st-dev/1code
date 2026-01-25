@@ -12,6 +12,7 @@ import {
 } from "unique-names-generator";
 import { checkGitLfsAvailable, getShellEnvironment } from "./shell-env";
 import { executeWorktreeSetup } from "./worktree-config";
+import { generateWorktreeFolderName } from "./worktree-naming";
 
 const execFileAsync = promisify(execFile);
 
@@ -897,13 +898,13 @@ export interface WorktreeResult {
 /**
  * Create a git worktree for a chat (wrapper for chats.ts)
  * @param projectPath - Path to the main repository
- * @param projectId - Project ID for worktree directory
- * @param chatId - Chat ID for worktree directory
+ * @param projectSlug - Sanitized project name for worktree directory
+ * @param chatId - Chat ID (used for logging)
  * @param selectedBaseBranch - Optional branch to base the worktree off (defaults to auto-detected default branch)
  */
 export async function createWorktreeForChat(
 	projectPath: string,
-	projectId: string,
+	projectSlug: string,
 	chatId: string,
 	selectedBaseBranch?: string,
 	branchType?: "local" | "remote",
@@ -921,7 +922,9 @@ export async function createWorktreeForChat(
 
 		const branch = generateBranchName();
 		const worktreesDir = join(homedir(), ".21st", "worktrees");
-		const worktreePath = join(worktreesDir, projectId, chatId);
+		const projectWorktreeDir = join(worktreesDir, projectSlug);
+		const folderName = generateWorktreeFolderName(projectWorktreeDir);
+		const worktreePath = join(projectWorktreeDir, folderName);
 
 		// Determine startPoint based on branch type
 		// For local branches, use the local ref directly

@@ -15,6 +15,7 @@ const execAsync = promisify(exec);
 
 // Re-export worktree utilities
 export * from "./worktree";
+export * from "./worktree-naming";
 
 // Re-export GitHub utilities
 export * from "./github";
