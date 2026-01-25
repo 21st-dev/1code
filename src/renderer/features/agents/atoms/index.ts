@@ -798,3 +798,9 @@ export type AddPreviewElementContextFn = (
 ) => void
 
 export const addPreviewElementContextFnAtom = atom<AddPreviewElementContextFn | null>(null)
+
+// Type for the handleAddAttachments function from useAgentsFileUpload
+export type HandleAddAttachmentsFn = (files: File[]) => Promise<void>
+
+// Atom to share the handleAddAttachments function between ChatViewInner and ChatView
+export const handleAddAttachmentsFnAtom = atom<HandleAddAttachmentsFn | null>(null)

@@ -124,6 +124,7 @@ import {
   subChatFilesAtom,
   undoStackAtom,
   addPreviewElementContextFnAtom,
+  handleAddAttachmentsFnAtom,
   type SelectedCommit
 } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
@@ -2369,6 +2370,13 @@ const ChatViewInner = memo(function ChatViewInner({
     return () => setAddPreviewElementContextFn(null)
   }, [addPreviewElementContext, setAddPreviewElementContextFn])
 
+  // Share the handleAddAttachments function with ChatView via atom (for screenshot capture)
+  const setHandleAddAttachmentsFn = useSetAtom(handleAddAttachmentsFnAtom)
+  useEffect(() => {
+    setHandleAddAttachmentsFn(() => handleAddAttachments)
+    return () => setHandleAddAttachmentsFn(null)
+  }, [handleAddAttachments, setHandleAddAttachmentsFn])
+
   // Wrapper for addTextContext that handles TextSelectionSource
   const addTextContext = useCallback((text: string, source: TextSelectionSource) => {
     if (source.type === "assistant-message") {
@@ -4215,6 +4223,19 @@ export function ChatView({
       addPreviewElementContextFn?.(html, componentName, filePath)
     },
     [addPreviewElementContextFn]
+  )
+
+  // Get handleAddAttachments function from ChatViewInner via atom (for screenshot capture)
+  const handleAddAttachmentsFn = useAtomValue(handleAddAttachmentsFnAtom)
+  const handleScreenshotCapture = useCallback(
+    async (imageData: { url: string; filename: string; blob: Blob }) => {
+      if (!handleAddAttachmentsFn) return
+
+      // Convert Blob to File for the upload handler
+      const file = new File([imageData.blob], imageData.filename, { type: "image/png" })
+      await handleAddAttachmentsFn([file])
+    },
+    [handleAddAttachmentsFn]
   )
 
   // Check if any chat has unseen changes
@@ -6527,6 +6548,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             chatId={chatId}
             worktreePath={worktreePath}
             onElementSelect={handlePreviewElementSelect}
+            onScreenshotCapture={handleScreenshotCapture}
           />
         )}
 
