@@ -483,8 +483,11 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
   // Track pending URL navigation (for when webview isn't ready yet)
   const pendingUrlRef = useRef<string | null>(null)
 
-  // Create webview once when sidebar opens (stable instance)
+  // Create webview when sidebar opens (recreated each time sidebar reopens)
   useEffect(() => {
+    // Only create webview when sidebar is open
+    if (!isOpen) return
+
     const container = webviewContainerRef.current
     if (!container) return
 
@@ -597,7 +600,7 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect }: Previe
       webviewReadyRef.current = false
       pendingUrlRef.current = null
     }
-  }, []) // Empty deps - create once
+  }, [isOpen]) // Recreate webview when sidebar opens
 
   // Navigate when selectedUrl changes from dropdown (resets to base URL)
   useEffect(() => {
