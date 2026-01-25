@@ -931,6 +931,15 @@ export async function createWorktreeForChat(
 		// For remote branches or when type is not specified, use origin/{branch}
 		const startPoint = branchType === "local" ? baseBranch : `origin/${baseBranch}`;
 
+		// For remote branches, fetch the latest from origin to ensure we have up-to-date refs
+		if (branchType === "remote") {
+			try {
+				await git.fetch("origin", baseBranch);
+			} catch (fetchError) {
+				console.warn(`[worktree] Failed to fetch origin/${baseBranch}, proceeding with local refs:`, fetchError);
+			}
+		}
+
 		await createWorktree(projectPath, branch, worktreePath, startPoint);
 
 		// Run worktree setup commands in BACKGROUND (don't block chat creation)
