@@ -2,6 +2,18 @@ import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 
+// Agent mode type - extensible for future modes like "debug"
+export type AgentMode = "agent" | "plan"
+
+// Ordered list of modes - Shift+Tab cycles through these
+export const AGENT_MODES: AgentMode[] = ["agent", "plan"]
+
+// Get next mode in cycle (for Shift+Tab toggle)
+export function getNextMode(current: AgentMode): AgentMode {
+  const idx = AGENT_MODES.indexOf(current)
+  return AGENT_MODES[(idx + 1) % AGENT_MODES.length]
+}
+
 // Selected agent chat ID - null means "new chat" view (persisted to restore on reload)
 // Uses window-scoped storage so each Electron window can have its own selected chat
 export const selectedAgentChatIdAtom = atomWithWindowStorage<string | null>(
@@ -189,11 +201,23 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-export const isPlanModeAtom = atomWithStorage<boolean>(
-  "agents:isPlanMode",
-  false,
+// Storage for all sub-chat modes (persisted per subChatId)
+const subChatModesStorageAtom = atomWithStorage<Record<string, AgentMode>>(
+  "agents:subChatModes",
+  {},
   undefined,
   { getOnInit: true },
+)
+
+// atomFamily to get/set mode per subChatId
+export const subChatModeAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => get(subChatModesStorageAtom)[subChatId] ?? "agent",
+    (get, set, newMode: AgentMode) => {
+      const current = get(subChatModesStorageAtom)
+      set(subChatModesStorageAtom, { ...current, [subChatId]: newMode })
+    },
+  ),
 )
 
 // Model ID to full Claude model string mapping

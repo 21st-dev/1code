@@ -4,9 +4,11 @@ import {
   analyticsOptOutAtom,
   autoAdvanceTargetAtom,
   ctrlTabTargetAtom,
+  defaultAgentModeAtom,
   desktopNotificationsEnabledAtom,
   extendedThinkingEnabledAtom,
   soundNotificationsEnabledAtom,
+  type AgentMode,
   type AutoAdvanceTarget,
   type CtrlTabTarget,
 } from "../../../lib/atoms"
@@ -46,6 +48,7 @@ export function AgentsPreferencesTab() {
   const [analyticsOptOut, setAnalyticsOptOut] = useAtom(analyticsOptOutAtom)
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
   const [autoAdvanceTarget, setAutoAdvanceTarget] = useAtom(autoAdvanceTargetAtom)
+  const [defaultAgentMode, setDefaultAgentMode] = useAtom(defaultAgentModeAtom)
   const isNarrowScreen = useIsNarrowScreen()
 
   // Co-authored-by setting from Claude settings.json
@@ -202,6 +205,32 @@ export function AgentsPreferencesTab() {
                 <SelectItem value="next">Go to next workspace</SelectItem>
                 <SelectItem value="previous">Go to previous workspace</SelectItem>
                 <SelectItem value="close">Close workspace</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Default Mode */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Default Mode
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Mode for new agents (Plan = read-only, Agent = can edit)
+              </span>
+            </div>
+            <Select
+              value={defaultAgentMode}
+              onValueChange={(value: AgentMode) => setDefaultAgentMode(value)}
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {defaultAgentMode === "agent" ? "Agent" : "Plan"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="agent">Agent</SelectItem>
+                <SelectItem value="plan">Plan</SelectItem>
               </SelectContent>
             </Select>
           </div>

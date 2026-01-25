@@ -33,6 +33,7 @@ import { PlanWidget } from "./sections/plan-widget"
 import { TerminalWidget } from "./sections/terminal-widget"
 import { ChangesWidget } from "./sections/changes-widget"
 import type { ParsedDiffFile } from "./types"
+import type { AgentMode } from "../agents/atoms"
 
 interface DetailsSidebarProps {
   /** Workspace/chat ID */
@@ -41,8 +42,8 @@ interface DetailsSidebarProps {
   worktreePath: string | null
   /** Plan path for plan section */
   planPath: string | null
-  /** Whether plan mode is active */
-  isPlanMode: boolean
+  /** Current agent mode (plan or agent) */
+  mode: AgentMode
   /** Callback when "Build plan" is clicked */
   onBuildPlan?: () => void
   /** Plan refetch trigger */
@@ -77,7 +78,7 @@ export function DetailsSidebar({
   chatId,
   worktreePath,
   planPath,
-  isPlanMode,
+  mode,
   onBuildPlan,
   planRefetchTrigger,
   activeSubChatId,
@@ -346,7 +347,7 @@ export function DetailsSidebar({
                     activeSubChatId={activeSubChatId}
                     planPath={planPath}
                     refetchTrigger={planRefetchTrigger}
-                    isPlanMode={isPlanMode}
+                    mode={mode}
                     onApprovePlan={onBuildPlan}
                     onExpandPlan={onExpandPlan}
                   />

@@ -16,6 +16,7 @@ import {
   justCreatedIdsAtom,
   pendingUserQuestionsAtom,
   undoStackAtom,
+  subChatModeAtomFamily,
   type UndoItem,
 } from "../agents/atoms"
 import {
@@ -28,8 +29,10 @@ import {
   selectedSubChatsCountAtom,
   isDesktopAtom,
   isFullscreenAtom,
+  defaultAgentModeAtom,
 } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
+import { appStore } from "../../lib/jotai-store"
 import {
   useAgentSubChatStore,
   type SubChatMeta,
@@ -261,6 +264,7 @@ export function AgentsSubChatsSidebar({
   const newAgentHotkey = useResolvedHotkeyDisplay("new-agent")
   const [justCreatedIds, setJustCreatedIds] = useAtom(justCreatedIdsAtom)
   const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
+  const defaultAgentMode = useAtomValue(defaultAgentModeAtom)
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
@@ -661,19 +665,22 @@ export function AgentsSubChatsSidebar({
     const newSubChat = await trpcClient.chats.createSubChat.mutate({
       chatId: parentChatId,
       name: "New Chat",
-      mode: "agent",
+      mode: defaultAgentMode,
     })
     const newId = newSubChat.id
 
     // Track this subchat as just created for typewriter effect
     setJustCreatedIds((prev) => new Set([...prev, newId]))
 
+    // Initialize atomFamily mode for the new sub-chat
+    appStore.set(subChatModeAtomFamily(newId), defaultAgentMode)
+
     // Add to allSubChats with placeholder name
     store.addToAllSubChats({
       id: newId,
       name: "New Chat",
       created_at: new Date().toISOString(),
-      mode: "agent",
+      mode: defaultAgentMode,
     })
 
     // Add to open tabs and set as active

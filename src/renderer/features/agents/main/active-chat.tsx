@@ -62,6 +62,7 @@ import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
 import {
   customClaudeConfigAtom,
+  defaultAgentModeAtom,
   isDesktopAtom, isFullscreenAtom,
   normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
@@ -100,7 +101,6 @@ import {
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   isCreatingPrAtom,
-  isPlanModeAtom,
   justCreatedIdsAtom,
   lastSelectedModelIdAtom,
   loadingSubChatsAtom,
@@ -120,7 +120,9 @@ import {
   selectedDiffFilePathAtom,
   setLoading,
   subChatFilesAtom,
+  subChatModeAtomFamily,
   undoStackAtom,
+  type AgentMode,
   type SelectedCommit
 } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
@@ -2033,8 +2035,8 @@ const ChatViewInner = memo(function ChatViewInner({
     [subChatId],
   )
 
-  // Plan mode state (read from global atom)
-  const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
+  // Plan mode state (per-subChat using atomFamily)
+  const [subChatMode, setSubChatMode] = useAtom(subChatModeAtomFamily(subChatId))
 
   // Mutation for updating sub-chat mode in database
   const updateSubChatModeMutation = api.agents.updateSubChatMode.useMutation({
@@ -2051,40 +2053,25 @@ const ChatViewInner = memo(function ChatViewInner({
       }
 
       // Revert local state on error to maintain sync with database
-      const subChat = useAgentSubChatStore
+      const revertedMode: AgentMode = variables.mode === "plan" ? "agent" : "plan"
+      setSubChatMode(revertedMode)
+      // Also update store for consistency
+      useAgentSubChatStore
         .getState()
-        .allSubChats.find((sc) => sc.id === variables.subChatId)
-      if (subChat) {
-        // Revert to previous mode
-        const revertedMode = variables.mode === "plan" ? "agent" : "plan"
-        useAgentSubChatStore
-          .getState()
-          .updateSubChatMode(variables.subChatId, revertedMode)
-        // Update ref BEFORE setIsPlanMode to prevent useEffect from triggering
-        lastIsPlanModeRef.current = revertedMode === "plan"
-        setIsPlanMode(revertedMode === "plan")
-      }
+        .updateSubChatMode(variables.subChatId, revertedMode)
       console.error("Failed to update sub-chat mode:", error.message)
     },
   })
 
-  // Track last initialized sub-chat to prevent re-initialization
-  const lastInitializedRef = useRef<string | null>(null)
-
-  // Initialize mode from sub-chat metadata ONLY when switching sub-chats
+  // Sync atomFamily mode to Zustand store on mount/subChatId change
+  // This ensures the sidebar shows the correct mode icon
   useEffect(() => {
-    if (subChatId && subChatId !== lastInitializedRef.current) {
-      const subChat = useAgentSubChatStore
-        .getState()
-        .allSubChats.find((sc) => sc.id === subChatId)
-
-      if (subChat?.mode) {
-        setIsPlanMode(subChat.mode === "plan")
-      }
-      lastInitializedRef.current = subChatId
+    if (subChatId) {
+      // Read mode directly from atomFamily to ensure we get the correct value
+      const mode = appStore.get(subChatModeAtomFamily(subChatId))
+      useAgentSubChatStore.getState().updateSubChatMode(subChatId, mode)
     }
-    // Dependencies: Only subChatId - setIsPlanMode is stable, useAgentSubChatStore is external
-  }, [subChatId, setIsPlanMode])
+  }, [subChatId])
 
   // NOTE: We no longer clear caches on deactivation.
   // With proper subChatId isolation, each chat's caches are separate.
@@ -2119,31 +2106,20 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }, [subChatId])
 
-  // Track last mode to detect actual user changes (not store updates)
-  const lastIsPlanModeRef = useRef<boolean>(isPlanMode)
+  // Handle mode changes - updates atomFamily, store, and database together
+  // No effect needed - this is called directly when user toggles mode
+  const handleModeChange = useCallback((newMode: AgentMode) => {
+    // Update atomFamily (source of truth for UI)
+    setSubChatMode(newMode)
 
-  // Update mode for current sub-chat when USER changes isPlanMode
-  useEffect(() => {
-    // Skip if isPlanMode didn't actually change
-    if (lastIsPlanModeRef.current === isPlanMode) {
-      return
+    // Update Zustand store (for other components that read from store)
+    useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
+
+    // Save to database (skip temp IDs that haven't been persisted yet)
+    if (!subChatId.startsWith("temp-")) {
+      updateSubChatModeMutation.mutate({ subChatId, mode: newMode })
     }
-
-    const newMode = isPlanMode ? "plan" : "agent"
-
-    lastIsPlanModeRef.current = isPlanMode
-
-    if (subChatId) {
-      // Update local store immediately (optimistic update)
-      useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
-
-      // Save to database with error handling to maintain consistency
-      if (!subChatId.startsWith("temp-")) {
-        updateSubChatModeMutation.mutate({ subChatId, mode: newMode })
-      }
-    }
-    // Dependencies: updateSubChatModeMutation.mutate is stable, useAgentSubChatStore is external
-  }, [isPlanMode, subChatId, updateSubChatModeMutation.mutate])
+  }, [subChatId, setSubChatMode, updateSubChatModeMutation])
 
   // File/image upload hook
   const {
@@ -2829,11 +2805,8 @@ const ChatViewInner = memo(function ChatViewInner({
       updateSubChatModeMutation.mutate({ subChatId, mode: "agent" })
     }
 
-    // Update ref BEFORE setIsPlanMode to prevent useEffect from triggering duplicate mutation
-    lastIsPlanModeRef.current = false
-
-    // Update React state (for UI)
-    setIsPlanMode(false)
+    // Update atomFamily state (for UI) - this also syncs to store via effect
+    setSubChatMode("agent")
 
     // Enable auto-scroll and immediately scroll to bottom
     shouldAutoScrollRef.current = true
@@ -2844,7 +2817,7 @@ const ChatViewInner = memo(function ChatViewInner({
       role: "user",
       parts: [{ type: "text", text: "Build plan" }],
     })
-  }, [subChatId, setIsPlanMode, scrollToBottom, updateSubChatModeMutation])
+  }, [subChatId, setSubChatMode, scrollToBottom, updateSubChatModeMutation])
 
   // Handle pending "Build plan" from sidebar
   useEffect(() => {
@@ -3242,8 +3215,8 @@ const ChatViewInner = memo(function ChatViewInner({
   // Refs for handleSend to avoid recreating callback on every messages change
   const messagesLengthRef = useRef(messages.length)
   messagesLengthRef.current = messages.length
-  const isPlanModeRef = useRef(isPlanMode)
-  isPlanModeRef.current = isPlanMode
+  const subChatModeRef = useRef(subChatMode)
+  subChatModeRef.current = subChatMode
   const imagesRef = useRef(images)
   imagesRef.current = images
   const filesRef = useRef(files)
@@ -3344,7 +3317,7 @@ const ChatViewInner = memo(function ChatViewInner({
     trackMessageSent({
       workspaceId: subChatId,
       messageLength: finalText.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
+      mode: subChatModeRef.current,
     })
 
     // Trigger auto-rename on first message in a new sub-chat
@@ -3567,7 +3540,7 @@ const ChatViewInner = memo(function ChatViewInner({
     trackMessageSent({
       workspaceId: subChatId,
       messageLength: item.message.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
+      mode: subChatModeRef.current,
     })
 
     // Update timestamps
@@ -3659,7 +3632,7 @@ const ChatViewInner = memo(function ChatViewInner({
     trackMessageSent({
       workspaceId: subChatId,
       messageLength: finalText.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
+      mode: subChatModeRef.current,
     })
 
     // Build message parts
@@ -3738,7 +3711,7 @@ const ChatViewInner = memo(function ChatViewInner({
   // Check if there's an unapproved plan (in plan mode with completed ExitPlanMode)
   const hasUnapprovedPlan = useMemo(() => {
     // If already in agent mode, plan is approved (mode is the source of truth)
-    if (!isPlanMode) return false
+    if (subChatMode !== "plan") return false
 
     // Look for completed ExitPlanMode in messages
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -3756,7 +3729,7 @@ const ChatViewInner = memo(function ChatViewInner({
       }
     }
     return false
-  }, [messages, isPlanMode])
+  }, [messages, subChatMode])
 
   // Keep ref in sync for use in initializeScroll (which runs in useLayoutEffect)
   hasUnapprovedPlanRef.current = hasUnapprovedPlan
@@ -4143,7 +4116,20 @@ export function ChatView({
 }) {
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedModelId] = useAtom(lastSelectedModelIdAtom)
-  const [isPlanMode] = useAtom(isPlanModeAtom)
+
+  // Get active sub-chat ID from store for mode tracking (reactive)
+  const activeSubChatIdForMode = useAgentSubChatStore((state) => state.activeSubChatId)
+  // Use per-subChat mode atom - falls back to "agent" if no active sub-chat
+  const subChatModeAtom = useMemo(
+    () => subChatModeAtomFamily(activeSubChatIdForMode || ""),
+    [activeSubChatIdForMode],
+  )
+  const [subChatMode] = useAtom(subChatModeAtom)
+  // Current mode - use subChatMode when there's an active sub-chat, otherwise default to "agent"
+  const currentMode: AgentMode = activeSubChatIdForMode ? subChatMode : "agent"
+  // Default mode for new sub-chats
+  const defaultAgentMode = useAtomValue(defaultAgentModeAtom)
+
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
@@ -5230,6 +5216,14 @@ Make sure to preserve all functionality from both branches when resolving confli
 
     freshState.setAllSubChats(allSubChats)
 
+    // Initialize atomFamily mode for each sub-chat from database
+    // This ensures new chats with mode="plan" use the correct mode
+    for (const sc of dbSubChats) {
+      if (sc.mode) {
+        appStore.set(subChatModeAtomFamily(sc.id), sc.mode)
+      }
+    }
+
     // All open tabs are now valid (we created placeholders for non-DB ones)
     const validOpenIds = currentOpenIds
 
@@ -5298,11 +5292,11 @@ Make sure to preserve all functionality from both branches when resolving confli
       const subChat = agentSubChats.find((sc) => sc.id === subChatId)
       const messages = (subChat?.messages as any[]) || []
 
-      // Get mode from store metadata (falls back to current isPlanMode)
+      // Get mode from store metadata (falls back to currentMode)
       const subChatMeta = useAgentSubChatStore
         .getState()
         .allSubChats.find((sc) => sc.id === subChatId)
-      const subChatMode = subChatMeta?.mode || (isPlanMode ? "plan" : "agent")
+      const subChatMode = subChatMeta?.mode || currentMode
 
       // Desktop: use IPCChatTransport for local Claude Code execution
       // Note: Extended thinking setting is read dynamically inside the transport
@@ -5405,7 +5399,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       chatWorkingDir,
       worktreePath,
       chatId,
-      isPlanMode,
+      currentMode,
       setSubChatUnseenChanges,
       selectedChatId,
       setUnseenChanges,
@@ -5416,13 +5410,14 @@ Make sure to preserve all functionality from both branches when resolving confli
   // Handle creating a new sub-chat
   const handleCreateNewSubChat = useCallback(async () => {
     const store = useAgentSubChatStore.getState()
-    const subChatMode = isPlanMode ? "plan" : "agent"
+    // New sub-chats use the user's default mode preference
+    const newSubChatMode = defaultAgentMode
 
     // Create sub-chat in DB first to get the real ID
     const newSubChat = await trpcClient.chats.createSubChat.mutate({
       chatId,
       name: "New Chat",
-      mode: subChatMode,
+      mode: newSubChatMode,
     })
     const newId = newSubChat.id
     utils.agents.getAgentChat.invalidate({ chatId })
@@ -5439,7 +5434,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           {
             id: newId,
             name: "New Chat",
-            mode: subChatMode,
+            mode: newSubChatMode,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             messages: null,
@@ -5457,7 +5452,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       id: newId,
       name: "New Chat",
       created_at: new Date().toISOString(),
-      mode: subChatMode,
+      mode: newSubChatMode,
     })
 
     // Add to open tabs and set as active
@@ -5475,7 +5470,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         subChatId: newId,
         cwd: worktreePath,
         projectPath,
-        mode: subChatMode,
+        mode: newSubChatMode,
       })
 
       const newChat = new Chat<any>({
@@ -5553,7 +5548,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   }, [
     worktreePath,
     chatId,
-    isPlanMode,
+    defaultAgentMode,
     utils,
     setSubChatUnseenChanges,
     selectedChatId,
@@ -6302,6 +6297,7 @@ Make sure to preserve all functionality from both branches when resolving confli
               onClose={() => setIsPlanSidebarOpen(false)}
               onBuildPlan={handleApprovePlanFromSidebar}
               refetchTrigger={planEditRefetchTrigger}
+              mode={currentMode}
             />
           </ResizableSidebar>
         )}
@@ -6451,7 +6447,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             chatId={chatId}
             worktreePath={worktreePath}
             planPath={currentPlanPath}
-            isPlanMode={isPlanMode}
+            mode={currentMode}
             onBuildPlan={handleApprovePlanFromSidebar}
             planRefetchTrigger={planEditRefetchTrigger}
             activeSubChatId={activeSubChatIdForPlan}

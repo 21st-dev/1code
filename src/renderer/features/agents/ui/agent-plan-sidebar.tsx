@@ -7,7 +7,7 @@ import { IconDoubleChevronRight, IconSpinner, PlanIcon } from "../../../componen
 import { Kbd } from "../../../components/ui/kbd"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { trpc } from "../../../lib/trpc"
-import { isPlanModeAtom } from "../atoms"
+import type { AgentMode } from "../atoms"
 
 interface AgentPlanSidebarProps {
   chatId: string
@@ -16,6 +16,8 @@ interface AgentPlanSidebarProps {
   onBuildPlan?: () => void
   /** Timestamp that triggers refetch when changed (e.g., after plan Edit completes) */
   refetchTrigger?: number
+  /** Current agent mode (plan or agent) */
+  mode?: AgentMode
 }
 
 export function AgentPlanSidebar({
@@ -24,8 +26,8 @@ export function AgentPlanSidebar({
   onClose,
   onBuildPlan,
   refetchTrigger,
+  mode = "agent",
 }: AgentPlanSidebarProps) {
-  const isPlanMode = useAtomValue(isPlanModeAtom)
 
   // Fetch plan file content using tRPC
   const { data: planContent, isLoading, error, refetch } = trpc.files.readFile.useQuery(
@@ -65,7 +67,7 @@ export function AgentPlanSidebar({
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Approve Plan button - only show in plan mode */}
-          {isPlanMode && onBuildPlan && (
+          {mode === "plan" && onBuildPlan && (
             <Button
               size="sm"
               className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"

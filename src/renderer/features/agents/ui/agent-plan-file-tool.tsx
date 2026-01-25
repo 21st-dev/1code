@@ -13,7 +13,7 @@ import { areToolPropsEqual } from "./agent-tool-utils"
 import {
   planSidebarOpenAtomFamily,
   currentPlanPathAtomFamily,
-  isPlanModeAtom,
+  subChatModeAtomFamily,
   pendingBuildPlanSubChatIdAtom,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
@@ -47,7 +47,9 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   const [isExpanded, setIsExpanded] = useState(false)
   const { isPending } = getToolStatus(part, chatStatus)
   const isWrite = part.type === "tool-Write"
-  const isPlanMode = useAtomValue(isPlanModeAtom)
+  // Get mode from per-subChat atomFamily
+  const subChatModeAtom = useMemo(() => subChatModeAtomFamily(subChatId), [subChatId])
+  const subChatMode = useAtomValue(subChatModeAtom)
   const setPendingBuildPlanSubChatId = useSetAtom(pendingBuildPlanSubChatIdAtom)
 
   // Refs for scroll gradients (avoid re-renders)
@@ -259,7 +261,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
           View plan
         </Button>
 
-        {isPlanMode && (
+        {subChatMode === "plan" && (
           <Button
             size="sm"
             onClick={handleBuildPlan}

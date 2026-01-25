@@ -9,6 +9,7 @@ import { PlanIcon, ExpandIcon, CollapseIcon, IconSpinner } from "@/components/ui
 import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
 import { trpc } from "@/lib/trpc"
 import { planContentCacheAtomFamily } from "../atoms"
+import type { AgentMode } from "../../agents/atoms"
 
 interface PlanWidgetProps {
   /** Chat ID for cache */
@@ -19,8 +20,8 @@ interface PlanWidgetProps {
   planPath: string | null
   /** Plan refetch trigger */
   refetchTrigger?: number
-  /** Whether plan mode is active */
-  isPlanMode?: boolean
+  /** Current agent mode (plan or agent) */
+  mode?: AgentMode
   /** Callback when "Approve" is clicked */
   onApprovePlan?: () => void
   /** Callback when "View plan" is clicked - opens plan sidebar */
@@ -38,7 +39,7 @@ export const PlanWidget = memo(function PlanWidget({
   activeSubChatId,
   planPath,
   refetchTrigger,
-  isPlanMode = false,
+  mode = "agent",
   onApprovePlan,
   onExpandPlan,
 }: PlanWidgetProps) {
@@ -156,7 +157,7 @@ export const PlanWidget = memo(function PlanWidget({
             >
               View plan
             </Button>
-            {isPlanMode && onApprovePlan && (
+            {mode === "plan" && onApprovePlan && (
               <Button
                 size="sm"
                 onClick={(e) => {

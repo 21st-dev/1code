@@ -8,7 +8,7 @@ import { atomWithStorage } from "jotai/utils"
 export {
   // Chat atoms
   selectedAgentChatIdAtom,
-  isPlanModeAtom,
+  subChatModeAtomFamily,
   lastSelectedModelIdAtom,
   lastSelectedAgentIdAtom,
   lastSelectedRepoAtom,
@@ -66,6 +66,11 @@ export {
   type AgentsMobileViewMode,
   type AgentsDebugMode,
   type SubChatFileChange,
+  type AgentMode,
+
+  // Mode utilities
+  AGENT_MODES,
+  getNextMode,
 } from "../../features/agents/atoms"
 
 // ============================================
@@ -428,6 +433,17 @@ export type AutoAdvanceTarget = "next" | "previous" | "close"
 export const autoAdvanceTargetAtom = atomWithStorage<AutoAdvanceTarget>(
   "preferences:auto-advance-target",
   "next", // Default: go to next workspace
+  undefined,
+  { getOnInit: true },
+)
+
+// Preferences - Default Agent Mode
+// Controls what mode new chats/sub-chats start in (Plan = read-only, Agent = can edit)
+// Re-using AgentMode type from features/agents/atoms
+import { type AgentMode as AgentModeType } from "../../features/agents/atoms"
+export const defaultAgentModeAtom = atomWithStorage<AgentModeType>(
+  "preferences:default-agent-mode",
+  "agent", // Default to agent mode
   undefined,
   { getOnInit: true },
 )

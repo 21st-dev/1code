@@ -18,6 +18,7 @@ import {
   filterBuiltinCommands,
   BUILTIN_SLASH_COMMANDS,
 } from "./builtin-commands"
+import type { AgentMode } from "../atoms"
 
 interface AgentsSlashCommandProps {
   isOpen: boolean
@@ -26,7 +27,7 @@ interface AgentsSlashCommandProps {
   searchText: string
   position: { top: number; left: number }
   projectPath?: string
-  isPlanMode?: boolean
+  mode?: AgentMode
   disabledCommands?: string[]
 }
 
@@ -38,7 +39,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   searchText,
   position,
   projectPath,
-  isPlanMode,
+  mode,
   disabledCommands,
 }: AgentsSlashCommandProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -125,10 +126,10 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     let builtinFiltered = filterBuiltinCommands(debouncedSearchText)
 
     // Hide /plan when already in Plan mode, hide /agent when already in Agent mode
-    if (isPlanMode !== undefined) {
+    if (mode !== undefined) {
       builtinFiltered = builtinFiltered.filter((cmd) => {
-        if (isPlanMode && cmd.name === "plan") return false
-        if (!isPlanMode && cmd.name === "agent") return false
+        if (mode === "plan" && cmd.name === "plan") return false
+        if (mode === "agent" && cmd.name === "agent") return false
         return true
       })
     }
@@ -153,7 +154,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
 
     // Return custom commands first, then builtin
     return [...customFiltered, ...builtinFiltered]
-  }, [debouncedSearchText, customCommands, isPlanMode, disabledCommands])
+  }, [debouncedSearchText, customCommands, mode, disabledCommands])
 
   // Track previous values for smarter selection reset
   const prevIsOpenRef = useRef(isOpen)
