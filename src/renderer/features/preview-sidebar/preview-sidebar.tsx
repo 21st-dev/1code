@@ -121,33 +121,76 @@ function getPaneId(chatId: string): string {
 // React Grab injection script - loads and activates the element selector
 const REACT_GRAB_INJECT_SCRIPT = `
 (function() {
-  // Handler for element selection on Cmd+C
-  function handleElementCapture(element) {
+  // Handler for element selection - called when user copies with Cmd+C
+  function handleElementCapture(element, content) {
     if (!element) return;
+
+    // Try multiple property names for component info (API may vary)
+    const grabData = element.__reactGrabData || element.__reactGrabInfo || {};
+
     const data = {
-      html: (element.outerHTML || '').slice(0, 10000),
-      componentName: element.__reactGrabInfo?.componentName || element.__reactGrabInfo?.name || null,
-      filePath: element.__reactGrabInfo?.filePath || element.__reactGrabInfo?.source || null,
+      html: (element.outerHTML || content || '').slice(0, 10000),
+      componentName: grabData.componentName || grabData.name || null,
+      filePath: grabData.filePath || grabData.source || null,
     };
     console.log('__ELEMENT_SELECTED__:' + JSON.stringify(data));
   }
 
-  // Listen for Cmd+C to capture selected element
-  document.addEventListener('keydown', function(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
-      const api = window.__REACT_GRAB__;
-      if (!api) return;
+  // Register our plugin with React Grab to get notified on copy
+  function registerOurPlugin() {
+    const api = window.__REACT_GRAB__ || window.ReactGrab;
+    if (!api) return false;
 
-      const element = api.selectedElements?.[0] || api.hoveredElement || api.currentElement;
-      if (element) {
-        handleElementCapture(element);
-      }
+    // Remove any previous registration to avoid duplicates
+    if (window.__CONDUCTOR_ELEMENT_PLUGIN_REGISTERED__) {
+      return true;
     }
-  });
 
-  // Activate if already loaded
-  if (window.__REACT_GRAB__) {
-    window.__REACT_GRAB__.activate?.();
+    // Use React Grab's plugin API if available
+    if (typeof api.registerPlugin === 'function') {
+      api.registerPlugin({
+        name: 'conductor-element-capture',
+        onCopySuccess: function(elements, content) {
+          if (elements && elements.length > 0) {
+            handleElementCapture(elements[0], content);
+          }
+        }
+      });
+      window.__CONDUCTOR_ELEMENT_PLUGIN_REGISTERED__ = true;
+    } else {
+      // Fallback: listen for copy events ourselves
+      if (!window.__CONDUCTOR_COPY_LISTENER__) {
+        window.__CONDUCTOR_COPY_LISTENER__ = function(e) {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+            const grabApi = window.__REACT_GRAB__ || window.ReactGrab;
+            if (!grabApi) return;
+
+            const element = grabApi.selectedElements?.[0] || grabApi.hoveredElement || grabApi.currentElement;
+            if (element) {
+              handleElementCapture(element, null);
+            }
+          }
+        };
+        document.addEventListener('keydown', window.__CONDUCTOR_COPY_LISTENER__);
+      }
+      window.__CONDUCTOR_ELEMENT_PLUGIN_REGISTERED__ = true;
+    }
+
+    return true;
+  }
+
+  // Activate React Grab and register our plugin
+  function activateReactGrab() {
+    const api = window.__REACT_GRAB__ || window.ReactGrab;
+    if (api) {
+      api.activate?.();
+      registerOurPlugin();
+    }
+  }
+
+  // If already loaded, just activate
+  if (window.__REACT_GRAB__ || window.ReactGrab) {
+    activateReactGrab();
     return;
   }
 
@@ -156,7 +199,7 @@ const REACT_GRAB_INJECT_SCRIPT = `
   script.src = 'https://unpkg.com/react-grab/dist/index.global.js';
   script.crossOrigin = 'anonymous';
   script.onload = function() {
-    window.__REACT_GRAB__?.activate?.();
+    activateReactGrab();
   };
   document.head.appendChild(script);
 })();
@@ -164,7 +207,10 @@ const REACT_GRAB_INJECT_SCRIPT = `
 
 const REACT_GRAB_DEACTIVATE_SCRIPT = `
 (function() {
-  window.__REACT_GRAB__?.deactivate?.();
+  const api = window.__REACT_GRAB__ || window.ReactGrab;
+  if (api) {
+    api.deactivate?.();
+  }
 })();
 `
 
