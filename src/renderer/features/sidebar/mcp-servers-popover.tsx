@@ -16,7 +16,7 @@ import {
   TooltipTrigger,
 } from "../../components/ui/tooltip"
 import { cn } from "../../lib/utils"
-import { ChevronRight, Loader2, RefreshCw, ExternalLink } from "lucide-react"
+import { ChevronRight, Loader2, RefreshCw } from "lucide-react"
 
 // Status type matching the backend
 type MCPServerStatus = "connected" | "failed" | "pending" | "needs-auth"

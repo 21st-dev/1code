@@ -456,56 +456,34 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
   }, [state.output])
 
   const handleToggleSelector = useCallback(() => {
-    if (!webviewReadyRef.current || !webviewRef.current) {
-      console.log("[PreviewSidebar] Cannot toggle selector - webview not ready")
-      return
-    }
+    if (!webviewReadyRef.current || !webviewRef.current) return
 
     if (isSelectorActive) {
-      console.log("[PreviewSidebar] Deactivating element selector")
       setIsSelectorActive(false)
-      webviewRef.current.executeJavaScript(REACT_GRAB_DEACTIVATE_SCRIPT).catch((err) => {
-        console.log("[PreviewSidebar] Deactivate script error:", err)
+      webviewRef.current.executeJavaScript(REACT_GRAB_DEACTIVATE_SCRIPT).catch(() => {
+        // Ignore errors
       })
     } else {
-      console.log("[PreviewSidebar] Activating element selector - injecting script")
       setIsSelectorActive(true)
-      webviewRef.current.executeJavaScript(REACT_GRAB_INJECT_SCRIPT).then(() => {
-        console.log("[PreviewSidebar] Script injected successfully")
-      }).catch((err) => {
-        console.log("[PreviewSidebar] Inject script error:", err)
+      webviewRef.current.executeJavaScript(REACT_GRAB_INJECT_SCRIPT).catch((err) => {
+        console.error("[PreviewSidebar] Failed to inject selector script:", err)
       })
     }
   }, [isSelectorActive])
 
   // Screenshot capture handler
   const handleScreenshotCapture = useCallback(async () => {
-    if (!webviewReadyRef.current || !webviewRef.current) {
-      console.log("[PreviewSidebar] Cannot capture screenshot - webview not ready")
-      return
-    }
+    if (!webviewReadyRef.current || !webviewRef.current) return
 
     try {
       const webview = webviewRef.current
-      // capturePage returns a NativeImage
       const nativeImage = await webview.capturePage()
-
-      // Convert to PNG buffer
       const pngBuffer = nativeImage.toPNG()
-
-      // Create a Blob from the buffer
       const blob = new Blob([pngBuffer], { type: "image/png" })
-
-      // Create a data URL for preview
       const url = URL.createObjectURL(blob)
-
-      // Generate filename with timestamp
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
       const filename = `preview-screenshot-${timestamp}.png`
 
-      console.log("[PreviewSidebar] Screenshot captured:", filename)
-
-      // Call the callback with the captured image
       onScreenshotCapture?.({ url, filename, blob })
     } catch (err) {
       console.error("[PreviewSidebar] Screenshot capture error:", err)
@@ -514,23 +492,15 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
 
   // Fill login form with saved credentials
   const handleFillLogin = useCallback(async (credentialId: string) => {
-    if (!webviewReadyRef.current || !webviewRef.current) {
-      console.log("[PreviewSidebar] Cannot fill login - webview not ready")
-      return
-    }
+    if (!webviewReadyRef.current || !webviewRef.current) return
 
     try {
-      // Get the full credential with decrypted password
       const cred = await getCredential.mutateAsync({ id: credentialId })
-      if (!cred) {
-        console.error("[PreviewSidebar] Credential not found")
-        return
-      }
+      if (!cred) return
 
       const webview = webviewRef.current
       const script = createFillLoginScript(cred.email, cred.password)
-      const result = await webview.executeJavaScript(script)
-      console.log("[PreviewSidebar] Fill login result:", result)
+      await webview.executeJavaScript(script)
     } catch (err) {
       console.error("[PreviewSidebar] Fill login error:", err)
     }
@@ -634,14 +604,7 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
     // Handle console messages from webview (for React Grab element selection)
     const handleConsoleMessage = (e: Event) => {
       const event = e as unknown as { message: string; level: number }
-      // Log ALL webview console messages for debugging (temporary)
-      console.log("[PreviewSidebar] WebView:", event.message.slice(0, 200))
-      // Log all [ReactGrab] messages for debugging
-      if (event.message.includes("[ReactGrab]")) {
-        console.log("[PreviewSidebar] >>> ReactGrab:", event.message)
-      }
       if (event.message.startsWith("__ELEMENT_SELECTED__:")) {
-        console.log("[PreviewSidebar] Element selected message received!")
         try {
           const jsonStr = event.message.slice("__ELEMENT_SELECTED__:".length)
           const data = JSON.parse(jsonStr) as {
@@ -649,8 +612,6 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
             componentName: string | null
             filePath: string | null
           }
-          console.log("[PreviewSidebar] Parsed data:", data.componentName, data.filePath, data.html.slice(0, 100))
-          console.log("[PreviewSidebar] onElementSelectRef.current exists:", !!onElementSelectRef.current)
           onElementSelectRef.current?.(data.html, data.componentName, data.filePath)
           // Deactivate selector mode after selection
           setIsSelectorActiveRef.current(false)
@@ -669,12 +630,10 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
     webview.addEventListener("did-navigate-in-page", handleDidNavigateInPage)
     webview.addEventListener("new-window", handleNewWindow)
     webview.addEventListener("console-message", handleConsoleMessage)
-    console.log("[PreviewSidebar] Console-message listener attached to webview")
 
     // Start with about:blank to trigger initial dom-ready
     webview.src = "about:blank"
     container.appendChild(webview)
-    console.log("[PreviewSidebar] Webview created and appended")
 
     return () => {
       webview.removeEventListener("dom-ready", handleDomReady)
