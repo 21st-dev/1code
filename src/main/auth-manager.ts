@@ -277,3 +277,25 @@ export class AuthManager {
     }
   }
 }
+
+// Global singleton instance
+let authManagerInstance: AuthManager | null = null
+
+/**
+ * Initialize the global auth manager instance
+ * Must be called once from main process initialization
+ */
+export function initAuthManager(isDev: boolean = false): AuthManager {
+  if (!authManagerInstance) {
+    authManagerInstance = new AuthManager(isDev)
+  }
+  return authManagerInstance
+}
+
+/**
+ * Get the global auth manager instance
+ * Returns null if not initialized
+ */
+export function getAuthManager(): AuthManager | null {
+  return authManagerInstance
+}

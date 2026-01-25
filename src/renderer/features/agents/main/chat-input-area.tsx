@@ -61,8 +61,16 @@ import { AgentFileItem } from "../ui/agent-file-item"
 import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
+import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
 import { handlePasteEvent } from "../utils/paste-text"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
+import {
+  useVoiceRecording,
+  blobToBase64,
+  getAudioFormat,
+} from "../../../lib/hooks/use-voice-recording"
+import { getResolvedHotkey } from "../../../lib/hotkeys"
+import { customHotkeysAtom } from "../../../lib/atoms"
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
@@ -432,6 +440,34 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Plan mode - global atom
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
 
+  // Voice input state
+  const {
+    isRecording: isVoiceRecording,
+    audioLevel: voiceAudioLevel,
+    startRecording: startVoiceRecording,
+    stopRecording: stopVoiceRecording,
+    cancelRecording: cancelVoiceRecording,
+  } = useVoiceRecording()
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const voiceMountedRef = useRef(true)
+
+  useEffect(() => {
+    voiceMountedRef.current = true
+    return () => {
+      voiceMountedRef.current = false
+    }
+  }, [])
+
+  const transcribeMutation = trpc.voice.transcribe.useMutation()
+
+  // Check if voice input is available (authenticated OR has OPENAI_API_KEY)
+  const { data: voiceAvailability } = trpc.voice.isAvailable.useQuery()
+  const isVoiceAvailable = voiceAvailability?.available ?? false
+
+  // Get resolved voice input hotkey
+  const customHotkeys = useAtomValue(customHotkeysAtom)
+  const voiceInputHotkey = getResolvedHotkey("voice-input", customHotkeys)
+
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
   const currentChatIdRef = useRef<string | null>(parentChatId)
@@ -454,6 +490,176 @@ export const ChatInputArea = memo(function ChatInputArea({
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
   }, [hasCustomClaudeConfig])
+
+  // Voice input handlers
+  const handleVoiceMouseDown = useCallback(async () => {
+    if (isStreaming || isTranscribing || isVoiceRecording) return
+    try {
+      await startVoiceRecording()
+    } catch (err) {
+      console.error("[VoiceInput] Failed to start recording:", err)
+    }
+  }, [isStreaming, isTranscribing, isVoiceRecording, startVoiceRecording])
+
+  const handleVoiceMouseUp = useCallback(async () => {
+    if (!isVoiceRecording) return
+
+    try {
+      const blob = await stopVoiceRecording()
+
+      // Don't transcribe very short recordings (likely accidental clicks)
+      if (blob.size < 1000) {
+        console.log("[VoiceInput] Recording too short, ignoring")
+        return
+      }
+
+      if (!voiceMountedRef.current) return
+
+      setIsTranscribing(true)
+
+      const base64 = await blobToBase64(blob)
+      const format = getAudioFormat(blob.type)
+
+      const result = await transcribeMutation.mutateAsync({
+        audio: base64,
+        format,
+      })
+
+      if (!voiceMountedRef.current) return
+
+      if (result.text && result.text.trim()) {
+        // Insert transcribed text into editor
+        // Clean both current value and transcribed text
+        const currentRaw = editorRef.current?.getValue() || ""
+        const current = currentRaw.replace(/[\r\n\t]+/g, " ").replace(/ +/g, " ").trim()
+        const transcribed = result.text
+          .replace(/[\r\n\t]+/g, " ")
+          .replace(/ +/g, " ")
+          .trim()
+
+        console.log("[VoiceInput] Raw result.text:", JSON.stringify(result.text))
+        console.log("[VoiceInput] Cleaned transcribed:", JSON.stringify(transcribed))
+        console.log("[VoiceInput] Current editor value:", JSON.stringify(current))
+
+        // Add space separator only if current text exists and doesn't end with whitespace
+        const needsSpace = current.length > 0 && !/\s$/.test(current)
+        const newValue = current + (needsSpace ? " " : "") + transcribed
+
+        console.log("[VoiceInput] Final newValue:", JSON.stringify(newValue))
+
+        editorRef.current?.setValue(newValue)
+        editorRef.current?.focus()
+      }
+    } catch (err) {
+      console.error("[VoiceInput] Transcription failed:", err)
+    } finally {
+      if (voiceMountedRef.current) {
+        setIsTranscribing(false)
+      }
+    }
+  }, [isVoiceRecording, stopVoiceRecording, transcribeMutation, editorRef])
+
+  const handleVoiceMouseLeave = useCallback(() => {
+    if (isVoiceRecording) {
+      // Cancel instead of transcribing when leaving button area
+      cancelVoiceRecording()
+    }
+  }, [isVoiceRecording, cancelVoiceRecording])
+
+  // Keyboard shortcut: Voice input hotkey (push-to-talk: hold to record, release to transcribe)
+  useEffect(() => {
+    if (!voiceInputHotkey) return
+
+    // Parse hotkey once
+    const parts = voiceInputHotkey.split("+").map(p => p.toLowerCase())
+    const modifiers = parts.filter(p => ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
+    const mainKey = parts.find(p => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
+
+    const needsCmd = modifiers.includes("cmd") || modifiers.includes("meta")
+    const needsShift = modifiers.includes("shift")
+    const needsCtrl = modifiers.includes("ctrl")
+    const needsAlt = modifiers.includes("alt") || modifiers.includes("opt")
+
+    // For modifier-only hotkeys (like ctrl+opt), we track when all modifiers are pressed
+    const isModifierOnlyHotkey = !mainKey
+
+    const modifiersMatch = (e: KeyboardEvent) => {
+      return (
+        e.metaKey === needsCmd &&
+        e.shiftKey === needsShift &&
+        e.ctrlKey === needsCtrl &&
+        e.altKey === needsAlt
+      )
+    }
+
+    const matchesHotkey = (e: KeyboardEvent) => {
+      if (isModifierOnlyHotkey) {
+        // For modifier-only: just check if all required modifiers are pressed
+        return modifiersMatch(e)
+      }
+
+      // For regular hotkey with main key
+      const keyMatches =
+        e.key.toLowerCase() === mainKey ||
+        e.code.toLowerCase() === mainKey ||
+        e.code.toLowerCase() === `key${mainKey}` ||
+        (mainKey === "space" && e.code === "Space")
+
+      return keyMatches && modifiersMatch(e)
+    }
+
+    // Check if any modifier key is released
+    const isModifierRelease = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+      return key === "control" || key === "alt" || key === "meta" || key === "shift"
+    }
+
+    // Check if the released key is the main key (not a modifier)
+    const isMainKeyRelease = (e: KeyboardEvent) => {
+      if (isModifierOnlyHotkey) {
+        return isModifierRelease(e)
+      }
+      const eventKey = e.key.toLowerCase()
+      return (
+        eventKey === mainKey ||
+        e.code.toLowerCase() === mainKey ||
+        e.code.toLowerCase() === `key${mainKey}` ||
+        (mainKey === "space" && e.code === "Space")
+      )
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!matchesHotkey(e)) return
+      if (e.repeat) return // Ignore key repeat
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      // Start recording on keydown
+      if (!isVoiceRecording && !isTranscribing && !isStreaming) {
+        handleVoiceMouseDown()
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Stop recording when the main key (or any modifier for modifier-only hotkeys) is released
+      if (!isMainKeyRelease(e)) return
+
+      // Only stop if we're currently recording
+      if (isVoiceRecording) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleVoiceMouseUp()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown, true)
+    window.addEventListener("keyup", handleKeyUp, true)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true)
+      window.removeEventListener("keyup", handleKeyUp, true)
+    }
+  }, [voiceInputHotkey, isVoiceRecording, isTranscribing, isStreaming, handleVoiceMouseDown, handleVoiceMouseUp])
 
   // Save draft on blur (with attachments and text contexts)
   const handleEditorBlur = useCallback(async () => {
@@ -1190,26 +1396,33 @@ export const ChatInputArea = memo(function ChatInputArea({
                     }}
                   />
 
-                  {/* Context window indicator - click to compact */}
-                  <AgentContextIndicator
-                    tokenData={messageTokenData}
-                    onCompact={onCompact}
-                    isCompacting={isCompacting}
-                    disabled={isStreaming}
-                  />
+                  {/* Voice wave indicator - shown during recording */}
+                  {isVoiceRecording ? (
+                    <VoiceWaveIndicator isRecording={isVoiceRecording} audioLevel={voiceAudioLevel} />
+                  ) : (
+                    <>
+                      {/* Context window indicator - click to compact */}
+                      <AgentContextIndicator
+                        tokenData={messageTokenData}
+                        onCompact={onCompact}
+                        isCompacting={isCompacting}
+                        disabled={isStreaming}
+                      />
 
-                  {/* Attachment button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={images.length >= 5 && files.length >= 10}
-                  >
-                    <AttachIcon className="h-4 w-4" />
-                  </Button>
+                      {/* Attachment button */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={images.length >= 5 && files.length >= 10}
+                      >
+                        <AttachIcon className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
 
-                  {/* Send/Stop button */}
+                  {/* Send/Stop/Voice button */}
                   <div className="ml-1">
                     <AgentSendButton
                       isStreaming={isStreaming}
@@ -1235,6 +1448,13 @@ export const ChatInputArea = memo(function ChatInputArea({
                       }}
                       onStop={onStop}
                       isPlanMode={isPlanMode}
+                      // Voice input props - show mic when input is empty and voice is available
+                      showVoiceInput={isVoiceAvailable}
+                      isRecording={isVoiceRecording}
+                      isTranscribing={isTranscribing}
+                      onVoiceMouseDown={handleVoiceMouseDown}
+                      onVoiceMouseUp={handleVoiceMouseUp}
+                      onVoiceMouseLeave={handleVoiceMouseLeave}
                     />
                   </div>
                 </div>

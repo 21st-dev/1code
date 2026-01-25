@@ -19,6 +19,10 @@ export const previousAgentChatIdAtom = atom<string | null>(null)
 // Reset to null when "New Workspace" is clicked or chat is created
 export const selectedDraftIdAtom = atom<string | null>(null)
 
+// Show new chat form explicitly - set to true when "New Workspace" is clicked
+// Cleared when a workspace is selected or a draft is selected
+export const showNewChatFormAtom = atom<boolean>(false)
+
 // Preview paths storage - stores all preview paths keyed by chatId
 const previewPathsStorageAtom = atomWithStorage<Record<string, string>>(
   "agents:previewPaths",

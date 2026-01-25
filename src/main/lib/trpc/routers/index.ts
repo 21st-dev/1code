@@ -13,7 +13,7 @@ import { skillsRouter } from "./skills"
 import { agentsRouter } from "./agents"
 import { worktreeConfigRouter } from "./worktree-config"
 import { commandsRouter } from "./commands"
-import { devCredentialsRouter } from "./dev-credentials"
+import { voiceRouter } from "./voice"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -37,7 +37,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     agents: agentsRouter,
     worktreeConfig: worktreeConfigRouter,
     commands: commandsRouter,
-    devCredentials: devCredentialsRouter,
+    voice: voiceRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

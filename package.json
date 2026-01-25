@@ -1,6 +1,6 @@
 {
   "name": "21st-desktop",
-  "version": "0.0.43",
+  "version": "0.0.44",
   "private": true,
   "description": "1Code - UI for parallel work with AI agents",
   "author": {
@@ -191,7 +191,10 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "1Code needs microphone access for voice dictation"
+      }
     },
     "dmg": {
       "window": {

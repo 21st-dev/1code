@@ -228,6 +228,8 @@ export function SubChatSelector({
   // Resolved hotkeys for tooltips
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
   const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
+  const archiveAgentHotkey = useResolvedHotkeyDisplay("archive-agent")
+  const newAgentHotkey = useResolvedHotkeyDisplay("new-agent")
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
@@ -814,8 +816,8 @@ export function SubChatSelector({
                                 }}
                                 className="relative z-20 hover:text-foreground rounded p-0.5 transition-[color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer"
                                 title={
-                                  isActive
-                                    ? `Close tab (${getShortcutKey("closeTab")})`
+                                  isActive && archiveAgentHotkey
+                                    ? `Close tab (${archiveAgentHotkey})`
                                     : "Close tab"
                                 }
                               >
@@ -866,7 +868,7 @@ export function SubChatSelector({
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   New chat
-                  <Kbd>{getShortcutKey("newTab")}</Kbd>
+                  {newAgentHotkey && <Kbd>{newAgentHotkey}</Kbd>}
                 </TooltipContent>
               </Tooltip>
             </div>

@@ -54,6 +54,7 @@ import {
   normalizeCustomClaudeConfig,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
+  customHotkeysAtom,
 } from "../../../lib/atoms"
 // Desktop uses real tRPC
 import { toast } from "sonner"
@@ -69,6 +70,12 @@ import { usePastedTextFiles } from "../hooks/use-pasted-text-files"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import {
+  useVoiceRecording,
+  blobToBase64,
+  getAudioFormat,
+} from "../../../lib/hooks/use-voice-recording"
+import { getResolvedHotkey } from "../../../lib/hotkeys"
+import {
   AgentsFileMention,
   AgentsMentionsEditor,
   MENTION_PREFIXES,
@@ -78,6 +85,7 @@ import {
 import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
+import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
 // import { CreateBranchDialog } from "@/app/(alpha)/agents/{components}/create-branch-dialog"
 import {
   PromptInput,
@@ -368,6 +376,166 @@ export function NewChatForm({
   const hasShownTooltipRef = useRef(false)
   const [modeDropdownOpen, setModeDropdownOpen] = useState(false)
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
+
+  // Voice input state
+  const customHotkeys = useAtomValue(customHotkeysAtom)
+  const {
+    isRecording: isVoiceRecording,
+    audioLevel: voiceAudioLevel,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  } = useVoiceRecording()
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const transcribeMutation = trpc.voice.transcribe.useMutation()
+
+  // Check if voice input is available (authenticated OR has OPENAI_API_KEY)
+  const { data: voiceAvailability } = trpc.voice.isAvailable.useQuery()
+  const isVoiceAvailable = voiceAvailability?.available ?? false
+
+  // Voice input handlers
+  const handleVoiceMouseDown = useCallback(async () => {
+    if (isUploading || isTranscribing || isVoiceRecording) return
+    try {
+      await startRecording()
+    } catch (err) {
+      console.error("[NewChatForm] Failed to start recording:", err)
+    }
+  }, [isUploading, isTranscribing, isVoiceRecording, startRecording])
+
+  const handleVoiceMouseUp = useCallback(async () => {
+    if (!isVoiceRecording) return
+    try {
+      const blob = await stopRecording()
+      if (blob.size < 1000) {
+        console.log("[NewChatForm] Recording too short, ignoring")
+        return
+      }
+      setIsTranscribing(true)
+      const base64 = await blobToBase64(blob)
+      const format = getAudioFormat(blob.type)
+      const result = await transcribeMutation.mutateAsync({ audio: base64, format })
+      if (result.text && result.text.trim()) {
+        const currentValue = editorRef.current?.getValue() || ""
+        // Clean transcribed text - remove any remaining whitespace issues
+        const transcribed = result.text
+          .replace(/[\r\n\t]+/g, " ")
+          .replace(/ +/g, " ")
+          .trim()
+        // Add space separator only if current text exists and doesn't end with whitespace
+        const needsSpace = currentValue.length > 0 && !/\s$/.test(currentValue)
+        const newValue = currentValue + (needsSpace ? " " : "") + transcribed
+        editorRef.current?.setValue(newValue)
+        setHasContent(true)
+      }
+    } catch (err) {
+      console.error("[NewChatForm] Transcription failed:", err)
+    } finally {
+      setIsTranscribing(false)
+    }
+  }, [isVoiceRecording, stopRecording, transcribeMutation])
+
+  const handleVoiceMouseLeave = useCallback(() => {
+    if (isVoiceRecording) {
+      cancelRecording()
+    }
+  }, [isVoiceRecording, cancelRecording])
+
+  // Voice hotkey listener (push-to-talk: hold to record, release to transcribe)
+  useEffect(() => {
+    const voiceHotkey = getResolvedHotkey("voice-input", customHotkeys)
+    if (!voiceHotkey) return
+
+    // Parse hotkey once
+    const parts = voiceHotkey.split("+").map(p => p.toLowerCase())
+    const modifiers = parts.filter(p => ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
+    const mainKey = parts.find(p => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
+
+    const needsCmd = modifiers.includes("cmd") || modifiers.includes("meta")
+    const needsShift = modifiers.includes("shift")
+    const needsCtrl = modifiers.includes("ctrl")
+    const needsAlt = modifiers.includes("alt") || modifiers.includes("opt")
+
+    // For modifier-only hotkeys (like ctrl+opt), we track when all modifiers are pressed
+    const isModifierOnlyHotkey = !mainKey
+
+    const modifiersMatch = (e: KeyboardEvent) => {
+      return (
+        e.metaKey === needsCmd &&
+        e.shiftKey === needsShift &&
+        e.ctrlKey === needsCtrl &&
+        e.altKey === needsAlt
+      )
+    }
+
+    const matchesHotkey = (e: KeyboardEvent) => {
+      if (isModifierOnlyHotkey) {
+        // For modifier-only: just check if all required modifiers are pressed
+        return modifiersMatch(e)
+      }
+
+      // For regular hotkey with main key
+      const keyMatches =
+        e.key.toLowerCase() === mainKey ||
+        e.code.toLowerCase() === mainKey ||
+        e.code.toLowerCase() === `key${mainKey}` ||
+        (mainKey === "space" && e.code === "Space")
+
+      return keyMatches && modifiersMatch(e)
+    }
+
+    // Check if any modifier key is released
+    const isModifierRelease = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+      return key === "control" || key === "alt" || key === "meta" || key === "shift"
+    }
+
+    // Check if the released key is the main key (not a modifier)
+    const isMainKeyRelease = (e: KeyboardEvent) => {
+      if (isModifierOnlyHotkey) {
+        return isModifierRelease(e)
+      }
+      const eventKey = e.key.toLowerCase()
+      return (
+        eventKey === mainKey ||
+        e.code.toLowerCase() === mainKey ||
+        e.code.toLowerCase() === `key${mainKey}` ||
+        (mainKey === "space" && e.code === "Space")
+      )
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!matchesHotkey(e)) return
+      if (e.repeat) return // Ignore key repeat
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      // Start recording on keydown
+      if (!isVoiceRecording && !isTranscribing) {
+        handleVoiceMouseDown()
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Stop recording when the main key (or any modifier for modifier-only hotkeys) is released
+      if (!isMainKeyRelease(e)) return
+
+      // Only stop if we're currently recording
+      if (isVoiceRecording) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleVoiceMouseUp()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown, true)
+    window.addEventListener("keyup", handleKeyUp, true)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true)
+      window.removeEventListener("keyup", handleKeyUp, true)
+    }
+  }, [customHotkeys, isVoiceRecording, isTranscribing, handleVoiceMouseDown, handleVoiceMouseUp])
 
   // Shift+Tab handler for mode switching (now handled inside input component via onShiftTab prop)
 
@@ -1646,16 +1814,20 @@ export function NewChatForm({
                           e.target.value = "" // Reset to allow same file selection
                         }}
                       />
-                      {/* Attachment button */}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={images.length >= 5}
-                      >
-                        <AttachIcon className="h-4 w-4" />
-                      </Button>
+                      {/* Voice wave indicator or Attachment button */}
+                      {isVoiceRecording ? (
+                        <VoiceWaveIndicator isRecording={isVoiceRecording} audioLevel={voiceAudioLevel} />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={images.length >= 5}
+                        >
+                          <AttachIcon className="h-4 w-4" />
+                        </Button>
+                      )}
                       <div className="ml-1">
                         <AgentSendButton
                           isStreaming={false}
@@ -1667,6 +1839,12 @@ export function NewChatForm({
                           )}
                           onClick={handleSend}
                           isPlanMode={isPlanMode}
+                          showVoiceInput={isVoiceAvailable}
+                          isRecording={isVoiceRecording}
+                          isTranscribing={isTranscribing}
+                          onVoiceMouseDown={handleVoiceMouseDown}
+                          onVoiceMouseUp={handleVoiceMouseUp}
+                          onVoiceMouseLeave={handleVoiceMouseLeave}
                         />
                       </div>
                     </div>

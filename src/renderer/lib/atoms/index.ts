@@ -241,6 +241,14 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
   { getOnInit: true },
 )
 
+// OpenAI API key for voice transcription (for users without paid subscription)
+export const openaiApiKeyAtom = atomWithStorage<string>(
+  "agents:openai-api-key",
+  "",
+  undefined,
+  { getOnInit: true },
+)
+
 // New: Model profiles storage
 export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
   "agents:model-profiles",
@@ -392,6 +400,15 @@ export const analyticsOptOutAtom = atomWithStorage<boolean>(
 // When disabled, shows simple file list with "Create PR" button
 export const betaGitFeaturesEnabledAtom = atomWithStorage<boolean>(
   "preferences:beta-git-features-enabled",
+  false, // Default OFF
+  undefined,
+  { getOnInit: true },
+)
+
+// Beta: Enable Kanban board view
+// When enabled, shows Kanban button in sidebar to view workspaces as a board
+export const betaKanbanEnabledAtom = atomWithStorage<boolean>(
+  "preferences:beta-kanban-enabled",
   false, // Default OFF
   undefined,
   { getOnInit: true },

@@ -5,6 +5,7 @@ import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
   customClaudeConfigAtom,
+  openaiApiKeyAtom,
   type CustomClaudeConfig,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -50,11 +51,21 @@ export function AgentsModelsTab() {
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
 
+  // OpenAI API key state
+  const [storedOpenAIKey, setStoredOpenAIKey] = useAtom(openaiApiKeyAtom)
+  const [openaiKey, setOpenaiKey] = useState(storedOpenAIKey)
+  const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
+  const trpcUtils = trpc.useUtils()
+
   useEffect(() => {
     setModel(storedConfig.model)
     setBaseUrl(storedConfig.baseUrl)
     setToken(storedConfig.token)
   }, [storedConfig.model, storedConfig.baseUrl, storedConfig.token])
+
+  useEffect(() => {
+    setOpenaiKey(storedOpenAIKey)
+  }, [storedOpenAIKey])
 
   const trimmedModel = model.trim()
   const trimmedBaseUrl = baseUrl.trim()
@@ -89,6 +100,40 @@ export function AgentsModelsTab() {
     disconnectClaudeCode.mutate()
     setSettingsOpen(false)
     setAnthropicOnboardingCompleted(false)
+  }
+
+  // OpenAI key handlers
+  const trimmedOpenAIKey = openaiKey.trim()
+  const canSaveOpenAI = trimmedOpenAIKey !== storedOpenAIKey
+  const canResetOpenAI = !!trimmedOpenAIKey
+
+  const handleSaveOpenAI = async () => {
+    if (trimmedOpenAIKey && !trimmedOpenAIKey.startsWith("sk-")) {
+      toast.error("Invalid OpenAI API key format. Key should start with 'sk-'")
+      return
+    }
+
+    try {
+      await setOpenAIKeyMutation.mutateAsync({ key: trimmedOpenAIKey })
+      setStoredOpenAIKey(trimmedOpenAIKey)
+      // Invalidate voice availability check
+      await trpcUtils.voice.isAvailable.invalidate()
+      toast.success("OpenAI API key saved")
+    } catch (err) {
+      toast.error("Failed to save OpenAI API key")
+    }
+  }
+
+  const handleResetOpenAI = async () => {
+    try {
+      await setOpenAIKeyMutation.mutateAsync({ key: "" })
+      setStoredOpenAIKey("")
+      setOpenaiKey("")
+      await trpcUtils.voice.isAvailable.invalidate()
+      toast.success("OpenAI API key removed")
+    } catch (err) {
+      toast.error("Failed to remove OpenAI API key")
+    }
   }
 
   return (
@@ -223,6 +268,54 @@ export function AgentsModelsTab() {
             Save
           </Button>
         </div>
+        </div>
+      </div>
+
+      {/* OpenAI API Key for Voice Input */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">Voice Input</h4>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">OpenAI API Key</Label>
+                <p className="text-xs text-muted-foreground">
+                  Required for voice transcription (Whisper API). Free users need their own key.
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  type="password"
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  className="w-full"
+                  placeholder="sk-..."
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted p-3 rounded-b-lg flex justify-end gap-2 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetOpenAI}
+              disabled={!canResetOpenAI || setOpenAIKeyMutation.isPending}
+              className="hover:bg-red-500/10 hover:text-red-600"
+            >
+              Remove
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveOpenAI}
+              disabled={!canSaveOpenAI || setOpenAIKeyMutation.isPending}
+            >
+              Save
+            </Button>
+          </div>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ By [21st.dev](https://21st.dev) team
 | **Custom Subagents** | ✅ | ✅ |
 | **Subscription & API Key Support** | ✅ | ✅ |
 | **Custom Models & Providers (BYOK)** | ✅ | ✅ |
+| **Voice Input** | ✅ Hold-to-talk dictation | ❌ |
 | **Checkpointing** | 🚧 Beta | ✅ |
 | **Tool Approve** | 📋 Backlog | ✅ |
 | **Hooks** | ❌ | ✅ |

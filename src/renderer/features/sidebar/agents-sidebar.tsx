@@ -23,11 +23,12 @@ import {
   isFullscreenAtom,
   showOfflineModeFeaturesAtom,
   showWorkspaceIconAtom,
+  betaKanbanEnabledAtom,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { RunningServersSection } from "./running-servers-popover"
 import { McpServersSection } from "./mcp-servers-popover"
-import { ChevronDown, MoreHorizontal } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Columns3 } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null })
@@ -89,6 +90,7 @@ import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
   selectedDraftIdAtom,
+  showNewChatFormAtom,
   loadingSubChatsAtom,
   agentsUnseenChangesAtom,
   archivePopoverOpenAtom,
@@ -491,6 +493,9 @@ const AgentChatItem = React.memo(function AgentChatItem({
   formatTime: (dateStr: string) => string
   isJustCreated: boolean
 }) {
+  // Resolved hotkey for context menu
+  const archiveWorkspaceHotkey = useResolvedHotkeyDisplay("archive-workspace")
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -735,7 +740,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => onArchive(chatId)} className="justify-between">
               Archive workspace
-              <Kbd>{getShortcutKey("archiveAgent")}</Kbd>
+              {archiveWorkspaceHotkey && <Kbd>{archiveWorkspaceHotkey}</Kbd>}
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => onArchiveAllBelow(chatId)}
@@ -1013,6 +1018,45 @@ const ArchiveButton = memo(forwardRef<HTMLButtonElement, React.ButtonHTMLAttribu
   }
 ))
 
+// Isolated Kanban Button - clears selection to show Kanban view
+const KanbanButton = memo(function KanbanButton() {
+  const kanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
+  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
+
+  // Resolved hotkey for tooltip (respects custom bindings)
+  const openKanbanHotkey = useResolvedHotkeyDisplay("open-kanban")
+
+  const handleClick = useCallback(() => {
+    // Clear selected chat, draft, and new form state to show Kanban view
+    setSelectedChatId(null)
+    setSelectedDraftId(null)
+    setShowNewChatForm(false)
+  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm])
+
+  // Hide button if feature is disabled
+  if (!kanbanEnabled) return null
+
+  return (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleClick}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+        >
+          <Columns3 className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        Kanban View
+        {openKanbanHotkey && <Kbd>{openKanbanHotkey}</Kbd>}
+      </TooltipContent>
+    </Tooltip>
+  )
+})
+
 // Isolated Archive Section - subscribes to archivePopoverOpenAtom internally
 // to prevent sidebar re-renders when popover opens/closes
 interface ArchiveSectionProps {
@@ -1135,16 +1179,18 @@ const SidebarHeader = memo(function SidebarHeader({
         >
           <Tooltip delayDuration={500}>
             <TooltipTrigger asChild>
-              <ButtonCustom
-                variant="ghost"
-                size="icon"
-                onClick={onToggleSidebar}
-                tabIndex={-1}
-                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                aria-label="Close sidebar"
-              >
-                <IconDoubleChevronLeft className="h-4 w-4" />
-              </ButtonCustom>
+              <span className="inline-flex">
+                <ButtonCustom
+                  variant="ghost"
+                  size="icon"
+                  onClick={onToggleSidebar}
+                  tabIndex={-1}
+                  className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
+                  aria-label="Close sidebar"
+                >
+                  <IconDoubleChevronLeft className="h-4 w-4" />
+                </ButtonCustom>
+              </span>
             </TooltipTrigger>
             <TooltipContent>
               Close sidebar
@@ -1456,6 +1502,7 @@ export function AgentsSidebar({
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
   const autoAdvanceTarget = useAtomValue(autoAdvanceTargetAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
+  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
   // Use ref instead of state to avoid re-renders on hover
@@ -1494,6 +1541,9 @@ export function AgentsSidebar({
 
   // Haptic feedback
   const { trigger: triggerHaptic } = useHaptic()
+
+  // Resolved hotkey for tooltip
+  const newWorkspaceHotkey = useResolvedHotkeyDisplay("new-workspace")
 
   // Rename dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
@@ -2014,11 +2064,12 @@ export function AgentsSidebar({
       // Navigate to NewChatForm with this draft selected
       setSelectedChatId(null)
       setSelectedDraftId(draftId)
+      setShowNewChatForm(false) // Clear explicit new chat state when selecting a draft
       if (isMobileFullscreen && onChatSelect) {
         onChatSelect()
       }
     },
-    [setSelectedChatId, setSelectedDraftId, isMobileFullscreen, onChatSelect],
+    [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, isMobileFullscreen, onChatSelect],
   )
 
   // Reset focused index when search query changes
@@ -2087,6 +2138,7 @@ export function AgentsSidebar({
     triggerHaptic("light")
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
+    setShowNewChatForm(true) // Explicitly show new chat form
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2153,11 +2205,12 @@ export function AgentsSidebar({
     // In multi-select mode, clicking on the item still navigates to the chat
     // Only clicking on the checkbox toggles selection
     setSelectedChatId(chatId)
+    setShowNewChatForm(false) // Clear new chat form state when selecting a workspace
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
-  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, isMobileFullscreen, onChatSelect])
+  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setShowNewChatForm, isMobileFullscreen, onChatSelect])
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()
@@ -2578,21 +2631,23 @@ export function AgentsSidebar({
           {/* New Workspace Button */}
           <Tooltip delayDuration={500}>
             <TooltipTrigger asChild>
-              <ButtonCustom
-                onClick={handleNewAgent}
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg gap-1.5",
-                  isMobileFullscreen ? "h-10" : "h-7",
-                )}
-              >
-                <span className="text-sm font-medium">New Workspace</span>
-              </ButtonCustom>
+              <span className="inline-flex w-full">
+                <ButtonCustom
+                  onClick={handleNewAgent}
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg gap-1.5",
+                    isMobileFullscreen ? "h-10" : "h-7",
+                  )}
+                >
+                  <span className="text-sm font-medium">New Workspace</span>
+                </ButtonCustom>
+              </span>
             </TooltipTrigger>
             <TooltipContent side="right">
               Start a new workspace
-              <Kbd>{getShortcutKey("newAgent")}</Kbd>
+              {newWorkspaceHotkey && <Kbd>{newWorkspaceHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -2831,6 +2886,9 @@ export function AgentsSidebar({
 
                 {/* MCP Servers Button - desktop only */}
                 {isDesktop && <McpServersSection isMobile={isMobileFullscreen} />}
+
+                {/* Kanban View Button - isolated component */}
+                <KanbanButton />
 
                 {/* Archive Button - isolated component to prevent sidebar re-renders */}
                 <ArchiveSection archivedChatsCount={archivedChatsCount} />

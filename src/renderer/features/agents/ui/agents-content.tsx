@@ -12,6 +12,8 @@ const useClerk = () => ({ signOut: () => {} })
 import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
+  selectedDraftIdAtom,
+  showNewChatFormAtom,
   agentsMobileViewModeAtom,
   agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
@@ -27,6 +29,7 @@ import {
   ctrlTabTargetAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
+import { KanbanView } from "../../kanban"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
@@ -58,6 +61,8 @@ const useIsAdmin = () => false
 // Main Component
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
+  const selectedDraftId = useAtomValue(selectedDraftIdAtom)
+  const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [previewSidebarOpen, setPreviewSidebarOpen] = useAtom(
@@ -929,10 +934,12 @@ export function AgentsContent() {
                 selectedTeamImageUrl={selectedTeam?.image_url}
               />
             </div>
-          ) : (
+          ) : selectedDraftId || showNewChatForm ? (
             <div className="h-full flex flex-col relative overflow-hidden">
               <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
             </div>
+          ) : (
+            <KanbanView />
           )}
         </div>
       </div>

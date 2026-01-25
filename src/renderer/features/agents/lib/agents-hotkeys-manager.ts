@@ -32,6 +32,7 @@ const SHORTCUT_TO_ACTION_MAP: Record<ShortcutActionId, string> = {
   "search-workspaces": "search-workspaces",
   "archive-workspace": "archive-workspace",
   "quick-switch-workspaces": "quick-switch-workspaces",
+  "open-kanban": "open-kanban",
   "new-agent": "create-new-agent",
   "search-chats": "search-chats",
   "search-in-chat": "toggle-chat-search",
@@ -44,9 +45,9 @@ const SHORTCUT_TO_ACTION_MAP: Record<ShortcutActionId, string> = {
   "stop-generation": "stop-generation",
   "switch-model": "switch-model",
   "toggle-terminal": "toggle-terminal",
-  "toggle-preview": "toggle-preview",
   "open-diff": "open-diff",
   "create-pr": "create-pr",
+  "voice-input": "voice-input", // Handled directly in chat-input-area.tsx
 }
 
 // Reverse mapping: action ID -> shortcut ID
@@ -101,6 +102,8 @@ function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
 
 export interface AgentsHotkeysManagerConfig {
   setSelectedChatId?: (id: string | null) => void
+  setSelectedDraftId?: (id: string | null) => void
+  setShowNewChatForm?: (show: boolean) => void
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
   setPreviewOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
   setSettingsDialogOpen?: (open: boolean) => void
@@ -108,9 +111,8 @@ export interface AgentsHotkeysManagerConfig {
   toggleChatSearch?: () => void
   selectedChatId?: string | null
   customHotkeysConfig?: CustomHotkeysConfig
-  isDesktop?: boolean
-  isPreviewOpen?: boolean
-  toggleDevServer?: (() => void) | null
+  // Feature flags
+  betaKanbanEnabled?: boolean
 }
 
 export interface UseAgentsHotkeysOptions {
@@ -134,25 +136,23 @@ export function useAgentsHotkeys(
   const createActionContext = useCallback(
     (): AgentActionContext => ({
       setSelectedChatId: config.setSelectedChatId,
+      setSelectedDraftId: config.setSelectedDraftId,
+      setShowNewChatForm: config.setShowNewChatForm,
       setSidebarOpen: config.setSidebarOpen,
-      setPreviewOpen: config.setPreviewOpen,
       setSettingsDialogOpen: config.setSettingsDialogOpen,
       setSettingsActiveTab: config.setSettingsActiveTab,
       toggleChatSearch: config.toggleChatSearch,
       selectedChatId: config.selectedChatId,
-      isPreviewOpen: config.isPreviewOpen,
-      toggleDevServer: config.toggleDevServer,
     }),
     [
       config.setSelectedChatId,
+      config.setSelectedDraftId,
+      config.setShowNewChatForm,
       config.setSidebarOpen,
-      config.setPreviewOpen,
       config.setSettingsDialogOpen,
       config.setSettingsActiveTab,
       config.toggleChatSearch,
       config.selectedChatId,
-      config.isPreviewOpen,
-      config.toggleDevServer,
     ],
   )
 
@@ -241,13 +241,13 @@ export function useAgentsHotkeys(
         return
       }
 
-      // Check toggle-preview hotkey (desktop only)
-      if (config.isDesktop) {
-        const togglePreviewHotkey = getHotkeyForAction("toggle-preview")
-        if (togglePreviewHotkey && matchesHotkey(e, togglePreviewHotkey)) {
+      // Check open-kanban hotkey (only if feature is enabled)
+      if (config.betaKanbanEnabled) {
+        const openKanbanHotkey = getHotkeyForAction("open-kanban")
+        if (openKanbanHotkey && matchesHotkey(e, openKanbanHotkey)) {
           e.preventDefault()
           e.stopPropagation()
-          handleHotkeyAction("toggle-preview")
+          handleHotkeyAction("open-kanban")
           return
         }
       }
@@ -255,7 +255,7 @@ export function useAgentsHotkeys(
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [enabled, handleHotkeyAction, getHotkeyForAction, config.isDesktop])
+  }, [enabled, handleHotkeyAction, getHotkeyForAction, config.betaKanbanEnabled])
 
   // General hotkey handler for remaining actions
   const actionsWithHotkeys = useMemo(
@@ -268,7 +268,7 @@ export function useAgentsHotkeys(
           action.id !== "open-shortcuts" &&
           action.id !== "open-settings" &&
           action.id !== "toggle-chat-search" &&
-          action.id !== "toggle-preview",
+          action.id !== "open-kanban",
       ),
     [],
   )

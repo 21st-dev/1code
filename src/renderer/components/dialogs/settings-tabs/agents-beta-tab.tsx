@@ -5,6 +5,7 @@ import {
   showOfflineModeFeaturesAtom,
   autoOfflineModeAtom,
   selectedOllamaModelAtom,
+  betaKanbanEnabledAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Switch } from "../../ui/switch"
@@ -46,6 +47,7 @@ export function AgentsBetaTab() {
   const [showOfflineFeatures, setShowOfflineFeatures] = useAtom(showOfflineModeFeaturesAtom)
   const [autoOffline, setAutoOffline] = useAtom(autoOfflineModeAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
+  const [kanbanEnabled, setKanbanEnabled] = useAtom(betaKanbanEnabledAtom)
   const [copied, setCopied] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "not-available" | "error">("idle")
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
@@ -138,6 +140,22 @@ export function AgentsBetaTab() {
             <Switch
               checked={showOfflineFeatures}
               onCheckedChange={setShowOfflineFeatures}
+            />
+          </div>
+
+          {/* Kanban Board Toggle */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Kanban Board
+              </span>
+              <span className="text-xs text-muted-foreground">
+                View workspaces as a Kanban board organized by status.
+              </span>
+            </div>
+            <Switch
+              checked={kanbanEnabled}
+              onCheckedChange={setKanbanEnabled}
             />
           </div>
         </div>

@@ -3,7 +3,7 @@ import { app, BrowserWindow, Menu, session } from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
-import { AuthManager } from "./auth-manager"
+import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
 import {
   identify,
   initAnalytics,
@@ -84,11 +84,12 @@ export function getAppUrl(): string {
   return process.env.ELECTRON_RENDERER_URL || "https://21st.dev/agents"
 }
 
-// Auth manager singleton
+// Auth manager singleton (use the one from auth-manager module)
 let authManager: AuthManager
 
 export function getAuthManager(): AuthManager {
-  return authManager
+  // First try to get from module, fallback to local variable for backwards compat
+  return getAuthManagerFromModule() || authManager
 }
 
 // Handle auth code from deep link (exported for IPC handlers)
@@ -802,8 +803,8 @@ if (gotTheLock) {
     // Build initial menu
     buildMenu()
 
-    // Initialize auth manager
-    authManager = new AuthManager(!!process.env.ELECTRON_RENDERER_URL)
+    // Initialize auth manager (uses singleton from auth-manager module)
+    authManager = initAuthManager(!!process.env.ELECTRON_RENDERER_URL)
     console.log("[App] Auth manager initialized")
 
     // Initialize analytics after auth manager so we can identify user

@@ -74,6 +74,12 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     isDynamic: true,
     dynamicDescription: "Controlled by Ctrl+Tab preference",
   },
+  {
+    id: "open-kanban",
+    label: "Open Kanban board",
+    category: "workspaces",
+    defaultKeys: ["cmd", "shift", "K"],
+  },
 
   // ============================================
   // AGENTS
@@ -170,6 +176,12 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     label: "Create PR",
     category: "agents",
     defaultKeys: ["cmd", "P"],
+  },
+  {
+    id: "voice-input",
+    label: "Voice input (hold)",
+    category: "agents",
+    defaultKeys: ["ctrl", "opt"],
   },
 ]
 
