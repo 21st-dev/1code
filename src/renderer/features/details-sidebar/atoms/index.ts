@@ -2,13 +2,13 @@ import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { LucideIcon } from "lucide-react"
-import { Box, FileText, Terminal, FileDiff, ListTodo } from "lucide-react"
+import { Box, FileText, Terminal, FileDiff, ListTodo, Gauge } from "lucide-react"
 
 // ============================================================================
 // Widget System Types & Registry
 // ============================================================================
 
-export type WidgetId = "info" | "todo" | "plan" | "terminal" | "diff"
+export type WidgetId = "info" | "usage" | "todo" | "plan" | "terminal" | "diff"
 
 export interface WidgetConfig {
   id: WidgetId
@@ -20,6 +20,7 @@ export interface WidgetConfig {
 
 export const WIDGET_REGISTRY: WidgetConfig[] = [
   { id: "info", label: "Workspace", icon: Box, canExpand: false, defaultVisible: true },
+  { id: "usage", label: "Usage", icon: Gauge, canExpand: false, defaultVisible: true },
   { id: "todo", label: "To-dos", icon: ListTodo, canExpand: false, defaultVisible: true },
   { id: "plan", label: "Plan", icon: FileText, canExpand: true, defaultVisible: true },
   { id: "terminal", label: "Terminal", icon: Terminal, canExpand: true, defaultVisible: false },

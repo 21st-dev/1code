@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react"
 import { useAtom } from "jotai"
-import { GripVertical, Box, TerminalSquare, ListTodo } from "lucide-react"
+import { GripVertical, Box, TerminalSquare, ListTodo, Gauge } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -30,6 +30,8 @@ function getWidgetIcon(widgetId: WidgetId) {
   switch (widgetId) {
     case "info":
       return Box
+    case "usage":
+      return Gauge
     case "todo":
       return ListTodo
     case "plan":
