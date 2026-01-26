@@ -25,33 +25,22 @@ function waitForElectronTRPC(): Promise<void> {
       return
     }
 
-    // Debug: log what's available on window
-    console.log("[TRPCProvider] Checking for preload globals...")
-    console.log("[TRPCProvider] window.electronTRPC:", (window as any).electronTRPC)
-    console.log("[TRPCProvider] typeof window.electronTRPC:", typeof (window as any).electronTRPC)
-    console.log("[TRPCProvider] window.desktopApi:", (window as any).desktopApi)
-    console.log("[TRPCProvider] window.desktopApi?.platform:", (window as any).desktopApi?.platform)
-    console.log("[TRPCProvider] navigator.userAgent:", navigator.userAgent)
-    console.log("[TRPCProvider] Is Electron:", navigator.userAgent.includes("Electron"))
-
-    // Check if already available
+    // Check if already available (most common case)
     if ((window as any).electronTRPC) {
-      console.log("[TRPCProvider] electronTRPC found immediately!")
       resolve()
       return
     }
 
     // Wait for it to become available (with timeout)
-    const maxWait = 5000 // 5 seconds
+    const maxWait = 2000 // 2 seconds (reduced from 5)
     const startTime = Date.now()
     const checkInterval = setInterval(() => {
       if ((window as any).electronTRPC) {
-        console.log("[TRPCProvider] electronTRPC found after waiting!")
         clearInterval(checkInterval)
         resolve()
       } else if (Date.now() - startTime > maxWait) {
         clearInterval(checkInterval)
-        console.error("[TRPCProvider] Timeout! Final state:")
+        console.error("[TRPCProvider] Timeout waiting for electronTRPC")
         console.error("[TRPCProvider] window.electronTRPC:", (window as any).electronTRPC)
         console.error("[TRPCProvider] window.desktopApi:", (window as any).desktopApi)
         reject(
@@ -110,12 +99,10 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
     )
   }
 
+  // Return null during initialization to avoid showing loading message
+  // The initialization is typically very fast (<100ms), so users won't see a flash
   if (!trpcClient) {
-    return (
-      <div style={{ padding: "20px" }}>
-        <p>Initializing TRPC client...</p>
-      </div>
-    )
+    return null
   }
 
   return (

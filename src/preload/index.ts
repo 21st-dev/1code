@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron"
 
-console.log("[Preload] ========== PRELOAD SCRIPT STARTING ==========")
-console.log("[Preload] contextBridge available:", !!contextBridge)
-console.log("[Preload] ipcRenderer available:", !!ipcRenderer)
-console.log("[Preload] process.type:", process.type)
+// Preload script initialization (only log in dev mode)
+if (process.env.NODE_ENV !== "production") {
+  console.log("[Preload] Preload script initialized")
+}
 
 // Only initialize Sentry in production to avoid IPC errors in dev mode
 if (process.env.NODE_ENV === "production") {
@@ -22,11 +22,12 @@ const electronTRPC = {
 }
 
 try {
-  console.log("[Preload] Attempting to expose electronTRPC...")
   contextBridge.exposeInMainWorld("electronTRPC", electronTRPC)
-  console.log("[Preload] ✓ electronTRPC exposed successfully")
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[Preload] electronTRPC exposed")
+  }
 } catch (err) {
-  console.error("[Preload] ✗ Failed to expose electronTRPC:", err)
+  console.error("[Preload] Failed to expose electronTRPC:", err)
 }
 
 // Expose analytics force flag for testing
