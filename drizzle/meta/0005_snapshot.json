@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a5b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "prevId": "1c211023-1270-4cdd-934d-4396e72557e9",
+  "id": "80d37e81-2636-4849-9967-e72494489501",
+  "prevId": "a5b2c3d4-e5f6-7890-abcd-ef1234567890",
   "tables": {
     "chats": {
       "name": "chats",
@@ -85,7 +85,22 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "chats_project_id_idx": {
+          "name": "chats_project_id_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
+        },
+        "chats_updated_at_idx": {
+          "name": "chats_updated_at_idx",
+          "columns": [
+            "updated_at"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "chats_project_id_projects_id_fk": {
           "name": "chats_project_id_projects_id_fk",
@@ -218,6 +233,13 @@
             "path"
           ],
           "isUnique": true
+        },
+        "projects_updated_at_idx": {
+          "name": "projects_updated_at_idx",
+          "columns": [
+            "updated_at"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -279,30 +301,6 @@
           "autoincrement": false,
           "default": "'[]'"
         },
-        "additions": {
-          "name": "additions",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": 0
-        },
-        "deletions": {
-          "name": "deletions",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": 0
-        },
-        "file_count": {
-          "name": "file_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": 0
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -318,7 +316,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "sub_chats_chat_id_idx": {
+          "name": "sub_chats_chat_id_idx",
+          "columns": [
+            "chat_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "sub_chats_chat_id_chats_id_fk": {
           "name": "sub_chats_chat_id_chats_id_fk",

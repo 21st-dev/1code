@@ -15,12 +15,50 @@ const execAsync = promisify(exec)
 
 export const projectsRouter = router({
   /**
-   * List all projects
+   * List all projects (with optional pagination for performance)
+   * For backward compatibility, returns array when no pagination params provided
    */
-  list: publicProcedure.query(() => {
-    const db = getDatabase()
-    return db.select().from(projects).orderBy(desc(projects.updatedAt)).all()
-  }),
+  list: publicProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().min(1).max(500).optional(),
+          offset: z.number().min(0).optional(),
+        })
+        .optional()
+    )
+    .query(({ input }) => {
+      const db = getDatabase()
+
+      // Backward compatibility: return full array if no pagination params
+      if (!input?.limit && !input?.offset) {
+        return db.select().from(projects).orderBy(desc(projects.updatedAt)).all()
+      }
+
+      const { limit = 50, offset = 0 } = input
+
+      // Get total count for pagination
+      const totalResult = db
+        .select({ count: projects.id })
+        .from(projects)
+        .all()
+      const total = totalResult.length
+
+      // Get paginated results
+      const items = db
+        .select()
+        .from(projects)
+        .orderBy(desc(projects.updatedAt))
+        .limit(limit)
+        .offset(offset)
+        .all()
+
+      return {
+        items,
+        total,
+        hasMore: offset + limit < total,
+      }
+    }),
 
   /**
    * Get a single project by ID

@@ -36,6 +36,13 @@
       "when": 1768199613729,
       "tag": "0004_melted_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1769415926979,
+      "tag": "0005_tidy_mauler",
+      "breakpoints": true
     }
   ]
 }

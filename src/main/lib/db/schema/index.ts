@@ -1,55 +1,68 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core"
 import { relations } from "drizzle-orm"
 import { createId } from "../utils"
 
 // ============ PROJECTS ============
-export const projects = sqliteTable("projects", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  name: text("name").notNull(),
-  path: text("path").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  // Git remote info (extracted from local .git)
-  gitRemoteUrl: text("git_remote_url"),
-  gitProvider: text("git_provider"), // "github" | "gitlab" | "bitbucket" | null
-  gitOwner: text("git_owner"),
-  gitRepo: text("git_repo"),
-})
+export const projects = sqliteTable(
+  "projects",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name").notNull(),
+    path: text("path").notNull().unique(),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    // Git remote info (extracted from local .git)
+    gitRemoteUrl: text("git_remote_url"),
+    gitProvider: text("git_provider"), // "github" | "gitlab" | "bitbucket" | null
+    gitOwner: text("git_owner"),
+    gitRepo: text("git_repo"),
+  },
+  (table) => ({
+    updatedAtIdx: index("projects_updated_at_idx").on(table.updatedAt),
+  })
+)
 
 export const projectsRelations = relations(projects, ({ many }) => ({
   chats: many(chats),
 }))
 
 // ============ CHATS ============
-export const chats = sqliteTable("chats", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  name: text("name"),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  archivedAt: integer("archived_at", { mode: "timestamp" }),
-  // Worktree fields (for git isolation per chat)
-  worktreePath: text("worktree_path"),
-  branch: text("branch"),
-  baseBranch: text("base_branch"),
-  // PR tracking fields
-  prUrl: text("pr_url"),
-  prNumber: integer("pr_number"),
-})
+export const chats = sqliteTable(
+  "chats",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name"),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+    // Worktree fields (for git isolation per chat)
+    worktreePath: text("worktree_path"),
+    branch: text("branch"),
+    baseBranch: text("base_branch"),
+    // PR tracking fields
+    prUrl: text("pr_url"),
+    prNumber: integer("pr_number"),
+  },
+  (table) => ({
+    projectIdIdx: index("chats_project_id_idx").on(table.projectId),
+    updatedAtIdx: index("chats_updated_at_idx").on(table.updatedAt),
+  })
+)
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({
   project: one(projects, {
@@ -60,25 +73,31 @@ export const chatsRelations = relations(chats, ({ one, many }) => ({
 }))
 
 // ============ SUB-CHATS ============
-export const subChats = sqliteTable("sub_chats", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  name: text("name"),
-  chatId: text("chat_id")
-    .notNull()
-    .references(() => chats.id, { onDelete: "cascade" }),
-  sessionId: text("session_id"), // Claude SDK session ID for resume
-  streamId: text("stream_id"), // Track in-progress streams
-  mode: text("mode").notNull().default("agent"), // "plan" | "agent"
-  messages: text("messages").notNull().default("[]"), // JSON array
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-})
+export const subChats = sqliteTable(
+  "sub_chats",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name"),
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    sessionId: text("session_id"), // Claude SDK session ID for resume
+    streamId: text("stream_id"), // Track in-progress streams
+    mode: text("mode").notNull().default("agent"), // "plan" | "agent"
+    messages: text("messages").notNull().default("[]"), // JSON array
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+  (table) => ({
+    chatIdIdx: index("sub_chats_chat_id_idx").on(table.chatId),
+  })
+)
 
 export const subChatsRelations = relations(subChats, ({ one }) => ({
   chat: one(chats, {
