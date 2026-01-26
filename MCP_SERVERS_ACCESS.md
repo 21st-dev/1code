@@ -7,7 +7,7 @@
 
 ### 1. ✅ user-github (GitHub API)
 **Status:** ⚠️ Authentication Required  
-**Location:** `/Users/kenny/.cursor/projects/Users-kenny-1code/mcps/user-github/`
+**Location:** `~/.cursor/projects/<project-name>/mcps/user-github/`
 
 **Available Tools:**
 - `search_repositories` - Search GitHub repositories
@@ -29,7 +29,7 @@
 
 ### 2. ✅ user-supermemory (Memory/Knowledge Base)
 **Status:** ✅ Working  
-**Location:** `/Users/kenny/.cursor/projects/Users-kenny-1code/mcps/user-supermemory/`
+**Location:** `~/.cursor/projects/<project-name>/mcps/user-supermemory/`
 
 **Available Tools:**
 - `whoAmI` - Get user information
@@ -51,7 +51,7 @@
 
 ### 3. ✅ cursor-ide-browser (Browser Automation)
 **Status:** ✅ Available  
-**Location:** `/Users/kenny/.cursor/projects/Users-kenny-1code/mcps/cursor-ide-browser/`
+**Location:** `~/.cursor/projects/<project-name>/mcps/cursor-ide-browser/`
 
 **Available Tools:**
 - `browser_navigate` - Navigate to URLs
@@ -68,7 +68,7 @@
 
 ### 4. ✅ cursor-browser-extension (Browser Extension)
 **Status:** ✅ Available  
-**Location:** `/Users/kenny/.cursor/projects/Users-kenny-1code/mcps/cursor-browser-extension/`
+**Location:** `~/.cursor/projects/<project-name>/mcps/cursor-browser-extension/`
 
 **Use Case:** Frontend/webapp development and testing
 

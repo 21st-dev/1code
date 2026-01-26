@@ -16,49 +16,35 @@
  * Run this after `npm run dist` to generate the manifest files.
  */
 
-import { createHash } from "crypto"
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "fs"
-import { join, dirname } from "path"
-import { fileURLToPath } from "url"
+import { writeFileSync } from "fs"
+import { join } from "path"
+import {
+  getRootDir,
+  getVersion,
+  calculateSha512,
+  getFileSize,
+  findFile,
+  formatBytes,
+  fileExists,
+} from "./utils.mjs"
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-// Get version from package.json
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, "../package.json"), "utf-8")
-)
-const version = process.env.VERSION || packageJson.version
-
-const releaseDir = join(__dirname, "../release")
-
-/**
- * Calculate SHA512 hash of a file and return base64 encoded string
- */
-function calculateSha512(filePath) {
-  const content = readFileSync(filePath)
-  return createHash("sha512").update(content).digest("base64")
-}
-
-/**
- * Get file size in bytes using stat (more efficient than reading entire file)
- */
-function getFileSize(filePath) {
-  return statSync(filePath).size
-}
+const ROOT_DIR = getRootDir(import.meta.url)
+const version = getVersion(ROOT_DIR)
+const releaseDir = join(ROOT_DIR, "release")
 
 /**
  * Find ZIP file matching pattern in release directory
  */
 function findZipFile(pattern) {
-  if (!existsSync(releaseDir)) {
+  if (!fileExists(releaseDir)) {
     console.error(`Release directory not found: ${releaseDir}`)
     process.exit(1)
   }
 
-  const files = readdirSync(releaseDir)
-  const match = files.find((f) => f.includes(pattern) && f.endsWith(".zip"))
-  return match ? join(releaseDir, match) : null
+  const zipFile = findFile(releaseDir, (f) =>
+    f.includes(pattern) && f.endsWith(".zip")
+  )
+  return zipFile || null
 }
 
 /**
@@ -76,6 +62,7 @@ function generateManifest(arch) {
     console.warn(`Skipping ${arch} manifest generation`)
     return null
   }
+
 
   const zipName = zipPath.split("/").pop()
   const sha512 = calculateSha512(zipPath)
@@ -151,16 +138,7 @@ function objectToYaml(obj, indent = 0) {
   return yaml
 }
 
-/**
- * Format bytes to human readable string
- */
-function formatBytes(bytes) {
-  if (bytes === 0) return "0 B"
-  const k = 1024
-  const sizes = ["B", "KB", "MB", "GB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
-}
+// formatBytes is now imported from utils.mjs
 
 // Main execution
 console.log("=".repeat(50))

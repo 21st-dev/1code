@@ -11,11 +11,9 @@
 import fs from "node:fs"
 import path from "node:path"
 import https from "node:https"
-import crypto from "node:crypto"
-import { fileURLToPath } from "node:url"
+import { getRootDir, calculateSha256, ensureDir } from "./utils.mjs"
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT_DIR = path.join(__dirname, "..")
+const ROOT_DIR = getRootDir(import.meta.url)
 const BIN_DIR = path.join(ROOT_DIR, "resources", "bin")
 
 // Claude Code distribution base URL
@@ -113,18 +111,7 @@ function downloadFile(url, destPath) {
   })
 }
 
-/**
- * Calculate SHA256 hash of file
- */
-function calculateSha256(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256")
-    const stream = fs.createReadStream(filePath)
-    stream.on("data", (chunk) => hash.update(chunk))
-    stream.on("end", () => resolve(hash.digest("hex")))
-    stream.on("error", reject)
-  })
-}
+// calculateSha256 is now imported from utils.mjs
 
 /**
  * Get latest version from manifest
@@ -164,7 +151,7 @@ async function downloadPlatform(version, platformKey, manifest) {
   const targetPath = path.join(targetDir, platform.binary)
 
   // Create directory
-  fs.mkdirSync(targetDir, { recursive: true })
+  ensureDir(targetDir)
 
   // Get expected hash from manifest
   const platformManifest = manifest.platforms[platform.dir]
@@ -259,7 +246,7 @@ async function main() {
   console.log(`\nPlatforms to download: ${platformsToDownload.join(", ")}`)
 
   // Create bin directory
-  fs.mkdirSync(BIN_DIR, { recursive: true })
+  ensureDir(BIN_DIR)
 
   // Write version file
   fs.writeFileSync(

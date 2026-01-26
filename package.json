@@ -28,11 +28,18 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "ts:check": "tsgo --noEmit",
+    "automate:start": "./scripts/automate-dev-workflow.sh start",
+    "automate:restart": "./scripts/automate-dev-workflow.sh restart",
+    "automate:setup": "./scripts/automate-dev-setup.sh",
+    "automate:review": "./scripts/automate-github-review.sh",
+    "automate:mcp": "./scripts/automate-mcp-check.sh",
+    "automate:all": "./scripts/automate-dev-workflow.sh all",
     "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\""
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",
     "@anthropic-ai/claude-agent-sdk": "^0.2.19",
+    "@emotion/is-prop-valid": "^1.4.0",
     "@git-diff-view/react": "^0.0.35",
     "@git-diff-view/shiki": "^0.0.36",
     "@radix-ui/react-accordion": "^1.2.12",

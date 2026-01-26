@@ -14,17 +14,16 @@
  * - 100px transparent padding on all sides
  */
 
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { writeFileSync, rmSync } from 'fs';
+import { join } from 'path';
 import { execSync } from 'child_process';
 import sharp from 'sharp';
+import { getRootDir, fileExists, ensureDir } from './utils.mjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const ROOT_DIR = getRootDir(import.meta.url);
 
 // Paths
-const BUILD_DIR = join(__dirname, '../build');
+const BUILD_DIR = join(ROOT_DIR, 'build');
 const INPUT_ICON = join(BUILD_DIR, 'icon.png');
 const ICONSET_DIR = join(BUILD_DIR, 'icon.iconset');
 const OUTPUT_ICON = join(BUILD_DIR, 'icon.icns');
@@ -132,7 +131,7 @@ async function main() {
   console.log('🎨 Generating macOS icon with proper rounded corners...\n');
 
   // Check input file
-  if (!existsSync(INPUT_ICON)) {
+  if (!fileExists(INPUT_ICON)) {
     console.error(`❌ Error: Input icon not found at ${INPUT_ICON}`);
     process.exit(1);
   }
@@ -141,10 +140,10 @@ async function main() {
   console.log(`📂 Output: ${OUTPUT_ICON}\n`);
 
   // Create iconset directory
-  if (existsSync(ICONSET_DIR)) {
+  if (fileExists(ICONSET_DIR)) {
     rmSync(ICONSET_DIR, { recursive: true });
   }
-  mkdirSync(ICONSET_DIR, { recursive: true });
+  ensureDir(ICONSET_DIR);
 
   // Step 1: Create rounded version
   console.log('1️⃣  Creating rounded squircle shape...');
@@ -168,7 +167,7 @@ async function main() {
   }
 
   // Clean up temp file
-  if (existsSync(roundedSource)) {
+  if (fileExists(roundedSource)) {
     rmSync(roundedSource);
   }
 

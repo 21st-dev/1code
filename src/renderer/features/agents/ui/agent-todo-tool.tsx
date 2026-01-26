@@ -9,7 +9,10 @@ import {
   PlanIcon,
   IconDoubleChevronRight,
   IconArrowRight,
+  CheckIcon,
+  IconSpinner,
 } from "../../../components/ui/icons"
+import { Circle } from "lucide-react"
 import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
@@ -19,7 +22,6 @@ import type { TodoItem } from "../shared/todo-types"
 import { getTodoStatusVerb } from "../shared/todo-types"
 import {
   TodoProgressCircle,
-  TodoStatusIcon,
 } from "../shared/todo-components"
 
 // Re-export for backward compatibility
