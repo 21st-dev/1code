@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState, Suspense } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 // import { useSearchParams, useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: mock Next.js navigation hooks
@@ -43,9 +43,18 @@ import { normalizeProjects } from "../../../lib/utils/projects"
 import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
 import { AgentsSubChatsSidebar } from "../../sidebar/agents-subchats-sidebar"
-import { AgentPreview } from "./agent-preview"
-import { AgentDiffView } from "./agent-diff-view"
-import { TerminalSidebar, terminalSidebarOpenAtom } from "../../terminal"
+// Code splitting: Lazy load heavy components
+const AgentPreview = React.lazy(() =>
+  import("./agent-preview").then((mod) => ({ default: mod.AgentPreview }))
+)
+const AgentDiffView = React.lazy(() =>
+  import("./agent-diff-view").then((mod) => ({ default: mod.AgentDiffView }))
+)
+import { terminalSidebarOpenAtom } from "../../terminal"
+// Code splitting: Lazy load terminal sidebar
+const TerminalSidebar = React.lazy(() =>
+  import("../../terminal/terminal-sidebar").then((mod) => ({ default: mod.TerminalSidebar }))
+)
 import {
   useAgentSubChatStore,
   type SubChatMeta,
@@ -819,35 +828,41 @@ export function AgentsContent() {
           />
         ) : mobileViewMode === "preview" && selectedChatId && canShowPreview ? (
           // Preview Mode
-          <AgentPreview
-            chatId={selectedChatId}
-            sandboxId={chatData!.sandbox_id!}
-            port={chatMeta?.sandboxConfig?.port!}
-            isMobile={true}
-            onClose={() => setMobileViewMode("chat")}
-          />
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading preview...</div>}>
+            <AgentPreview
+              chatId={selectedChatId}
+              sandboxId={chatData!.sandbox_id!}
+              port={chatMeta?.sandboxConfig?.port!}
+              isMobile={true}
+              onClose={() => setMobileViewMode("chat")}
+            />
+          </Suspense>
         ) : mobileViewMode === "diff" && selectedChatId && canShowDiff ? (
           // Diff Mode - fullscreen diff view
-          <AgentDiffView
-            chatId={selectedChatId}
-            sandboxId={chatData!.sandbox_id!}
-            worktreePath={worktreePath}
-            repository={chatMeta?.repository}
-            showFooter={true}
-            isMobile={true}
-            onClose={() => setMobileViewMode("chat")}
-          />
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading diff view...</div>}>
+            <AgentDiffView
+              chatId={selectedChatId}
+              sandboxId={chatData!.sandbox_id!}
+              worktreePath={worktreePath}
+              repository={chatMeta?.repository}
+              showFooter={true}
+              isMobile={true}
+              onClose={() => setMobileViewMode("chat")}
+            />
+          </Suspense>
         ) : mobileViewMode === "terminal" &&
           selectedChatId &&
           canShowTerminal ? (
           // Terminal Mode - fullscreen terminal
-          <TerminalSidebar
-            chatId={selectedChatId}
-            cwd={worktreePath!}
-            workspaceId={selectedChatId}
-            isMobileFullscreen={true}
-            onClose={() => setMobileViewMode("chat")}
-          />
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading terminal...</div>}>
+            <TerminalSidebar
+              chatId={selectedChatId}
+              cwd={worktreePath!}
+              workspaceId={selectedChatId}
+              isMobileFullscreen={true}
+              onClose={() => setMobileViewMode("chat")}
+            />
+          </Suspense>
         ) : (
           // Chat Mode - shows either ChatView or NewChatForm
           <div

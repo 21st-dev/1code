@@ -33,6 +33,8 @@ export function AgentsClaudeCodeTab() {
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
   const [authCode, setAuthCode] = useState("")
   const [copied, setCopied] = useState(false)
+  const [showManualImport, setShowManualImport] = useState(false)
+  const [manualToken, setManualToken] = useState("")
   const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
@@ -98,6 +100,35 @@ export function AgentsClaudeCodeTab() {
     },
     onError: (error: { message: string }) => {
       toast.error(error.message || "Failed to disconnect")
+    },
+  })
+
+  // Check for system token
+  const { data: systemTokenData } = trpc.claudeCode.getSystemToken.useQuery()
+
+  // Import system token mutation
+  const importSystemToken = trpc.claudeCode.importSystemToken.useMutation({
+    onSuccess: () => {
+      toast.success("Token imported from system successfully!")
+      refetch()
+      utils.claudeCode.getIntegration.invalidate()
+    },
+    onError: (error: { message: string }) => {
+      toast.error(error.message || "Failed to import system token")
+    },
+  })
+
+  // Import manual token mutation
+  const importToken = trpc.claudeCode.importToken.useMutation({
+    onSuccess: () => {
+      toast.success("Token imported successfully!")
+      setManualToken("")
+      setShowManualImport(false)
+      refetch()
+      utils.claudeCode.getIntegration.invalidate()
+    },
+    onError: (error: { message: string }) => {
+      toast.error(error.message || "Failed to import token")
     },
   })
 
@@ -240,7 +271,76 @@ export function AgentsClaudeCodeTab() {
                   <p className="text-sm text-muted-foreground">Not connected</p>
                 </div>
 
-                <Button onClick={handleStartAuth}>Connect Claude Code</Button>
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={handleStartAuth}>Connect Claude Code</Button>
+                    
+                    {systemTokenData?.token && (
+                      <Button
+                        variant="outline"
+                        onClick={() => importSystemToken.mutate()}
+                        disabled={importSystemToken.isPending}
+                      >
+                        {importSystemToken.isPending && (
+                          <IconSpinner className="h-4 w-4 mr-2" />
+                        )}
+                        Import Token from System
+                      </Button>
+                    )}
+
+                    {!showManualImport && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowManualImport(true)}
+                        className="text-xs"
+                      >
+                        Or paste token manually
+                      </Button>
+                    )}
+                  </div>
+
+                  {showManualImport && (
+                    <div className="space-y-2 p-3 bg-muted rounded-md border">
+                      <Label className="text-xs font-medium">
+                        Paste OAuth Token
+                      </Label>
+                      <Input
+                        value={manualToken}
+                        onChange={(e) => setManualToken(e.target.value)}
+                        placeholder="Paste your token here..."
+                        className="font-mono text-xs"
+                        type="password"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            if (manualToken.trim()) {
+                              importToken.mutate({ token: manualToken.trim() })
+                            }
+                          }}
+                          disabled={!manualToken.trim() || importToken.isPending}
+                        >
+                          {importToken.isPending && (
+                            <IconSpinner className="h-3 w-3 mr-1" />
+                          )}
+                          Import
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setShowManualImport(false)
+                            setManualToken("")
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

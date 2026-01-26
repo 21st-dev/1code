@@ -1,8 +1,10 @@
 import { eq } from "drizzle-orm"
 import { safeStorage, shell } from "electron"
+import { existsSync } from "fs"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
 import { getExistingClaudeToken } from "../../claude-token"
+import { getBundledClaudeBinaryPath } from "../../claude/env"
 import { getApiUrl } from "../../config"
 import { claudeCodeCredentials, getDatabase } from "../../db"
 import { publicProcedure, router } from "../index"
@@ -285,4 +287,100 @@ export const claudeCodeRouter = router({
       await shell.openExternal(url)
       return { success: true }
     }),
+
+  /**
+   * Diagnostic endpoint to check Claude API connection status
+   */
+  diagnoseConnection: publicProcedure.query(async () => {
+    const diagnostics: {
+      tokenInDb: boolean
+      tokenDecryptable: boolean
+      tokenValue: string | null
+      binaryExists: boolean
+      binaryPath: string
+      networkReachable: boolean
+      systemTokenAvailable: boolean
+      errors: string[]
+    } = {
+      tokenInDb: false,
+      tokenDecryptable: false,
+      tokenValue: null,
+      binaryExists: false,
+      binaryPath: "",
+      networkReachable: false,
+      systemTokenAvailable: false,
+      errors: [],
+    }
+
+    // 1. Check if token exists in database
+    try {
+      const db = getDatabase()
+      const cred = db
+        .select()
+        .from(claudeCodeCredentials)
+        .where(eq(claudeCodeCredentials.id, "default"))
+        .get()
+
+      diagnostics.tokenInDb = !!cred?.oauthToken
+
+      // 2. Check if token can be decrypted
+      if (cred?.oauthToken) {
+        try {
+          const token = decryptToken(cred.oauthToken)
+          diagnostics.tokenDecryptable = true
+          diagnostics.tokenValue = token ? `${token.slice(0, 10)}...` : null
+        } catch (error) {
+          diagnostics.errors.push(
+            `Token decryption failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+      } else {
+        diagnostics.errors.push("No token found in database")
+      }
+    } catch (error) {
+      diagnostics.errors.push(
+        `Database check failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+
+    // 3. Check if binary exists
+    try {
+      const binaryPath = getBundledClaudeBinaryPath()
+      diagnostics.binaryPath = binaryPath
+      diagnostics.binaryExists = existsSync(binaryPath)
+      if (!diagnostics.binaryExists) {
+        diagnostics.errors.push(`Claude binary not found at: ${binaryPath}`)
+      }
+    } catch (error) {
+      diagnostics.errors.push(
+        `Binary check failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+
+    // 4. Check network connectivity
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "HEAD",
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => null)
+      diagnostics.networkReachable = response !== null
+      if (!diagnostics.networkReachable) {
+        diagnostics.errors.push("Cannot reach Anthropic API (network issue or offline)")
+      }
+    } catch (error) {
+      diagnostics.errors.push(
+        `Network check failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+
+    // 5. Check for system token
+    try {
+      const systemToken = getExistingClaudeToken()
+      diagnostics.systemTokenAvailable = !!systemToken
+    } catch (error) {
+      // Ignore system token check errors
+    }
+
+    return diagnostics
+  }),
 })

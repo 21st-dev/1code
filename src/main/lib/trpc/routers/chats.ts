@@ -218,28 +218,26 @@ export const chatsRouter = router({
 
   /**
    * Get a single chat with all sub-chats
+   * OPTIMIZED: Single query with joins instead of N+1 pattern
    */
   get: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(({ input }) => {
       const db = getDatabase()
-      const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
-      if (!chat) return null
 
-      const chatSubChats = db
-        .select()
-        .from(subChats)
-        .where(eq(subChats.chatId, input.id))
-        .orderBy(subChats.createdAt)
-        .all()
+      // Use Drizzle's relational query API for efficient joins
+      // This performs a single SQL query with LEFT JOINs instead of 3 separate queries
+      const result = db.query.chats.findFirst({
+        where: eq(chats.id, input.id),
+        with: {
+          subChats: {
+            orderBy: (subChats, { asc }) => [asc(subChats.createdAt)]
+          },
+          project: true
+        }
+      })
 
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, chat.projectId))
-        .get()
-
-      return { ...chat, subChats: chatSubChats, project }
+      return result || null
     }),
 
   /**
@@ -553,18 +551,21 @@ export const chatsRouter = router({
     .mutation(async ({ input }) => {
       const db = getDatabase()
 
-      // Get chat before deletion
-      const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
+      // OPTIMIZED: Get chat with project in one query
+      const chatWithProject = db.query.chats.findFirst({
+        where: eq(chats.id, input.id),
+        with: {
+          project: true
+        }
+      })
 
       // Cleanup worktree if it was created (has branch = was a real worktree, not just project path)
-      if (chat?.worktreePath && chat?.branch) {
-        const project = db
-          .select()
-          .from(projects)
-          .where(eq(projects.id, chat.projectId))
-          .get()
-        if (project) {
-          const result = await removeWorktree(project.path, chat.worktreePath)
+      if (chatWithProject?.worktreePath && chatWithProject?.branch) {
+        if (chatWithProject.project) {
+          const result = await removeWorktree(
+            chatWithProject.project.path,
+            chatWithProject.worktreePath
+          )
           if (!result.success) {
             console.warn(`[Worktree] Cleanup failed: ${result.error}`)
           }
@@ -575,9 +576,9 @@ export const chatsRouter = router({
       trackWorkspaceDeleted(input.id)
 
       // Invalidate git cache for this worktree
-      if (chat?.worktreePath) {
-        gitCache.invalidateStatus(chat.worktreePath)
-        gitCache.invalidateParsedDiff(chat.worktreePath)
+      if (chatWithProject?.worktreePath) {
+        gitCache.invalidateStatus(chatWithProject.worktreePath)
+        gitCache.invalidateParsedDiff(chatWithProject.worktreePath)
       }
 
       return db.delete(chats).where(eq(chats.id, input.id)).returning().get()
@@ -1636,28 +1637,27 @@ export const chatsRouter = router({
     )
     .query(({ input }) => {
       const db = getDatabase()
-      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
-      if (!chat) {
+      // OPTIMIZED: Use relational query to get chat with subchats in one query
+      const chatWithSubChats = db.query.chats.findFirst({
+        where: eq(chats.id, input.chatId),
+        with: {
+          subChats: {
+            orderBy: (subChats, { asc }) => [asc(subChats.createdAt)]
+          }
+        }
+      })
+
+      if (!chatWithSubChats) {
         throw new Error("Chat not found")
       }
 
-      // Get sub-chat if specified, otherwise get first sub-chat
+      // Get target sub-chat from the already-loaded subChats
       let targetSubChat
       if (input.subChatId) {
-        targetSubChat = db
-          .select()
-          .from(subChats)
-          .where(eq(subChats.id, input.subChatId))
-          .get()
+        targetSubChat = chatWithSubChats.subChats.find(sc => sc.id === input.subChatId)
       } else {
-        const allSubChats = db
-          .select()
-          .from(subChats)
-          .where(eq(subChats.chatId, input.chatId))
-          .orderBy(subChats.createdAt)
-          .all()
-        targetSubChat = allSubChats[0]
+        targetSubChat = chatWithSubChats.subChats[0]
       }
 
       if (!targetSubChat) {

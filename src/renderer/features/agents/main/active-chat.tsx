@@ -43,7 +43,7 @@ import {
   TerminalSquare
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import {
+import React, {
   createContext,
   memo,
   useCallback,
@@ -52,7 +52,8 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState
+  useState,
+  Suspense
 } from "react"
 import { flushSync } from "react-dom"
 import { toast } from "sonner"
@@ -75,11 +76,17 @@ import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
 import { ChangesPanel } from "../../changes"
 import { DiffCenterPeekDialog } from "../../changes/components/diff-center-peek-dialog"
-import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
+// Code splitting: Lazy load heavy components
+const DiffFullPageView = React.lazy(() =>
+  import("../../changes/components/diff-full-page-view").then((mod) => ({ default: mod.DiffFullPageView }))
+)
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
-import { TerminalSidebar } from "../../terminal/terminal-sidebar"
+// Code splitting: Lazy load heavy components
+const TerminalSidebar = React.lazy(() =>
+  import("../../terminal/terminal-sidebar").then((mod) => ({ default: mod.TerminalSidebar }))
+)
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -132,6 +139,7 @@ import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useHaptic } from "../hooks/use-haptic"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
+import { useChatScroll } from "../hooks/use-chat-scroll"
 import {
   clearSubChatDraft,
   getSubChatDraftFull
@@ -169,13 +177,18 @@ import {
   type SubChatMeta,
 } from "../stores/sub-chat-store"
 import {
-  AgentDiffView,
   diffViewModeAtom,
   splitUnifiedDiffByFile,
   type AgentDiffViewRef,
   type ParsedDiffFile,
 } from "../ui/agent-diff-view"
-import { AgentPreview } from "../ui/agent-preview"
+// Code splitting: Lazy load heavy components
+const AgentDiffView = React.lazy(() =>
+  import("../ui/agent-diff-view").then((mod) => ({ default: mod.AgentDiffView }))
+)
+const AgentPreview = React.lazy(() =>
+  import("../ui/agent-preview").then((mod) => ({ default: mod.AgentPreview }))
+)
 import { AgentQueueIndicator } from "../ui/agent-queue-indicator"
 import { AgentToolCall } from "../ui/agent-tool-call"
 import { AgentToolRegistry } from "../ui/agent-tool-registry"
@@ -193,6 +206,8 @@ import { autoRenameAgentChat } from "../utils/auto-rename"
 import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
+import { QueueAndStatusCards } from "./queue-and-status-cards"
+import { UserQuestionsPanel, type UserQuestionsPanelRef } from "./user-questions-panel"
 const clearSubChatSelectionAtom = atom(null, () => {})
 const isSubChatMultiSelectModeAtom = atom(false)
 const selectedSubChatIdsAtom = atom(new Set<string>())
@@ -549,22 +564,24 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
             "absolute inset-0 overflow-hidden",
             activeTab === "history" && selectedCommit ? "z-0 invisible" : "z-10"
           )}>
-            <AgentDiffView
-              ref={diffViewRef}
-              chatId={chatId}
-              sandboxId={sandboxId || ""}
-              worktreePath={worktreePath || undefined}
-              repository={repository ? (typeof repository === 'string' ? repository : `${repository.owner}/${repository.name}`) : undefined}
-              onStatsChange={setDiffStats}
-              initialDiff={effectiveDiff}
-              initialParsedFiles={effectiveParsedFiles}
-              prefetchedFileContents={effectivePrefetchedContents}
-              showFooter={false}
-              onCollapsedStateChange={setDiffCollapseState}
-              onSelectNextFile={handleSelectNextFile}
-              onViewedCountChange={handleViewedCountChange}
-              initialSelectedFile={initialSelectedFile}
-            />
+            <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading diff view...</div>}>
+              <AgentDiffView
+                ref={diffViewRef}
+                chatId={chatId}
+                sandboxId={sandboxId || ""}
+                worktreePath={worktreePath || undefined}
+                repository={repository ? (typeof repository === 'string' ? repository : `${repository.owner}/${repository.name}`) : undefined}
+                onStatsChange={setDiffStats}
+                initialDiff={effectiveDiff}
+                initialParsedFiles={effectiveParsedFiles}
+                prefetchedFileContents={effectivePrefetchedContents}
+                showFooter={false}
+                onCollapsedStateChange={setDiffCollapseState}
+                onSelectNextFile={handleSelectNextFile}
+                onViewedCountChange={handleViewedCountChange}
+                initialSelectedFile={initialSelectedFile}
+              />
+            </Suspense>
           </div>
         </div>
       </div>
@@ -675,22 +692,24 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
           "absolute inset-0 overflow-hidden",
           activeTab === "history" && selectedCommit ? "z-0 invisible" : "z-10"
         )}>
-          <AgentDiffView
-            ref={diffViewRef}
-            chatId={chatId}
-            sandboxId={sandboxId || ""}
-            worktreePath={worktreePath || undefined}
-            repository={repository ? (typeof repository === 'string' ? repository : `${repository.owner}/${repository.name}`) : undefined}
-            onStatsChange={setDiffStats}
-            initialDiff={effectiveDiff}
-            initialParsedFiles={effectiveParsedFiles}
-            prefetchedFileContents={effectivePrefetchedContents}
-            showFooter={true}
-            onCollapsedStateChange={setDiffCollapseState}
-            onSelectNextFile={handleSelectNextFile}
-            onViewedCountChange={handleViewedCountChange}
-            initialSelectedFile={initialSelectedFile}
-          />
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading diff view...</div>}>
+            <AgentDiffView
+              ref={diffViewRef}
+              chatId={chatId}
+              sandboxId={sandboxId || ""}
+              worktreePath={worktreePath || undefined}
+              repository={repository ? (typeof repository === 'string' ? repository : `${repository.owner}/${repository.name}`) : undefined}
+              onStatsChange={setDiffStats}
+              initialDiff={effectiveDiff}
+              initialParsedFiles={effectiveParsedFiles}
+              prefetchedFileContents={effectivePrefetchedContents}
+              showFooter={true}
+              onCollapsedStateChange={setDiffCollapseState}
+              onSelectNextFile={handleSelectNextFile}
+              onViewedCountChange={handleViewedCountChange}
+              initialSelectedFile={initialSelectedFile}
+            />
+          </Suspense>
         </div>
       </div>
     </div>
@@ -1043,12 +1062,14 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
 
   if (diffDisplayMode === "full-page") {
     return (
-      <DiffFullPageView
-        isOpen={isDiffSidebarOpen}
-        onClose={handleCloseDiff}
-      >
-        {diffViewContent}
-      </DiffFullPageView>
+      <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading full page view...</div>}>
+        <DiffFullPageView
+          isOpen={isDiffSidebarOpen}
+          onClose={handleCloseDiff}
+        >
+          {diffViewContent}
+        </DiffFullPageView>
+      </Suspense>
     )
   }
 
@@ -1109,27 +1130,27 @@ const ChatViewInner = memo(function ChatViewInner({
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
 
-  // Scroll management state (like canvas chat)
-  // Using only ref to avoid re-renders on scroll
-  const shouldAutoScrollRef = useRef(true)
-  const isAutoScrollingRef = useRef(false) // Flag to ignore scroll events caused by auto-scroll
-  const isInitializingScrollRef = useRef(false) // Flag to ignore scroll events during scroll initialization (content loading)
-  const hasUnapprovedPlanRef = useRef(false) // Track unapproved plan state for scroll initialization
-  const chatContainerRef = useRef<HTMLElement | null>(null)
-
-  // Cleanup isAutoScrollingRef on unmount to prevent stuck state
-  useEffect(() => {
-    return () => {
-      isAutoScrollingRef.current = false
-    }
-  }, [])
-
   // Track chat container height via CSS custom property (no re-renders)
   const chatContainerObserverRef = useRef<ResizeObserver | null>(null)
+  const chatContainerRef = useRef<HTMLElement | null>(null)
+
+  // Extract scroll management to custom hook
+  const {
+    scrollToBottom,
+    shouldAutoScrollRef,
+    isAutoScrollingRef,
+    isInitializingScrollRef,
+    scrollInitializedRef,
+  } = useChatScroll({
+    containerRef: chatContainerRef,
+    isActive,
+    subChatId,
+    shouldAutoScroll: true,
+  })
 
   const editorRef = useRef<AgentsMentionsEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const questionRef = useRef<AgentUserQuestionHandle>(null)
+  const questionPanelRef = useRef<UserQuestionsPanelRef>(null)
   const prevChatKeyRef = useRef<string | null>(null)
   const prevSubChatIdRef = useRef<string | null>(null)
 
@@ -1155,87 +1176,6 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // Rollback state
   const [isRollingBack, setIsRollingBack] = useState(false)
-
-  // Check if user is at bottom of chat (like canvas)
-  const isAtBottom = useCallback(() => {
-    const container = chatContainerRef.current
-    if (!container) return true
-    const threshold = 50 // pixels from bottom
-    return (
-      container.scrollHeight - container.scrollTop - container.clientHeight <=
-      threshold
-    )
-  }, [])
-
-
-  // Track previous scroll position to detect scroll direction
-  const prevScrollTopRef = useRef(0)
-
-  // Handle scroll events to detect user scrolling
-  // Updates shouldAutoScrollRef based on scroll direction
-  // Using refs only to avoid re-renders on scroll
-  const handleScroll = useCallback(() => {
-    // Skip scroll handling for inactive tabs (keep-alive)
-    if (!isActiveRef.current) return
-
-    const container = chatContainerRef.current
-    if (!container) return
-
-    const currentScrollTop = container.scrollTop
-    const prevScrollTop = prevScrollTopRef.current
-    prevScrollTopRef.current = currentScrollTop
-
-    // Ignore scroll events during initialization (content loading)
-    if (isAutoScrollingRef.current || isInitializingScrollRef.current) return
-
-    // If user scrolls UP - disable auto-scroll immediately
-    // BUT keep large padding (user wants to keep the clean slate UX)
-    if (currentScrollTop < prevScrollTop) {
-      console.log("[handleScroll] User scrolled UP - disabling auto-scroll only")
-      shouldAutoScrollRef.current = false
-      return
-    }
-
-    // If user scrolls DOWN and reaches bottom - enable auto-scroll
-    shouldAutoScrollRef.current = isAtBottom()
-  }, [isAtBottom])
-
-  // Scroll to bottom handler with ease-in-out animation
-  const scrollToBottom = useCallback(() => {
-    const container = chatContainerRef.current
-    if (!container) return
-
-    isAutoScrollingRef.current = true
-    shouldAutoScrollRef.current = true
-
-    const start = container.scrollTop
-    const duration = 300 // ms
-    const startTime = performance.now()
-
-    // Ease-in-out cubic function
-    const easeInOutCubic = (t: number) =>
-      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
-
-    const animateScroll = (currentTime: number) => {
-      const elapsed = currentTime - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      const easedProgress = easeInOutCubic(progress)
-
-      // Calculate end on each frame to handle dynamic content
-      const end = container.scrollHeight - container.clientHeight
-      container.scrollTop = start + (end - start) * easedProgress
-
-      if (progress < 1) {
-        requestAnimationFrame(animateScroll)
-      } else {
-        // Ensure we're at the absolute bottom
-        container.scrollTop = container.scrollHeight
-        isAutoScrollingRef.current = false
-      }
-    }
-
-    requestAnimationFrame(animateScroll)
-  }, [])
 
   // tRPC utils for cache invalidation
   const utils = api.useUtils()
@@ -1878,7 +1818,7 @@ const ChatViewInner = memo(function ChatViewInner({
         }
 
         // 2. Get already selected answers from question component
-        const selectedAnswers = questionRef.current?.getAnswers() || {}
+        const selectedAnswers = questionPanelRef.current?.getAnswers() || {}
         const formattedAnswers: Record<string, string> = { ...selectedAnswers }
 
         // 3. Add custom text to the last question as "Other"
@@ -2278,78 +2218,11 @@ const ChatViewInner = memo(function ChatViewInner({
     subChatId,
   ])
 
-  // Ref to track if initial scroll has been set for this sub-chat
-  const scrollInitializedRef = useRef(false)
+  // Scroll initialization is handled by useChatScroll hook
+  // Keep ref for hasUnapprovedPlan (used in scroll initialization)
+  const hasUnapprovedPlanRef = useRef(false)
 
-  // Track if this tab has been initialized (for keep-alive)
-  const hasInitializedRef = useRef(false)
-
-  // Initialize scroll position on mount (only once per tab with keep-alive)
-  // Strategy: wait for content to stabilize, then scroll to bottom ONCE
-  // No jumping around - just wait and scroll when ready
-  useLayoutEffect(() => {
-    // Skip if not active (keep-alive: hidden tabs don't need scroll init)
-    if (!isActive) return
-
-    const container = chatContainerRef.current
-    if (!container) return
-
-    // With keep-alive, only initialize once per tab mount
-    if (hasInitializedRef.current) return
-    hasInitializedRef.current = true
-
-    // Reset on sub-chat change
-    scrollInitializedRef.current = false
-    isInitializingScrollRef.current = true
-
-    // IMMEDIATE scroll to bottom - no waiting
-    container.scrollTop = container.scrollHeight
-    shouldAutoScrollRef.current = true
-
-    // Mark as initialized IMMEDIATELY
-    scrollInitializedRef.current = true
-    isInitializingScrollRef.current = false
-
-    // MutationObserver for async content (images, code blocks loading after initial render)
-    const observer = new MutationObserver((mutations) => {
-      // Skip if not active (keep-alive: don't scroll hidden tabs)
-      if (!isActive) return
-      if (!shouldAutoScrollRef.current) return
-
-      // Check if content was added
-      const hasAddedContent = mutations.some(
-        (m) => m.type === "childList" && m.addedNodes.length > 0
-      )
-
-      if (hasAddedContent) {
-        requestAnimationFrame(() => {
-          isAutoScrollingRef.current = true
-          container.scrollTop = container.scrollHeight
-          requestAnimationFrame(() => {
-            isAutoScrollingRef.current = false
-          })
-        })
-      }
-    })
-
-    observer.observe(container, { childList: true, subtree: true })
-
-    return () => {
-      observer.disconnect()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subChatId, isActive])
-
-  // Attach scroll listener (separate effect)
-  useEffect(() => {
-    const container = chatContainerRef.current
-    if (!container) return
-
-    container.addEventListener("scroll", handleScroll, { passive: true })
-    return () => {
-      container.removeEventListener("scroll", handleScroll)
-    }
-  }, [handleScroll])
+  // Scroll listener is handled by useChatScroll hook
 
   // Auto scroll to bottom when messages change during streaming
   // Only kicks in after content fills the viewport (overflow behavior)
@@ -3071,52 +2944,29 @@ const ChatViewInner = memo(function ChatViewInner({
       </div>
 
       {/* User questions panel - shows when AskUserQuestion tool is called */}
-      {/* Only show if the pending question belongs to THIS sub-chat */}
-      {pendingQuestions && (
-        <div className="px-4 relative z-20">
-          <div className="w-full px-2 max-w-2xl mx-auto">
-            <AgentUserQuestion
-              ref={questionRef}
-              pendingQuestions={pendingQuestions}
-              onAnswer={handleQuestionsAnswer}
-              onSkip={handleQuestionsSkip}
-              hasCustomText={inputHasContent}
-            />
-          </div>
-        </div>
-      )}
+      <UserQuestionsPanel
+        ref={questionPanelRef}
+        pendingQuestions={pendingQuestions}
+        subChatId={subChatId}
+        onAnswer={handleQuestionsAnswer}
+        onSkip={handleQuestionsSkip}
+        inputHasContent={inputHasContent}
+      />
 
       {/* Stacked cards container - queue + status */}
-      {!pendingQuestions &&
-        (queue.length > 0 || changedFilesForSubChat.length > 0) && (
-          <div className="px-2 -mb-6 relative z-10">
-            <div className="w-full max-w-2xl mx-auto px-2">
-              {/* Queue indicator card - top card */}
-              {queue.length > 0 && (
-                <AgentQueueIndicator
-                  queue={queue}
-                  onRemoveItem={handleRemoveFromQueue}
-                  onSendNow={handleSendFromQueue}
-                  isStreaming={isStreaming}
-                  hasStatusCardBelow={changedFilesForSubChat.length > 0}
-                />
-              )}
-              {/* Status card - bottom card, only when there are changed files */}
-              {changedFilesForSubChat.length > 0 && (
-                <SubChatStatusCard
-                  chatId={parentChatId}
-                  subChatId={subChatId}
-                  isStreaming={isStreaming}
-                  isCompacting={isCompacting}
-                  changedFiles={changedFilesForSubChat}
-                  worktreePath={projectPath}
-                  onStop={handleStop}
-                  hasQueueCardAbove={queue.length > 0}
-                />
-              )}
-            </div>
-          </div>
-        )}
+      <QueueAndStatusCards
+        queue={queue}
+        changedFiles={changedFilesForSubChat}
+        pendingQuestions={!!pendingQuestions}
+        chatId={parentChatId}
+        subChatId={subChatId}
+        isStreaming={isStreaming}
+        isCompacting={isCompacting}
+        worktreePath={projectPath}
+        onStop={handleStop}
+        onRemoveFromQueue={handleRemoveFromQueue}
+        onSendFromQueue={handleSendFromQueue}
+      />
 
       {/* Input - isolated component to prevent re-renders */}
       <ChatInputArea
@@ -5184,25 +5034,29 @@ Make sure to preserve all functionality from both branches when resolving confli
                 </div>
               </div>
             ) : (
-              <AgentPreview
-                chatId={chatId}
-                sandboxId={sandboxId}
-                port={previewPort}
-                repository={repository}
-                hideHeader={false}
-                onClose={() => setIsPreviewSidebarOpen(false)}
-              />
+              <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading preview...</div>}>
+                <AgentPreview
+                  chatId={chatId}
+                  sandboxId={sandboxId}
+                  port={previewPort}
+                  repository={repository}
+                  hideHeader={false}
+                  onClose={() => setIsPreviewSidebarOpen(false)}
+                />
+              </Suspense>
             )}
           </ResizableSidebar>
         )}
 
         {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
         {worktreePath && (
-          <TerminalSidebar
-            chatId={chatId}
-            cwd={worktreePath}
-            workspaceId={chatId}
-          />
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading terminal...</div>}>
+            <TerminalSidebar
+              chatId={chatId}
+              cwd={worktreePath}
+              workspaceId={chatId}
+            />
+          </Suspense>
         )}
       </div>
     </div>
