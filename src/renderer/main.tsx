@@ -45,6 +45,36 @@ window.onerror = (message, source, lineno, colno, error) => {
 
 const rootElement = document.getElementById("root")
 
-if (rootElement) {
-  ReactDOM.createRoot(rootElement).render(<App />)
+if (!rootElement) {
+  console.error("[Renderer] Root element not found")
+  document.body.innerHTML = "<pre style='padding:16px;color:#b91c1c'>Root element not found</pre>"
+} else {
+  try {
+    ReactDOM.createRoot(rootElement).render(<App />)
+    console.log("[Renderer] App rendered")
+    setTimeout(() => {
+      const root = document.getElementById("root")
+      if (!root) {
+        console.warn("[Renderer] Root missing after render")
+        return
+      }
+      console.log("[Renderer] Root children:", root.children.length)
+      console.log("[Renderer] Root HTML length:", root.innerHTML.length)
+      const rootStyle = window.getComputedStyle(root)
+      console.log("[Renderer] Root styles:", {
+        display: rootStyle.display,
+        visibility: rootStyle.visibility,
+        opacity: rootStyle.opacity,
+      })
+      const bodyStyle = window.getComputedStyle(document.body)
+      console.log("[Renderer] Body styles:", {
+        background: bodyStyle.backgroundColor,
+        color: bodyStyle.color,
+      })
+    }, 1000)
+  } catch (err) {
+    console.error("[Renderer] App render failed:", err)
+    const message = err instanceof Error ? err.message : String(err)
+    rootElement.innerHTML = `<pre style='padding:16px;color:#b91c1c'>Render error: ${message}</pre>`
+  }
 }

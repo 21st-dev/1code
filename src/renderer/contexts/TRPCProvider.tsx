@@ -16,44 +16,6 @@ export function getQueryClient(): QueryClient | null {
   return globalQueryClient
 }
 
-/**
- * Wait for electronTRPC to be available (preload script may not have finished)
- */
-function waitForElectronTRPC(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === "undefined") {
-      reject(new Error("Window is not available"))
-      return
-    }
-
-    // Check if already available (most common case)
-    if ((window as any).electronTRPC) {
-      resolve()
-      return
-    }
-
-    // Wait for it to become available (with timeout)
-    const maxWait = 2000 // 2 seconds (reduced from 5)
-    const startTime = Date.now()
-    const checkInterval = setInterval(() => {
-      if ((window as any).electronTRPC) {
-        clearInterval(checkInterval)
-        resolve()
-      } else if (Date.now() - startTime > maxWait) {
-        clearInterval(checkInterval)
-        console.error("[TRPCProvider] Timeout waiting for electronTRPC")
-        console.error("[TRPCProvider] window.electronTRPC:", (window as any).electronTRPC)
-        console.error("[TRPCProvider] window.desktopApi:", (window as any).desktopApi)
-        reject(
-          new Error(
-            "Could not find `electronTRPC` global after waiting. Check that `exposeElectronTRPC` has been called in your preload file."
-          )
-        )
-      }
-    }, 10)
-  })
-}
-
 export function TRPCProvider({ children }: TRPCProviderProps) {
   const [queryClient] = useState(() => {
     const client = new QueryClient({
@@ -76,18 +38,30 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
 
   const [trpcClient, setTrpcClient] = useState<ReturnType<typeof trpc.createClient> | null>(null)
   const [error, setError] = useState<Error | null>(null)
+  const [initStatus, setInitStatus] = useState({
+    elapsedMs: 0,
+    hasElectronTRPC: false,
+    hasDesktopApi: false,
+  })
 
   useEffect(() => {
-    waitForElectronTRPC()
-      .then(() => {
-        const client = trpc.createClient({
-          links: [ipcLink({ transformer: superjson })],
-        })
-        setTrpcClient(client)
+    const startTime = Date.now()
+    const hasElectronTRPC = Boolean((window as any).electronTRPC)
+    const hasDesktopApi = Boolean((window as any).desktopApi)
+    setInitStatus({
+      elapsedMs: Date.now() - startTime,
+      hasElectronTRPC,
+      hasDesktopApi,
+    })
+
+    try {
+      const client = trpc.createClient({
+        links: [ipcLink({ transformer: superjson })],
       })
-      .catch((err) => {
-        setError(err)
-      })
+      setTrpcClient(client)
+    } catch (err) {
+      setError(err as Error)
+    }
   }, [])
 
   if (error) {
@@ -102,7 +76,31 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
 
   // Show a lightweight skeleton during initialization to avoid blank screen
   if (!trpcClient) {
-    return <LoadingSkeleton />
+    return (
+      <div className="relative">
+        <LoadingSkeleton label="Connecting to app services…" />
+        {import.meta.env.DEV && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 8,
+              right: 8,
+              zIndex: 99999,
+              padding: "6px 8px",
+              fontSize: 11,
+              borderRadius: 6,
+              background: "rgba(0,0,0,0.7)",
+              color: "white",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            }}
+          >
+            <div>TRPC init… {initStatus.elapsedMs}ms</div>
+            <div>electronTRPC: {String(initStatus.hasElectronTRPC)}</div>
+            <div>desktopApi: {String(initStatus.hasDesktopApi)}</div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (

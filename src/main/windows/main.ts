@@ -559,6 +559,26 @@ export function createMainWindow(initialParams?: WindowLaunchParams): BrowserWin
     return { action: "deny" }
   })
 
+  // Renderer diagnostics to investigate white screens
+  window.webContents.on("did-start-loading", () => {
+    console.log("[Main] Renderer started loading:", window.webContents.getURL())
+  })
+  window.webContents.on("did-stop-loading", () => {
+    console.log("[Main] Renderer stopped loading:", window.webContents.getURL())
+  })
+  window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    console.log("[Renderer Console]", { level, message, line, sourceId })
+  })
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[Main] Renderer process gone:", details)
+  })
+  window.webContents.on("unresponsive", () => {
+    console.error("[Main] Renderer unresponsive")
+  })
+  window.webContents.on("responsive", () => {
+    console.log("[Main] Renderer responsive")
+  })
+
   // Handle window close
   window.on("closed", () => {
     currentWindow = null
@@ -619,11 +639,152 @@ export function createMainWindow(initialParams?: WindowLaunchParams): BrowserWin
     if (process.platform === "darwin") {
       window.setWindowButtonVisibility(true)
     }
+    if (!app.isPackaged) {
+      window.webContents
+        .executeJavaScript(
+          `
+          (() => {
+            const existing = document.getElementById("main-process-banner");
+            if (existing) return "banner-exists";
+            const banner = document.createElement("div");
+            banner.id = "main-process-banner";
+            banner.textContent = "Main process injected UI";
+            banner.style.position = "fixed";
+            banner.style.top = "8px";
+            banner.style.left = "8px";
+            banner.style.zIndex = "999999";
+            banner.style.padding = "4px 8px";
+            banner.style.background = "rgba(0,0,0,0.8)";
+            banner.style.color = "white";
+            banner.style.fontSize = "11px";
+            banner.style.borderRadius = "6px";
+            banner.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+            document.body.appendChild(banner);
+            return "banner-added";
+          })();
+          `,
+        )
+        .then((result) => {
+          console.log("[Main] Banner injection:", result);
+        })
+        .catch((error) => {
+          console.error("[Main] Banner injection failed:", error);
+        });
+
+      window.webContents
+        .executeJavaScript(
+          `
+          (() => ({
+            hasElectronTRPC: Boolean(window.electronTRPC),
+            hasDesktopApi: Boolean(window.desktopApi),
+          }))();
+          `,
+        )
+        .then((result) => {
+          console.log("[Main] Renderer globals:", result);
+        })
+        .catch((error) => {
+          console.error("[Main] Renderer globals check failed:", error);
+        });
+
+      window.webContents
+        .executeJavaScript(
+          `
+          (() => {
+            if (document.getElementById("debug-fullscreen-overlay")) return "overlay-exists";
+            const overlay = document.createElement("div");
+            overlay.id = "debug-fullscreen-overlay";
+            overlay.textContent = "Renderer overlay visible";
+            overlay.style.position = "fixed";
+            overlay.style.inset = "0";
+            overlay.style.zIndex = "999998";
+            overlay.style.display = "flex";
+            overlay.style.alignItems = "center";
+            overlay.style.justifyContent = "center";
+            overlay.style.background = "rgba(255, 0, 0, 0.15)";
+            overlay.style.color = "#b91c1c";
+            overlay.style.fontSize = "24px";
+            overlay.style.fontWeight = "600";
+            overlay.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+            document.body.appendChild(overlay);
+            return "overlay-added";
+          })();
+          `,
+        )
+        .then((result) => {
+          console.log("[Main] Overlay injection:", result);
+        })
+        .catch((error) => {
+          console.error("[Main] Overlay injection failed:", error);
+        });
+
+      window.webContents
+        .executeJavaScript(
+          `
+          (() => {
+            const root = document.getElementById("root");
+            const rect = root?.getBoundingClientRect();
+            const centerX = Math.floor(window.innerWidth / 2);
+            const centerY = Math.floor(window.innerHeight / 2);
+            const el = document.elementFromPoint(centerX, centerY);
+            const elTag = el ? el.tagName : null;
+            const elId = el ? el.id : null;
+            const elClass = el ? el.className : null;
+            return {
+              rootRect: rect
+                ? { x: rect.x, y: rect.y, w: rect.width, h: rect.height }
+                : null,
+              centerEl: { tag: elTag, id: elId, className: elClass },
+              bodyBg: getComputedStyle(document.body).backgroundColor,
+              rootDisplay: root ? getComputedStyle(root).display : null,
+            };
+          })();
+          `,
+        )
+        .then((result) => {
+          console.log("[Main] Renderer snapshot:", result);
+        })
+        .catch((error) => {
+          console.error("[Main] Renderer snapshot failed:", error);
+        });
+
+      window.webContents
+        .executeJavaScript(
+          `
+          (() => {
+            const root = document.getElementById("root");
+            const app = document.querySelector("[data-agents-page]");
+            const appRect = app?.getBoundingClientRect();
+            const bodyText = document.body.innerText || "";
+            const rootText = root?.innerText || "";
+            return {
+              bodyTextLength: bodyText.length,
+              rootTextLength: rootText.length,
+              bodyTextSample: bodyText.slice(0, 120),
+              rootTextSample: rootText.slice(0, 120),
+              appRect: appRect
+                ? { x: appRect.x, y: appRect.y, w: appRect.width, h: appRect.height }
+                : null,
+            };
+          })();
+          `,
+        )
+        .then((result) => {
+          console.log("[Main] Renderer text snapshot:", result);
+        })
+        .catch((error) => {
+          console.error("[Main] Renderer text snapshot failed:", error);
+        });
+    }
   })
   window.webContents.on(
     "did-fail-load",
-    (_event, errorCode, errorDescription) => {
-      console.error("[Main] Page failed to load:", errorCode, errorDescription)
+    (_event, errorCode, errorDescription, validatedURL) => {
+      console.error("[Main] Page failed to load:", {
+        errorCode,
+        errorDescription,
+        validatedURL,
+      })
     },
   )
 

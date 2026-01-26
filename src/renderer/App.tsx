@@ -101,7 +101,7 @@ function AppContent() {
 
   // Show loading skeleton while projects are being fetched to prevent layout shift
   if (isLoadingProjects) {
-    return <LoadingSkeleton />
+    return <LoadingSkeleton label="Loading projects…" />
   }
 
   if (!validatedProject) {
@@ -154,6 +154,24 @@ export function App() {
           <VSCodeThemeProvider>
             <TooltipProvider delayDuration={100}>
               <TRPCProvider>
+                {import.meta.env.DEV && (
+                  <div
+                    style={{
+                      position: "fixed",
+                      top: 8,
+                      right: 8,
+                      zIndex: 99999,
+                      padding: "4px 8px",
+                      fontSize: 11,
+                      borderRadius: 6,
+                      background: "rgba(0,0,0,0.6)",
+                      color: "white",
+                      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                    }}
+                  >
+                    Renderer OK
+                  </div>
+                )}
                 <div
                   data-agents-page
                   className="h-screen w-screen bg-background text-foreground overflow-hidden"
