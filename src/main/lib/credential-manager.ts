@@ -314,8 +314,8 @@ export class SourceCredentialManager {
     callbacks?: OAuthCallbacks
   ): Promise<AuthResult> {
     const defaultCallbacks: OAuthCallbacks = {
-      onStatus: (msg) => debug(`[SourceCredentialManager] ${msg}`),
-      onError: (err) => debug(`[SourceCredentialManager] Error: ${err}`),
+      onStatus: (msg: string) => debug(`[SourceCredentialManager] ${msg}`),
+      onError: (err: unknown) => debug(`[SourceCredentialManager] Error: ${err}`),
     };
     const cb = callbacks || defaultCallbacks;
 

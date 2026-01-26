@@ -46,7 +46,7 @@ export const VoiceInputButton = memo(function VoiceInputButton({
   }, [])
 
   const transcribeMutation = trpc.voice.transcribe.useMutation({
-    onError: (err) => {
+    onError: (err: { message: string }) => {
       console.error("[VoiceInput] Transcription error:", err)
       if (isMountedRef.current) {
         setTranscribeError(err.message)

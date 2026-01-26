@@ -2,6 +2,7 @@ import { useCallback, useMemo, useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { toast } from "sonner"
 import { trpc } from "../../lib/trpc"
+import { normalizeProjects } from "../../lib/utils/projects"
 import { getWindowId } from "../../contexts/WindowContext"
 import {
   selectedAgentChatIdAtom,
@@ -122,12 +123,12 @@ export function KanbanView() {
   const { data: chats } = trpc.chats.list.useQuery({})
 
   // Fetch projects for metadata
-  const { data: projects } = trpc.projects.list.useQuery()
+  const { data: projectsData } = trpc.projects.list.useQuery()
+  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
 
   // Create projects map
-  type Project = NonNullable<typeof projects>[number]
   const projectsMap = useMemo(() => {
-    if (!projects) return new Map<string, Project>()
+    if (!projects.length) return new Map<string, typeof projects[0]>()
     return new Map(projects.map((p) => [p.id, p]))
   }, [projects])
 

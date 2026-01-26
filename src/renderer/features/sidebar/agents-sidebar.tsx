@@ -37,6 +37,7 @@ import { DiscordIcon } from "../../icons"
 import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
 import { ConfirmArchiveDialog } from "../../components/confirm-archive-dialog"
 import { trpc } from "../../lib/trpc"
+import { normalizeProjects } from "../../lib/utils/projects"
 import { toast } from "sonner"
 import {
   DropdownMenu,
@@ -1521,11 +1522,12 @@ export function AgentsSidebar({
   )
 
   // Fetch all projects for git info
-  const { data: projects } = trpc.projects.list.useQuery()
+  const { data: projectsData } = trpc.projects.list.useQuery()
+  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
 
   // Create map for quick project lookup by id
   const projectsMap = useMemo(() => {
-    if (!projects) return new Map()
+    if (!projects.length) return new Map()
     return new Map(projects.map((p) => [p.id, p]))
   }, [projects])
 

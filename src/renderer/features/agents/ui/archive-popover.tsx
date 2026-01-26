@@ -3,6 +3,7 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback, memo } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import { trpc } from "../../../lib/trpc"
+import { normalizeProjects } from "../../../lib/utils/projects"
 import {
   archivePopoverOpenAtom,
   archiveSearchQueryAtom,
@@ -215,7 +216,8 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   )
 
   // Fetch all projects for git info
-  const { data: projects } = trpc.projects.list.useQuery()
+  const { data: projectsData } = trpc.projects.list.useQuery()
+  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
 
   // Collect chat IDs for file stats query
   const archivedChatIds = useMemo(() => {
@@ -231,7 +233,7 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
 
   // Create map for quick project lookup by id
   const projectsMap = useMemo(() => {
-    if (!projects) return new Map()
+    if (!projects.length) return new Map()
     return new Map(projects.map((p) => [p.id, p]))
   }, [projects])
 

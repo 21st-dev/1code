@@ -8,6 +8,7 @@ import { IconSpinner, GitHubIcon } from "../../components/ui/icons"
 import { Logo } from "../../components/ui/logo"
 import { Input } from "../../components/ui/input"
 import { trpc } from "../../lib/trpc"
+import { normalizeProjects } from "../../lib/utils/projects"
 import { selectedProjectAtom } from "../agents/atoms"
 
 export function SelectRepoPage() {
@@ -24,14 +25,15 @@ export function SelectRepoPage() {
       if (project) {
         // Optimistically update the projects list cache
         utils.projects.list.setData(undefined, (oldData) => {
-          if (!oldData) return [project]
-          const exists = oldData.some((p) => p.id === project.id)
+          const normalized = normalizeProjects(oldData)
+          if (!normalized.length) return [project]
+          const exists = normalized.some((p) => p.id === project.id)
           if (exists) {
-            return oldData.map((p) =>
+            return normalized.map((p) =>
               p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p
             )
           }
-          return [project, ...oldData]
+          return [project, ...normalized]
         })
 
         setSelectedProject({
@@ -56,14 +58,15 @@ export function SelectRepoPage() {
     onSuccess: (project) => {
       if (project) {
         utils.projects.list.setData(undefined, (oldData) => {
-          if (!oldData) return [project]
-          const exists = oldData.some((p) => p.id === project.id)
+          const normalized = normalizeProjects(oldData)
+          if (!normalized.length) return [project]
+          const exists = normalized.some((p) => p.id === project.id)
           if (exists) {
-            return oldData.map((p) =>
+            return normalized.map((p) =>
               p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p
             )
           }
-          return [project, ...oldData]
+          return [project, ...normalized]
         })
 
         setSelectedProject({

@@ -20,13 +20,13 @@ export function useAutoImport() {
   const utils = trpc.useUtils()
 
   const importMutation = trpc.sandboxImport.importSandboxChat.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result: { chatId: string }) => {
       toast.success("Opened locally")
       setChatSourceMode("local")
       setSelectedChatId(result.chatId)
       utils.chats.list.invalidate()
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       toast.error(`Import failed: ${error.message}`)
     },
   })

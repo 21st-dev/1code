@@ -54,7 +54,7 @@ export function OpenLocallyDialog({
   const locateMutation = trpc.projects.locateAndAddProject.useMutation()
 
   const importMutation = trpc.sandboxImport.importSandboxChat.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: async (result: { chatId: string }) => {
       toast.success("Opened locally")
 
       // 1. Clear stale Chat instances from cache
@@ -72,7 +72,7 @@ export function OpenLocallyDialog({
       setSelectedChatId(result.chatId)
       onClose()
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       toast.error(`Import failed: ${error.message}`)
     },
   })
@@ -80,7 +80,7 @@ export function OpenLocallyDialog({
   const pickDestMutation = trpc.projects.pickCloneDestination.useMutation()
 
   const cloneMutation = trpc.sandboxImport.cloneFromSandbox.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: async (result: { chatId: string }) => {
       toast.success("Cloned and opened locally")
 
       // 1. Clear stale Chat instances from cache
@@ -98,7 +98,7 @@ export function OpenLocallyDialog({
       setSelectedChatId(result.chatId)
       onClose()
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       toast.error(`Clone failed: ${error.message}`)
     },
   })
