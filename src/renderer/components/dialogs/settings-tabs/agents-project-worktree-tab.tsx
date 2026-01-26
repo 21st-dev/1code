@@ -104,8 +104,8 @@ export function AgentsProjectWorktreeTab({
         }
         return current
       })
-      // Switch to account tab
-      setSettingsActiveTab("account")
+      // Switch to profile tab
+      setSettingsActiveTab("profile")
     },
     onError: (err) => {
       toast.error(`Failed to delete project: ${err.message}`)

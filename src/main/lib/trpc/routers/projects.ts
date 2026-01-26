@@ -379,4 +379,112 @@ export const projectsRouter = router({
 
       return newProject
     }),
+
+  /**
+   * Locate an existing project folder and add it if it matches expected owner/repo
+   * Used for importing sandbox chats to existing local projects
+   */
+  locateAndAddProject: publicProcedure
+    .input(
+      z.object({
+        expectedOwner: z.string(),
+        expectedRepo: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const window = ctx.getWindow?.() ?? BrowserWindow.getFocusedWindow()
+
+      if (!window) {
+        throw new Error("No window available for folder dialog")
+      }
+
+      // Ensure window is focused
+      if (!window.isFocused()) {
+        window.focus()
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+
+      const result = await dialog.showOpenDialog(window, {
+        properties: ["openDirectory"],
+        title: "Select Project Folder",
+        buttonLabel: "Select",
+      })
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, reason: "canceled" as const }
+      }
+
+      const folderPath = result.filePaths[0]!
+      const gitInfo = await getGitRemoteInfo(folderPath)
+
+      // Check if it matches expected owner/repo
+      if (gitInfo.owner !== input.expectedOwner || gitInfo.repo !== input.expectedRepo) {
+        return {
+          success: false,
+          reason: "wrong-repo" as const,
+          found: gitInfo.owner && gitInfo.repo ? `${gitInfo.owner}/${gitInfo.repo}` : "not a git repository",
+        }
+      }
+
+      const db = getDatabase()
+
+      // Check if project already exists
+      const existing = db
+        .select()
+        .from(projects)
+        .where(eq(projects.path, folderPath))
+        .get()
+
+      if (existing) {
+        return { success: true, project: existing }
+      }
+
+      // Create new project
+      const newProject = db
+        .insert(projects)
+        .values({
+          name: basename(folderPath),
+          path: folderPath,
+          gitRemoteUrl: gitInfo.remoteUrl,
+          gitProvider: gitInfo.provider,
+          gitOwner: gitInfo.owner,
+          gitRepo: gitInfo.repo,
+        })
+        .returning()
+        .get()
+
+      return { success: true, project: newProject }
+    }),
+
+  /**
+   * Pick a destination folder for cloning a repository
+   */
+  pickCloneDestination: publicProcedure
+    .input(z.object({ suggestedName: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const window = ctx.getWindow?.() ?? BrowserWindow.getFocusedWindow()
+
+      if (!window) {
+        throw new Error("No window available for folder dialog")
+      }
+
+      // Ensure window is focused
+      if (!window.isFocused()) {
+        window.focus()
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+
+      const result = await dialog.showOpenDialog(window, {
+        properties: ["openDirectory", "createDirectory"],
+        title: "Select Clone Destination",
+        buttonLabel: "Select",
+        defaultPath: input.suggestedName,
+      })
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, targetPath: null }
+      }
+
+      return { success: true, targetPath: result.filePaths[0]! }
+    }),
 })

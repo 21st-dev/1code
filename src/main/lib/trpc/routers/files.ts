@@ -1,7 +1,11 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { readdir, stat } from "node:fs/promises"
-import { join, relative, basename } from "node:path"
+import { readdir, stat, readFile, writeFile, mkdir } from "node:fs/promises"
+import { join, relative, basename, dirname } from "node:path"
+import { app } from "electron"
+import { getDatabase } from "../../db"
+import { subChats, chats } from "../../db/schema"
+import { eq } from "drizzle-orm"
 
 // Directories to ignore when scanning
 const IGNORED_DIRS = new Set([
@@ -260,5 +264,66 @@ export const filesRouter = router({
     .mutation(({ input }) => {
       fileListCache.delete(input.projectPath)
       return { success: true }
+    }),
+
+  /**
+   * Read file contents
+   */
+  readFile: publicProcedure
+    .input(z.object({ filePath: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const content = await readFile(input.filePath, "utf-8")
+        return content
+      } catch (error) {
+        console.error(`[files] Error reading file: ${input.filePath}`, error)
+        throw new Error(`Failed to read file: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }),
+
+  /**
+   * Write pasted text to a file in the sub-chat's worktree
+   */
+  writePastedText: publicProcedure
+    .input(
+      z.object({
+        subChatId: z.string(),
+        text: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+
+      // Get sub-chat and its chat
+      const subChat = db.select().from(subChats).where(eq(subChats.id, input.subChatId)).get()
+      if (!subChat) {
+        throw new Error("Sub-chat not found")
+      }
+
+      const chat = db.select().from(chats).where(eq(chats.id, subChat.chatId)).get()
+      if (!chat || !chat.worktreePath) {
+        throw new Error("Chat worktree not found")
+      }
+
+      // Create pasted-texts directory in worktree if it doesn't exist
+      const pastedTextsDir = join(chat.worktreePath, ".pasted-texts")
+      await mkdir(pastedTextsDir, { recursive: true })
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+      const filename = `pasted-${timestamp}.txt`
+      const filePath = join(pastedTextsDir, filename)
+
+      // Write file
+      await writeFile(filePath, input.text, "utf-8")
+
+      // Get file size
+      const stats = await stat(filePath)
+
+      return {
+        filePath,
+        filename,
+        size: stats.size,
+      }
     }),
 })

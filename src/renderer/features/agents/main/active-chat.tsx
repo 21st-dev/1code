@@ -162,7 +162,7 @@ import {
 } from "../search"
 import { agentChatStore } from "../stores/agent-chat-store"
 import { EMPTY_QUEUE, useMessageQueueStore } from "../stores/message-queue-store"
-import { clearSubChatCaches, isRollingBackAtom, rollbackHandlerAtom, syncMessagesWithStatusAtom } from "../stores/message-store"
+import { clearSubChatCaches, isRollingBackAtom, rollbackHandlerAtom, syncMessagesWithStatusAtom, PLAYBACK_SPEEDS, type PlaybackSpeed } from "../stores/message-store"
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import {
   useAgentSubChatStore,

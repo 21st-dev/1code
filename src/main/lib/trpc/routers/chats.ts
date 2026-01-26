@@ -1622,4 +1622,86 @@ export const chatsRouter = router({
         return { hasWorktree: false, uncommittedCount: 0 }
       }
     }),
+
+  /**
+   * Export chat or sub-chat messages to markdown/json/text format
+   */
+  exportChat: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string(),
+        subChatId: z.string().optional(),
+        format: z.enum(["markdown", "json", "text"]),
+      })
+    )
+    .query(({ input }) => {
+      const db = getDatabase()
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
+
+      if (!chat) {
+        throw new Error("Chat not found")
+      }
+
+      // Get sub-chat if specified, otherwise get first sub-chat
+      let targetSubChat
+      if (input.subChatId) {
+        targetSubChat = db
+          .select()
+          .from(subChats)
+          .where(eq(subChats.id, input.subChatId))
+          .get()
+      } else {
+        const allSubChats = db
+          .select()
+          .from(subChats)
+          .where(eq(subChats.chatId, input.chatId))
+          .orderBy(subChats.createdAt)
+          .all()
+        targetSubChat = allSubChats[0]
+      }
+
+      if (!targetSubChat) {
+        throw new Error("Sub-chat not found")
+      }
+
+      const messages = targetSubChat.messages ? JSON.parse(targetSubChat.messages) : []
+      const chatName = targetSubChat.name || chat.name || "chat"
+      const timestamp = new Date().toISOString().split("T")[0]
+      const safeName = chatName.replace(/[^a-z0-9]/gi, "-").toLowerCase()
+
+      let content: string
+      let filename: string
+
+      if (input.format === "json") {
+        content = JSON.stringify(messages, null, 2)
+        filename = `${safeName}-${timestamp}.json`
+      } else {
+        const formattedMessages = messages.map((msg: any) => {
+          const role = msg.role === "user" ? "User" : msg.role === "assistant" ? "Assistant" : msg.role
+          let content = ""
+
+          if (typeof msg.content === "string") {
+            content = msg.content
+          } else if (Array.isArray(msg.content)) {
+            content = msg.content
+              .filter((part: any) => part.type === "text" && part.text)
+              .map((part: any) => part.text)
+              .join("\n")
+          }
+
+          if (input.format === "markdown") {
+            return `## ${role}\n\n${content}`
+          } else {
+            return `${role}:\n${content}`
+          }
+        })
+
+        const ext = input.format === "markdown" ? "md" : "txt"
+        const separator = input.format === "markdown" ? "\n\n---\n\n" : "\n\n"
+        content = formattedMessages.join(separator)
+        filename = `${safeName}-${timestamp}.${ext}`
+      }
+
+      return { content, filename }
+    }),
 })
