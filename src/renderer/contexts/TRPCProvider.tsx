@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ipcLink } from "trpc-electron/renderer"
 import { trpc } from "../lib/trpc"
+import { LoadingSkeleton } from "../components/ui/loading-skeleton"
 import superjson from "superjson"
 
 interface TRPCProviderProps {
@@ -99,10 +100,9 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
     )
   }
 
-  // Return null during initialization to avoid showing loading message
-  // The initialization is typically very fast (<100ms), so users won't see a flash
+  // Show a lightweight skeleton during initialization to avoid blank screen
   if (!trpcClient) {
-    return null
+    return <LoadingSkeleton />
   }
 
   return (
