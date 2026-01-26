@@ -24,6 +24,7 @@ import {
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
 import { cleanupGitWatchers } from "./lib/git/watcher"
+import { logger } from "./lib/logger"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -87,11 +88,11 @@ export function getAuthManager(): AuthManager {
 
 // Handle auth code from deep link (exported for IPC handlers)
 export async function handleAuthCode(code: string): Promise<void> {
-  console.log("[Auth] Handling auth code:", code.slice(0, 8) + "...")
+  logger.debug("[Auth] Handling auth code", { codePreview: code.slice(0, 8) + "..." })
 
   try {
     const authData = await authManager.exchangeCode(code)
-    console.log("[Auth] Success for user:", authData.user.email)
+    logger.info("[Auth] Success for user", { email: authData.user.email })
 
     // Track successful authentication
     trackAuthCompleted(authData.user.id, authData.user.email)
@@ -112,10 +113,10 @@ export async function handleAuthCode(code: string): Promise<void> {
         secure: getBaseUrl().startsWith("https"),
         sameSite: "lax" as const,
       })
-      console.log("[Auth] Desktop token cookie set")
+      logger.debug("[Auth] Desktop token cookie set")
     } catch (cookieError) {
       // Cookie setting is optional - auth data is already saved to disk
-      console.warn("[Auth] Cookie set failed (non-critical):", cookieError)
+      logger.warn("[Auth] Cookie set failed (non-critical)", cookieError)
     }
 
     // Notify renderer
@@ -130,14 +131,14 @@ export async function handleAuthCode(code: string): Promise<void> {
     }
     win?.focus()
   } catch (error) {
-    console.error("[Auth] Exchange failed:", error)
+    logger.error("[Auth] Exchange failed", error)
     getWindow()?.webContents.send("auth:error", (error as Error).message)
   }
 }
 
 // Handle deep link
 function handleDeepLink(url: string): void {
-  console.log("[DeepLink] Received:", url)
+  logger.debug("[DeepLink] Received", { url })
 
   try {
     const parsed = new URL(url)
@@ -151,7 +152,7 @@ function handleDeepLink(url: string): void {
       }
     }
   } catch (e) {
-    console.error("[DeepLink] Failed to parse:", e)
+    logger.error("[DeepLink] Failed to parse", e)
   }
 }
 
@@ -394,360 +395,406 @@ if (!gotTheLock && app) {
 if (gotTheLock) {
   // Handle second instance launch (also handles deep links on Windows/Linux)
   app.on("second-instance", (_event, commandLine) => {
-    console.log("[App] Second instance detected, focusing existing window...")
+    logger.debug("[App] Second instance detected, focusing existing window...")
     
-    // Check for deep link in command line args
-    const url = commandLine.find((arg) => arg.startsWith(`${PROTOCOL}://`))
-    if (url) {
-      handleDeepLink(url)
-    }
+    try {
+      // Check for deep link in command line args
+      const url = commandLine.find((arg) => arg.startsWith(`${PROTOCOL}://`))
+      if (url) {
+        handleDeepLink(url)
+      }
 
-    const window = getWindow()
-    if (window) {
-      // Restore if minimized, then focus
-      if (window.isMinimized()) {
-        window.restore()
+      const window = getWindow()
+      if (window) {
+        // Restore if minimized, then focus
+        if (window.isMinimized()) {
+          window.restore()
+        }
+        // Focus the window and bring it to front
+        window.focus()
+        window.show() // Ensure window is visible
+        
+        // On macOS, also activate the app
+        if (process.platform === "darwin") {
+          app.dock?.show()
+        }
+      } else {
+        // Window doesn't exist yet, create it
+        createMainWindow()
       }
-      // Focus the window and bring it to front
-      window.focus()
-      window.show() // Ensure window is visible
-      
-      // On macOS, also activate the app
-      if (process.platform === "darwin") {
-        app.dock?.show()
+    } catch (error) {
+      logger.error("[App] Error handling second instance", error)
+      // Try to create window anyway
+      try {
+        createMainWindow()
+      } catch (windowError) {
+        logger.error("[App] Failed to create window after second instance error", windowError)
       }
-    } else {
-      // Window doesn't exist yet, create it
-      createMainWindow()
     }
   })
 
   // App ready
   app.whenReady().then(async () => {
-    // Set dev mode app name (userData path was already set before requestSingleInstanceLock)
-    if (IS_DEV) {
-      app.name = "Agents Dev"
-
-      // Install DevTools extensions in dev mode
-      try {
-        const installed = await installExtension([REACT_DEVELOPER_TOOLS, REDUX_DEVTOOLS], {
-          loadExtensionOptions: { allowFileAccess: true },
-        })
-        console.log("[DevTools] Extensions installed:", installed)
-      } catch (err) {
-        console.warn("[DevTools] Failed to install extensions:", err)
-      }
-    }
-
-    // Register protocol handler (must be after app is ready)
-    initialRegistration = registerProtocol()
-
-    // Handle deep link on macOS (app already running)
-    app.on("open-url", (event, url) => {
-      console.log("[Protocol] open-url event received:", url)
-      event.preventDefault()
-      handleDeepLink(url)
-    })
-
-    // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
-    if (process.platform === "win32") {
-      app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
-    }
-
-    console.log(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
-
-    // Verify protocol registration after app is ready
-    // This helps diagnose first-install issues where the protocol isn't recognized yet
-    verifyProtocolRegistration()
-
-    // Get Claude Code version for About panel
-    let claudeCodeVersion = "unknown"
     try {
-      const isDev = !app.isPackaged
-      const versionPath = isDev
-        ? join(app.getAppPath(), "resources/bin/VERSION")
-        : join(process.resourcesPath, "bin/VERSION")
+      // Set dev mode app name (userData path was already set before requestSingleInstanceLock)
+      if (IS_DEV) {
+        app.name = "Agents Dev"
 
-      if (existsSync(versionPath)) {
-        const versionContent = readFileSync(versionPath, "utf-8")
-        claudeCodeVersion = versionContent.split("\n")[0]?.trim() || "unknown"
+        // Install DevTools extensions in dev mode
+        try {
+          const installed = await installExtension([REACT_DEVELOPER_TOOLS, REDUX_DEVTOOLS], {
+            loadExtensionOptions: { allowFileAccess: true },
+          })
+          logger.debug("[DevTools] Extensions installed", { installed })
+        } catch (err) {
+          logger.warn("[DevTools] Failed to install extensions", err)
+        }
       }
-    } catch (error) {
-      console.warn("[App] Failed to read Claude Code version:", error)
-    }
 
-    // Set About panel options with Claude Code version
-    app.setAboutPanelOptions({
-      applicationName: "1Code",
-      applicationVersion: app.getVersion(),
-      version: `Claude Code ${claudeCodeVersion}`,
-      copyright: "Copyright © 2026 21st.dev",
-    })
+      // Register protocol handler (must be after app is ready)
+      initialRegistration = registerProtocol()
 
-    // Track update availability for menu
-    let updateAvailable = false
-    let availableVersion: string | null = null
+      // Handle deep link on macOS (app already running)
+      app.on("open-url", (event, url) => {
+        logger.debug("[Protocol] open-url event received", { url })
+        event.preventDefault()
+        try {
+          handleDeepLink(url)
+        } catch (error) {
+          logger.error("[Protocol] Error handling deep link from open-url", error)
+        }
+      })
 
-    // Function to build and set application menu
-    const buildMenu = () => {
-      const template: Electron.MenuItemConstructorOptions[] = [
-        {
-          label: app.name,
-          submenu: [
-            { role: "about", label: "About 1Code" },
-            {
-              label: updateAvailable
-                ? `Update to v${availableVersion}...`
-                : "Check for Updates...",
-              click: () => {
-                // Send event to renderer to clear dismiss state
-                const win = getWindow()
-                if (win) {
-                  win.webContents.send("update:manual-check")
-                }
-                // If update is already available, start downloading immediately
-                if (updateAvailable) {
-                  downloadUpdate()
-                } else {
-                  checkForUpdates(true)
-                }
+      // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
+      if (process.platform === "win32") {
+        app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
+      }
+
+      logger.info(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
+
+      // Verify protocol registration after app is ready
+      // This helps diagnose first-install issues where the protocol isn't recognized yet
+      verifyProtocolRegistration()
+
+      // Get Claude Code version for About panel
+      let claudeCodeVersion = "unknown"
+      try {
+        const isDev = !app.isPackaged
+        const versionPath = isDev
+          ? join(app.getAppPath(), "resources/bin/VERSION")
+          : join(process.resourcesPath, "bin/VERSION")
+
+        if (existsSync(versionPath)) {
+          const versionContent = readFileSync(versionPath, "utf-8")
+          claudeCodeVersion = versionContent.split("\n")[0]?.trim() || "unknown"
+        }
+      } catch (error) {
+        logger.warn("[App] Failed to read Claude Code version", error)
+      }
+
+      // Set About panel options with Claude Code version
+      app.setAboutPanelOptions({
+        applicationName: "1Code",
+        applicationVersion: app.getVersion(),
+        version: `Claude Code ${claudeCodeVersion}`,
+        copyright: "Copyright © 2026 21st.dev",
+      })
+
+      // Track update availability for menu
+      let updateAvailable = false
+      let availableVersion: string | null = null
+
+      // Function to build and set application menu
+      const buildMenu = () => {
+        const template: Electron.MenuItemConstructorOptions[] = [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about", label: "About 1Code" },
+              {
+                label: updateAvailable
+                  ? `Update to v${availableVersion}...`
+                  : "Check for Updates...",
+                click: () => {
+                  // Send event to renderer to clear dismiss state
+                  const win = getWindow()
+                  if (win) {
+                    win.webContents.send("update:manual-check")
+                  }
+                  // If update is already available, start downloading immediately
+                  if (updateAvailable) {
+                    downloadUpdate()
+                  } else {
+                    checkForUpdates(true)
+                  }
+                },
               },
-            },
-            { type: "separator" },
-            { role: "services" },
-            { type: "separator" },
-            { role: "hide" },
-            { role: "hideOthers" },
-            { role: "unhide" },
-            { type: "separator" },
-            { role: "quit" },
-          ],
-        },
-        {
-          label: "File",
-          submenu: [
-            {
-              label: "New Chat",
-              accelerator: "CmdOrCtrl+N",
-              click: () => {
-                console.log("[Menu] New Chat clicked (Cmd+N)")
-                const win = getWindow()
-                if (win) {
-                  console.log("[Menu] Sending shortcut:new-agent to renderer")
-                  win.webContents.send("shortcut:new-agent")
-                } else {
-                  console.log("[Menu] No window found!")
-                }
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" },
+            ],
+          },
+          {
+            label: "File",
+            submenu: [
+              {
+                label: "New Chat",
+                accelerator: "CmdOrCtrl+N",
+                click: () => {
+                  logger.debug("[Menu] New Chat clicked (Cmd+N)")
+                  const win = getWindow()
+                  if (win) {
+                    logger.debug("[Menu] Sending shortcut:new-agent to renderer")
+                    win.webContents.send("shortcut:new-agent")
+                  } else {
+                    logger.warn("[Menu] No window found!")
+                  }
+                },
               },
-            },
-          ],
-        },
-        {
-          label: "Edit",
-          submenu: [
-            { role: "undo" },
-            { role: "redo" },
-            { type: "separator" },
-            { role: "cut" },
-            { role: "copy" },
-            { role: "paste" },
-            { role: "selectAll" },
-          ],
-        },
-        {
-          label: "View",
-          submenu: [
-            { role: "reload" },
-            { role: "forceReload" },
-            { role: "toggleDevTools" },
-            { type: "separator" },
-            { role: "resetZoom" },
-            { role: "zoomIn" },
-            { role: "zoomOut" },
-            { type: "separator" },
-            { role: "togglefullscreen" },
-          ],
-        },
-        {
-          label: "Window",
-          submenu: [
-            { role: "minimize" },
-            { role: "zoom" },
-            { type: "separator" },
-            { role: "front" },
-          ],
-        },
-        {
-          role: "help",
-          submenu: [
-            {
-              label: "Learn More",
-              click: async () => {
-                const { shell } = await import("electron")
-                await shell.openExternal("https://21st.dev")
+            ],
+          },
+          {
+            label: "Edit",
+            submenu: [
+              { role: "undo" },
+              { role: "redo" },
+              { type: "separator" },
+              { role: "cut" },
+              { role: "copy" },
+              { role: "paste" },
+              { role: "selectAll" },
+            ],
+          },
+          {
+            label: "View",
+            submenu: [
+              { role: "reload" },
+              { role: "forceReload" },
+              { role: "toggleDevTools" },
+              { type: "separator" },
+              { role: "resetZoom" },
+              { role: "zoomIn" },
+              { role: "zoomOut" },
+              { type: "separator" },
+              { role: "togglefullscreen" },
+            ],
+          },
+          {
+            label: "Window",
+            submenu: [
+              { role: "minimize" },
+              { role: "zoom" },
+              { type: "separator" },
+              { role: "front" },
+            ],
+          },
+          {
+            role: "help",
+            submenu: [
+              {
+                label: "Learn More",
+                click: async () => {
+                  const { shell } = await import("electron")
+                  await shell.openExternal("https://21st.dev")
+                },
               },
-            },
-          ],
-        },
-      ]
-      Menu.setApplicationMenu(Menu.buildFromTemplate(template))
-    }
+            ],
+          },
+        ]
+        Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+      }
 
-    // Set update state and rebuild menu
-    const setUpdateAvailable = (available: boolean, version?: string) => {
-      updateAvailable = available
-      availableVersion = version || null
+      // Set update state and rebuild menu
+      const setUpdateAvailable = (available: boolean, version?: string) => {
+        updateAvailable = available
+        availableVersion = version || null
+        buildMenu()
+      }
+
+      // Expose setUpdateAvailable globally for auto-updater
+      ;(global as any).__setUpdateAvailable = setUpdateAvailable
+
+      // Build initial menu
       buildMenu()
-    }
 
-    // Expose setUpdateAvailable globally for auto-updater
-    ;(global as any).__setUpdateAvailable = setUpdateAvailable
+      // Initialize auth manager
+      authManager = new AuthManager(!!process.env.ELECTRON_RENDERER_URL)
+      logger.info("[App] Auth manager initialized")
 
-    // Build initial menu
-    buildMenu()
+      // Initialize analytics after auth manager so we can identify user
+      initAnalytics()
 
-    // Initialize auth manager
-    authManager = new AuthManager(!!process.env.ELECTRON_RENDERER_URL)
-    console.log("[App] Auth manager initialized")
-
-    // Initialize analytics after auth manager so we can identify user
-    initAnalytics()
-
-    // If user already authenticated from previous session, identify them
-    if (authManager.isAuthenticated()) {
-      const user = authManager.getUser()
-      if (user) {
-        identify(user.id, { email: user.email })
-        console.log("[Analytics] User identified from saved session:", user.id)
+      // If user already authenticated from previous session, identify them
+      if (authManager.isAuthenticated()) {
+        const user = authManager.getUser()
+        if (user) {
+          identify(user.id, { email: user.email })
+          logger.debug("[Analytics] User identified from saved session", { userId: user.id })
+        }
       }
-    }
 
-    // Track app opened (now with correct user ID if authenticated)
-    trackAppOpened()
+      // Track app opened (now with correct user ID if authenticated)
+      trackAppOpened()
 
-    // Set up callback to update cookie when token is refreshed
-    authManager.setOnTokenRefresh(async (authData) => {
-      console.log("[Auth] Token refreshed, updating cookie...")
-      const ses = session.fromPartition("persist:main")
+      // Set up callback to update cookie when token is refreshed
+      authManager.setOnTokenRefresh(async (authData) => {
+        logger.debug("[Auth] Token refreshed, updating cookie...")
+        const ses = session.fromPartition("persist:main")
+        try {
+          await ses.cookies.set({
+            url: getBaseUrl(),
+            name: "x-desktop-token",
+            value: authData.token,
+            expirationDate: Math.floor(
+              new Date(authData.expiresAt).getTime() / 1000,
+            ),
+            httpOnly: false,
+            secure: getBaseUrl().startsWith("https"),
+            sameSite: "lax" as const,
+          })
+          logger.debug("[Auth] Desktop token cookie updated after refresh")
+        } catch (err) {
+          logger.error("[Auth] Failed to update cookie", err)
+        }
+      })
+
+      // Initialize database
       try {
-        await ses.cookies.set({
-          url: getBaseUrl(),
-          name: "x-desktop-token",
-          value: authData.token,
-          expirationDate: Math.floor(
-            new Date(authData.expiresAt).getTime() / 1000,
-          ),
-          httpOnly: false,
-          secure: getBaseUrl().startsWith("https"),
-          sameSite: "lax" as const,
-        })
-        console.log("[Auth] Desktop token cookie updated after refresh")
-      } catch (err) {
-        console.error("[Auth] Failed to update cookie:", err)
+        initDatabase()
+        logger.info("[App] Database initialized")
+      } catch (error) {
+        logger.error("[App] Failed to initialize database", error)
+        // Database initialization failure is critical - but don't crash
+        // The app can still run, but some features won't work
       }
-    })
 
-    // Initialize database
-    try {
-      initDatabase()
-      console.log("[App] Database initialized")
-    } catch (error) {
-      console.error("[App] Failed to initialize database:", error)
-    }
+      // Create main window
+      createMainWindow()
 
-    // Create main window
-    createMainWindow()
+      // Auto-load the 1code project (development only)
+      // NOTE: This auto-loads a specific project for development convenience
+      // Set AUTO_LOAD_PROJECT env var to enable in production
+      const autoLoadPath = process.env.AUTO_LOAD_PROJECT
+      if (autoLoadPath && !app.isPackaged) {
+        setTimeout(async () => {
+          try {
+            const projectPath = autoLoadPath
+            const { getDatabase, projects } = await import("./lib/db")
+            const { eq } = await import("drizzle-orm")
+            const { getGitRemoteInfo } = await import("./lib/git")
+            const { basename } = await import("path")
 
-    // Auto-load the 1code project (development only)
-    // NOTE: This auto-loads a specific project for development convenience
-    // Set AUTO_LOAD_PROJECT env var to enable in production
-    const autoLoadPath = process.env.AUTO_LOAD_PROJECT
-    if (autoLoadPath && !app.isPackaged) {
+            const db = getDatabase()
+
+            // Check if project already exists
+            const existing = db
+              .select()
+              .from(projects)
+              .where(eq(projects.path, projectPath))
+              .get()
+
+            if (existing) {
+              logger.debug("[App] Auto-load project already exists, updating timestamp")
+              // Update the updatedAt timestamp
+              db.update(projects)
+                .set({ updatedAt: new Date() })
+                .where(eq(projects.id, existing.id))
+                .run()
+            } else {
+              logger.info("[App] Auto-loading project", { projectPath })
+              // Get git info and create project
+              const gitInfo = await getGitRemoteInfo(projectPath)
+              const name = basename(projectPath)
+
+              db.insert(projects)
+                .values({
+                  name,
+                  path: projectPath,
+                  gitRemoteUrl: gitInfo.remoteUrl,
+                  gitProvider: gitInfo.provider,
+                  gitOwner: gitInfo.owner,
+                  gitRepo: gitInfo.repo,
+                })
+                .run()
+
+            logger.info("[App] Project loaded successfully", { name })
+          }
+          } catch (error) {
+            logger.error("[App] Failed to auto-load project", error)
+          }
+        }, 1000)
+      }
+
+      // Initialize auto-updater (production only)
+      if (app.isPackaged) {
+        try {
+          await initAutoUpdater(getWindow)
+          // Setup update check on window focus (instead of periodic interval)
+          setupFocusUpdateCheck(getWindow)
+          // Check for updates 5 seconds after startup (force to bypass interval check)
+          setTimeout(() => {
+            checkForUpdates(true)
+          }, 5000)
+        } catch (error) {
+          logger.error("[App] Failed to initialize auto-updater", error)
+        }
+      }
+
+      // Warm up MCP cache 3 seconds after startup (background, non-blocking)
+      // This populates the cache so all future sessions can use filtered MCP servers
       setTimeout(async () => {
         try {
-          const projectPath = autoLoadPath
-          const { getDatabase, projects } = await import("./lib/db")
-          const { eq } = await import("drizzle-orm")
-          const { getGitRemoteInfo } = await import("./lib/git")
-          const { basename } = await import("path")
+          const { warmupMcpCache } = await import("./lib/trpc/routers/claude")
+          await warmupMcpCache()
+        } catch (error) {
+          logger.error("[App] MCP warmup failed", error)
+        }
+      }, 3000)
 
-          const db = getDatabase()
+      // Handle deep link from app launch (Windows/Linux)
+      const deepLinkUrl = process.argv.find((arg) =>
+        arg.startsWith(`${PROTOCOL}://`),
+      )
+      if (deepLinkUrl) {
+        try {
+          handleDeepLink(deepLinkUrl)
+        } catch (error) {
+          logger.error("[App] Error handling deep link from launch", error)
+        }
+      }
 
-          // Check if project already exists
-          const existing = db
-            .select()
-            .from(projects)
-            .where(eq(projects.path, projectPath))
-            .get()
-
-          if (existing) {
-            console.log("[App] Auto-load project already exists, updating timestamp")
-            // Update the updatedAt timestamp
-            db.update(projects)
-              .set({ updatedAt: new Date() })
-              .where(eq(projects.id, existing.id))
-              .run()
-          } else {
-            console.log("[App] Auto-loading project:", projectPath)
-            // Get git info and create project
-            const gitInfo = await getGitRemoteInfo(projectPath)
-            const name = basename(projectPath)
-
-            db.insert(projects)
-              .values({
-                name,
-                path: projectPath,
-                gitRemoteUrl: gitInfo.remoteUrl,
-                gitProvider: gitInfo.provider,
-                gitOwner: gitInfo.owner,
-                gitRepo: gitInfo.repo,
-              })
-              .run()
-
-            console.log("[App] Project loaded successfully:", name)
+      // macOS: Re-create window when dock icon is clicked
+      app.on("activate", () => {
+        try {
+          if (BrowserWindow.getAllWindows().length === 0) {
+            createMainWindow()
           }
         } catch (error) {
-          console.error("[App] Failed to auto-load project:", error)
+          logger.error("[App] Error handling activate event", error)
         }
-      }, 1000)
-    }
-
-    // Initialize auto-updater (production only)
-    if (app.isPackaged) {
-      await initAutoUpdater(getWindow)
-      // Setup update check on window focus (instead of periodic interval)
-      setupFocusUpdateCheck(getWindow)
-      // Check for updates 5 seconds after startup (force to bypass interval check)
-      setTimeout(() => {
-        checkForUpdates(true)
-      }, 5000)
-    }
-
-    // Warm up MCP cache 3 seconds after startup (background, non-blocking)
-    // This populates the cache so all future sessions can use filtered MCP servers
-    setTimeout(async () => {
+      })
+    } catch (error) {
+      logger.error("[App] Error during app initialization", error)
+      // Try to create window anyway so user can see error
       try {
-        const { warmupMcpCache } = await import("./lib/trpc/routers/claude")
-        await warmupMcpCache()
-      } catch (error) {
-        console.error("[App] MCP warmup failed:", error)
-      }
-    }, 3000)
-
-    // Handle deep link from app launch (Windows/Linux)
-    const deepLinkUrl = process.argv.find((arg) =>
-      arg.startsWith(`${PROTOCOL}://`),
-    )
-    if (deepLinkUrl) {
-      handleDeepLink(deepLinkUrl)
-    }
-
-    // macOS: Re-create window when dock icon is clicked
-    app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
         createMainWindow()
+      } catch (windowError) {
+        logger.error("[App] Failed to create window after initialization error", windowError)
       }
-    })
+    }
+  }).catch((error) => {
+    logger.error("[App] Unhandled error in app.whenReady()", error)
+    // Try to create window so user can see error
+    try {
+      createMainWindow()
+    } catch (windowError) {
+      logger.error("[App] Failed to create window after whenReady error", windowError)
+    }
   })
 
   // Quit when all windows are closed (except on macOS)
@@ -759,18 +806,55 @@ if (gotTheLock) {
 
   // Cleanup before quit
   app.on("before-quit", async () => {
-    console.log("[App] Shutting down...")
-    await cleanupGitWatchers()
-    await shutdownAnalytics()
-    await closeDatabase()
+    logger.info("[App] Shutting down...")
+    try {
+      await cleanupGitWatchers()
+    } catch (error) {
+      logger.error("[App] Error cleaning up git watchers", error)
+    }
+    try {
+      await shutdownAnalytics()
+    } catch (error) {
+      logger.error("[App] Error shutting down analytics", error)
+    }
+    try {
+      await closeDatabase()
+    } catch (error) {
+      logger.error("[App] Error closing database", error)
+    }
   })
 
   // Handle uncaught exceptions
   process.on("uncaughtException", (error) => {
-    console.error("[App] Uncaught exception:", error)
+    logger.error("[App] Uncaught exception", error)
+    // In production, try to report to Sentry if available
+    if (app.isPackaged && !IS_DEV) {
+      try {
+        const Sentry = require("@sentry/electron/main")
+        Sentry.captureException(error)
+      } catch {
+        // Sentry not available - ignore
+      }
+    }
+    // Don't exit - let the app continue running
+    // The error is logged and can be handled by the app
   })
 
   process.on("unhandledRejection", (reason, promise) => {
-    console.error("[App] Unhandled rejection at:", promise, "reason:", reason)
+    logger.error("[App] Unhandled rejection", {
+      promise: String(promise),
+      reason: reason instanceof Error ? reason : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    })
+    // In production, try to report to Sentry if available
+    if (app.isPackaged && !IS_DEV) {
+      try {
+        const Sentry = require("@sentry/electron/main")
+        Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)))
+      } catch {
+        // Sentry not available - ignore
+      }
+    }
+    // Don't exit - let the app continue running
   })
 }

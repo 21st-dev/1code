@@ -27,6 +27,8 @@ export default defineConfig({
           format: "cjs",
         },
       },
+      // Enable watching for main process changes
+      watch: {},
     },
   },
   preload: {
@@ -45,6 +47,8 @@ export default defineConfig({
           format: "cjs",
         },
       },
+      // Enable watching for preload changes
+      watch: {},
     },
   },
   renderer: {
@@ -65,6 +69,13 @@ export default defineConfig({
     css: {
       postcss: {
         plugins: [tailwindcss, autoprefixer],
+      },
+    },
+    // Enhanced HMR configuration
+    server: {
+      hmr: true,
+      watch: {
+        usePolling: false,
       },
     },
   },

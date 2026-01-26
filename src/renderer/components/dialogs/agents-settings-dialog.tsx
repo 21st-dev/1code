@@ -11,7 +11,7 @@ import {
   SlidersFilledIcon,
   SettingsIcon,
 } from "../../icons"
-import { SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon, BrainFilledIcon, FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
+import { SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon, BrainFilledIcon, FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon, ExtensionsFilledIcon } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
@@ -22,6 +22,7 @@ import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
 import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
 import { AgentsMcpTab } from "./settings-tabs/agents-mcp-tab"
 import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
+import { AgentsExtensionsTab } from "./settings-tabs/agents-extensions-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { trpc } from "../../lib/trpc"
 import { normalizeProjects } from "../../lib/utils/projects"
@@ -104,6 +105,12 @@ const ADVANCED_TABS = [
     label: "MCP Servers",
     icon: OriginalMCPIcon,
     description: "Model Context Protocol servers",
+  },
+  {
+    id: "extensions" as SettingsTab,
+    label: "Extensions",
+    icon: ExtensionsFilledIcon,
+    description: "Manage VS Code extensions",
   },
   {
     id: "beta" as SettingsTab,
@@ -312,6 +319,8 @@ export function AgentsSettingsDialog({
         return <AgentsCustomAgentsTab />
       case "mcp":
         return <AgentsMcpTab />
+      case "extensions":
+        return <AgentsExtensionsTab />
       case "beta":
         return <AgentsBetaTab />
       case "debug":
