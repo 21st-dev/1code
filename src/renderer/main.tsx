@@ -9,9 +9,13 @@ import ReactDOM from "react-dom/client"
 import { App } from "./App"
 import "./styles/globals.css"
 import { preloadDiffHighlighter } from "./lib/themes/diff-view-highlighter"
+import { initWebVitals } from "./lib/monitoring/web-vitals"
 
 // Preload shiki highlighter for diff view (prevents delay when opening diff sidebar)
 preloadDiffHighlighter()
+
+// Initialize web vitals monitoring for CLS tracking
+initWebVitals()
 
 // Suppress ResizeObserver loop error - this is a non-fatal browser warning
 // that can occur when layout changes trigger observation callbacks
