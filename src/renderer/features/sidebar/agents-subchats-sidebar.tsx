@@ -675,8 +675,7 @@ export function AgentsSubChatsSidebar({
       state.addToOpenSubChats(subChat.id)
     }
     state.setActiveSubChat(subChat.id)
-
-    setIsHistoryOpen(false)
+    // Note: SearchCombobox handles closing via onOpenChange
   }, [])
 
   // Sort sub-chats by most recent first for history

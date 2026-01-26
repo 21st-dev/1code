@@ -4,11 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 // import { useSearchParams, useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: mock Next.js navigation hooks
-const useSearchParams = () => ({ get: () => null })
-const useRouter = () => ({ push: () => {}, replace: () => {} })
+const useSearchParams = () => ({ get: (_key: string) => null as string | null })
+const useRouter = () => ({ push: (_url: string) => {}, replace: (_url: string, _opts?: { scroll?: boolean }) => {} })
 // Desktop: mock Clerk hooks
 const useUser = () => ({ user: null })
-const useClerk = () => ({ signOut: () => {} })
+const useClerk = () => ({ signOut: async (_opts?: { redirectUrl?: string }) => {} })
 import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
@@ -258,7 +258,7 @@ export function AgentsContent() {
   const sortedChats = agentChats
     ? [...agentChats].sort(
         (a, b) =>
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+          new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(),
       )
     : []
 
@@ -397,8 +397,8 @@ export function AgentsContent() {
             // Get sorted chat list
             const sortedChats = [...agentChats].sort(
               (a, b) =>
-                new Date(b.updated_at).getTime() -
-                new Date(a.updated_at).getTime(),
+                new Date(b.updatedAt ?? 0).getTime() -
+                new Date(a.updatedAt ?? 0).getTime(),
             )
             isNavigatingRef.current = true
             setTimeout(() => {
@@ -891,7 +891,7 @@ export function AgentsContent() {
             isSidebarOpen={sidebarOpen}
             onBackToChats={() => setSidebarOpen((prev) => !prev)}
             isLoading={isLoadingSubChats}
-            agentName={chatData?.name}
+            agentName={chatData?.name ?? undefined}
           />
         </ResizableSidebar>
 

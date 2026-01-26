@@ -4,6 +4,7 @@ import { Streamdown, parseMarkdownIntoBlocks } from "streamdown"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
 import { Copy, Check } from "lucide-react"
+import DOMPurify from "dompurify"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
 
@@ -129,7 +130,7 @@ function CodeBlock({
           tabSize: 2,
         }}
       >
-        <code dangerouslySetInnerHTML={{ __html: htmlContent }} />
+        <code dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent) }} />
       </pre>
     </div>
   )

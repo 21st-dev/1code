@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useMemo, useCallback } from "react"
 import { useSetAtom } from "jotai"
+import DOMPurify from "dompurify"
 import { useCodeTheme } from "../../lib/hooks/use-code-theme"
 import { highlightCode } from "../../lib/themes/shiki-theme-loader"
 import {
@@ -170,7 +171,7 @@ const DiffLineRow = memo(function DiffLineRow({
       {highlightedHtml ? (
         <span
           className="whitespace-pre-wrap break-all [&_.shiki]:bg-transparent [&_pre]:bg-transparent [&_code]:bg-transparent"
-          dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightedHtml) }}
         />
       ) : (
         <span

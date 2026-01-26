@@ -1,8 +1,8 @@
-import { app, BrowserWindow, session, Menu } from "electron"
+import * as electron from "electron"
+const { app, BrowserWindow, session, Menu } = electron
 import { join } from "path"
 import { createServer } from "http"
 import { readFileSync, existsSync, unlinkSync, readlinkSync } from "fs"
-import * as Sentry from "@sentry/electron/main"
 import { initDatabase, closeDatabase } from "./lib/db"
 import { createMainWindow, getWindow, showLoginPage } from "./windows/main"
 import { AuthManager } from "./auth-manager"
@@ -30,7 +30,7 @@ const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
-if (IS_DEV) {
+if (IS_DEV && app) {
   const { join } = require("path")
   const devUserData = join(app.getPath("userData"), "..", "Agents Dev")
   app.setPath("userData", devUserData)
@@ -38,17 +38,20 @@ if (IS_DEV) {
 }
 
 // Initialize Sentry before app is ready (production only)
-if (app.isPackaged && !IS_DEV) {
+if (app && app.isPackaged && !IS_DEV) {
   const sentryDsn = import.meta.env.MAIN_VITE_SENTRY_DSN
   if (sentryDsn) {
-    try {
-      Sentry.init({
-        dsn: sentryDsn,
+    // Dynamic import to avoid loading Sentry in dev mode
+    import("@sentry/electron/main")
+      .then((Sentry) => {
+        Sentry.init({
+          dsn: sentryDsn,
+        })
+        console.log("[App] Sentry initialized")
       })
-      console.log("[App] Sentry initialized")
-    } catch (error) {
-      console.warn("[App] Failed to initialize Sentry:", error)
-    }
+      .catch((error) => {
+        console.warn("[App] Failed to initialize Sentry:", error)
+      })
   } else {
     console.log("[App] Skipping Sentry initialization (no DSN configured)")
   }
@@ -367,9 +370,9 @@ function cleanupStaleLocks(): boolean {
 }
 
 // Prevent multiple instances
-let gotTheLock = app.requestSingleInstanceLock()
+let gotTheLock = app ? app.requestSingleInstanceLock() : false
 
-if (!gotTheLock) {
+if (!gotTheLock && app) {
   // Maybe stale lock - try cleanup and retry once
   const cleaned = cleanupStaleLocks()
   if (cleaned) {
@@ -621,6 +624,60 @@ if (gotTheLock) {
 
     // Create main window
     createMainWindow()
+
+    // Auto-load the 1code project (development only)
+    // NOTE: This auto-loads a specific project for development convenience
+    // Set AUTO_LOAD_PROJECT env var to enable in production
+    const autoLoadPath = process.env.AUTO_LOAD_PROJECT
+    if (autoLoadPath && !app.isPackaged) {
+      setTimeout(async () => {
+        try {
+          const projectPath = autoLoadPath
+          const { getDatabase, projects } = await import("./lib/db")
+          const { eq } = await import("drizzle-orm")
+          const { getGitRemoteInfo } = await import("./lib/git")
+          const { basename } = await import("path")
+
+          const db = getDatabase()
+
+          // Check if project already exists
+          const existing = db
+            .select()
+            .from(projects)
+            .where(eq(projects.path, projectPath))
+            .get()
+
+          if (existing) {
+            console.log("[App] Auto-load project already exists, updating timestamp")
+            // Update the updatedAt timestamp
+            db.update(projects)
+              .set({ updatedAt: new Date() })
+              .where(eq(projects.id, existing.id))
+              .run()
+          } else {
+            console.log("[App] Auto-loading project:", projectPath)
+            // Get git info and create project
+            const gitInfo = await getGitRemoteInfo(projectPath)
+            const name = basename(projectPath)
+
+            db.insert(projects)
+              .values({
+                name,
+                path: projectPath,
+                gitRemoteUrl: gitInfo.remoteUrl,
+                gitProvider: gitInfo.provider,
+                gitOwner: gitInfo.owner,
+                gitRepo: gitInfo.repo,
+              })
+              .run()
+
+            console.log("[App] Project loaded successfully:", name)
+          }
+        } catch (error) {
+          console.error("[App] Failed to auto-load project:", error)
+        }
+      }, 1000)
+    }
 
     // Initialize auto-updater (production only)
     if (app.isPackaged) {

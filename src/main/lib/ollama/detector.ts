@@ -46,11 +46,11 @@ export async function checkOllamaStatus(): Promise<OllamaStatus> {
       'codestral:22b',
     ]
 
-    let recommendedModel = codingModels.find(m => models.includes(m))
+    let recommendedModel = codingModels.find((m: string) => models.includes(m))
 
     // If no exact match, try to find any qwen-coder, deepseek-coder, or codestral variant
     if (!recommendedModel) {
-      recommendedModel = models.find(m =>
+      recommendedModel = models.find((m: string) =>
         m.includes('qwen') && m.includes('coder') ||
         m.includes('deepseek') && m.includes('coder') ||
         m.includes('codestral')

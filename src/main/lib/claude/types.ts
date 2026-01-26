@@ -37,6 +37,7 @@ export type UIMessageChunk =
       }>
     }
   | { type: "ask-user-question-timeout"; toolUseId: string }
+  | { type: "ask-user-question-result"; toolUseId: string; result: unknown }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
   // System tools (rendered like regular tools)
   | {

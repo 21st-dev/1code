@@ -193,9 +193,12 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   // This keeps the creation tool in sync with all updates
   useEffect(() => {
     if (newTodos.length > 0) {
-      setSyncedTodos(newTodos)
+      setSyncedTodos({
+        todos: newTodos,
+        creationToolCallId: syncedTodos.creationToolCallId ?? part.toolCallId,
+      })
     }
-  }, [newTodos, setSyncedTodos])
+  }, [newTodos, setSyncedTodos, syncedTodos.creationToolCallId, part.toolCallId])
 
   // Auto-expand on creation
   useEffect(() => {
@@ -331,9 +334,9 @@ export const AgentTodoTool = memo(function AgentTodoTool({
 
   // FULL MODE: Creation - render as expandable list
   // Use syncedTodos to show the current state (synced with all updates)
-  const displayTodos = syncedTodos.length > 0 ? syncedTodos : newTodos
+  const displayTodos = syncedTodos.todos.length > 0 ? syncedTodos.todos : newTodos
   const completedCount = displayTodos.filter(
-    (t) => t.status === "completed",
+    (t: TodoItem) => t.status === "completed",
   ).length
   const totalTodos = displayTodos.length
 
@@ -413,7 +416,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
       {/* Expanded content - todo list */}
       {isExpanded && (
         <div className="border-t border-border max-h-[300px] overflow-y-auto">
-          {displayTodos.map((todo, idx) => (
+          {displayTodos.map((todo: TodoItem, idx: number) => (
             <div
               key={idx}
               className={cn(

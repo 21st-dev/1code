@@ -1,0 +1,3 @@
+#!/bin/bash
+cd "/Users/kenny/1code"
+exec /opt/homebrew/bin/bun run dev

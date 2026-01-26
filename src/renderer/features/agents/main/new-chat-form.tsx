@@ -344,7 +344,14 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  type Repository = {
+    id: string
+    name: string
+    full_name: string
+    sandbox_status: "error" | "ready" | "not_setup" | "in_progress" | null
+    pushed_at?: string | null
+  }
+  const reposData: { repositories: Repository[] } = { repositories: [] }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
@@ -413,7 +420,7 @@ export function NewChatForm({
         id: firstRepo.id,
         name: firstRepo.name,
         full_name: firstRepo.full_name,
-        sandbox_status: firstRepo.sandbox_status,
+        sandbox_status: firstRepo.sandbox_status ?? undefined,
       })
     }
 

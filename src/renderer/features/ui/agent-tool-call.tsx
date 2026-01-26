@@ -1,4 +1,5 @@
 import { memo } from "react"
+import DOMPurify from "dompurify"
 import { TextShimmer } from "../../components/ui/text-shimmer"
 
 interface AgentToolCallProps {
@@ -53,7 +54,7 @@ export const AgentToolCall = memo(
             {subtitleStr && (
               <span
                 className="text-muted-foreground/60 font-normal truncate min-w-0"
-                dangerouslySetInnerHTML={{ __html: subtitleStr }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(subtitleStr) }}
               />
             )}
           </div>

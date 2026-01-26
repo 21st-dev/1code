@@ -756,7 +756,8 @@ const FileDiffCard = memo(function FileDiffCard({
                   diffViewMode={diffMode}
                   diffViewHighlight={!!shikiHighlighter}
                   diffViewWrap={false}
-                  registerHighlighter={shikiHighlighter ?? undefined}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  registerHighlighter={shikiHighlighter as any}
                 />
               </DiffErrorBoundary>
             </div>

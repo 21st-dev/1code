@@ -90,6 +90,7 @@ export async function checkOfflineFallback(
     }
   }
 
+
   // Internet available but no auth - let it fail with auth error
   console.log('[Offline] Online but no Claude auth found')
   return {

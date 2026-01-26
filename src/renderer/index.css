@@ -1,0 +1,33 @@
+
+/* ============================================
+   CLS Optimizations - Added by fix-cls.sh
+   ============================================ */
+
+/* Reduce layout recalculation */
+.chat-message {
+  contain: layout style;
+}
+
+.sidebar {
+  contain: layout style;
+}
+
+.agent-tool-call {
+  contain: layout;
+}
+
+/* Force GPU acceleration for animations */
+.animated-element {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Prevent font loading shifts */
+body {
+  font-display: swap;
+}
+
+/* Reserve space for images */
+img:not([width]):not([height]) {
+  aspect-ratio: 16 / 9;
+}

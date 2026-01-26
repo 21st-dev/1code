@@ -951,20 +951,20 @@ function useDiffState() {
 
 // Diff sidebar content component with responsive layout
 interface DiffSidebarContentProps {
-  worktreePath: string | null
+  worktreePath: string | null | undefined
   selectedFilePath: string | null
   onFileSelect: (file: { path: string }, category: string) => void
   chatId: string
-  sandboxId: string | null
-  repository: { owner: string; name: string } | null
+  sandboxId: string | null | undefined
+  repository: { owner: string; name: string } | string | null | undefined
   diffStats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }
   setDiffStats: (stats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }) => void
   diffContent: string | null
-  parsedFileDiffs: unknown
+  parsedFileDiffs: ParsedDiffFile[] | null | undefined
   prefetchedFileContents: Record<string, string> | undefined
-  setDiffCollapseState: (state: Map<string, boolean>) => void
-  diffViewRef: React.RefObject<{ expandAll: () => void; collapseAll: () => void; getViewedCount: () => number; markAllViewed: () => void; markAllUnviewed: () => void } | null>
-  agentChat: { prUrl?: string; prNumber?: number } | null | undefined
+  setDiffCollapseState: (state: { allCollapsed: boolean; allExpanded: boolean }) => void
+  diffViewRef: React.RefObject<AgentDiffViewRef | null>
+  agentChat: { prUrl?: string | null; prNumber?: number | null; [key: string]: unknown } | null | undefined
   // Real-time sidebar width for responsive layout during resize
   sidebarWidth: number
   // Commit with AI
@@ -1283,9 +1283,9 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
             <AgentDiffView
               ref={diffViewRef}
               chatId={chatId}
-              sandboxId={sandboxId}
+              sandboxId={sandboxId || ""}
               worktreePath={worktreePath || undefined}
-              repository={repository}
+              repository={repository ? (typeof repository === 'string' ? repository : `${repository.owner}/${repository.name}`) : undefined}
               onStatsChange={setDiffStats}
               initialDiff={effectiveDiff}
               initialParsedFiles={effectiveParsedFiles}
@@ -1409,9 +1409,9 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
           <AgentDiffView
             ref={diffViewRef}
             chatId={chatId}
-            sandboxId={sandboxId}
+            sandboxId={sandboxId || ""}
             worktreePath={worktreePath || undefined}
-            repository={repository}
+            repository={repository ? (typeof repository === 'string' ? repository : `${repository.owner}/${repository.name}`) : undefined}
             onStatsChange={setDiffStats}
             initialDiff={effectiveDiff}
             initialParsedFiles={effectiveParsedFiles}
@@ -1571,10 +1571,10 @@ const DiffStateProvider = memo(function DiffStateProvider({
 // ============================================================================
 
 interface DiffSidebarRendererProps {
-  worktreePath: string | null
+  worktreePath: string | null | undefined
   chatId: string
-  sandboxId: string | null
-  repository: { owner: string; name: string } | null
+  sandboxId: string | null | undefined
+  repository: { owner: string; name: string } | string | null | undefined
   diffStats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }
   diffContent: string | null
   parsedFileDiffs: ParsedDiffFile[] | null
@@ -1582,7 +1582,7 @@ interface DiffSidebarRendererProps {
   setDiffCollapseState: (state: { allCollapsed: boolean; allExpanded: boolean }) => void
   diffViewRef: React.RefObject<AgentDiffViewRef | null>
   diffSidebarRef: React.RefObject<HTMLDivElement | null>
-  agentChat: { prUrl?: string; prNumber?: number } | null | undefined
+  agentChat: { prUrl?: string | null; prNumber?: number | null; [key: string]: unknown } | null | undefined
   branchData: { current: string } | undefined
   gitStatus: { pushCount?: number; pullCount?: number; hasUpstream?: boolean; ahead?: number; behind?: number; staged?: any[]; unstaged?: any[]; untracked?: any[] } | undefined
   isGitStatusLoading: boolean
@@ -1708,7 +1708,7 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
           viewedCount={viewedCount}
           onMarkAllViewed={handleMarkAllViewed}
           onMarkAllUnviewed={handleMarkAllUnviewed}
-          isDesktop={isDesktop}
+          isDesktop={isDesktop ?? false}
           isFullscreen={isFullscreen}
           displayMode={diffDisplayMode}
           onDisplayModeChange={setDiffDisplayMode}
@@ -3464,7 +3464,7 @@ const ChatViewInner = memo(function ChatViewInner({
           type: "data-file" as const,
           data: {
             url: f.url,
-            mediaType: f.mediaType,
+            mediaType: f.type,
             filename: f.filename,
             size: f.size,
           },
@@ -3968,8 +3968,9 @@ export function ChatView({
     hasChanges: false,
   })
   // Smart setter that only updates if values actually changed
-  const setDiffStats = useCallback((val: any) => {
-    setDiffStatsRaw((prev: typeof diffStats) => {
+  type DiffStatsType = typeof diffStats
+  const setDiffStats = useCallback((val: DiffStatsType | ((prev: DiffStatsType) => DiffStatsType)) => {
+    setDiffStatsRaw((prev: DiffStatsType) => {
       // Handle function updates
       const newVal = typeof val === 'function' ? val(prev) : val
       // Only update if something changed
@@ -5408,8 +5409,9 @@ Make sure to preserve all functionality from both branches when resolving confli
           // Also update query cache so init effect doesn't overwrite
           utils.agents.getAgentChat.setData({ chatId }, (old) => {
             if (!old) return old
+            type SubChat = (typeof old.subChats)[number]
             const existsInCache = old.subChats.some(
-              (sc) => sc.id === subChatIdToUpdate,
+              (sc: SubChat) => sc.id === subChatIdToUpdate,
             )
             if (!existsInCache) {
               // Sub-chat not in cache yet (DB save still in flight) - add it
@@ -5432,7 +5434,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             }
             return {
               ...old,
-              subChats: old.subChats.map((sc) =>
+              subChats: old.subChats.map((sc: SubChat) =>
                 sc.id === subChatIdToUpdate ? { ...sc, name } : sc,
               ),
             }
@@ -5443,9 +5445,10 @@ Make sure to preserve all functionality from both branches when resolving confli
           // On desktop, selectedTeamId is always null, so we update unconditionally
           utils.agents.getAgentChats.setData(
             { teamId: selectedTeamId },
-            (old) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (old: any) => {
               if (!old) return old
-              return old.map((c) =>
+              return old.map((c: { id: string; name: string | null }) =>
                 c.id === chatIdToUpdate ? { ...c, name } : c,
               )
             },
@@ -5829,8 +5832,8 @@ Make sure to preserve all functionality from both branches when resolving confli
               setDiffMode={setDiffMode}
               handleMarkAllViewed={handleMarkAllViewed}
               handleMarkAllUnviewed={handleMarkAllUnviewed}
-              isDesktop={isDesktop}
-              isFullscreen={isFullscreen}
+              isDesktop={isDesktop ?? false}
+              isFullscreen={isFullscreen ?? false}
               setDiffDisplayMode={setDiffDisplayMode}
               handleCommitToPr={handleCommitToPr}
               isCommittingToPr={isCommittingToPr}

@@ -20,6 +20,7 @@ import {
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
 import { trpc } from "./lib/trpc"
+import { LoadingSkeleton } from "./components/ui/loading-skeleton"
 
 /**
  * Custom Toaster that adapts to theme
@@ -47,6 +48,7 @@ function AppContent() {
   )
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const setSelectedProject = useSetAtom(selectedProjectAtom)
 
   // Migration: If user already completed Anthropic onboarding but has no billing method set,
   // automatically set it to "claude-subscription" (legacy users before billing method was added)
@@ -59,6 +61,30 @@ function AppContent() {
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
+
+  // Auto-select the 1code project if no project is currently selected
+  useEffect(() => {
+    if (!selectedProject && projects && projects.length > 0) {
+      // Find the 1code project
+      const onecodeProject = projects.find((p) => p.path === "/Users/kenny/1code")
+      if (onecodeProject) {
+        console.log("[App] Auto-selecting 1code project")
+        setSelectedProject({
+          id: onecodeProject.id,
+          name: onecodeProject.name,
+          path: onecodeProject.path,
+          gitRemoteUrl: onecodeProject.gitRemoteUrl,
+          gitProvider: onecodeProject.gitProvider as
+            | "github"
+            | "gitlab"
+            | "bitbucket"
+            | null,
+          gitOwner: onecodeProject.gitOwner,
+          gitRepo: onecodeProject.gitRepo,
+        })
+      }
+    }
+  }, [selectedProject, projects, setSelectedProject])
 
   // Validated project - only valid if exists in DB
   const validatedProject = useMemo(() => {
@@ -92,7 +118,12 @@ function AppContent() {
     return <ApiKeyOnboardingPage />
   }
 
-  if (!validatedProject && !isLoadingProjects) {
+  // Show loading skeleton while projects are being fetched to prevent layout shift
+  if (isLoadingProjects) {
+    return <LoadingSkeleton />
+  }
+
+  if (!validatedProject) {
     return <SelectRepoPage />
   }
 

@@ -6,6 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **21st Agents** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
 
+## Running the Electron App
+
+**IMPORTANT**: When asked to run/start/launch the Electron app, ALWAYS use this exact format:
+
+```
+Running the 1Code Electron app.
+
+Running command: cd, bun
+$ cd /Users/kenny/1code && bun run dev
+```
+
+Run the command in the background so the user can continue working.
+
 ## Commands
 
 ```bash
