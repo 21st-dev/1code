@@ -60,13 +60,25 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     if (currentToolCallId) {
       // Track this tool ID to avoid duplicates from assistant message
       emittedToolIds.add(currentToolCallId)
-      
+
+      // Safely parse tool input JSON
+      let parsedInput = {}
+      if (accumulatedToolInput) {
+        try {
+          parsedInput = JSON.parse(accumulatedToolInput)
+        } catch (error) {
+          // If JSON parsing fails, emit empty input to prevent crashes
+          // This can happen with malformed tool input from the SDK
+          parsedInput = {}
+        }
+      }
+
       // Emit complete tool call with accumulated input
       yield {
         type: "tool-input-available",
         toolCallId: currentToolCallId,
         toolName: currentToolName || "unknown",
-        input: accumulatedToolInput ? JSON.parse(accumulatedToolInput) : {},
+        input: parsedInput,
       }
       currentToolCallId = null
       currentToolName = null
@@ -84,24 +96,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
       }
     }
 
-    // Debug: log ALL message types to understand what SDK sends
-    if (isUsingOllama) {
-      console.log("[Ollama Transform] MSG:", msg.type, msg.subtype || "", msg.event?.type || "")
-      if (msg.type === "system") {
-        console.log("[Ollama Transform] SYSTEM message full:", JSON.stringify(msg, null, 2))
-      }
-      if (msg.type === "stream_event") {
-        console.log("[Ollama Transform] STREAM_EVENT:", msg.event?.type, "content_block:", msg.event?.content_block?.type)
-      }
-      if (msg.type === "assistant") {
-        console.log("[Ollama Transform] ASSISTANT message, content blocks:", msg.message?.content?.length || 0)
-      }
-    } else {
-      console.log("[transform] MSG:", msg.type, msg.subtype || "", msg.event?.type || "")
-      if (msg.type === "system") {
-        console.log("[transform] SYSTEM message:", msg.subtype, msg)
-      }
-    }
 
     // Track parent_tool_use_id for nested tools
     // Only update when explicitly present (don't reset on messages without it)
@@ -127,39 +121,19 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     // ===== STREAMING EVENTS (token-by-token) =====
     if (msg.type === "stream_event") {
       const event = msg.event
-      console.log("[transform] stream_event:", event?.type, "delta:", event?.delta?.type, "content_block_type:", event?.content_block?.type)
-      // Debug: log full event when content_block_start but no type
-      if (event?.type === "content_block_start" && !event?.content_block?.type) {
-        console.log("[transform] WARNING: content_block_start with no type, full event:", JSON.stringify(event))
-      }
       if (!event) return
 
       // Text block start
       if (event.type === "content_block_start" && event.content_block?.type === "text") {
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] ✓ TEXT BLOCK START - Model is generating text!")
-        } else {
-          console.log("[transform] TEXT BLOCK START")
-        }
         yield* endTextBlock()
         yield* endToolInput()
         textId = genId()
         yield { type: "text-start", id: textId }
         textStarted = true
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] textStarted set to TRUE, textId:", textId)
-        } else {
-          console.log("[transform] textStarted set to TRUE, textId:", textId)
-        }
       }
 
       // Text delta
       if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] ✓ TEXT DELTA received, length:", event.delta.text?.length, "preview:", event.delta.text?.slice(0, 50))
-        } else {
-          console.log("[transform] TEXT DELTA, textStarted:", textStarted, "delta:", event.delta.text?.slice(0, 20))
-        }
         if (!textStarted) {
           yield* endToolInput()
           textId = genId()
@@ -171,18 +145,8 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
       // Content block stop
       if (event.type === "content_block_stop") {
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] CONTENT BLOCK STOP, textStarted:", textStarted)
-        } else {
-          console.log("[transform] CONTENT BLOCK STOP, textStarted:", textStarted)
-        }
         if (textStarted) {
           yield* endTextBlock()
-          if (isUsingOllama) {
-            console.log("[Ollama Transform] Text block ended, textStarted now:", textStarted)
-          } else {
-            console.log("[transform] after endTextBlock, textStarted:", textStarted)
-          }
         }
         if (currentToolCallId) {
           yield* endToolInput()
@@ -304,13 +268,11 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
         }
 
         if (block.type === "text") {
-          console.log("[transform] ASSISTANT TEXT block, textStarted:", textStarted, "text length:", block.text?.length)
           yield* endToolInput()
 
           // Only emit text if we're NOT already streaming (textStarted = false)
           // When includePartialMessages is true, text comes via stream_event
           if (!textStarted) {
-            console.log("[transform] EMITTING assistant text (textStarted was false)")
             textId = genId()
             yield { type: "text-start", id: textId }
             yield { type: "text-delta", id: textId, delta: block.text }
@@ -318,8 +280,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
             // Track the last text ID for final response marking
             lastTextId = textId
             textId = null
-          } else {
-            console.log("[transform] SKIPPING assistant text (textStarted is true)")
           }
           // If textStarted is true, we're mid-stream - skip this duplicate
         }
@@ -330,7 +290,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
           // Skip if already emitted via streaming
           if (emittedToolIds.has(block.id)) {
-            console.log("[transform] SKIPPING duplicate tool_use (already emitted via streaming):", block.id)
             continue
           }
 
@@ -353,18 +312,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
     // ===== USER MESSAGE (tool results) =====
     if (msg.type === "user" && msg.message?.content) {
-      // DEBUG: Log the message structure to understand tool_use_result
-      console.log("[Transform DEBUG] User message:", {
-        tool_use_result: msg.tool_use_result,
-        tool_use_result_type: typeof msg.tool_use_result,
-        content_length: msg.message.content.length,
-        blocks: msg.message.content.map((b: any) => ({
-          type: b.type,
-          tool_use_id: b.tool_use_id,
-          content_preview: typeof b.content === 'string' ? b.content.slice(0, 100) : typeof b.content,
-        })),
-      })
-
       for (const block of msg.message.content) {
         if (block.type === "tool_result") {
           // Lookup composite ID from mapping, fallback to original
@@ -392,14 +339,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
             }
             output = output || block.content
 
-            console.log("[Transform DEBUG] Tool output:", {
-              tool_use_id: block.tool_use_id,
-              compositeId,
-              output_type: typeof output,
-              output_keys: output && typeof output === 'object' ? Object.keys(output) : null,
-              numFiles: output?.numFiles,
-            })
-
             yield {
               type: "tool-output-available",
               toolCallId: compositeId,
@@ -414,12 +353,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     if (msg.type === "system") {
       // Session init - extract MCP servers, plugins, tools
       if (msg.subtype === "init") {
-        console.log("[MCP Transform] Received SDK init message:", {
-          tools: msg.tools?.length,
-          mcp_servers: msg.mcp_servers,
-          plugins: msg.plugins,
-          skills: msg.skills?.length,
-        })
         // Map MCP servers with validated status type and additional info
         const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
           (s: { name: string; status: string; serverInfo?: { name: string; version: string }; error?: string }) => ({
@@ -466,7 +399,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
     // ===== RESULT (final) =====
     if (msg.type === "result") {
-      console.log("[transform] RESULT message, textStarted:", textStarted, "lastTextId:", lastTextId)
       yield* endTextBlock()
       yield* endToolInput()
 
@@ -485,7 +417,6 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
       }
       yield { type: "message-metadata", messageMetadata: metadata }
       yield { type: "finish-step" }
-      console.log("[transform] YIELDING FINISH from result message")
       yield { type: "finish", messageMetadata: metadata }
     }
   }

@@ -164,7 +164,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   return (
     <div
       className={cn(
-        "border border-border bg-muted/30 overflow-hidden flex flex-col border-b-0 pb-6",
+        "border border-border/60 bg-muted/40 backdrop-blur-sm overflow-hidden flex flex-col border-b-0 pb-6 shadow-sm",
         // If queue card above - no top radius
         hasQueueCardAbove ? "rounded-none" : "rounded-t-xl"
       )}
@@ -182,7 +182,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
         }}
         aria-expanded={isExpanded}
         aria-label={`${isExpanded ? "Collapse" : "Expand"} status details`}
-        className="flex items-center justify-between pr-1 pl-3 h-8 cursor-pointer hover:bg-muted/50 transition-colors duration-150 focus:outline-none rounded-sm"
+        className="flex items-center justify-between pr-1 pl-3 h-8 cursor-pointer hover:bg-muted/60 active:bg-muted/70 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 rounded-sm"
       >
         <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
           {/* Expand/Collapse chevron - always show */}
@@ -230,7 +230,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
                 e.stopPropagation()
                 onStop()
               }}
-              className="h-6 px-2 text-xs font-normal rounded-md transition-transform duration-150 active:scale-[0.97]"
+              className="h-6 px-2.5 text-xs font-medium rounded-md transition-all duration-150 hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] focus:ring-2 focus:ring-destructive/50 focus:ring-offset-1"
             >
               Stop
               <span className="text-muted-foreground/60 ml-1">⌃C</span>
@@ -245,7 +245,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
               e.stopPropagation()
               handleReview()
             }}
-            className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
+            className="h-6 px-3 text-xs font-medium rounded-md transition-all duration-150 hover:bg-secondary/80 active:scale-[0.97] focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 shadow-sm"
           >
             Review
           </Button>
@@ -292,7 +292,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
                     onClick={handleFileClick}
                     onKeyDown={handleKeyDown}
                     aria-label={`View diff for ${file.displayPath}`}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors cursor-pointer focus:outline-none rounded-sm"
+                    className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/60 active:bg-muted/70 transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 rounded-sm"
                   >
                     {FileIcon && (
                       <FileIcon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />

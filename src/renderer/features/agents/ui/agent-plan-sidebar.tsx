@@ -84,42 +84,40 @@ export function AgentPlanSidebar({
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <IconSpinner className="h-8 w-8 text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">Loading plan...</p>
+            <IconSpinner className="h-8 w-8 text-muted-foreground animate-spin mb-3" />
+            <p className="text-sm font-medium text-muted-foreground mb-1">Loading plan...</p>
+            <p className="text-xs text-muted-foreground/70">Reading plan file</p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <div className="text-muted-foreground mb-4">
+            <div className="mb-4">
               <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="48"
-                height="48"
-                viewBox="0 0 24 24"
+                className="w-12 h-12 text-destructive/60 mx-auto"
                 fill="none"
+                viewBox="0 0 24 24"
                 stroke="currentColor"
                 strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="opacity-50"
               >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                />
               </svg>
             </div>
-            <p className="text-sm text-muted-foreground mb-2">
+            <p className="text-sm font-medium text-destructive mb-1">
               Failed to load plan
             </p>
-            <p className="text-xs text-muted-foreground/70 max-w-[300px]">
+            <p className="text-xs text-muted-foreground/80 max-w-[300px]">
               {error.message || "The plan file could not be read"}
             </p>
           </div>
         ) : !planPath ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <div className="text-muted-foreground mb-4">
-              <PlanIcon className="h-12 w-12 opacity-50" />
+            <div className="mb-4">
+              <PlanIcon className="h-12 w-12 text-muted-foreground/40 mx-auto" />
             </div>
-            <p className="text-sm text-muted-foreground mb-2">
+            <p className="text-sm font-medium text-muted-foreground mb-1">
               No plan selected
             </p>
             <p className="text-xs text-muted-foreground/70 max-w-[250px]">

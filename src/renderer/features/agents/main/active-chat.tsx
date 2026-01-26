@@ -113,8 +113,6 @@ import {
   pendingPlanApprovalsAtom,
   pendingPrMessageAtom,
   pendingReviewMessageAtom,
-  pendingUserQuestionsAtom,
-  QUESTIONS_SKIPPED_MESSAGE,
   selectedAgentChatIdAtom,
   selectedCommitAtom,
   setLoading,
@@ -140,9 +138,14 @@ import { useHaptic } from "../hooks/use-haptic"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import { useChatScroll } from "../hooks/use-chat-scroll"
+import { usePendingMessages } from "../hooks/use-pending-messages"
+import { useDraftRestoration } from "../hooks/use-draft-restoration"
+import { usePendingQuestions } from "../hooks/use-pending-questions"
+import { usePrUrlDetection } from "../hooks/use-pr-url-detection"
+import { useKeyboardShortcuts } from "../hooks/use-keyboard-shortcuts"
+import { useMessageSending } from "../hooks/use-message-sending"
 import {
-  clearSubChatDraft,
-  getSubChatDraftFull
+  clearSubChatDraft
 } from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
 import {
@@ -510,12 +513,27 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
           )}>
             {selectedCommit && (
               !commitFiles ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                  Loading files...
+                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                  <IconSpinner className="w-4 h-4 animate-spin mb-2" />
+                  <p className="text-sm">Loading files...</p>
                 </div>
               ) : commitFiles.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                  No files changed in this commit
+                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                  <svg
+                    className="w-8 h-8 text-muted-foreground/40 mb-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z"
+                    />
+                  </svg>
+                  <p className="text-sm font-medium">No files changed</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">This commit has no file changes</p>
                 </div>
               ) : (
                 <>
@@ -564,7 +582,12 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
             "absolute inset-0 overflow-hidden",
             activeTab === "history" && selectedCommit ? "z-0 invisible" : "z-10"
           )}>
-            <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading diff view...</div>}>
+            <Suspense fallback={
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <IconSpinner className="w-5 h-5 animate-spin mb-2" />
+                <p className="text-sm">Loading diff view...</p>
+              </div>
+            }>
               <AgentDiffView
                 ref={diffViewRef}
                 chatId={chatId}
@@ -638,12 +661,27 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
         )}>
           {selectedCommit && (
             !commitFiles ? (
-              <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                Loading files...
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                <IconSpinner className="w-4 h-4 animate-spin mb-2" />
+                <p className="text-sm">Loading files...</p>
               </div>
             ) : commitFiles.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                No files changed in this commit
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                <svg
+                  className="w-8 h-8 text-muted-foreground/40 mb-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z"
+                  />
+                </svg>
+                <p className="text-sm font-medium">No files changed</p>
+                <p className="text-xs text-muted-foreground/70 mt-0.5">This commit has no file changes</p>
               </div>
             ) : (
               <>
@@ -1062,7 +1100,12 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
 
   if (diffDisplayMode === "full-page") {
     return (
-      <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading full page view...</div>}>
+      <Suspense fallback={
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+          <IconSpinner className="w-5 h-5 animate-spin mb-2" />
+          <p className="text-sm">Loading full page view...</p>
+        </div>
+      }>
         <DiffFullPageView
           isOpen={isDiffSidebarOpen}
           onClose={handleCloseDiff}
@@ -1170,9 +1213,6 @@ const ChatViewInner = memo(function ChatViewInner({
     setTtsPlaybackRate(rate)
     localStorage.setItem("tts-playback-rate", String(rate))
   }, [])
-
-  // PR creation loading state - from atom to allow resetting after message sent
-  const setIsCreatingPr = useSetAtom(isCreatingPrAtom)
 
   // Rollback state
   const [isRollingBack, setIsRollingBack] = useState(false)
@@ -1373,56 +1413,16 @@ const ChatViewInner = memo(function ChatViewInner({
   chatRef.current = chat
 
   // Restore draft when subChatId changes (switching between sub-chats)
-  const prevSubChatIdForDraftRef = useRef<string | null>(null)
-  useEffect(() => {
-    // Restore full draft (text + attachments + text contexts) for new sub-chat
-    const savedDraft = parentChatId
-      ? getSubChatDraftFull(parentChatId, subChatId)
-      : null
-
-    if (savedDraft) {
-      // Restore text
-      if (savedDraft.text) {
-        editorRef.current?.setValue(savedDraft.text)
-      } else {
-        editorRef.current?.clear()
-      }
-      // Restore images
-      if (savedDraft.images.length > 0) {
-        setImagesFromDraft(savedDraft.images)
-      } else {
-        clearAll()
-      }
-      // Restore files
-      if (savedDraft.files.length > 0) {
-        setFilesFromDraft(savedDraft.files)
-      }
-      // Restore text contexts
-      if (savedDraft.textContexts.length > 0) {
-        setTextContextsFromDraft(savedDraft.textContexts)
-      } else {
-        clearTextContexts()
-      }
-    } else if (
-      prevSubChatIdForDraftRef.current &&
-      prevSubChatIdForDraftRef.current !== subChatId
-    ) {
-      // Clear everything when switching to a sub-chat with no draft
-      editorRef.current?.clear()
-      clearAll()
-      clearTextContexts()
-    }
-
-    prevSubChatIdForDraftRef.current = subChatId
-  }, [
-    subChatId,
+  useDraftRestoration({
+    editorRef,
     parentChatId,
+    subChatId,
     setImagesFromDraft,
     setFilesFromDraft,
     setTextContextsFromDraft,
     clearAll,
     clearTextContexts,
-  ])
+  })
 
   // Use subChatId as stable key to prevent HMR-induced duplicate resume requests
   // resume: !!streamId to reconnect to active streams (background streaming support)
@@ -1555,76 +1555,15 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }, [isStreaming, subChatId, setLoadingSubChats])
 
-  // Watch for pending PR message and send it
-  const [pendingPrMessage, setPendingPrMessage] = useAtom(pendingPrMessageAtom)
-
-  useEffect(() => {
-    if (pendingPrMessage && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingPrMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingPrMessage }],
-      })
-
-      // Reset creating PR state after message is sent
-      setIsCreatingPr(false)
-    }
-  }, [pendingPrMessage, isStreaming, sendMessage, setPendingPrMessage])
-
-  // Watch for pending Review message and send it
-  const [pendingReviewMessage, setPendingReviewMessage] = useAtom(
-    pendingReviewMessageAtom,
-  )
-
-  useEffect(() => {
-    if (pendingReviewMessage && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingReviewMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingReviewMessage }],
-      })
-    }
-  }, [pendingReviewMessage, isStreaming, sendMessage, setPendingReviewMessage])
-
-  // Watch for pending conflict resolution message and send it
-  const [pendingConflictMessage, setPendingConflictMessage] = useAtom(
-    pendingConflictResolutionMessageAtom,
-  )
-
-  useEffect(() => {
-    if (pendingConflictMessage && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingConflictMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingConflictMessage }],
-      })
-    }
-  }, [pendingConflictMessage, isStreaming, sendMessage, setPendingConflictMessage])
-
-  // Pending user questions from AskUserQuestion tool
-  const [pendingQuestionsMap, setPendingQuestionsMap] = useAtom(
-    pendingUserQuestionsAtom,
-  )
-  // Get pending questions for this specific subChat
-  const pendingQuestions = pendingQuestionsMap.get(subChatId) ?? null
+  // Handle pending messages (PR, Review, Conflict Resolution, Auth Retry)
+  usePendingMessages({
+    subChatId,
+    isStreaming,
+    sendMessage,
+  })
 
   // Track whether chat input has content (for custom text with questions)
   const [inputHasContent, setInputHasContent] = useState(false)
-
-  // Memoize the last assistant message to avoid unnecessary recalculations
-  const lastAssistantMessage = useMemo(
-    () => messages.findLast((m) => m.role === "assistant"),
-    [messages],
-  )
 
   // Pre-compute token data for ChatInputArea to avoid passing unstable messages array
   // This prevents ChatInputArea from re-rendering on every streaming chunk
@@ -1642,297 +1581,24 @@ const ChatViewInner = memo(function ChatViewInner({
     return { totalInputTokens, totalOutputTokens, totalCostUsd, messageCount: messages.length }
   }, [messages])
 
-  // Track previous streaming state to detect stream stop
-  const prevIsStreamingRef = useRef(isStreaming)
-  // Track if we recently stopped streaming (to prevent sync effect from restoring)
-  const recentlyStoppedStreamRef = useRef(false)
-
-  // Clear pending questions when streaming is aborted
-  // This effect runs when isStreaming transitions from true to false
-  useEffect(() => {
-    const wasStreaming = prevIsStreamingRef.current
-    prevIsStreamingRef.current = isStreaming
-
-    // Detect streaming stop transition
-    if (wasStreaming && !isStreaming) {
-      // Mark that we recently stopped streaming
-      recentlyStoppedStreamRef.current = true
-      // Clear the flag after a delay
-      const flagTimeout = setTimeout(() => {
-        recentlyStoppedStreamRef.current = false
-      }, 500)
-
-      // Streaming just stopped - if there's a pending question for this chat,
-      // clear it after a brief delay (backend already handled the abort)
-      if (pendingQuestions) {
-        const timeout = setTimeout(() => {
-          // Re-check if still showing the same question (might have been cleared by other means)
-          setPendingQuestionsMap((current) => {
-            if (current.has(subChatId)) {
-              const newMap = new Map(current)
-              newMap.delete(subChatId)
-              return newMap
-            }
-            return current
-          })
-        }, 150) // Small delay to allow for race conditions with transport chunks
-        return () => {
-          clearTimeout(timeout)
-          clearTimeout(flagTimeout)
-        }
-      }
-      return () => clearTimeout(flagTimeout)
-    }
-  }, [isStreaming, subChatId, pendingQuestions, setPendingQuestionsMap])
-
-  // Sync pending questions with messages state
-  // This handles: 1) restoring on chat switch, 2) clearing when question is answered/timed out
-  useEffect(() => {
-    // Check if there's a pending AskUserQuestion in the last assistant message
-    const pendingQuestionPart = lastAssistantMessage?.parts?.find(
-      (part: any) =>
-        part.type === "tool-AskUserQuestion" &&
-        part.state !== "output-available" &&
-        part.state !== "output-error" &&
-        part.state !== "result" &&
-        part.input?.questions,
-    ) as any | undefined
-
-
-    // Helper to clear pending question for this subChat
-    const clearPendingQuestion = () => {
-      setPendingQuestionsMap((current) => {
-        if (current.has(subChatId)) {
-          const newMap = new Map(current)
-          newMap.delete(subChatId)
-          return newMap
-        }
-        return current
-      })
-    }
-
-    // If streaming and we already have a pending question for this chat, keep it
-    // (transport will manage it via chunks)
-    if (isStreaming && pendingQuestions) {
-      // But if the question in messages is already answered, clear the atom
-      if (!pendingQuestionPart) {
-        // Check if the specific toolUseId is now answered
-        const answeredPart = lastAssistantMessage?.parts?.find(
-          (part: any) =>
-            part.type === "tool-AskUserQuestion" &&
-            part.toolCallId === pendingQuestions.toolUseId &&
-            (part.state === "output-available" ||
-              part.state === "output-error" ||
-              part.state === "result"),
-        )
-        if (answeredPart) {
-          clearPendingQuestion()
-        }
-      }
-      return
-    }
-
-    // Not streaming - DON'T restore pending questions from messages
-    // If stream is not active, the question is either:
-    // 1. Already answered (state would be "output-available")
-    // 2. Interrupted/aborted (should not show dialog)
-    // 3. Timed out (should not show dialog)
-    // We only show the question dialog during active streaming when
-    // the backend is waiting for user response.
-    if (pendingQuestionPart) {
-      // Don't restore - if there's an existing pending question for this chat, clear it
-      if (pendingQuestions) {
-        clearPendingQuestion()
-      }
-    } else {
-      // No pending question - clear if belongs to this sub-chat
-      if (pendingQuestions) {
-        clearPendingQuestion()
-      }
-    }
-  }, [subChatId, lastAssistantMessage, isStreaming, pendingQuestions, setPendingQuestionsMap])
-
-  // Helper to clear pending question for this subChat (used in callbacks)
-  const clearPendingQuestionCallback = useCallback(() => {
-    setPendingQuestionsMap((current) => {
-      if (current.has(subChatId)) {
-        const newMap = new Map(current)
-        newMap.delete(subChatId)
-        return newMap
-      }
-      return current
-    })
-  }, [subChatId, setPendingQuestionsMap])
-
-  // Handle answering questions
-  const handleQuestionsAnswer = useCallback(
-    async (answers: Record<string, string>) => {
-      if (!pendingQuestions) return
-      await trpcClient.claude.respondToolApproval.mutate({
-        toolUseId: pendingQuestions.toolUseId,
-        approved: true,
-        updatedInput: { questions: pendingQuestions.questions, answers },
-      })
-      clearPendingQuestionCallback()
-    },
-    [pendingQuestions, clearPendingQuestionCallback],
-  )
-
-  // Handle skipping questions
-  const handleQuestionsSkip = useCallback(async () => {
-    if (!pendingQuestions) return
-    const toolUseId = pendingQuestions.toolUseId
-
-    // Clear UI immediately - don't wait for backend
-    // This ensures dialog closes even if stream was already aborted
-    clearPendingQuestionCallback()
-
-    // Try to notify backend (may fail if already aborted - that's ok)
-    try {
-      await trpcClient.claude.respondToolApproval.mutate({
-        toolUseId,
-        approved: false,
-        message: QUESTIONS_SKIPPED_MESSAGE,
-      })
-    } catch {
-      // Stream likely already aborted - ignore
-    }
-  }, [pendingQuestions, clearPendingQuestionCallback])
-
-  // Ref to prevent double submit of question answer
-  const isSubmittingQuestionAnswerRef = useRef(false)
-
-  // Handle answering questions with custom text from input (called on Enter in input)
-  const handleSubmitWithQuestionAnswer = useCallback(
-    async () => {
-      if (!pendingQuestions) return
-      if (isSubmittingQuestionAnswerRef.current) return
-      isSubmittingQuestionAnswerRef.current = true
-
-      try {
-        // 1. Get custom text from input
-        const customText = editorRef.current?.getValue()?.trim() || ""
-        if (!customText) {
-          isSubmittingQuestionAnswerRef.current = false
-          return
-        }
-
-        // 2. Get already selected answers from question component
-        const selectedAnswers = questionPanelRef.current?.getAnswers() || {}
-        const formattedAnswers: Record<string, string> = { ...selectedAnswers }
-
-        // 3. Add custom text to the last question as "Other"
-        const lastQuestion =
-          pendingQuestions.questions[pendingQuestions.questions.length - 1]
-        if (lastQuestion) {
-          const existingAnswer = formattedAnswers[lastQuestion.question]
-          if (existingAnswer) {
-            // Append to existing answer
-            formattedAnswers[lastQuestion.question] = `${existingAnswer}, Other: ${customText}`
-          } else {
-            formattedAnswers[lastQuestion.question] = `Other: ${customText}`
-          }
-        }
-
-        // 4. Submit tool response with all answers
-        await trpcClient.claude.respondToolApproval.mutate({
-          toolUseId: pendingQuestions.toolUseId,
-          approved: true,
-          updatedInput: {
-            questions: pendingQuestions.questions,
-            answers: formattedAnswers,
-          },
-        })
-        clearPendingQuestionCallback()
-
-        // 5. Stop stream if currently streaming
-        if (isStreamingRef.current) {
-          agentChatStore.setManuallyAborted(subChatId, true)
-          await stopRef.current()
-          await new Promise((resolve) => setTimeout(resolve, 100))
-        }
-
-        // 6. Clear input
-        editorRef.current?.clear()
-        if (parentChatId) {
-          clearSubChatDraft(parentChatId, subChatId)
-        }
-
-        // 7. Send custom text as a new user message
-        shouldAutoScrollRef.current = true
-        await sendMessageRef.current({
-          role: "user",
-          parts: [{ type: "text", text: customText }],
-        })
-      } finally {
-        isSubmittingQuestionAnswerRef.current = false
-      }
-    },
-    [pendingQuestions, clearPendingQuestionCallback, subChatId, parentChatId],
-  )
-
-  // Memoize the callback to prevent ChatInputArea re-renders
-  // Only provide callback when there's a pending question for this subChat
-  const submitWithQuestionAnswerCallback = useMemo(
-    () =>
-      pendingQuestions
-        ? handleSubmitWithQuestionAnswer
-        : undefined,
-    [pendingQuestions, handleSubmitWithQuestionAnswer],
-  )
-
-  // Watch for pending auth retry message (after successful OAuth flow)
-  const [pendingAuthRetry, setPendingAuthRetry] = useAtom(
-    pendingAuthRetryMessageAtom,
-  )
-
-  useEffect(() => {
-    // Only retry when:
-    // 1. There's a pending message
-    // 2. readyToRetry is true (set by modal on OAuth success)
-    // 3. We're in the correct chat
-    // 4. Not currently streaming
-    if (
-      pendingAuthRetry &&
-      pendingAuthRetry.readyToRetry &&
-      pendingAuthRetry.subChatId === subChatId &&
-      !isStreaming
-    ) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingAuthRetry(null)
-
-      // Build message parts
-      const parts: Array<
-        { type: "text"; text: string } | { type: "data-image"; data: any }
-      > = [{ type: "text", text: pendingAuthRetry.prompt }]
-
-      // Add images if present
-      if (pendingAuthRetry.images && pendingAuthRetry.images.length > 0) {
-        for (const img of pendingAuthRetry.images) {
-          parts.push({
-            type: "data-image",
-            data: {
-              base64Data: img.base64Data,
-              mediaType: img.mediaType,
-              filename: img.filename,
-            },
-          })
-        }
-      }
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts,
-      })
-    }
-  }, [
-    pendingAuthRetry,
-    isStreaming,
-    sendMessage,
-    setPendingAuthRetry,
+  // Manage pending questions from AskUserQuestion tool
+  const {
+    pendingQuestions,
+    handleQuestionsAnswer,
+    handleQuestionsSkip,
+    submitWithQuestionAnswerCallback,
+  } = usePendingQuestions({
     subChatId,
-  ])
+    isStreaming,
+    messages,
+    editorRef,
+    questionPanelRef,
+    sendMessageRef,
+    stopRef,
+    isStreamingRef,
+    shouldAutoScrollRef,
+    parentChatId,
+  })
 
   const handlePlanApproval = useCallback(
     async (toolUseId: string, approved: boolean) => {
@@ -1976,49 +1642,13 @@ const ChatViewInner = memo(function ChatViewInner({
     })
   }, [subChatId, setIsPlanMode, scrollToBottom])
 
-  // Detect PR URLs in assistant messages and store them
-  // Initialize with existing PR URL to prevent duplicate toast on re-mount
-  const detectedPrUrlRef = useRef<string | null>(existingPrUrl ?? null)
-
-  useEffect(() => {
-    // Only check after streaming ends
-    if (isStreaming) return
-
-    // Look through messages for PR URLs
-    for (const msg of messages) {
-      if (msg.role !== "assistant") continue
-
-      // Extract text content from message
-      const textContent =
-        msg.parts
-          ?.filter((p: any) => p.type === "text")
-          .map((p: any) => p.text)
-          .join(" ") || ""
-
-      // Match GitHub PR URL pattern
-      const prUrlMatch = textContent.match(
-        /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)/,
-      )
-
-      if (prUrlMatch && prUrlMatch[0] !== detectedPrUrlRef.current) {
-        const prUrl = prUrlMatch[0]
-        const prNumber = parseInt(prUrlMatch[1], 10)
-
-        // Store to prevent duplicate calls
-        detectedPrUrlRef.current = prUrl
-
-        // Update database
-        trpcClient.chats.updatePrInfo
-          .mutate({ chatId: parentChatId, prUrl, prNumber })
-          .then(() => {
-            // Invalidate the agentChat query to refetch with new PR info
-            utils.agents.getAgentChat.invalidate({ chatId: parentChatId })
-          })
-
-        break // Only process first PR URL found
-      }
-    }
-  }, [messages, isStreaming, parentChatId])
+  // Detect PR URLs in assistant messages and update database
+  usePrUrlDetection({
+    messages,
+    isStreaming,
+    parentChatId,
+    existingPrUrl,
+  })
   const { changedFiles: changedFilesForSubChat, recomputeChangedFiles } = useChangedFilesTracking(
     messages,
     subChatId,
@@ -2093,90 +1723,15 @@ const ChatViewInner = memo(function ChatViewInner({
     setIsRollingBackAtom(isRollingBack)
   }, [isRollingBack, setIsRollingBackAtom])
 
-  // ESC, Ctrl+C and Cmd+Shift+Backspace handler for stopping stream
-  useEffect(() => {
-    // Skip keyboard handlers for inactive tabs (keep-alive)
-    if (!isActive) return
-
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      let shouldStop = false
-      let shouldSkipQuestions = false
-
-      // Check for Escape key without modifiers (works even from input fields, like terminal Ctrl+C)
-      // Ignore if Cmd/Ctrl is pressed (reserved for Cmd+Esc to focus input)
-      if (
-        e.key === "Escape" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.shiftKey &&
-        !e.altKey &&
-        isStreaming
-      ) {
-        const target = e.target as HTMLElement
-
-        // Allow ESC to propagate if it originated from a modal/dialog/dropdown
-        const isInsideOverlay = target.closest(
-          '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper], [data-state="open"]',
-        )
-
-        // Also check if any dialog/modal is open anywhere in the document (not just at event target)
-        // This prevents stopping stream when settings dialog is open but not focused
-        const hasOpenDialog = document.querySelector(
-          '[role="dialog"][aria-modal="true"], [data-modal="agents-settings"]',
-        )
-
-        if (!isInsideOverlay && !hasOpenDialog) {
-          // If there are pending questions for this chat, skip them instead of stopping stream
-          if (pendingQuestions) {
-            shouldSkipQuestions = true
-          } else {
-            shouldStop = true
-          }
-        }
-      }
-
-      // Check for Ctrl+C (only Ctrl, not Cmd on Mac)
-      if (e.ctrlKey && !e.metaKey && e.code === "KeyC") {
-        if (!isStreaming) return
-
-        const selection = window.getSelection()
-        const hasSelection = selection && selection.toString().length > 0
-
-        // If there's a text selection, let browser handle copy
-        if (hasSelection) return
-
-        shouldStop = true
-      }
-
-      // Check for Cmd+Shift+Backspace (Mac) or Ctrl+Shift+Backspace (Windows/Linux)
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        e.shiftKey &&
-        e.key === "Backspace" &&
-        isStreaming
-      ) {
-        shouldStop = true
-      }
-
-      if (shouldSkipQuestions) {
-        e.preventDefault()
-        await handleQuestionsSkip()
-      } else if (shouldStop) {
-        e.preventDefault()
-        // Mark as manually aborted to prevent completion sound
-        agentChatStore.setManuallyAborted(subChatId, true)
-        await stop()
-        // Call DELETE endpoint to cancel server-side stream
-        await fetch(`/api/agents/chat?id=${encodeURIComponent(subChatId)}`, {
-          method: "DELETE",
-          credentials: "include",
-        })
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isActive, isStreaming, stop, subChatId, pendingQuestions, handleQuestionsSkip])
+  // Keyboard shortcuts for stopping stream (ESC, Ctrl+C, Cmd+Shift+Backspace)
+  useKeyboardShortcuts({
+    isActive,
+    isStreaming,
+    subChatId,
+    stop,
+    pendingQuestions,
+    handleQuestionsSkip,
+  })
 
   // Keyboard shortcut: Enter to focus input when not already focused
   useFocusInputOnEnter(editorRef)
@@ -2272,185 +1827,19 @@ const ChatViewInner = memo(function ChatViewInner({
   const filesRef = useRef(files)
   filesRef.current = files
 
-  const handleSend = useCallback(async () => {
-    // Block sending while sandbox is still being set up
-    if (sandboxSetupStatus !== "ready") {
-      return
-    }
-
-    // Get value from uncontrolled editor
-    const inputValue = editorRef.current?.getValue() || ""
-    const hasText = inputValue.trim().length > 0
-    const currentImages = imagesRef.current
-    const currentFiles = filesRef.current
-    const currentTextContexts = textContextsRef.current
-    const hasImages =
-      currentImages.filter((img) => !img.isLoading && img.url).length > 0
-    const hasTextContexts = currentTextContexts.length > 0
-
-    if (!hasText && !hasImages && !hasTextContexts) return
-
-    // If streaming, add to queue instead of sending directly
-    if (isStreamingRef.current) {
-      const queuedImages = currentImages
-        .filter((img) => !img.isLoading && img.url)
-        .map(toQueuedImage)
-      const queuedFiles = currentFiles
-        .filter((f) => !f.isLoading && f.url)
-        .map(toQueuedFile)
-      const queuedTextContexts = currentTextContexts.map(toQueuedTextContext)
-
-      const item = createQueueItem(
-        generateQueueId(),
-        inputValue.trim(),
-        queuedImages.length > 0 ? queuedImages : undefined,
-        queuedFiles.length > 0 ? queuedFiles : undefined,
-        queuedTextContexts.length > 0 ? queuedTextContexts : undefined
-      )
-      addToQueue(subChatId, item)
-
-      // Clear input and attachments
-      editorRef.current?.clear()
-      if (parentChatId) {
-        clearSubChatDraft(parentChatId, subChatId)
-      }
-      clearAll()
-      clearTextContexts()
-      return
-    }
-
-    // Auto-restore archived workspace when sending a message
-    if (isArchived && onRestoreWorkspace) {
-      onRestoreWorkspace()
-    }
-
-    const text = inputValue.trim()
-    // Clear editor and draft from localStorage
-    editorRef.current?.clear()
-    if (parentChatId) {
-      clearSubChatDraft(parentChatId, subChatId)
-    }
-
-    // Track message sent
-    trackMessageSent({
-      workspaceId: subChatId,
-      messageLength: text.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
-    })
-
-    // Trigger auto-rename on first message in a new sub-chat
-    if (messagesLengthRef.current === 0 && !hasTriggeredRenameRef.current) {
-      hasTriggeredRenameRef.current = true
-      onAutoRename(text || "Image message", subChatId)
-    }
-
-    // Build message parts: images first, then files, then text
-    // Include base64Data for API transmission
-    const parts: any[] = [
-      ...currentImages
-        .filter((img) => !img.isLoading && img.url)
-        .map((img) => ({
-          type: "data-image" as const,
-          data: {
-            url: img.url,
-            mediaType: img.mediaType,
-            filename: img.filename,
-            base64Data: img.base64Data, // Include base64 data for Claude API
-          },
-        })),
-      ...currentFiles
-        .filter((f) => !f.isLoading && f.url)
-        .map((f) => ({
-          type: "data-file" as const,
-          data: {
-            url: f.url,
-            mediaType: (f as any).mediaType,
-            filename: f.filename,
-            size: f.size,
-          },
-        })),
-    ]
-
-    // Add text contexts as mention tokens
-    const currentDiffTextContexts = diffTextContextsRef.current
-    let mentionPrefix = ""
-
-    if (currentTextContexts.length > 0 || currentDiffTextContexts.length > 0) {
-      const quoteMentions = currentTextContexts.map((tc) => {
-        const preview = tc.preview.replace(/[:\[\]]/g, "") // Sanitize preview
-        const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
-        return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
-      })
-
-      const diffMentions = currentDiffTextContexts.map((dtc) => {
-        const preview = dtc.preview.replace(/[:\[\]]/g, "") // Sanitize preview
-        const encodedText = utf8ToBase64(dtc.text) // Base64 encode full text
-        const lineNum = dtc.lineNumber || 0
-        return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
-      })
-
-      mentionPrefix = [...quoteMentions, ...diffMentions].join(" ") + " "
-    }
-
-    if (text || mentionPrefix) {
-      parts.push({ type: "text", text: mentionPrefix + (text || "") })
-    }
-
-    clearAll()
-    clearTextContexts()
-    clearDiffTextContexts()
-
-    // Optimistic update: immediately update chat's updated_at and resort array for instant sidebar resorting
-    if (teamId) {
-      const now = new Date()
-      utils.agents.getAgentChats.setData({ teamId }, (old: any) => {
-        if (!old) return old
-        // Update the timestamp and sort by updated_at descending
-        const updated = old.map((c: any) =>
-          c.id === parentChatId ? { ...c, updated_at: now } : c,
-        )
-        return updated.sort(
-          (a: any, b: any) =>
-            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-        )
-      })
-    }
-
-    // Desktop app: Optimistic update for chats.list to update sidebar immediately
-    const queryClient = getQueryClient()
-    if (queryClient) {
-      const now = new Date()
-      const queries = queryClient.getQueryCache().getAll()
-      const chatsListQuery = queries.find(q =>
-        Array.isArray(q.queryKey) &&
-        Array.isArray(q.queryKey[0]) &&
-        q.queryKey[0][0] === 'chats' &&
-        q.queryKey[0][1] === 'list'
-      )
-      if (chatsListQuery) {
-        queryClient.setQueryData(chatsListQuery.queryKey, (old: any[] | undefined) => {
-          if (!old) return old
-          // Update the timestamp and sort by updatedAt descending
-          const updated = old.map((c: any) =>
-            c.id === parentChatId ? { ...c, updatedAt: now } : c,
-          )
-          return updated.sort(
-            (a: any, b: any) =>
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-          )
-        })
-      }
-    }
-
-    // Optimistically update sub-chat timestamp to move it to top
-    useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
-
-    // Enable auto-scroll and immediately scroll to bottom
-    shouldAutoScrollRef.current = true
-    scrollToBottom()
-
-    await sendMessageRef.current({ role: "user", parts })
-  }, [
+  // Message sending logic (handleSend, handleSendFromQueue, handleForceSend)
+  const { handleSend, handleSendFromQueue, handleForceSend } = useMessageSending({
+    editorRef,
+    imagesRef,
+    filesRef,
+    textContextsRef,
+    diffTextContextsRef,
+    isStreamingRef,
+    sendMessageRef,
+    messagesLengthRef,
+    isPlanModeRef,
+    shouldAutoScrollRef,
+    scrollToBottom,
     sandboxSetupStatus,
     isArchived,
     onRestoreWorkspace,
@@ -2459,184 +1848,17 @@ const ChatViewInner = memo(function ChatViewInner({
     onAutoRename,
     clearAll,
     clearTextContexts,
+    clearDiffTextContexts,
     teamId,
     addToQueue,
-  ])
-
-  // Queue handlers for sending queued messages
-  const handleSendFromQueue = useCallback(async (itemId: string) => {
-    const item = popItemFromQueue(subChatId, itemId)
-    if (!item) return
-
-    // Stop current stream if streaming
-    if (isStreamingRef.current) {
-      await handleStop()
-      // Small delay to ensure stop completes
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-
-    // Build message parts from queued item
-    const parts: any[] = [
-      ...(item.images || []).map((img) => ({
-        type: "data-image" as const,
-        data: {
-          url: img.url,
-          mediaType: img.mediaType,
-          filename: img.filename,
-          base64Data: img.base64Data,
-        },
-      })),
-      ...(item.files || []).map((f) => ({
-        type: "data-file" as const,
-        data: {
-          url: f.url,
-          mediaType: f.mediaType,
-          filename: f.filename,
-          size: f.size,
-        },
-      })),
-    ]
-
-    // Add text contexts as mention tokens
-    let mentionPrefix = ""
-    if (item.textContexts && item.textContexts.length > 0) {
-      const quoteMentions = item.textContexts.map((tc) => {
-        const preview = tc.text.slice(0, 50).replace(/[:\[\]]/g, "") // Create and sanitize preview
-        const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
-        return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
-      })
-      mentionPrefix = quoteMentions.join(" ") + " "
-    }
-
-    // Add diff text contexts as mention tokens
-    if (item.diffTextContexts && item.diffTextContexts.length > 0) {
-      const diffMentions = item.diffTextContexts.map((dtc) => {
-        const preview = dtc.text.slice(0, 50).replace(/[:\[\]]/g, "") // Create and sanitize preview
-        const encodedText = utf8ToBase64(dtc.text) // Base64 encode full text
-        const lineNum = dtc.lineNumber || 0
-        return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
-      })
-      mentionPrefix += diffMentions.join(" ") + " "
-    }
-
-    if (item.message || mentionPrefix) {
-      parts.push({ type: "text", text: mentionPrefix + (item.message || "") })
-    }
-
-    // Track message sent
-    trackMessageSent({
-      workspaceId: subChatId,
-      messageLength: item.message.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
-    })
-
-    // Update timestamps
-    useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
-
-    // Enable auto-scroll and immediately scroll to bottom
-    shouldAutoScrollRef.current = true
-    scrollToBottom()
-
-    await sendMessageRef.current({ role: "user", parts })
-  }, [subChatId, popItemFromQueue, handleStop])
+    popItemFromQueue,
+    handleStop,
+    hasTriggeredRenameRef,
+  })
 
   const handleRemoveFromQueue = useCallback((itemId: string) => {
     removeFromQueue(subChatId, itemId)
   }, [subChatId, removeFromQueue])
-
-  // Force send - stop stream and send immediately, bypassing queue (Opt+Enter)
-  const handleForceSend = useCallback(async () => {
-    // Block sending while sandbox is still being set up
-    if (sandboxSetupStatus !== "ready") {
-      return
-    }
-
-    // Get value from uncontrolled editor
-    const inputValue = editorRef.current?.getValue() || ""
-    const hasText = inputValue.trim().length > 0
-    const currentImages = imagesRef.current
-    const currentFiles = filesRef.current
-    const hasImages =
-      currentImages.filter((img) => !img.isLoading && img.url).length > 0
-
-    if (!hasText && !hasImages) return
-
-    // Stop current stream if streaming
-    if (isStreamingRef.current) {
-      await handleStop()
-      // Small delay to ensure stop completes
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-
-    // Auto-restore archived workspace when sending a message
-    if (isArchived && onRestoreWorkspace) {
-      onRestoreWorkspace()
-    }
-
-    const text = inputValue.trim()
-    // Clear editor and draft from localStorage
-    editorRef.current?.clear()
-    if (parentChatId) {
-      clearSubChatDraft(parentChatId, subChatId)
-    }
-
-    // Track message sent
-    trackMessageSent({
-      workspaceId: subChatId,
-      messageLength: text.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
-    })
-
-    // Build message parts
-    const parts: any[] = [
-      ...currentImages
-        .filter((img) => !img.isLoading && img.url)
-        .map((img) => ({
-          type: "data-image" as const,
-          data: {
-            url: img.url,
-            mediaType: img.mediaType,
-            filename: img.filename,
-            base64Data: img.base64Data,
-          },
-        })),
-      ...currentFiles
-        .filter((f) => !f.isLoading && f.url)
-        .map((f) => ({
-          type: "data-file" as const,
-          data: {
-            url: f.url,
-            mediaType: f.type,
-            filename: f.filename,
-            size: f.size,
-          },
-        })),
-    ]
-
-    if (text) {
-      parts.push({ type: "text", text })
-    }
-
-    // Clear attachments
-    clearAll()
-
-    // Update timestamps
-    useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
-
-    // Force scroll to bottom
-    shouldAutoScrollRef.current = true
-    scrollToBottom()
-
-    await sendMessageRef.current({ role: "user", parts })
-  }, [
-    sandboxSetupStatus,
-    isArchived,
-    onRestoreWorkspace,
-    parentChatId,
-    subChatId,
-    handleStop,
-    clearAll,
-  ])
 
   // NOTE: Auto-processing of queue is now handled globally by QueueProcessor
   // component in agents-layout.tsx. This ensures queues continue processing
@@ -4713,7 +3935,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                           variant="ghost"
                           size="icon"
                           onClick={() => setIsPreviewSidebarOpen(true)}
-                          className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                          className="h-6 w-6 p-0 hover:bg-foreground/10 active:bg-foreground/15 transition-all duration-150 active:scale-[0.95] text-foreground flex-shrink-0 rounded-md ml-2 focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
                           aria-label="Open preview"
                         >
                           <IconOpenSidebarRight className="h-4 w-4" />
@@ -4746,7 +3968,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                           variant="ghost"
                           size="icon"
                           onClick={() => setIsTerminalSidebarOpen(true)}
-                          className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                          className="h-6 w-6 p-0 hover:bg-foreground/10 active:bg-foreground/15 transition-all duration-150 active:scale-[0.95] text-foreground flex-shrink-0 rounded-md ml-2 focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
                           aria-label="Open terminal"
                         >
                           <TerminalSquare className="h-4 w-4" />
@@ -4766,7 +3988,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                         variant="ghost"
                         onClick={handleRestoreWorkspace}
                         disabled={restoreWorkspaceMutation.isPending}
-                        className="h-6 px-2 gap-1.5 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2 flex items-center"
+                        className="h-6 px-2 gap-1.5 hover:bg-foreground/10 active:bg-foreground/15 transition-all duration-150 active:scale-[0.97] text-foreground flex-shrink-0 rounded-md ml-2 flex items-center focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
                         aria-label="Restore workspace"
                       >
                         <IconTextUndo className="h-4 w-4" />
@@ -4999,42 +4221,47 @@ Make sure to preserve all functionality from both branches when resolving confli
                 <div className="flex items-center justify-end px-3 h-10 bg-tl-background flex-shrink-0 border-b border-border/50">
                   <Button
                     variant="ghost"
-                    className="h-7 w-7 p-0 hover:bg-muted transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md"
+                    className="h-7 w-7 p-0 hover:bg-muted/60 active:bg-muted/70 transition-all duration-150 active:scale-[0.97] rounded-md focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
                     onClick={() => setIsPreviewSidebarOpen(false)}
+                    aria-label="Close preview"
                   >
                     <IconCloseSidebarRight className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </div>
                 {/* Content */}
-                <div className="flex flex-col items-center justify-center flex-1 p-6 text-center">
-                  <div className="text-muted-foreground mb-4">
+                <div className="flex flex-col items-center justify-center flex-1 p-8 text-center">
+                  <div className="text-muted-foreground/40 mb-5">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      width="48"
-                      height="48"
+                      width="56"
+                      height="56"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="1.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="opacity-50"
                     >
                       <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                       <line x1="8" y1="21" x2="16" y2="21" />
                       <line x1="12" y1="17" x2="12" y2="21" />
                     </svg>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-2">
+                  <p className="text-sm font-medium text-foreground mb-2">
                     Preview not available
                   </p>
-                  <p className="text-xs text-muted-foreground/70 max-w-[200px]">
+                  <p className="text-xs text-muted-foreground/70 max-w-[240px] leading-relaxed">
                     Set up this repository to enable live preview
                   </p>
                 </div>
               </div>
             ) : (
-              <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading preview...</div>}>
+              <Suspense fallback={
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                  <IconSpinner className="w-5 h-5 animate-spin mb-2" />
+                  <p className="text-sm">Loading preview...</p>
+                </div>
+              }>
                 <AgentPreview
                   chatId={chatId}
                   sandboxId={sandboxId}
@@ -5050,7 +4277,12 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
         {worktreePath && (
-          <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading terminal...</div>}>
+          <Suspense fallback={
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <IconSpinner className="w-5 h-5 animate-spin mb-2" />
+              <p className="text-sm">Loading terminal...</p>
+            </div>
+          }>
             <TerminalSidebar
               chatId={chatId}
               cwd={worktreePath}

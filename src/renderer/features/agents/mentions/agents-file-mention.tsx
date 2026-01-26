@@ -504,9 +504,9 @@ export function getOptionIcon(option: { id?: string; label: string; type?: "file
 /**
  * Render folder path as a tree structure for tooltip
  * e.g., "apps/web/app" becomes:
- *   📁 apps
- *     📁 web
- *       📁 app
+ *   apps
+ *     web
+ *       app
  */
 function renderFolderTree(path: string) {
   const parts = path.split("/").filter(Boolean)
@@ -1204,24 +1204,57 @@ export const AgentsFileMention = memo(function AgentsFileMention({
         {/* Initial loading state (no previous data) */}
         {isLoading && options.length === 0 && (
           <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 text-xs text-muted-foreground">
-            <IconSpinner className="h-3.5 w-3.5" />
+            <IconSpinner className="h-3.5 w-3.5 animate-spin" />
             <span>Loading files...</span>
           </div>
         )}
 
         {/* Error state */}
         {error && (
-          <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
-            Error loading files
+          <div className="flex items-center gap-2 h-7 px-1.5 mx-1 text-xs text-destructive">
+            <svg
+              className="w-3.5 h-3.5 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+              />
+            </svg>
+            <span>Error loading files</span>
           </div>
         )}
 
         {/* Empty state (only show when not fetching) */}
         {!isLoading && !isFetching && !error && options.length === 0 && (
-          <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
-            {debouncedSearchText
-              ? `No files matching "${debouncedSearchText}"`
-              : "No files found"}
+          <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+            <svg
+              className="w-8 h-8 text-muted-foreground/40 mb-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+              />
+            </svg>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">
+              {debouncedSearchText
+                ? `No files matching "${debouncedSearchText}"`
+                : "No files found"}
+            </p>
+            {debouncedSearchText && (
+              <p className="text-[10px] text-muted-foreground/70">
+                Try a different search term
+              </p>
+            )}
           </div>
         )}
 
@@ -1265,10 +1298,11 @@ export const AgentsFileMention = memo(function AgentsFileMention({
                       className={cn(
                         "group inline-flex w-[calc(100%-8px)] mx-1 items-center whitespace-nowrap outline-none",
                         "h-7 px-1.5 justify-start text-xs rounded-md",
-                        "transition-colors cursor-pointer select-none gap-1.5",
+                        "transition-all duration-150 cursor-pointer select-none gap-1.5",
+                        "focus:ring-2 focus:ring-primary/50 focus:ring-offset-1",
                         isSelected
-                          ? "dark:bg-neutral-800 bg-accent text-foreground"
-                          : "text-muted-foreground dark:hover:bg-neutral-800 hover:bg-accent hover:text-foreground",
+                          ? "dark:bg-neutral-800 bg-accent text-foreground shadow-sm"
+                          : "text-muted-foreground dark:hover:bg-neutral-800 hover:bg-accent hover:text-foreground active:scale-[0.98]",
                       )}
                     >
                       <OptionIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />

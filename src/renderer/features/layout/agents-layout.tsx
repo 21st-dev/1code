@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from "react"
+import { Bug } from "lucide-react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { isDesktopApp } from "../../lib/utils/platform"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
@@ -281,6 +282,17 @@ export function AgentsLayout() {
 
         {/* Update Banner */}
         <UpdateBanner />
+
+        {/* DevTools Quick Access Button (dev mode only) */}
+        {import.meta.env.DEV && (
+          <button
+            onClick={() => window.desktopApi?.toggleDevTools()}
+            className="fixed bottom-4 right-4 z-50 p-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 shadow-lg border border-zinc-700 transition-all hover:scale-110 active:scale-95"
+            title="Toggle DevTools (Cmd+Option+I)"
+          >
+            <Bug className="h-5 w-5" />
+          </button>
+        )}
       </div>
     </TooltipProvider>
   )

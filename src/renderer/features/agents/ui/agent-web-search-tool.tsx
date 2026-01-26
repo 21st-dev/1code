@@ -33,6 +33,7 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
 
   const query = part.input?.query || ""
   const truncatedQuery = query.length > 40 ? query.slice(0, 37) + "..." : query
+  const errorMessage = part.output?.error || part.output?.errorText || ""
   
   // Parse results from output
   const results = useMemo(() => {
@@ -59,6 +60,7 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
 
   const resultCount = results.length
   const hasResults = resultCount > 0
+  const hasError = isError || errorMessage.length > 0
 
   // Show interrupted state if search was interrupted without completing
   if (isInterrupted && !hasResults) {
@@ -69,10 +71,10 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
     <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
       {/* Header - clickable to toggle expand */}
       <div
-        onClick={() => hasResults && !isPending && setIsExpanded(!isExpanded)}
+        onClick={() => (hasResults || hasError) && !isPending && setIsExpanded(!isExpanded)}
         className={cn(
           "flex items-center justify-between px-2.5 h-7",
-          hasResults && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          (hasResults || hasError) && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <div className="flex items-center gap-1.5 text-xs truncate flex-1 min-w-0">
@@ -100,8 +102,8 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
           <div className="flex items-center gap-1.5 text-xs">
             {isPending ? (
               <IconSpinner className="w-3 h-3" />
-            ) : isError ? (
-              <span className="text-destructive">Failed</span>
+            ) : hasError ? (
+              <span className="text-destructive font-medium">Failed</span>
             ) : (
               <span className="text-muted-foreground">
                 {resultCount} {resultCount === 1 ? "result" : "results"}
@@ -109,8 +111,8 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
             )}
           </div>
 
-          {/* Expand/Collapse icon */}
-          {hasResults && !isPending && (
+          {/* Expand/Collapse icon - show for errors too to see error details */}
+          {(hasResults || hasError) && !isPending && (
             <div className="relative w-4 h-4">
               <ExpandIcon
                 className={cn(
@@ -129,28 +131,63 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
         </div>
       </div>
 
-      {/* Results list - expandable */}
-      {hasResults && isExpanded && (
-        <div className="border-t border-border max-h-[200px] overflow-y-auto">
-          {results.map((result, idx) => (
-            <a
-              key={idx}
-              href={result.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-start gap-2 px-2.5 py-1.5 hover:bg-muted/50 transition-colors group"
-            >
-              <ExternalLinkIcon className="w-3 h-3 mt-0.5 flex-shrink-0 text-muted-foreground group-hover:text-foreground" />
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-foreground truncate">
-                  {result.title}
-                </div>
-                <div className="text-[10px] text-muted-foreground truncate">
-                  {result.url}
+      {/* Results list or error - expandable */}
+      {(hasResults || hasError) && isExpanded && (
+        <div className="border-t border-border">
+          {hasError ? (
+            <div className="px-2.5 py-2.5">
+              <div className="flex items-start gap-2">
+                <svg
+                  className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                  />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-destructive mb-1">
+                    Search failed
+                  </p>
+                  {errorMessage && (
+                    <p className="text-xs text-destructive/80 whitespace-pre-wrap break-words">
+                      {errorMessage}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-2">
+                    Query: {query}
+                  </p>
                 </div>
               </div>
-            </a>
-          ))}
+            </div>
+          ) : (
+            <div className="max-h-[200px] overflow-y-auto">
+              {results.map((result, idx) => (
+                <a
+                  key={idx}
+                  href={result.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-2 px-2.5 py-1.5 hover:bg-muted/50 transition-colors group"
+                >
+                  <ExternalLinkIcon className="w-3 h-3 mt-0.5 flex-shrink-0 text-muted-foreground group-hover:text-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs text-foreground truncate">
+                      {result.title}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {result.url}
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

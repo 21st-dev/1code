@@ -353,9 +353,10 @@ export const PlayButton = memo(function PlayButton({
         onClick={handlePlay}
         tabIndex={-1}
         className={cn(
-          "p-1.5 rounded-md transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
+          "p-1.5 rounded-md transition-all duration-150 ease-out hover:bg-accent/80 active:bg-accent active:scale-[0.95] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1",
           state === "loading" && "cursor-wait",
         )}
+        aria-label={state === "playing" ? "Pause" : "Play message"}
       >
         <div className="relative w-3.5 h-3.5">
           {state === "loading" ? (
@@ -374,11 +375,12 @@ export const PlayButton = memo(function PlayButton({
           onClick={handleSpeedChange}
           tabIndex={-1}
           className={cn(
-            "p-1.5 rounded-md transition-[background-color,opacity,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
+            "p-1.5 rounded-md transition-all duration-150 ease-out hover:bg-accent/80 active:bg-accent active:scale-[0.95] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1",
             isMobile
               ? "opacity-100"
               : "opacity-0 group-hover/message:opacity-100",
           )}
+          aria-label={`Playback speed: ${playbackRate}x`}
         >
           <div className="relative w-4 h-3.5 flex items-center justify-center">
             {PLAYBACK_SPEEDS.map((speed) => (

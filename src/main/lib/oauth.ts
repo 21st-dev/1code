@@ -106,7 +106,7 @@ function generateOAuthPage(options: {
       content = `<span class="cmd-text">${line.text}${line.status ? ` <span class="${line.statusClass}">${line.status}</span>` : ''}${line.hasCursor ? ' <span class="cursor"></span>' : ''}</span>`;
     }
     return `        <div class="line" style="animation-delay: ${0.2 + i * 0.4}s;">
-          <span class="prompt">➜</span>
+          <span class="prompt">$</span>
           <span class="path">~</span>
           ${content}
         </div>`;

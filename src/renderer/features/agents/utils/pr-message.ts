@@ -98,7 +98,7 @@ Run \`git diff origin/${baseBranch}...\` to get the changes.
 
 Provide:
 1. A brief summary of what the changes do
-2. A table of issues found with columns: severity (🔴 high, 🟡 medium, 🟢 low), file:line, issue, suggestion
+2. A table of issues found with columns: severity (high, medium, low), file:line, issue, suggestion
 3. If no issues found, state that the code looks good
 
 Keep the review concise and actionable.`

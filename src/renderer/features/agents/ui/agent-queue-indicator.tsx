@@ -53,22 +53,23 @@ const QueueItemRow = memo(function QueueItemRow({
     (item.diffTextContexts?.length || 0)
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors cursor-default">
+    <div className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/60 active:bg-muted/70 transition-all duration-150 cursor-default rounded-sm">
       <span className="truncate flex-1 text-foreground">
           <RenderFileMentions text={item.message} />
         </span>
       {hasAttachments && (
-        <span className="flex-shrink-0 text-muted-foreground text-[10px]">
+        <span className="flex-shrink-0 text-muted-foreground text-[10px] px-1.5 py-0.5 bg-muted/50 rounded">
           +{attachmentCount} {attachmentCount === 1 ? "file" : "files"}
         </span>
       )}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {onSendNow && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 onClick={handleSendNow}
-                className="flex-shrink-0 p-1 hover:bg-foreground/10 rounded text-muted-foreground hover:text-foreground transition-all"
+                className="flex-shrink-0 p-1.5 hover:bg-primary/10 active:bg-primary/20 rounded-md text-muted-foreground hover:text-primary transition-all duration-150 active:scale-[0.95] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
+                aria-label="Send now"
               >
                 <ArrowUp className="w-3.5 h-3.5" />
               </button>
@@ -81,7 +82,8 @@ const QueueItemRow = memo(function QueueItemRow({
             <TooltipTrigger asChild>
               <button
                 onClick={handleRemove}
-                className="flex-shrink-0 p-1 hover:bg-foreground/10 rounded text-muted-foreground hover:text-foreground transition-all"
+                className="flex-shrink-0 p-1.5 hover:bg-destructive/10 active:bg-destructive/20 rounded-md text-muted-foreground hover:text-destructive transition-all duration-150 active:scale-[0.95] focus:outline-none focus:ring-2 focus:ring-destructive/50 focus:ring-offset-1"
+                aria-label="Remove"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -129,7 +131,7 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
   return (
     <div
       className={cn(
-        "border border-border bg-muted/30 overflow-hidden flex flex-col rounded-t-xl",
+        "border border-border/60 bg-muted/40 backdrop-blur-sm overflow-hidden flex flex-col rounded-t-xl shadow-sm",
         // If status card below - no bottom border/radius, no padding
         // If no status card - need pb-6 for input overlap
         hasStatusCardBelow ? "border-b-0" : "border-b-0 pb-6"
@@ -148,7 +150,7 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
         }}
         aria-expanded={isExpanded}
         aria-label={`${isExpanded ? "Collapse" : "Expand"} queue`}
-        className="flex items-center justify-between pr-1 pl-3 h-8 cursor-pointer hover:bg-muted/50 transition-colors duration-150 focus:outline-none rounded-sm"
+        className="flex items-center justify-between pr-1 pl-3 h-8 cursor-pointer hover:bg-muted/60 active:bg-muted/70 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 rounded-sm"
       >
         <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
           <ChevronDown

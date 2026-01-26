@@ -159,9 +159,10 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
           disabled={isSaving}
           placeholder={placeholder}
           className={cn(
-            "w-full h-full bg-transparent border-0 outline-none",
+            "w-full h-full bg-transparent border-0 outline-none transition-all duration-150",
             isMobile ? "text-base" : "text-lg",
             "font-medium text-foreground",
+            "focus:ring-2 focus:ring-primary/40 focus:ring-offset-1 rounded px-1",
           )}
         />
       ) : (

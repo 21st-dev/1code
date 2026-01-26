@@ -22,6 +22,9 @@ export interface DetectedWorktreeConfig {
 const CURSOR_CONFIG_PATH = ".cursor/worktrees.json"
 const ONECODE_CONFIG_PATH = ".1code/worktree.json"
 
+/** Timeout for worktree setup commands (5 minutes) */
+const WORKTREE_SETUP_TIMEOUT_MS = 300_000
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath)
@@ -219,7 +222,7 @@ export async function executeWorktreeSetup(
           ...process.env,
           ROOT_WORKTREE_PATH: mainRepoPath,
         },
-        timeout: 300_000, // 5 minutes per command
+        timeout: WORKTREE_SETUP_TIMEOUT_MS,
       })
 
       if (stdout) {
@@ -230,12 +233,12 @@ export async function executeWorktreeSetup(
       }
 
       result.commandsRun++
-      console.log(`[worktree-setup] ✓ ${cmd}`)
+      console.log(`[worktree-setup] [OK] ${cmd}`)
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       result.errors.push(`Command failed: ${cmd}\n${errorMsg}`)
       result.output.push(`[error] ${errorMsg}`)
-      console.error(`[worktree-setup] ✗ ${cmd}: ${errorMsg}`)
+      console.error(`[worktree-setup] [ERROR] ${cmd}: ${errorMsg}`)
       // Continue with next command, don't fail entirely
     }
   }

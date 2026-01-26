@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useMemo } from "react"
+import { motion } from "motion/react"
 import { useAtomValue } from "jotai"
 import {
   messageAtomFamily,
@@ -168,22 +169,48 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
 
         {/* Setup error with retry */}
         {shouldShowSetupError && (
-          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <div className="flex items-center gap-2 text-destructive text-sm">
-              <span>
-                Failed to set up sandbox
-                {sandboxSetupError ? `: ${sandboxSetupError}` : ""}
-              </span>
-              {onRetrySetup && (
-                <button
-                  className="px-2 py-1 text-sm hover:bg-destructive/20 rounded"
-                  onClick={onRetrySetup}
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg shadow-sm"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg
+                  className="w-5 h-5 text-destructive"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
                 >
-                  Retry
-                </button>
-              )}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                  />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-destructive mb-1">
+                  Failed to set up sandbox
+                </p>
+                {sandboxSetupError && (
+                  <p className="text-xs text-destructive/80 mb-3">
+                    {sandboxSetupError}
+                  </p>
+                )}
+                {onRetrySetup && (
+                  <button
+                    className="px-3 py-1.5 text-xs font-medium bg-destructive/20 hover:bg-destructive/30 text-destructive rounded-md transition-all duration-150 active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-destructive/50 focus:ring-offset-2"
+                    onClick={onRetrySetup}
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
 

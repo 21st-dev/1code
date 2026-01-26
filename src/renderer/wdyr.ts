@@ -54,7 +54,7 @@ if (import.meta.env.DEV && WDYR_ENABLED) {
       // Trigger debugger before crash if threshold exceeded
       if (renderCounts[name].count >= THRESHOLD) {
         console.error(
-          `🔴 INFINITE LOOP DETECTED: ${name} rendered ${THRESHOLD}+ times in ${TIME_WINDOW}ms`
+          `[ERROR] INFINITE LOOP DETECTED: ${name} rendered ${THRESHOLD}+ times in ${TIME_WINDOW}ms`
         )
         console.error("Full info:", info)
         console.error("Props diff:", info.reason?.propsDifferences)

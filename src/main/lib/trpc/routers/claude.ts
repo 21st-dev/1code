@@ -126,13 +126,13 @@ function getClaudeCodeToken(): string | null {
 }
 
 // Dynamic import for ESM module - CACHED to avoid re-importing on every message
-let cachedClaudeQuery: typeof import("@anthropic-ai/claude-agent-sdk").query | null = null
+let cachedClaudeQuery: ((options: any) => AsyncIterable<any>) | null = null
 const getClaudeQuery = async () => {
   if (cachedClaudeQuery) {
     return cachedClaudeQuery
   }
   const sdk = await import("@anthropic-ai/claude-agent-sdk")
-  cachedClaudeQuery = sdk.query
+  cachedClaudeQuery = sdk.query as (options: any) => AsyncIterable<any>
   return cachedClaudeQuery
 }
 
@@ -347,7 +347,7 @@ export async function warmupMcpCache(): Promise<void> {
     // First, check if Claude Code binary exists
     const binaryPath = getBundledClaudeBinaryPath()
     if (!existsSync(binaryPath)) {
-      console.log("[MCP Warmup] Claude Code binary not found - skipping warmup")
+      logger.debug("[MCP Warmup] Claude Code binary not found - skipping warmup")
       saveMcpStatusToDisk() // Save empty cache
       return
     }
@@ -359,13 +359,13 @@ export async function warmupMcpCache(): Promise<void> {
       const configContent = readFileSync(claudeJsonPath, "utf-8")
       config = JSON.parse(configContent)
     } catch (err) {
-      console.log("[MCP Warmup] No ~/.claude.json found or failed to read - skipping warmup")
+      logger.debug("[MCP Warmup] No ~/.claude.json found or failed to read - skipping warmup")
       saveMcpStatusToDisk() // Save empty cache
       return
     }
 
     if (!config.projects || Object.keys(config.projects).length === 0) {
-      console.log("[MCP Warmup] No projects configured - skipping warmup")
+      logger.debug("[MCP Warmup] No projects configured - skipping warmup")
       saveMcpStatusToDisk() // Save empty cache
       return
     }
@@ -392,7 +392,7 @@ export async function warmupMcpCache(): Promise<void> {
     }
 
     if (projectsWithMcp.length === 0) {
-      console.log("[MCP Warmup] No MCP servers configured (excluding worktrees) - skipping warmup")
+      logger.debug("[MCP Warmup] No MCP servers configured (excluding worktrees) - skipping warmup")
       saveMcpStatusToDisk() // Save empty cache
       return
     }
@@ -451,16 +451,16 @@ export async function warmupMcpCache(): Promise<void> {
         if (result) {
           mcpServerStatusCache.set(project.path, result)
         } else {
-          console.warn(`[MCP Warmup] Timeout or no init for ${project.path}`)
+          logger.warn(`[MCP Warmup] Timeout or no init for ${project.path}`)
         }
       } catch (err) {
         // Log but don't throw - warmup failure should not affect app
         const errMsg = err instanceof Error ? err.message : String(err)
         // Only log detailed error if not the common "process exited" error
         if (errMsg.includes("exited with code")) {
-          console.log(`[MCP Warmup] Skipped ${project.path} (Claude Code unavailable)`)
+          logger.debug(`[MCP Warmup] Skipped ${project.path} (Claude Code unavailable)`)
         } else {
-          console.error(`[MCP Warmup] Failed to warm up MCP for ${project.path}:`, err)
+          logger.error(`[MCP Warmup] Failed to warm up MCP for ${project.path}`, err)
         }
       }
     }
@@ -471,10 +471,10 @@ export async function warmupMcpCache(): Promise<void> {
     const totalServers = Array.from(mcpServerStatusCache.values())
       .reduce((sum, map) => sum + map.size, 0)
     const warmupDuration = Date.now() - warmupStart
-    console.log(`[MCP Warmup] Initialized ${totalServers} servers across ${projectsWithMcp.length} projects in ${warmupDuration}ms`)
+    logger.info(`[MCP Warmup] Initialized ${totalServers} servers across ${projectsWithMcp.length} projects in ${warmupDuration}ms`)
   } catch (error) {
     // Catch-all: warmup should never crash the app
-    console.error("[MCP Warmup] Warmup failed (non-critical):", error)
+    logger.error("[MCP Warmup] Warmup failed (non-critical)", error)
     saveMcpStatusToDisk() // Save whatever we have
   }
 }
@@ -570,6 +570,7 @@ export const claudeRouter = router({
           } as UIMessageChunk)
         }
 
+        // Wrap async function to catch any unhandled promise rejections
         ;(async () => {
           try {
             const db = getDatabase()
@@ -865,27 +866,21 @@ export const claudeRouter = router({
 
             const resumeSessionId = input.sessionId || existingSessionId || undefined
 
-            console.log(`[claude] Session ID to resume: ${resumeSessionId} (Existing: ${existingSessionId})`)
-            console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
-            
-            console.log(`[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`)
+            logger.debug(`[claude] Session resume`, { resumeSessionId, existingSessionId, resumeAtUuid })
+            logger.debug(`[SD] Query options`, { cwd: input.cwd, projectPath: input.projectPath || "(not set)", mcpServers: mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)" })
             if (finalCustomConfig) {
-              const redactedConfig = {
-                ...finalCustomConfig,
-                token: `${finalCustomConfig.token.slice(0, 6)}...`,
-              }
               if (isUsingOllama) {
-                console.log(`[Ollama] Using offline mode - Model: ${finalCustomConfig.model}, Base URL: ${finalCustomConfig.baseUrl}`)
+                logger.debug(`[Ollama] Using offline mode`, { model: finalCustomConfig.model, baseUrl: finalCustomConfig.baseUrl })
               } else {
-                console.log(`[claude] Custom config: ${JSON.stringify(redactedConfig)}`)
+                logger.debug(`[claude] Custom config`, { model: finalCustomConfig.model, baseUrl: finalCustomConfig.baseUrl })
               }
             }
 
             const resolvedModel = finalCustomConfig?.model || input.model
 
-            // DEBUG: If using Ollama, test if it's actually responding
+            // Test Ollama connectivity before starting stream
             if (isUsingOllama && finalCustomConfig) {
-              console.log('[Ollama Debug] Testing Ollama connectivity...')
+              logger.debug('[Ollama] Testing connectivity...')
               try {
                 const testResponse = await fetch(`${finalCustomConfig.baseUrl}/api/tags`, {
                   signal: AbortSignal.timeout(2000)
@@ -893,20 +888,16 @@ export const claudeRouter = router({
                 if (testResponse.ok) {
                   const data = await testResponse.json()
                   const models = data.models?.map((m: any) => m.name) || []
-                  console.log('[Ollama Debug] Ollama is responding. Available models:', models)
+                  logger.debug('[Ollama] Connected', { availableModels: models })
 
                   if (!models.includes(finalCustomConfig.model)) {
-                    console.error(`[Ollama Debug] WARNING: Model "${finalCustomConfig.model}" not found in Ollama!`)
-                    console.error(`[Ollama Debug] Available models:`, models)
-                    console.error(`[Ollama Debug] This will likely cause the stream to hang or fail silently.`)
-                  } else {
-                    console.log(`[Ollama Debug] ✓ Model "${finalCustomConfig.model}" is available`)
+                    logger.error(`[Ollama] Model "${finalCustomConfig.model}" not found in Ollama`, { availableModels: models })
                   }
                 } else {
-                  console.error('[Ollama Debug] Ollama returned error:', testResponse.status)
+                  logger.error('[Ollama] Connection error', { status: testResponse.status })
                 }
               } catch (err) {
-                console.error('[Ollama Debug] Failed to connect to Ollama:', err)
+                logger.error('[Ollama] Failed to connect', err)
               }
             }
 
@@ -943,26 +934,18 @@ export const claudeRouter = router({
                 mcpServersFiltered = undefined
               }
             } else if (isUsingOllama) {
-              console.log('[Ollama] Skipping MCP servers to speed up initialization')
+              logger.debug('[Ollama] Skipping MCP servers to speed up initialization')
               mcpServersFiltered = undefined
             }
 
             // Log SDK configuration for debugging
             if (isUsingOllama) {
-              console.log('[Ollama Debug] SDK Configuration:', {
+              logger.debug('[Ollama] SDK Configuration', {
                 model: resolvedModel,
                 baseUrl: finalCustomConfig?.baseUrl,
                 cwd: input.cwd,
                 configDir: isolatedConfigDir,
-                hasAuthToken: !!finalCustomConfig?.token,
-                tokenPreview: finalCustomConfig?.token?.slice(0, 10) + '...',
-              })
-              console.log('[Ollama Debug] Session settings:', {
                 resumeSessionId: resumeSessionId || 'none (first message)',
-                mode: resumeSessionId ? 'resume' : 'continue',
-                note: resumeSessionId
-                  ? 'Resuming existing session to maintain chat history'
-                  : 'Starting new session with continue mode'
               })
             }
 
@@ -1044,7 +1027,7 @@ ${history}
 [/CONVERSATION HISTORY]
 
 `
-                  console.log(`[Ollama] Added ${historyParts.length} messages to history (${history.length} chars)`)
+                  logger.debug(`[Ollama] Added ${historyParts.length} messages to history (${history.length} chars)`)
                 }
               }
 
@@ -1069,7 +1052,7 @@ ${historyText}[CURRENT REQUEST]
 ${prompt}
 [/CURRENT REQUEST]`
               finalQueryPrompt = ollamaContext
-              console.log('[Ollama] Context prefix added to prompt')
+              logger.debug('[Ollama] Context prefix added to prompt')
             }
 
             // System prompt config - use preset for both Claude and Ollama
@@ -1107,35 +1090,20 @@ ${prompt}
                   // Fix common parameter mistakes from Ollama models
                   // Local models often use slightly wrong parameter names
                   if (isUsingOllama) {
-                    // Read: "file" -> "file_path"
-                    if (toolName === "Read" && toolInput.file && !toolInput.file_path) {
+                    // Read/Write/Edit: "file" -> "file_path"
+                    if ((toolName === "Read" || toolName === "Write" || toolName === "Edit") && toolInput.file && !toolInput.file_path) {
                       toolInput.file_path = toolInput.file
                       delete toolInput.file
-                      console.log('[Ollama] Fixed Read tool: file -> file_path')
                     }
-                    // Write: "file" -> "file_path", "content" is usually correct
-                    if (toolName === "Write" && toolInput.file && !toolInput.file_path) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log('[Ollama] Fixed Write tool: file -> file_path')
-                    }
-                    // Edit: "file" -> "file_path"
-                    if (toolName === "Edit" && toolInput.file && !toolInput.file_path) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log('[Ollama] Fixed Edit tool: file -> file_path')
-                    }
-                    // Glob: "path" might be passed as "directory" or "dir"
+                    // Glob: "directory" or "dir" -> "path"
                     if (toolName === "Glob") {
                       if (toolInput.directory && !toolInput.path) {
                         toolInput.path = toolInput.directory
                         delete toolInput.directory
-                        console.log('[Ollama] Fixed Glob tool: directory -> path')
                       }
                       if (toolInput.dir && !toolInput.path) {
                         toolInput.path = toolInput.dir
                         delete toolInput.dir
-                        console.log('[Ollama] Fixed Glob tool: dir -> path')
                       }
                     }
                     // Grep: "query" -> "pattern", "directory" -> "path"
@@ -1143,19 +1111,16 @@ ${prompt}
                       if (toolInput.query && !toolInput.pattern) {
                         toolInput.pattern = toolInput.query
                         delete toolInput.query
-                        console.log('[Ollama] Fixed Grep tool: query -> pattern')
                       }
                       if (toolInput.directory && !toolInput.path) {
                         toolInput.path = toolInput.directory
                         delete toolInput.directory
-                        console.log('[Ollama] Fixed Grep tool: directory -> path')
                       }
                     }
                     // Bash: "cmd" -> "command"
                     if (toolName === "Bash" && toolInput.cmd && !toolInput.command) {
                       toolInput.command = toolInput.cmd
                       delete toolInput.cmd
-                      console.log('[Ollama] Fixed Bash tool: cmd -> command')
                     }
                   }
 
@@ -1263,10 +1228,10 @@ ${prompt}
                 },
                 stderr: (data: string) => {
                   stderrLines.push(data)
-                  if (isUsingOllama) {
-                    console.error("[Ollama stderr]", data)
-                  } else {
-                    console.error("[claude stderr]", data)
+                  // Log stderr output (errors are always visible)
+                  // Only log if it's actually an error (not just warnings/info)
+                  if (data.includes("error") || data.includes("Error") || data.includes("ERROR") || data.includes("failed") || data.includes("Failed")) {
+                    logger.error(isUsingOllama ? "[Ollama stderr]" : "[claude stderr]", data)
                   }
                 },
                 // Use bundled binary
@@ -1296,7 +1261,7 @@ ${prompt}
               stream = claudeQuery(queryOptions)
             } catch (queryError) {
               console.error(
-                "[CLAUDE] ✗ Failed to create SDK query:",
+                "[CLAUDE] [ERROR] Failed to create SDK query:",
                 queryError,
               )
               emitError(queryError, "Failed to start Claude query")
@@ -1314,298 +1279,301 @@ ${prompt}
             const streamIterationStart = Date.now()
 
             if (isUsingOllama) {
-              console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
-              console.log(`[Ollama] Model: ${finalCustomConfig?.model}`)
-              console.log(`[Ollama] Base URL: ${finalCustomConfig?.baseUrl}`)
-              console.log(`[Ollama] Prompt: "${typeof input.prompt === 'string' ? input.prompt.slice(0, 100) : 'N/A'}..."`)
-              console.log(`[Ollama] CWD: ${input.cwd}`)
+              logger.debug("[Ollama] Starting stream iteration", {
+                model: finalCustomConfig?.model,
+                baseUrl: finalCustomConfig?.baseUrl,
+                promptPreview: typeof input.prompt === 'string' ? input.prompt.slice(0, 100) : 'N/A',
+                cwd: input.cwd
+              })
             }
 
             try {
+              // Wrap stream iteration in try-catch to prevent crashes
               for await (const msg of stream) {
-                if (abortController.signal.aborted) {
-                  if (isUsingOllama) console.log(`[Ollama] Stream aborted by user`)
-                  break
-                }
-
-                messageCount++
-
-                // Extra logging for Ollama to diagnose issues
-                if (isUsingOllama) {
-                  const msgAnyPreview = msg as any
-                  console.log(`[Ollama] ===== MESSAGE #${messageCount} =====`)
-                  console.log(`[Ollama] Type: ${msgAnyPreview.type}`)
-                  console.log(`[Ollama] Subtype: ${msgAnyPreview.subtype || 'none'}`)
-                  if (msgAnyPreview.event) {
-                    console.log(`[Ollama] Event: ${msgAnyPreview.event.type}`, {
-                      delta_type: msgAnyPreview.event.delta?.type,
-                      content_block_type: msgAnyPreview.event.content_block?.type
-                    })
+                try {
+                  if (abortController.signal.aborted) {
+                    if (isUsingOllama) logger.debug("[Ollama] Stream aborted by user")
+                    break
                   }
-                  if (msgAnyPreview.message?.content) {
-                    console.log(`[Ollama] Message content blocks:`, msgAnyPreview.message.content.length)
-                    msgAnyPreview.message.content.forEach((block: any, idx: number) => {
-                      console.log(`[Ollama]   Block ${idx}: type=${block.type}, text_length=${block.text?.length || 0}`)
-                    })
-                  }
-                }
 
-                // Warn if SDK initialization is slow (MCP delay)
-                if (!firstMessageReceived) {
-                  firstMessageReceived = true
-                  const timeToFirstMessage = Date.now() - streamIterationStart
+                  messageCount++
+
+                  // Extra logging for Ollama to diagnose issues (debug only)
                   if (isUsingOllama) {
-                    console.log(`[Ollama] Time to first message: ${timeToFirstMessage}ms`)
-                  }
-                  if (timeToFirstMessage > 5000) {
-                    console.warn(`[claude] SDK initialization took ${(timeToFirstMessage / 1000).toFixed(1)}s (MCP servers loading?)`)
-                  }
-                }
-
-                // Log raw message for debugging
-                logRawClaudeMessage(input.chatId, msg)
-
-                // Check for error messages from SDK (error can be embedded in message payload!)
-                const msgAny = msg as any
-                if (msgAny.type === "error" || msgAny.error) {
-                  console.log(`[SD] ERROR MSG RECEIVED:`, JSON.stringify(msgAny, null, 2))
-                  const sdkError =
-                    msgAny.error || msgAny.message || "Unknown SDK error"
-                  lastError = new Error(sdkError)
-
-                  // Categorize SDK-level errors
-                  let errorCategory = "SDK_ERROR"
-                  let errorContext = "Claude SDK error"
-
-                  if (
-                    sdkError === "authentication_failed" ||
-                    sdkError.includes("authentication")
-                  ) {
-                    errorCategory = "AUTH_FAILED_SDK"
-                    errorContext =
-                      "Authentication failed - not logged into Claude Code CLI"
-                  } else if (
-                    sdkError === "invalid_api_key" ||
-                    sdkError.includes("api_key")
-                  ) {
-                    errorCategory = "INVALID_API_KEY_SDK"
-                    errorContext = "Invalid API key in Claude Code CLI"
-                  } else if (
-                    sdkError === "rate_limit_exceeded" ||
-                    sdkError.includes("rate")
-                  ) {
-                    errorCategory = "RATE_LIMIT_SDK"
-                    errorContext = "Session limit reached"
-                  } else if (
-                    sdkError === "overloaded" ||
-                    sdkError.includes("overload")
-                  ) {
-                    errorCategory = "OVERLOADED_SDK"
-                    errorContext = "Claude is overloaded, try again later"
+                    const msgAnyPreview = msg as any
+                    logger.debug(`[Ollama] Message #${messageCount}`, {
+                      type: msgAnyPreview.type,
+                      subtype: msgAnyPreview.subtype || 'none',
+                      event: msgAnyPreview.event?.type,
+                      deltaType: msgAnyPreview.event?.delta?.type,
+                      contentBlockType: msgAnyPreview.event?.content_block?.type,
+                      contentBlocks: msgAnyPreview.message?.content?.length
+                    })
                   }
 
-                  // Emit auth-error for authentication failures, regular error otherwise
-                  if (errorCategory === "AUTH_FAILED_SDK") {
-                    safeEmit({
-                      type: "auth-error",
-                      errorText: errorContext,
-                    } as UIMessageChunk)
-                  } else {
-                    safeEmit({
-                      type: "error",
-                      errorText: errorContext,
-                      debugInfo: {
-                        category: errorCategory,
-                        sdkError: sdkError,
-                        sessionId: msgAny.session_id,
-                        messageId: msgAny.message?.id,
-                      },
-                    } as UIMessageChunk)
+                  // Warn if SDK initialization is slow (MCP delay)
+                  if (!firstMessageReceived) {
+                    firstMessageReceived = true
+                    const timeToFirstMessage = Date.now() - streamIterationStart
+                    if (isUsingOllama) {
+                      logger.debug(`[Ollama] Time to first message: ${timeToFirstMessage}ms`)
+                    }
+                    if (timeToFirstMessage > 5000) {
+                      logger.warn(`[claude] SDK initialization took ${(timeToFirstMessage / 1000).toFixed(1)}s (MCP servers loading?)`)
+                    }
                   }
 
-                  console.log(`[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`)
-                  safeEmit({ type: "finish" } as UIMessageChunk)
-                  safeComplete()
-                  return
-                }
+                  // Log raw message for debugging
+                  logRawClaudeMessage(input.chatId, msg)
 
-                // Track sessionId and uuid for rollback support (available on all messages)
-                if (msgAny.session_id) {
-                  metadata.sessionId = msgAny.session_id
-                  currentSessionId = msgAny.session_id // Share with cleanup
-                }
+                  // Check for error messages from SDK (error can be embedded in message payload!)
+                  const msgAny = msg as any
+                  if (msgAny.type === "error" || msgAny.error) {
+                    console.log(`[SD] ERROR MSG RECEIVED:`, JSON.stringify(msgAny, null, 2))
+                    const sdkError =
+                      msgAny.error || msgAny.message || "Unknown SDK error"
+                    lastError = new Error(sdkError)
 
-                // Debug: Log system messages from SDK
-                if (msgAny.type === "system") {
-                  // Full log to see all fields including MCP errors
-                  console.log(`[SD] SYSTEM message: subtype=${msgAny.subtype}`, JSON.stringify({
-                    cwd: msgAny.cwd,
-                    mcp_servers: msgAny.mcp_servers,
-                    tools: msgAny.tools,
-                    plugins: msgAny.plugins,
-                    permissionMode: msgAny.permissionMode,
-                  }, null, 2))
+                    // Categorize SDK-level errors
+                    let errorCategory = "SDK_ERROR"
+                    let errorContext = "Claude SDK error"
 
-                  // Cache MCP server statuses for next request
-                  if (msgAny.subtype === "init" && msgAny.mcp_servers) {
-                    const lookupPath = input.projectPath || input.cwd
-                    const statusMap = new Map<string, string>()
-
-                    for (const server of msgAny.mcp_servers) {
-                      if (server.name && server.status) {
-                        statusMap.set(server.name, server.status)
-                      }
+                    if (
+                      sdkError === "authentication_failed" ||
+                      sdkError.includes("authentication")
+                    ) {
+                      errorCategory = "AUTH_FAILED_SDK"
+                      errorContext =
+                        "Authentication failed - not logged into Claude Code CLI"
+                    } else if (
+                      sdkError === "invalid_api_key" ||
+                      sdkError.includes("api_key")
+                    ) {
+                      errorCategory = "INVALID_API_KEY_SDK"
+                      errorContext = "Invalid API key in Claude Code CLI"
+                    } else if (
+                      sdkError === "rate_limit_exceeded" ||
+                      sdkError.includes("rate")
+                    ) {
+                      errorCategory = "RATE_LIMIT_SDK"
+                      errorContext = "Session limit reached"
+                    } else if (
+                      sdkError === "overloaded" ||
+                      sdkError.includes("overload")
+                    ) {
+                      errorCategory = "OVERLOADED_SDK"
+                      errorContext = "Claude is overloaded, try again later"
                     }
 
-                    mcpServerStatusCache.set(lookupPath, statusMap)
-                    // Persist to disk immediately (write-through)
-                    saveMcpStatusToDisk()
+                    // Emit auth-error for authentication failures, regular error otherwise
+                    if (errorCategory === "AUTH_FAILED_SDK") {
+                      safeEmit({
+                        type: "auth-error",
+                        errorText: errorContext,
+                      } as UIMessageChunk)
+                    } else {
+                      safeEmit({
+                        type: "error",
+                        errorText: errorContext,
+                        debugInfo: {
+                          category: errorCategory,
+                          sdkError: sdkError,
+                          sessionId: msgAny.session_id,
+                          messageId: msgAny.message?.id,
+                        },
+                      } as UIMessageChunk)
+                    }
+
+                    console.log(`[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`)
+                    safeEmit({ type: "finish" } as UIMessageChunk)
+                    safeComplete()
+                    return
                   }
-                }
 
-                // Transform and emit + accumulate
-                for (const chunk of transform(msg)) {
-                  chunkCount++
-                  lastChunkType = chunk.type
-
-                  // Use safeEmit to prevent throws when observer is closed
-                  if (!safeEmit(chunk)) {
-                    // Observer closed (user clicked Stop), break out of loop
-                    console.log(`[SD] M:EMIT_CLOSED sub=${subId} type=${chunk.type} n=${chunkCount}`)
-                    break
+                  // Track sessionId and uuid for rollback support (available on all messages)
+                  if (msgAny.session_id) {
+                    metadata.sessionId = msgAny.session_id
+                    currentSessionId = msgAny.session_id // Share with cleanup
                   }
 
-                  // Accumulate based on chunk type
-                  switch (chunk.type) {
-                    case "text-delta":
-                      currentText += chunk.delta
-                      break
-                    case "text-end":
-                      if (currentText.trim()) {
-                        parts.push({ type: "text", text: currentText })
-                        currentText = ""
-                      }
-                      break
-                    case "tool-input-available":
-                      // DEBUG: Log tool calls
-                      console.log(`[SD] M:TOOL_CALL sub=${subId} toolName="${chunk.toolName}" mode=${input.mode} callId=${chunk.toolCallId}`)
+                  // Debug: Log system messages from SDK
+                  if (msgAny.type === "system") {
+                    // Full log to see all fields including MCP errors
+                    console.log(`[SD] SYSTEM message: subtype=${msgAny.subtype}`, JSON.stringify({
+                      cwd: msgAny.cwd,
+                      mcp_servers: msgAny.mcp_servers,
+                      tools: msgAny.tools,
+                      plugins: msgAny.plugins,
+                      permissionMode: msgAny.permissionMode,
+                    }, null, 2))
 
-                      // Track ExitPlanMode toolCallId so we can stop when it completes
-                      if (input.mode === "plan" && chunk.toolName === "ExitPlanMode") {
-                        console.log(`[SD] M:PLAN_TOOL_DETECTED sub=${subId} callId=${chunk.toolCallId}`)
-                        exitPlanModeToolCallId = chunk.toolCallId
-                      }
+                    // Cache MCP server statuses for next request
+                    if (msgAny.subtype === "init" && msgAny.mcp_servers) {
+                      const lookupPath = input.projectPath || input.cwd
+                      const statusMap = new Map<string, string>()
 
-                      parts.push({
-                        type: `tool-${chunk.toolName}`,
-                        toolCallId: chunk.toolCallId,
-                        toolName: chunk.toolName,
-                        input: chunk.input,
-                        state: "call",
-                      })
-                      break
-                    case "tool-output-available":
-                      const toolPart = parts.find(
-                        (p) =>
-                          p.type?.startsWith("tool-") &&
-                          p.toolCallId === chunk.toolCallId,
-                      )
-                      if (toolPart) {
-                        toolPart.result = chunk.output
-                        toolPart.output = chunk.output // Backwards compatibility for the UI that relies on output field
-                        toolPart.state = "result"
-
-                        // Notify renderer about file changes for Write/Edit tools
-                        if (toolPart.type === "tool-Write" || toolPart.type === "tool-Edit") {
-                          const filePath = toolPart.input?.file_path
-                          if (filePath) {
-                            const windows = BrowserWindow.getAllWindows()
-                            for (const win of windows) {
-                              win.webContents.send("file-changed", {
-                                filePath,
-                                type: toolPart.type,
-                                subChatId: input.subChatId
-                              })
-                            }
-                          }
+                      for (const server of msgAny.mcp_servers) {
+                        if (server.name && server.status) {
+                          statusMap.set(server.name, server.status)
                         }
                       }
-                      // Stop streaming after ExitPlanMode completes in plan mode
-                      // Match by toolCallId since toolName is undefined in output chunks
-                      if (input.mode === "plan" && exitPlanModeToolCallId && chunk.toolCallId === exitPlanModeToolCallId) {
-                        console.log(`[SD] M:PLAN_STOP sub=${subId} callId=${chunk.toolCallId} n=${chunkCount} parts=${parts.length}`)
-                        planCompleted = true
-                        // Emit finish chunk so Chat hook properly resets its state
-                        console.log(`[SD] M:PLAN_FINISH sub=${subId} - emitting finish chunk`)
-                        safeEmit({ type: "finish" } as UIMessageChunk)
-                        // Abort the Claude process so it doesn't keep running
-                        console.log(`[SD] M:PLAN_ABORT sub=${subId} - aborting claude process`)
-                        abortController.abort()
-                      }
-                      break
-                    case "message-metadata":
-                      metadata = { ...metadata, ...chunk.messageMetadata }
-                      break
-                    case "system-Compact":
-                      // Add system-Compact to parts so it renders in the chat
-                      // Find existing part by toolCallId or add new one
-                      const existingCompact = parts.find(
-                        (p) => p.type === "system-Compact" && p.toolCallId === chunk.toolCallId
-                      )
-                      if (existingCompact) {
-                        existingCompact.state = chunk.state
-                      } else {
-                        parts.push({
-                          type: "system-Compact",
-                          toolCallId: chunk.toolCallId,
-                          state: chunk.state,
-                        })
-                      }
-                      break
+
+                      mcpServerStatusCache.set(lookupPath, statusMap)
+                      // Persist to disk immediately (write-through)
+                      saveMcpStatusToDisk()
+                    }
                   }
-                  // Break from chunk loop if plan is done
+
+                  // Transform and emit + accumulate
+                  try {
+                    for (const chunk of transform(msg)) {
+                      chunkCount++
+                      lastChunkType = chunk.type
+
+                      // Use safeEmit to prevent throws when observer is closed
+                      if (!safeEmit(chunk)) {
+                        // Observer closed (user clicked Stop), break out of loop
+                        console.log(`[SD] M:EMIT_CLOSED sub=${subId} type=${chunk.type} n=${chunkCount}`)
+                        break
+                      }
+
+                      // Accumulate based on chunk type
+                      switch (chunk.type) {
+                        case "text-delta":
+                          currentText += chunk.delta
+                          break
+                        case "text-end":
+                          if (currentText.trim()) {
+                            parts.push({ type: "text", text: currentText })
+                            currentText = ""
+                          }
+                          break
+                        case "tool-input-available":
+                          // DEBUG: Log tool calls
+                          console.log(`[SD] M:TOOL_CALL sub=${subId} toolName="${chunk.toolName}" mode=${input.mode} callId=${chunk.toolCallId}`)
+
+                          // Track ExitPlanMode toolCallId so we can stop when it completes
+                          if (input.mode === "plan" && chunk.toolName === "ExitPlanMode") {
+                            console.log(`[SD] M:PLAN_TOOL_DETECTED sub=${subId} callId=${chunk.toolCallId}`)
+                            exitPlanModeToolCallId = chunk.toolCallId
+                          }
+
+                          parts.push({
+                            type: `tool-${chunk.toolName}`,
+                            toolCallId: chunk.toolCallId,
+                            toolName: chunk.toolName,
+                            input: chunk.input,
+                            state: "call",
+                          })
+                          break
+                        case "tool-output-available":
+                          const toolPart = parts.find(
+                            (p) =>
+                              p.type?.startsWith("tool-") &&
+                              p.toolCallId === chunk.toolCallId,
+                          )
+                          if (toolPart) {
+                            toolPart.result = chunk.output
+                            toolPart.output = chunk.output // Backwards compatibility for the UI that relies on output field
+                            toolPart.state = "result"
+
+                            // Notify renderer about file changes for Write/Edit tools
+                            if (toolPart.type === "tool-Write" || toolPart.type === "tool-Edit") {
+                              const filePath = toolPart.input?.file_path
+                              if (filePath) {
+                                const windows = BrowserWindow.getAllWindows()
+                                for (const win of windows) {
+                                  win.webContents.send("file-changed", {
+                                    filePath,
+                                    type: toolPart.type,
+                                    subChatId: input.subChatId
+                                  })
+                                }
+                              }
+                            }
+                          }
+                          // Stop streaming after ExitPlanMode completes in plan mode
+                          // Match by toolCallId since toolName is undefined in output chunks
+                          if (input.mode === "plan" && exitPlanModeToolCallId && chunk.toolCallId === exitPlanModeToolCallId) {
+                            console.log(`[SD] M:PLAN_STOP sub=${subId} callId=${chunk.toolCallId} n=${chunkCount} parts=${parts.length}`)
+                            planCompleted = true
+                            // Emit finish chunk so Chat hook properly resets its state
+                            console.log(`[SD] M:PLAN_FINISH sub=${subId} - emitting finish chunk`)
+                            safeEmit({ type: "finish" } as UIMessageChunk)
+                            // Abort the Claude process so it doesn't keep running
+                            console.log(`[SD] M:PLAN_ABORT sub=${subId} - aborting claude process`)
+                            abortController.abort()
+                          }
+                          break
+                        case "message-metadata":
+                          metadata = { ...metadata, ...chunk.messageMetadata }
+                          break
+                        case "system-Compact":
+                          // Add system-Compact to parts so it renders in the chat
+                          // Find existing part by toolCallId or add new one
+                          const existingCompact = parts.find(
+                            (p) => p.type === "system-Compact" && p.toolCallId === chunk.toolCallId
+                          )
+                          if (existingCompact) {
+                            existingCompact.state = chunk.state
+                          } else {
+                            parts.push({
+                              type: "system-Compact",
+                              toolCallId: chunk.toolCallId,
+                              state: chunk.state,
+                            })
+                          }
+                          break
+                      }
+                      // Break from chunk loop if plan is done
+                      if (planCompleted) {
+                        console.log(`[SD] M:PLAN_BREAK_CHUNK sub=${subId}`)
+                        break
+                      }
+                    }
+                  } catch (transformError) {
+                    // Transform errors should not crash the stream
+                    const transformErr = transformError as Error
+                    console.error(`[SD] Transform error for message #${messageCount}:`, transformErr.message)
+                    logger.error("[claude] Transform error", transformErr)
+                    // Continue processing - don't break the stream
+                  }
+                  // Break from stream loop if plan is done
                   if (planCompleted) {
-                    console.log(`[SD] M:PLAN_BREAK_CHUNK sub=${subId}`)
+                    console.log(`[SD] M:PLAN_BREAK_STREAM sub=${subId}`)
                     break
                   }
-                }
-                // Break from stream loop if plan is done
-                if (planCompleted) {
-                  console.log(`[SD] M:PLAN_BREAK_STREAM sub=${subId}`)
-                  break
-                }
-                // Break from stream loop if observer closed (user clicked Stop)
-                if (!isObservableActive) {
-                  console.log(`[SD] M:OBSERVER_CLOSED_STREAM sub=${subId}`)
-                  break
+                  // Break from stream loop if observer closed (user clicked Stop)
+                  if (!isObservableActive) {
+                    console.log(`[SD] M:OBSERVER_CLOSED_STREAM sub=${subId}`)
+                    break
+                  }
+                } catch (msgError) {
+                  // Individual message processing errors should not crash the stream
+                  const msgErr = msgError as Error
+                  console.error(`[SD] Error processing message #${messageCount}:`, msgErr.message)
+                  logger.error("[claude] Message processing error", msgErr)
+                  // Continue to next message - don't break the stream
                 }
               }
 
               // Warn if stream yielded no messages (offline mode issue)
               const streamDuration = Date.now() - streamIterationStart
               if (isUsingOllama) {
-                console.log(`[Ollama] ===== STREAM COMPLETED =====`)
-                console.log(`[Ollama] Total messages: ${messageCount}`)
-                console.log(`[Ollama] Duration: ${streamDuration}ms`)
-                console.log(`[Ollama] Chunks emitted: ${chunkCount}`)
+                logger.debug("[Ollama] Stream completed", {
+                  messageCount,
+                  duration: streamDuration,
+                  chunksEmitted: chunkCount
+                })
               }
 
               if (messageCount === 0) {
-                console.error(`[claude] Stream yielded no messages - model not responding`)
+                logger.error("[claude] Stream yielded no messages - model not responding")
                 if (isUsingOllama) {
-                  console.error(`[Ollama] ===== DIAGNOSIS =====`)
-                  console.error(`[Ollama] Problem: Stream completed but NO messages received from SDK`)
-                  console.error(`[Ollama] This usually means:`)
-                  console.error(`[Ollama]   1. Ollama doesn't support Anthropic Messages API format (/v1/messages)`)
-                  console.error(`[Ollama]   2. Model failed to start generating (check Ollama logs: ollama logs)`)
-                  console.error(`[Ollama]   3. Network issue between Claude SDK and Ollama`)
-                  console.error(`[Ollama] ===== NEXT STEPS =====`)
-                  console.error(`[Ollama]   1. Check if model works: curl http://localhost:11434/api/generate -d '{"model":"${finalCustomConfig?.model}","prompt":"test"}'`)
-                  console.error(`[Ollama]   2. Check Ollama version supports Messages API`)
-                  console.error(`[Ollama]   3. Try using a proxy that converts Anthropic API → Ollama format`)
+                  logger.error("[Ollama] No messages received. Check: 1) Ollama supports Messages API, 2) Model is running, 3) Network connectivity")
                 }
               } else if (messageCount === 1 && isUsingOllama) {
-                console.warn(`[Ollama] Only received 1 message (likely just init). No actual content generated.`)
+                logger.warn("[Ollama] Only received 1 message (likely just init). No actual content generated.")
               }
             } catch (streamError) {
               // This catches errors during streaming (like process exit)
@@ -1613,13 +1581,11 @@ ${prompt}
               const stderrOutput = stderrLines.join("\n")
 
               if (isUsingOllama) {
-                console.error(`[Ollama] ===== STREAM ERROR =====`)
-                console.error(`[Ollama] Error message: ${err.message}`)
-                console.error(`[Ollama] Error stack:`, err.stack)
-                console.error(`[Ollama] Messages received before error: ${messageCount}`)
-                if (stderrOutput) {
-                  console.error(`[Ollama] Claude binary stderr:`, stderrOutput)
-                }
+                logger.error("[Ollama] Stream error", {
+                  message: err.message,
+                  messagesReceived: messageCount,
+                  stderr: stderrOutput || undefined
+                })
               }
 
               // Build detailed error message with category
@@ -1722,30 +1688,39 @@ ${prompt}
                 parts.push({ type: "text", text: currentText })
               }
               if (parts.length > 0) {
-                const assistantMessage = {
-                  id: crypto.randomUUID(),
-                  role: "assistant",
-                  parts,
-                  metadata,
-                }
-                const finalMessages = [...messagesToSave, assistantMessage]
-                db.update(subChats)
-                  .set({
-                    messages: JSON.stringify(finalMessages),
-                    sessionId: metadata.sessionId,
-                    streamId: null,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(subChats.id, input.subChatId))
-                  .run()
-                db.update(chats)
-                  .set({ updatedAt: new Date() })
-                  .where(eq(chats.id, input.chatId))
-                  .run()
+                try {
+                  const assistantMessage = {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    parts,
+                    metadata,
+                  }
+                  const finalMessages = [...messagesToSave, assistantMessage]
+                  db.update(subChats)
+                    .set({
+                      messages: JSON.stringify(finalMessages),
+                      sessionId: metadata.sessionId,
+                      streamId: null,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(subChats.id, input.subChatId))
+                    .run()
+                  db.update(chats)
+                    .set({ updatedAt: new Date() })
+                    .where(eq(chats.id, input.chatId))
+                    .run()
 
-                // Create snapshot stash for rollback support (on error)
-                if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
-                  await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+                  // Create snapshot stash for rollback support (on error)
+                  if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
+                    try {
+                      await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+                    } catch (stashErr) {
+                      logger.error("[claude] Failed to create rollback stash", stashErr)
+                    }
+                  }
+                } catch (dbErr) {
+                  logger.error("[claude] Failed to save messages to database", dbErr)
+                  // Don't throw - we still want to emit the error to frontend
                 }
               }
 
@@ -1776,46 +1751,55 @@ ${prompt}
               parts.push({ type: "text", text: currentText })
             }
 
-            if (parts.length > 0) {
-              const assistantMessage = {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                parts,
-                metadata,
+            try {
+              if (parts.length > 0) {
+                const assistantMessage = {
+                  id: crypto.randomUUID(),
+                  role: "assistant",
+                  parts,
+                  metadata,
+                }
+
+                const finalMessages = [...messagesToSave, assistantMessage]
+
+                db.update(subChats)
+                  .set({
+                    messages: JSON.stringify(finalMessages),
+                    sessionId: metadata.sessionId,
+                    streamId: null,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+              } else {
+                // No assistant response - just clear streamId
+                db.update(subChats)
+                  .set({
+                    sessionId: metadata.sessionId,
+                    streamId: null,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
               }
 
-              const finalMessages = [...messagesToSave, assistantMessage]
-
-              db.update(subChats)
-                .set({
-                  messages: JSON.stringify(finalMessages),
-                  sessionId: metadata.sessionId,
-                  streamId: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
+              // Update parent chat timestamp
+              db.update(chats)
+                .set({ updatedAt: new Date() })
+                .where(eq(chats.id, input.chatId))
                 .run()
-            } else {
-              // No assistant response - just clear streamId
-              db.update(subChats)
-                .set({
-                  sessionId: metadata.sessionId,
-                  streamId: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            }
 
-            // Update parent chat timestamp
-            db.update(chats)
-              .set({ updatedAt: new Date() })
-              .where(eq(chats.id, input.chatId))
-              .run()
-
-            // Create snapshot stash for rollback support
-            if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
-              await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+              // Create snapshot stash for rollback support
+              if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
+                try {
+                  await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+                } catch (stashErr) {
+                  logger.error("[claude] Failed to create rollback stash", stashErr)
+                }
+              }
+            } catch (dbErr) {
+              logger.error("[claude] Failed to save final messages to database", dbErr)
+              // Don't throw - we've already emitted the response
             }
 
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
@@ -1831,7 +1815,22 @@ ${prompt}
           } finally {
             activeSessions.delete(input.subChatId)
           }
-        })()
+        })().catch((unhandledError) => {
+          // Catch any unhandled promise rejections to prevent app crashes
+          logger.error("[claude] Unhandled promise rejection in stream", unhandledError)
+          // Try to emit error to frontend if possible
+          try {
+            safeEmit({
+              type: "error",
+              errorText: `Unexpected error: ${unhandledError instanceof Error ? unhandledError.message : String(unhandledError)}`,
+            } as UIMessageChunk)
+            safeEmit({ type: "finish" } as UIMessageChunk)
+            safeComplete()
+          } catch {
+            // If emit fails, at least we logged it
+          }
+          activeSessions.delete(input.subChatId)
+        })
 
         // Cleanup on unsubscribe
         return () => {
@@ -1843,14 +1842,19 @@ ${prompt}
 
           // Save sessionId on abort so conversation can be resumed
           // Clear streamId since we're no longer streaming
-          const db = getDatabase()
-          db.update(subChats)
-            .set({
-              streamId: null,
-              ...(currentSessionId && { sessionId: currentSessionId })
-            })
-            .where(eq(subChats.id, input.subChatId))
-            .run()
+          try {
+            const db = getDatabase()
+            db.update(subChats)
+              .set({
+                streamId: null,
+                ...(currentSessionId && { sessionId: currentSessionId })
+              })
+              .where(eq(subChats.id, input.subChatId))
+              .run()
+          } catch (cleanupErr) {
+            logger.error("[claude] Failed to cleanup session on unsubscribe", cleanupErr)
+            // Don't throw - cleanup errors shouldn't crash the app
+          }
         }
       })
     }),

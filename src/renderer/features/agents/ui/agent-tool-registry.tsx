@@ -36,9 +36,13 @@ export interface ToolMeta {
 export function getToolStatus(part: any, chatStatus?: string) {
   const basePending =
     part.state !== "output-available" && part.state !== "output-error" && part.state !== "result"
+  // Check for error state - includes explicit error state, success=false, or non-200 status codes
+  const hasErrorOutput = part.output?.error || part.output?.errorText
+  const hasNonSuccessStatus = part.output?.code && part.output.code !== 200
   const isError =
     part.state === "output-error" ||
-    (part.state === "output-available" && part.output?.success === false)
+    (part.state === "output-available" && part.output?.success === false) ||
+    (part.state === "output-available" && (hasErrorOutput || hasNonSuccessStatus))
   const isSuccess = part.state === "output-available" && !isError
   // Critical: if chat stopped streaming, pending tools should show as complete
   // Include "submitted" status - this is when request was sent but streaming hasn't started yet

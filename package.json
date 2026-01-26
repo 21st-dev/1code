@@ -128,6 +128,7 @@
     "drizzle-kit": "^0.31.8",
     "electron": "33.4.5",
     "electron-builder": "^25.1.8",
+    "electron-devtools-installer": "^4.0.0",
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^3.0.0",
     "postcss": "^8.5.1",

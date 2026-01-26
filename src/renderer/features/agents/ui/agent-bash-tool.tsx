@@ -115,14 +115,14 @@ export const AgentBashTool = memo(function AgentBashTool({
       data-message-id={messageId}
       data-part-index={partIndex}
       data-part-type="tool-Bash"
-      className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2"
+      className="rounded-lg border border-border/60 bg-muted/30 backdrop-blur-sm overflow-hidden mx-2 shadow-sm"
     >
       {/* Header - clickable to expand, fixed height to prevent layout shift */}
       <div
         onClick={() => hasMoreOutput && !isPending && setIsOutputExpanded(!isOutputExpanded)}
         className={cn(
-          "flex items-center justify-between pl-2.5 pr-2 h-7",
-          hasMoreOutput && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          "flex items-center justify-between pl-2.5 pr-2 h-7 transition-colors duration-150",
+          hasMoreOutput && !isPending && "cursor-pointer hover:bg-muted/50 active:bg-muted/60",
         )}
       >
         <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
@@ -156,7 +156,7 @@ export const AgentBashTool = memo(function AgentBashTool({
                 e.stopPropagation()
                 setIsOutputExpanded(!isOutputExpanded)
               }}
-              className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+              className="p-1 rounded-md hover:bg-accent/80 active:bg-accent transition-all duration-150 ease-out active:scale-[0.95] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
             >
               {isOutputExpanded ? (
                 <CollapseIcon className="w-4 h-4 text-muted-foreground" />
@@ -174,8 +174,8 @@ export const AgentBashTool = memo(function AgentBashTool({
           hasMoreOutput && !isOutputExpanded && setIsOutputExpanded(true)
         }
         className={cn(
-          "border-t border-border px-2.5 py-1.5 transition-colors duration-150",
-          hasMoreOutput && !isOutputExpanded && "cursor-pointer hover:bg-muted/50",
+          "border-t border-border/50 px-2.5 py-1.5 transition-colors duration-150",
+          hasMoreOutput && !isOutputExpanded && "cursor-pointer hover:bg-muted/50 active:bg-muted/60",
         )}
       >
         {/* Command - always show full command */}

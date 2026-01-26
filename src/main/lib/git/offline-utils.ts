@@ -19,7 +19,7 @@ export async function warnIfOfflineGitOperation(command: string): Promise<string
     const hasInternet = await checkInternetConnection()
 
     if (!hasInternet) {
-      return `⚠️ Warning: "${command}" requires internet connection and will likely fail.`
+      return `Warning: "${command}" requires internet connection and will likely fail.`
     }
   }
 

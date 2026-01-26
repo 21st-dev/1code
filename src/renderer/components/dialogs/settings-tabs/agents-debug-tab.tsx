@@ -4,7 +4,7 @@ import { Button } from "../../ui/button"
 import { Switch } from "../../ui/switch"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
-import { Copy, FolderOpen, RefreshCw, Terminal, Check, Scan, WifiOff } from "lucide-react"
+import { Copy, FolderOpen, RefreshCw, Terminal, Check, Scan, WifiOff, Puzzle, Download, Trash2, Loader2 } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -408,6 +408,9 @@ export function AgentsDebugTab() {
         </div>
       </div>
 
+      {/* DevTools Extensions (dev mode only) */}
+      {isDev && <ExtensionsSection />}
+
       {/* Data Management */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -456,6 +459,93 @@ export function AgentsDebugTab() {
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Extensions management section
+function ExtensionsSection() {
+  const { data: extensions, isLoading, refetch } = trpc.debug.getExtensions.useQuery()
+  const installMutation = trpc.debug.installExtension.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Installed ${data.name}`, {
+        description: "Reload the app to use the extension",
+      })
+      refetch()
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  const removeMutation = trpc.debug.removeExtension.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Removed ${data.name}`)
+      refetch()
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  const isPending = installMutation.isPending || removeMutation.isPending
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+        DevTools Extensions
+      </h4>
+      <div className="rounded-lg border bg-muted/30 divide-y">
+        {isLoading ? (
+          <div className="p-3 text-sm text-muted-foreground">Loading extensions...</div>
+        ) : (
+          extensions?.map((ext) => (
+            <div key={ext.key} className="flex items-center justify-between p-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Puzzle className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-sm font-medium">{ext.name}</span>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {ext.description}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {ext.installed ? (
+                  <>
+                    <span className="text-xs text-green-500">Installed</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => removeMutation.mutate({ key: ext.key })}
+                      disabled={isPending}
+                    >
+                      {removeMutation.isPending && removeMutation.variables?.key === ext.key ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => installMutation.mutate({ key: ext.key })}
+                    disabled={isPending}
+                  >
+                    {installMutation.isPending && installMutation.variables?.key === ext.key ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    Install
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Extensions appear in DevTools tabs. Reload app after installing.
+      </p>
     </div>
   )
 }

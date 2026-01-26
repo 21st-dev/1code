@@ -1,9 +1,29 @@
 import { router, publicProcedure } from "../index"
 import { getDatabase, projects, chats, subChats } from "../../db"
-import { app, shell } from "electron"
+import { app, shell, session } from "electron"
 import { getAuthManager } from "../../../index"
 import { z } from "zod"
 import { clearNetworkCache } from "../../ollama/network-detector"
+import installExtension, {
+  REACT_DEVELOPER_TOOLS,
+  REDUX_DEVTOOLS,
+} from "electron-devtools-installer"
+
+// Available extensions for installation
+const AVAILABLE_EXTENSIONS = {
+  "react-devtools": {
+    id: REACT_DEVELOPER_TOOLS,
+    name: "React Developer Tools",
+    description: "Inspect React component hierarchy, props, and state",
+  },
+  "redux-devtools": {
+    id: REDUX_DEVTOOLS,
+    name: "Redux DevTools",
+    description: "Debug Redux state changes and time-travel debugging",
+  },
+} as const
+
+type ExtensionKey = keyof typeof AVAILABLE_EXTENSIONS
 
 // Protocol constant (must match main/index.ts)
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -128,5 +148,87 @@ export const debugRouter = router({
       clearNetworkCache()
       console.log(`[Debug] Offline simulation ${input.enabled ? "enabled" : "disabled"}`)
       return { success: true, enabled: simulateOfflineMode }
+    }),
+
+  /**
+   * Get list of available DevTools extensions and their installation status
+   */
+  getExtensions: publicProcedure.query(async () => {
+    const ses = session.defaultSession
+    const installedExtensions = ses.getAllExtensions()
+    const installedNames = installedExtensions.map((ext) => ext.name.toLowerCase())
+
+    return Object.entries(AVAILABLE_EXTENSIONS).map(([key, ext]) => ({
+      key,
+      name: ext.name,
+      description: ext.description,
+      installed: installedNames.some(
+        (name) =>
+          name.includes("react") && key === "react-devtools" ||
+          name.includes("redux") && key === "redux-devtools"
+      ),
+    }))
+  }),
+
+  /**
+   * Install a DevTools extension
+   */
+  installExtension: publicProcedure
+    .input(z.object({ key: z.string() }))
+    .mutation(async ({ input }) => {
+      const ext = AVAILABLE_EXTENSIONS[input.key as ExtensionKey]
+      if (!ext) {
+        throw new Error(`Unknown extension: ${input.key}`)
+      }
+
+      try {
+        const name = await installExtension(ext.id, {
+          loadExtensionOptions: { allowFileAccess: true },
+          forceDownload: false,
+        })
+        console.log(`[DevTools] Installed extension: ${name}`)
+        return { success: true, name: typeof name === 'string' ? name : ext.name }
+      } catch (error: unknown) {
+        // Handle "already installed" as success
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        if (errorMsg.includes('already installed') || errorMsg.includes('is already loaded')) {
+          console.log(`[DevTools] Extension already installed: ${ext.name}`)
+          return { success: true, name: ext.name }
+        }
+        console.error(`[DevTools] Failed to install ${ext.name}:`, error)
+        throw new Error(`Failed to install ${ext.name}: ${errorMsg}`)
+      }
+    }),
+
+  /**
+   * Remove a DevTools extension
+   */
+  removeExtension: publicProcedure
+    .input(z.object({ key: z.string() }))
+    .mutation(async ({ input }) => {
+      const ses = session.defaultSession
+      const installedExtensions = ses.getAllExtensions()
+
+      // Find matching extension
+      const extToRemove = installedExtensions.find((ext) => {
+        const name = ext.name.toLowerCase()
+        return (
+          (name.includes("react") && input.key === "react-devtools") ||
+          (name.includes("redux") && input.key === "redux-devtools")
+        )
+      })
+
+      if (!extToRemove) {
+        throw new Error(`Extension not found: ${input.key}`)
+      }
+
+      try {
+        await ses.removeExtension(extToRemove.id)
+        console.log(`[DevTools] Removed extension: ${extToRemove.name}`)
+        return { success: true, name: extToRemove.name }
+      } catch (error) {
+        console.error(`[DevTools] Failed to remove ${extToRemove.name}:`, error)
+        throw new Error(`Failed to remove: ${error}`)
+      }
     }),
 })

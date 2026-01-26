@@ -160,10 +160,11 @@ export function CommitInput({
 				value={summary}
 				onChange={(e) => setSummary(e.target.value)}
 				className={cn(
-					"w-full px-2 py-1.5 text-xs rounded-md",
-					"bg-background border border-input",
-					"placeholder:text-muted-foreground",
-					"focus:outline-none focus:ring-1 focus:ring-ring"
+					"w-full px-2.5 py-1.5 text-xs rounded-md transition-all duration-150",
+					"bg-background border border-input/60",
+					"placeholder:text-muted-foreground/60",
+					"focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40",
+					"hover:border-input"
 				)}
 				onKeyDown={(e) => {
 					if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canCommit) {
@@ -179,11 +180,11 @@ export function CommitInput({
 				value={description}
 				onChange={(e) => setDescription(e.target.value)}
 				className={cn(
-					"w-full px-2 py-1.5 text-xs rounded-md resize-none",
-					"bg-background border border-input",
-					"placeholder:text-muted-foreground",
-					"focus:outline-none focus:ring-1 focus:ring-ring",
-					"min-h-[60px]"
+					"w-full px-2.5 py-1.5 text-xs rounded-md resize-none transition-all duration-150",
+					"bg-background border border-input/60",
+					"placeholder:text-muted-foreground/60",
+					"focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40",
+					"hover:border-input min-h-[60px]"
 				)}
 				onKeyDown={(e) => {
 					if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canCommit) {

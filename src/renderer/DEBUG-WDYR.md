@@ -59,7 +59,7 @@ This tells you:
 
 When a component renders 10+ times in 1 second, WDYR will:
 
-1. Log a red error: `🔴 INFINITE LOOP DETECTED: ComponentName rendered 10+ times in 1000ms`
+1. Log an error: `[ERROR] INFINITE LOOP DETECTED: ComponentName rendered 10+ times in 1000ms`
 2. Log the full diff info (props, state, hooks)
 3. Trigger `debugger` - pausing execution so you can inspect the call stack
 
@@ -138,7 +138,7 @@ useEffect(() => {
 ### WDYR Output
 ```
 [WDYR] SearchHistoryPopover2 render #10 { props: ['sortedSubChats'], state: false, hooks: false }
-🔴 INFINITE LOOP DETECTED: SearchHistoryPopover2 rendered 10+ times in 1000ms
+[ERROR] INFINITE LOOP DETECTED: SearchHistoryPopover2 rendered 10+ times in 1000ms
 
 diffType: "deepEquals"
 pathString: "sortedSubChats"

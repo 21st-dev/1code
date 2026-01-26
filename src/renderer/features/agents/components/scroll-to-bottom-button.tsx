@@ -102,12 +102,12 @@ export const ScrollToBottomButton = memo(function ScrollToBottomButton({
               transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
               onClick={onScrollToBottom}
               className={cn(
-                "absolute right-4 p-2 rounded-full bg-background border border-border shadow-md hover:bg-accent active:scale-[0.97] transition-colors z-20",
+                "absolute right-4 p-2.5 rounded-full bg-background/95 backdrop-blur-sm border border-border/60 shadow-lg hover:bg-accent hover:shadow-xl active:scale-[0.95] transition-all duration-200 z-20 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2",
                 hasStackedCards ? "bottom-44 sm:bottom-36" : "bottom-32 sm:bottom-24"
               )}
               aria-label="Scroll to bottom"
             >
-              <ArrowDown className="h-4 w-4 text-muted-foreground" />
+              <ArrowDown className="h-4 w-4 text-foreground" />
             </motion.button>
           </TooltipTrigger>
           <TooltipContent side="top">

@@ -1,5 +1,9 @@
 import * as electron from "electron"
 const { app, BrowserWindow, session, Menu } = electron
+import installExtension, {
+  REACT_DEVELOPER_TOOLS,
+  REDUX_DEVTOOLS,
+} from "electron-devtools-installer"
 import { join } from "path"
 import { createServer } from "http"
 import { readFileSync, existsSync, unlinkSync, readlinkSync } from "fs"
@@ -423,6 +427,16 @@ if (gotTheLock) {
     // Set dev mode app name (userData path was already set before requestSingleInstanceLock)
     if (IS_DEV) {
       app.name = "Agents Dev"
+
+      // Install DevTools extensions in dev mode
+      try {
+        const installed = await installExtension([REACT_DEVELOPER_TOOLS, REDUX_DEVTOOLS], {
+          loadExtensionOptions: { allowFileAccess: true },
+        })
+        console.log("[DevTools] Extensions installed:", installed)
+      } catch (err) {
+        console.warn("[DevTools] Failed to install extensions:", err)
+      }
     }
 
     // Register protocol handler (must be after app is ready)

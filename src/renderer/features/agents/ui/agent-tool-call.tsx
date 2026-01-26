@@ -20,7 +20,9 @@ interface AgentToolCallProps {
 
 export const AgentToolCall = memo(
   function AgentToolCall({
-    icon: _Icon,
+    // icon and isError are part of the interface but currently unused in UI
+    // They're kept in props for API consistency with other tool components
+    icon: _icon,
     title,
     subtitle,
     tooltipContent,
@@ -28,6 +30,8 @@ export const AgentToolCall = memo(
     isError: _isError,
     isNested,
   }: AgentToolCallProps) {
+    void _icon
+    void _isError
     // Ensure title and subtitle are strings (copied from canvas)
     const titleStr = String(title)
     const subtitleStr = subtitle ? String(subtitle) : undefined
@@ -61,8 +65,8 @@ export const AgentToolCall = memo(
 
     return (
       <div
-        className={`flex items-start gap-1.5 py-0.5 ${
-          isNested ? "px-2.5" : "rounded-md px-2"
+        className={`flex items-start gap-1.5 py-0.5 transition-colors duration-150 ${
+          isNested ? "px-2.5" : "rounded-md px-2 hover:bg-muted/30"
         }`}
       >
         {/* Icon container - commented out like canvas, uncomment to show icons */}

@@ -260,11 +260,11 @@ export const AgentUserQuestion = memo(forwardRef<AgentUserQuestionHandle, AgentU
   ])
 
   return (
-    <div className="border rounded-t-xl border-b-0 border-border bg-muted/30 overflow-hidden">
+    <div className="border rounded-t-xl border-b-0 border-border/60 bg-muted/40 backdrop-blur-sm overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5">
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/50">
         <div className="flex items-center gap-1.5">
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-[12px] font-medium text-foreground">
             {currentQuestion?.header || "Question"}
           </span>
           <span className="text-muted-foreground/50">•</span>
@@ -279,17 +279,19 @@ export const AgentUserQuestion = memo(forwardRef<AgentUserQuestionHandle, AgentU
             <button
               onClick={handlePrevious}
               disabled={currentQuestionIndex === 0}
-              className="p-0.5 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed outline-none"
+              className="p-1 rounded-md hover:bg-muted/60 active:bg-muted/70 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-[0.95] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
+              aria-label="Previous question"
             >
               <ChevronUp className="w-4 h-4 text-muted-foreground" />
             </button>
-            <span className="text-xs text-muted-foreground px-1">
+            <span className="text-xs text-muted-foreground px-1.5 font-medium">
               {currentQuestionIndex + 1} / {questions.length}
             </span>
             <button
               onClick={handleNext}
               disabled={currentQuestionIndex === questions.length - 1}
-              className="p-0.5 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed outline-none"
+              className="p-1 rounded-md hover:bg-muted/60 active:bg-muted/70 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-[0.95] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
+              aria-label="Next question"
             >
               <ChevronDown className="w-4 h-4 text-muted-foreground" />
             </button>
@@ -332,17 +334,19 @@ export const AgentUserQuestion = memo(forwardRef<AgentUserQuestionHandle, AgentU
                 }}
                 disabled={isSubmitting}
                 className={cn(
-                  "w-full flex items-start gap-3 p-2 text-[13px] text-foreground rounded-md text-left transition-colors outline-none",
-                  isFocused ? "bg-muted/70" : "hover:bg-muted/50",
+                  "w-full flex items-start gap-3 p-2.5 text-[13px] text-foreground rounded-lg text-left transition-all duration-150 outline-none",
+                  isFocused ? "bg-muted/70 ring-2 ring-primary/30" : "hover:bg-muted/60",
+                  isSelected && "bg-primary/10 ring-2 ring-primary/40",
                   isSubmitting && "opacity-50 cursor-not-allowed",
+                  "focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 active:scale-[0.98]",
                 )}
               >
                 <div
                   className={cn(
-                    "flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-medium transition-colors mt-0.5",
+                    "flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-semibold transition-all duration-150 mt-0.5",
                     isSelected
-                      ? "bg-foreground text-background"
-                      : "bg-muted text-muted-foreground",
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted/80 text-muted-foreground border border-border/50",
                   )}
                 >
                   {number}
@@ -369,13 +373,13 @@ export const AgentUserQuestion = memo(forwardRef<AgentUserQuestionHandle, AgentU
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-end gap-2 px-2 py-2">
+      <div className="flex items-center justify-end gap-2 px-3 py-2.5 border-t border-border/50 bg-muted/20">
         <Button
           variant="ghost"
           size="sm"
           onClick={handleSkipWithGuard}
           disabled={isSubmitting}
-          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 active:bg-muted/70 transition-all duration-150 active:scale-[0.97] focus:ring-2 focus:ring-primary/50 focus:ring-offset-1"
         >
           Skip All
         </Button>
@@ -387,14 +391,14 @@ export const AgentUserQuestion = memo(forwardRef<AgentUserQuestionHandle, AgentU
             hasCustomText ||
             (isLastQuestion ? !allQuestionsAnswered : !currentQuestionHasAnswer)
           }
-          className="h-6 text-xs px-3 rounded-md"
+          className="h-7 text-xs px-4 rounded-md transition-all duration-150 active:scale-[0.97] focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 shadow-sm"
         >
           {isSubmitting ? (
             "Sending..."
           ) : (
             <>
               {isLastQuestion ? "Submit" : "Continue"}
-              <CornerDownLeft className="w-3 h-3 ml-1 opacity-60" />
+              <CornerDownLeft className="w-3 h-3 ml-1.5 opacity-60" />
             </>
           )}
         </Button>

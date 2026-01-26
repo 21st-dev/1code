@@ -7,6 +7,7 @@ import {
   clipboard,
   session,
   nativeImage,
+  net,
 } from "electron"
 import { join } from "path"
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
@@ -175,12 +176,13 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
         const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
         try {
-          const response = await fetch(normalizedUrl, {
+          const response = await net.fetch(normalizedUrl, {
             method: options?.method || "GET",
             headers,
             body: options?.body,
             signal: controller.signal,
-            redirect: "follow", // Follow redirects automatically
+            redirect: "follow", // Follow redirects automatically with cookie persistence
+            bypassCustomProtocolHandlers: true, // Use Electron session cookies for sites like CIA reading room
           })
 
           // Check if URL was redirected
@@ -328,12 +330,13 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
         const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
         try {
-          const response = await fetch(normalizedUrl, {
+          const response = await net.fetch(normalizedUrl, {
             method: options?.method || "GET",
             headers,
             body: options?.body,
             signal: controller.signal,
-            redirect: "follow", // Follow redirects automatically
+            redirect: "follow", // Follow redirects automatically with cookie persistence
+            bypassCustomProtocolHandlers: true, // Use Electron session cookies for sites like CIA reading room
           })
 
           clearTimeout(timeoutId)
@@ -808,7 +811,7 @@ export function createMainWindow(initialParams?: WindowLaunchParams): BrowserWin
     if (devServerUrl) {
       loadUrlWithParams(devServerUrl, initialParams)
       // DevTools can be opened manually with Cmd+Option+I
-      // window.webContents.openDevTools()
+      window.webContents.openDevTools({ mode: 'detach' })
     } else {
       loadWithParams(join(__dirname, "../renderer/index.html"), initialParams)
     }

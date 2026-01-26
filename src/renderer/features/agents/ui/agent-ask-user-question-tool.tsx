@@ -123,20 +123,20 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
     }
 
     return (
-      <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
+      <div className="rounded-lg border border-border/60 bg-muted/30 backdrop-blur-sm overflow-hidden mx-2 shadow-sm">
         {/* Header */}
-        <div className="flex items-center gap-1.5 pl-2.5 pr-2 h-7 border-b border-border">
+        <div className="flex items-center gap-1.5 pl-2.5 pr-2 h-7 border-b border-border/50 bg-muted/30">
           <QuestionIcon className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs font-medium text-muted-foreground">
             {entries.length === 1 ? "Answer" : "Answers"}
           </span>
         </div>
         {/* Content */}
-        <div className="flex flex-col gap-2 p-2.5 text-xs">
+        <div className="flex flex-col gap-2.5 p-2.5 text-xs">
           {entries.map(([question, answer], idx) => (
-            <div key={idx} className="flex flex-col gap-0.5">
+            <div key={idx} className="flex flex-col gap-1">
               <span className="font-medium text-foreground">{question}</span>
-              <span className="text-muted-foreground">{answer}</span>
+              <span className="text-muted-foreground leading-relaxed">{answer}</span>
             </div>
           ))}
         </div>
