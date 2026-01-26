@@ -88,7 +88,7 @@ export function AnthropicOnboardingPage() {
     if (flowState.step === "idle") {
       setFlowState({ step: "starting" })
       startAuthMutation.mutate(undefined, {
-        onSuccess: (result) => {
+        onSuccess: (result: { sandboxId: string; sandboxUrl: string; sessionId: string }) => {
           setFlowState({
             step: "waiting_url",
             sandboxId: result.sandboxId,
@@ -96,7 +96,7 @@ export function AnthropicOnboardingPage() {
             sessionId: result.sessionId,
           })
         },
-        onError: (err) => {
+        onError: (err: { message?: string }) => {
           setFlowState({
             step: "error",
             message: err.message || "Failed to start authentication",

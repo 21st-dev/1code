@@ -28,6 +28,23 @@ import { trpc } from "../../../lib/trpc"
 import { normalizeProjects } from "../../../lib/utils/projects"
 import { selectedProjectAtom } from "../atoms"
 
+type ProjectRecord = {
+  id: string
+  name: string
+  path: string
+  createdAt: Date | null
+  updatedAt: Date | null
+  gitRemoteUrl: string | null
+  gitProvider: string | null
+  gitOwner: string | null
+  gitRepo: string | null
+}
+
+type ProjectListData =
+  | ProjectRecord[]
+  | { items: ProjectRecord[]; total: number; hasMore: boolean }
+  | undefined
+
 // Helper component to render project icon (avatar or folder)
 function ProjectIcon({
   gitOwner,
@@ -73,7 +90,10 @@ export function ProjectSelector() {
 
   // Fetch projects from DB
   const { data: projectsData, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () => normalizeProjects(projectsData) as ProjectRecord[],
+    [projectsData],
+  )
 
   // Filter projects by search query
   const filteredProjects = useMemo(() => {
@@ -92,19 +112,28 @@ export function ProjectSelector() {
 
   // Open folder mutation
   const openFolder = trpc.projects.openFolder.useMutation({
-    onSuccess: (project) => {
+    onSuccess: (project: ProjectRecord | null) => {
       if (project) {
         // Optimistically update the projects list cache to prevent validation failures
-        utils.projects.list.setData(undefined, (oldData) => {
-          const normalized = normalizeProjects(oldData)
-          if (!normalized.length) return [project]
-          const exists = normalized.some((p) => p.id === project.id)
-          if (exists) {
-            return normalized.map((p) =>
-              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
-            )
+        utils.projects.list.setData(undefined, (oldData: ProjectListData) => {
+          const normalized = normalizeProjects(oldData) as ProjectRecord[]
+          if (!normalized.length) {
+            const updated = [project]
+            if (oldData && !Array.isArray(oldData) && "items" in oldData) {
+              return { ...oldData, items: updated }
+            }
+            return updated
           }
-          return [project, ...normalized]
+          const exists = normalized.some((p) => p.id === project.id)
+          const updated = exists
+            ? normalized.map((p) =>
+                p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+              )
+            : [project, ...normalized]
+          if (oldData && !Array.isArray(oldData) && "items" in oldData) {
+            return { ...oldData, items: updated }
+          }
+          return updated
         })
 
         setSelectedProject({
@@ -126,18 +155,27 @@ export function ProjectSelector() {
 
   // Clone from GitHub mutation
   const cloneFromGitHub = trpc.projects.cloneFromGitHub.useMutation({
-    onSuccess: (project) => {
+    onSuccess: (project: ProjectRecord | null) => {
       if (project) {
-        utils.projects.list.setData(undefined, (oldData) => {
-          const normalized = normalizeProjects(oldData)
-          if (!normalized.length) return [project]
-          const exists = normalized.some((p) => p.id === project.id)
-          if (exists) {
-            return normalized.map((p) =>
-              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
-            )
+        utils.projects.list.setData(undefined, (oldData: ProjectListData) => {
+          const normalized = normalizeProjects(oldData) as ProjectRecord[]
+          if (!normalized.length) {
+            const updated = [project]
+            if (oldData && !Array.isArray(oldData) && "items" in oldData) {
+              return { ...oldData, items: updated }
+            }
+            return updated
           }
-          return [project, ...normalized]
+          const exists = normalized.some((p) => p.id === project.id)
+          const updated = exists
+            ? normalized.map((p) =>
+                p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+              )
+            : [project, ...normalized]
+          if (oldData && !Array.isArray(oldData) && "items" in oldData) {
+            return { ...oldData, items: updated }
+          }
+          return updated
         })
 
         setSelectedProject({

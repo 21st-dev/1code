@@ -8,7 +8,7 @@ import superjson from "superjson"
 /**
  * React hooks for tRPC
  */
-export const trpc: CreateTRPCReact<AppRouter> = createTRPCReact<AppRouter>()
+export const trpc: CreateTRPCReact<AppRouter, unknown> = createTRPCReact<AppRouter>()
 
 /**
  * Create ipcLink lazily to ensure window.electronTRPC is available

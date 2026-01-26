@@ -244,7 +244,12 @@ export function AgentsMcpTab() {
   const { data: desktopConfig, isLoading: isLoadingDesktop, refetch: refetchDesktop } =
     trpc.claude.getClaudeDesktopMcpConfig.useQuery()
 
-  const desktopServers = desktopConfig?.mcpServers || []
+  const desktopServers = (desktopConfig?.mcpServers || []) as Array<{
+    name: string
+    command?: string
+    args?: string[]
+    env?: Record<string, string>
+  }>
 
   // Group tools by server
   const toolsByServer = mcpServers.reduce(

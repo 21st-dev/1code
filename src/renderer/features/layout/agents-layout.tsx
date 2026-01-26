@@ -98,7 +98,10 @@ export function AgentsLayout() {
   // Fetch projects to validate selectedProject exists
   const { data: projectsData, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () => normalizeProjects(projectsData) as Array<{ id: string }>,
+    [projectsData],
+  )
 
   // Validated project - only valid if exists in DB
   // While loading, trust localStorage value to prevent clearing on app restart
@@ -230,6 +233,10 @@ export function AgentsLayout() {
     setSidebarOpen(false)
   }, [setSidebarOpen])
 
+  const safeDesktopUser = desktopUser
+    ? { ...desktopUser, name: desktopUser.name ?? undefined }
+    : null
+
   return (
     <TooltipProvider delayDuration={300}>
       {/* Global queue processor - handles message queues for all sub-chats */}
@@ -260,7 +267,7 @@ export function AgentsLayout() {
           style={{ borderRightWidth: "0.5px" }}
         >
           <AgentsSidebar
-            desktopUser={desktopUser}
+            desktopUser={safeDesktopUser}
             onSignOut={handleSignOut}
             onToggleSidebar={handleCloseSidebar}
           />

@@ -185,14 +185,14 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: () => {
 			onRefresh?.();
 		},
-		onError: (error) => toast.error(`Push failed: ${error.message}`),
+		onError: (error: { message: string }) => toast.error(`Push failed: ${error.message}`),
 	});
 
 	const pullMutation = trpc.changes.pull.useMutation({
 		onSuccess: () => {
 			onRefresh?.();
 		},
-		onError: (error) => toast.error(`Pull failed: ${error.message}`),
+		onError: (error: { message: string }) => toast.error(`Pull failed: ${error.message}`),
 	});
 
 	const forcePushMutation = trpc.changes.forcePush.useMutation({

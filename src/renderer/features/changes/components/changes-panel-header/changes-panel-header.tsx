@@ -138,7 +138,7 @@ export function ChangesPanelHeader({
 					<TooltipContent side="bottom">Switch branch</TooltipContent>
 				</Tooltip>
 				<DropdownMenuContent align="start" className="w-48">
-					{branches.map((branchInfo) => (
+					{branches.map((branchInfo: { branch: string }) => (
 						<DropdownMenuItem
 							key={branchInfo.branch}
 							onClick={() => handleBranchSelect(branchInfo.branch)}

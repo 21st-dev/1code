@@ -80,7 +80,7 @@ export function CreateBranchDialog({
   const utils = trpc.useUtils()
 
   const createBranchMutation = trpc.changes.createBranch.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { branchName: string }) => {
       toast.success(`Branch '${data.branchName}' created successfully`)
       // Invalidate branches query to refresh the list
       utils.changes.getBranches.invalidate({ worktreePath: projectPath })
@@ -89,7 +89,7 @@ export function CreateBranchDialog({
       setBranchName("")
       setBaseBranch(defaultBranch)
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       toast.error(`Failed to create branch: ${error.message}`)
     },
   })

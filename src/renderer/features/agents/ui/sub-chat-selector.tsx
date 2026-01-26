@@ -201,9 +201,14 @@ export function SubChatSelector({
   const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
 
   // Pending plan approvals from DB - only for open sub-chats
+  type PendingPlanApproval = { subChatId: string }
+
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds },
-    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: openSubChatIds.length > 0,
+    },
   )
   const pendingPlanApprovals = useMemo(() => {
     const set = new Set<string>()

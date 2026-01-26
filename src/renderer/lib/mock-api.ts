@@ -122,7 +122,7 @@ export const api = {
       }) => {
         const mutation = trpc.chats.archive.useMutation({
           onSuccess: () => opts?.onSettled?.(),
-          onError: (err) => opts?.onError?.(err),
+          onError: (err: { message?: string }) => opts?.onError?.(err),
         })
         return {
           mutate: async (args?: { chatId: string }) => {
@@ -144,7 +144,7 @@ export const api = {
       }) => {
         const mutation = trpc.chats.restore.useMutation({
           onSuccess: () => opts?.onSettled?.(),
-          onError: (err) => opts?.onError?.(err),
+          onError: (err: { message?: string }) => opts?.onError?.(err),
         })
         return {
           mutate: async (args?: { chatId: string }) => {
@@ -161,8 +161,8 @@ export const api = {
     renameChat: {
       useMutation: (opts?: { onSuccess?: AnyFn; onError?: AnyFn }) => {
         const mutation = trpc.chats.rename.useMutation({
-          onSuccess: (data) => opts?.onSuccess?.(data),
-          onError: (err) => opts?.onError?.(err),
+          onSuccess: (data: unknown) => opts?.onSuccess?.(data),
+          onError: (err: { message?: string }) => opts?.onError?.(err),
         })
         return {
           mutate: (args?: { chatId: string; name: string }) => {
@@ -185,8 +185,8 @@ export const api = {
         onMutate?: AnyFn
       }) => {
         const mutation = trpc.chats.renameSubChat.useMutation({
-          onSuccess: (data) => opts?.onSuccess?.(data),
-          onError: (err) => opts?.onError?.(err),
+          onSuccess: (data: unknown) => opts?.onSuccess?.(data),
+          onError: (err: { message?: string }) => opts?.onError?.(err),
         })
         return {
           mutate: (

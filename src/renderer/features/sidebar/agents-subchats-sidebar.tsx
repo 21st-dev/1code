@@ -221,14 +221,14 @@ export function AgentsSubChatsSidebar({
 
   // Archive parent chat mutation
   const archiveChatMutation = trpc.chats.archive.useMutation({
-    onSuccess: (_, variables) => {
+    onSuccess: (_: unknown, variables: { id: string }) => {
       utils.chats.list.invalidate()
       utils.chats.listArchived.invalidate()
 
       // Navigate to previous chat or new workspace
       if (selectedChatId === variables.id) {
         const isPreviousAvailable = previousChatId &&
-          agentChats?.some((c) => c.id === previousChatId)
+          agentChats?.some((c: { id: string }) => c.id === previousChatId)
 
         if (isPreviousAvailable) {
           setSelectedChatId(previousChatId)
@@ -244,9 +244,14 @@ export function AgentsSubChatsSidebar({
   const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
 
   // Pending plan approvals from DB - only for open sub-chats
+  type PendingPlanApproval = { subChatId: string }
+
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds },
-    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: openSubChatIds.length > 0,
+    },
   )
   const pendingPlanApprovals = useMemo(() => {
     const set = new Set<string>()

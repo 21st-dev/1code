@@ -47,7 +47,7 @@ export function AgentsClaudeCodeTab() {
 
   // Start auth mutation
   const startAuth = trpc.claudeCode.startAuth.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { sandboxId: string; sandboxUrl: string; sessionId: string }) => {
       setFlowState({
         step: "waiting_url",
         sandboxId: data.sandboxId,
@@ -55,7 +55,7 @@ export function AgentsClaudeCodeTab() {
         sessionId: data.sessionId,
       })
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       setFlowState({ step: "error", message: error.message })
       toast.error(error.message || "Failed to start authentication")
     },
@@ -83,7 +83,7 @@ export function AgentsClaudeCodeTab() {
       refetch()
       utils.claudeCode.getIntegration.invalidate()
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       setFlowState({ step: "error", message: error.message })
       toast.error(error.message || "Failed to complete authentication")
     },
@@ -96,7 +96,7 @@ export function AgentsClaudeCodeTab() {
       refetch()
       utils.claudeCode.getIntegration.invalidate()
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       toast.error(error.message || "Failed to disconnect")
     },
   })

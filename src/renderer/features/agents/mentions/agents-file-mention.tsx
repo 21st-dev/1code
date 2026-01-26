@@ -94,6 +94,31 @@ interface ChangedFile {
   deletions: number
 }
 
+interface FileSearchResult {
+  id: string
+  label: string
+  path: string
+  repository: string
+  type?: "file" | "folder"
+}
+
+interface FileSkill {
+  name: string
+  description: string
+  source: "user" | "project"
+  path: string
+}
+
+interface FileAgent {
+  name: string
+  description: string
+  source: "user" | "project"
+  path: string
+  tools?: string[]
+  disallowedTools?: string[]
+  model?: string
+}
+
 interface AgentsFileMentionProps {
   isOpen: boolean
   onClose: () => void
@@ -687,16 +712,18 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   const sessionInfo = useAtomValue(sessionInfoAtom)
 
   // Fetch skills from filesystem (cached for 5 minutes)
-  const { data: skills = [], isFetching: isFetchingSkills } = trpc.skills.listEnabled.useQuery(undefined, {
+  const { data: skillsData = [], isFetching: isFetchingSkills } = trpc.skills.listEnabled.useQuery(undefined, {
     enabled: isOpen,
     staleTime: 5 * 60 * 1000, // 5 minutes - skills don't change frequently
   })
+  const skills = skillsData as FileSkill[]
 
   // Fetch custom agents from filesystem (cached for 5 minutes)
-  const { data: customAgents = [], isFetching: isFetchingAgents } = trpc.agents.listEnabled.useQuery(undefined, {
+  const { data: customAgentsData = [], isFetching: isFetchingAgents } = trpc.agents.listEnabled.useQuery(undefined, {
     enabled: isOpen,
     staleTime: 5 * 60 * 1000, // 5 minutes - agents don't change frequently
   })
+  const customAgents = customAgentsData as FileAgent[]
 
   // Debounce search text (300ms to match canvas implementation)
   useEffect(() => {
@@ -717,7 +744,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   // Fetch files from API
   // Priority: sandboxId (includes uncommitted) > branch (GitHub API) > cached file_tree
   const {
-    data: fileResults = [],
+    data: fileResultsData = [],
     isLoading,
     isFetching,
     error,
@@ -740,6 +767,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       placeholderData: keepPreviousData,
     },
   )
+  const fileResults = fileResultsData as FileSearchResult[]
   // Convert changed files to options (shown at top in separate group)
   const changedFileOptions: FileMentionOption[] = useMemo(() => {
     if (!changedFiles.length) return []
@@ -782,10 +810,10 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     const searchLower = debouncedSearchText.toLowerCase()
 
     const mapped = fileResults
-      .filter((file) => !changedFilePaths.has(file.path))
+      .filter((file: FileSearchResult) => !changedFilePaths.has(file.path))
       // Client-side multi-word filtering (API only filtered by first word)
-      .filter((file) => matchesMultiWordSearch(file.path, searchLower))
-      .map((file) => {
+      .filter((file: FileSearchResult) => matchesMultiWordSearch(file.path, searchLower))
+      .map((file: FileSearchResult) => {
         // Get directory path (without filename/foldername) for inline display
         const pathParts = file.path.split("/")
         const dirPath = pathParts.slice(0, -1).join("/") || "/"
@@ -809,12 +837,12 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     const searchLower = debouncedSearchText.toLowerCase()
 
     return skills
-      .filter(skill =>
+      .filter((skill: FileSkill) =>
         // Multi-word search: all words must match in name OR description
         matchesMultiWordSearch(skill.name, searchLower) ||
         matchesMultiWordSearch(skill.description, searchLower)
       )
-      .map(skill => ({
+      .map((skill: FileSkill) => ({
         id: `${MENTION_PREFIXES.SKILL}${skill.name}`,
         label: skill.name,
         path: skill.path, // file path for tooltip
@@ -832,12 +860,12 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     const searchLower = debouncedSearchText.toLowerCase()
 
     return customAgents
-      .filter(agent =>
+      .filter((agent: FileAgent) =>
         // Multi-word search: all words must match in name OR description
         matchesMultiWordSearch(agent.name, searchLower) ||
         matchesMultiWordSearch(agent.description, searchLower)
       )
-      .map(agent => ({
+      .map((agent: FileAgent) => ({
         id: `${MENTION_PREFIXES.AGENT}${agent.name}`,
         label: agent.name,
         path: agent.path, // file path for tooltip

@@ -141,7 +141,7 @@ export const HistoryView = memo(function HistoryView({
 			)}
 
 			{/* Commits list - only commits, files are shown in right panel */}
-			{commits.map((commit, index) => (
+			{commits.map((commit: CommitInfo, index: number) => (
 				<HistoryCommitItem
 					key={commit.hash}
 					commit={commit}

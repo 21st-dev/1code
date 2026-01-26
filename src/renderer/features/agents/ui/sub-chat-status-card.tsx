@@ -67,6 +67,12 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   // Listen for file changes from Claude Write/Edit tools
   useFileChangeListener(worktreePath)
 
+  type GitStatus = {
+    staged?: Array<{ path: string }>
+    unstaged?: Array<{ path: string }>
+    untracked?: Array<{ path: string }>
+  }
+
   // Fetch git status to filter out committed files
   const { data: gitStatus } = trpc.changes.getStatus.useQuery(
     { worktreePath: worktreePath || "", defaultBranch: "main" },
@@ -74,7 +80,6 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
       enabled: !!worktreePath && changedFiles.length > 0 && !isStreaming,
       // No polling - updates triggered by file-changed events from Claude tools
       staleTime: 30000,
-      placeholderData: (prev) => prev,
     },
   )
 

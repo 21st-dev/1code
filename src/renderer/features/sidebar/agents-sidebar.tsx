@@ -23,14 +23,29 @@ import {
   isFullscreenAtom,
   showOfflineModeFeaturesAtom,
   showWorkspaceIconAtom,
+  type SettingsTab,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
+
+type ChatListItem = {
+  id: string
+  name: string | null
+  projectId: string
+  createdAt: Date | null
+  updatedAt: Date | null
+  archivedAt: Date | null
+  worktreePath: string | null
+  branch: string | null
+  baseBranch: string | null
+  prUrl: string | null
+  prNumber: number | null
+}
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
-const useCombinedAuth = () => ({ userId: null })
+const useCombinedAuth = () => ({ userId: null, isLoaded: true })
 // import { AuthDialog } from "@/components/auth/auth-dialog"
-const AuthDialog = () => null
+const AuthDialog = (_props: { open: boolean; onOpenChange: (open: boolean) => void }) => null
 // Desktop: archive is handled inline, not via hook
 // import { DiscordIcon } from "@/components/icons"
 import { DiscordIcon } from "../../icons"
@@ -994,11 +1009,11 @@ interface SidebarHeaderProps {
   onSignOut: () => void
   onToggleSidebar?: () => void
   setSettingsDialogOpen: (open: boolean) => void
-  setSettingsActiveTab: (tab: string) => void
+  setSettingsActiveTab: (tab: SettingsTab) => void
   setShowAuthDialog: (open: boolean) => void
-  handleSidebarMouseEnter: () => void
-  handleSidebarMouseLeave: () => void
-  closeButtonRef: React.RefObject<HTMLDivElement>
+  handleSidebarMouseEnter: (event: React.MouseEvent) => void
+  handleSidebarMouseLeave: (event: React.MouseEvent) => void
+  closeButtonRef: React.RefObject<HTMLDivElement | null>
 }
 
 const SidebarHeader = memo(function SidebarHeader({
@@ -1453,6 +1468,10 @@ export function AgentsSidebar({
   const { isLoaded: isAuthLoaded } = useCombinedAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const setCreateTeamDialogOpen = useSetAtom(createTeamDialogOpenAtom)
+  const handleSetSettingsActiveTab = useCallback(
+    (tab: SettingsTab) => setSettingsActiveTab(tab),
+    [setSettingsActiveTab],
+  )
 
   // Debug mode for testing first-time user experience
   const debugMode = useAtomValue(agentsDebugModeAtom)
@@ -1465,6 +1484,10 @@ export function AgentsSidebar({
 
   // Fetch all chats (no project filter)
   const { data: agentChats } = trpc.chats.list.useQuery({})
+  const agentChatsList = useMemo(
+    () => (agentChats ?? []) as ChatListItem[],
+    [agentChats],
+  )
 
   // Track open sub-chat changes for reactivity
   const [openSubChatsVersion, setOpenSubChatsVersion] = useState(0)
@@ -1481,10 +1504,10 @@ export function AgentsSidebar({
   const allOpenSubChatIds = useMemo(() => {
     // openSubChatsVersion is used to trigger recalculation when sub-chats change
     void openSubChatsVersion
-    if (!agentChats) return prevOpenSubChatIdsRef.current
+    if (!agentChatsList.length) return prevOpenSubChatIdsRef.current
 
     const allIds: string[] = []
-    for (const chat of agentChats) {
+    for (const chat of agentChatsList) {
       try {
         const stored = localStorage.getItem(`agent-open-sub-chats-${chat.id}`)
         if (stored) {
@@ -1507,28 +1530,47 @@ export function AgentsSidebar({
 
     prevOpenSubChatIdsRef.current = allIds
     return allIds
-  }, [agentChats, openSubChatsVersion])
+  }, [agentChatsList, openSubChatsVersion])
+
+  type SidebarFileStats = { chatId: string; additions: number; deletions: number }
+  type SidebarPendingApproval = { chatId: string }
 
   // File changes stats from DB - only for open sub-chats
   const { data: fileStatsData } = trpc.chats.getFileStats.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: allOpenSubChatIds.length > 0,
+    },
   )
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: allOpenSubChatIds.length > 0,
+    },
   )
 
   // Fetch all projects for git info
   const { data: projectsData } = trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () =>
+      normalizeProjects(projectsData) as Array<{
+        id: string
+        name: string
+        gitOwner?: string | null
+        gitProvider?: string | null
+        gitRepo?: string | null
+      }>,
+    [projectsData],
+  )
 
   // Create map for quick project lookup by id
   const projectsMap = useMemo(() => {
     if (!projects.length) return new Map()
-    return new Map(projects.map((p) => [p.id, p]))
+    return new Map(projects.map((p: { id: string }) => [p.id, p]))
   }, [projects])
 
   // Fetch all archived chats (to get count)
@@ -1543,7 +1585,7 @@ export function AgentsSidebar({
 
   // Restore chat mutation (for undo)
   const restoreChatMutation = trpc.chats.restore.useMutation({
-    onSuccess: (_, variables) => {
+    onSuccess: (_: unknown, variables: { id: string }) => {
       utils.chats.list.invalidate()
       utils.chats.listArchived.invalidate()
       // Select the restored chat
@@ -1565,7 +1607,7 @@ export function AgentsSidebar({
 
   // Archive chat mutation
   const archiveChatMutation = trpc.chats.archive.useMutation({
-    onSuccess: (_, variables) => {
+    onSuccess: (_: unknown, variables: { id: string }) => {
       utils.chats.list.invalidate()
       utils.chats.listArchived.invalidate()
 
@@ -1573,7 +1615,7 @@ export function AgentsSidebar({
       if (selectedChatId === variables.id) {
         // Check if previous chat is available (exists and not being archived)
         const isPreviousAvailable = previousChatId &&
-          agentChats?.some((c) => c.id === previousChatId && c.id !== variables.id)
+          agentChatsList.some((c) => c.id === previousChatId && c.id !== variables.id)
 
         if (isPreviousAvailable) {
           setSelectedChatId(previousChatId)
@@ -1589,7 +1631,7 @@ export function AgentsSidebar({
       }, 10000)
 
       // Add to unified undo stack for Cmd+Z
-      setUndoStack((prev) => [...prev, {
+      setUndoStack((prev: UndoItem[]) => [...prev, {
         type: "workspace",
         chatId: variables.id,
         timeoutId,
@@ -1608,7 +1650,7 @@ export function AgentsSidebar({
 
         // Clear timeout and remove from stack
         clearTimeout(lastItem.timeoutId)
-        setUndoStack((prev) => prev.slice(0, -1))
+        setUndoStack((prev: UndoItem[]) => prev.slice(0, -1))
 
         if (lastItem.type === "workspace") {
           // Restore workspace from archive
@@ -1628,18 +1670,18 @@ export function AgentsSidebar({
 
   // Batch archive mutation
   const archiveChatsBatchMutation = trpc.chats.archiveBatch.useMutation({
-    onSuccess: (_, variables) => {
+    onSuccess: (_: unknown, variables: { chatIds: string[] }) => {
       utils.chats.list.invalidate()
       utils.chats.listArchived.invalidate()
 
       // Add each chat to unified undo stack for Cmd+Z
-      const newItems: UndoItem[] = variables.chatIds.map((chatId) => {
+      const newItems: UndoItem[] = variables.chatIds.map((chatId: string) => {
         const timeoutId = setTimeout(() => {
           removeWorkspaceFromStack(chatId)
         }, 10000)
         return { type: "workspace" as const, chatId, timeoutId }
       })
-      setUndoStack((prev) => [...prev, ...newItems])
+      setUndoStack((prev: UndoItem[]) => [...prev, ...newItems])
     },
   })
 
@@ -1706,7 +1748,7 @@ export function AgentsSidebar({
   })
 
   const handleTogglePin = useCallback((chatId: string) => {
-    setPinnedChatIds((prev) => {
+    setPinnedChatIds((prev: Set<string>) => {
       const next = new Set(prev)
       if (next.has(chatId)) {
         next.delete(chatId)
@@ -1729,7 +1771,7 @@ export function AgentsSidebar({
     const oldName = renamingChat.name
 
     // Optimistically update the query cache
-    utils.chats.list.setData({}, (old) => {
+    utils.chats.list.setData({}, (old: ChatListItem[] | undefined) => {
       if (!old) return old
       return old.map((c) => (c.id === chatId ? { ...c, name: newName } : c))
     })
@@ -1743,7 +1785,7 @@ export function AgentsSidebar({
       })
     } catch {
       // Rollback on error
-      utils.chats.list.setData({}, (old) => {
+      utils.chats.list.setData({}, (old: ChatListItem[] | undefined) => {
         if (!old) return old
         return old.map((c) => (c.id === chatId ? { ...c, name: oldName } : c))
       })
@@ -1785,7 +1827,7 @@ export function AgentsSidebar({
   const handleBulkUnpin = useCallback(() => {
     const chatIdsToUnpin = Array.from(selectedChatIds)
     if (chatIdsToUnpin.length > 0) {
-      setPinnedChatIds((prev) => {
+      setPinnedChatIds((prev: Set<string>) => {
         const next = new Set(prev)
         chatIdsToUnpin.forEach((id) => next.delete(id))
         return next
@@ -1798,36 +1840,40 @@ export function AgentsSidebar({
   const clerkUsername = clerkUser?.username
 
   // Filter and separate pinned/unpinned agents
-  const { pinnedAgents, unpinnedAgents, filteredChats } = useMemo(() => {
-    if (!agentChats)
+  const { pinnedAgents, unpinnedAgents, filteredChats } = useMemo((): {
+    pinnedAgents: ChatListItem[]
+    unpinnedAgents: ChatListItem[]
+    filteredChats: ChatListItem[]
+  } => {
+    if (!agentChatsList.length)
       return { pinnedAgents: [], unpinnedAgents: [], filteredChats: [] }
 
     const filtered = searchQuery.trim()
-      ? agentChats.filter((chat) =>
-          chat.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      ? agentChatsList.filter((chat: ChatListItem) =>
+          (chat.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
         )
-      : agentChats
+      : agentChatsList
 
-    const pinned = filtered.filter((chat) => pinnedChatIds.has(chat.id))
-    const unpinned = filtered.filter((chat) => !pinnedChatIds.has(chat.id))
+    const pinned = filtered.filter((chat: ChatListItem) => pinnedChatIds.has(chat.id))
+    const unpinned = filtered.filter((chat: ChatListItem) => !pinnedChatIds.has(chat.id))
 
     return {
       pinnedAgents: pinned,
       unpinnedAgents: unpinned,
       filteredChats: [...pinned, ...unpinned],
     }
-  }, [searchQuery, agentChats, pinnedChatIds])
+  }, [searchQuery, agentChatsList, pinnedChatIds])
 
   // Create virtualized list items (headers + chats)
   const virtualListItems = useMemo(() => {
     const items: Array<
       | { type: 'header'; title: string; key: string }
-      | { type: 'chat'; chat: typeof filteredChats[0]; key: string }
+      | { type: 'chat'; chat: ChatListItem; key: string }
     > = []
 
     if (pinnedAgents.length > 0) {
       items.push({ type: 'header', title: 'Pinned workspaces', key: 'header-pinned' })
-      pinnedAgents.forEach((chat) => {
+      pinnedAgents.forEach((chat: ChatListItem) => {
         items.push({ type: 'chat', chat, key: `chat-${chat.id}` })
       })
     }
@@ -1835,7 +1881,7 @@ export function AgentsSidebar({
     if (unpinnedAgents.length > 0) {
       const unpinnedTitle = pinnedAgents.length > 0 ? 'Recent workspaces' : 'Workspaces'
       items.push({ type: 'header', title: unpinnedTitle, key: 'header-unpinned' })
-      unpinnedAgents.forEach((chat) => {
+      unpinnedAgents.forEach((chat: ChatListItem) => {
         items.push({ type: 'chat', chat, key: `chat-${chat.id}` })
       })
     }
@@ -2222,7 +2268,7 @@ export function AgentsSidebar({
     }
   }, [])
 
-  const handleSidebarMouseEnter = useCallback(() => {
+  const handleSidebarMouseEnter = useCallback((_event: React.MouseEvent) => {
     updateSidebarHoverUI(true)
   }, [updateSidebarHoverUI])
 
@@ -2437,7 +2483,7 @@ export function AgentsSidebar({
         onSignOut={onSignOut}
         onToggleSidebar={onToggleSidebar}
         setSettingsDialogOpen={setSettingsDialogOpen}
-        setSettingsActiveTab={setSettingsActiveTab}
+        setSettingsActiveTab={handleSetSettingsActiveTab}
         setShowAuthDialog={setShowAuthDialog}
         handleSidebarMouseEnter={handleSidebarMouseEnter}
         handleSidebarMouseLeave={handleSidebarMouseLeave}

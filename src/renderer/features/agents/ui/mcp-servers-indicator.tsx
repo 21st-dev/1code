@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
-import { sessionInfoAtom, type MCPServerStatus } from "../../../lib/atoms"
+import { sessionInfoAtom, type MCPServerStatus, type SessionInfo } from "../../../lib/atoms"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 
@@ -49,14 +49,14 @@ export const McpServersIndicator = memo(function McpServersIndicator({
   // Update sessionInfo with MCP config if we don't have it yet
   useEffect(() => {
     if (mcpConfig?.mcpServers?.length && !sessionInfo?.mcpServers?.length) {
-      setSessionInfo((prev) => ({
-        tools: prev?.tools || [],
-        mcpServers: mcpConfig.mcpServers.map((s) => ({
+      setSessionInfo((prev: SessionInfo | null) => ({
+        tools: prev?.tools ?? [],
+        mcpServers: mcpConfig.mcpServers.map((s: { name: string; status: string }) => ({
           name: s.name,
-          status: s.status,
+          status: s.status as MCPServerStatus,
         })),
-        plugins: prev?.plugins || [],
-        skills: prev?.skills || [],
+        plugins: prev?.plugins ?? [],
+        skills: prev?.skills ?? [],
       }))
     }
   }, [mcpConfig, sessionInfo?.mcpServers?.length, setSessionInfo])

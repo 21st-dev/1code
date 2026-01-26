@@ -59,6 +59,23 @@ import {
 import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
 import { normalizeProjects } from "../../../lib/utils/projects"
+
+type ProjectRecord = {
+  id: string
+  name: string
+  path: string
+  createdAt: Date | null
+  updatedAt: Date | null
+  gitRemoteUrl: string | null
+  gitProvider: string | null
+  gitOwner: string | null
+  gitRepo: string | null
+}
+
+type ProjectListData =
+  | ProjectRecord[]
+  | { items: ProjectRecord[]; total: number; hasMore: boolean }
+  | undefined
 import {
   AgentsSlashCommand,
   COMMAND_PROMPTS,
@@ -178,7 +195,10 @@ export function NewChatForm({
   // Fetch projects to validate selectedProject exists
   const { data: projectsData, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
-  const projectsList = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projectsList = useMemo(
+    () => normalizeProjects(projectsData) as ProjectRecord[],
+    [projectsData],
+  )
 
   // Validate selected project exists in DB
   // While loading, trust the stored value to prevent flicker
@@ -636,7 +656,7 @@ export function NewChatForm({
   // Create chat mutation (real tRPC)
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { id: string; subChats?: Array<{ id: string }> }) => {
       // Clear editor and images only on success
       editorRef.current?.clear()
       clearImages()
@@ -650,30 +670,38 @@ export function NewChatForm({
       }
       setJustCreatedIds((prev) => new Set([...prev, ...ids]))
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       toast.error(error.message)
     },
   })
 
   // Open folder mutation for selecting a project
   const openFolder = trpc.projects.openFolder.useMutation({
-    onSuccess: (project) => {
+    onSuccess: (project: ProjectRecord | null) => {
       if (project) {
         // Optimistically update the projects list cache to prevent "Select repo" flash
         // This ensures validatedProject can find the new project immediately
-        utils.projects.list.setData(undefined, (oldData) => {
-          const normalized = normalizeProjects(oldData)
-          if (!normalized.length) return [project]
+        utils.projects.list.setData(undefined, (oldData: ProjectListData) => {
+          const normalized = normalizeProjects(oldData) as ProjectRecord[]
+          if (!normalized.length) {
+            const updated = [project]
+            if (oldData && !Array.isArray(oldData) && "items" in oldData) {
+              return { ...oldData, items: updated }
+            }
+            return updated
+          }
           // Check if project already exists (reopened existing project)
           const exists = normalized.some((p) => p.id === project.id)
-          if (exists) {
-            // Update existing project's timestamp
-            return normalized.map((p) =>
-              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
-            )
+          const updated = exists
+            ? normalized.map((p) =>
+                p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+              )
+            : [project, ...normalized]
+          if (oldData && !Array.isArray(oldData) && "items" in oldData) {
+            return { ...oldData, items: updated }
           }
           // Add new project at the beginning
-          return [project, ...normalized]
+          return updated
         })
 
         setSelectedProject({
@@ -732,10 +760,10 @@ export function NewChatForm({
       if (!builtinNames.has(commandName)) {
         // This is a custom command - load content and replace $ARGUMENTS
         try {
-          const commands = await trpcUtils.commands.list.fetch({
+          const commands = (await trpcUtils.commands.list.fetch({
             projectPath: validatedProject?.path,
-          })
-          const cmd = commands.find((c) => c.name === commandName)
+          })) as Array<{ name: string; path: string }>
+          const cmd = commands.find((c: { name: string }) => c.name === commandName)
 
           if (cmd) {
             const { content } = await trpcUtils.commands.getContent.fetch({
@@ -1339,7 +1367,7 @@ export function NewChatForm({
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start" className="w-[240px]">
-                            {availableModels.ollamaModels.map((model) => {
+                            {availableModels.ollamaModels.map((model: string) => {
                               const isSelected = model === currentOllamaModel
                               const isRecommended = model === availableModels.recommendedModel
                               return (
@@ -1400,13 +1428,14 @@ export function NewChatForm({
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start" className="w-[200px]">
-                            {availableModels.models.map((model) => {
+                            {availableModels.models.map((model: { id: string; name?: string }) => {
                               const isSelected = selectedModel?.id === model.id
+                              const modelName = model.name ?? model.id
                               return (
                                 <DropdownMenuItem
                                   key={model.id}
                                   onClick={() => {
-                                    setSelectedModel(model)
+                                    setSelectedModel({ id: model.id, name: modelName })
                                     setLastSelectedModelId(model.id)
                                   }}
                                   className="gap-2 justify-between"
@@ -1414,7 +1443,7 @@ export function NewChatForm({
                                   <div className="flex items-center gap-1.5">
                                     <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                     <span>
-                                      {model.name}{" "}
+                                      {modelName}{" "}
                                       <span className="text-muted-foreground">4.5</span>
                                     </span>
                                   </div>

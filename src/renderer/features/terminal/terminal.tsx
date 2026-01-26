@@ -120,7 +120,7 @@ export function Terminal({
   // Subscribe to terminal output
   trpc.terminal.stream.useSubscription(paneId, {
     onData: handleStreamData,
-    onError: (err) => {
+    onError: (err: { message: string }) => {
       console.error("[Terminal] Stream error:", err)
       xtermRef.current?.write(
         `\r\n\x1b[31m[Connection error: ${err.message}]\x1b[0m\r\n`,
@@ -198,8 +198,10 @@ export function Terminal({
           cwd: terminalCwdRef.current || cwd,
         },
         {
-          onSuccess: (result) => {
-            applySerializedState(result.serializedState)
+          onSuccess: (result: { serializedState?: string }) => {
+            if (result.serializedState) {
+              applySerializedState(result.serializedState)
+            }
           },
         },
       )
@@ -251,11 +253,13 @@ export function Terminal({
         initialCommands,
       },
       {
-        onSuccess: (result) => {
-          applySerializedState(result.serializedState)
+        onSuccess: (result: { serializedState?: string }) => {
+          if (result.serializedState) {
+            applySerializedState(result.serializedState)
+          }
           xterm.focus()
         },
-        onError: (err) => {
+        onError: (err: { message: string }) => {
           xterm.write(
             `\x1b[31m[Failed to start terminal: ${err.message}]\x1b[0m\r\n`,
           )

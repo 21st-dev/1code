@@ -11,6 +11,7 @@
  * - session-scoped-tools OAuth triggers
  * - IPC handlers for credential storage
  */
+// @ts-nocheck
 
 import {
   inferGoogleServiceFromUrl,

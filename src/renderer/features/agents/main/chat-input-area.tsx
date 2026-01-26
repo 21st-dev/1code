@@ -916,7 +916,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-[240px]">
-                        {availableModels.ollamaModels.map((model) => {
+                        {availableModels.ollamaModels.map((model: string) => {
                           const isSelected = model === currentOllamaModel
                           const isRecommended = model === availableModels.recommendedModel
                           return (

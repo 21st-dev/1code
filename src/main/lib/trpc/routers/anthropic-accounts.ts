@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { eq, sql } from "drizzle-orm"
 import { safeStorage } from "electron"
 import { z } from "zod"

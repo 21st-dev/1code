@@ -74,7 +74,7 @@ export function AgentsDebugTab() {
   const { data: offlineSimulation, refetch: refetchOfflineSimulation } =
     trpc.debug.getOfflineSimulation.useQuery()
   const setOfflineSimulationMutation = trpc.debug.setOfflineSimulation.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { enabled: boolean }) => {
       refetchOfflineSimulation()
       toast.success(data.enabled ? "Offline simulation enabled" : "Offline simulation disabled", {
         description: data.enabled
@@ -82,7 +82,7 @@ export function AgentsDebugTab() {
           : "Network detection restored to normal"
       })
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error: { message: string }) => toast.error(error.message),
   })
 
 
@@ -96,7 +96,7 @@ export function AgentsDebugTab() {
       toast.success("All chats cleared")
       refetchDb()
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error: { message: string }) => toast.error(error.message),
   })
 
   const clearAllDataMutation = trpc.debug.clearAllData.useMutation({
@@ -104,7 +104,7 @@ export function AgentsDebugTab() {
       toast.success("All data cleared. Reloading...")
       setTimeout(() => window.location.reload(), 500)
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error: { message: string }) => toast.error(error.message),
   })
 
   const logoutMutation = trpc.debug.logout.useMutation({
@@ -112,11 +112,11 @@ export function AgentsDebugTab() {
       toast.success("Logged out. Reloading...")
       setTimeout(() => window.location.reload(), 500)
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error: { message: string }) => toast.error(error.message),
   })
 
   const openFolderMutation = trpc.debug.openUserDataFolder.useMutation({
-    onError: (error) => toast.error(error.message),
+    onError: (error: { message: string }) => toast.error(error.message),
   })
 
   const handleCopyPath = async () => {

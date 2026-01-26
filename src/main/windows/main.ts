@@ -13,6 +13,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
+import { capture } from "../lib/analytics"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 
 // Register IPC handlers for window operations (only once)
@@ -117,6 +118,112 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   // API base URL for fetch requests
   ipcMain.handle("app:get-api-base-url", () => getBaseUrl())
 
+  // Signed fetch via main process (adds auth token)
+  ipcMain.handle(
+    "fetch:signed",
+    async (
+      _event,
+      url: string,
+      options?: { method?: string; body?: string; headers?: Record<string, string> },
+    ) => {
+      try {
+        const authManager = getAuthManager()
+        const token = await authManager?.getValidToken()
+        const headers = new Headers(options?.headers || {})
+        if (token && !headers.has("X-Desktop-Token")) {
+          headers.set("X-Desktop-Token", token)
+        }
+
+        const response = await fetch(url, {
+          method: options?.method || "GET",
+          headers,
+          body: options?.body,
+        })
+
+        const contentType = response.headers.get("content-type") || ""
+        let data: unknown = null
+        if (contentType.includes("application/json")) {
+          data = await response.json().catch(() => null)
+        } else {
+          data = await response.text().catch(() => null)
+        }
+
+        return { ok: response.ok, status: response.status, data }
+      } catch (error) {
+        return {
+          ok: false,
+          status: 500,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    },
+  )
+
+  // Streaming fetch via IPC (SSE)
+  ipcMain.handle(
+    "stream:fetch",
+    async (
+      event,
+      streamId: string,
+      url: string,
+      options: { method?: string; body?: string; headers?: Record<string, string> },
+    ) => {
+      try {
+        const authManager = getAuthManager()
+        const token = await authManager?.getValidToken()
+        const headers = new Headers(options?.headers || {})
+        if (token && !headers.has("X-Desktop-Token")) {
+          headers.set("X-Desktop-Token", token)
+        }
+
+        const response = await fetch(url, {
+          method: options?.method || "GET",
+          headers,
+          body: options?.body,
+        })
+
+        if (!response.ok || !response.body) {
+          return {
+            ok: false,
+            status: response.status,
+            error: response.statusText || "No response body",
+          }
+        }
+
+        const sender = event.sender
+        const reader = response.body.getReader()
+
+        ;(async () => {
+          try {
+            while (true) {
+              const { value, done } = await reader.read()
+              if (done) {
+                sender.send(`stream:done:${streamId}`)
+                break
+              }
+              if (value) {
+                sender.send(`stream:chunk:${streamId}`, value)
+              }
+            }
+          } catch (err) {
+            sender.send(
+              `stream:error:${streamId}`,
+              err instanceof Error ? err.message : String(err),
+            )
+          }
+        })()
+
+        return { ok: true, status: response.status }
+      } catch (error) {
+        return {
+          ok: false,
+          status: 500,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    },
+  )
+
   // Window controls
   ipcMain.handle("window:minimize", () => getWindow()?.minimize())
   ipcMain.handle("window:maximize", () => {
@@ -141,6 +248,16 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(
     "window:is-fullscreen",
     () => getWindow()?.isFullScreen() ?? false,
+  )
+
+  // Create a new window (optionally focused on a chat)
+  ipcMain.handle(
+    "window:new",
+    (_event, params?: { chatId?: string; subChatId?: string; windowId?: string }) => {
+      const windowId = params?.windowId || `window-${Date.now()}`
+      createMainWindow({ ...params, windowId })
+      return true
+    },
   )
 
   // Traffic light visibility control (for hybrid native/custom approach)
@@ -194,6 +311,9 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("analytics:set-opt-out", async (_event, optedOut: boolean) => {
     const { setOptOut } = await import("../lib/analytics")
     setOptOut(optedOut)
+  })
+  ipcMain.handle("analytics:track-metric", (_event, metric: Record<string, unknown>) => {
+    capture("web_vital", metric)
   })
 
   // Shell
@@ -328,7 +448,13 @@ function getUseNativeFramePreference(): boolean {
 /**
  * Create the main application window
  */
-export function createMainWindow(): BrowserWindow {
+type WindowLaunchParams = {
+  windowId?: string
+  chatId?: string
+  subChatId?: string
+}
+
+export function createMainWindow(initialParams?: WindowLaunchParams): BrowserWindow {
   // Register IPC handlers before creating window
   registerIpcHandlers(getWindow)
 
@@ -438,6 +564,24 @@ export function createMainWindow(): BrowserWindow {
     currentWindow = null
   })
 
+  const loadWithParams = (filePath: string, params?: WindowLaunchParams) => {
+    const entries = Object.entries(params || {}).filter(([, value]) => value)
+    const hash = entries.length > 0 ? new URLSearchParams(entries as Array<[string, string]>).toString() : ""
+    return window.loadFile(filePath, hash ? { hash } : undefined)
+  }
+
+  const loadUrlWithParams = (baseUrl: string, params?: WindowLaunchParams) => {
+    const url = new URL(baseUrl)
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) {
+          url.searchParams.set(key, value)
+        }
+      })
+    }
+    return window.loadURL(url.toString())
+  }
+
   // Load the renderer - check auth first
   const devServerUrl = process.env.ELECTRON_RENDERER_URL
   const authManager = getAuthManager()
@@ -453,19 +597,19 @@ export function createMainWindow(): BrowserWindow {
   if (isAuth) {
     console.log("[Main] ✓ User authenticated, loading app")
     if (devServerUrl) {
-      window.loadURL(devServerUrl)
+      loadUrlWithParams(devServerUrl, initialParams)
       window.webContents.openDevTools()
     } else {
-      window.loadFile(join(__dirname, "../renderer/index.html"))
+      loadWithParams(join(__dirname, "../renderer/index.html"), initialParams)
     }
   } else {
     console.log("[Main] ✗ Not authenticated, showing login page")
     // In dev mode, login.html is in src/renderer
     if (devServerUrl) {
       const loginPath = join(app.getAppPath(), "src/renderer/login.html")
-      window.loadFile(loginPath)
+      loadWithParams(loginPath, initialParams)
     } else {
-      window.loadFile(join(__dirname, "../renderer/login.html"))
+      loadWithParams(join(__dirname, "../renderer/login.html"), initialParams)
     }
   }
 

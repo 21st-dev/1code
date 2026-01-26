@@ -123,6 +123,14 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Analytics
   setAnalyticsOptOut: (optedOut: boolean) => ipcRenderer.invoke("analytics:set-opt-out", optedOut),
+  trackMetric: (metric: {
+    name: string
+    value: number
+    rating: string
+    delta: number
+    id: string
+    navigationType?: string
+  }) => ipcRenderer.invoke("analytics:track-metric", metric),
 
   // Native features
   setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
@@ -133,6 +141,33 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // API base URL (for fetch requests to server)
   getApiBaseUrl: () => ipcRenderer.invoke("app:get-api-base-url"),
+  signedFetch: (
+    url: string,
+    options?: { method?: string; body?: string; headers?: Record<string, string> }
+  ) => ipcRenderer.invoke("fetch:signed", url, options),
+  streamFetch: (
+    streamId: string,
+    url: string,
+    options: { method?: string; body?: string; headers?: Record<string, string> }
+  ) => ipcRenderer.invoke("stream:fetch", streamId, url, options),
+  onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => {
+    const channel = `stream:chunk:${streamId}`
+    const handler = (_event: unknown, chunk: Uint8Array) => callback(chunk)
+    ipcRenderer.on(channel, handler)
+    return () => ipcRenderer.removeListener(channel, handler)
+  },
+  onStreamDone: (streamId: string, callback: () => void) => {
+    const channel = `stream:done:${streamId}`
+    const handler = () => callback()
+    ipcRenderer.on(channel, handler)
+    return () => ipcRenderer.removeListener(channel, handler)
+  },
+  onStreamError: (streamId: string, callback: (error: string) => void) => {
+    const channel = `stream:error:${streamId}`
+    const handler = (_event: unknown, error: string) => callback(error)
+    ipcRenderer.on(channel, handler)
+    return () => ipcRenderer.removeListener(channel, handler)
+  },
 
   // Clipboard
   clipboardWrite: (text: string) => ipcRenderer.invoke("clipboard:write", text),
@@ -164,6 +199,10 @@ contextBridge.exposeInMainWorld("desktopApi", {
     ipcRenderer.on("shortcut:new-agent", handler)
     return () => ipcRenderer.removeListener("shortcut:new-agent", handler)
   },
+
+  // Window management
+  newWindow: (params?: { chatId?: string; subChatId?: string }) =>
+    ipcRenderer.invoke("window:new", params),
 
   // File change events (from Claude Write/Edit tools)
   onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => {
@@ -232,11 +271,31 @@ export interface DesktopApi {
   getZoom: () => Promise<number>
   toggleDevTools: () => Promise<void>
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
+  trackMetric: (metric: {
+    name: string
+    value: number
+    rating: string
+    delta: number
+    id: string
+    navigationType?: string
+  }) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
   setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
   getApiBaseUrl: () => Promise<string>
+  signedFetch: (
+    url: string,
+    options?: { method?: string; body?: string; headers?: Record<string, string> }
+  ) => Promise<{ ok: boolean; status: number; data?: unknown; error?: string }>
+  streamFetch: (
+    streamId: string,
+    url: string,
+    options: { method?: string; body?: string; headers?: Record<string, string> }
+  ) => Promise<{ ok: boolean; status: number; error?: string }>
+  onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => () => void
+  onStreamDone: (streamId: string, callback: () => void) => () => void
+  onStreamError: (streamId: string, callback: (error: string) => void) => () => void
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
   // Auth
@@ -262,6 +321,8 @@ export interface DesktopApi {
   onAuthError: (callback: (error: string) => void) => () => void
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
+  // Window management
+  newWindow: (params?: { chatId?: string; subChatId?: string }) => Promise<void>
   // File changes
   onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => () => void
   // Git status changes (from file watcher)

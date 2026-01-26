@@ -70,7 +70,7 @@ export function AgentsProjectWorktreeTab({
       toast.success("Worktree config saved")
       refetchConfig()
     },
-    onError: (err) => {
+    onError: (err: { message: string }) => {
       toast.error(`Failed to save: ${err.message}`)
     },
   })
@@ -81,7 +81,7 @@ export function AgentsProjectWorktreeTab({
   const setSelectedProject = useSetAtom(selectedProjectAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const createChatMutation = trpc.chats.create.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { id: string }) => {
       setSettingsDialogOpen(false)
       setSelectedChatId(data.id)
     },
@@ -107,7 +107,7 @@ export function AgentsProjectWorktreeTab({
       // Switch to profile tab
       setSettingsActiveTab("profile")
     },
-    onError: (err) => {
+    onError: (err: { message: string }) => {
       toast.error(`Failed to delete project: ${err.message}`)
     },
   })

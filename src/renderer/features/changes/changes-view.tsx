@@ -246,7 +246,7 @@ export function ChangesView({
 			toast.success("Changes discarded");
 			refetch();
 		},
-		onError: (error) => {
+		onError: (error: { message: string }) => {
 			toast.error(`Failed to discard changes: ${error.message}`);
 		},
 	});
@@ -255,7 +255,7 @@ export function ChangesView({
 			toast.success("File deleted");
 			refetch();
 		},
-		onError: (error) => {
+		onError: (error: { message: string }) => {
 			toast.error(`Failed to delete file: ${error.message}`);
 		},
 	});

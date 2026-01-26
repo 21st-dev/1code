@@ -58,12 +58,42 @@ export interface DesktopApi {
 
   // Analytics
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
+  trackMetric: (metric: {
+    name: string
+    value: number
+    rating: string
+    delta: number
+    id: string
+    navigationType?: string
+  }) => Promise<void>
 
   // Native features
   setBadge: (count: number | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
   getApiBaseUrl: () => Promise<string>
+  signedFetch: (
+    url: string,
+    options?: {
+      method?: string
+      body?: string
+      headers?: Record<string, string>
+    },
+  ) => Promise<{ ok: boolean; status: number; data?: unknown; error?: string }>
+
+  // Streaming fetch (SSE)
+  streamFetch: (
+    streamId: string,
+    url: string,
+    options: {
+      method?: string
+      body?: string
+      headers?: Record<string, string>
+    },
+  ) => Promise<{ ok: boolean; status: number; error?: string }>
+  onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => () => void
+  onStreamDone: (streamId: string, callback: () => void) => () => void
+  onStreamError: (streamId: string, callback: (error: string) => void) => () => void
 
   // Clipboard
   clipboardWrite: (text: string) => Promise<void>
@@ -81,6 +111,9 @@ export interface DesktopApi {
 
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
+
+  // Windows
+  newWindow: (params?: { chatId?: string; subChatId?: string }) => Promise<void>
 }
 
 declare global {

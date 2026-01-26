@@ -42,6 +42,43 @@ const formatTime = (dateInput: Date | string) => {
   return `${Math.floor(diffDays / 365)}y`
 }
 
+type ArchivedChat = {
+  id: string
+  name: string | null
+  branch: string | null
+  projectId: string
+  updatedAt: Date | null
+  archivedAt: Date | null
+}
+
+type ProjectRecord = {
+  id: string
+  name: string
+  gitOwner?: string | null
+  gitRepo?: string | null
+  gitProvider?: string | null
+}
+
+type FileStats = {
+  chatId: string
+  additions: number
+  deletions: number
+}
+
+type ChatListItem = {
+  id: string
+  name: string | null
+  projectId: string
+  createdAt: Date | null
+  updatedAt: Date | null
+  archivedAt: Date | null
+  worktreePath: string | null
+  branch: string | null
+  baseBranch: string | null
+  prUrl: string | null
+  prNumber: number | null
+}
+
 // Memoized chat item component to prevent unnecessary re-renders
 interface ArchiveChatItemProps {
   chat: {
@@ -214,16 +251,20 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
     {},
     { enabled: open },
   )
+  const archivedChatsList = (archivedChats ?? []) as ArchivedChat[]
 
   // Fetch all projects for git info
   const { data: projectsData } = trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () => normalizeProjects(projectsData) as ProjectRecord[],
+    [projectsData],
+  )
 
   // Collect chat IDs for file stats query
   const archivedChatIds = useMemo(() => {
-    if (!archivedChats) return []
-    return archivedChats.map((chat) => chat.id)
-  }, [archivedChats])
+    if (!archivedChatsList.length) return []
+    return archivedChatsList.map((chat: ArchivedChat) => chat.id)
+  }, [archivedChatsList])
 
   // Fetch file stats for archived chats
   const { data: fileStatsData } = trpc.chats.getFileStats.useQuery(
@@ -234,24 +275,27 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   // Create map for quick project lookup by id
   const projectsMap = useMemo(() => {
     if (!projects.length) return new Map()
-    return new Map(projects.map((p) => [p.id, p]))
+    return new Map(projects.map((p: ProjectRecord) => [p.id, p]))
   }, [projects])
 
   // Create map for quick file stats lookup by chat id
   const fileStatsMap = useMemo(() => {
     if (!fileStatsData) return new Map<string, { additions: number; deletions: number }>()
-    return new Map(fileStatsData.map((s) => [s.chatId, { additions: s.additions, deletions: s.deletions }]))
+    const stats = fileStatsData as FileStats[]
+    return new Map(stats.map((s: FileStats) => [s.chatId, { additions: s.additions, deletions: s.deletions }]))
   }, [fileStatsData])
 
   const restoreMutation = trpc.chats.restore.useMutation({
-    onSuccess: (restoredChat) => {
+    onSuccess: (restoredChat: ChatListItem | null) => {
       // Optimistically add restored chat to the main list cache
       if (restoredChat) {
-        utils.chats.list.setData({}, (oldData) => {
-          if (!oldData) return [restoredChat]
+        utils.chats.list.setData({}, (oldData: ChatListItem[] | undefined) => {
+          const normalized = (oldData ?? []) as ChatListItem[]
           // Add to beginning if not already present
-          if (oldData.some((c) => c.id === restoredChat.id)) return oldData
-          return [restoredChat, ...oldData]
+          if (normalized.some((c: { id: string }) => c.id === restoredChat.id)) {
+            return normalized
+          }
+          return [restoredChat, ...normalized]
         })
       }
       // Invalidate both lists to refresh
@@ -262,10 +306,10 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
 
   // Filter and sort archived chats (always newest first)
   const filteredChats = useMemo(() => {
-    if (!archivedChats) return []
+    if (!archivedChatsList.length) return []
 
-    return archivedChats
-      .filter((chat) => {
+    return archivedChatsList
+      .filter((chat: ArchivedChat) => {
         // Search filter by name only
         if (
           searchQuery.trim() &&
@@ -279,7 +323,7 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
         (a, b) =>
           new Date(b.archivedAt!).getTime() - new Date(a.archivedAt!).getTime(),
       )
-  }, [archivedChats, searchQuery])
+  }, [archivedChatsList, searchQuery])
 
   // Clear search query and sync selected index when popover opens
   useEffect(() => {
@@ -344,10 +388,10 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
 
   // Auto-close popover when archive becomes empty
   useEffect(() => {
-    if (open && archivedChats && archivedChats.length === 0) {
+    if (open && archivedChatsList.length === 0) {
       setOpen(false)
     }
-  }, [archivedChats, open, setOpen])
+  }, [archivedChatsList, open, setOpen])
 
   // Memoized callbacks for chat items
   const handleSelectChat = useCallback((id: string) => {

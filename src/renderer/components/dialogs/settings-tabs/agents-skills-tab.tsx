@@ -5,6 +5,13 @@ import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { SkillIcon } from "../../ui/icons"
 
+interface FileSkill {
+  name: string
+  description: string
+  source: "user" | "project"
+  path: string
+}
+
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
   const [isNarrow, setIsNarrow] = useState(false)
@@ -26,11 +33,12 @@ export function AgentsSkillsTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [expandedSkillName, setExpandedSkillName] = useState<string | null>(null)
 
-  const { data: skills = [], isLoading } = trpc.skills.list.useQuery(undefined)
+  const { data: skillsData = [], isLoading } = trpc.skills.list.useQuery(undefined)
+  const skills = skillsData as FileSkill[]
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
 
-  const userSkills = skills.filter((s) => s.source === "user")
-  const projectSkills = skills.filter((s) => s.source === "project")
+  const userSkills = skills.filter((s: FileSkill) => s.source === "user")
+  const projectSkills = skills.filter((s: FileSkill) => s.source === "project")
 
   const handleExpandSkill = (skillName: string) => {
     setExpandedSkillName(expandedSkillName === skillName ? null : skillName)
@@ -88,7 +96,7 @@ export function AgentsSkillsTab() {
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {userSkills.map((skill) => (
+                    {userSkills.map((skill: FileSkill) => (
                       <SkillRow
                         key={skill.name}
                         skill={skill}
@@ -110,7 +118,7 @@ export function AgentsSkillsTab() {
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {projectSkills.map((skill) => (
+                    {projectSkills.map((skill: FileSkill) => (
                       <SkillRow
                         key={skill.name}
                         skill={skill}

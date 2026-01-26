@@ -6,6 +6,7 @@ export type ShortcutActionId =
   | "show-shortcuts"
   | "open-settings"
   | "toggle-sidebar"
+  | "toggle-details"
   | "undo-archive"
   // Workspaces
   | "new-workspace"

@@ -52,7 +52,7 @@ export function CommitInput({
 			onRefresh();
 			onCommitSuccess?.();
 		},
-		onError: (error) => toast.error(`Commit failed: ${error.message}`),
+		onError: (error: { message: string }) => toast.error(`Commit failed: ${error.message}`),
 	});
 
 	// Fallback to regular commit for staged changes
@@ -64,7 +64,7 @@ export function CommitInput({
 			onRefresh();
 			onCommitSuccess?.();
 		},
-		onError: (error) => toast.error(`Commit failed: ${error.message}`),
+		onError: (error: { message: string }) => toast.error(`Commit failed: ${error.message}`),
 	});
 
 	const isPending = commitMutation.isPending || atomicCommitMutation.isPending || isGenerating;

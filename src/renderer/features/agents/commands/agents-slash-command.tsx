@@ -19,6 +19,14 @@ import {
   BUILTIN_SLASH_COMMANDS,
 } from "./builtin-commands"
 
+type FileCommand = {
+  name: string
+  description?: string
+  argumentHint?: string
+  source: "user" | "project"
+  path: string
+}
+
 interface AgentsSlashCommandProps {
   isOpen: boolean
   onClose: () => void
@@ -55,7 +63,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   }, [searchText])
 
   // Fetch custom commands from filesystem
-  const { data: fileCommands = [], isLoading } = trpc.commands.list.useQuery(
+  const { data: fileCommandsData = [], isLoading } = trpc.commands.list.useQuery(
     { projectPath },
     {
       enabled: isOpen,
@@ -63,10 +71,11 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       refetchOnWindowFocus: false,
     },
   )
+  const fileCommands = fileCommandsData as FileCommand[]
 
   // Transform FileCommand to SlashCommandOption
   const customCommands: SlashCommandOption[] = useMemo(() => {
-    return fileCommands.map((cmd) => ({
+    return fileCommands.map((cmd: FileCommand) => ({
       id: `custom:${cmd.source}:${cmd.name}`,
       name: cmd.name,
       command: `/${cmd.name}`,

@@ -155,7 +155,17 @@ export function AgentsContent() {
 
   // Fetch all projects for git info (like sidebar does)
   const { data: projectsData } = trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () =>
+      normalizeProjects(projectsData) as Array<{
+        id: string
+        name?: string
+        gitOwner?: string | null
+        gitProvider?: string | null
+        gitRepo?: string | null
+      }>,
+    [projectsData],
+  )
 
   // Create map for quick project lookup by id
   const projectsMap = useMemo(() => {

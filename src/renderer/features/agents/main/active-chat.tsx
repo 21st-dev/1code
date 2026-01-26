@@ -533,7 +533,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
                   <div className="px-2 py-1.5 text-xs text-muted-foreground font-medium bg-muted/30 border-b border-border/50">
                     Files in commit ({commitFiles.length})
                   </div>
-                  {commitFiles.map((file) => (
+                  {commitFiles.map((file: { path: string; status: FileStatus }) => (
                     <CommitFileItem
                       key={file.path}
                       file={file}
@@ -659,7 +659,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
                 <div className="px-2 py-1.5 text-xs text-muted-foreground font-medium bg-muted/30 border-b border-border/50">
                   Files in commit ({commitFiles.length})
                 </div>
-                {commitFiles.map((file) => (
+                {commitFiles.map((file: { path: string; status: FileStatus }) => (
                   <CommitFileItem
                     key={file.path}
                     file={file}
@@ -3483,7 +3483,7 @@ export function ChatView({
       // Invalidate PR status to refresh mergeability
       trpcUtils.chats.getPrStatus.invalidate({ chatId })
     },
-    onError: (error) => {
+    onError: (error: { message?: string }) => {
       toast.error(error.message || "Failed to sync with main", { position: "top-center" })
     },
   })
@@ -3494,7 +3494,7 @@ export function ChatView({
       // Invalidate PR status to update button state
       trpcUtils.chats.getPrStatus.invalidate({ chatId })
     },
-    onError: (error) => {
+    onError: (error: { message?: string }) => {
       const errorMsg = error.message || "Failed to merge PR"
 
       // Check if it's a merge conflict error
@@ -3518,19 +3518,33 @@ export function ChatView({
     },
   })
 
+  type ChatListItem = {
+    id: string
+    name: string | null
+    projectId: string
+    createdAt: Date | null
+    updatedAt: Date | null
+    archivedAt: Date | null
+    worktreePath: string | null
+    branch: string | null
+    baseBranch: string | null
+    prUrl: string | null
+    prNumber: number | null
+  }
+
   const handleMergePr = useCallback(() => {
     mergePrMutation.mutate({ chatId, method: "squash" })
   }, [chatId, mergePrMutation])
 
   // Restore archived workspace mutation (silent - no toast)
   const restoreWorkspaceMutation = trpc.chats.restore.useMutation({
-    onSuccess: (restoredChat) => {
+    onSuccess: (restoredChat: ChatListItem | null) => {
       if (restoredChat) {
         // Update the main chat list cache
-        trpcUtils.chats.list.setData({}, (oldData) => {
-          if (!oldData) return [restoredChat]
-          if (oldData.some((c) => c.id === restoredChat.id)) return oldData
-          return [restoredChat, ...oldData]
+        trpcUtils.chats.list.setData({}, (oldData: ChatListItem[] | undefined) => {
+          const normalized = (oldData ?? []) as ChatListItem[]
+          if (normalized.some((c) => c.id === restoredChat.id)) return normalized
+          return [restoredChat, ...normalized]
         })
       }
       // Invalidate both lists to refresh

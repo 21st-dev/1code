@@ -284,8 +284,6 @@ export const TerminalWidget = memo(function TerminalWidget({
               cwds={terminalCwds}
               initialCwd={cwd}
               terminalBg={terminalBg}
-              hidePlusButton
-              small
               onSelectTerminal={selectTerminal}
               onCloseTerminal={closeTerminal}
               onCloseOtherTerminals={closeOtherTerminals}

@@ -124,7 +124,17 @@ export function KanbanView() {
 
   // Fetch projects for metadata
   const { data: projectsData } = trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () =>
+      normalizeProjects(projectsData) as Array<{
+        id: string
+        name: string
+        gitOwner?: string | null
+        gitProvider?: string | null
+        gitRepo?: string | null
+      }>,
+    [projectsData],
+  )
 
   // Create projects map
   const projectsMap = useMemo(() => {
@@ -174,15 +184,24 @@ export function KanbanView() {
   }, [chats, openSubChatsVersion])
 
   // Pending plan approvals from DB
+  type PendingPlanApproval = { chatId: string }
+  type FileStats = { chatId: string; additions: number; deletions: number }
+
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: allOpenSubChatIds.length > 0,
+    },
   )
 
   // File stats from DB
   const { data: fileStatsData } = trpc.chats.getFileStats.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: allOpenSubChatIds.length > 0,
+    },
   )
 
   // Build set of chatIds with pending plan approvals from DB

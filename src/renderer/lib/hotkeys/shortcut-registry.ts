@@ -33,6 +33,12 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     defaultKeys: ["cmd", "\\"],
   },
   {
+    id: "toggle-details",
+    label: "Toggle details",
+    category: "general",
+    defaultKeys: ["cmd", "shift", "D"],
+  },
+  {
     id: "undo-archive",
     label: "Undo archive",
     category: "general",

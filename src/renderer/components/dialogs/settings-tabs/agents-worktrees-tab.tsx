@@ -41,7 +41,18 @@ export function AgentsWorktreesTab() {
 
   // Get projects list
   const { data: projectsData } = trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () =>
+      normalizeProjects(projectsData) as Array<{
+        id: string
+        name: string
+        path: string
+        gitOwner?: string | null
+        gitRepo?: string | null
+        updatedAt?: Date | null
+      }>,
+    [projectsData],
+  )
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   )
@@ -59,7 +70,7 @@ export function AgentsWorktreesTab() {
       toast.success("Worktree config saved")
       refetchConfig()
     },
-    onError: (err) => {
+    onError: (err: { message: string }) => {
       toast.error(`Failed to save: ${err.message}`)
     },
   })
@@ -68,7 +79,7 @@ export function AgentsWorktreesTab() {
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const createChatMutation = trpc.chats.create.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { id: string }) => {
       setSettingsDialogOpen(false)
       setSelectedChatId(data.id)
     },
