@@ -1,5 +1,4 @@
 import { BrowserWindow } from "electron"
-import { cleanupWindowSubscriptions } from "../lib/git/watcher/ipc-bridge"
 
 /**
  * Manages multiple application windows
@@ -40,9 +39,8 @@ class WindowManager {
     // Note: Electron automatically removes all listeners when a window is destroyed,
     // so we only need to clean up our internal tracking here
     window.on("closed", () => {
-      // Cleanup git watcher subscriptions for this window to prevent memory leaks
-      cleanupWindowSubscriptions(electronId)
-
+      // Git watcher subscriptions are tracked per worktree, not per window,
+      // and are automatically cleaned up when the app shuts down via cleanupGitWatchers()
       this.windows.delete(electronId)
       this.windowIdMap.delete(electronId)
       if (this.focusedWindowId === electronId) {

@@ -13,6 +13,7 @@ import { agentsRouter } from "./agents"
 import { worktreeConfigRouter } from "./worktree-config"
 import { commandsRouter } from "./commands"
 import { sandboxImportRouter } from "./sandbox-import"
+import { voiceRouter } from "./voice"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -36,6 +37,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     worktreeConfig: worktreeConfigRouter,
     commands: commandsRouter,
     sandboxImport: sandboxImportRouter,
+    voice: voiceRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

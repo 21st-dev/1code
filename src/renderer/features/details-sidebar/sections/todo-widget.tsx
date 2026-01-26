@@ -3,7 +3,7 @@
 import { memo, useMemo, useState, useCallback } from "react"
 import { useAtomValue } from "jotai"
 import { cn } from "@/lib/utils"
-import { PlanIcon, ExpandIcon, CollapseIcon } from "@/components/ui/icons"
+import { PlanIcon, ExpandIcon, CollapseIcon, CheckIcon } from "@/components/ui/icons"
 import { currentTodosAtomFamily } from "@/features/agents/atoms"
 import type { TodoItem } from "@/features/agents/shared/todo-types"
 import {

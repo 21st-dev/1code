@@ -11,7 +11,7 @@ import { Terminal } from "@/features/terminal/terminal"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
 import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import {
-  terminalSidebarOpenAtomFamily,
+  terminalSidebarOpenAtom,
   terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,

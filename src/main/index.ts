@@ -380,13 +380,18 @@ if (!gotTheLock && app) {
     gotTheLock = app.requestSingleInstanceLock()
   }
   if (!gotTheLock) {
-    app.quit()
+    // Another instance is already running - quit silently
+    // The first instance will receive a 'second-instance' event and focus its window
+    console.log("[App] Another instance is already running, quitting silently...")
+    app.exit(0) // Use exit() instead of quit() to avoid any dialogs
   }
 }
 
 if (gotTheLock) {
   // Handle second instance launch (also handles deep links on Windows/Linux)
   app.on("second-instance", (_event, commandLine) => {
+    console.log("[App] Second instance detected, focusing existing window...")
+    
     // Check for deep link in command line args
     const url = commandLine.find((arg) => arg.startsWith(`${PROTOCOL}://`))
     if (url) {
@@ -395,8 +400,21 @@ if (gotTheLock) {
 
     const window = getWindow()
     if (window) {
-      if (window.isMinimized()) window.restore()
+      // Restore if minimized, then focus
+      if (window.isMinimized()) {
+        window.restore()
+      }
+      // Focus the window and bring it to front
       window.focus()
+      window.show() // Ensure window is visible
+      
+      // On macOS, also activate the app
+      if (process.platform === "darwin") {
+        app.dock?.show()
+      }
+    } else {
+      // Window doesn't exist yet, create it
+      createMainWindow()
     }
   })
 

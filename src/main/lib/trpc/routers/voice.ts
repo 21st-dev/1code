@@ -11,7 +11,7 @@ import os from "node:os"
 import { z } from "zod"
 import { publicProcedure, router } from "../index"
 import { getApiUrl } from "../../config"
-import { getAuthManager } from "../../../auth-manager"
+import { getAuthManager } from "../../../index"
 
 // Max audio size: 25MB (Whisper API limit)
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024
@@ -66,6 +66,8 @@ const PLAN_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Fetch and cache user's subscription plan
+ * Note: Plan fetching is not yet implemented in AuthManager
+ * This function returns null for now - plan checking will be done via API calls when needed
  */
 async function getUserPlan(): Promise<{ plan: string; status: string | null } | null> {
   const authManager = getAuthManager()
@@ -78,20 +80,8 @@ async function getUserPlan(): Promise<{ plan: string; status: string | null } | 
     return { plan: cachedUserPlan.plan, status: cachedUserPlan.status }
   }
 
-  try {
-    const planData = await authManager.fetchUserPlan()
-    if (planData) {
-      cachedUserPlan = {
-        plan: planData.plan,
-        status: planData.status,
-        fetchedAt: Date.now(),
-      }
-      return { plan: planData.plan, status: planData.status }
-    }
-  } catch (err) {
-    console.error("[Voice] Failed to fetch user plan:", err)
-  }
-
+  // TODO: Implement plan fetching via API when AuthManager supports it
+  // For now, return null - the backend API will handle plan checking
   return null
 }
 
