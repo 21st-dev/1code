@@ -163,7 +163,7 @@ export function AgentsBetaTab() {
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      {ollamaStatus.ollama.models.map((model) => {
+                      {ollamaStatus.ollama.models.map((model: string) => {
                         const isRecommended = model === ollamaStatus.ollama.recommendedModel
                         return (
                           <SelectItem key={model} value={model}>

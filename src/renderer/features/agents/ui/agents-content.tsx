@@ -9,6 +9,15 @@ const useRouter = () => ({ push: (_url: string) => {}, replace: (_url: string, _
 // Desktop: mock Clerk hooks
 const useUser = () => ({ user: null })
 const useClerk = () => ({ signOut: async (_opts?: { redirectUrl?: string }) => {} })
+
+type QuickSwitchChat = {
+  id: string
+  name: string
+  meta: any
+  sandbox_id: string | null
+  updated_at: Date
+  projectId: string
+}
 import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
@@ -99,6 +108,7 @@ export function AgentsContent() {
   const wasShiftPressedRef = useRef(false)
   const isQuickSwitchingRef = useRef(false)
   const frozenRecentChatsRef = useRef<typeof agentChats>([]) // Frozen snapshot for dialog
+  const frozenQuickSwitchChatsRef = useRef<QuickSwitchChat[]>([])
 
   // Ctrl+Tab target preference
   const ctrlTabTarget = useAtomValue(ctrlTabTargetAtom)
@@ -283,6 +293,20 @@ export function AgentsContent() {
     recentChats = sortedChats.slice(0, 5)
   }
 
+  const quickSwitchChats = useMemo(
+    () =>
+      recentChats.map((chat) => ({
+        id: chat.id,
+        name: chat.name ?? "Untitled",
+        meta: (chat as { meta?: unknown }).meta ?? null,
+        sandbox_id: (chat as { sandbox_id?: string | null }).sandbox_id ?? null,
+        updated_at: (chat as { updated_at?: Date; updatedAt?: Date | null }).updated_at ??
+          (chat.updatedAt ?? new Date(0)),
+        projectId: chat.projectId,
+      })),
+    [recentChats],
+  )
+
   // Keyboard navigation: Quick switch between workspaces
   // Shortcut depends on ctrlTabTarget preference:
   // - "workspaces" (default): Ctrl+Tab switches workspaces
@@ -330,6 +354,7 @@ export function AgentsContent() {
 
           // Freeze current recentChats snapshot for this dialog session
           frozenRecentChatsRef.current = [...recentChats]
+          frozenQuickSwitchChatsRef.current = [...quickSwitchChats]
 
           // Start timer to show dialog after 30ms (almost instant)
           holdTimerRef.current = setTimeout(() => {
@@ -925,7 +950,9 @@ export function AgentsContent() {
       <AgentsQuickSwitchDialog
         isOpen={quickSwitchOpen}
         chats={
-          quickSwitchOpen ? (frozenRecentChatsRef.current ?? []) : recentChats
+          quickSwitchOpen
+            ? (frozenQuickSwitchChatsRef.current ?? [])
+            : quickSwitchChats
         }
         selectedIndex={quickSwitchSelectedIndex}
         projectsMap={projectsMap}

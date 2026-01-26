@@ -195,7 +195,16 @@ export function AgentsSettingsDialog({
 
   // Get projects list for dynamic tabs
   const { data: projectsData } = trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () =>
+      normalizeProjects(projectsData) as Array<{
+        id: string
+        name: string
+        gitOwner?: string | null
+        gitProvider?: string | null
+      }>,
+    [projectsData],
+  )
 
   // Generate dynamic project tabs
   const projectTabs = useMemo(() => {

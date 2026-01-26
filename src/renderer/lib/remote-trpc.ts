@@ -3,7 +3,7 @@
  * Uses signedFetch via IPC for authentication (no CORS issues)
  */
 import { createTRPCClient, httpLink } from "@trpc/client"
-import type { AppRouter } from "../../../../web/server/api/root"
+type RemoteAppRouter = any
 import SuperJSON from "superjson"
 
 // Placeholder URL - actual base is fetched dynamically from main process
@@ -56,7 +56,7 @@ const signedFetch: typeof fetch = async (input, init) => {
  * tRPC client connected to web backend
  * Fully typed, handles superjson automatically
  */
-export const remoteTrpc = createTRPCClient<AppRouter>({
+export const remoteTrpc = createTRPCClient<RemoteAppRouter>({
   links: [
     httpLink({
       url: TRPC_PLACEHOLDER,

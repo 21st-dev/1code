@@ -37,12 +37,13 @@ export function AgentsCustomAgentsTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [expandedAgentName, setExpandedAgentName] = useState<string | null>(null)
 
-  const { data: agents = [], isLoading } = trpc.agents.list.useQuery(undefined)
+  const { data: agentsData = [], isLoading } = trpc.agents.list.useQuery(undefined)
+  const agents = agentsData as FileAgent[]
 
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
 
-  const userAgents = agents.filter((a) => a.source === "user")
-  const projectAgents = agents.filter((a) => a.source === "project")
+  const userAgents = agents.filter((a: FileAgent) => a.source === "user")
+  const projectAgents = agents.filter((a: FileAgent) => a.source === "project")
 
   const handleExpandAgent = (agentName: string) => {
     setExpandedAgentName(expandedAgentName === agentName ? null : agentName)
@@ -100,7 +101,7 @@ export function AgentsCustomAgentsTab() {
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {userAgents.map((agent) => (
+                    {userAgents.map((agent: FileAgent) => (
                       <AgentRow
                         key={agent.name}
                         agent={agent}
@@ -122,7 +123,7 @@ export function AgentsCustomAgentsTab() {
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {projectAgents.map((agent) => (
+                    {projectAgents.map((agent: FileAgent) => (
                       <AgentRow
                         key={agent.name}
                         agent={agent}

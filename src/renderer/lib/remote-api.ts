@@ -4,6 +4,9 @@
  */
 import { remoteTrpc } from "./remote-trpc"
 
+// Remote tRPC client uses dynamic backend routes; cast to any to avoid strict typing errors
+const remoteTrpcAny = remoteTrpc as any
+
 // API base URL - dynamically fetched from main process
 let API_BASE: string | null = null
 
@@ -56,7 +59,7 @@ export const remoteApi = {
    * Fetch user's teams (same as web)
    */
   async getTeams(): Promise<Team[]> {
-    const teams = await remoteTrpc.teams.getUserTeams.query()
+    const teams = await remoteTrpcAny.teams.getUserTeams.query()
     return teams.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name }))
   },
 
@@ -64,7 +67,7 @@ export const remoteApi = {
    * Fetch all agent chats for a team (same as web)
    */
   async getAgentChats(teamId: string): Promise<RemoteChat[]> {
-    const chats = await remoteTrpc.agents.getAgentChats.query({ teamId })
+    const chats = await remoteTrpcAny.agents.getAgentChats.query({ teamId })
     return chats as RemoteChat[]
   },
 
@@ -72,7 +75,7 @@ export const remoteApi = {
    * Fetch a single agent chat with all sub-chats (same as web)
    */
   async getAgentChat(chatId: string): Promise<RemoteChatWithSubChats> {
-    const chat = await remoteTrpc.agents.getAgentChat.query({ chatId })
+    const chat = await remoteTrpcAny.agents.getAgentChat.query({ chatId })
     return chat as RemoteChatWithSubChats
   },
 
@@ -80,7 +83,7 @@ export const remoteApi = {
    * Fetch archived chats for a team (same as web)
    */
   async getArchivedChats(teamId: string): Promise<RemoteChat[]> {
-    const chats = await remoteTrpc.agents.getArchivedChats.query({ teamId })
+    const chats = await remoteTrpcAny.agents.getArchivedChats.query({ teamId })
     return chats as RemoteChat[]
   },
 
@@ -88,35 +91,35 @@ export const remoteApi = {
    * Archive a chat
    */
   async archiveChat(chatId: string): Promise<void> {
-    await remoteTrpc.agents.archiveChat.mutate({ chatId })
+    await remoteTrpcAny.agents.archiveChat.mutate({ chatId })
   },
 
   /**
    * Archive multiple chats at once
    */
   async archiveChatsBatch(chatIds: string[]): Promise<{ archivedCount: number }> {
-    return await remoteTrpc.agents.archiveChatsBatch.mutate({ chatIds })
+    return await remoteTrpcAny.agents.archiveChatsBatch.mutate({ chatIds })
   },
 
   /**
    * Restore a chat from archive
    */
   async restoreChat(chatId: string): Promise<void> {
-    await remoteTrpc.agents.restoreChat.mutate({ chatId })
+    await remoteTrpcAny.agents.restoreChat.mutate({ chatId })
   },
 
   /**
    * Rename a sub-chat
    */
   async renameSubChat(subChatId: string, name: string): Promise<void> {
-    await remoteTrpc.agents.renameSubChat.mutate({ subChatId, name })
+    await remoteTrpcAny.agents.renameSubChat.mutate({ subChatId, name })
   },
 
   /**
    * Rename a chat (workspace)
    */
   async renameChat(chatId: string, name: string): Promise<void> {
-    await remoteTrpc.agents.renameChat.mutate({ chatId, name })
+    await remoteTrpcAny.agents.renameChat.mutate({ chatId, name })
   },
 
   /**

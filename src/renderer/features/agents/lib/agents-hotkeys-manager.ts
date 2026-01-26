@@ -26,6 +26,7 @@ const SHORTCUT_TO_ACTION_MAP: Record<ShortcutActionId, string> = {
   "show-shortcuts": "open-shortcuts",
   "open-settings": "open-settings",
   "toggle-sidebar": "toggle-sidebar",
+  "toggle-details": "toggle-sidebar",
   "undo-archive": "undo-archive",
   "new-workspace": "create-new-agent",
   "search-workspaces": "search-workspaces",

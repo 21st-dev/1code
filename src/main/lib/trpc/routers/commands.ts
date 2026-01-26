@@ -5,7 +5,7 @@ import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
 
-interface FileCommand {
+export interface FileCommand {
   name: string
   description: string
   argumentHint?: string

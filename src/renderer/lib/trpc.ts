@@ -1,4 +1,5 @@
 import { createTRPCReact } from "@trpc/react-query"
+import type { CreateTRPCReact } from "@trpc/react-query"
 import { createTRPCProxyClient } from "@trpc/client"
 import { ipcLink } from "trpc-electron/renderer"
 import type { AppRouter } from "../../main/lib/trpc/routers"
@@ -7,7 +8,7 @@ import superjson from "superjson"
 /**
  * React hooks for tRPC
  */
-export const trpc = createTRPCReact<AppRouter>()
+export const trpc: CreateTRPCReact<AppRouter> = createTRPCReact<AppRouter>()
 
 /**
  * Create ipcLink lazily to ensure window.electronTRPC is available
@@ -26,7 +27,9 @@ function createIpcLink() {
  * Created lazily to ensure preload script has finished
  */
 let _trpcClient: ReturnType<typeof createTRPCProxyClient<AppRouter>> | null = null
-export const trpcClient = new Proxy({} as ReturnType<typeof createTRPCProxyClient<AppRouter>>, {
+export const trpcClient: ReturnType<typeof createTRPCProxyClient<AppRouter>> = new Proxy(
+  {} as ReturnType<typeof createTRPCProxyClient<AppRouter>>,
+  {
   get(_target, prop) {
     if (!_trpcClient) {
       _trpcClient = createTRPCProxyClient<AppRouter>({
@@ -35,4 +38,5 @@ export const trpcClient = new Proxy({} as ReturnType<typeof createTRPCProxyClien
     }
     return _trpcClient[prop as keyof typeof _trpcClient]
   },
-})
+  },
+)

@@ -62,7 +62,10 @@ function AppContent() {
   // Fetch projects to validate selectedProject exists
   const { data: projectsData, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
-  const projects = useMemo(() => normalizeProjects(projectsData), [projectsData])
+  const projects = useMemo(
+    () => normalizeProjects(projectsData) as Array<{ id: string }>,
+    [projectsData],
+  )
 
   // Validated project - only valid if exists in DB
   const validatedProject = useMemo(() => {
