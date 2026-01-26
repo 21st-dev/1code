@@ -11,7 +11,7 @@ import {
 import { agentsSettingsDialogActiveTabAtom, devToolsUnlockedAtom, type SettingsTab } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
-import { BrainFilledIcon, BugFilledIcon, CustomAgentIconFilled, FlaskFilledIcon, KeyboardFilledIcon, OriginalMCPIcon, SkillIconFilled } from "../ui/icons"
+import { BrainFilledIcon, BugFilledIcon, CustomAgentIconFilled, FlaskFilledIcon, KeyboardFilledIcon, OriginalMCPIcon, PluginFilledIcon, SkillIconFilled } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
 import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
@@ -23,6 +23,7 @@ import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
+import { AgentsPluginsTab } from "./settings-tabs/agents-plugins-tab"
 
 // GitHub avatar icon with loading placeholder
 function GitHubAvatarIcon({ gitOwner, className }: { gitOwner: string; className?: string }) {
@@ -134,6 +135,12 @@ const ADVANCED_TABS_BASE = [
     label: "MCP Servers",
     icon: OriginalMCPIcon,
     description: "Model Context Protocol servers",
+  },
+  {
+    id: "plugins" as SettingsTab,
+    label: "Plugins",
+    icon: PluginFilledIcon,
+    description: "Manage installed plugins",
   },
   {
     id: "beta" as SettingsTab,
@@ -362,6 +369,8 @@ export function AgentsSettingsDialog({
         return <AgentsCustomAgentsTab />
       case "mcp":
         return <AgentsMcpTab />
+      case "plugins":
+        return <AgentsPluginsTab />
       case "beta":
         return <AgentsBetaTab />
       case "debug":

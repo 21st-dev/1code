@@ -177,6 +177,7 @@ export type SettingsTab =
   | "skills"
   | "agents"
   | "mcp"
+  | "plugins"
   | "worktrees"
   | "debug"
   | "beta"
@@ -732,3 +733,22 @@ export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
 // DevTools unlock state (hidden feature - click Beta tab 5 times to enable)
 // Persisted per-session only (not in localStorage for security)
 export const devToolsUnlockedAtom = atom<boolean>(false)
+
+// ============================================
+// MCP APPROVAL DIALOG ATOMS
+// ============================================
+
+export type PendingMcpApproval = {
+  pluginSource: string
+  pluginName: string
+  serverName: string
+  identifier: string
+  command: string
+  args: string[]
+}
+
+// Whether the MCP approval dialog is open
+export const mcpApprovalDialogOpenAtom = atom<boolean>(false)
+
+// Pending MCP approvals to show in the dialog
+export const pendingMcpApprovalsAtom = atom<PendingMcpApproval[]>([])

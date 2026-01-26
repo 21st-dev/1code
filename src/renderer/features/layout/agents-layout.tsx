@@ -20,6 +20,7 @@ import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
 import { AgentsSettingsDialog } from "../../components/dialogs/agents-settings-dialog"
 import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
+import { McpApprovalDialog } from "../../components/dialogs/mcp-approval-dialog"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { AgentsSidebar } from "../sidebar/agents-sidebar"
@@ -244,6 +245,7 @@ export function AgentsLayout() {
         onClose={() => setSettingsOpen(false)}
       />
       <ClaudeLoginModal />
+      <McpApprovalDialog />
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />

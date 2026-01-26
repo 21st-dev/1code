@@ -5782,3 +5782,24 @@ export function MicrophoneIcon(props: IconProps) {
     </svg>
   )
 }
+
+// Plugin icon filled - puzzle piece for Plugins tab
+export function PluginFilledIcon(props: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      width="24"
+      height="24"
+      {...props}
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M12 2C10.8954 2 10 2.89543 10 4V5H6C4.89543 5 4 5.89543 4 7V10H5C6.10457 10 7 10.8954 7 12C7 13.1046 6.10457 14 5 14H4V18C4 19.1046 4.89543 20 6 20H10V19C10 17.8954 10.8954 17 12 17C13.1046 17 14 17.8954 14 19V20H18C19.1046 20 20 19.1046 20 18V14H19C17.8954 14 17 13.1046 17 12C17 10.8954 17.8954 10 19 10H20V7C20 5.89543 19.1046 5 18 5H14V4C14 2.89543 13.1046 2 12 2Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
