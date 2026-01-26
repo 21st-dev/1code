@@ -167,7 +167,7 @@ interface McpCacheData {
 }
 
 const MCP_STATUS_TTL = 5 * 60 * 1000 // 5 minutes
-const MCP_CACHE_PATH = join(app.getPath("userData"), "cache", "mcp-status.json")
+const getMcpCachePath = () => join(app.getPath("userData"), "cache", "mcp-status.json")
 let diskCacheLastLoadTime = 0 // Track when disk cache was last loaded
 
 const pendingToolApprovals = new Map<
@@ -210,13 +210,13 @@ export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
  */
 function loadMcpStatusFromDisk(): void {
   try {
-    if (!existsSync(MCP_CACHE_PATH)) {
+    if (!existsSync(getMcpCachePath())) {
       diskCacheLastLoadTime = Date.now()
       return
     }
 
     // Check if file was modified since last load (handles concurrent requests)
-    const stats = statSync(MCP_CACHE_PATH)
+    const stats = statSync(getMcpCachePath())
     const fileModTime = stats.mtimeMs
 
     if (diskCacheLastLoadTime > 0 && fileModTime <= diskCacheLastLoadTime) {
@@ -224,7 +224,7 @@ function loadMcpStatusFromDisk(): void {
       return
     }
 
-    const data: McpCacheData = JSON.parse(readFileSync(MCP_CACHE_PATH, "utf-8"))
+    const data: McpCacheData = JSON.parse(readFileSync(getMcpCachePath(), "utf-8"))
 
     if (data.version !== 1) {
       console.warn(`[MCP Cache] Unknown version ${data.version}, ignoring`)
@@ -261,8 +261,8 @@ function loadMcpStatusFromDisk(): void {
     console.warn("[MCP Cache] Failed to load from disk:", error)
     diskCacheLastLoadTime = Date.now()
     try {
-      if (existsSync(MCP_CACHE_PATH)) {
-        unlinkSync(MCP_CACHE_PATH)
+      if (existsSync(getMcpCachePath())) {
+        unlinkSync(getMcpCachePath())
       }
     } catch {}
   }
@@ -273,7 +273,7 @@ function loadMcpStatusFromDisk(): void {
  */
 function saveMcpStatusToDisk(): void {
   try {
-    const cacheDir = dirname(MCP_CACHE_PATH)
+    const cacheDir = dirname(getMcpCachePath())
     if (!existsSync(cacheDir)) {
       mkdirSync(cacheDir, { recursive: true })
     }
@@ -296,9 +296,9 @@ function saveMcpStatusToDisk(): void {
       )
     }
 
-    const tempPath = MCP_CACHE_PATH + ".tmp"
+    const tempPath = getMcpCachePath() + ".tmp"
     writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8")
-    renameSync(tempPath, MCP_CACHE_PATH)
+    renameSync(tempPath, getMcpCachePath())
 
     const totalServers = Array.from(mcpServerStatusCache.values())
       .reduce((sum, map) => sum + map.size, 0)
@@ -320,8 +320,8 @@ export function clearClaudeCaches() {
 
   // Clear disk cache
   try {
-    if (existsSync(MCP_CACHE_PATH)) {
-      unlinkSync(MCP_CACHE_PATH)
+    if (existsSync(getMcpCachePath())) {
+      unlinkSync(getMcpCachePath())
       console.log("[MCP Cache] Cleared disk cache")
     }
   } catch (error) {
@@ -910,11 +910,11 @@ export const claudeRouter = router({
             if (isUsingOllama) {
               console.log('[Ollama Debug] SDK Configuration:', {
                 model: resolvedModel,
-                baseUrl: finalEnv.ANTHROPIC_BASE_URL,
+                baseUrl: finalCustomConfig?.baseUrl,
                 cwd: input.cwd,
                 configDir: isolatedConfigDir,
-                hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-                tokenPreview: finalEnv.ANTHROPIC_AUTH_TOKEN?.slice(0, 10) + '...',
+                hasAuthToken: !!finalCustomConfig?.token,
+                tokenPreview: finalCustomConfig?.token?.slice(0, 10) + '...',
               })
               console.log('[Ollama Debug] Session settings:', {
                 resumeSessionId: resumeSessionId || 'none (first message)',
@@ -1126,14 +1126,14 @@ ${prompt}
                           : ""
                       if (!/\.md$/i.test(filePath)) {
                         return {
-                          behavior: "deny",
+                          behavior: "deny" as const,
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
@@ -1192,7 +1192,7 @@ ${prompt}
                         result: errorMessage,
                       } as UIMessageChunk)
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: errorMessage,
                       }
                     }
@@ -1211,13 +1211,13 @@ ${prompt}
                       result: answerResult,
                     } as UIMessageChunk)
                     return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      behavior: "allow" as const,
+                      updatedInput: response.updatedInput as Record<string, unknown>,
                     }
                   }
                   return {
-                    behavior: "allow",
-                    updatedInput: toolInput,
+                    behavior: "allow" as const,
+                    updatedInput: toolInput as Record<string, unknown>,
                   }
                 },
                 stderr: (data: string) => {
@@ -1836,6 +1836,57 @@ ${prompt}
         return { mcpServers: [], projectPath: input.projectPath, error: String(error) }
       }
     }),
+
+  /**
+   * Get Claude Desktop MCP servers configuration
+   * Reads from ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)
+   * or equivalent paths on Windows/Linux
+   */
+  getClaudeDesktopMcpConfig: publicProcedure.query(async () => {
+    // Path varies by platform
+    const platform = process.platform
+    let configPath: string
+
+    if (platform === "darwin") {
+      configPath = path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json")
+    } else if (platform === "win32") {
+      configPath = path.join(os.homedir(), "AppData", "Roaming", "Claude", "claude_desktop_config.json")
+    } else {
+      // Linux
+      configPath = path.join(os.homedir(), ".config", "Claude", "claude_desktop_config.json")
+    }
+
+    try {
+      const exists = await fs.stat(configPath).then(() => true).catch(() => false)
+      if (!exists) {
+        return { mcpServers: [], configPath, exists: false }
+      }
+
+      const configContent = await fs.readFile(configPath, "utf-8")
+      const config = JSON.parse(configContent)
+
+      if (!config.mcpServers) {
+        return { mcpServers: [], configPath, exists: true }
+      }
+
+      // Convert to array format with names and config details
+      const mcpServers = Object.entries(config.mcpServers).map(([name, serverConfig]) => {
+        const cfg = serverConfig as Record<string, unknown>
+        return {
+          name,
+          command: cfg.command as string | undefined,
+          args: cfg.args as string[] | undefined,
+          url: cfg.url as string | undefined,
+          env: cfg.env as Record<string, string> | undefined,
+        }
+      })
+
+      return { mcpServers, configPath, exists: true }
+    } catch (error) {
+      console.error("[getClaudeDesktopMcpConfig] Error reading config:", error)
+      return { mcpServers: [], configPath, error: String(error), exists: false }
+    }
+  }),
 
   /**
    * Cancel active session

@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, ExternalLink, RefreshCw } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import { useAtomValue } from "jotai"
 import { sessionInfoAtom } from "../../../lib/atoms"
 import { cn } from "../../../lib/utils"
 import { OriginalMCPIcon } from "../../ui/icons"
+import { trpc } from "../../../lib/trpc"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -146,13 +147,104 @@ function ServerRow({ server, tools, isExpanded, onToggle }: ServerRowProps) {
   )
 }
 
+// Claude Desktop server row (simpler - no status, just config info)
+interface DesktopServerRowProps {
+  server: {
+    name: string
+    command?: string
+    args?: string[]
+    url?: string
+  }
+  isExpanded: boolean
+  onToggle: () => void
+}
+
+function DesktopServerRow({ server, isExpanded, onToggle }: DesktopServerRowProps) {
+  const hasDetails = server.command || server.url || (server.args && server.args.length > 0)
+
+  return (
+    <div>
+      <button
+        onClick={hasDetails ? onToggle : undefined}
+        className={cn(
+          "w-full flex items-center gap-3 p-3 text-left transition-colors",
+          hasDetails && "hover:bg-muted/50 cursor-pointer",
+          !hasDetails && "cursor-default",
+        )}
+      >
+        {/* Expand chevron */}
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 text-muted-foreground transition-transform flex-shrink-0",
+            isExpanded && "rotate-90",
+            !hasDetails && "opacity-0",
+          )}
+        />
+
+        {/* Status dot - always show as configured (not connected yet) */}
+        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+
+        {/* Server info */}
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium text-foreground truncate block">
+            {server.name}
+          </span>
+        </div>
+
+        {/* Type indicator */}
+        <span className="text-xs text-muted-foreground flex-shrink-0">
+          {server.url ? "Remote" : "Local"}
+        </span>
+      </button>
+
+      {/* Expanded details */}
+      <AnimatePresence>
+        {isExpanded && hasDetails && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="pl-10 pr-3 pb-3 space-y-1">
+              {server.command && (
+                <div className="text-xs text-muted-foreground font-mono py-0.5">
+                  <span className="text-muted-foreground/70">command:</span> {server.command}
+                </div>
+              )}
+              {server.args && server.args.length > 0 && (
+                <div className="text-xs text-muted-foreground font-mono py-0.5">
+                  <span className="text-muted-foreground/70">args:</span> {server.args.join(" ")}
+                </div>
+              )}
+              {server.url && (
+                <div className="text-xs text-muted-foreground font-mono py-0.5">
+                  <span className="text-muted-foreground/70">url:</span> {server.url}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 export function AgentsMcpTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [expandedServer, setExpandedServer] = useState<string | null>(null)
+  const [expandedDesktopServer, setExpandedDesktopServer] = useState<string | null>(null)
 
   const sessionInfo = useAtomValue(sessionInfoAtom)
   const mcpServers = sessionInfo?.mcpServers || []
   const tools = sessionInfo?.tools || []
+
+  // Fetch Claude Desktop MCP config
+  const { data: desktopConfig, isLoading: isLoadingDesktop, refetch: refetchDesktop } =
+    trpc.claude.getClaudeDesktopMcpConfig.useQuery()
+
+  const desktopServers = desktopConfig?.mcpServers || []
 
   // Group tools by server
   const toolsByServer = mcpServers.reduce(
@@ -170,6 +262,10 @@ export function AgentsMcpTab() {
     setExpandedServer(expandedServer === serverName ? null : serverName)
   }
 
+  const handleToggleDesktopServer = (serverName: string) => {
+    setExpandedDesktopServer(expandedDesktopServer === serverName ? null : serverName)
+  }
+
   return (
     <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
       {/* Header */}
@@ -180,24 +276,78 @@ export function AgentsMcpTab() {
             href="https://docs.anthropic.com/en/docs/claude-code/mcp"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors inline-flex items-center gap-1"
           >
-            Documentation
+            Documentation <ExternalLink className="h-3 w-3" />
           </a>
         </div>
       )}
 
-      {/* Servers List */}
-      <div className="space-y-4">
-        {mcpServers.length === 0 ? (
-          <div className="bg-background rounded-lg border border-border p-6 text-center">
-            <OriginalMCPIcon className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground mb-2">
-              No MCP servers configured
-            </p>
+      {/* Claude Desktop Servers */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-medium text-foreground">
+            Claude Desktop Servers
+          </h4>
+          <button
+            onClick={() => refetchDesktop()}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors p-1"
+            title="Refresh"
+          >
+            <RefreshCw className={cn("h-3 w-3", isLoadingDesktop && "animate-spin")} />
+          </button>
+        </div>
+
+        {isLoadingDesktop ? (
+          <div className="bg-background rounded-lg border border-border p-4 text-center">
+            <RefreshCw className="h-4 w-4 text-muted-foreground animate-spin mx-auto" />
+          </div>
+        ) : desktopServers.length === 0 ? (
+          <div className="bg-background rounded-lg border border-border p-4 text-center">
             <p className="text-xs text-muted-foreground">
-              Add servers to{" "}
-              <code className="px-1 py-0.5 bg-muted rounded">~/.claude.json</code>
+              No Claude Desktop servers configured
+            </p>
+            {desktopConfig?.configPath && (
+              <p className="text-xs text-muted-foreground/70 mt-1 font-mono truncate">
+                {desktopConfig.configPath}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="bg-background rounded-lg border border-border overflow-hidden">
+            <div className="divide-y divide-border">
+              {desktopServers.map((server) => (
+                <DesktopServerRow
+                  key={server.name}
+                  server={server}
+                  isExpanded={expandedDesktopServer === server.name}
+                  onToggle={() => handleToggleDesktopServer(server.name)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        {desktopConfig?.configPath && desktopServers.length > 0 && (
+          <p className="text-xs text-muted-foreground/70 font-mono truncate">
+            {desktopConfig.configPath}
+          </p>
+        )}
+      </div>
+
+      {/* Active Session Servers */}
+      <div className="space-y-2">
+        <h4 className="text-xs font-medium text-foreground">
+          Active Session Servers
+        </h4>
+        {mcpServers.length === 0 ? (
+          <div className="bg-background rounded-lg border border-border p-4 text-center">
+            <OriginalMCPIcon className="h-6 w-6 text-muted-foreground/50 mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground">
+              No active MCP servers
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Start a chat to connect servers from{" "}
+              <code className="px-1 py-0.5 bg-muted rounded text-[10px]">~/.claude.json</code>
             </p>
           </div>
         ) : (
@@ -236,7 +386,8 @@ export function AgentsMcpTab() {
           <p className="text-xs text-muted-foreground">
             Add MCP server configuration to{" "}
             <code className="px-1 py-0.5 bg-muted rounded">~/.claude.json</code>{" "}
-            under your project path.
+            under your project path, or install via{" "}
+            <code className="px-1 py-0.5 bg-muted rounded">npx install-mcp</code>.
           </p>
         </div>
       </div>
