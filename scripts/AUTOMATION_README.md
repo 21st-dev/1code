@@ -103,6 +103,36 @@ chmod +x scripts/automate-*.sh
 ./scripts/automate-mcp-check.sh
 ```
 
+### 5. `automate-update.sh` - Update 1Code ⭐ NEW
+
+**Purpose:** Automate the complete update process
+
+**What it does:**
+- Pulls latest changes from Git
+- Cleans up processes and ports
+- Installs dependencies
+- Builds the application
+- Optionally restarts the app
+
+**Usage:**
+```bash
+# Basic update
+bun run automate:update
+
+# Update and restart
+bun run automate:update:restart
+
+# With options
+./scripts/automate-update.sh --skip-build --restart
+```
+
+**Options:**
+- `--restart` - Restart Electron app after update
+- `--skip-build` - Skip building (faster)
+- `--skip-cleanup` - Skip port/process cleanup
+
+**Output:** `UPDATE_AUTOMATION.md` - Comprehensive guide
+
 ## 🔧 Integration with VS Code
 
 ### Add to Tasks

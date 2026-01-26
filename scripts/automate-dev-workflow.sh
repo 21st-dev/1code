@@ -88,6 +88,16 @@ case "${1:-menu}" in
         run_command "./scripts/automate-mcp-check.sh"
         ;;
     
+    "update")
+        print_header "🔄 Updating 1Code"
+        run_command "./scripts/automate-update.sh"
+        ;;
+    
+    "update:restart")
+        print_header "🔄 Updating and Restarting 1Code"
+        run_command "./scripts/automate-update.sh --restart"
+        ;;
+    
     "all"|"full")
         print_header "🔄 Full Development Workflow"
         echo "1. Cleaning..."
@@ -120,6 +130,8 @@ case "${1:-menu}" in
         echo "  ${YELLOW}setup${NC}            - Setup development environment"
         echo "  ${YELLOW}review${NC}           - Generate GitHub review"
         echo "  ${YELLOW}mcp${NC}              - Check MCP servers"
+        echo "  ${YELLOW}update${NC}           - Update 1Code (git pull, install, build)"
+        echo "  ${YELLOW}update:restart${NC}   - Update and restart app"
         echo "  ${YELLOW}all${NC}, ${YELLOW}full${NC}     - Run full workflow (clean, install, build, test)"
         echo ""
         echo "Examples:"

@@ -34,6 +34,8 @@
     "automate:review": "./scripts/automate-github-review.sh",
     "automate:mcp": "./scripts/automate-mcp-check.sh",
     "automate:all": "./scripts/automate-dev-workflow.sh all",
+    "automate:update": "./scripts/automate-update.sh",
+    "automate:update:restart": "./scripts/automate-update.sh --restart",
     "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\""
   },
   "dependencies": {
