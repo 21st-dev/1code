@@ -96,6 +96,7 @@ import { AgentsSection } from "./components/agents-section"
 import { SkillsSection } from "./components/skills-section"
 import { CommandsSection } from "./components/commands-section"
 import { emitInsertText, emitForkSubChat, emitRestoreChatState } from "../agents/lib/drafts"
+import { selectedProjectAtom } from "../agents/atoms"
 
 // Isolated Search History Popover for sidebar - prevents parent re-renders when popover opens/closes
 interface SidebarSearchHistoryPopoverProps {
@@ -348,6 +349,9 @@ export function AgentsSubChatsSidebar({
 
   // Agents section collapse state
   const [agentsSectionCollapsed, setAgentsSectionCollapsed] = useAtom(agentsSectionCollapsedAtom)
+
+  // Get selected project for agents directory
+  const [selectedProject] = useAtom(selectedProjectAtom)
 
   const toggleAgentsSectionCollapse = useCallback(() => {
     setAgentsSectionCollapsed(prev => !prev)
@@ -2093,7 +2097,7 @@ export function AgentsSubChatsSidebar({
           {parentChatId && (
             <AgentsSection
               chatId={parentChatId}
-              projectPath={undefined}
+              projectPath={selectedProject?.path}
               isCollapsed={agentsSectionCollapsed}
               onToggleCollapse={toggleAgentsSectionCollapse}
               onAgentClick={handleAgentClick}

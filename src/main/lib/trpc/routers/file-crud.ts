@@ -117,8 +117,8 @@ export const fileCrudRouter = router({
     }),
 
   /**
-   * @deprecated Use readProjectFile instead
-   * Legacy endpoint - reads workspace files only
+   * Read any file from the project
+   * Accepts project-relative paths (e.g., ".ii/workspaces/chatId/file.md" or "src/App.tsx")
    */
   readFile: publicProcedure
     .input(
@@ -130,9 +130,6 @@ export const fileCrudRouter = router({
     .query(async ({ input }) => {
       const db = getDatabase()
 
-      // Validate file path
-      const safePath = validatePath(input.filePath)
-
       // Get chat and project
       const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
       if (!chat) {
@@ -148,69 +145,37 @@ export const fileCrudRouter = router({
         throw new Error("Project not found")
       }
 
-      // Build full file path
-      const workspaceDir = path.join(
-        project.path,
-        ".ii",
-        "workspaces",
-        input.chatId
-      )
-      const fullPath = path.join(workspaceDir, safePath)
+      let projectRelativePath = input.filePath
 
-      // Security: Ensure resolved path is still within workspace directory
-      const resolvedPath = path.resolve(fullPath)
-      const resolvedWorkspaceDir = path.resolve(workspaceDir)
-      if (!resolvedPath.startsWith(resolvedWorkspaceDir)) {
-        throw new Error("Access denied: path outside workspace directory")
-      }
-
-      // Read file
-      try {
-        const content = await fs.readFile(fullPath, "utf-8")
-        return {
-          content,
-          path: safePath,
+      // Handle absolute paths by converting to project-relative
+      if (path.isAbsolute(input.filePath)) {
+        // Check if the absolute path is within the project
+        if (input.filePath.startsWith(project.path)) {
+          // Extract project-relative portion
+          projectRelativePath = input.filePath.slice(project.path.length)
+          // Remove leading slash
+          if (projectRelativePath.startsWith(path.sep)) {
+            projectRelativePath = projectRelativePath.slice(1)
+          }
+        } else {
+          throw new Error("Access denied: absolute path outside project directory")
         }
-      } catch (error) {
-        console.error("[workspaceFiles.readFile] error:", error)
-        throw new Error("Failed to read file")
-      }
-    }),
-
-  /**
-   * Read any file from project root (including workspace files)
-   * Accepts project-relative paths
-   */
-  readProjectFile: publicProcedure
-    .input(
-      z.object({
-        chatId: z.string(),
-        filePath: z.string(),
-      })
-    )
-    .query(async ({ input }) => {
-      const db = getDatabase()
-
-      // Get chat and project
-      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
-      if (!chat) {
-        throw new Error("Chat not found")
       }
 
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, chat.projectId))
-        .get()
-      if (!project) {
-        throw new Error("Project not found")
-      }
-
-      // Normalize and validate path
-      const normalizedPath = path.normalize(input.filePath)
+      // Normalize path (handles ./ ../ etc)
+      const normalizedPath = path.normalize(projectRelativePath)
 
       // Build full file path from project root
       const fullPath = path.join(project.path, normalizedPath)
+
+      console.log("[workspaceFiles.readFile] Path resolution:", {
+        inputPath: input.filePath,
+        isAbsolute: path.isAbsolute(input.filePath),
+        projectRelativePath,
+        normalizedPath,
+        projectPath: project.path,
+        fullPath,
+      })
 
       // Security: Ensure resolved path is still within project directory
       const resolvedPath = path.resolve(fullPath)
@@ -227,8 +192,9 @@ export const fileCrudRouter = router({
           path: normalizedPath,
         }
       } catch (error) {
-        console.error("[workspaceFiles.readProjectFile] error:", error)
+        console.error("[workspaceFiles.readFile] error:", error)
         throw new Error("Failed to read file")
       }
     }),
+
 })

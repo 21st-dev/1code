@@ -2,6 +2,8 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { getDatabase } from "../../db"
+import { agents } from "../../db/schema"
 
 // Valid model values for agents
 export const VALID_AGENT_MODELS = ["sonnet", "opus", "haiku", "inherit"] as const
@@ -266,4 +268,145 @@ export async function buildAgentsOption(
   }
 
   return agents
+}
+
+/**
+ * Build agents Record for SDK with ALL available agents
+ * Enables SDK to discover and auto-invoke agents based on their descriptions
+ * Scans both user-level (~/.claude/agents) and project-level (.claude/agents) directories
+ * Project agents override user agents with the same name (priority)
+ */
+export async function buildAllAgentsOption(
+  cwd?: string
+): Promise<
+  Record<
+    string,
+    {
+      description: string
+      prompt: string
+      tools?: string[]
+      disallowedTools?: string[]
+      model?: AgentModel
+    }
+  >
+> {
+  const result: Record<
+    string,
+    {
+      description: string
+      prompt: string
+      tools?: string[]
+      disallowedTools?: string[]
+      model?: AgentModel
+    }
+  > = {}
+
+  // Scan user-level agents (~/.claude/agents)
+  const userAgentsDir = path.join(os.homedir(), ".claude", "agents")
+  const userAgents = await scanAgentsDirectory(userAgentsDir, "user")
+
+  // Scan project-level agents (.claude/agents)
+  const projectAgentsDir = path.join(cwd || process.cwd(), ".claude", "agents")
+  const projectAgents = await scanAgentsDirectory(projectAgentsDir, "project")
+
+  // Combine agents: user agents first, then project agents (which will override)
+  const allAgents = [...userAgents, ...projectAgents]
+
+  // Convert to SDK format
+  for (const agent of allAgents) {
+    result[agent.name] = {
+      description: agent.description,
+      prompt: agent.prompt,
+      ...(agent.tools && { tools: agent.tools }),
+      ...(agent.disallowedTools && { disallowedTools: agent.disallowedTools }),
+      ...(agent.model && { model: agent.model }),
+    }
+  }
+
+  return result
+}
+
+/**
+ * Sync agents from filesystem to database
+ * Reads all .md files from .claude/agents/ and creates/updates database records
+ * This is called automatically when agents are loaded for SDK registration
+ */
+export async function syncAgentsToDatabase(cwd?: string): Promise<{ syncedCount: number; errors: string[] }> {
+  const errors: string[] = []
+  let syncedCount = 0
+
+  // Helper to sync a directory
+  const syncDirectory = async (dir: string, source: "user" | "project") => {
+    try {
+      await fs.access(dir)
+    } catch {
+      return // Directory doesn't exist
+    }
+
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue
+
+      const agentPath = path.join(dir, entry.name)
+      try {
+        const content = await fs.readFile(agentPath, "utf-8")
+        const parsed = parseAgentMd(content, entry.name)
+
+        if (!parsed.name) {
+          console.warn(`[agents] Skipping ${entry.name}: no name in frontmatter`)
+          continue
+        }
+
+        // Parse creationChatId from frontmatter
+        const creationChatIds = parsed.creationChatId
+          ? [parsed.creationChatId]
+          : []
+
+        // Upsert into database
+        const db = getDatabase()
+        await db.insert(agents).values({
+          name: parsed.name,
+          description: parsed.description || "",
+          prompt: parsed.prompt,
+          tools: JSON.stringify(parsed.tools || []),
+          disallowedTools: JSON.stringify(parsed.disallowedTools || []),
+          model: parsed.model,
+          source,
+          filePath: agentPath,
+          creationChatIds: JSON.stringify(creationChatIds),
+        }).onConflictDoUpdate({
+          target: agents.name,
+          set: {
+            description: parsed.description || "",
+            prompt: parsed.prompt,
+            tools: JSON.stringify(parsed.tools || []),
+            disallowedTools: JSON.stringify(parsed.disallowedTools || []),
+            model: parsed.model,
+            filePath: agentPath,
+            updatedAt: new Date(),
+            // Don't update creationChatIds - preserve original
+          },
+        })
+
+        syncedCount++
+      } catch (err) {
+        const errorMsg = `Failed to sync ${entry.name}: ${err}`
+        console.error(`[agents] ${errorMsg}`)
+        errors.push(errorMsg)
+      }
+    }
+  }
+
+  // Sync both directories
+  const userAgentsDir = path.join(os.homedir(), ".claude", "agents")
+  const projectAgentsDir = path.join(cwd || process.cwd(), ".claude", "agents")
+
+  await syncDirectory(userAgentsDir, "user")
+  await syncDirectory(projectAgentsDir, "project")
+
+  if (syncedCount > 0) {
+    console.log(`[agents] Synced ${syncedCount} agents to database`)
+  }
+
+  return { syncedCount, errors }
 }

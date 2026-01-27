@@ -109,7 +109,9 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
         part.state !== "output-available" && part.state !== "output-error"
       const isInputStreaming = part.state === "input-streaming"
       if (isInputStreaming) return "Preparing task"
-      return isPending ? "Running Task" : "Completed Task"
+      // Prioritize custom name, then subagent type, then fall back to "Task"
+      const displayName = part.input?.name || part.input?.subagent_type || "Task"
+      return isPending ? `Running ${displayName}` : `Completed ${displayName}`
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming

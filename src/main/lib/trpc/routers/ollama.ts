@@ -8,6 +8,20 @@ import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { publicProcedure, router } from "../index"
 
 /**
+ * Types for input refinement
+ */
+const WorkspaceFileSchema = z.object({
+  path: z.string(),
+  name: z.string(),
+  content: z.string(),
+})
+
+const MessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+})
+
+/**
  * Generate text using local Ollama model
  * Used for chat title generation and commit messages in offline mode
  * @param prompt - The prompt to send to Ollama
@@ -162,5 +176,102 @@ Commit message:`
         }
       }
       return { message: null }
+    }),
+
+  /**
+   * Refine user input using local Ollama model
+   * Enhances prompts with file references, structure, and codebase context
+   */
+  refineInput: publicProcedure
+    .input(
+      z.object({
+        userInput: z.string(),
+        chatHistory: z.array(MessageSchema).optional().default([]),
+        workspaceFiles: z.array(WorkspaceFileSchema).optional().default([]),
+        model: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // Build context sections
+      let workspaceFilesSection = ""
+      if (input.workspaceFiles.length > 0) {
+        workspaceFilesSection = `WORKSPACE FILES:\n${input.workspaceFiles
+          .map((f) => `- ${f.path}`)
+          .join("\n")}\n\n`
+      }
+
+      let chatHistorySection = ""
+      if (input.chatHistory.length > 0) {
+        chatHistorySection = `RECENT CHAT HISTORY:\n${input.chatHistory
+          .map((msg) => `${msg.role.toUpperCase()}: ${msg.content.slice(0, 200)}${msg.content.length > 200 ? "..." : ""}`)
+          .join("\n")}\n\n`
+      }
+
+      const prompt = `You are helping clarify a vague coding request by understanding what the user is referring to and making it specific.
+
+${workspaceFilesSection}${chatHistorySection}USER'S VAGUE INPUT:
+${input.userInput}
+
+YOUR TASK:
+- Identify what files/components/functions the user is likely referring to based on context
+- Replace vague terms like "the bug", "that function", "this component" with specific references
+- Add @file mentions for any files that should be examined (use exact paths from workspace files above)
+- Keep it brief and natural - don't over-explain, just make the vague parts specific
+
+EXAMPLES:
+Vague: "fix the bug"
+Better: "Fix the authentication bug in @src/auth/login.tsx"
+
+Vague: "update that function"
+Better: "Update the validateToken function in @src/utils/auth.ts"
+
+Vague: "the component isn't working"
+Better: "The UserProfile component in @src/components/UserProfile.tsx isn't rendering correctly"
+
+Now refine this input (output ONLY the improved version, no explanations):`
+
+      try {
+        const ollamaStatus = await checkOllamaStatus()
+        if (!ollamaStatus.available) {
+          return { refinedInput: null }
+        }
+
+        const modelToUse = input.model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
+        if (!modelToUse) {
+          console.error("[Ollama] No model available for input refinement")
+          return { refinedInput: null }
+        }
+
+        const response = await fetch("http://localhost:11434/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: modelToUse,
+            prompt,
+            stream: false,
+            options: {
+              temperature: 0.7,
+              num_predict: 500,
+            },
+          }),
+        })
+
+        if (!response.ok) {
+          console.error("[Ollama] Refine input failed:", response.status)
+          return { refinedInput: null }
+        }
+
+        const data = await response.json()
+        const refined = data.response?.trim()
+
+        if (refined && refined.length > 0) {
+          return { refinedInput: refined }
+        }
+
+        return { refinedInput: null }
+      } catch (error) {
+        console.error("[Ollama] Refine input error:", error)
+        return { refinedInput: null }
+      }
     }),
 })

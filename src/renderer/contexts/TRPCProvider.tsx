@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ipcLink } from "trpc-electron/renderer"
-import { trpc } from "../lib/trpc"
+import { trpc, createTrpcClient } from "../lib/trpc"
 import superjson from "superjson"
 
 interface TRPCProviderProps {
@@ -35,12 +35,7 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
     return client
   })
 
-  const [trpcClient] = useState(() => {
-    const client = trpc.createClient({
-      links: [ipcLink({ transformer: superjson })],
-    })
-    return client
-  })
+  const [trpcClient] = useState(() => createTrpcClient())
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>

@@ -20,7 +20,7 @@ export function NetworkStatus() {
     refetchInterval: 30000,
   })
 
-  const online = data?.internet.online ?? true
+  const online = data?.internet?.online ?? true
 
   if (online) {
     return null // Don't show anything when online

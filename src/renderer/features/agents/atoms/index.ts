@@ -184,12 +184,37 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-export const isPlanModeAtom = atomWithStorage<boolean>(
-  "agents:isPlanMode",
-  false,
+// Agent mode type - supports 4 modes
+export type AgentModeType = "agent" | "plan" | "read-only" | "ask"
+
+// New enum-based mode atom (replaces boolean isPlanModeAtom)
+export const agentModeAtom = atomWithStorage<AgentModeType>(
+  "agents:agentMode",
+  "agent",
   undefined,
   { getOnInit: true },
 )
+
+// Backwards compatibility wrapper for existing code that uses isPlanModeAtom
+export const isPlanModeAtom = atom(
+  (get) => get(agentModeAtom) === "plan",
+  (get, set, newValue: boolean) => {
+    set(agentModeAtom, newValue ? "plan" : "agent")
+  },
+)
+
+// Ask mode - pending edit approvals
+export type PendingEditApproval = {
+  toolUseId: string
+  toolName: "Edit" | "Write"
+  input: Record<string, unknown>
+  filePath: string
+  oldContent?: string
+  newContent?: string
+}
+
+export const pendingEditApprovalsAtom = atom<Map<string, PendingEditApproval>>(new Map())
+export const reviewingEditAtom = atom<PendingEditApproval | null>(null)
 
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {

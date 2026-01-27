@@ -37,9 +37,12 @@ export function CommandsSection({
     { refetchInterval: 30000 }
   )
 
+  // Ensure commands is always an array (safety check for undefined/null)
+  const commandsArray = Array.isArray(commands) ? commands : []
+
   // Separate by source
-  const projectCommands = commands.filter((c) => c.source === "project")
-  const userCommands = commands.filter((c) => c.source === "user")
+  const projectCommands = commandsArray.filter((c) => c.source === "project")
+  const userCommands = commandsArray.filter((c) => c.source === "user")
 
   return (
     <div className="flex flex-col border-t border-border overflow-hidden flex-shrink-0">
@@ -60,7 +63,7 @@ export function CommandsSection({
           </button>
           <span className="text-xs font-medium text-muted-foreground">Commands</span>
         </div>
-        <span className="text-xs text-muted-foreground/60">{commands.length}</span>
+        <span className="text-xs text-muted-foreground/60">{commandsArray.length}</span>
       </div>
 
       {/* Commands List */}
@@ -70,7 +73,7 @@ export function CommandsSection({
             <div className="text-xs text-muted-foreground/60 text-center py-4">
               Loading...
             </div>
-          ) : commands.length === 0 ? (
+          ) : commandsArray.length === 0 ? (
             <div className="text-xs text-muted-foreground/60 text-center py-4">
               No commands found
             </div>

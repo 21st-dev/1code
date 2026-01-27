@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react"
-import { useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
 import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
 import {
@@ -19,10 +19,16 @@ import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
-import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom } from "../atoms"
+import {
+  agentsDiffSidebarOpenAtom,
+  agentsFocusedDiffFileAtom,
+  agentModeAtom,
+  pendingEditApprovalsAtom,
+  reviewingEditAtom,
+} from "../atoms"
 import { cn } from "../../../lib/utils"
 import { useOpenFile } from "../../workspace-files/hooks/use-open-file"
-import { FileText } from "lucide-react"
+import { FileText, ShieldCheck } from "lucide-react"
 
 interface AgentEditToolProps {
   part: any
@@ -228,6 +234,14 @@ export const AgentEditTool = memo(function AgentEditTool({
   const setDiffSidebarOpen = useSetAtom(agentsDiffSidebarOpenAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
 
+  // Ask mode atoms
+  const agentMode = useAtomValue(agentModeAtom)
+  const pendingApprovals = useAtomValue(pendingEditApprovalsAtom)
+  const setReviewingEdit = useSetAtom(reviewingEditAtom)
+
+  // Check if this edit is pending approval
+  const isPendingApproval = pendingApprovals.has(part.toolCallId)
+
   // Determine tool type
   const isWriteMode = part.type === "tool-Write"
   const toolPrefix = isWriteMode ? "tool-Write" : "tool-Edit"
@@ -276,8 +290,9 @@ export const AgentEditTool = memo(function AgentEditTool({
     e.stopPropagation()
     if (!fullPath) return
 
+    console.log("[AgentEditTool] Opening file in viewer:", { filePath, fullPath, filename })
     await openFile(fullPath, filename)
-  }, [fullPath, filename, openFile])
+  }, [fullPath, filename, openFile, filePath])
 
   // Memoized click handlers to prevent inline function re-creation
   const handleHeaderClick = useCallback(() => {
@@ -570,6 +585,26 @@ export const AgentEditTool = memo(function AgentEditTool({
               </>
             ) : null}
           </div>
+
+          {/* Review Changes button - show in Ask mode when edit is pending approval */}
+          {agentMode === "ask" && isPendingApproval && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    const approval = pendingApprovals.get(part.toolCallId)
+                    if (approval) {
+                      setReviewingEdit(approval)
+                    }
+                  }}
+                  className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Review Changes</TooltipContent>
+            </Tooltip>
+          )}
 
           {/* Open in viewer button - show when not pending */}
           {!isPending && !isInputStreaming && fullPath && (

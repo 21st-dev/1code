@@ -1,13 +1,14 @@
 "use client"
 
 import { memo, useState, useEffect, useRef } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, PlayCircle } from "lucide-react"
 import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
 import { AgentToolCall } from "./agent-tool-call"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areTaskToolPropsEqual } from "./agent-tool-utils"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
+import { Badge } from "../../../components/ui/badge"
 
 interface AgentTaskToolProps {
   part: any
@@ -48,6 +49,10 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   const [isTimeInaccurate, setIsTimeInaccurate] = useState(false)
 
   const description = part.input?.description || ""
+  const agentName = part.input?.name
+  const subagentType = part.input?.subagent_type || ""
+  const model = part.input?.model
+  const isBackground = part.input?.run_in_background
 
   // Track elapsed time while task is running
   useEffect(() => {
@@ -113,7 +118,9 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 
   // Get title text based on status
   const getTitle = () => {
-    return isPending ? "Running Task" : "Completed Task"
+    // Prioritize custom name, then subagent type, then fall back to "Task"
+    const displayName = agentName || subagentType || "Task"
+    return isPending ? `Running ${displayName}` : `Completed ${displayName}`
   }
 
   // Show interrupted state if task was interrupted without completing
@@ -148,6 +155,16 @@ export const AgentTaskTool = memo(function AgentTaskTool({
               <span className="text-muted-foreground/60 truncate">
                 {subtitle}
               </span>
+            )}
+            {/* Show model override badge */}
+            {model && (
+              <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-normal flex-shrink-0">
+                {model}
+              </Badge>
+            )}
+            {/* Show background execution indicator */}
+            {isBackground && (
+              <PlayCircle className="w-3 h-3 text-muted-foreground/50 flex-shrink-0" title="Running in background" />
             )}
             {/* Show elapsed time while running or final time when done */}
             {elapsedTimeDisplay && (

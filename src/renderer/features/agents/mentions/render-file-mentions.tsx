@@ -289,7 +289,7 @@ function MentionChip({ mention }: { mention: ParsedMention }) {
 
     if (mention.type === "file" && mention.path) {
       // File mentions use project-relative paths (e.g., "src/components/Button.tsx")
-      // The hook will use readProjectFile to read any file from the project
+      // The hook will use readFile to read any file from the project
       await openFile(mention.path, mention.label)
     } else if (mention.type === "folder") {
       // Future: Handle folder clicks

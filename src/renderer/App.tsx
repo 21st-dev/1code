@@ -5,6 +5,7 @@ import { Toaster } from "sonner"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
 import { selectedProjectAtom } from "./features/agents/atoms"
+import { EditReviewModal } from "./features/agents/ui/edit-review-modal"
 import { AgentsLayout } from "./features/layout/agents-layout"
 import {
   AnthropicOnboardingPage,
@@ -148,6 +149,7 @@ export function App() {
                 <AppContent />
               </div>
               <ThemedToaster />
+              <EditReviewModal />
             </TRPCProvider>
           </TooltipProvider>
         </VSCodeThemeProvider>

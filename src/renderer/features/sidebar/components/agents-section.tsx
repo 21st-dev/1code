@@ -1,11 +1,14 @@
 "use client"
 
 import React, { useCallback } from "react"
-import { ChevronRight, Trash2 } from "lucide-react"
+import { ChevronRight, Trash2, Plus } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import { AgentIcon } from "../../../components/ui/icons"
+import { useSetAtom } from "jotai"
+import { agentBuilderModalOpenAtom } from "../../../lib/atoms"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 
 interface FileAgent {
   name: string
@@ -31,11 +34,22 @@ export function AgentsSection({
   onAgentClick,
   onDeleteAgent,
 }: AgentsSectionProps) {
+  const setModalOpen = useSetAtom(agentBuilderModalOpenAtom)
+
+  console.log('[AgentsSection] Rendering with projectPath:', projectPath)
+
   // Query agents
   const { data: agents = [], isLoading } = trpc.agents.listEnabled.useQuery(
     { cwd: projectPath },
     { refetchInterval: 30000 }
   )
+
+  console.log('[AgentsSection] Agents loaded:', {
+    count: agents.length,
+    isLoading,
+    projectPath,
+    agents: agents.map(a => ({ name: a.name, source: a.source, path: a.path }))
+  })
 
   // Separate by source
   const projectAgents = agents.filter((a) => a.source === "project")
@@ -60,7 +74,23 @@ export function AgentsSection({
           </button>
           <span className="text-xs font-medium text-muted-foreground">Agents</span>
         </div>
-        <span className="text-xs text-muted-foreground/60">{agents.length}</span>
+
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground/60">{agents.length}</span>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setModalOpen(true)}
+                className="p-0.5 hover:bg-muted rounded transition-colors"
+                aria-label="Create new agent"
+              >
+                <Plus className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Create new agent</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Agents List */}
