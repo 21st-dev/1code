@@ -50,6 +50,13 @@
       "when": 1769480000000,
       "tag": "0006_anthropic_multi_account",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1769541435416,
+      "tag": "0007_watery_winter_soldier",
+      "breakpoints": true
     }
   ]
 }

@@ -60,7 +60,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     if (currentToolCallId) {
       // Track this tool ID to avoid duplicates from assistant message
       emittedToolIds.add(currentToolCallId)
-      
+
       // Emit complete tool call with accumulated input
       yield {
         type: "tool-input-available",
@@ -230,7 +230,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
       // Thinking/reasoning streaming - emit as tool-like chunks for UI
       if (event.delta?.type === "thinking_delta" && currentThinkingId && inThinkingBlock) {
         const thinkingText = String(event.delta.thinking || "")
-        
+
         // Accumulate and emit delta
         accumulatedThinking += thinkingText
         yield {
@@ -239,7 +239,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
           inputTextDelta: thinkingText,
         }
       }
-      
+
       // Thinking complete (content_block_stop while in thinking block)
       if (event.type === "content_block_stop" && inThinkingBlock && currentThinkingId) {
         // Emit the complete thinking tool
@@ -273,11 +273,11 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
           // Check if we already streamed this thinking block
           // We compare by checking if accumulated thinking matches
           const wasStreamed = emittedToolIds.has("thinking-streamed")
-          
+
           if (wasStreamed) {
             continue
           }
-          
+
           // Emit as tool-input-available with special "Thinking" tool name
           // This allows the UI to render it like other tools
           const thinkingId = genId()
@@ -458,14 +458,31 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
     // ===== RESULT (final) =====
     if (msg.type === "result") {
-      console.log("[transform] RESULT message, textStarted:", textStarted, "lastTextId:", lastTextId)
       yield* endTextBlock()
       yield* endToolInput()
 
       const inputTokens = msg.usage?.input_tokens
       const outputTokens = msg.usage?.output_tokens
+
+      // Extract per-model usage from SDK (if available)
+      const modelUsage = msg.modelUsage
+        ? Object.fromEntries(
+            Object.entries(msg.modelUsage).map(([model, usage]: [string, any]) => [
+              model,
+              {
+                inputTokens: usage.inputTokens || 0,
+                outputTokens: usage.outputTokens || 0,
+                cacheReadInputTokens: usage.cacheReadInputTokens || 0,
+                cacheCreationInputTokens: usage.cacheCreationInputTokens || 0,
+                costUSD: usage.costUSD || 0,
+              },
+            ])
+          )
+        : undefined
+
       const metadata: MessageMetadata = {
         sessionId: msg.session_id,
+        sdkMessageUuid: emitSdkMessageUuid ? msg.uuid : undefined,
         inputTokens,
         outputTokens,
         totalTokens: inputTokens && outputTokens ? inputTokens + outputTokens : undefined,
@@ -474,10 +491,11 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
         resultSubtype: msg.subtype || "success",
         // Include finalTextId for collapsing tools when there's a final response
         finalTextId: lastTextId || undefined,
+        // Per-model usage breakdown
+        modelUsage,
       }
       yield { type: "message-metadata", messageMetadata: metadata }
       yield { type: "finish-step" }
-      console.log("[transform] YIELDING FINISH from result message")
       yield { type: "finish", messageMetadata: metadata }
     }
   }

@@ -15,8 +15,8 @@ import {
   logRawClaudeMessage,
   type UIMessageChunk,
 } from "../../claude"
-import { getProjectMcpServers, GLOBAL_MCP_PATH, readClaudeConfig, resolveProjectPathFromWorktree, type McpServerConfig } from "../../claude-config"
-import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
+import { getProjectMcpServers, GLOBAL_MCP_PATH, readClaudeConfig, type McpServerConfig } from "../../claude-config"
+import { chats, claudeCodeCredentials, getDatabase, modelUsage, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import { ensureMcpTokensFresh, fetchMcpTools, fetchMcpToolsStdio, getMcpAuthStatus, startMcpOAuth } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
@@ -563,6 +563,14 @@ export const claudeRouter = router({
               .get()
             const existingMessages = JSON.parse(existing?.messages || "[]")
             const existingSessionId = existing?.sessionId || null
+
+            // Get projectId from chat record (needed for usage tracking)
+            const chatRecord = db
+              .select({ projectId: chats.projectId })
+              .from(chats)
+              .where(eq(chats.id, input.chatId))
+              .get()
+            const projectId = chatRecord?.projectId
 
             // Get resumeSessionAt UUID only if shouldResume flag was set (by rollbackToMessage)
             const lastAssistantMsg = [...existingMessages].reverse().find(
@@ -1803,6 +1811,65 @@ ${prompt}
                 if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
                   await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
                 }
+
+                // Record usage statistics (even on error)
+                // Prefer per-model breakdown from SDK for accurate model attribution
+                if (projectId && metadata.modelUsage && Object.keys(metadata.modelUsage).length > 0) {
+                  try {
+                    const existingUsage = metadata.sdkMessageUuid
+                      ? db.select().from(modelUsage).where(eq(modelUsage.messageUuid, metadata.sdkMessageUuid)).get()
+                      : null
+
+                    if (!existingUsage) {
+                      for (const [model, usage] of Object.entries(metadata.modelUsage)) {
+                        const totalTokens = usage.inputTokens + usage.outputTokens
+                        db.insert(modelUsage).values({
+                          subChatId: input.subChatId,
+                          chatId: input.chatId,
+                          projectId,
+                          model,
+                          inputTokens: usage.inputTokens,
+                          outputTokens: usage.outputTokens,
+                          totalTokens,
+                          costUsd: usage.costUSD?.toFixed(6),
+                          sessionId: metadata.sessionId,
+                          messageUuid: metadata.sdkMessageUuid ? `${metadata.sdkMessageUuid}-${model}` : undefined,
+                          mode: input.mode,
+                          durationMs: metadata.durationMs,
+                        }).run()
+                        console.log(`[Usage] Recorded ${model} (on error): ${usage.inputTokens} in, ${usage.outputTokens} out`)
+                      }
+                    }
+                  } catch (usageErr) {
+                    console.error(`[Usage] Failed to record per-model usage:`, usageErr)
+                  }
+                } else if (projectId && (metadata.inputTokens || metadata.outputTokens)) {
+                  try {
+                    const existingUsage = metadata.sdkMessageUuid
+                      ? db.select().from(modelUsage).where(eq(modelUsage.messageUuid, metadata.sdkMessageUuid)).get()
+                      : null
+
+                    if (!existingUsage) {
+                      db.insert(modelUsage).values({
+                        subChatId: input.subChatId,
+                        chatId: input.chatId,
+                        projectId,
+                        model: finalCustomConfig?.model || "claude-sonnet-4-20250514",
+                        inputTokens: metadata.inputTokens || 0,
+                        outputTokens: metadata.outputTokens || 0,
+                        totalTokens: metadata.totalTokens || 0,
+                        costUsd: metadata.totalCostUsd?.toFixed(6),
+                        sessionId: metadata.sessionId,
+                        messageUuid: metadata.sdkMessageUuid,
+                        mode: input.mode,
+                        durationMs: metadata.durationMs,
+                      }).run()
+                      console.log(`[Usage] Recorded (on error, fallback): ${metadata.inputTokens || 0} in, ${metadata.outputTokens || 0} out`)
+                    }
+                  } catch (usageErr) {
+                    console.error(`[Usage] Failed to record usage:`, usageErr)
+                  }
+                }
               }
 
               console.log(`[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`)
@@ -1868,6 +1935,74 @@ ${prompt}
               .set({ updatedAt: new Date() })
               .where(eq(chats.id, input.chatId))
               .run()
+
+            // Record usage statistics (if we have token data and projectId)
+            // Prefer per-model breakdown from SDK for accurate model attribution
+            if (!projectId) {
+              // Skip - no projectId available (shouldn't happen in normal flow)
+            } else if (metadata.modelUsage && Object.keys(metadata.modelUsage).length > 0) {
+              try {
+                // Check for duplicate by sdkMessageUuid
+                const existingUsage = metadata.sdkMessageUuid
+                  ? db.select().from(modelUsage).where(eq(modelUsage.messageUuid, metadata.sdkMessageUuid)).get()
+                  : null
+
+                if (!existingUsage) {
+                  // Record separate entries for each model used
+                  for (const [model, usage] of Object.entries(metadata.modelUsage)) {
+                    const totalTokens = usage.inputTokens + usage.outputTokens
+                    db.insert(modelUsage).values({
+                      subChatId: input.subChatId,
+                      chatId: input.chatId,
+                      projectId,
+                      model,
+                      inputTokens: usage.inputTokens,
+                      outputTokens: usage.outputTokens,
+                      totalTokens,
+                      costUsd: usage.costUSD?.toFixed(6),
+                      sessionId: metadata.sessionId,
+                      messageUuid: metadata.sdkMessageUuid ? `${metadata.sdkMessageUuid}-${model}` : undefined,
+                      mode: input.mode,
+                      durationMs: metadata.durationMs,
+                    }).run()
+                    console.log(`[Usage] Recorded ${model}: ${usage.inputTokens} in, ${usage.outputTokens} out, cost: ${usage.costUSD?.toFixed(4) || '?'}`)
+                  }
+                } else {
+                  console.log(`[Usage] Skipping duplicate: ${metadata.sdkMessageUuid}`)
+                }
+              } catch (usageErr) {
+                console.error(`[Usage] Failed to record per-model usage:`, usageErr)
+              }
+            } else if (metadata.inputTokens || metadata.outputTokens) {
+              // Fallback: use aggregate data if per-model breakdown not available
+              try {
+                const existingUsage = metadata.sdkMessageUuid
+                  ? db.select().from(modelUsage).where(eq(modelUsage.messageUuid, metadata.sdkMessageUuid)).get()
+                  : null
+
+                if (!existingUsage) {
+                  db.insert(modelUsage).values({
+                    subChatId: input.subChatId,
+                    chatId: input.chatId,
+                    projectId,
+                    model: finalCustomConfig?.model || "claude-sonnet-4-20250514",
+                    inputTokens: metadata.inputTokens || 0,
+                    outputTokens: metadata.outputTokens || 0,
+                    totalTokens: metadata.totalTokens || 0,
+                    costUsd: metadata.totalCostUsd?.toFixed(6),
+                    sessionId: metadata.sessionId,
+                    messageUuid: metadata.sdkMessageUuid,
+                    mode: input.mode,
+                    durationMs: metadata.durationMs,
+                  }).run()
+                  console.log(`[Usage] Recorded (fallback): ${metadata.inputTokens || 0} in, ${metadata.outputTokens || 0} out, cost: ${metadata.totalCostUsd?.toFixed(4) || '?'}`)
+                } else {
+                  console.log(`[Usage] Skipping duplicate: ${metadata.sdkMessageUuid}`)
+                }
+              } catch (usageErr) {
+                console.error(`[Usage] Failed to record usage:`, usageErr)
+              }
+            }
 
             // Create snapshot stash for rollback support
             if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
