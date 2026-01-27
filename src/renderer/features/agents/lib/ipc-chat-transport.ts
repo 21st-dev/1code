@@ -112,7 +112,7 @@ type IPCChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string // Original project path for MCP config lookup (when using worktrees)
-  mode: "plan" | "agent" | "agent-builder" | "agent-modifier" | "read-only" | "ask"
+  mode: "plan" | "agent" | "agent-builder" | "read-only" | "ask"
   model?: string
   systemPrompt?: string // Custom system prompt (for agent builder)
 }

@@ -19,7 +19,6 @@ import {
   CheckIcon,
   ClaudeCodeIcon,
   PlanIcon,
-  ThinkingIcon,
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import {
@@ -58,6 +57,7 @@ import { AgentDiffTextContextItem } from "../ui/agent-diff-text-context-item"
 import { AgentFileItem } from "../ui/agent-file-item"
 import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
+import { ModelSelector } from "../ui/model-selector"
 import { handlePasteEvent } from "../utils/paste-text"
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
@@ -884,7 +884,10 @@ export const ChatInputArea = memo(function ChatInputArea({
                     }}
                   >
                     <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
+                      <button
+                        aria-label={`Current mode: ${agentMode === "plan" ? "Plan" : agentMode === "read-only" ? "Read-Only" : agentMode === "ask" ? "Ask" : "Agent"}. Click to change mode.`}
+                        className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                      >
                         {agentMode === "plan" ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
                         ) : agentMode === "read-only" ? (
@@ -1205,93 +1208,15 @@ export const ChatInputArea = memo(function ChatInputArea({
                     </DropdownMenu>
                   ) : (
                     // Online mode: show unified model selector with Claude, Custom, and Ollama models
-                    <DropdownMenu
-                      open={isModelDropdownOpen}
-                      onOpenChange={setIsModelDropdownOpen}
-                    >
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          className={cn(
-                            "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                            "hover:text-foreground hover:bg-muted/50",
-                          )}
-                        >
-                          {selectedModel?.provider === "claude" ? (
-                            <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
-                          ) : selectedModel?.provider === "custom" ? (
-                            <Zap className="h-3.5 w-3.5 shrink-0" />
-                          ) : (
-                            <Zap className="h-3.5 w-3.5 shrink-0" />
-                          )}
-                          <span className="truncate">
-                            {selectedModel?.name}
-                            {selectedModel?.provider === "claude" && (
-                              <span className="text-muted-foreground ml-0.5">4.5</span>
-                            )}
-                          </span>
-                          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[280px]">
-                        {availableModels.groups.map((group) => (
-                          <div key={group.id}>
-                            {group.id !== "claude" && <DropdownMenuSeparator />}
-                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                              {group.name}
-                            </div>
-                            {group.options.map((model) => {
-                              const isSelected = selectedModel?.id === model.id
-                              return (
-                                <DropdownMenuItem
-                                  key={model.id}
-                                  onClick={() => {
-                                    availableModels.selectModel(model)
-                                    if (model.provider === "claude") {
-                                      setLastSelectedModelId(model.id)
-                                    }
-                                  }}
-                                  className="gap-2 justify-between"
-                                >
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    {model.provider === "claude" ? (
-                                      <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    ) : model.provider === "custom" ? (
-                                      <Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    ) : (
-                                      <Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    )}
-                                    <span className="truncate">
-                                      {model.name}
-                                      {model.provider === "claude" && (
-                                        <span className="text-muted-foreground ml-0.5">4.5</span>
-                                      )}
-                                    </span>
-                                  </div>
-                                  {isSelected && (
-                                    <CheckIcon className="h-3.5 w-3.5 shrink-0 ml-2" />
-                                  )}
-                                </DropdownMenuItem>
-                              )
-                            })}
-                          </div>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <div
-                          className="flex items-center justify-between px-1.5 py-1.5 mx-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm">Thinking</span>
-                          </div>
-                          <Switch
-                            checked={thinkingEnabled}
-                            onCheckedChange={setThinkingEnabled}
-                            className="scale-75"
-                          />
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <ModelSelector
+                      thinkingEnabled={thinkingEnabled}
+                      onThinkingChange={setThinkingEnabled}
+                      onModelSelect={(model) => {
+                        if (model.provider === "claude") {
+                          setLastSelectedModelId(model.id)
+                        }
+                      }}
+                    />
                   )}
                 </div>
 
@@ -1337,7 +1262,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                       onClick={handleRefineInput}
                       disabled={!hasContent || isRefining || isStreaming}
-                      title="Refine input with AI (uses Ollama)"
+                      aria-label="Refine input with AI (uses Ollama)"
                     >
                       {isRefining ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

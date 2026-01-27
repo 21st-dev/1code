@@ -16,6 +16,16 @@ import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { Badge } from "../../ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import { cn } from "../../../lib/utils"
 import { Trash2, Plus, Edit2, Save, X, GripVertical } from "lucide-react"
 
@@ -81,6 +91,10 @@ export function AgentsModelsTab() {
   const createProfileMutation = trpc.modelProfiles.create.useMutation()
   const updateProfileMutation = trpc.modelProfiles.update.useMutation()
   const deleteProfileMutation = trpc.modelProfiles.delete.useMutation()
+
+  // Delete confirmation dialog state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [profileToDelete, setProfileToDelete] = useState<{id: string, name: string} | null>(null)
 
   // Get the profile being edited
   const editingProfile = editingProfileId ? modelProfiles.find((p) => p.id === editingProfileId) : null
@@ -168,13 +182,22 @@ export function AgentsModelsTab() {
     setEditingProfileId(profileId)
   }
 
-  const handleDeleteProfile = async (profileId: string) => {
+  const handleDeleteProfile = (profileId: string, profileName: string) => {
+    setProfileToDelete({ id: profileId, name: profileName })
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!profileToDelete) return
     try {
-      await deleteProfileMutation.mutateAsync({ id: profileId })
+      await deleteProfileMutation.mutateAsync({ id: profileToDelete.id })
       toast.success("Profile deleted")
     } catch (error) {
       toast.error("Failed to delete profile")
       console.error(error)
+    } finally {
+      setDeleteConfirmOpen(false)
+      setProfileToDelete(null)
     }
   }
 
@@ -401,7 +424,7 @@ export function AgentsModelsTab() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteProfile(profile.id)}
+                          onClick={() => handleDeleteProfile(profile.id, profile.name)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -654,6 +677,23 @@ export function AgentsModelsTab() {
           </div>
         </div>
       )}
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Profile?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{profileToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

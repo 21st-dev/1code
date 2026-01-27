@@ -195,6 +195,7 @@ const pendingToolApprovals = new Map<
       message?: string
       updatedInput?: unknown
     }) => void
+    timeoutId: NodeJS.Timeout | null
   }
 >()
 
@@ -206,6 +207,9 @@ const PLAN_MODE_BLOCKED_TOOLS = new Set([
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
     if (subChatId && pending.subChatId !== subChatId) continue
+    if (pending.timeoutId) {
+      clearTimeout(pending.timeoutId)
+    }
     pending.resolve({ approved: false, message })
     pendingToolApprovals.delete(toolUseId)
   }
@@ -391,7 +395,7 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "agent", "agent-builder", "agent-modifier", "read-only", "ask"]).default("agent"),
+        mode: z.enum(["plan", "agent", "agent-builder", "read-only", "ask"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
         systemPrompt: z.string().optional(), // Custom system prompt for agent builder
@@ -1237,12 +1241,16 @@ ${prompt}
                     // Wait for user approval (similar to AskUserQuestion pattern)
                     const response = await new Promise<{ approved: boolean; message?: string }>((resolve) => {
                       const timeoutId = setTimeout(() => {
-                        pendingToolApprovals.delete(toolUseID)
-                        safeEmit({
-                          type: "edit-approval-timeout",
-                          toolUseId: toolUseID,
-                        } as UIMessageChunk)
-                        resolve({ approved: false, message: "Edit approval timed out after 5 minutes" })
+                        const pending = pendingToolApprovals.get(toolUseID)
+                        if (pending) {
+                          pending.timeoutId = null
+                          pendingToolApprovals.delete(toolUseID)
+                          safeEmit({
+                            type: "edit-approval-timeout",
+                            toolUseId: toolUseID,
+                          } as UIMessageChunk)
+                          resolve({ approved: false, message: "Edit approval timed out after 5 minutes" })
+                        }
                       }, 300000) // 5 minute timeout
 
                       pendingToolApprovals.set(toolUseID, {
@@ -1251,6 +1259,7 @@ ${prompt}
                           clearTimeout(timeoutId)
                           resolve(data)
                         },
+                        timeoutId,
                       })
                     })
 
@@ -1281,14 +1290,18 @@ ${prompt}
                       updatedInput?: unknown
                     }>((resolve) => {
                       const timeoutId = setTimeout(() => {
-                        pendingToolApprovals.delete(toolUseID)
-                        // Emit chunk to notify UI that the question has timed out
-                        // This ensures the pending question dialog is cleared
-                        safeEmit({
-                          type: "ask-user-question-timeout",
-                          toolUseId: toolUseID,
-                        } as UIMessageChunk)
-                        resolve({ approved: false, message: "Timed out" })
+                        const pending = pendingToolApprovals.get(toolUseID)
+                        if (pending) {
+                          pending.timeoutId = null
+                          pendingToolApprovals.delete(toolUseID)
+                          // Emit chunk to notify UI that the question has timed out
+                          // This ensures the pending question dialog is cleared
+                          safeEmit({
+                            type: "ask-user-question-timeout",
+                            toolUseId: toolUseID,
+                          } as UIMessageChunk)
+                          resolve({ approved: false, message: "Timed out" })
+                        }
                       }, 60000)
 
                       pendingToolApprovals.set(toolUseID, {
@@ -1297,6 +1310,7 @@ ${prompt}
                           clearTimeout(timeoutId)
                           resolve(d)
                         },
+                        timeoutId,
                       })
                     })
 
@@ -2298,6 +2312,9 @@ ${prompt}
     .mutation(async ({ input }) => {
       const pending = pendingToolApprovals.get(input.toolUseId)
       if (pending) {
+        if (pending.timeoutId) {
+          clearTimeout(pending.timeoutId)
+        }
         pending.resolve({ approved: input.approved, message: input.message })
         pendingToolApprovals.delete(input.toolUseId)
         return { success: true }

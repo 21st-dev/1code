@@ -8,6 +8,7 @@ import {
 } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 import { Button } from "../ui/button"
+import { Input } from "../ui/input"
 import { ScrollArea } from "../ui/scroll-area"
 import {
   Dialog,
@@ -62,6 +63,7 @@ const PRIORITY_LABELS: Record<FeedbackPriority, string> = {
 
 export function FeedbackListDialog() {
   const [isOpen, setIsOpen] = useAtom(feedbackListDialogOpenAtom)
+  const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState<FeedbackType | "all">("all")
   const [filterResolved, setFilterResolved] = useState<"all" | "resolved" | "unresolved">("all")
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -116,6 +118,12 @@ export function FeedbackListDialog() {
     setIsOpen(open)
   }
 
+  // Filter feedback based on search query (client-side search)
+  const filteredFeedback = feedbackList?.filter((item) =>
+    searchQuery === "" ||
+    item.description.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[75vw] max-w-6xl max-h-[85vh] h-[85vh]">
@@ -127,6 +135,15 @@ export function FeedbackListDialog() {
 
           {/* Filters */}
           <div className="flex items-center gap-4 py-3 border-b">
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Search feedback..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-64"
+              />
+            </div>
+
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Type:</label>
               <Select
@@ -168,7 +185,7 @@ export function FeedbackListDialog() {
             <div className="flex-1" />
 
             <div className="text-sm text-muted-foreground">
-              {feedbackList?.length || 0} items
+              {filteredFeedback?.length || 0} items
             </div>
           </div>
 
@@ -186,7 +203,7 @@ export function FeedbackListDialog() {
                 </tr>
               </thead>
               <tbody>
-                {feedbackList?.map((item) => (
+                {filteredFeedback?.map((item) => (
                   <tr
                     key={item.id}
                     className="border-b hover:bg-muted/50 transition-colors"
@@ -251,10 +268,12 @@ export function FeedbackListDialog() {
                     </td>
                   </tr>
                 ))}
-                {(!feedbackList || feedbackList.length === 0) && (
+                {(!filteredFeedback || filteredFeedback.length === 0) && (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                      No feedback found
+                      {feedbackList && feedbackList.length > 0
+                        ? "No feedback matches your search"
+                        : "No feedback found"}
                     </td>
                   </tr>
                 )}

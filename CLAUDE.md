@@ -122,9 +122,19 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 
 ### Claude Integration
 - Dynamic import of `@anthropic-ai/claude-code` SDK
-- Two modes: "plan" (read-only) and "agent" (full permissions)
+- Session modes control tool permissions and behavior
 - Session resume via `sessionId` stored in SubChat
 - Message streaming via tRPC subscription (`claude.onMessage`)
+
+**Claude Session Modes:**
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `agent` | Full permissions with tool use | Implementing features, running commands |
+| `plan` | Read-only mode for review and planning | Reviewing code changes without making modifications |
+| `agent-builder` | Specialized for creating new agents | Designing Claude Code agents from conversations |
+| `read-only` | Strict read-only, no file modifications | Browsing codebases safely |
+| `ask` | Q&A mode without tool execution | Getting explanations without side effects |
 
 ### Custom Slash Commands (v0.0.30+)
 
