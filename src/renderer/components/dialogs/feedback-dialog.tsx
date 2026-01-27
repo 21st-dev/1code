@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useAtom } from "jotai"
-import { Upload } from "lucide-react"
+import { Upload, X } from "lucide-react"
 import { feedbackDialogOpenAtom } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 import { Button } from "../ui/button"
@@ -88,8 +88,19 @@ export function FeedbackDialog() {
     })
 
     if (!result.canceled && result.filePaths.length > 0) {
-      // For now, just store the paths (file operations can be added later)
-      setScreenshots((prev) => [...prev, ...result.filePaths])
+      // Copy each file to userData directory and store relative paths
+      const newScreenshots: string[] = []
+      for (const filePath of result.filePaths) {
+        try {
+          const relativePath = await window.desktopApi.copyFeedbackScreenshot(filePath)
+          newScreenshots.push(relativePath)
+        } catch (error) {
+          console.error("[Feedback] Failed to copy screenshot:", error)
+          // Fallback to original path if copy fails
+          newScreenshots.push(filePath)
+        }
+      }
+      setScreenshots((prev) => [...prev, ...newScreenshots])
     }
   }
 

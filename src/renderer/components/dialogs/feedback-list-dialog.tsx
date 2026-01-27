@@ -25,13 +25,14 @@ import { toast } from "sonner"
 type FeedbackType = "bug" | "feature" | "enhancement" | "idea" | "usability" | "other"
 type FeedbackPriority = "low" | "medium" | "high" | "critical"
 
+// Type for feedback item returned from tRPC
 interface FeedbackItem {
   id: string
   type: FeedbackType
   priority: FeedbackPriority
   description: string
   screenshots: string
-  resolved: number
+  resolved: boolean
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -95,7 +96,7 @@ export function FeedbackListDialog() {
         priority: item.priority,
         description: item.description,
         screenshots: JSON.parse(item.screenshots || "[]"),
-        resolved: item.resolved === 1,
+        resolved: item.resolved,
         createdAt: item.createdAt?.toISOString(),
         updatedAt: item.updatedAt?.toISOString(),
       },
@@ -227,7 +228,7 @@ export function FeedbackListDialog() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleCopyJson(item as any)}
+                          onClick={() => handleCopyJson(item)}
                           title="Copy as JSON"
                         >
                           {copiedId === item.id ? (

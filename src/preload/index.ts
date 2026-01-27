@@ -163,6 +163,16 @@ contextBridge.exposeInMainWorld("desktopApi", {
   // Subscribe to git watcher for a worktree (from renderer)
   subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
   unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
+
+  // Feedback screenshot handling - copy file to userData and return relative path
+  copyFeedbackScreenshot: (sourcePath: string) => ipcRenderer.invoke("feedback:copy-screenshot", sourcePath),
+
+  // Agent cache invalidation events
+  onAgentCacheCleared: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on("agent-cache-cleared", handler)
+    return () => ipcRenderer.removeListener("agent-cache-cleared", handler)
+  },
 })
 
 // Type definitions
@@ -249,6 +259,10 @@ export interface DesktopApi {
   onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => () => void
   subscribeToGitWatcher: (worktreePath: string) => Promise<void>
   unsubscribeFromGitWatcher: (worktreePath: string) => Promise<void>
+  // Feedback
+  copyFeedbackScreenshot: (sourcePath: string) => Promise<string>
+  // Agent cache
+  onAgentCacheCleared: (callback: () => void) => () => void
 }
 
 declare global {

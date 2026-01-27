@@ -2,6 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { BrowserWindow } from "electron"
 import { getDatabase } from "../../db"
 import { agents } from "../../db/schema"
 
@@ -215,10 +216,18 @@ const agentCache = new Map<string, ParsedAgent | null>()
 
 /**
  * Clear the agent cache (for testing/debugging)
+ * Also broadcasts to all renderer windows to clear their local cache
  */
 export function clearAgentCache() {
   agentCache.clear()
   console.log("[agents] Cache cleared")
+
+  // Broadcast to all renderer windows to clear their local cache
+  BrowserWindow.getAllWindows().forEach((win) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send("agent-cache-cleared")
+    }
+  })
 }
 
 /**

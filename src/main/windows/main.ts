@@ -7,9 +7,10 @@ import {
   clipboard,
   session,
   nativeImage,
+  copyFileSync,
 } from "electron"
-import { join } from "path"
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
+import { join, basename } from "path"
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync as copyFile } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
@@ -271,6 +272,33 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
 
   // Register git watcher IPC handlers
   registerGitWatcherIPC(getWindow)
+
+  // Feedback screenshot handling - copy files to userData directory
+  ipcMain.handle("feedback:copy-screenshot", async (_event, sourcePath: string) => {
+    try {
+      const screenshotsDir = join(app.getPath("userData"), "feedback-screenshots")
+      // Ensure directory exists
+      if (!existsSync(screenshotsDir)) {
+        mkdirSync(screenshotsDir, { recursive: true })
+      }
+
+      // Generate unique filename to avoid collisions
+      const timestamp = Date.now()
+      const ext = basename(sourcePath).split(".").pop() || "png"
+      const filename = `screenshot-${timestamp}-${Math.random().toString(36).substring(2, 8)}.${ext}`
+      const destPath = join(screenshotsDir, filename)
+
+      // Copy file
+      copyFile(sourcePath, destPath)
+
+      console.log("[Feedback] Screenshot copied to:", destPath)
+      // Return the full path for display in renderer
+      return destPath
+    } catch (error) {
+      console.error("[Feedback] Failed to copy screenshot:", error)
+      throw error
+    }
+  })
 }
 
 // Current window reference
