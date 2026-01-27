@@ -11,7 +11,6 @@ interface AgentUserQuestionProps {
   onAnswer: (answers: Record<string, string>) => void
   onSkip: () => void
   hasCustomText?: boolean
-  isExpired?: boolean
 }
 
 export interface AgentUserQuestionHandle {
@@ -24,7 +23,6 @@ export const AgentUserQuestion = memo(forwardRef<AgentUserQuestionHandle, AgentU
     onAnswer,
     onSkip,
     hasCustomText = false,
-    isExpired = false,
   }: AgentUserQuestionProps, ref) {
   const { questions, toolUseId } = pendingQuestions
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)

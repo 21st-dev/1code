@@ -2649,6 +2649,30 @@ const ChatViewInner = memo(function ChatViewInner({
     })
   }, [subChatId, setPendingQuestionsMap, setExpiredQuestionsMap])
 
+  // Shared helpers for question answer handlers
+  const formatAnswersAsText = useCallback(
+    (answers: Record<string, string>): string =>
+      Object.entries(answers)
+        .map(([question, answer]) => `${question}: ${answer}`)
+        .join("\n"),
+    [],
+  )
+
+  const clearInputAndDraft = useCallback(() => {
+    editorRef.current?.clear()
+    if (parentChatId) {
+      clearSubChatDraft(parentChatId, subChatId)
+    }
+  }, [parentChatId, subChatId])
+
+  const sendUserMessage = useCallback(async (text: string) => {
+    shouldAutoScrollRef.current = true
+    await sendMessageRef.current({
+      role: "user",
+      parts: [{ type: "text", text }],
+    })
+  }, [])
+
   // Handle answering questions
   const handleQuestionsAnswer = useCallback(
     async (answers: Record<string, string>) => {
@@ -2656,17 +2680,8 @@ const ChatViewInner = memo(function ChatViewInner({
 
       if (isQuestionExpired) {
         // Question timed out - send answers as a normal user message
-        const answerLines = Object.entries(answers)
-          .map(([question, answer]) => `${question}: ${answer}`)
-          .join("\n")
-
         clearPendingQuestionCallback()
-
-        shouldAutoScrollRef.current = true
-        await sendMessageRef.current({
-          role: "user",
-          parts: [{ type: "text", text: answerLines }],
-        })
+        await sendUserMessage(formatAnswersAsText(answers))
       } else {
         // Question is still live - use tool approval path
         await trpcClient.claude.respondToolApproval.mutate({
@@ -2677,7 +2692,7 @@ const ChatViewInner = memo(function ChatViewInner({
         clearPendingQuestionCallback()
       }
     },
-    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback],
+    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, sendUserMessage, formatAnswersAsText],
   )
 
   // Handle skipping questions
@@ -2745,27 +2760,11 @@ const ChatViewInner = memo(function ChatViewInner({
 
         if (isQuestionExpired) {
           // Expired: format everything as a user message
-          const answerLines = Object.entries(formattedAnswers)
-            .map(([question, answer]) => `${question}: ${answer}`)
-            .join("\n")
-
           clearPendingQuestionCallback()
-
-          // Clear input
-          editorRef.current?.clear()
-          if (parentChatId) {
-            clearSubChatDraft(parentChatId, subChatId)
-          }
-
-          // Send combined answers + custom text as a message
-          shouldAutoScrollRef.current = true
-          await sendMessageRef.current({
-            role: "user",
-            parts: [{ type: "text", text: answerLines }],
-          })
+          clearInputAndDraft()
+          await sendUserMessage(formatAnswersAsText(formattedAnswers))
         } else {
           // Live: use existing tool approval flow
-          // 4. Submit tool response with all answers
           await trpcClient.claude.respondToolApproval.mutate({
             toolUseId: displayQuestions.toolUseId,
             approved: true,
@@ -2776,31 +2775,21 @@ const ChatViewInner = memo(function ChatViewInner({
           })
           clearPendingQuestionCallback()
 
-          // 5. Stop stream if currently streaming
+          // Stop stream if currently streaming
           if (isStreamingRef.current) {
             agentChatStore.setManuallyAborted(subChatId, true)
             await stopRef.current()
             await new Promise((resolve) => setTimeout(resolve, 100))
           }
 
-          // 6. Clear input
-          editorRef.current?.clear()
-          if (parentChatId) {
-            clearSubChatDraft(parentChatId, subChatId)
-          }
-
-          // 7. Send custom text as a new user message
-          shouldAutoScrollRef.current = true
-          await sendMessageRef.current({
-            role: "user",
-            parts: [{ type: "text", text: customText }],
-          })
+          clearInputAndDraft()
+          await sendUserMessage(customText)
         }
       } finally {
         isSubmittingQuestionAnswerRef.current = false
       }
     },
-    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, subChatId, parentChatId],
+    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, clearInputAndDraft, sendUserMessage, formatAnswersAsText, subChatId],
   )
 
   // Memoize the callback to prevent ChatInputArea re-renders
@@ -4103,7 +4092,6 @@ const ChatViewInner = memo(function ChatViewInner({
               onAnswer={handleQuestionsAnswer}
               onSkip={handleQuestionsSkip}
               hasCustomText={inputHasContent}
-              isExpired={isQuestionExpired}
             />
           </div>
         </div>
