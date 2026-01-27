@@ -21,7 +21,7 @@ import { createRollbackStash } from "../../git/stash"
 import { ensureMcpTokensFresh, fetchMcpTools, fetchMcpToolsStdio, getMcpAuthStatus, startMcpOAuth } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { publicProcedure, router } from "../index"
-import { buildAgentsOption } from "./agent-utils"
+import { buildAllAgentsOption, syncAgentsToDatabase } from "./agent-utils"
 import { systemPromptExtensions } from "../../system-prompt-extensions"
 
 /**
@@ -195,6 +195,7 @@ const pendingToolApprovals = new Map<
       message?: string
       updatedInput?: unknown
     }) => void
+    timeoutId: NodeJS.Timeout | null
   }
 >()
 
@@ -206,6 +207,9 @@ const PLAN_MODE_BLOCKED_TOOLS = new Set([
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
     if (subChatId && pending.subChatId !== subChatId) continue
+    if (pending.timeoutId) {
+      clearTimeout(pending.timeoutId)
+    }
     pending.resolve({ approved: false, message })
     pendingToolApprovals.delete(toolUseId)
   }
@@ -391,9 +395,10 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "agent", "agent-builder", "read-only", "ask"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
+        systemPrompt: z.string().optional(), // Custom system prompt for agent builder
         customConfig: z
           .object({
             model: z.string().min(1),
@@ -588,13 +593,19 @@ export const claudeRouter = router({
             // Parse mentions from prompt (agents, skills, files, folders)
             const { cleanedPrompt, agentMentions, skillMentions } = parseMentions(input.prompt)
 
-            // Build agents option for SDK (proper registration via options.agents)
-            const agentsOption = await buildAgentsOption(agentMentions, input.cwd)
+            // Build agents option for SDK - load ALL available agents for auto-invocation
+            // This enables Claude to discover and invoke agents based on their descriptions
+            const agentsOption = await buildAllAgentsOption(input.cwd)
 
-            // Log if agents were mentioned
-            if (agentMentions.length > 0) {
-              console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
+            // Log registered agents for debugging
+            if (Object.keys(agentsOption).length > 0) {
+              console.log(`[claude] Registered ${Object.keys(agentsOption).length} agents with SDK:`, Object.keys(agentsOption))
             }
+
+            // Sync agents to database (fire and forget, don't await)
+            syncAgentsToDatabase(input.cwd).catch(err => {
+              console.error('[claude] Failed to sync agents to database:', err)
+            })
 
             // Log if skills were mentioned
             if (skillMentions.length > 0) {
@@ -818,7 +829,7 @@ export const claudeRouter = router({
                   // Ignore symlink errors (might already exist or permission issues)
                 }
 
-                // Symlink agents directory if source exists and target doesn't
+                // Symlink user agents directory if source exists and target doesn't
                 try {
                   const agentsSourceExists = await fs.stat(agentsSource).then(() => true).catch(() => false)
                   const agentsTargetExists = await fs.lstat(agentsTarget).then(() => true).catch(() => false)
@@ -827,6 +838,21 @@ export const claudeRouter = router({
                   }
                 } catch (symlinkErr) {
                   // Ignore symlink errors (might already exist or permission issues)
+                }
+
+                // Symlink project agents directory if it exists
+                // Project agents can override user agents with the same name
+                try {
+                  const projectAgentsSource = path.join(input.cwd || process.cwd(), ".claude", "agents")
+                  const projectAgentsTarget = path.join(isolatedConfigDir, "agents", "project")
+                  const projectAgentsSourceExists = await fs.stat(projectAgentsSource).then(() => true).catch(() => false)
+                  const projectAgentsTargetExists = await fs.lstat(projectAgentsTarget).then(() => true).catch(() => false)
+                  if (projectAgentsSourceExists && !projectAgentsTargetExists) {
+                    await fs.symlink(projectAgentsSource, projectAgentsTarget, "dir")
+                    console.log(`[claude] Symlinked project agents: ${projectAgentsSource} -> ${projectAgentsTarget}`)
+                  }
+                } catch (symlinkErr) {
+                  console.warn("[claude] Failed to symlink project agents:", symlinkErr)
                 }
 
                 symlinksCreated.add(cacheKey)
@@ -867,7 +893,7 @@ export const claudeRouter = router({
             }
 
             // Build final env - only add OAuth token if we have one
-            const finalEnv = {
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
               ...(claudeCodeToken && {
                 CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
@@ -1074,13 +1100,18 @@ ${prompt}
               console.log('[Ollama] Context prefix added to prompt')
             }
 
-            // System prompt config - add workspace extensions for Claude
-            const systemPromptConfig = {
-              type: "preset" as const,
-              preset: "claude_code" as const,
-              // Add workspace extensions for Claude (not Ollama, as it's handled in the prompt)
-              ...(!isUsingOllama && { append: promptExtensions }),
-            }
+            // System prompt config - use custom prompt for agent builder, otherwise default
+            const systemPromptConfig = input.systemPrompt
+              ? {
+                  type: "text" as const,
+                  text: input.systemPrompt,
+                }
+              : {
+                  type: "preset" as const,
+                  preset: "claude_code" as const,
+                  // Add workspace extensions for Claude (not Ollama, as it's handled in the prompt)
+                  ...(!isUsingOllama && { append: promptExtensions }),
+                }
 
             const queryOptions = {
               prompt: finalQueryPrompt,
@@ -1094,10 +1125,10 @@ ${prompt}
                 ...(mcpServersFiltered && Object.keys(mcpServersFiltered).length > 0 && { mcpServers: mcpServersFiltered }),
                 env: finalEnv,
                 permissionMode:
-                  input.mode === "plan"
+                  input.mode === "plan" || input.mode === "read-only"
                     ? ("plan" as const)
                     : ("bypassPermissions" as const),
-                ...(input.mode !== "plan" && {
+                ...(input.mode !== "plan" && input.mode !== "read-only" && {
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,
@@ -1183,6 +1214,66 @@ ${prompt}
                       }
                     }
                   }
+
+                  // Read-Only mode: block all write operations
+                  if (input.mode === "read-only") {
+                    if (["Edit", "Write", "Bash", "NotebookEdit"].includes(toolName)) {
+                      return {
+                        behavior: "deny",
+                        message: `Tool "${toolName}" is blocked in read-only mode.`,
+                      }
+                    }
+                  }
+
+                  // Ask mode: require approval for Edit/Write operations
+                  if (input.mode === "ask" && (toolName === "Edit" || toolName === "Write")) {
+                    const { toolUseID } = options
+
+                    // Emit pending-edit-approval chunk to UI
+                    safeEmit({
+                      type: "pending-edit-approval",
+                      toolUseId: toolUseID,
+                      toolName,
+                      input: toolInput,
+                      filePath: toolInput.file_path as string,
+                    } as UIMessageChunk)
+
+                    // Wait for user approval (similar to AskUserQuestion pattern)
+                    const response = await new Promise<{ approved: boolean; message?: string }>((resolve) => {
+                      const timeoutId = setTimeout(() => {
+                        const pending = pendingToolApprovals.get(toolUseID)
+                        if (pending) {
+                          pending.timeoutId = null
+                          pendingToolApprovals.delete(toolUseID)
+                          safeEmit({
+                            type: "edit-approval-timeout",
+                            toolUseId: toolUseID,
+                          } as UIMessageChunk)
+                          resolve({ approved: false, message: "Edit approval timed out after 5 minutes" })
+                        }
+                      }, 300000) // 5 minute timeout
+
+                      pendingToolApprovals.set(toolUseID, {
+                        subChatId: input.subChatId,
+                        resolve: (data: { approved: boolean; message?: string }) => {
+                          clearTimeout(timeoutId)
+                          resolve(data)
+                        },
+                        timeoutId,
+                      })
+                    })
+
+                    if (!response.approved) {
+                      return {
+                        behavior: "deny",
+                        message: response.message || "Edit rejected by user",
+                      }
+                    }
+
+                    // If approved, allow the tool to proceed
+                    return { behavior: "allow", updatedInput: toolInput }
+                  }
+
                   if (toolName === "AskUserQuestion") {
                     const { toolUseID } = options
                     // Emit to UI (safely in case observer is closed)
@@ -1199,14 +1290,18 @@ ${prompt}
                       updatedInput?: unknown
                     }>((resolve) => {
                       const timeoutId = setTimeout(() => {
-                        pendingToolApprovals.delete(toolUseID)
-                        // Emit chunk to notify UI that the question has timed out
-                        // This ensures the pending question dialog is cleared
-                        safeEmit({
-                          type: "ask-user-question-timeout",
-                          toolUseId: toolUseID,
-                        } as UIMessageChunk)
-                        resolve({ approved: false, message: "Timed out" })
+                        const pending = pendingToolApprovals.get(toolUseID)
+                        if (pending) {
+                          pending.timeoutId = null
+                          pendingToolApprovals.delete(toolUseID)
+                          // Emit chunk to notify UI that the question has timed out
+                          // This ensures the pending question dialog is cleared
+                          safeEmit({
+                            type: "ask-user-question-timeout",
+                            toolUseId: toolUseID,
+                          } as UIMessageChunk)
+                          resolve({ approved: false, message: "Timed out" })
+                        }
                       }, 60000)
 
                       pendingToolApprovals.set(toolUseID, {
@@ -1215,6 +1310,7 @@ ${prompt}
                           clearTimeout(timeoutId)
                           resolve(d)
                         },
+                        timeoutId,
                       })
                     })
 
@@ -2202,5 +2298,27 @@ ${prompt}
         fileName: planFiles[0],
         path: planFilePath,
       }
+    }),
+
+  /**
+   * Respond to edit approval request in Ask mode
+   */
+  respondEditApproval: publicProcedure
+    .input(z.object({
+      toolUseId: z.string(),
+      approved: z.boolean(),
+      message: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const pending = pendingToolApprovals.get(input.toolUseId)
+      if (pending) {
+        if (pending.timeoutId) {
+          clearTimeout(pending.timeoutId)
+        }
+        pending.resolve({ approved: input.approved, message: input.message })
+        pendingToolApprovals.delete(input.toolUseId)
+        return { success: true }
+      }
+      return { success: false, error: "Approval request not found" }
     }),
 })

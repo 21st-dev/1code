@@ -37,6 +37,19 @@ export type UIMessageChunk =
       }>
     }
   | { type: "ask-user-question-timeout"; toolUseId: string }
+  | {
+      type: "ask-user-question-result"
+      toolUseId: string
+      result: string | { answers: any }
+    }
+  | {
+      type: "pending-edit-approval"
+      toolUseId: string
+      toolName: string
+      input: Record<string, unknown>
+      filePath: string
+    }
+  | { type: "edit-approval-timeout"; toolUseId: string }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
   // System tools (rendered like regular tools)
   | {

@@ -20,6 +20,7 @@ import {
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
   pendingUserQuestionsAtom,
+  pendingEditApprovalsAtom,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 
@@ -111,8 +112,9 @@ type IPCChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string // Original project path for MCP config lookup (when using worktrees)
-  mode: "plan" | "agent"
+  mode: "plan" | "agent" | "agent-builder" | "read-only" | "ask"
   model?: string
+  systemPrompt?: string // Custom system prompt (for agent builder)
 }
 
 // Image attachment type matching the tRPC schema
@@ -183,6 +185,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
             sessionId,
+            ...(this.config.systemPrompt && { systemPrompt: this.config.systemPrompt }),
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
@@ -225,6 +228,29 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 const newResults = new Map(currentResults)
                 newResults.set(chunk.toolUseId, chunk.result)
                 appStore.set(askUserQuestionResultsAtom, newResults)
+              }
+
+              // Handle Ask mode edit approval request
+              if (chunk.type === "pending-edit-approval") {
+                const current = appStore.get(pendingEditApprovalsAtom)
+                const next = new Map(current)
+                next.set(chunk.toolUseId, {
+                  toolUseId: chunk.toolUseId,
+                  toolName: chunk.toolName,
+                  input: chunk.input,
+                  filePath: chunk.filePath,
+                })
+                appStore.set(pendingEditApprovalsAtom, next)
+              }
+
+              // Handle edit approval timeout - clear pending approval
+              if (chunk.type === "edit-approval-timeout") {
+                const current = appStore.get(pendingEditApprovalsAtom)
+                if (current.has(chunk.toolUseId)) {
+                  const next = new Map(current)
+                  next.delete(chunk.toolUseId)
+                  appStore.set(pendingEditApprovalsAtom, next)
+                }
               }
 
               // Handle compacting status - track in atom for UI display

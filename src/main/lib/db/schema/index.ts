@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core"
 import { relations } from "drizzle-orm"
 import { createId } from "../utils"
 
@@ -101,6 +101,67 @@ export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
   userId: text("user_id"), // Desktop auth user ID (for reference)
 })
 
+// ============ AGENTS ============
+// Tracks Claude Code agents with chat creation/modification history
+export const agents = sqliteTable(
+  "agents",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name").notNull().unique(),
+    description: text("description"),
+    prompt: text("prompt").notNull(),
+    tools: text("tools"), // JSON array of allowed tools
+    disallowedTools: text("disallowed_tools"), // JSON array of disallowed tools
+    model: text("model"), // "sonnet" | "opus" | "haiku" | "inherit"
+    source: text("source").notNull(), // "user" | "project"
+    projectId: text("project_id"), // null for user agents
+    filePath: text("file_path").notNull(), // Actual .md file location
+    createdViaChat: integer("created_via_chat", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    creationChatIds: text("creation_chat_ids").notNull().default("[]"), // JSON array of sub_chat IDs
+    modificationChatIds: text("modification_chat_ids").notNull().default("[]"), // JSON array of sub_chat IDs
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+  (table) => ({
+    sourceIdx: index("idx_agents_source").on(table.source),
+  }),
+)
+
+// ============ MODEL PROFILES ============
+// Stores custom model configurations for API integrations
+export const modelProfiles = sqliteTable(
+  "model_profiles",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name").notNull(),
+    description: text("description"),
+    // Store config as JSON to preserve structure
+    config: text("config").notNull(), // JSON: { model, token, baseUrl }
+    // Store models array as JSON
+    models: text("models").notNull(), // JSON array of model names
+    isOffline: integer("is_offline", { mode: "boolean" }).default(false),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+  (table) => ({
+    isOfflineIdx: index("idx_model_profiles_is_offline").on(table.isOffline),
+  }),
+)
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -110,3 +171,11 @@ export type SubChat = typeof subChats.$inferSelect
 export type NewSubChat = typeof subChats.$inferInsert
 export type ClaudeCodeCredential = typeof claudeCodeCredentials.$inferSelect
 export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
+export type Agent = typeof agents.$inferSelect
+export type NewAgent = typeof agents.$inferInsert
+export type ModelProfile = typeof modelProfiles.$inferSelect
+export type NewModelProfile = typeof modelProfiles.$inferInsert
+
+// ============ FEEDBACK ============
+export { feedback, feedbackRelations } from "./feedback"
+export type { Feedback, NewFeedback } from "./feedback"

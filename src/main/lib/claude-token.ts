@@ -1,6 +1,6 @@
 import { execSync, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { refreshOAuthToken, isTokenExpired as checkTokenExpired } from "./oauth-utils";
 
@@ -266,40 +266,61 @@ export function runClaudeSetupToken(
     const fullPath = getExtendedPath();
 
     // Script that runs claude setup-token and signals completion
-    const script = `
-      export PATH="${fullPath}"
-      echo "=== Claude Code Authentication ==="
-      echo ""
-      echo "Please complete the authentication in your browser."
-      echo "This terminal will close automatically when done."
-      echo ""
-
-      if claude setup-token; then
-        echo ""
-        echo "✓ Authentication successful!"
-        sleep 1
-      else
-        echo ""
-        echo "✗ Authentication failed"
-        sleep 2
-      fi
-    `;
+    const script = [
+      `export PATH="${fullPath}"`,
+      'echo "=== Claude Code Authentication ==="',
+      'echo ""',
+      'echo "Please complete the authentication in your browser."',
+      'echo "This terminal will close automatically when done."',
+      'echo ""',
+      '',
+      'if claude setup-token; then',
+      '  echo ""',
+      '  echo "✓ Authentication successful!"',
+      '  sleep 1',
+      'else',
+      '  echo ""',
+      '  echo "✗ Authentication failed"',
+      '  sleep 2',
+      'fi',
+    ].join('\n').trim();
 
     let terminalCommand: string;
+    let terminalArgs: string[] = [];
 
     if (process.platform === 'darwin') {
-      // macOS: Use Terminal.app or iTerm2
-      terminalCommand = `osascript -e 'tell application "Terminal" to do script "${script.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"'`;
+      // macOS: Write script to temp file and open with Terminal.app
+      const scriptDir = join(tmpdir(), 'claude-auth-scripts');
+      const scriptPath = join(scriptDir, `auth-${Date.now()}.sh`);
+
+      // Ensure script directory exists
+      try {
+        mkdirSync(scriptDir, { recursive: true });
+      } catch {
+        // Directory might already exist
+      }
+
+      writeFileSync(scriptPath, script, { mode: 0o755 });
+
+      // Use osascript to tell Terminal to execute the script
+      // This avoids shell escaping issues
+      const escapedPath = scriptPath.replace(/"/g, '\\"'); // Escape quotes for osascript
+      terminalCommand = 'osascript';
+      terminalArgs = [
+        '-e',
+        `tell application "Terminal" to do script "bash \\"${escapedPath}\\""`
+      ];
     } else if (process.platform === 'win32') {
       // Windows: Use cmd or Windows Terminal
-      terminalCommand = `start cmd /k "${script.replace(/\n/g, ' && ')}"`;
+      terminalCommand = 'cmd';
+      terminalArgs = ['/c', 'start', 'cmd', '/k', script.replace(/\n/g, ' && ')];
     } else {
       // Linux: Try various terminal emulators
-      terminalCommand = `x-terminal-emulator -e bash -c '${script}'`;
+      terminalCommand = 'x-terminal-emulator';
+      terminalArgs = ['-e', 'bash', '-c', script];
     }
 
-    const child = spawn(terminalCommand, {
-      shell: true,
+    const child = spawn(terminalCommand, terminalArgs, {
       detached: true,
       stdio: 'ignore',
       env: { ...process.env, PATH: fullPath },

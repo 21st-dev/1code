@@ -1,5 +1,5 @@
 import { createTRPCReact } from "@trpc/react-query"
-import { createTRPCProxyClient } from "@trpc/client"
+import { createTRPCClient } from "@trpc/client"
 import { ipcLink } from "trpc-electron/renderer"
 import type { AppRouter } from "../../main/lib/trpc/routers"
 import superjson from "superjson"
@@ -10,8 +10,18 @@ import superjson from "superjson"
 export const trpc = createTRPCReact<AppRouter>()
 
 /**
- * Vanilla client for use outside React components (stores, utilities)
+ * Typed client factory for use in TRPCProvider
  */
-export const trpcClient = createTRPCProxyClient<AppRouter>({
+export function createTrpcClient() {
+  return createTRPCClient<AppRouter>({
+    links: [ipcLink({ transformer: superjson })],
+  })
+}
+
+/**
+ * Typed client for use outside React components (stores, utilities)
+ * Provides typed router accessors like .modelProfiles.list.query()
+ */
+export const trpcClient = createTRPCClient<AppRouter>({
   links: [ipcLink({ transformer: superjson })],
 })

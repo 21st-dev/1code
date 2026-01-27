@@ -7,6 +7,8 @@ import {
   parseAgentMd,
   generateAgentMd,
   scanAgentsDirectory,
+  clearAgentCache,
+  syncAgentsToDatabase,
   VALID_AGENT_MODELS,
   type FileAgent,
 } from "./agent-utils"
@@ -150,6 +152,9 @@ export const agentsRouter = router({
 
       await fs.writeFile(agentPath, content, "utf-8")
 
+      // Clear agent cache so new agent is loaded in next session
+      clearAgentCache()
+
       return {
         name: safeName,
         path: agentPath,
@@ -232,6 +237,9 @@ export const agentsRouter = router({
 
       await fs.writeFile(newPath, content, "utf-8")
 
+      // Clear agent cache so updated agent is loaded in next session
+      clearAgentCache()
+
       return {
         name: safeName,
         path: newPath,
@@ -270,6 +278,23 @@ export const agentsRouter = router({
 
       await fs.unlink(agentPath)
 
+      // Clear agent cache so deleted agent is removed from registry
+      clearAgentCache()
+
       return { deleted: true }
+    }),
+
+  /**
+   * Sync agents from filesystem to database
+   * Reads all .md files from .claude/agents/ and creates/updates database records
+   */
+  syncFromFile: publicProcedure
+    .input(
+      z.object({
+        cwd: z.string().optional(),
+      }).optional(),
+    )
+    .mutation(async ({ input }) => {
+      return syncAgentsToDatabase(input?.cwd)
     }),
 })

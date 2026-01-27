@@ -1,5 +1,7 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import { useEffect, useRef } from "react"
+import { useAtom } from "jotai"
 
 // ============================================
 // RE-EXPORT FROM FEATURES/AGENTS/ATOMS (source of truth)
@@ -186,12 +188,16 @@ export type CustomClaudeConfig = {
   baseUrl: string
 }
 
-// Model profile system - support multiple configs
+// Model profile system - support multiple custom model configs with multiple model names
 export type ModelProfile = {
   id: string
   name: string
+  description?: string // User-facing description for this model profile
   config: CustomClaudeConfig
+  models: string[] // Multiple model names available with this profile
   isOffline?: boolean // Mark as offline/Ollama profile
+  createdAt?: number // Timestamp for sorting
+  updatedAt?: number // Timestamp for updates
 }
 
 // Selected Ollama model for offline mode
@@ -202,28 +208,37 @@ export const selectedOllamaModelAtom = atomWithStorage<string | null>(
   { getOnInit: true },
 )
 
+// Helper to generate unique profile ID
+export const generateProfileId = (): string => {
+  return `profile-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
+
 // Helper to get offline profile with selected model
 export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
   id: 'offline-ollama',
   name: 'Offline (Ollama)',
+  description: 'Local Ollama models for offline use',
   isOffline: true,
   config: {
     model: modelName || 'qwen2.5-coder:7b',
     token: 'ollama',
     baseUrl: 'http://localhost:11434',
   },
+  models: [], // Ollama models are dynamic
 })
 
 // Predefined offline profile for Ollama (legacy, uses default model)
 export const OFFLINE_PROFILE: ModelProfile = {
   id: 'offline-ollama',
   name: 'Offline (Ollama)',
+  description: 'Local Ollama models for offline use',
   isOffline: true,
   config: {
     model: 'qwen2.5-coder:7b',
     token: 'ollama',
     baseUrl: 'http://localhost:11434',
   },
+  models: [], // Ollama models are dynamic, populated at runtime
 }
 
 // Legacy single config (deprecated, kept for backwards compatibility)
@@ -238,13 +253,83 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
   { getOnInit: true },
 )
 
-// New: Model profiles storage
-export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
-  "agents:model-profiles",
-  [OFFLINE_PROFILE], // Start with offline profile
-  undefined,
-  { getOnInit: true },
-)
+// New: Model profiles storage with DB sync
+// The actual storage is in localStorage, but we initialize from DB on first load
+const LOCAL_STORAGE_KEY = "agents:model-profiles"
+const INITIAL_OFFLINE_PROFILE: ModelProfile = {
+  id: 'offline-ollama',
+  name: 'Offline (Ollama)',
+  description: 'Local Ollama models for offline use',
+  isOffline: true,
+  config: {
+    model: 'qwen2.5-coder:7b',
+    token: 'ollama',
+    baseUrl: 'http://localhost:11434',
+  },
+  models: [],
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+}
+
+/**
+ * Create a model profiles atom that syncs with the database
+ * On first load, it checks DB for profiles and migrates localStorage if needed
+ */
+function createModelProfilesAtom() {
+  const baseAtom = atomWithStorage<ModelProfile[]>(
+    LOCAL_STORAGE_KEY,
+    [INITIAL_OFFLINE_PROFILE],
+    undefined,
+    { getOnInit: true },
+  )
+
+  // Track if we've initialized from DB
+  let initializedFromDb = false
+
+  return atom(
+    (get) => {
+      const profiles = get(baseAtom as any) as ModelProfile[]
+      return profiles
+    },
+    async (get, set, newProfiles: ModelProfile[]) => {
+      // Update localStorage
+      set(baseAtom as any, newProfiles)
+
+      // Sync to database
+      await syncProfilesToDb(newProfiles)
+    },
+  )
+}
+
+export const modelProfilesAtom = createModelProfilesAtom()
+
+/**
+ * Hook to initialize model profiles from database
+ * Call this in a component to ensure profiles are loaded from DB
+ */
+export function useInitializeModelProfiles() {
+  const [profiles, setProfiles] = useAtom(modelProfilesAtom)
+  const initializedRef = useRef(false)
+
+  useEffect(() => {
+    if (initializedRef.current) return
+    initializedRef.current = true
+
+    // Only initialize if we have the default offline profile and no other profiles
+    // This suggests first load
+    const hasOnlyOffline = profiles.length === 1 && profiles[0]?.id === 'offline-ollama'
+
+    if (hasOnlyOffline) {
+      initializeModelProfiles().then((dbProfiles) => {
+        if (dbProfiles.length > 0) {
+          setProfiles(dbProfiles)
+        }
+      })
+    }
+  }, [profiles, setProfiles])
+
+  return profiles
+}
 
 // Active profile ID (null = use Claude Code default)
 export const activeProfileIdAtom = atomWithStorage<string | null>(
@@ -292,6 +377,43 @@ export function normalizeCustomClaudeConfig(
 
   return { model, token, baseUrl }
 }
+
+// Validate a model profile
+export function validateModelProfile(profile: Partial<ModelProfile>): {
+  valid: boolean
+  errors: string[]
+} {
+  const errors: string[] = []
+
+  if (!profile.name?.trim()) {
+    errors.push("Profile name is required")
+  }
+
+  if (!profile.models || profile.models.length === 0) {
+    errors.push("At least one model name is required")
+  }
+
+  if (!profile.config?.baseUrl?.trim()) {
+    errors.push("Base URL is required")
+  }
+
+  if (!profile.config?.token?.trim()) {
+    errors.push("API token is required")
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  }
+}
+
+// Selected custom model ID (tracks which specific model within a profile is selected)
+export const selectedCustomModelIdAtom = atomWithStorage<string | null>(
+  "agents:selected-custom-model-id",
+  null,
+  undefined,
+  { getOnInit: true },
+)
 
 // Get active config (considering network status and auto-fallback)
 export const activeConfigAtom = atom((get) => {
@@ -529,6 +651,12 @@ export const agentsLoginModalOpenAtom = atom<boolean>(false)
 // Help popover
 export const agentsHelpPopoverOpenAtom = atom<boolean>(false)
 
+// Feedback dialog
+export const feedbackDialogOpenAtom = atom<boolean>(false)
+
+// Feedback list dialog
+export const feedbackListDialogOpenAtom = atom<boolean>(false)
+
 // Quick switch dialog - Agents
 export const agentsQuickSwitchOpenAtom = atom<boolean>(false)
 export const agentsQuickSwitchSelectedIndexAtom = atom<number>(0)
@@ -678,3 +806,218 @@ export {
   type FileTreeNode,
   type ActiveDocument,
 } from "./documents"
+
+// ============================================
+// TASKS PANEL ATOMS
+// ============================================
+
+export {
+  tasksAtom,
+  tasksPanelOpenAtom,
+  tasksPanelWidthAtom,
+  type Task,
+} from "../../features/tasks/index"
+
+// ============================================
+// AGENT BUILDER ATOMS
+// ============================================
+
+export {
+  agentBuilderModalOpenAtom,
+  agentBuilderSubChatIdAtom,
+  agentBuilderEditingAgentAtom,
+  agentBuilderModeAtom,
+  agentBuilderPhaseAtom,
+  agentBuilderDraftAtom,
+  agentBuilderSourceAtom,
+  type AgentBuilderPhase,
+  type AgentDraft,
+} from "./agent-builder"
+
+// ============================================
+// RIGHT SIDEBAR ATOMS
+// ============================================
+
+export {
+  rightSidebarPanelAtom,
+  rightSidebarDrawerWidthAtom,
+  RIGHT_ACTION_BAR_WIDTH,
+  type RightSidebarPanel,
+} from "./right-sidebar"
+
+// ============================================
+// MODEL PROFILES DATABASE SYNC
+// ============================================
+
+/**
+ * Convert DB profile format to frontend ModelProfile format
+ */
+export function dbProfileToModelProfile(dbProfile: {
+  id: string
+  name: string
+  description: string | null
+  config: string
+  models: string
+  isOffline: number
+  createdAt: Date
+  updatedAt: Date
+}): ModelProfile {
+  return {
+    id: dbProfile.id,
+    name: dbProfile.name,
+    description: dbProfile.description || undefined,
+    config: JSON.parse(dbProfile.config) as CustomClaudeConfig,
+    models: JSON.parse(dbProfile.models) as string[],
+    isOffline: dbProfile.isOffline === 1,
+    createdAt: dbProfile.createdAt.getTime(),
+    updatedAt: dbProfile.updatedAt.getTime(),
+  }
+}
+
+/**
+ * Convert frontend ModelProfile to DB format
+ */
+export function modelProfileToDbProfile(profile: ModelProfile): {
+  id: string
+  name: string
+  description: string | null
+  config: string
+  models: string
+  isOffline: number
+  createdAt: number
+  updatedAt: number
+} {
+  return {
+    id: profile.id,
+    name: profile.name,
+    description: profile.description || null,
+    config: JSON.stringify(profile.config),
+    models: JSON.stringify(profile.models),
+    isOffline: profile.isOffline ? 1 : 0,
+    createdAt: profile.createdAt || Date.now(),
+    updatedAt: profile.updatedAt || Date.now(),
+  }
+}
+
+/**
+ * Migrate localStorage profiles to database
+ * Call this on app startup to ensure persistence
+ */
+export async function migrateLocalProfilesToDb(): Promise<void> {
+  try {
+    // Get profiles from localStorage
+    const saved = localStorage.getItem("agents:model-profiles")
+    if (!saved) return
+
+    const profiles = JSON.parse(saved) as ModelProfile[]
+    if (!Array.isArray(profiles) || profiles.length === 0) return
+
+    // Import to database via tRPC
+    const { trpc } = await import("../trpc")
+    await trpc.modelProfiles.importFromLocalStorage.mutate(profiles)
+
+    console.log(`[model-profiles] Migrated ${profiles.length} profiles to database`)
+  } catch (error) {
+    console.error("[model-profiles] Migration failed:", error)
+  }
+}
+
+/**
+ * Check if database has profiles and localStorage doesn't
+ * If so, populate localStorage from database
+ */
+export async function syncProfilesFromDbToLocal(): Promise<ModelProfile[]> {
+  try {
+    const { trpcClient } = await import("../trpc")
+    const dbProfiles = await trpcClient.modelProfiles.list.query()
+
+    if (!dbProfiles || dbProfiles.length === 0) {
+      return []
+    }
+
+    const profiles = dbProfiles.map(dbProfileToModelProfile)
+
+    // Update localStorage
+    localStorage.setItem("agents:model-profiles", JSON.stringify(profiles))
+
+    console.log(`[model-profiles] Synced ${profiles.length} profiles from database to localStorage`)
+    return profiles
+  } catch (error) {
+    console.error("[model-profiles] Sync from DB failed:", error)
+    return []
+  }
+}
+
+/**
+ * Sync profiles to database (called after local changes)
+ */
+export async function syncProfilesToDb(profiles: ModelProfile[]): Promise<void> {
+  try {
+    const { trpcClient } = await import("../trpc")
+
+    // Use bulk upsert to sync all profiles
+    const dbProfiles = profiles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      config: p.config,
+      models: p.models,
+      isOffline: p.isOffline,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    }))
+
+    await trpcClient.modelProfiles.bulkUpsert.mutate(dbProfiles)
+    console.log(`[model-profiles] Synced ${profiles.length} profiles to database`)
+  } catch (error) {
+    console.error("[model-profiles] Sync to DB failed:", error)
+  }
+}
+
+/**
+ * Initialize model profiles - checks if DB has profiles and syncs if needed
+ * Returns the profiles to use (from DB if available, otherwise from localStorage)
+ */
+export async function initializeModelProfiles(): Promise<ModelProfile[]> {
+  try {
+    const { trpcClient } = await import("../trpc")
+
+    // First try to get profiles from DB
+    const dbProfiles = await trpcClient.modelProfiles.list.query()
+
+    if (dbProfiles && dbProfiles.length > 0) {
+      // DB has profiles - sync to localStorage and return
+      const profiles = dbProfiles.map(dbProfileToModelProfile)
+      localStorage.setItem("agents:model-profiles", JSON.stringify(profiles))
+      console.log(`[model-profiles] Loaded ${profiles.length} profiles from database`)
+      return profiles
+    }
+
+    // DB is empty - check localStorage for migration
+    const saved = localStorage.getItem("agents:model-profiles")
+    if (saved) {
+      const localProfiles = JSON.parse(saved) as ModelProfile[]
+      if (Array.isArray(localProfiles) && localProfiles.length > 0) {
+        // Migrate local profiles to DB
+        await migrateLocalProfilesToDb()
+        console.log(`[model-profiles] Migrated ${localProfiles.length} profiles from localStorage`)
+        return localProfiles
+      }
+    }
+
+    // Neither has profiles - return empty (no custom profiles)
+    return []
+  } catch (error) {
+    console.error("[model-profiles] Initialization failed:", error)
+    // Fallback to localStorage
+    try {
+      const saved = localStorage.getItem("agents:model-profiles")
+      if (saved) {
+        return JSON.parse(saved) as ModelProfile[]
+      }
+    } catch {
+      // Ignore
+    }
+    return []
+  }
+}

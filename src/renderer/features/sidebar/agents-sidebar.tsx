@@ -22,9 +22,11 @@ import {
   isFullscreenAtom,
   showOfflineModeFeaturesAtom,
   showWorkspaceIconAtom,
+  feedbackDialogOpenAtom,
+  feedbackListDialogOpenAtom,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Inbox } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null })
@@ -107,10 +109,6 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
-
-// Feedback URL: uses env variable for hosted version, falls back to public Discord for open source
-const FEEDBACK_URL =
-  import.meta.env.VITE_FEEDBACK_URL || "https://discord.gg/8ektTZGnj4"
 
 // Component to render chat icon with loading status
 const ChatIcon = React.memo(function ChatIcon({
@@ -1451,6 +1449,8 @@ export function AgentsSidebar({
   const { isLoaded: isAuthLoaded } = useCombinedAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const setCreateTeamDialogOpen = useSetAtom(createTeamDialogOpenAtom)
+  const setFeedbackDialogOpen = useSetAtom(feedbackDialogOpenAtom)
+  const setFeedbackListDialogOpen = useSetAtom(feedbackListDialogOpenAtom)
 
   // Debug mode for testing first-time user experience
   const debugMode = useAtomValue(agentsDebugModeAtom)
@@ -1479,7 +1479,7 @@ export function AgentsSidebar({
   const allOpenSubChatIds = useMemo(() => {
     // openSubChatsVersion is used to trigger recalculation when sub-chats change
     void openSubChatsVersion
-    if (!agentChats) return prevOpenSubChatIdsRef.current
+    if (!agentChats || !Array.isArray(agentChats)) return prevOpenSubChatIdsRef.current
 
     const allIds: string[] = []
     for (const chat of agentChats) {
@@ -2711,6 +2711,20 @@ export function AgentsSidebar({
                   <TooltipContent>Settings</TooltipContent>
                 </Tooltip>
 
+                {/* Feedback List Button */}
+                <Tooltip delayDuration={500}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackListDialogOpen(true)}
+                      className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                    >
+                      <Inbox className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Feedback List</TooltipContent>
+                </Tooltip>
+
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />
 
@@ -2723,7 +2737,7 @@ export function AgentsSidebar({
 
             {/* Feedback Button */}
             <ButtonCustom
-              onClick={() => window.open(FEEDBACK_URL, "_blank")}
+              onClick={() => setFeedbackDialogOpen(true)}
               variant="outline"
               size="sm"
               className={cn(

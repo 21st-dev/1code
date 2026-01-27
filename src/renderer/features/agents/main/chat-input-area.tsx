@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue } from "jotai"
-import { ChevronDown, Zap } from "lucide-react"
+import { ChevronDown, Eye, Loader2, ShieldCheck, Sparkles, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -19,7 +19,6 @@ import {
   CheckIcon,
   ClaudeCodeIcon,
   PlanIcon,
-  ThinkingIcon,
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import {
@@ -30,15 +29,12 @@ import {
 import { Switch } from "../../../components/ui/switch"
 import {
   autoOfflineModeAtom,
-  customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
-  normalizeCustomClaudeConfig,
-  selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom
 } from "../../../lib/atoms"
-import { trpc } from "../../../lib/trpc"
+import { trpc, trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { isPlanModeAtom, lastSelectedModelIdAtom, type SubChatFileChange } from "../atoms"
+import { agentModeAtom, type AgentModeType, isPlanModeAtom, lastSelectedModelIdAtom, type SubChatFileChange } from "../atoms"
 import { AgentsSlashCommand, COMMAND_PROMPTS, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
@@ -48,7 +44,7 @@ import {
   INSERT_TEXT_EVENT,
   type InsertTextPayload,
 } from "../lib/drafts"
-import { CLAUDE_MODELS } from "../lib/models"
+import { useAllModels } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
 import {
   AgentsFileMention,
@@ -61,43 +57,13 @@ import { AgentDiffTextContextItem } from "../ui/agent-diff-text-context-item"
 import { AgentFileItem } from "../ui/agent-file-item"
 import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
+import { ModelSelector } from "../ui/model-selector"
 import { handlePasteEvent } from "../utils/paste-text"
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
+// Now uses useAllModels which handles Claude, Custom, and Ollama models
 function useAvailableModels() {
-  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
-    refetchInterval: 30000,
-  })
-  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
-
-  const baseModels = CLAUDE_MODELS
-
-  const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
-  const ollamaModels = ollamaStatus?.ollama.models || []
-  const recommendedModel = ollamaStatus?.ollama.recommendedModel
-
-  // Only show offline models if:
-  // 1. Debug flag is enabled (showOfflineFeatures)
-  // 2. Ollama is available with models
-  // 3. User is actually offline
-  if (showOfflineFeatures && hasOllama && isOffline) {
-    return {
-      models: baseModels,
-      ollamaModels,
-      recommendedModel,
-      isOffline,
-      hasOllama: true,
-    }
-  }
-
-  return {
-    models: baseModels,
-    ollamaModels: [] as string[],
-    recommendedModel: undefined as string | undefined,
-    isOffline,
-    hasOllama: false,
-  }
+  return useAllModels()
 }
 
 export interface ChatInputAreaProps {
@@ -149,6 +115,8 @@ export interface ChatInputAreaProps {
   onInputContentChange?: (hasContent: boolean) => void
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
+  // Hide the Agent/Plan mode toggle (e.g., for agent builder where only agent mode makes sense)
+  hideModeToggle?: boolean
 }
 
 /**
@@ -326,11 +294,17 @@ export const ChatInputArea = memo(function ChatInputArea({
   firstQueueItemId,
   onInputContentChange,
   onSubmitWithQuestionAnswer,
+  hideModeToggle = false,
 }: ChatInputAreaProps) {
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+
+  // Input refinement state
+  const [isRefining, setIsRefining] = useState(false)
+  const [previousInput, setPreviousInput] = useState<string | null>(null)
+  const refineInputMutation = trpc.ollama.refineInput.useMutation()
 
   // Mention dropdown state
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
@@ -353,7 +327,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: AgentModeType
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -361,27 +335,22 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Model dropdown state
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
   const [lastSelectedModelId, setLastSelectedModelId] = useAtom(lastSelectedModelIdAtom)
-  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
   const availableModels = useAvailableModels()
   const autoOfflineMode = useAtomValue(autoOfflineModeAtom)
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
-  const [selectedModel, setSelectedModel] = useState(
-    () => availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[1],
-  )
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
 
-  // Determine current Ollama model (selected or recommended)
-  const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
+  // Check Ollama status for refine button (separate from model selector logic)
+  const { data: ollamaStatusForRefine } = trpc.ollama.getStatus.useQuery(undefined, {
+    refetchInterval: 30000,
+  })
+  const isOllamaAvailableForRefine = ollamaStatusForRefine?.ollama.available &&
+    (ollamaStatusForRefine.ollama.models?.length ?? 0) > 0
 
-  // Debug: log selected Ollama model
-  useEffect(() => {
-    if (availableModels.isOffline) {
-      console.log(`[Ollama UI] selectedOllamaModel atom value: ${selectedOllamaModel || "(null)"}, currentOllamaModel: ${currentOllamaModel}`)
-    }
-  }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
+  // Selected model from the new unified model system
+  const selectedModel = availableModels.selectedModel
+
+  // Determine current Ollama model (from availableModels)
+  const currentOllamaModel = availableModels.recommendedOllamaModel || availableModels.ollamaModels[0]
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
@@ -390,8 +359,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Note: When offline, we show Ollama models selector instead of Claude models
   // The selectedOllamaModel atom is used to track which Ollama model is selected
 
-  // Plan mode - global atom
-  const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
+  // Agent mode - global atom (supports agent, plan, read-only, ask)
+  const [agentMode, setAgentMode] = useAtom(agentModeAtom)
 
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
@@ -406,15 +375,13 @@ export const ChatInputArea = memo(function ChatInputArea({
       if (e.metaKey && e.key === "/") {
         e.preventDefault()
         e.stopPropagation()
-        if (!hasCustomClaudeConfig) {
-          setIsModelDropdownOpen(true)
-        }
+        setIsModelDropdownOpen(true)
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [hasCustomClaudeConfig])
+  }, [])
 
   // Save draft on blur (with attachments and text contexts)
   const handleEditorBlur = useCallback(async () => {
@@ -449,12 +416,17 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Content change handler
   const handleContentChange = useCallback((newHasContent: boolean) => {
+    console.log('[ChatInputArea] Content change:', {
+      newHasContent,
+      previousHasContent: hasContent,
+      editorValue: editorRef.current?.getValue?.() || '',
+    })
     setHasContent(newHasContent)
     onInputContentChange?.(newHasContent)
     // Sync the draft text ref for unmount save
     const draft = editorRef.current?.getValue() || ""
     currentDraftTextRef.current = draft
-  }, [editorRef, onInputContentChange])
+  }, [editorRef, onInputContentChange, hasContent])
 
   // Listen for insert text events from sidebar
   useEffect(() => {
@@ -561,13 +533,13 @@ export const ChatInputArea = memo(function ChatInputArea({
             }
             break
           case "plan":
-            if (!isPlanMode) {
-              setIsPlanMode(true)
+            if (agentMode !== "plan") {
+              setAgentMode("plan")
             }
             break
           case "agent":
-            if (isPlanMode) {
-              setIsPlanMode(false)
+            if (agentMode !== "agent") {
+              setAgentMode("agent")
             }
             break
           case "compact":
@@ -603,7 +575,7 @@ export const ChatInputArea = memo(function ChatInputArea({
         setTimeout(() => onSend(), 0)
       }
     },
-    [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onCompact, editorRef],
+    [agentMode, setAgentMode, onSend, onCreateNewSubChat, onCompact, editorRef],
   )
 
   // Paste handler for images and plain text
@@ -638,6 +610,143 @@ export const ChatInputArea = memo(function ChatInputArea({
     },
     [onAddAttachments, editorRef],
   )
+
+  // Input refinement handler
+  const handleRefineInput = useCallback(async () => {
+    const currentInput = editorRef.current?.getValue()
+    if (!currentInput?.trim()) return
+
+    // Save current input for undo
+    setPreviousInput(currentInput)
+    setIsRefining(true)
+
+    // Disable editor during refinement
+    const editorElement = editorRef.current?.blur()
+    if (editorElement) {
+      // Get the actual contenteditable div
+      const editableDiv = document.querySelector('[contenteditable="true"]') as HTMLElement
+      if (editableDiv) {
+        editableDiv.setAttribute('contenteditable', 'false')
+      }
+    }
+
+    try {
+      // Gather context: Get recent messages from subchat
+      let chatHistory: Array<{ role: "user" | "assistant"; content: string }> = []
+      try {
+        const subChatData = await trpcClient.chats.getSubChat.query({ id: subChatId })
+        if (subChatData?.messages) {
+          const messages = typeof subChatData.messages === 'string'
+            ? JSON.parse(subChatData.messages)
+            : subChatData.messages
+
+          // Get last 10-15 messages and convert to simple format
+          chatHistory = messages.slice(-15).map((msg: any) => ({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: typeof msg.content === 'string'
+              ? msg.content
+              : msg.content?.map((c: any) => c.text || c.content || '').join(' ') || ''
+          }))
+        }
+      } catch (error) {
+        console.error('Failed to get chat history:', error)
+        // Continue without chat history
+      }
+
+      // Gather workspace files (smart selection based on input)
+      let workspaceFiles: Array<{ path: string; name: string; content: string }> = []
+      if (projectPath) {
+        try {
+          // Search for project files mentioned in the input
+          const lowerInput = currentInput.toLowerCase()
+          const allProjectFiles = await trpcClient.files.search.query({
+            projectPath,
+            query: '', // Get all files
+            limit: 200
+          })
+
+          // Smart selection: files (not folders) mentioned in input by filename
+          const mentioned = allProjectFiles
+            .filter((f: any) => f.type === 'file' && lowerInput.includes(f.label.toLowerCase()))
+            .slice(0, 10) // Limit to 10 files
+
+          // Get file contents for mentioned files
+          workspaceFiles = await Promise.all(
+            mentioned.map(async (f: any) => {
+              try {
+                const result = await trpcClient.workspaceFiles.readFile.query({
+                  chatId: parentChatId,
+                  filePath: f.path
+                })
+                return {
+                  path: f.path,
+                  name: f.label,
+                  content: result.content.slice(0, 2000) // Truncate large files
+                }
+              } catch (error) {
+                console.error(`Failed to read file ${f.path}:`, error)
+                return null
+              }
+            })
+          ).then(files => files.filter(Boolean) as Array<{ path: string; name: string; content: string }>)
+        } catch (error) {
+          console.error('Failed to get workspace files:', error)
+          // Continue without workspace files
+        }
+      }
+
+      // Call Ollama to refine input
+      const result = await refineInputMutation.mutateAsync({
+        userInput: currentInput,
+        chatHistory,
+        workspaceFiles,
+        model: currentOllamaModel || undefined,
+      })
+
+      if (result.refinedInput) {
+        // Replace content with refined version
+        editorRef.current?.setValue(result.refinedInput)
+        editorRef.current?.focus()
+      }
+    } catch (error) {
+      console.error('Input refinement failed:', error)
+      // Restore previous input on error
+      if (previousInput) {
+        editorRef.current?.setValue(previousInput)
+      }
+    } finally {
+      setIsRefining(false)
+      // Re-enable editor
+      const editableDiv = document.querySelector('[contenteditable="false"]') as HTMLElement
+      if (editableDiv) {
+        editableDiv.setAttribute('contenteditable', 'true')
+      }
+      editorRef.current?.focus()
+    }
+  }, [editorRef, subChatId, parentChatId, currentOllamaModel, refineInputMutation, previousInput])
+
+  // Undo refinement handler
+  const handleUndoRefinement = useCallback(() => {
+    if (previousInput !== null) {
+      editorRef.current?.setValue(previousInput)
+      editorRef.current?.focus()
+      setPreviousInput(null)
+    }
+  }, [previousInput, editorRef])
+
+  // Keyboard shortcut for undo (Cmd+Z when previousInput exists)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && previousInput !== null && !isRefining) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleUndoRefinement()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [previousInput, isRefining, handleUndoRefinement])
 
   return (
     <div className="px-2 pb-2 shadow-sm shadow-background relative z-10">
@@ -758,7 +867,8 @@ export const ChatInputArea = memo(function ChatInputArea({
               </div>
               <PromptInputActions className="w-full">
                 <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                  {/* Mode toggle (Agent/Plan) */}
+                  {/* Mode toggle (Agent/Plan) - hidden when hideModeToggle is true */}
+                  {!hideModeToggle && (
                   <DropdownMenu
                     open={modeDropdownOpen}
                     onOpenChange={(open) => {
@@ -774,20 +884,29 @@ export const ChatInputArea = memo(function ChatInputArea({
                     }}
                   >
                     <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                        {isPlanMode ? (
+                      <button
+                        aria-label={`Current mode: ${agentMode === "plan" ? "Plan" : agentMode === "read-only" ? "Read-Only" : agentMode === "ask" ? "Ask" : "Agent"}. Click to change mode.`}
+                        className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                      >
+                        {agentMode === "plan" ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
+                        ) : agentMode === "read-only" ? (
+                          <Eye className="h-3.5 w-3.5 shrink-0" />
+                        ) : agentMode === "ask" ? (
+                          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span className="truncate">{isPlanMode ? "Plan" : "Agent"}</span>
+                        <span className="truncate">
+                          {agentMode === "plan" ? "Plan" : agentMode === "read-only" ? "Read-Only" : agentMode === "ask" ? "Ask" : "Agent"}
+                        </span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="start"
                       sideOffset={6}
-                      className="!min-w-[116px] !w-[116px]"
+                      className="!min-w-[150px] !w-[150px]"
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
                       <DropdownMenuItem
@@ -798,7 +917,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             tooltipTimeoutRef.current = null
                           }
                           setModeTooltip(null)
-                          setIsPlanMode(false)
+                          setAgentMode("agent")
                           setModeDropdownOpen(false)
                         }}
                         className="justify-between gap-2"
@@ -841,7 +960,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <AgentIcon className="w-4 h-4 text-muted-foreground" />
                           <span>Agent</span>
                         </div>
-                        {!isPlanMode && (
+                        {agentMode === "agent" && (
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                         )}
                       </DropdownMenuItem>
@@ -853,7 +972,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             tooltipTimeoutRef.current = null
                           }
                           setModeTooltip(null)
-                          setIsPlanMode(true)
+                          setAgentMode("plan")
                           setModeDropdownOpen(false)
                         }}
                         className="justify-between gap-2"
@@ -896,7 +1015,117 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <PlanIcon className="w-4 h-4 text-muted-foreground" />
                           <span>Plan</span>
                         </div>
-                        {isPlanMode && (
+                        {agentMode === "plan" && (
+                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                          setAgentMode("read-only")
+                          setModeDropdownOpen(false)
+                        }}
+                        className="justify-between gap-2"
+                        onMouseEnter={(e) => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          const showTooltip = () => {
+                            setModeTooltip({
+                              visible: true,
+                              position: {
+                                top: rect.top,
+                                left: rect.right + 8,
+                              },
+                              mode: "read-only",
+                            })
+                            hasShownTooltipRef.current = true
+                            tooltipTimeoutRef.current = null
+                          }
+                          if (hasShownTooltipRef.current) {
+                            showTooltip()
+                          } else {
+                            tooltipTimeoutRef.current = setTimeout(
+                              showTooltip,
+                              1000,
+                            )
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Eye className="w-4 h-4 text-muted-foreground" />
+                          <span>Read-Only</span>
+                        </div>
+                        {agentMode === "read-only" && (
+                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                          setAgentMode("ask")
+                          setModeDropdownOpen(false)
+                        }}
+                        className="justify-between gap-2"
+                        onMouseEnter={(e) => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          const showTooltip = () => {
+                            setModeTooltip({
+                              visible: true,
+                              position: {
+                                top: rect.top,
+                                left: rect.right + 8,
+                              },
+                              mode: "ask",
+                            })
+                            hasShownTooltipRef.current = true
+                            tooltipTimeoutRef.current = null
+                          }
+                          if (hasShownTooltipRef.current) {
+                            showTooltip()
+                          } else {
+                            tooltipTimeoutRef.current = setTimeout(
+                              showTooltip,
+                              1000,
+                            )
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                          <span>Ask</span>
+                        </div>
+                        {agentMode === "ask" && (
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                         )}
                       </DropdownMenuItem>
@@ -918,13 +1147,18 @@ export const ChatInputArea = memo(function ChatInputArea({
                             <span>
                               {modeTooltip.mode === "agent"
                                 ? "Apply changes directly without a plan"
-                                : "Create a plan before making changes"}
+                                : modeTooltip.mode === "plan"
+                                  ? "Create a plan before making changes"
+                                  : modeTooltip.mode === "read-only"
+                                    ? "Analysis only, no file modifications"
+                                    : "Review each edit before applying"}
                             </span>
                           </div>
                         </div>,
                         document.body,
                       )}
                   </DropdownMenu>
+                  )}
 
                   {/* Model selector - shows Ollama models when offline, Claude models when online */}
                   {availableModels.isOffline && availableModels.hasOllama ? (
@@ -973,81 +1207,16 @@ export const ChatInputArea = memo(function ChatInputArea({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ) : (
-                    // Online mode: show Claude model selector
-                    <DropdownMenu
-                      open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
-                      onOpenChange={(open) => {
-                        if (!hasCustomClaudeConfig) {
-                          setIsModelDropdownOpen(open)
+                    // Online mode: show unified model selector with Claude, Custom, and Ollama models
+                    <ModelSelector
+                      thinkingEnabled={thinkingEnabled}
+                      onThinkingChange={setThinkingEnabled}
+                      onModelSelect={(model) => {
+                        if (model.provider === "claude") {
+                          setLastSelectedModelId(model.id)
                         }
                       }}
-                    >
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          disabled={hasCustomClaudeConfig}
-                          className={cn(
-                            "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                            hasCustomClaudeConfig
-                              ? "opacity-70 cursor-not-allowed"
-                              : "hover:text-foreground hover:bg-muted/50",
-                          )}
-                        >
-                          <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">
-                            {hasCustomClaudeConfig ? (
-                              "Custom Model"
-                            ) : (
-                              <>
-                                {selectedModel?.name}{" "}
-                                <span className="text-muted-foreground">4.5</span>
-                              </>
-                            )}
-                          </span>
-                          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[200px]">
-                        {availableModels.models.map((model) => {
-                          const isSelected = selectedModel?.id === model.id
-                          return (
-                            <DropdownMenuItem
-                              key={model.id}
-                              onClick={() => {
-                                setSelectedModel(model)
-                                setLastSelectedModelId(model.id)
-                              }}
-                              className="gap-2 justify-between"
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span>
-                                  {model.name}{" "}
-                                  <span className="text-muted-foreground">4.5</span>
-                                </span>
-                              </div>
-                              {isSelected && (
-                                <CheckIcon className="h-3.5 w-3.5 shrink-0" />
-                              )}
-                            </DropdownMenuItem>
-                          )
-                        })}
-                        <DropdownMenuSeparator />
-                        <div
-                          className="flex items-center justify-between px-1.5 py-1.5 mx-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm">Thinking</span>
-                          </div>
-                          <Switch
-                            checked={thinkingEnabled}
-                            onCheckedChange={setThinkingEnabled}
-                            className="scale-75"
-                          />
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    />
                   )}
                 </div>
 
@@ -1085,53 +1254,94 @@ export const ChatInputArea = memo(function ChatInputArea({
                     <AttachIcon className="h-4 w-4" />
                   </Button>
 
+                  {/* Refine button (only show when offline features enabled and Ollama available) */}
+                  {showOfflineFeatures && isOllamaAvailableForRefine && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                      onClick={handleRefineInput}
+                      disabled={!hasContent || isRefining || isStreaming}
+                      aria-label="Refine input with AI (uses Ollama)"
+                    >
+                      {isRefining ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+
                   {/* Send/Stop button or Build Plan button */}
                   <div className="ml-1">
                     {/* Show "Build plan" button when plan is ready, input is empty, and in plan mode */}
-                    {isPlanMode &&
-                    hasUnapprovedPlan &&
-                    !hasContent &&
-                    images.length === 0 &&
-                    files.length === 0 &&
-                    textContexts.length === 0 &&
-                    (diffTextContexts?.length ?? 0) === 0 &&
-                    !isStreaming ? (
-                      <Button
-                        onClick={onApprovePlan}
-                        size="sm"
-                        className="h-7 gap-1.5 rounded-lg"
-                      >
-                        Build plan
-                        <Kbd className="text-primary-foreground/70">
-                          ⌘↵
-                        </Kbd>
-                      </Button>
-                    ) : (
-                      <AgentSendButton
-                        isStreaming={isStreaming}
-                        isSubmitting={false}
-                        disabled={
-                          (!hasContent &&
-                            images.length === 0 &&
-                            files.length === 0 &&
-                            textContexts.length === 0 &&
-                            (diffTextContexts?.length ?? 0) === 0 &&
-                            queueLength === 0) ||
-                          isUploading
-                        }
-                        hasContent={hasContent || images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0}
-                        onClick={() => {
-                          // If input is empty and queue has items, send first queue item
-                          if (!hasContent && images.length === 0 && files.length === 0 && queueLength > 0 && onSendFromQueue && firstQueueItemId) {
-                            onSendFromQueue(firstQueueItemId)
-                          } else {
-                            onSend()
-                          }
-                        }}
-                        onStop={onStop}
-                        isPlanMode={isPlanMode}
-                      />
-                    )}
+                    {(() => {
+                      const shouldShowBuildPlan = agentMode === "plan" &&
+                        hasUnapprovedPlan &&
+                        !hasContent &&
+                        images.length === 0 &&
+                        files.length === 0 &&
+                        textContexts.length === 0 &&
+                        (diffTextContexts?.length ?? 0) === 0 &&
+                        !isStreaming
+
+                      const sendButtonDisabled = (!hasContent &&
+                        images.length === 0 &&
+                        files.length === 0 &&
+                        textContexts.length === 0 &&
+                        (diffTextContexts?.length ?? 0) === 0 &&
+                        queueLength === 0) ||
+                        isUploading
+
+                      const sendButtonHasContent = hasContent || images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0
+
+                      console.log('[ChatInputArea] Send button decision:', {
+                        shouldShowBuildPlan,
+                        agentMode,
+                        hasUnapprovedPlan,
+                        hasContent,
+                        isStreaming,
+                        sendButtonDisabled,
+                        sendButtonHasContent,
+                        isUploading,
+                        queueLength,
+                        imagesCount: images.length,
+                        filesCount: files.length,
+                        textContextsCount: textContexts.length,
+                        diffTextContextsCount: diffTextContexts?.length ?? 0,
+                      })
+
+                      return shouldShowBuildPlan ? (
+                        <Button
+                          onClick={onApprovePlan}
+                          size="sm"
+                          className="h-7 gap-1.5 rounded-lg"
+                        >
+                          Build plan
+                          <Kbd className="text-primary-foreground/70">
+                            ⌘↵
+                          </Kbd>
+                        </Button>
+                      ) : (
+                        <AgentSendButton
+                          isStreaming={isStreaming}
+                          isSubmitting={false}
+                          disabled={sendButtonDisabled}
+                          hasContent={sendButtonHasContent}
+                          onClick={() => {
+                            console.log('[ChatInputArea] Send button onClick called')
+                            // If input is empty and queue has items, send first queue item
+                            if (!hasContent && images.length === 0 && files.length === 0 && queueLength > 0 && onSendFromQueue && firstQueueItemId) {
+                              onSendFromQueue(firstQueueItemId)
+                            } else {
+                              onSend()
+                            }
+                          }}
+                          onStop={onStop}
+                          isPlanMode={agentMode === "plan"}
+                        />
+                      )
+                    })()}
                   </div>
                 </div>
               </PromptInputActions>
@@ -1178,7 +1388,7 @@ export const ChatInputArea = memo(function ChatInputArea({
         searchText={slashSearchText}
         position={slashPosition}
         projectPath={projectPath}
-        isPlanMode={isPlanMode}
+        isPlanMode={agentMode === "plan"}
       />
     </div>
   )

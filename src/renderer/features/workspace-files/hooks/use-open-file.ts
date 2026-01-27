@@ -4,7 +4,7 @@ import { activeDocumentAtomFamily, documentsPanelOpenAtomFamily } from "../../..
 import { selectedAgentChatIdAtom } from "../../agents/atoms"
 import { useAgentSubChatStore } from "../../../lib/stores/sub-chat-store"
 import { getFileType } from "../utils/file-types"
-import { trpc } from "../../../lib/trpc"
+import { trpcClient } from "../../../lib/trpc"
 
 export function useOpenFile() {
   // Get effective chat ID
@@ -16,9 +16,6 @@ export function useOpenFile() {
   const setActiveDoc = useSetAtom(activeDocumentAtomFamily(effectiveChatId))
   const setDocumentsOpen = useSetAtom(documentsPanelOpenAtomFamily(effectiveChatId))
 
-  // Get tRPC utilities
-  const utils = trpc.useUtils()
-
   const openFile = useCallback(
     async (filePath: string, fileName?: string) => {
       if (!effectiveChatId) {
@@ -27,30 +24,32 @@ export function useOpenFile() {
       }
 
       try {
-        // Read any file from project root (including workspace files)
-        const result = await utils.workspaceFiles.readProjectFile.fetch({
-          chatId: effectiveChatId,
+        console.log("[useOpenFile] Opening file:", {
           filePath,
+          chatId: effectiveChatId,
         })
 
-        // Determine file type for rendering
+        // Backend now handles both absolute and project-relative paths
+        const result = await trpcClient.workspaceFiles.readFile.query({
+          chatId: effectiveChatId,
+          filePath: filePath,
+        })
+
         const type = getFileType(fileName || filePath)
 
-        // Update active document
         setActiveDoc({
           path: filePath,
           content: result.content,
           type,
         })
 
-        // Show documents panel
         setDocumentsOpen(true)
       } catch (error) {
         console.error("[useOpenFile] Failed to open file:", filePath, error)
         // TODO: Show user-friendly error toast
       }
     },
-    [effectiveChatId, setActiveDoc, setDocumentsOpen, utils]
+    [effectiveChatId, setActiveDoc, setDocumentsOpen]
   )
 
   return { openFile, effectiveChatId }

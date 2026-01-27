@@ -12,9 +12,8 @@ import {
   isFullscreenAtom,
   anthropicOnboardingCompletedAtom,
   customHotkeysAtom,
-  activeDocumentAtomFamily,
-  documentsPanelOpenAtomFamily,
-  documentsPanelWidthAtom,
+  rightSidebarPanelAtom,
+  type RightSidebarPanel,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
@@ -22,6 +21,9 @@ import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
 import { AgentsSettingsDialog } from "../../components/dialogs/agents-settings-dialog"
 import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
+import { AgentBuilderModal } from "../../components/dialogs/agent-builder-modal"
+import { FeedbackDialog } from "../../components/dialogs/feedback-dialog"
+import { FeedbackListDialog } from "../../components/dialogs/feedback-list-dialog"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { AgentsSidebar } from "../sidebar/agents-sidebar"
@@ -31,7 +33,8 @@ import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
-import { WorkspaceDocumentViewer } from "../workspace-files"
+import { RightActionBar } from "../../components/ui/right-action-bar"
+import { RightSidebarDrawer } from "../../components/ui/right-sidebar-drawer"
 
 // ============================================================================
 // Constants
@@ -99,16 +102,25 @@ export function AgentsLayout() {
   const parentChatId = useAgentSubChatStore((state) => state.chatId)
   const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
 
-  // Documents panel state - use parent chat ID for workspace context
+  // Unified right sidebar state - use parent chat ID for workspace context
   const effectiveChatId = parentChatId || selectedChatId || ""
-  const documentsOpen = useAtomValue(
-    documentsPanelOpenAtomFamily(effectiveChatId)
-  )
-  const setDocumentsOpen = useSetAtom(
-    documentsPanelOpenAtomFamily(effectiveChatId)
-  )
-  // Get active document to check if panel should be visible
-  const activeDoc = useAtomValue(activeDocumentAtomFamily(effectiveChatId))
+  const rightSidebarPanelState = useAtomValue(rightSidebarPanelAtom)
+  const setRightSidebarPanel = useSetAtom(rightSidebarPanelAtom)
+
+  // Get active right panel for current chat
+  const activeRightPanel = effectiveChatId
+    ? (rightSidebarPanelState[effectiveChatId] || null)
+    : null
+
+  // Handler to change right panel (Documents, Tasks, or close)
+  const handleRightPanelChange = useCallback((panel: RightSidebarPanel) => {
+    if (effectiveChatId) {
+      setRightSidebarPanel(prev => ({
+        ...prev,
+        [effectiveChatId]: panel
+      }))
+    }
+  }, [effectiveChatId, setRightSidebarPanel])
 
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
@@ -257,6 +269,8 @@ export function AgentsLayout() {
         onClose={() => setSettingsOpen(false)}
       />
       <ClaudeLoginModal />
+      <FeedbackDialog />
+      <FeedbackListDialog />
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />
@@ -289,27 +303,28 @@ export function AgentsLayout() {
             <AgentsContent />
           </div>
 
-          {/* Documents Panel (Right) */}
+          {/* Right Section: Drawer + Action Bar */}
           {selectedChatId && (
-            <ResizableSidebar
-              isOpen={documentsOpen}
-              onClose={() => setDocumentsOpen(false)}
-              widthAtom={documentsPanelWidthAtom}
-              minWidth={400}
-              maxWidth={1000}
-              side="right"
-              animationDuration={100}
-              showResizeTooltip={true}
-              className="overflow-hidden bg-background border-l"
-              style={{ borderLeftWidth: "0.5px" }}
-            >
-              <WorkspaceDocumentViewer chatId={effectiveChatId} subChatId={activeSubChatId} />
-            </ResizableSidebar>
+            <>
+              <RightSidebarDrawer
+                activePanel={activeRightPanel}
+                onClose={() => handleRightPanelChange(null)}
+                chatId={effectiveChatId}
+                subChatId={activeSubChatId}
+              />
+              <RightActionBar
+                activePanel={activeRightPanel}
+                onPanelChange={handleRightPanelChange}
+              />
+            </>
           )}
         </div>
 
         {/* Update Banner */}
         <UpdateBanner />
+
+        {/* Agent Builder Modal */}
+        <AgentBuilderModal />
       </div>
     </TooltipProvider>
   )

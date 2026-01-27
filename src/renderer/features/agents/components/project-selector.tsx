@@ -68,7 +68,7 @@ export function ProjectSelector() {
   const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
     enabled: showOfflineFeatures,
   })
-  const isOffline = showOfflineFeatures && ollamaStatus ? !ollamaStatus.internet.online : false
+  const isOffline = showOfflineFeatures && ollamaStatus ? !ollamaStatus.internet?.online : false
 
   // Fetch projects from DB
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()

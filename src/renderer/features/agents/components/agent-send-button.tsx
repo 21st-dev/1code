@@ -54,13 +54,29 @@ export function AgentSendButton({
   // Otherwise during streaming, show stop button
   const shouldShowQueueArrow = isStreaming && hasContent
 
+  console.log('[AgentSendButton] Render state:', {
+    isStreaming,
+    isSubmitting,
+    disabled,
+    isPlanMode,
+    hasContent,
+    shouldShowQueueArrow,
+  })
+
   // Determine the actual click handler based on state
   const handleClick = () => {
+    console.log('[AgentSendButton] Click handler called, state:', {
+      isStreaming,
+      hasContent,
+      hasOnStop: !!onStop,
+    })
     if (isStreaming && !hasContent && onStop) {
       // Stop only when streaming and no content to queue
+      console.log('[AgentSendButton] Calling onStop')
       onStop()
     } else {
       // Send (or add to queue if streaming)
+      console.log('[AgentSendButton] Calling onClick')
       onClick()
     }
   }
@@ -68,6 +84,7 @@ export function AgentSendButton({
   // Determine if button should be disabled
   // During streaming with content, enable the button for queue
   const isDisabled = isStreaming ? false : disabled
+  console.log('[AgentSendButton] isDisabled:', isDisabled)
 
   // Determine icon to show
   const getIcon = () => {
