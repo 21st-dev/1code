@@ -635,6 +635,11 @@ export const pendingUserQuestionsAtom = atom<Map<string, PendingUserQuestion>>(n
 // Legacy type alias for backwards compatibility
 export type PendingUserQuestions = PendingUserQuestion
 
+// Expired user questions - questions that timed out but should still be answerable
+// When answered, responses are sent as normal user messages instead of tool approvals
+// Map<subChatId, PendingUserQuestion>
+export const expiredUserQuestionsAtom = atom<Map<string, PendingUserQuestion>>(new Map())
+
 // Track sub-chats with pending plan approval (plan ready but not yet implemented)
 // Map<subChatId, parentChatId> - allows filtering by workspace
 export const pendingPlanApprovalsAtom = atom<Map<string, string>>(new Map())

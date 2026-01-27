@@ -118,6 +118,7 @@ import {
   pendingPrMessageAtom,
   pendingReviewMessageAtom,
   pendingUserQuestionsAtom,
+  expiredUserQuestionsAtom,
   planSidebarOpenAtomFamily,
   QUESTIONS_SKIPPED_MESSAGE,
   selectedAgentChatIdAtom,
@@ -2483,6 +2484,16 @@ const ChatViewInner = memo(function ChatViewInner({
   // Get pending questions for this specific subChat
   const pendingQuestions = pendingQuestionsMap.get(subChatId) ?? null
 
+  // Expired user questions (timed out but still answerable as normal messages)
+  const [expiredQuestionsMap, setExpiredQuestionsMap] = useAtom(
+    expiredUserQuestionsAtom,
+  )
+  const expiredQuestions = expiredQuestionsMap.get(subChatId) ?? null
+
+  // Unified display questions: prefer pending (live), fall back to expired
+  const displayQuestions = pendingQuestions ?? expiredQuestions
+  const isQuestionExpired = !pendingQuestions && !!expiredQuestions
+
   // Track whether chat input has content (for custom text with questions)
   const [inputHasContent, setInputHasContent] = useState(false)
 
@@ -2618,7 +2629,7 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }, [subChatId, lastAssistantMessage, isStreaming, pendingQuestions, setPendingQuestionsMap])
 
-  // Helper to clear pending question for this subChat (used in callbacks)
+  // Helper to clear pending and expired questions for this subChat (used in callbacks)
   const clearPendingQuestionCallback = useCallback(() => {
     setPendingQuestionsMap((current) => {
       if (current.has(subChatId)) {
@@ -2628,26 +2639,58 @@ const ChatViewInner = memo(function ChatViewInner({
       }
       return current
     })
-  }, [subChatId, setPendingQuestionsMap])
+    setExpiredQuestionsMap((current) => {
+      if (current.has(subChatId)) {
+        const newMap = new Map(current)
+        newMap.delete(subChatId)
+        return newMap
+      }
+      return current
+    })
+  }, [subChatId, setPendingQuestionsMap, setExpiredQuestionsMap])
 
   // Handle answering questions
   const handleQuestionsAnswer = useCallback(
     async (answers: Record<string, string>) => {
-      if (!pendingQuestions) return
-      await trpcClient.claude.respondToolApproval.mutate({
-        toolUseId: pendingQuestions.toolUseId,
-        approved: true,
-        updatedInput: { questions: pendingQuestions.questions, answers },
-      })
-      clearPendingQuestionCallback()
+      if (!displayQuestions) return
+
+      if (isQuestionExpired) {
+        // Question timed out - send answers as a normal user message
+        const answerLines = Object.entries(answers)
+          .map(([question, answer]) => `${question}: ${answer}`)
+          .join("\n")
+
+        clearPendingQuestionCallback()
+
+        shouldAutoScrollRef.current = true
+        await sendMessageRef.current({
+          role: "user",
+          parts: [{ type: "text", text: answerLines }],
+        })
+      } else {
+        // Question is still live - use tool approval path
+        await trpcClient.claude.respondToolApproval.mutate({
+          toolUseId: displayQuestions.toolUseId,
+          approved: true,
+          updatedInput: { questions: displayQuestions.questions, answers },
+        })
+        clearPendingQuestionCallback()
+      }
     },
-    [pendingQuestions, clearPendingQuestionCallback],
+    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback],
   )
 
   // Handle skipping questions
   const handleQuestionsSkip = useCallback(async () => {
-    if (!pendingQuestions) return
-    const toolUseId = pendingQuestions.toolUseId
+    if (!displayQuestions) return
+
+    if (isQuestionExpired) {
+      // Expired question - just clear the UI, no backend call needed
+      clearPendingQuestionCallback()
+      return
+    }
+
+    const toolUseId = displayQuestions.toolUseId
 
     // Clear UI immediately - don't wait for backend
     // This ensures dialog closes even if stream was already aborted
@@ -2663,7 +2706,7 @@ const ChatViewInner = memo(function ChatViewInner({
     } catch {
       // Stream likely already aborted - ignore
     }
-  }, [pendingQuestions, clearPendingQuestionCallback])
+  }, [displayQuestions, isQuestionExpired, clearPendingQuestionCallback])
 
   // Ref to prevent double submit of question answer
   const isSubmittingQuestionAnswerRef = useRef(false)
@@ -2671,7 +2714,7 @@ const ChatViewInner = memo(function ChatViewInner({
   // Handle answering questions with custom text from input (called on Enter in input)
   const handleSubmitWithQuestionAnswer = useCallback(
     async () => {
-      if (!pendingQuestions) return
+      if (!displayQuestions) return
       if (isSubmittingQuestionAnswerRef.current) return
       isSubmittingQuestionAnswerRef.current = true
 
@@ -2689,7 +2732,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
         // 3. Add custom text to the last question as "Other"
         const lastQuestion =
-          pendingQuestions.questions[pendingQuestions.questions.length - 1]
+          displayQuestions.questions[displayQuestions.questions.length - 1]
         if (lastQuestion) {
           const existingAnswer = formattedAnswers[lastQuestion.question]
           if (existingAnswer) {
@@ -2700,51 +2743,74 @@ const ChatViewInner = memo(function ChatViewInner({
           }
         }
 
-        // 4. Submit tool response with all answers
-        await trpcClient.claude.respondToolApproval.mutate({
-          toolUseId: pendingQuestions.toolUseId,
-          approved: true,
-          updatedInput: {
-            questions: pendingQuestions.questions,
-            answers: formattedAnswers,
-          },
-        })
-        clearPendingQuestionCallback()
+        if (isQuestionExpired) {
+          // Expired: format everything as a user message
+          const answerLines = Object.entries(formattedAnswers)
+            .map(([question, answer]) => `${question}: ${answer}`)
+            .join("\n")
 
-        // 5. Stop stream if currently streaming
-        if (isStreamingRef.current) {
-          agentChatStore.setManuallyAborted(subChatId, true)
-          await stopRef.current()
-          await new Promise((resolve) => setTimeout(resolve, 100))
+          clearPendingQuestionCallback()
+
+          // Clear input
+          editorRef.current?.clear()
+          if (parentChatId) {
+            clearSubChatDraft(parentChatId, subChatId)
+          }
+
+          // Send combined answers + custom text as a message
+          shouldAutoScrollRef.current = true
+          await sendMessageRef.current({
+            role: "user",
+            parts: [{ type: "text", text: answerLines }],
+          })
+        } else {
+          // Live: use existing tool approval flow
+          // 4. Submit tool response with all answers
+          await trpcClient.claude.respondToolApproval.mutate({
+            toolUseId: displayQuestions.toolUseId,
+            approved: true,
+            updatedInput: {
+              questions: displayQuestions.questions,
+              answers: formattedAnswers,
+            },
+          })
+          clearPendingQuestionCallback()
+
+          // 5. Stop stream if currently streaming
+          if (isStreamingRef.current) {
+            agentChatStore.setManuallyAborted(subChatId, true)
+            await stopRef.current()
+            await new Promise((resolve) => setTimeout(resolve, 100))
+          }
+
+          // 6. Clear input
+          editorRef.current?.clear()
+          if (parentChatId) {
+            clearSubChatDraft(parentChatId, subChatId)
+          }
+
+          // 7. Send custom text as a new user message
+          shouldAutoScrollRef.current = true
+          await sendMessageRef.current({
+            role: "user",
+            parts: [{ type: "text", text: customText }],
+          })
         }
-
-        // 6. Clear input
-        editorRef.current?.clear()
-        if (parentChatId) {
-          clearSubChatDraft(parentChatId, subChatId)
-        }
-
-        // 7. Send custom text as a new user message
-        shouldAutoScrollRef.current = true
-        await sendMessageRef.current({
-          role: "user",
-          parts: [{ type: "text", text: customText }],
-        })
       } finally {
         isSubmittingQuestionAnswerRef.current = false
       }
     },
-    [pendingQuestions, clearPendingQuestionCallback, subChatId, parentChatId],
+    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, subChatId, parentChatId],
   )
 
   // Memoize the callback to prevent ChatInputArea re-renders
-  // Only provide callback when there's a pending question for this subChat
+  // Only provide callback when there's a pending or expired question for this subChat
   const submitWithQuestionAnswerCallback = useMemo(
     () =>
-      pendingQuestions
+      displayQuestions
         ? handleSubmitWithQuestionAnswer
         : undefined,
-    [pendingQuestions, handleSubmitWithQuestionAnswer],
+    [displayQuestions, handleSubmitWithQuestionAnswer],
   )
 
   // Watch for pending auth retry message (after successful OAuth flow)
@@ -3037,8 +3103,8 @@ const ChatViewInner = memo(function ChatViewInner({
         )
 
         if (!isInsideOverlay && !hasOpenDialog) {
-          // If there are pending questions for this chat, skip them instead of stopping stream
-          if (pendingQuestions) {
+          // If there are pending/expired questions for this chat, skip/dismiss them instead of stopping stream
+          if (displayQuestions) {
             shouldSkipQuestions = true
           } else {
             shouldStop = true
@@ -3087,7 +3153,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isActive, isStreaming, stop, subChatId, pendingQuestions, handleQuestionsSkip])
+  }, [isActive, isStreaming, stop, subChatId, displayQuestions, handleQuestionsSkip])
 
   // Keyboard shortcut: Enter to focus input when not already focused
   useFocusInputOnEnter(editorRef)
@@ -3255,6 +3321,16 @@ const ChatViewInner = memo(function ChatViewInner({
     if (sandboxSetupStatus !== "ready") {
       return
     }
+
+    // Clear any expired questions when user sends a new message
+    setExpiredQuestionsMap((current) => {
+      if (current.has(subChatId)) {
+        const newMap = new Map(current)
+        newMap.delete(subChatId)
+        return newMap
+      }
+      return current
+    })
 
     // Get value from uncontrolled editor
     const inputValue = editorRef.current?.getValue() || ""
@@ -3496,6 +3572,7 @@ const ChatViewInner = memo(function ChatViewInner({
     clearPastedTexts,
     teamId,
     addToQueue,
+    setExpiredQuestionsMap,
   ])
 
   // Queue handlers for sending queued messages
@@ -4016,24 +4093,24 @@ const ChatViewInner = memo(function ChatViewInner({
         </div>
       </div>
 
-      {/* User questions panel - shows when AskUserQuestion tool is called */}
-      {/* Only show if the pending question belongs to THIS sub-chat */}
-      {pendingQuestions && (
+      {/* User questions panel - shows for both live (pending) and expired (timed out) questions */}
+      {displayQuestions && (
         <div className="px-4 relative z-20">
           <div className="w-full px-2 max-w-2xl mx-auto">
             <AgentUserQuestion
               ref={questionRef}
-              pendingQuestions={pendingQuestions}
+              pendingQuestions={displayQuestions}
               onAnswer={handleQuestionsAnswer}
               onSkip={handleQuestionsSkip}
               hasCustomText={inputHasContent}
+              isExpired={isQuestionExpired}
             />
           </div>
         </div>
       )}
 
       {/* Stacked cards container - queue + status */}
-      {!pendingQuestions &&
+      {!displayQuestions &&
         (queue.length > 0 || changedFilesForSubChat.length > 0) && (
           <div className="px-2 -mb-6 relative z-10">
             <div className="w-full max-w-2xl mx-auto px-2">
@@ -4109,7 +4186,7 @@ const ChatViewInner = memo(function ChatViewInner({
         <ScrollToBottomButton
           containerRef={chatContainerRef}
           onScrollToBottom={scrollToBottom}
-          hasStackedCards={!pendingQuestions && (queue.length > 0 || changedFilesForSubChat.length > 0)}
+          hasStackedCards={!displayQuestions && (queue.length > 0 || changedFilesForSubChat.length > 0)}
           subChatId={subChatId}
           isActive={isActive}
         />
