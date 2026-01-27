@@ -14,6 +14,8 @@ import { agentsRouter } from "./agents"
 import { worktreeConfigRouter } from "./worktree-config"
 import { commandsRouter } from "./commands"
 import { fileCrudRouter } from "./file-crud"
+import { modelProfilesRouter } from "./model-profiles"
+import { feedbackRouter } from "./feedback"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -39,8 +41,12 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     commands: commandsRouter,
     // File CRUD operations - keep "workspaceFiles" name for backward compatibility
     workspaceFiles: fileCrudRouter,
+    // Model profiles for custom model configurations
+    modelProfiles: modelProfilesRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
+    // Feedback system
+    feedback: feedbackRouter,
   })
 }
 
