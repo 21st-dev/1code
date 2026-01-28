@@ -11,6 +11,8 @@ import {
   memo,
 } from "react"
 import { createFileIconElement } from "./agents-file-mention"
+import { hasCodeBlocks, parseCodeBlocks } from "../utils/parse-user-code-blocks"
+import { highlightCode, onThemeChange } from "../../../lib/themes/shiki-theme-loader"
 
 // Threshold for skipping expensive trigger detection (characters)
 // Should be >= MAX_PASTE_LENGTH from paste-text.ts to avoid processing large pasted content
@@ -109,6 +111,126 @@ function createMentionNode(option: FileMentionOption): HTMLSpanElement {
   return span
 }
 
+// Get the current code theme from DOM state (for use outside React context)
+function getCodeThemeFromDOM(): string {
+  const isDark = document.documentElement.classList.contains("dark")
+  return isDark ? "github-dark" : "github-light"
+}
+
+// Apply syntax highlighting to a code block element asynchronously.
+// Subscribes to theme changes so editor code blocks re-highlight on dark/light toggle.
+// Auto-unsubscribes when the element is removed from the DOM.
+function applyHighlighting(codeEl: HTMLElement, code: string, language: string): void {
+  const doHighlight = () => {
+    const themeId = getCodeThemeFromDOM()
+    highlightCode(code, language || "plaintext", themeId)
+      .then((html) => {
+        if (codeEl.isConnected) {
+          // Only use innerHTML if it looks like Shiki output (contains <span> tokens).
+          // If highlightCode's regex fallback returned raw text, use textContent to prevent XSS.
+          if (html.includes("<span")) {
+            codeEl.innerHTML = html
+          } else {
+            codeEl.textContent = html
+          }
+        }
+      })
+      .catch(() => {
+        // Keep plain text fallback
+      })
+  }
+
+  doHighlight()
+
+  const unsubscribe = onThemeChange(() => {
+    if (codeEl.isConnected) {
+      doHighlight()
+    } else {
+      unsubscribe()
+    }
+  })
+}
+
+// Create styled code block element (non-editable block within the contenteditable)
+export function createCodeBlockNode(language: string, code: string): HTMLDivElement {
+  const wrapper = document.createElement("div")
+  wrapper.setAttribute("contenteditable", "false")
+  wrapper.setAttribute("data-code-block", "true")
+  wrapper.setAttribute("data-code-language", language)
+  wrapper.className =
+    "relative my-1 rounded-[10px] bg-muted/50 overflow-hidden select-none"
+
+  // Header with language label and remove button
+  const header = document.createElement("div")
+  header.className =
+    "flex items-center justify-between px-3 pt-2 pb-0 text-xs text-muted-foreground"
+
+  const langLabel = document.createElement("span")
+  langLabel.textContent = language || "code"
+  langLabel.className = "font-medium"
+  header.appendChild(langLabel)
+
+  const removeBtn = document.createElement("button")
+  removeBtn.type = "button"
+  removeBtn.setAttribute("aria-label", "Remove code block")
+  removeBtn.className =
+    "flex items-center justify-center w-4 h-4 rounded text-muted-foreground hover:text-foreground transition-colors"
+  removeBtn.innerHTML =
+    '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1L9 9M9 1L1 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+  removeBtn.addEventListener("click", (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const block = (e.currentTarget as HTMLElement).closest("[data-code-block]")
+    if (block) {
+      const editor = block.closest('[contenteditable="true"]')
+      block.remove()
+      if (editor) {
+        // Dispatch input event so the editor updates its state
+        editor.dispatchEvent(new Event("input", { bubbles: true }))
+      }
+    }
+  })
+  header.appendChild(removeBtn)
+  wrapper.appendChild(header)
+
+  // Code content
+  const pre = document.createElement("pre")
+  pre.className = "m-0 px-3 py-2 overflow-x-auto max-h-[150px] overflow-y-auto"
+  pre.style.fontFamily =
+    "SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace"
+  pre.style.fontSize = "13px"
+  pre.style.lineHeight = "1.5"
+  pre.style.tabSize = "2"
+  pre.style.whiteSpace = "pre"
+
+  const codeEl = document.createElement("code")
+  codeEl.textContent = code
+  pre.appendChild(codeEl)
+  wrapper.appendChild(pre)
+
+  // Apply syntax highlighting asynchronously (plain text shows first, then highlights)
+  applyHighlighting(codeEl, code, language)
+
+  return wrapper
+}
+
+// Advance a TreeWalker past the subtree rooted at `el`.
+// Returns the next node to visit, or null if traversal is complete.
+function skipSubtree(walker: TreeWalker, el: Element): Node | null {
+  const next: Node | null = el.nextSibling
+  if (next) {
+    walker.currentNode = next
+    return next
+  }
+  let parent: Node | null = el.parentNode
+  while (parent && !parent.nextSibling) parent = parent.parentNode
+  if (parent && parent.nextSibling) {
+    walker.currentNode = parent.nextSibling
+    return parent.nextSibling
+  }
+  return null
+}
+
 // Serialize DOM to text with @[id] tokens
 function serializeContent(root: HTMLElement): string {
   let result = ""
@@ -130,6 +252,27 @@ function serializeContent(root: HTMLElement): string {
       node = walker.nextNode()
       continue
     }
+    // Handle code block elements (must be checked before generic DIV handler
+    // since the code block wrapper is also a <div>)
+    if (el.hasAttribute("data-code-block")) {
+      const lang = el.getAttribute("data-code-language") || ""
+      const code = el.querySelector("code")?.textContent || ""
+      result += "```" + lang + "\n" + code + "\n```"
+      node = skipSubtree(walker, el)
+      continue
+    }
+    // Handle ultrathink styled nodes
+    if (el.hasAttribute("data-ultrathink")) {
+      result += el.textContent || ""
+      node = skipSubtree(walker, el)
+      continue
+    }
+    if (el.hasAttribute("data-mention-id")) {
+      const id = el.getAttribute("data-mention-id") || ""
+      result += `@[${id}]`
+      node = skipSubtree(walker, el)
+      continue
+    }
     // Handle <div> elements (some browsers wrap lines in divs)
     if (el.tagName === "DIV" && el !== root) {
       // Add newline before div content (if not at start)
@@ -139,70 +282,25 @@ function serializeContent(root: HTMLElement): string {
       node = walker.nextNode()
       continue
     }
-    // Handle ultrathink styled nodes
-    if (el.hasAttribute("data-ultrathink")) {
-      result += el.textContent || ""
-      // Skip subtree
-      let next: Node | null = el.nextSibling
-      if (next) {
-        walker.currentNode = next
-        node = next
-        continue
-      }
-      let parent: Node | null = el.parentNode
-      while (parent && !parent.nextSibling) parent = parent.parentNode
-      if (parent && parent.nextSibling) {
-        walker.currentNode = parent.nextSibling
-        node = parent.nextSibling
-      } else {
-        node = null
-      }
-      continue
-    }
-    if (el.hasAttribute("data-mention-id")) {
-      const id = el.getAttribute("data-mention-id") || ""
-      result += `@[${id}]`
-      // Skip subtree
-      let next: Node | null = el.nextSibling
-      if (next) {
-        walker.currentNode = next
-        node = next
-        continue
-      }
-      let parent: Node | null = el.parentNode
-      while (parent && !parent.nextSibling) parent = parent.parentNode
-      if (parent && parent.nextSibling) {
-        walker.currentNode = parent.nextSibling
-        node = parent.nextSibling
-      } else {
-        node = null
-      }
-      continue
-    }
     node = walker.nextNode()
   }
   return result
 }
 
-// Build DOM from serialized text
-function buildContentFromSerialized(
+// Build DOM nodes for a text segment (handles @[...] mentions)
+function buildTextSegment(
   root: HTMLElement,
-  serialized: string,
+  text: string,
   resolveMention?: (id: string) => FileMentionOption | null,
 ) {
-  // Clear safely
-  while (root.firstChild) {
-    root.removeChild(root.firstChild)
-  }
-
   const regex = /@\[([^\]]+)\]/g
   let lastIndex = 0
   let match: RegExpExecArray | null
 
-  while ((match = regex.exec(serialized)) !== null) {
+  while ((match = regex.exec(text)) !== null) {
     // Text before mention
     if (match.index > lastIndex) {
-      appendText(root, serialized.slice(lastIndex, match.index))
+      appendText(root, text.slice(lastIndex, match.index))
     }
     const id = match[1]
     // Try to resolve mention
@@ -254,9 +352,39 @@ function buildContentFromSerialized(
   }
 
   // Remaining text
-  if (lastIndex < serialized.length) {
-    appendText(root, serialized.slice(lastIndex))
+  if (lastIndex < text.length) {
+    appendText(root, text.slice(lastIndex))
   }
+}
+
+// Build DOM from serialized text
+// Two-pass: first split by fenced code blocks, then process text segments for mentions
+function buildContentFromSerialized(
+  root: HTMLElement,
+  serialized: string,
+  resolveMention?: (id: string) => FileMentionOption | null,
+) {
+  // Clear safely
+  while (root.firstChild) {
+    root.removeChild(root.firstChild)
+  }
+
+  // Check for fenced code blocks first
+  if (hasCodeBlocks(serialized)) {
+    const segments = parseCodeBlocks(serialized)
+    for (const segment of segments) {
+      if (segment.type === "code") {
+        root.appendChild(createCodeBlockNode(segment.language, segment.content))
+      } else {
+        // Process text segment for mentions
+        buildTextSegment(root, segment.content, resolveMention)
+      }
+    }
+    return
+  }
+
+  // No code blocks — process entire text for mentions (fast path)
+  buildTextSegment(root, serialized, resolveMention)
 }
 
 // Combined tree walk result - computes everything in ONE pass instead of 3
@@ -395,9 +523,24 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
       continue
     }
 
-    // Element node - check for ultrathink or mention
+    // Element node - check for code block, ultrathink, or mention
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement
+
+      // Handle code block elements
+      if (el.hasAttribute("data-code-block")) {
+        const lang = el.getAttribute("data-code-language") || ""
+        const code = el.querySelector("code")?.textContent || ""
+        const token = "```" + lang + "\n" + code + "\n```"
+        serialized += token
+        if (!reachedCursor) {
+          textBeforeCursor += token
+        }
+
+        // Skip code block subtree
+        node = skipSubtree(walker, el)
+        continue
+      }
 
       // Handle ultrathink styled nodes
       if (el.hasAttribute("data-ultrathink")) {
@@ -407,21 +550,7 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
           textBeforeCursor += text
         }
 
-        // Skip ultrathink subtree
-        let next: Node | null = el.nextSibling
-        if (next) {
-          walker.currentNode = next
-          node = next
-          continue
-        }
-        let parent: Node | null = el.parentNode
-        while (parent && !parent.nextSibling) parent = parent.parentNode
-        if (parent && parent.nextSibling) {
-          walker.currentNode = parent.nextSibling
-          node = parent.nextSibling
-          continue
-        }
-        node = null
+        node = skipSubtree(walker, el)
         continue
       }
 
@@ -433,21 +562,7 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
           textBeforeCursor += mentionToken
         }
 
-        // Skip mention subtree
-        let next: Node | null = el.nextSibling
-        if (next) {
-          walker.currentNode = next
-          node = next
-          continue
-        }
-        let parent: Node | null = el.parentNode
-        while (parent && !parent.nextSibling) parent = parent.parentNode
-        if (parent && parent.nextSibling) {
-          walker.currentNode = parent.nextSibling
-          node = parent.nextSibling
-          continue
-        }
-        node = null
+        node = skipSubtree(walker, el)
         continue
       }
     }
@@ -552,10 +667,10 @@ export const AgentsMentionsEditor = memo(
               cursorOffset += node.textContent?.length || 0
             } else if (node.nodeType === Node.ELEMENT_NODE) {
               const el = node as HTMLElement
-              // Mention nodes count as their serialized length for consistency
-              if (el.hasAttribute("data-mention-id")) {
-                cursorOffset += 1 // Count mention as single unit
-                // Skip children of mention node - move walker to next sibling
+              // Mention and code block nodes count as single units for cursor offset
+              if (el.hasAttribute("data-mention-id") || el.hasAttribute("data-code-block")) {
+                cursorOffset += 1 // Count as single unit
+                // Skip children - move walker to next sibling
                 const nextSibling = walker.nextSibling()
                 if (nextSibling) {
                   node = nextSibling
@@ -640,10 +755,10 @@ export const AgentsMentionsEditor = memo(
             currentOffset += nodeLength
           } else if (node.nodeType === Node.ELEMENT_NODE) {
             const el = node as HTMLElement
-            if (el.hasAttribute("data-mention-id")) {
-              // Mention counts as 1 unit
+            if (el.hasAttribute("data-mention-id") || el.hasAttribute("data-code-block")) {
+              // Mention and code block count as 1 unit
               if (currentOffset + 1 >= offset) {
-                // Place cursor after mention
+                // Place cursor after element
                 const range = document.createRange()
                 range.setStartAfter(el)
                 range.collapse(true)
@@ -652,7 +767,7 @@ export const AgentsMentionsEditor = memo(
                 return
               }
               currentOffset += 1
-              // Skip to next sibling (don't traverse inside mention)
+              // Skip to next sibling (don't traverse inside)
               const nextSibling = walker.nextSibling()
               if (nextSibling) {
                 node = nextSibling
@@ -808,6 +923,9 @@ export const AgentsMentionsEditor = memo(
 
       // Trigger detection timeout ref for cleanup
       const triggerDetectionTimeout = useRef<number | null>(null)
+      // Code block detection debounce timer and re-entrancy guard
+      const codeBlockDetectionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+      const isRebuildingCodeBlocks = useRef(false)
 
       // Handle input - UNCONTROLLED: no onChange, just @ and / trigger detection
       const handleInput = useCallback(() => {
@@ -964,13 +1082,52 @@ export const AgentsMentionsEditor = memo(
           cancelAnimationFrame(triggerDetectionTimeout.current)
         }
         triggerDetectionTimeout.current = requestAnimationFrame(runTriggerDetection)
-      }, [onContentChange, onTrigger, onCloseTrigger, onSlashTrigger, onCloseSlashTrigger, debouncedSaveUndoState])
+
+        // Debounced code block detection: check if user has typed a complete fenced code block
+        // Only runs after 300ms of no input, and only if ``` is present in text content
+        // Skipped if we're in the middle of a DOM rebuild (re-entrancy guard)
+        if (codeBlockDetectionTimer.current) {
+          clearTimeout(codeBlockDetectionTimer.current)
+        }
+        if (content.includes("```") && !isRebuildingCodeBlocks.current) {
+          codeBlockDetectionTimer.current = setTimeout(() => {
+            if (!editorRef.current || isRebuildingCodeBlocks.current) return
+            // Get serialized text and check for complete fenced code blocks
+            const serialized = serializeContent(editorRef.current)
+            if (hasCodeBlocks(serialized)) {
+              isRebuildingCodeBlocks.current = true
+              try {
+                // Save undo state before transforming
+                immediateSaveUndoState()
+                // Rebuild DOM with code blocks rendered as styled elements
+                buildContentFromSerialized(editorRef.current, serialized, resolveMention)
+                // Move cursor to end
+                const sel = window.getSelection()
+                if (sel) {
+                  sel.selectAllChildren(editorRef.current)
+                  sel.collapseToEnd()
+                }
+                // Update content state
+                const newContent = editorRef.current.textContent || ""
+                const newHasContent = !!newContent
+                setHasContent(newHasContent)
+                onContentChange?.(newHasContent)
+              } finally {
+                isRebuildingCodeBlocks.current = false
+              }
+            }
+          }, 300)
+        }
+      }, [onContentChange, onTrigger, onCloseTrigger, onSlashTrigger, onCloseSlashTrigger, debouncedSaveUndoState, immediateSaveUndoState, resolveMention])
 
       // Cleanup on unmount
       useEffect(() => {
         return () => {
           if (triggerDetectionTimeout.current) {
             cancelAnimationFrame(triggerDetectionTimeout.current)
+          }
+          if (codeBlockDetectionTimer.current) {
+            clearTimeout(codeBlockDetectionTimer.current)
           }
         }
       }, [])

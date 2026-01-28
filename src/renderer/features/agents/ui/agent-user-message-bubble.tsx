@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog"
 import { AgentImageItem } from "./agent-image-item"
-import { RenderFileMentions, extractTextMentions, TextMentionBlocks } from "../mentions/render-file-mentions"
+import { RenderFileMentions, RenderUserContent, extractTextMentions, TextMentionBlocks } from "../mentions/render-file-mentions"
 import { useSearchHighlight, useSearchQuery } from "../search"
 
 interface AgentUserMessageBubbleProps {
@@ -234,7 +234,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
               data-part-index={0}
               data-part-type="text"
             >
-              <RenderFileMentions text={cleanedText} />
+              <RenderUserContent text={cleanedText} />
               {/* Show gradient only when collapsed and not searching in this message */}
               {showGradient && !hasCurrentSearchHighlight && (
                 <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none bg-gradient-to-t from-[hsl(var(--input-background))] to-transparent rounded-b-xl" />
@@ -282,7 +282,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
               <TextMentionBlocks mentions={textMentions} />
             )}
             <div className="whitespace-pre-wrap text-sm">
-              <RenderFileMentions text={cleanedText} />
+              <RenderUserContent text={cleanedText} />
             </div>
           </div>
         </DialogContent>

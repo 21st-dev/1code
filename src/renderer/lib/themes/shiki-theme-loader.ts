@@ -56,6 +56,35 @@ class LRUCache<K, V> {
 
 const highlightCache = new LRUCache<string, string>(HIGHLIGHT_CACHE_MAX_SIZE)
 
+// Track in-flight language load promises to prevent concurrent duplicate loads
+const pendingLanguageLoads = new Map<string, Promise<boolean>>()
+
+// Shared theme-change observer: single MutationObserver shared by all consumers
+type ThemeChangeListener = () => void
+const themeChangeListeners = new Set<ThemeChangeListener>()
+let themeObserver: MutationObserver | null = null
+
+/** Subscribe to theme changes on document.documentElement. Returns an unsubscribe function. */
+export function onThemeChange(listener: ThemeChangeListener): () => void {
+  themeChangeListeners.add(listener)
+  if (!themeObserver) {
+    themeObserver = new MutationObserver(() => {
+      themeChangeListeners.forEach((fn) => fn())
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+  }
+  return () => {
+    themeChangeListeners.delete(listener)
+    if (themeChangeListeners.size === 0 && themeObserver) {
+      themeObserver.disconnect()
+      themeObserver = null
+    }
+  }
+}
+
 /**
  * Languages supported by the highlighter
  */
@@ -266,10 +295,30 @@ export async function highlightCode(
   // Get the theme to use for highlighting
   const shikiTheme = getShikiThemeForHighlighting(themeId)
 
-  const loadedLangs = highlighter.getLoadedLanguages()
-  const lang = loadedLangs.includes(language as shiki.BundledLanguage)
-    ? (language as shiki.BundledLanguage)
-    : "plaintext"
+  // Resolve language: use loaded language, try dynamic loading, or fall back to plaintext
+  let lang: shiki.BundledLanguage | "plaintext" = "plaintext"
+  if (language && language !== "plaintext") {
+    const loadedLangs = highlighter.getLoadedLanguages()
+    if (loadedLangs.includes(language as shiki.BundledLanguage)) {
+      lang = language as shiki.BundledLanguage
+    } else {
+      // Try to load the language dynamically from Shiki's bundles.
+      // Use a shared promise to prevent concurrent duplicate loads for the same language.
+      let loadPromise = pendingLanguageLoads.get(language)
+      if (!loadPromise) {
+        loadPromise = highlighter
+          .loadLanguage(language as shiki.BundledLanguage)
+          .then(() => true)
+          .catch(() => false)
+          .finally(() => pendingLanguageLoads.delete(language))
+        pendingLanguageLoads.set(language, loadPromise)
+      }
+      const loaded = await loadPromise
+      if (loaded) {
+        lang = language as shiki.BundledLanguage
+      }
+    }
+  }
 
   const html = highlighter.codeToHtml(code, {
     lang,
