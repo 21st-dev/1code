@@ -9,6 +9,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import { ipcMain } from "electron"
+import { parse as parseJsonc } from "jsonc-parser"
 
 /**
  * Source editor type
@@ -160,12 +161,8 @@ async function scanExtensionsDir(extensionsDir: string, source: EditorSource): P
           let actualThemeName: string | undefined
           try {
             const themeContent = await fs.readFile(themePath, "utf-8")
-            // Handle JSONC (JSON with comments and trailing commas)
-            const jsonContent = themeContent
-              .replace(/\/\/.*$/gm, "") // Remove single-line comments
-              .replace(/\/\*[\s\S]*?\*\//g, "") // Remove multi-line comments
-              .replace(/,(\s*[}\]])/g, "$1") // Remove trailing commas
-            const themeData = JSON.parse(jsonContent)
+            // Use proper JSONC parser (handles comments and trailing commas)
+            const themeData = parseJsonc(themeContent)
             actualThemeName = themeData.name
           } catch {
             continue
@@ -235,13 +232,8 @@ export async function scanVSCodeThemes(): Promise<DiscoveredTheme[]> {
 export async function loadThemeFromPath(themePath: string): Promise<VSCodeThemeData> {
   const content = await fs.readFile(themePath, "utf-8")
 
-  // Handle JSONC (JSON with comments and trailing commas) - VS Code theme files use this format
-  const jsonContent = content
-    .replace(/\/\/.*$/gm, "") // Remove single-line comments
-    .replace(/\/\*[\s\S]*?\*\//g, "") // Remove multi-line comments
-    .replace(/,(\s*[}\]])/g, "$1") // Remove trailing commas
-
-  const theme = JSON.parse(jsonContent)
+  // Use proper JSONC parser (handles comments and trailing commas)
+  const theme = parseJsonc(content)
 
   // Generate unique ID based on path and timestamp
   const id = `imported-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

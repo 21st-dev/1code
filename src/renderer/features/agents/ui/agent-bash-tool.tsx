@@ -150,21 +150,24 @@ export const AgentBashTool = memo(function AgentBashTool({
           </div>
 
           {/* Expand/Collapse button - only show when not pending and has output that can be expanded */}
-          {!isPending && hasOutput && hasMoreOutput && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsOutputExpanded(!isOutputExpanded)
-              }}
-              className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
-            >
-              {isOutputExpanded ? (
-                <CollapseIcon className="w-4 h-4 text-muted-foreground" />
-              ) : (
-                <ExpandIcon className="w-4 h-4 text-muted-foreground" />
-              )}
-            </button>
-          )}
+          {/* Always render container for consistent spacing */}
+          <div className="w-6 h-6 flex items-center justify-center">
+            {!isPending && hasOutput && hasMoreOutput && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsOutputExpanded(!isOutputExpanded)
+                }}
+                className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+              >
+                {isOutputExpanded ? (
+                  <CollapseIcon className="w-4 h-4 text-muted-foreground" />
+                ) : (
+                  <ExpandIcon className="w-4 h-4 text-muted-foreground" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

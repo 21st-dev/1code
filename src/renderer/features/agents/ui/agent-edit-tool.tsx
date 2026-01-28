@@ -583,31 +583,34 @@ export const AgentEditTool = memo(function AgentEditTool({
           </div>
 
           {/* Expand/Collapse button - show when has visible content and not streaming */}
-          {hasVisibleContent && !isPending && !isInputStreaming && (
-            <button
-              onClick={handleExpandButtonClick}
-              className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
-            >
-              <div className="relative w-4 h-4">
-                <ExpandIcon
-                  className={cn(
-                    "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                    isOutputExpanded
-                      ? "opacity-0 scale-75"
-                      : "opacity-100 scale-100",
-                  )}
-                />
-                <CollapseIcon
-                  className={cn(
-                    "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                    isOutputExpanded
-                      ? "opacity-100 scale-100"
-                      : "opacity-0 scale-75",
-                  )}
-                />
-              </div>
-            </button>
-          )}
+          {/* Always render container for consistent spacing */}
+          <div className="w-6 h-6 flex items-center justify-center">
+            {hasVisibleContent && !isPending && !isInputStreaming && (
+              <button
+                onClick={handleExpandButtonClick}
+                className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+              >
+                <div className="relative w-4 h-4">
+                  <ExpandIcon
+                    className={cn(
+                      "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                      isOutputExpanded
+                        ? "opacity-0 scale-75"
+                        : "opacity-100 scale-100",
+                    )}
+                  />
+                  <CollapseIcon
+                    className={cn(
+                      "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                      isOutputExpanded
+                        ? "opacity-100 scale-100"
+                        : "opacity-0 scale-75",
+                    )}
+                  />
+                </div>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

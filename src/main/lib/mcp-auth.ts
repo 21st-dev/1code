@@ -6,8 +6,8 @@ import {
   getMcpServerConfig,
   GLOBAL_MCP_PATH,
   readClaudeConfig,
+  updateClaudeConfigAtomic,
   updateMcpServerConfig,
-  writeClaudeConfig
 } from './claude-config';
 import { getClaudeShellEnvironment } from './claude/env';
 import { CraftOAuth, fetchOAuthMetadata, getMcpBaseUrl, type OAuthMetadata, type OAuthTokens } from './oauth';
@@ -389,42 +389,45 @@ export async function ensureMcpTokensFresh(
   return updatedServers;
 }
 
+/**
+ * Save OAuth tokens to ~/.claude.json atomically.
+ * Uses a mutex to prevent race conditions when multiple concurrent
+ * token refreshes try to update the config simultaneously.
+ */
 async function saveTokensToClaudeJson(
   serverName: string,
   projectPath: string,
   tokens: OAuthTokens,
   clientId?: string
 ): Promise<void> {
-  let config = await readClaudeConfig();
+  await updateClaudeConfigAtomic((config) => {
+    // Get existing server config to preserve existing headers and determine type
+    const existingConfig = getMcpServerConfig(config, projectPath, serverName) || {};
+    const serverUrl = existingConfig.url as string | undefined;
 
-  // Get existing server config to preserve existing headers and determine type
-  const existingConfig = getMcpServerConfig(config, projectPath, serverName) || {};
-  const serverUrl = existingConfig.url as string | undefined;
+    // Determine transport type from URL (SDK expects explicit type for HTTP servers)
+    const serverType = serverUrl?.endsWith('/sse') ? 'sse' : 'http';
 
-  // Determine transport type from URL (SDK expects explicit type for HTTP servers)
-  const serverType = serverUrl?.endsWith('/sse') ? 'sse' : 'http';
+    // Build headers with Authorization (preserve any existing headers)
+    const existingHeaders = (existingConfig.headers as Record<string, string>) || {};
+    const headers = {
+      ...existingHeaders,
+      Authorization: `Bearer ${tokens.accessToken}`,
+    };
 
-  // Build headers with Authorization (preserve any existing headers)
-  const existingHeaders = (existingConfig.headers as Record<string, string>) || {};
-  const headers = {
-    ...existingHeaders,
-    Authorization: `Bearer ${tokens.accessToken}`,
-  };
-
-  config = updateMcpServerConfig(config, projectPath, serverName, {
-    // SDK-required fields
-    type: serverType,
-    headers,
-    // Internal tracking (for token refresh, status checking)
-    _oauth: {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      clientId,
-      expiresAt: tokens.expiresAt,
-    },
+    return updateMcpServerConfig(config, projectPath, serverName, {
+      // SDK-required fields
+      type: serverType,
+      headers,
+      // Internal tracking (for token refresh, status checking)
+      _oauth: {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        clientId,
+        expiresAt: tokens.expiresAt,
+      },
+    });
   });
-
-  await writeClaudeConfig(config);
 }
 
 export function cancelAllPendingOAuth(): void {

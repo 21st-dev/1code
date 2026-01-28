@@ -177,10 +177,18 @@ export function AgentsMcpTab() {
   const [expandedServer, setExpandedServer] = useState<string | null>(null)
 
   // Fetch ALL MCP config (global + all projects) - includes tools for connected servers
-  const { data: allMcpConfig, isLoading: isLoadingConfig, refetch } = trpc.claude.getAllMcpConfig.useQuery()
+  // Uses long staleTime since data is prefetched at app startup and user can manually refresh
+  const {
+    data: allMcpConfig,
+    isLoading: isLoadingConfig,
+    refetch,
+  } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000, // 10 minutes - rely on manual refresh button
+  })
 
-  // Refresh state
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  // Refresh state - true during initial load OR manual refresh
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false)
+  const isRefreshing = isLoadingConfig || isManualRefreshing
 
   // tRPC
   const startOAuthMutation = trpc.claude.startMcpOAuth.useMutation()
@@ -201,7 +209,7 @@ export function AgentsMcpTab() {
   }
 
   const handleRefresh = useCallback(async (silent = false) => {
-    setIsRefreshing(true)
+    setIsManualRefreshing(true)
     try {
       await refetch()
       if (!silent) {
@@ -212,14 +220,9 @@ export function AgentsMcpTab() {
         toast.error("Failed to refresh MCP servers")
       }
     } finally {
-      setIsRefreshing(false)
+      setIsManualRefreshing(false)
     }
   }, [refetch])
-
-  // Refresh on every tab access (component mount)
-  useEffect(() => {
-    handleRefresh(true)
-  }, [handleRefresh])
 
   const handleAuth = async (serverName: string, projectPath: string | null) => {
     try {

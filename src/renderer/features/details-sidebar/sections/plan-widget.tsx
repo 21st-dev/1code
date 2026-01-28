@@ -145,7 +145,7 @@ export const PlanWidget = memo(function PlanWidget({
           <span className="text-xs font-medium text-foreground flex-1">Plan</span>
 
           {/* Original buttons: View plan + Approve */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center">
             <Button
               variant="ghost"
               size="sm"
@@ -164,37 +164,37 @@ export const PlanWidget = memo(function PlanWidget({
                   e.stopPropagation()
                   onApprovePlan()
                 }}
-                className="h-5 px-2 text-[10px] font-medium rounded transition-transform duration-150 active:scale-[0.97]"
+                className="h-5 px-2 mx-0.5 text-[10px] font-medium rounded transition-transform duration-150 active:scale-[0.97]"
               >
                 Approve
                 <Kbd className="ml-1 text-primary-foreground/70">⌘↵</Kbd>
               </Button>
             )}
-          </div>
 
-          {/* Expand/Collapse button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleToggleExpand}
-            className="h-5 w-5 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
-            aria-label={isExpanded ? "Collapse plan" : "Expand plan"}
-          >
-            <div className="relative w-3.5 h-3.5">
-              <ExpandIcon
-                className={cn(
-                  "absolute inset-0 w-3.5 h-3.5 transition-[opacity,transform] duration-200 ease-out",
-                  isExpanded ? "opacity-0 scale-75" : "opacity-100 scale-100",
-                )}
-              />
-              <CollapseIcon
-                className={cn(
-                  "absolute inset-0 w-3.5 h-3.5 transition-[opacity,transform] duration-200 ease-out",
-                  isExpanded ? "opacity-100 scale-100" : "opacity-0 scale-75",
-                )}
-              />
-            </div>
-          </Button>
+            {/* Expand/Collapse button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleExpand}
+              className="h-5 w-5 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
+              aria-label={isExpanded ? "Collapse plan" : "Expand plan"}
+            >
+              <div className="relative w-3.5 h-3.5">
+                <ExpandIcon
+                  className={cn(
+                    "absolute inset-0 w-3.5 h-3.5 transition-[opacity,transform] duration-200 ease-out",
+                    isExpanded ? "opacity-0 scale-75" : "opacity-100 scale-100",
+                  )}
+                />
+                <CollapseIcon
+                  className={cn(
+                    "absolute inset-0 w-3.5 h-3.5 transition-[opacity,transform] duration-200 ease-out",
+                    isExpanded ? "opacity-100 scale-100" : "opacity-0 scale-75",
+                  )}
+                />
+              </div>
+            </Button>
+          </div>
         </div>
 
         {/* Content */}

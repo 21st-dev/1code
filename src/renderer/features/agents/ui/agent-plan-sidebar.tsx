@@ -1,12 +1,15 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useAtomValue } from "jotai"
 import { Button } from "../../../components/ui/button"
-import { IconDoubleChevronRight, IconSpinner, PlanIcon } from "../../../components/ui/icons"
+import { IconDoubleChevronRight, IconSpinner, PlanIcon, MarkdownIcon, CodeIcon } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
+import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
+import { CopyButton } from "./message-action-buttons"
 import type { AgentMode } from "../atoms"
 
 interface AgentPlanSidebarProps {
@@ -28,6 +31,13 @@ export function AgentPlanSidebar({
   refetchTrigger,
   mode = "agent",
 }: AgentPlanSidebarProps) {
+  // View mode: rendered markdown or plaintext
+  const [viewMode, setViewMode] = useState<"rendered" | "plaintext">("rendered")
+
+  // Toggle view mode
+  const handleToggleViewMode = useCallback(() => {
+    setViewMode((prev) => (prev === "rendered" ? "plaintext" : "rendered"))
+  }, [])
 
   // Fetch plan file content using tRPC
   const { data: planContent, isLoading, error, refetch } = trpc.files.readFile.useQuery(
@@ -66,6 +76,53 @@ export function AgentPlanSidebar({
           <span className="text-sm font-medium truncate">{planTitle}</span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {/* View mode toggle */}
+          {planContent && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleViewMode}
+                  className="h-6 w-6 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground"
+                  aria-label={viewMode === "rendered" ? "Show raw markdown" : "Show rendered"}
+                >
+                  <div className="relative w-4 h-4">
+                    <MarkdownIcon
+                      className={cn(
+                        "absolute inset-0 w-4 h-4 transition-[opacity,transform] duration-200 ease-out",
+                        viewMode === "rendered" ? "opacity-100 scale-100" : "opacity-0 scale-75",
+                      )}
+                    />
+                    <CodeIcon
+                      className={cn(
+                        "absolute inset-0 w-4 h-4 transition-[opacity,transform] duration-200 ease-out",
+                        viewMode === "plaintext" ? "opacity-100 scale-100" : "opacity-0 scale-75",
+                      )}
+                    />
+                  </div>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" showArrow={false}>
+                {viewMode === "rendered" ? "View raw markdown" : "View rendered"}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Copy button */}
+          {planContent && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <CopyButton text={planContent} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" showArrow={false}>
+                Copy plan
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           {/* Approve Plan button - only show in plan mode */}
           {mode === "plan" && onBuildPlan && (
             <Button
@@ -131,10 +188,16 @@ export function AgentPlanSidebar({
             className="px-4 py-3 allow-text-selection"
             data-plan-path={planPath}
           >
-            <ChatMarkdownRenderer
-              content={planContent || ""}
-              size="sm"
-            />
+            {viewMode === "rendered" ? (
+              <ChatMarkdownRenderer
+                content={planContent || ""}
+                size="sm"
+              />
+            ) : (
+              <pre className="text-sm font-mono whitespace-pre-wrap text-foreground/80 leading-relaxed">
+                {planContent || ""}
+              </pre>
+            )}
           </div>
         )}
       </div>

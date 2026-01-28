@@ -1,6 +1,6 @@
 {
   "name": "21st-desktop",
-  "version": "0.0.46",
+  "version": "0.0.49",
   "private": true,
   "description": "1Code - UI for parallel work with AI agents",
   "author": {
@@ -21,7 +21,7 @@
     "dist:upload": "node scripts/upload-release.mjs",
     "claude:download": "node scripts/download-claude-binary.mjs",
     "claude:download:all": "node scripts/download-claude-binary.mjs --all",
-    "release": "rm -rf release && bun run claude:download && bun run build && bun run package:mac && bun run dist:manifest && ./scripts/upload-release-wrangler.sh",
+    "release": "rm -rf release && bun i && bun run claude:download && bun run build && bun run package:mac && bun run dist:manifest && ./scripts/upload-release-wrangler.sh",
     "release:dev": "rm -rf release && bun run claude:download && bun run build && bun run package:mac && rm -rf node_modules && bun i",
     "sync:public": "./scripts/sync-to-public.sh",
     "icon:generate": "node scripts/generate-icon.mjs",
@@ -68,6 +68,7 @@
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/addon-webgl": "^0.19.0",
     "ai": "^6.0.14",
+    "async-mutex": "^0.5.0",
     "better-sqlite3": "^11.8.1",
     "chokidar": "^5.0.0",
     "class-variance-authority": "^0.7.1",
@@ -78,6 +79,7 @@
     "electron-updater": "^6.7.3",
     "gray-matter": "^4.0.3",
     "jotai": "^2.11.1",
+    "jsonc-parser": "^3.3.1",
     "lucide-react": "^0.468.0",
     "mermaid": "^11.12.2",
     "motion": "^11.15.0",

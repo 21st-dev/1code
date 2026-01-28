@@ -1,6 +1,7 @@
 /**
  * Helpers for reading and writing ~/.claude.json configuration
  */
+import { Mutex } from "async-mutex"
 import { eq } from "drizzle-orm"
 import { existsSync, readFileSync, writeFileSync } from "fs"
 import * as fs from "fs/promises"
@@ -8,6 +9,13 @@ import * as os from "os"
 import * as path from "path"
 import { getDatabase } from "./db"
 import { chats, projects } from "./db/schema"
+
+/**
+ * Mutex for protecting read-modify-write operations on ~/.claude.json
+ * This prevents race conditions when multiple concurrent operations
+ * (e.g., token refreshes for different MCP servers) try to update the config.
+ */
+const configMutex = new Mutex()
 
 export const CLAUDE_CONFIG_PATH = path.join(os.homedir(), ".claude.json")
 
@@ -74,6 +82,28 @@ export async function writeClaudeConfig(config: ClaudeConfig): Promise<void> {
  */
 export function writeClaudeConfigSync(config: ClaudeConfig): void {
   writeFileSync(CLAUDE_CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8")
+}
+
+/**
+ * Execute a read-modify-write operation on ~/.claude.json atomically.
+ * This is the ONLY safe way to update the config when concurrent writes are possible.
+ *
+ * Uses a mutex to ensure that only one read-modify-write cycle happens at a time,
+ * preventing race conditions where concurrent token refreshes could overwrite
+ * each other's updates.
+ *
+ * @param updater Function that receives current config and returns updated config
+ * @returns The updated config
+ */
+export async function updateClaudeConfigAtomic(
+  updater: (config: ClaudeConfig) => ClaudeConfig | Promise<ClaudeConfig>
+): Promise<ClaudeConfig> {
+  return configMutex.runExclusive(async () => {
+    const config = await readClaudeConfig()
+    const updatedConfig = await updater(config)
+    await writeClaudeConfig(updatedConfig)
+    return updatedConfig
+  })
 }
 
 /**

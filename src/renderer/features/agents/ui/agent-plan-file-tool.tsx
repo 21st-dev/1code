@@ -1,22 +1,23 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
-import { ExpandIcon, CollapseIcon, PlanIcon } from "../../../components/ui/icons"
+import { CheckIcon, CollapseIcon, CopyIcon, ExpandIcon, PlanIcon } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
-import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
-import { getToolStatus } from "./agent-tool-registry"
-import { areToolPropsEqual } from "./agent-tool-utils"
 import {
-  planSidebarOpenAtomFamily,
   currentPlanPathAtomFamily,
-  subChatModeAtomFamily,
   pendingBuildPlanSubChatIdAtom,
+  planSidebarOpenAtomFamily,
+  subChatModeAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import { getToolStatus } from "./agent-tool-registry"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentPlanFileToolProps {
   part: {
@@ -45,6 +46,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   isEdit = false,
 }: AgentPlanFileToolProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
   const { isPending } = getToolStatus(part, chatStatus)
   const isWrite = part.type === "tool-Write"
   // Get mode from per-subChat atomFamily
@@ -152,6 +154,13 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
     }
   }, [setPendingBuildPlanSubChatId])
 
+  // Handle copy plan
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(planContent)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [planContent])
+
   // If no content yet, show minimal view with shimmer (no icon during shimmer)
   if (!hasVisibleContent) {
     return (
@@ -190,25 +199,58 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
           )}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
+          {/* Copy button */}
+          {hasVisibleContent && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleCopy()
+                  }}
+                  className="group p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+                >
+                  <div className="relative w-3.5 h-3.5">
+                    <CopyIcon
+                      className={cn(
+                        "absolute inset-0 w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-[opacity,transform,color] duration-200 ease-out",
+                        copied ? "opacity-0 scale-50" : "opacity-100 scale-100",
+                      )}
+                    />
+                    <CheckIcon
+                      className={cn(
+                        "absolute inset-0 w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-[opacity,transform,color] duration-200 ease-out",
+                        copied ? "opacity-100 scale-100" : "opacity-0 scale-50",
+                      )}
+                    />
+                  </div>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" showArrow={false}>
+                Copy plan
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           {/* Expand/Collapse button */}
           <button
             onClick={(e) => {
               e.stopPropagation()
               handleToggleExpand()
             }}
-            className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+            className="group p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
           >
             <div className="relative w-4 h-4">
               <ExpandIcon
                 className={cn(
-                  "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                  "absolute inset-0 w-4 h-4 text-muted-foreground group-hover:text-foreground transition-[opacity,transform,color] duration-200 ease-out",
                   isExpanded ? "opacity-0 scale-75" : "opacity-100 scale-100",
                 )}
               />
               <CollapseIcon
                 className={cn(
-                  "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                  "absolute inset-0 w-4 h-4 text-muted-foreground group-hover:text-foreground transition-[opacity,transform,color] duration-200 ease-out",
                   isExpanded ? "opacity-100 scale-100" : "opacity-0 scale-75",
                 )}
               />
@@ -251,15 +293,17 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
 
       {/* Footer - action buttons */}
       <div className="flex items-center justify-between p-1.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleOpenSidebar}
-          disabled={!viewPlanEnabled}
-          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-        >
-          View plan
-        </Button>
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleOpenSidebar}
+            disabled={!viewPlanEnabled}
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            View plan
+          </Button>
+        </div>
 
         {subChatMode === "plan" && (
           <Button

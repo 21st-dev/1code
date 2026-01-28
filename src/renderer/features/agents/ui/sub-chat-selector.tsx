@@ -651,7 +651,7 @@ export function SubChatSelector({
             "flex items-center px-1 py-1 -my-1 gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide pr-12",
             // Hide tabs when sidebar is open (desktop) or when only one chat exists
             (subChatsSidebarMode === "sidebar" && !isMobile) && "hidden",
-            hasSingleChat && "hidden",
+            hasSingleChat && "invisible",
           )}
         >
           {hasNoChats
