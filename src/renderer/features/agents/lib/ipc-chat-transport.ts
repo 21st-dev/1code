@@ -24,6 +24,7 @@ import {
   pendingUserQuestionsAtom,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import type { AgentMessageMetadata } from "../ui/agent-message-usage"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -136,6 +137,10 @@ type ImageAttachment = {
 }
 
 export class IPCChatTransport implements ChatTransport<UIMessage> {
+  // When a session is cancelled (abort), the Claude process is killed and the
+  // sessionId becomes stale. Skip it on the next send so we start fresh.
+  private sessionInvalidated = false
+
   constructor(private config: IPCChatTransportConfig) {}
 
   async sendMessages(options: {
@@ -149,11 +154,13 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
 
-    // Get sessionId for resume
+    // Get sessionId for resume (skip if session was invalidated by a cancel/abort)
     const lastAssistant = [...options.messages]
       .reverse()
       .find((m) => m.role === "assistant")
-    const sessionId = (lastAssistant as any)?.metadata?.sessionId
+    const metadata = lastAssistant?.metadata as AgentMessageMetadata | undefined
+    const sessionId = this.sessionInvalidated ? undefined : metadata?.sessionId
+    this.sessionInvalidated = false
 
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
@@ -440,8 +447,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
           console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+          this.sessionInvalidated = true
           sub.unsubscribe()
-          trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
           try {
             controller.close()
           } catch {

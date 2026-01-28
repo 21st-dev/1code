@@ -1788,7 +1788,9 @@ ${prompt}
                 db.update(subChats)
                   .set({
                     messages: JSON.stringify(finalMessages),
-                    sessionId: metadata.sessionId,
+                    // Don't save sessionId on abort — the session is stale and
+                    // the transport already marks it as invalidated client-side
+                    sessionId: abortController.signal.aborted ? null : metadata.sessionId,
                     streamId: null,
                     updatedAt: new Date(),
                   })
@@ -1832,6 +1834,10 @@ ${prompt}
               parts.push({ type: "text", text: currentText })
             }
 
+            // Don't save sessionId on abort — the session is stale and
+            // the transport already marks it as invalidated client-side
+            const savedSessionId = abortController.signal.aborted ? null : metadata.sessionId
+
             if (parts.length > 0) {
               const assistantMessage = {
                 id: crypto.randomUUID(),
@@ -1845,7 +1851,7 @@ ${prompt}
               db.update(subChats)
                 .set({
                   messages: JSON.stringify(finalMessages),
-                  sessionId: metadata.sessionId,
+                  sessionId: savedSessionId,
                   streamId: null,
                   updatedAt: new Date(),
                 })
@@ -1855,7 +1861,7 @@ ${prompt}
               // No assistant response - just clear streamId
               db.update(subChats)
                 .set({
-                  sessionId: metadata.sessionId,
+                  sessionId: savedSessionId,
                   streamId: null,
                   updatedAt: new Date(),
                 })
@@ -1896,14 +1902,13 @@ ${prompt}
           activeSessions.delete(input.subChatId)
           clearPendingApprovals("Session ended.", input.subChatId)
 
-          // Save sessionId on abort so conversation can be resumed
-          // Clear streamId since we're no longer streaming
+          // Clear streamId since we're no longer streaming.
+          // sessionId is NOT saved here — the save block in the async function
+          // handles it (saves on normal completion, clears on abort). This avoids
+          // a redundant DB write that the cancel mutation would then overwrite.
           const db = getDatabase()
           db.update(subChats)
-            .set({
-              streamId: null,
-              ...(currentSessionId && { sessionId: currentSessionId })
-            })
+            .set({ streamId: null })
             .where(eq(subChats.id, input.subChatId))
             .run()
         }
@@ -1964,9 +1969,21 @@ ${prompt}
         controller.abort()
         activeSessions.delete(input.subChatId)
         clearPendingApprovals("Session cancelled.", input.subChatId)
-        return { cancelled: true }
       }
-      return { cancelled: false }
+
+      // The save block in the async function sets sessionId=null on abort,
+      // so this DB write is only needed when cancel is called directly
+      // (no active subscription / save block to handle it).
+      if (!controller) {
+        console.log(`[claude] cancel: no active session for ${input.subChatId.slice(-8)}, clearing sessionId from DB`)
+        const db = getDatabase()
+        db.update(subChats)
+          .set({ sessionId: null })
+          .where(eq(subChats.id, input.subChatId))
+          .run()
+      }
+
+      return { cancelled: !!controller }
     }),
 
   /**

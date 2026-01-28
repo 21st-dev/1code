@@ -181,7 +181,9 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.repository !== nextProps.repository ||
     prevProps.sandboxId !== nextProps.sandboxId ||
     prevProps.projectPath !== nextProps.projectPath ||
-    prevProps.isMobile !== nextProps.isMobile
+    prevProps.isMobile !== nextProps.isMobile ||
+    prevProps.queueLength !== nextProps.queueLength ||
+    prevProps.firstQueueItemId !== nextProps.firstQueueItemId
   ) {
     return false
   }
@@ -209,7 +211,8 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.onRemovePastedText !== nextProps.onRemovePastedText ||
     prevProps.onCacheFileContent !== nextProps.onCacheFileContent ||
     prevProps.onInputContentChange !== nextProps.onInputContentChange ||
-    prevProps.onSubmitWithQuestionAnswer !== nextProps.onSubmitWithQuestionAnswer
+    prevProps.onSubmitWithQuestionAnswer !== nextProps.onSubmitWithQuestionAnswer ||
+    prevProps.onSendFromQueue !== nextProps.onSendFromQueue
   ) {
     return false
   }
