@@ -28,6 +28,7 @@ import {
 } from "./lib/cli"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
+import { terminalManager, portManager } from "./lib/terminal"
 import {
   createMainWindow,
   createWindow,
@@ -907,6 +908,10 @@ if (gotTheLock) {
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
     cancelAllPendingOAuth()
+    // Kill all terminal sessions (including child processes like dev servers)
+    // This prevents orphan processes from consuming memory after app quits
+    await terminalManager.cleanup()
+    portManager.stopAllScanning()
     await cleanupGitWatchers()
     await shutdownAnalytics()
     await closeDatabase()

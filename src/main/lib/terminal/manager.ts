@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events"
 import { FALLBACK_SHELL, SHELL_CRASH_THRESHOLD_MS } from "./env"
 import { portManager } from "./port-manager"
+import { getProcessTree } from "./port-scanner"
 import { createSession, setupInitialCommands } from "./session"
 import type {
 	CreateSessionParams,
@@ -114,10 +115,10 @@ export class TerminalManager extends EventEmitter {
 
 			this.emit(`exit:${paneId}`, exitCode, signal)
 
-			// Clean up session after delay
+			// Clean up session after short delay (allows late exit event handlers to fire)
 			const timeout = setTimeout(() => {
 				this.sessions.delete(paneId)
-			}, 5000)
+			}, 500)
 			timeout.unref()
 		})
 	}
@@ -172,7 +173,27 @@ export class TerminalManager extends EventEmitter {
 		}
 	}
 
-	signal(params: { paneId: string; signal?: string }): void {
+	/**
+	 * Kill all processes in a process tree (shell + all child processes like bun, node, webpack, etc.)
+	 * This prevents orphaned child processes from consuming memory after the shell exits.
+	 */
+	private async killProcessTree(pid: number, signal: NodeJS.Signals = "SIGTERM"): Promise<void> {
+		try {
+			const pids = await getProcessTree(pid)
+			// Kill in reverse order (children first, then parent) for cleaner shutdown
+			for (const childPid of pids.reverse()) {
+				try {
+					process.kill(childPid, signal)
+				} catch {
+					// Process may have already exited
+				}
+			}
+		} catch {
+			// getProcessTree may fail if process already exited
+		}
+	}
+
+	async signal(params: { paneId: string; signal?: string }): Promise<void> {
 		const { paneId, signal = "SIGTERM" } = params
 		const session = this.sessions.get(paneId)
 
@@ -183,6 +204,11 @@ export class TerminalManager extends EventEmitter {
 			return
 		}
 
+		// Kill entire process tree, not just the shell
+		const ptyPid = session.pty.pid
+		if (ptyPid) {
+			await this.killProcessTree(ptyPid, signal as NodeJS.Signals)
+		}
 		session.pty.kill(signal)
 		session.lastActive = Date.now()
 	}
@@ -201,8 +227,13 @@ export class TerminalManager extends EventEmitter {
 			return
 		}
 
-		// Send SIGTERM first
+		const ptyPid = session.pty.pid
+
+		// Send SIGTERM to entire process tree first
 		try {
+			if (ptyPid) {
+				await this.killProcessTree(ptyPid, "SIGTERM")
+			}
 			session.pty.kill("SIGTERM")
 		} catch (error) {
 			console.error(`[TerminalManager] Failed to send SIGTERM to ${paneId}:`, error)
@@ -218,10 +249,14 @@ export class TerminalManager extends EventEmitter {
 				}
 			}, 100)
 
-			const forceKillTimeout = setTimeout(() => {
+			const forceKillTimeout = setTimeout(async () => {
 				clearInterval(checkInterval)
 				if (session.isAlive) {
 					try {
+						// SIGKILL entire process tree
+						if (ptyPid) {
+							await this.killProcessTree(ptyPid, "SIGKILL")
+						}
 						session.pty.kill("SIGKILL")
 					} catch (error) {
 						console.error(`[TerminalManager] Failed to send SIGKILL to ${paneId}:`, error)
@@ -398,11 +433,13 @@ export class TerminalManager extends EventEmitter {
 	}
 
 	async cleanup(): Promise<void> {
+		console.log(`[TerminalManager] Cleanup: killing ${this.sessions.size} sessions`)
 		const exitPromises: Promise<void>[] = []
 
 		for (const [paneId, session] of this.sessions.entries()) {
 			if (session.isAlive) {
-				const exitPromise = new Promise<void>((resolve) => {
+				const ptyPid = session.pty.pid
+				const exitPromise = new Promise<void>(async (resolve) => {
 					let timeoutId: ReturnType<typeof setTimeout> | undefined
 					const exitHandler = () => {
 						this.off(`exit:${paneId}`, exitHandler)
@@ -413,21 +450,31 @@ export class TerminalManager extends EventEmitter {
 					}
 					this.once(`exit:${paneId}`, exitHandler)
 
-					timeoutId = setTimeout(() => {
+					// Kill entire process tree (not just shell) to prevent orphan processes
+					if (ptyPid) {
+						await this.killProcessTree(ptyPid, "SIGTERM")
+					}
+					session.pty.kill()
+
+					timeoutId = setTimeout(async () => {
 						this.off(`exit:${paneId}`, exitHandler)
+						// Force kill if still alive after timeout
+						if (session.isAlive && ptyPid) {
+							await this.killProcessTree(ptyPid, "SIGKILL")
+						}
 						resolve()
 					}, 2000)
 					timeoutId.unref()
 				})
 
 				exitPromises.push(exitPromise)
-				session.pty.kill()
 			}
 		}
 
 		await Promise.all(exitPromises)
 		this.sessions.clear()
 		this.removeAllListeners()
+		console.log("[TerminalManager] Cleanup complete")
 	}
 }
 

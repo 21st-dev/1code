@@ -10,8 +10,7 @@ import {
 import { KeyboardIcon } from "../../../components/ui/icons"
 import { DiscordIcon } from "../../../icons"
 import { useSetAtom, useAtomValue } from "jotai"
-import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom, isDesktopAtom } from "../../../lib/atoms"
-import { RunningServersMenuItem } from "../../sidebar/running-servers-popover"
+import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "../../../lib/atoms"
 
 interface AgentsHelpPopoverProps {
   children: React.ReactNode
@@ -29,7 +28,6 @@ export function AgentsHelpPopover({
   const [internalOpen, setInternalOpen] = useState(false)
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
-  const isDesktop = useAtomValue(isDesktopAtom)
 
   // Use controlled state if provided, otherwise use internal state
   const open = controlledOpen ?? internalOpen
@@ -62,11 +60,6 @@ export function AgentsHelpPopover({
             <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="flex-1">Shortcuts</span>
           </DropdownMenuItem>
-        )}
-
-        {/* Running Servers - desktop only */}
-        {isDesktop && (
-          <RunningServersMenuItem onCloseMenu={() => setOpen(false)} />
         )}
       </DropdownMenuContent>
     </DropdownMenu>

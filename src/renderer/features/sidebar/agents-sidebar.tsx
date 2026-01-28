@@ -38,7 +38,6 @@ import {
   useRenameRemoteChat,
 } from "../../lib/hooks/use-remote-chats"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { McpServersSection } from "./mcp-servers-popover"
 import { ChevronDown, MoreHorizontal, Columns3 } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
@@ -3301,9 +3300,6 @@ export function AgentsSidebar({
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />
-
-                {/* MCP Servers Button - desktop only */}
-                {isDesktop && <McpServersSection isMobile={isMobileFullscreen} />}
 
                 {/* Kanban View Button - isolated component */}
                 <KanbanButton />

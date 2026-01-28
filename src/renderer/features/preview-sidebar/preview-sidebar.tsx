@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { atom, useAtom, useSetAtom } from "jotai"
+import { atom, useAtom } from "jotai"
 import { atomWithStorage, atomFamily } from "jotai/utils"
 import {
   Play,
@@ -14,6 +14,7 @@ import {
   MousePointer2,
   Camera,
   Key,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
@@ -76,9 +77,6 @@ export const previewSplitPositionAtom = atomWithStorage<number>(
 
 // Track which chats have running dev servers (for sidebar indicator)
 export const runningDevServersAtom = atom<Set<string>>(new Set())
-
-// Expose the toggle start/stop function for hotkey access (cmd+R)
-export const previewToggleDevServerFnAtom = atom<(() => void) | null>(null)
 
 // Per-chat preview state (UI state only - backend is source of truth for running)
 interface PreviewState {
@@ -324,32 +322,49 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
   const createOrAttach = trpc.terminal.createOrAttach.useMutation()
   const write = trpc.terminal.write.useMutation()
   const kill = trpc.terminal.kill.useMutation()
-  const signal = trpc.terminal.signal.useMutation()
 
-  // Running state derived from subscription events (no polling needed)
-  const [isRunning, setIsRunning] = useState(false)
+  // ============================================================================
+  // BULLETPROOF STATE MACHINE
+  // ============================================================================
+  // States: idle | starting | running | stopping
+  // Transitions are strictly controlled to prevent race conditions
+  type DevServerState = "idle" | "starting" | "running" | "stopping"
+  const [serverState, setServerState] = useState<DevServerState>("idle")
+
+  // Ref to track if operation is in-flight (prevents concurrent operations)
+  const operationInFlightRef = useRef(false)
+
+  // Derived state for UI compatibility
+  const isRunning = serverState === "running" || serverState === "stopping"
+  const isTransitioning = serverState === "starting" || serverState === "stopping"
 
   // Sync running state to global atom for sidebar indicator
   const setRunningDevServers = useSetAtom(runningDevServersAtom)
   useEffect(() => {
     setRunningDevServers(prev => {
+      const isCurrentlyTracked = prev.has(chatId)
+      const shouldBeTracked = serverState === "running"
+
+      // Only create new Set if actually changing
+      if (isCurrentlyTracked === shouldBeTracked) return prev
+
       const next = new Set(prev)
-      if (isRunning) {
+      if (shouldBeTracked) {
         next.add(chatId)
       } else {
         next.delete(chatId)
       }
       return next
     })
-  }, [isRunning, chatId, setRunningDevServers])
+  }, [serverState, chatId, setRunningDevServers])
 
   // Track webview readiness via ref (avoids re-renders)
   const webviewReadyRef = useRef(false)
 
   // Check for existing session on mount (handles sidebar reopen while process running)
-  const { data: initialSession } = trpc.terminal.getSession.useQuery(paneId, {
+  const { data: initialSession, refetch: refetchSession } = trpc.terminal.getSession.useQuery(paneId, {
     enabled: isOpen,
-    staleTime: Infinity, // Only fetch once
+    staleTime: 0, // Always fresh
     refetchOnMount: "always",
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -358,7 +373,10 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
   // Sync initial session state (handles sidebar reopen after process exited)
   useEffect(() => {
     if (initialSession !== undefined) {
-      setIsRunning(initialSession?.isAlive ?? false)
+      // Only update if we're in a stable state (not transitioning)
+      if (!operationInFlightRef.current) {
+        setServerState(initialSession?.isAlive ? "running" : "idle")
+      }
     }
   }, [initialSession])
 
@@ -395,19 +413,23 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
   }, [setState])
 
   // Handle terminal stream events (started, data, exit)
+  // This is the ONLY place that transitions state based on backend events
   const handleStream = useCallback(
     (event: TerminalStreamEvent) => {
       if (event.type === "started") {
-        setIsRunning(true)
+        // Backend confirmed process started - transition to running
+        operationInFlightRef.current = false
+        setServerState("running")
       } else if (event.type === "data" && event.data) {
         // Buffer output and debounce state updates for performance
         outputBufferRef.current.push(event.data)
         clearTimeout(flushTimeoutRef.current)
         flushTimeoutRef.current = setTimeout(flushOutputBuffer, 50)
       } else if (event.type === "exit") {
-        // Flush any remaining output before exit message
+        // Backend confirmed process exited - transition to idle
+        operationInFlightRef.current = false
         flushOutputBuffer()
-        setIsRunning(false)
+        setServerState("idle")
         setState(s => ({
           ...s,
           output: [...s.output, `\n[Exited with code ${event.exitCode}]`],
@@ -422,16 +444,29 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
     onData: handleStream,
     onError: (err) => {
       console.error("[PreviewSidebar] Stream error:", err)
-      setIsRunning(false)
-      setState(s => ({ ...s, output: [...s.output, `\n[Error: ${err.message}]`] }))
+      // On subscription error, verify actual state from backend instead of assuming dead
+      refetchSession()
+      setState(s => ({ ...s, output: [...s.output, `\n[Connection error: ${err.message}]`] }))
     },
     enabled: isOpen,
   })
 
-  // Actions
-  const handleStart = useCallback(async () => {
-    if (!worktreePath) return
+  // ============================================================================
+  // ACTIONS - Bulletproof with state guards
+  // ============================================================================
 
+  const handleStart = useCallback(async () => {
+    // GUARD: Only start from idle state, prevent concurrent operations
+    if (serverState !== "idle" || operationInFlightRef.current || !worktreePath) {
+      console.log("[PreviewSidebar] Start blocked - state:", serverState, "inFlight:", operationInFlightRef.current)
+      return
+    }
+
+    // Mark operation in-flight and transition to starting
+    operationInFlightRef.current = true
+    setServerState("starting")
+
+    // Clear output for fresh start
     setState(s => ({
       ...s,
       output: [],
@@ -448,58 +483,122 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
       })
 
       if (result.isNew) {
-        write.mutate({ paneId, data: "bun run dev\r" })
+        // Await the write to ensure it completes before we consider start done
+        await write.mutateAsync({ paneId, data: "bun run dev\r" })
+      } else {
+        // Session already exists - verify it's actually alive
+        const session = await refetchSession()
+        if (!session.data?.isAlive) {
+          // Stale session, kill it and retry
+          await kill.mutateAsync({ paneId })
+          // Wait a bit for cleanup
+          await new Promise(r => setTimeout(r, 200))
+          // Try again - this will create a new session
+          const retryResult = await createOrAttach.mutateAsync({
+            paneId,
+            cwd: worktreePath,
+            cols: 120,
+            rows: 30,
+          })
+          if (retryResult.isNew) {
+            await write.mutateAsync({ paneId, data: "bun run dev\r" })
+          }
+        }
       }
-      // isRunning will be set by 'started' event from subscription
+      // State will transition to "running" when we receive 'started' event
     } catch (err) {
       console.error("[PreviewSidebar] Start failed:", err)
+      operationInFlightRef.current = false
+      setServerState("idle")
       setState(s => ({
         ...s,
         output: [...s.output, `[Failed: ${err instanceof Error ? err.message : "Unknown"}]`],
       }))
     }
-  }, [worktreePath, paneId, createOrAttach, write, setState])
+  }, [serverState, worktreePath, paneId, createOrAttach, write, kill, setState, refetchSession])
 
   const handleStop = useCallback(async () => {
-    if (!isRunning) return
+    // GUARD: Only stop from running state, prevent concurrent operations
+    if (serverState !== "running" || operationInFlightRef.current) {
+      console.log("[PreviewSidebar] Stop blocked - state:", serverState, "inFlight:", operationInFlightRef.current)
+      return
+    }
 
-    // Optimistically update UI immediately for responsiveness
-    setIsRunning(false)
+    // Mark operation in-flight and transition to stopping
+    operationInFlightRef.current = true
+    setServerState("stopping")
 
     try {
-      // Send SIGTERM first (more reliable than SIGINT for dev servers)
-      await signal.mutateAsync({ paneId, signal: "SIGTERM" })
-
-      // Give process time to terminate gracefully
-      await new Promise(r => setTimeout(r, 1000))
-
-      // Force kill if still running
+      // Kill directly (backend handles SIGTERM → wait → SIGKILL escalation)
       await kill.mutateAsync({ paneId })
-    } catch {
-      // Session might already be dead, that's ok
+      // State will transition to "idle" when we receive 'exit' event
+    } catch (err) {
+      console.error("[PreviewSidebar] Stop failed:", err)
+      // Verify actual state from backend
+      const session = await refetchSession()
+      operationInFlightRef.current = false
+      setServerState(session.data?.isAlive ? "running" : "idle")
     }
-    // Final isRunning state will be confirmed by 'exit' event from subscription
-  }, [isRunning, paneId, signal, kill])
+  }, [serverState, paneId, kill, refetchSession])
 
   // Toggle start/stop - exposed for hotkey (cmd+R)
   const handleToggleDevServer = useCallback(() => {
-    if (isRunning) {
+    if (serverState === "running") {
       handleStop()
-    } else {
+    } else if (serverState === "idle") {
       handleStart()
     }
-  }, [isRunning, handleStart, handleStop])
+    // Ignore toggle during transitions (starting/stopping)
+  }, [serverState, handleStart, handleStop])
 
-  // Register toggle function to global atom for hotkey access
-  const setToggleDevServerFn = useSetAtom(previewToggleDevServerFnAtom)
+  // Reset operation flag and clear timers when sidebar closes (prevents stuck state and memory leaks)
   useEffect(() => {
-    if (isOpen) {
-      setToggleDevServerFn(() => handleToggleDevServer)
+    if (!isOpen) {
+      operationInFlightRef.current = false
+      clearTimeout(flushTimeoutRef.current)
+      outputBufferRef.current = [] // Free buffered output memory
     }
+  }, [isOpen])
+
+  // Cleanup flush timeout on unmount
+  useEffect(() => {
     return () => {
-      setToggleDevServerFn(null)
+      clearTimeout(flushTimeoutRef.current)
     }
-  }, [isOpen, handleToggleDevServer, setToggleDevServerFn])
+  }, [])
+
+  // Safety timeout: If stuck in transitioning state for too long, verify actual state
+  useEffect(() => {
+    if (serverState !== "starting" && serverState !== "stopping") return
+
+    const timeout = setTimeout(async () => {
+      if (operationInFlightRef.current) {
+        console.warn("[PreviewSidebar] Operation timeout - verifying state from backend")
+        const session = await refetchSession()
+        operationInFlightRef.current = false
+        setServerState(session.data?.isAlive ? "running" : "idle")
+      }
+    }, 30000) // 30 second safety timeout
+
+    return () => clearTimeout(timeout)
+  }, [serverState, refetchSession])
+
+  // Handle cmd+R directly when preview is open (start/stop dev server)
+  // This intercepts the hotkey before the global handler which toggles the sidebar
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "r") {
+        e.preventDefault()
+        e.stopPropagation()
+        handleToggleDevServer()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown, { capture: true })
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true })
+  }, [isOpen, handleToggleDevServer])
 
   const handleRefresh = useCallback(() => {
     if (webviewReadyRef.current && webviewRef.current) {
@@ -1106,7 +1205,9 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
             />
             {!state.selectedUrl && (
               <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                {isRunning ? "Waiting for dev server..." : "Start the dev server to preview"}
+                {serverState === "starting" ? "Starting dev server..." :
+                 serverState === "running" ? "Waiting for dev server..." :
+                 "Start the dev server to preview"}
               </div>
             )}
           </div>
@@ -1142,12 +1243,23 @@ export function PreviewSidebar({ chatId, worktreePath, onElementSelect, onScreen
             </div>
 
             <Button
-              variant={isRunning ? "destructive" : "default"}
+              variant={serverState === "running" || serverState === "stopping" ? "destructive" : "default"}
               size="sm"
-              onClick={isRunning ? handleStop : handleStart}
-              className="gap-1.5"
+              onClick={handleToggleDevServer}
+              disabled={isTransitioning}
+              className="gap-1.5 min-w-[72px]"
             >
-              {isRunning ? (
+              {serverState === "starting" ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Starting
+                </>
+              ) : serverState === "stopping" ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Stopping
+                </>
+              ) : serverState === "running" ? (
                 <>
                   <Square className="h-3 w-3" />
                   Stop
