@@ -256,7 +256,6 @@ export function AgentsModelsTab() {
   )
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const isNarrowScreen = useIsNarrowScreen()
-  const disconnectClaudeCode = trpc.claudeCode.disconnect.useMutation()
   const { data: claudeCodeIntegration, isLoading: isClaudeCodeLoading } =
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
@@ -307,7 +306,9 @@ export function AgentsModelsTab() {
   }
 
   const handleClaudeCodeSetup = () => {
-    disconnectClaudeCode.mutate()
+    // Don't disconnect - just open onboarding to add a new account
+    // The previous code was calling disconnectClaudeCode.mutate() which
+    // deleted the active account when users tried to add a new one
     setSettingsOpen(false)
     setAnthropicOnboardingCompleted(false)
   }
@@ -373,7 +374,7 @@ export function AgentsModelsTab() {
             size="sm"
             variant="outline"
             onClick={handleClaudeCodeSetup}
-            disabled={disconnectClaudeCode.isPending || isClaudeCodeLoading}
+            disabled={isClaudeCodeLoading}
           >
             <Plus className="h-3 w-3 mr-1" />
             {isClaudeCodeConnected ? "Add" : "Connect"}
