@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react"
+import { useAtomValue } from "jotai"
 import { ChevronRight } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
+import { selectedProjectAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { SkillIcon } from "../../ui/icons"
@@ -25,8 +27,11 @@ function useIsNarrowScreen(): boolean {
 export function AgentsSkillsTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [expandedSkillName, setExpandedSkillName] = useState<string | null>(null)
+  const selectedProject = useAtomValue(selectedProjectAtom)
 
-  const { data: skills = [], isLoading } = trpc.skills.list.useQuery(undefined)
+  const { data: skills = [], isLoading } = trpc.skills.list.useQuery(
+    selectedProject?.path ? { cwd: selectedProject.path } : undefined,
+  )
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
 
   const userSkills = skills.filter((s) => s.source === "user")

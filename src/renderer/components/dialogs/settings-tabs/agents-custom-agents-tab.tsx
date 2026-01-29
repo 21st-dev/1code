@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react"
+import { useAtomValue } from "jotai"
 import { ChevronRight } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
+import { selectedProjectAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { AgentIcon } from "../../ui/icons"
@@ -36,8 +38,11 @@ interface FileAgent {
 export function AgentsCustomAgentsTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [expandedAgentName, setExpandedAgentName] = useState<string | null>(null)
+  const selectedProject = useAtomValue(selectedProjectAtom)
 
-  const { data: agents = [], isLoading } = trpc.agents.list.useQuery(undefined)
+  const { data: agents = [], isLoading } = trpc.agents.list.useQuery(
+    selectedProject?.path ? { cwd: selectedProject.path } : undefined,
+  )
 
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
 
