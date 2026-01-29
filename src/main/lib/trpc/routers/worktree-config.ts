@@ -13,6 +13,9 @@ const WorktreeConfigSchema = z.object({
   "setup-worktree-unix": z.union([z.array(z.string()), z.string()]).optional(),
   "setup-worktree-windows": z.union([z.array(z.string()), z.string()]).optional(),
   "setup-worktree": z.union([z.array(z.string()), z.string()]).optional(),
+  "archive-worktree-unix": z.union([z.array(z.string()), z.string()]).optional(),
+  "archive-worktree-windows": z.union([z.array(z.string()), z.string()]).optional(),
+  "archive-worktree": z.union([z.array(z.string()), z.string()]).optional(),
 })
 
 export const worktreeConfigRouter = router({

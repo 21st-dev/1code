@@ -114,12 +114,18 @@ export function AgentsProjectWorktreeTab({
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
-  // Local state
+  // Local state - Setup commands
   const [saveTarget, setSaveTarget] = useState<"cursor" | "1code">("1code")
   const [commands, setCommands] = useState<string[]>([""])
   const [unixCommands, setUnixCommands] = useState<string[]>([])
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
   const [showPlatformSpecific, setShowPlatformSpecific] = useState(false)
+
+  // Local state - Archive commands
+  const [archiveCommands, setArchiveCommands] = useState<string[]>([""])
+  const [archiveUnixCommands, setArchiveUnixCommands] = useState<string[]>([])
+  const [archiveWindowsCommands, setArchiveWindowsCommands] = useState<string[]>([])
+  const [showArchivePlatformSpecific, setShowArchivePlatformSpecific] = useState(false)
 
   // Sync from server data
   useEffect(() => {
@@ -131,7 +137,7 @@ export function AgentsProjectWorktreeTab({
       }
 
       if (configData.config) {
-        // Generic commands
+        // Setup commands - Generic
         const generic = configData.config["setup-worktree"]
         setCommands(
           Array.isArray(generic)
@@ -141,7 +147,7 @@ export function AgentsProjectWorktreeTab({
               : [""],
         )
 
-        // Platform-specific
+        // Setup commands - Platform-specific
         const unix = configData.config["setup-worktree-unix"]
         const win = configData.config["setup-worktree-windows"]
 
@@ -156,10 +162,39 @@ export function AgentsProjectWorktreeTab({
         if (unix || win) {
           setShowPlatformSpecific(true)
         }
+
+        // Archive commands - Generic
+        const archiveGeneric = configData.config["archive-worktree"]
+        setArchiveCommands(
+          Array.isArray(archiveGeneric)
+            ? [...archiveGeneric, ""]
+            : archiveGeneric
+              ? [archiveGeneric, ""]
+              : [""],
+        )
+
+        // Archive commands - Platform-specific
+        const archiveUnix = configData.config["archive-worktree-unix"]
+        const archiveWin = configData.config["archive-worktree-windows"]
+
+        setArchiveUnixCommands(
+          Array.isArray(archiveUnix) ? archiveUnix : archiveUnix ? [archiveUnix] : [],
+        )
+        setArchiveWindowsCommands(
+          Array.isArray(archiveWin) ? archiveWin : archiveWin ? [archiveWin] : [],
+        )
+
+        // Show archive platform section if any platform-specific commands exist
+        if (archiveUnix || archiveWin) {
+          setShowArchivePlatformSpecific(true)
+        }
       } else {
         setCommands([""])
         setUnixCommands([])
         setWindowsCommands([])
+        setArchiveCommands([""])
+        setArchiveUnixCommands([])
+        setArchiveWindowsCommands([])
       }
     }
   }, [configData])
@@ -168,6 +203,8 @@ export function AgentsProjectWorktreeTab({
     if (!projectId) return
 
     const config: Record<string, string[]> = {}
+
+    // Setup commands
     const filteredCommands = commands.filter((c) => c.trim())
     const filteredUnix = unixCommands.filter((c) => c.trim())
     const filteredWin = windowsCommands.filter((c) => c.trim())
@@ -180,6 +217,21 @@ export function AgentsProjectWorktreeTab({
     }
     if (filteredWin.length > 0) {
       config["setup-worktree-windows"] = filteredWin
+    }
+
+    // Archive commands
+    const filteredArchiveCommands = archiveCommands.filter((c) => c.trim())
+    const filteredArchiveUnix = archiveUnixCommands.filter((c) => c.trim())
+    const filteredArchiveWin = archiveWindowsCommands.filter((c) => c.trim())
+
+    if (filteredArchiveCommands.length > 0) {
+      config["archive-worktree"] = filteredArchiveCommands
+    }
+    if (filteredArchiveUnix.length > 0) {
+      config["archive-worktree-unix"] = filteredArchiveUnix
+    }
+    if (filteredArchiveWin.length > 0) {
+      config["archive-worktree-windows"] = filteredArchiveWin
     }
 
     saveMutation.mutate({
@@ -221,9 +273,9 @@ export function AgentsProjectWorktreeTab({
       {!isNarrowScreen && (
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col space-y-1.5 text-center sm:text-left">
-            <h3 className="text-sm font-semibold text-foreground">Worktree Setup</h3>
+            <h3 className="text-sm font-semibold text-foreground">Worktree Scripts</h3>
             <p className="text-xs text-muted-foreground">
-              Configure setup commands that run when a new worktree is created
+              Configure commands that run when worktrees are created or archived
             </p>
           </div>
           <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -513,16 +565,204 @@ export function AgentsProjectWorktreeTab({
             )}
           </div>
 
-          <div className="bg-muted p-3 flex justify-end gap-2 border-t">
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
-            >
-              {saveMutation.isPending ? "Saving..." : "Save"}
-            </Button>
+        </div>
+      </div>
+
+      {/* Archive Commands */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <div>
+            <h4 className="text-sm font-medium text-foreground">
+              Archive Commands
+            </h4>
+            <p className="text-xs text-muted-foreground mt-1">
+              Commands run when a workspace is archived
+            </p>
           </div>
         </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">All Platforms</Label>
+              <span className="text-xs text-muted-foreground">
+                use <code className="font-mono bg-muted px-1 py-0.5 rounded">$ROOT_WORKTREE_PATH</code> for main repo path
+              </span>
+            </div>
+            <div className="space-y-2">
+              {archiveCommands.map((cmd, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    value={cmd}
+                    onChange={(e) =>
+                      updateCommand(i, e.target.value, archiveCommands, setArchiveCommands)
+                    }
+                    placeholder="git fetch --prune"
+                    className="flex-1 font-mono text-sm"
+                  />
+                  {archiveCommands.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeCommand(i, archiveCommands, setArchiveCommands)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground"
+              onClick={() => addCommand(archiveCommands, setArchiveCommands)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add command
+            </Button>
+          </div>
+
+          {/* Platform-specific toggle */}
+          <div className="border-t">
+            <button
+              type="button"
+              className="w-full p-3 flex items-center justify-between text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              onClick={() => setShowArchivePlatformSpecific(!showArchivePlatformSpecific)}
+            >
+              <span>Platform-specific overrides</span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${
+                  showArchivePlatformSpecific ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {showArchivePlatformSpecific && (
+              <div className="p-4 pt-0 space-y-4">
+                {/* Unix Commands */}
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    macOS / Linux
+                  </span>
+                  {archiveUnixCommands.length === 0 ? (
+                    <p className="text-xs text-muted-foreground/60 italic">
+                      Falls back to "All Platforms"
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {archiveUnixCommands.map((cmd, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Input
+                            value={cmd}
+                            onChange={(e) =>
+                              updateCommand(
+                                i,
+                                e.target.value,
+                                archiveUnixCommands,
+                                setArchiveUnixCommands,
+                              )
+                            }
+                            placeholder="git fetch --prune"
+                            className="flex-1 font-mono text-sm"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() =>
+                              removeCommand(i, archiveUnixCommands, setArchiveUnixCommands)
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground h-7 text-xs"
+                    onClick={() => addCommand(archiveUnixCommands, setArchiveUnixCommands)}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add
+                  </Button>
+                </div>
+
+                {/* Windows Commands */}
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Windows
+                  </span>
+                  {archiveWindowsCommands.length === 0 ? (
+                    <p className="text-xs text-muted-foreground/60 italic">
+                      Falls back to "All Platforms"
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {archiveWindowsCommands.map((cmd, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Input
+                            value={cmd}
+                            onChange={(e) =>
+                              updateCommand(
+                                i,
+                                e.target.value,
+                                archiveWindowsCommands,
+                                setArchiveWindowsCommands,
+                              )
+                            }
+                            placeholder="git fetch --prune"
+                            className="flex-1 font-mono text-sm"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() =>
+                              removeCommand(
+                                i,
+                                archiveWindowsCommands,
+                                setArchiveWindowsCommands,
+                              )
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground h-7 text-xs"
+                    onClick={() =>
+                      addCommand(archiveWindowsCommands, setArchiveWindowsCommands)
+                    }
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={saveMutation.isPending}
+        >
+          {saveMutation.isPending ? "Saving..." : "Save"}
+        </Button>
       </div>
     </div>
   )

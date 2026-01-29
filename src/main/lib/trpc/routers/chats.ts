@@ -22,6 +22,7 @@ import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
+import { executeWorktreeArchive } from "../../git/worktree-config"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
@@ -468,8 +469,8 @@ export const chatsRouter = router({
         console.error(`[chats.archive] Error killing processes:`, error)
       })
 
-      // Optionally delete worktree in background (don't await)
-      if (input.deleteWorktree && chat?.worktreePath && chat?.branch) {
+      // Run archive script if workspace has a worktree (in background)
+      if (chat?.worktreePath && chat?.branch) {
         const project = db
           .select()
           .from(projects)
@@ -477,24 +478,45 @@ export const chatsRouter = router({
           .get()
 
         if (project) {
-          removeWorktree(project.path, chat.worktreePath).then((worktreeResult) => {
-            if (worktreeResult.success) {
-              console.log(
-                `[chats.archive] Deleted worktree for workspace ${input.id}`,
-              )
-              // Clear worktreePath since it's deleted (keep branch for reference)
-              db.update(chats)
-                .set({ worktreePath: null })
-                .where(eq(chats.id, input.id))
-                .run()
-            } else {
-              console.warn(
-                `[chats.archive] Failed to delete worktree: ${worktreeResult.error}`,
-              )
-            }
-          }).catch((error) => {
-            console.error(`[chats.archive] Error removing worktree:`, error)
-          })
+          // Execute archive script first, then optionally delete worktree
+          executeWorktreeArchive(chat.worktreePath, project.path)
+            .then((archiveResult) => {
+              if (archiveResult.commandsRun > 0) {
+                console.log(
+                  `[chats.archive] Ran ${archiveResult.commandsRun} archive command(s) for workspace ${input.id}`,
+                )
+              }
+              if (archiveResult.errors.length > 0) {
+                console.warn(
+                  `[chats.archive] Archive script had ${archiveResult.errors.length} error(s)`,
+                )
+              }
+
+              // Now delete worktree if requested
+              if (input.deleteWorktree) {
+                return removeWorktree(project.path, chat.worktreePath!)
+              }
+              return null
+            })
+            .then((worktreeResult) => {
+              if (worktreeResult?.success) {
+                console.log(
+                  `[chats.archive] Deleted worktree for workspace ${input.id}`,
+                )
+                // Clear worktreePath since it's deleted (keep branch for reference)
+                db.update(chats)
+                  .set({ worktreePath: null })
+                  .where(eq(chats.id, input.id))
+                  .run()
+              } else if (worktreeResult && !worktreeResult.success) {
+                console.warn(
+                  `[chats.archive] Failed to delete worktree: ${worktreeResult.error}`,
+                )
+              }
+            })
+            .catch((error) => {
+              console.error(`[chats.archive] Error in archive flow:`, error)
+            })
         }
       }
 

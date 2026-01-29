@@ -9,6 +9,9 @@ export interface WorktreeConfig {
   "setup-worktree-unix"?: string[] | string
   "setup-worktree-windows"?: string[] | string
   "setup-worktree"?: string[] | string
+  "archive-worktree-unix"?: string[] | string
+  "archive-worktree-windows"?: string[] | string
+  "archive-worktree"?: string[] | string
 }
 
 export type WorktreeConfigSource = "custom" | "cursor" | "1code" | null
@@ -161,6 +164,24 @@ export function getSetupCommands(config: WorktreeConfig): string[] | string | nu
   return config["setup-worktree-unix"] ?? null
 }
 
+/**
+ * Get archive commands for current platform
+ */
+export function getArchiveCommands(config: WorktreeConfig): string[] | string | null {
+  // Generic archive-worktree takes priority (cross-platform)
+  if (config["archive-worktree"]) {
+    return config["archive-worktree"]
+  }
+
+  // Fall back to platform-specific commands
+  if (process.platform === "win32") {
+    return config["archive-worktree-windows"] ?? null
+  }
+
+  // Unix (darwin, linux)
+  return config["archive-worktree-unix"] ?? null
+}
+
 export interface WorktreeSetupResult {
   success: boolean
   commandsRun: number
@@ -244,6 +265,96 @@ export async function executeWorktreeSetup(
 
   console.log(
     `[worktree-setup] Completed: ${result.commandsRun}/${commandList.length} commands, ` +
+    `${result.errors.length} errors`
+  )
+
+  return result
+}
+
+export interface WorktreeArchiveResult {
+  success: boolean
+  commandsRun: number
+  output: string[]
+  errors: string[]
+}
+
+/**
+ * Execute worktree archive commands
+ * Runs when a workspace is archived (before worktree deletion if applicable)
+ * Useful for cleanup tasks like pruning branches, syncing, etc.
+ */
+export async function executeWorktreeArchive(
+  worktreePath: string,
+  mainRepoPath: string,
+): Promise<WorktreeArchiveResult> {
+  const result: WorktreeArchiveResult = {
+    success: true,
+    commandsRun: 0,
+    output: [],
+    errors: [],
+  }
+
+  // Detect config from main repo
+  const detected = await detectWorktreeConfig(mainRepoPath)
+  if (!detected.config) {
+    result.output.push("No worktree config found, skipping archive commands")
+    return result
+  }
+
+  // Get commands for current platform
+  const commands = getArchiveCommands(detected.config)
+  if (!commands) {
+    result.output.push("No archive commands for current platform")
+    return result
+  }
+
+  // Normalize to array
+  const commandList = Array.isArray(commands) ? commands : [commands]
+  if (commandList.length === 0) {
+    result.output.push("Empty archive command list")
+    return result
+  }
+
+  console.log(`[worktree-archive] Running ${commandList.length} archive commands in ${worktreePath}`)
+
+  // Execute each command
+  for (const cmd of commandList) {
+    if (!cmd.trim()) continue
+
+    try {
+      result.output.push(`$ ${cmd}`)
+
+      const { stdout, stderr } = await execAsync(cmd, {
+        cwd: worktreePath,
+        env: {
+          ...process.env,
+          ROOT_WORKTREE_PATH: mainRepoPath,
+        },
+        timeout: 300_000, // 5 minutes per command
+      })
+
+      if (stdout) {
+        result.output.push(stdout.trim())
+      }
+      if (stderr) {
+        result.output.push(`[stderr] ${stderr.trim()}`)
+      }
+
+      result.commandsRun++
+      console.log(`[worktree-archive] ✓ ${cmd}`)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      result.errors.push(`Command failed: ${cmd}\n${errorMsg}`)
+      result.output.push(`[error] ${errorMsg}`)
+      console.error(`[worktree-archive] ✗ ${cmd}: ${errorMsg}`)
+      // Continue with next command, don't fail entirely
+    }
+  }
+
+  result.success = result.errors.length === 0
+
+  console.log(
+    `[worktree-archive] Completed: ${result.commandsRun}/${commandList.length} commands, ` +
     `${result.errors.length} errors`
   )
 
