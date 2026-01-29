@@ -1,9 +1,11 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { getFileIconByExtension } from "./agents-file-mention"
 import { FilesIcon, SkillIcon, CustomAgentIcon, OriginalMCPIcon } from "../../../components/ui/icons"
 import { MENTION_PREFIXES } from "./agents-mentions-editor"
+import { hasCodeBlocks, parseCodeBlocks, looksLikeCode } from "../utils/parse-user-code-blocks"
+import { highlightCode, onThemeChange } from "../../../lib/themes/shiki-theme-loader"
 import {
   HoverCard,
   HoverCardContent,
@@ -462,13 +464,8 @@ export function extractTextMentions(text: string): {
     cleanedText = cleanedText.replace(mentionStr, "")
   }
 
-  // Clean up extra whitespace but preserve newlines
-  // Only collapse multiple spaces (not newlines) into one space
-  // and trim leading/trailing whitespace from each line
+  // Clean up extra whitespace left by mention removal while preserving indentation
   cleanedText = cleanedText
-    .split("\n")
-    .map(line => line.trim())
-    .join("\n")
     .replace(/\n{3,}/g, "\n\n") // Collapse 3+ newlines to 2
     .trim()
 
@@ -573,6 +570,111 @@ export function TextMentionBlocks({ mentions }: { mentions: ParsedMention[] }) {
       {textMentions.map((mention, idx) => (
         <TextMentionBlock key={idx} mention={mention} />
       ))}
+    </div>
+  )
+}
+
+/**
+ * Syntax-highlighted code block for user messages (read-only, no remove button).
+ */
+function UserCodeBlock({ code, language }: { code: string; language: string }) {
+  const [highlighted, setHighlighted] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const highlight = () => {
+      const isDark = document.documentElement.classList.contains("dark")
+      const themeId = isDark ? "github-dark" : "github-light"
+
+      highlightCode(code, language || "plaintext", themeId)
+        .then((html) => {
+          if (!cancelled && html.includes("<span")) {
+            setHighlighted(html)
+          }
+        })
+        .catch(() => {
+          // Keep plain text fallback
+        })
+    }
+
+    highlight()
+    const unsubscribe = onThemeChange(highlight)
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [code, language])
+
+  return (
+    <div className="my-1 rounded-[10px] bg-muted/50 overflow-hidden">
+      <div className="flex items-center px-3 pt-2 pb-0 text-xs text-muted-foreground">
+        <span className="font-medium">{language || "code"}</span>
+      </div>
+      <pre
+        className="m-0 px-3 py-2 overflow-x-auto max-h-[300px] overflow-y-auto"
+        style={{
+          fontFamily:
+            "SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace",
+          fontSize: "13px",
+          lineHeight: "1.5",
+          tabSize: 2,
+          whiteSpace: "pre",
+        }}
+      >
+        {highlighted ? (
+          <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+        ) : (
+          <code>{code}</code>
+        )}
+      </pre>
+    </div>
+  )
+}
+
+/**
+ * Render user message text with fenced code blocks highlighted and
+ * remaining text passed through RenderFileMentions.
+ *
+ * Use this in place of <RenderFileMentions> when the text may contain
+ * triple-backtick fenced code blocks or unfenced code.
+ */
+export function RenderUserContent({
+  text,
+  className,
+}: {
+  text: string
+  className?: string
+}) {
+  const segments = useMemo(() => {
+    // First: check for fenced code blocks (```lang\ncode\n```)
+    if (hasCodeBlocks(text)) {
+      return parseCodeBlocks(text)
+    }
+    // Fallback: check if entire text looks like code (unfenced)
+    const detection = looksLikeCode(text)
+    if (detection.isCode && detection.language) {
+      return [{ type: "code" as const, content: text, language: detection.language }]
+    }
+    return null
+  }, [text])
+
+  // Fast path: no code blocks, fall through to existing renderer
+  if (!segments) {
+    return <RenderFileMentions text={text} className={className} />
+  }
+
+  // Use div wrapper instead of span because UserCodeBlock renders block-level elements
+  return (
+    <div className={className}>
+      {segments.map((seg, i) =>
+        seg.type === "code" ? (
+          <UserCodeBlock key={i} code={seg.content} language={seg.language} />
+        ) : (
+          <RenderFileMentions key={i} text={seg.content} />
+        ),
+      )}
     </div>
   )
 }

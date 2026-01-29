@@ -1,4 +1,11 @@
 import { toast } from "sonner"
+import {
+  hasCodeBlocks,
+  parseCodeBlocks,
+  looksLikeCode,
+  detectLanguage,
+} from "./parse-user-code-blocks"
+import { createCodeBlockNode } from "../mentions/agents-mentions-editor"
 
 // Threshold for auto-converting large pasted text to a file (5KB)
 // Text larger than this will be saved as a file attachment instead of pasted inline
@@ -66,6 +73,94 @@ export function insertTextAtCursor(text: string, editableElement: Element): void
 }
 
 /**
+ * Insert a code block element at the current cursor position, or append
+ * to the editable element if no selection is available.
+ */
+function insertCodeBlockAtCursor(
+  editableElement: Element,
+  language: string,
+  content: string,
+): void {
+  const codeBlockEl = createCodeBlockNode(language, content)
+  const sel = window.getSelection()
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0)
+    range.deleteContents()
+    range.insertNode(codeBlockEl)
+
+    const newRange = document.createRange()
+    newRange.setStartAfter(codeBlockEl)
+    newRange.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(newRange)
+  } else {
+    editableElement.appendChild(codeBlockEl)
+  }
+}
+
+/**
+ * Check if clipboard HTML indicates text was copied from a code editor
+ * (VS Code, IntelliJ, Sublime, etc.) by looking for monospace fonts and
+ * syntax-highlighted spans in the HTML representation.
+ */
+function isPastedFromCodeEditor(clipboardData: DataTransfer): boolean {
+  const html = clipboardData.getData("text/html")
+  if (!html) return false
+
+  // VS Code specific data attributes
+  if (/data-vscode/i.test(html)) return true
+
+  // Monospace font-family used by code editors
+  const hasMonospaceFont =
+    /font-family:[^;]*(?:monospace|Consolas|Menlo|Monaco|Courier|SFMono|"Fira Code"|"JetBrains Mono"|"Source Code Pro"|Inconsolata)/i.test(
+      html,
+    )
+
+  // Multiple colored spans = syntax highlighting
+  const coloredSpans = (html.match(/<span[^>]*style="[^"]*color:/g) || []).length
+
+  return hasMonospaceFont && coloredSpans >= 2
+}
+
+/**
+ * Check if the cursor is positioned right after an opening code fence (```lang).
+ * If found, removes the fence text from the DOM and returns the language.
+ * Returns null if no opening fence is found before the cursor.
+ *
+ * This handles the case where a user types ```php then pastes code —
+ * we consume the fence and use its language for the code block.
+ */
+function consumeOpenFence(editableElement: Element): string | null {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return null
+  const range = sel.getRangeAt(0)
+  if (!range.collapsed) return null
+
+  // Get all text from start of editor to cursor
+  const preRange = document.createRange()
+  preRange.selectNodeContents(editableElement)
+  preRange.setEnd(range.startContainer, range.startOffset)
+  const textBefore = preRange.toString()
+
+  // Check for opening fence at end: ``` with optional language and trailing whitespace/newline
+  const fenceMatch = textBefore.match(/```(\w*)[\t ]*\n?$/)
+  if (!fenceMatch) return null
+
+  const language = fenceMatch[1] || ""
+  const charsToDelete = fenceMatch[0].length
+
+  // Delete the fence by extending selection backwards and deleting
+  for (let i = 0; i < charsToDelete; i++) {
+    sel.modify("extend", "backward", "character")
+  }
+  if (!sel.isCollapsed) {
+    document.execCommand("delete", false)
+  }
+
+  return language
+}
+
+/**
  * Handle paste event for contentEditable elements.
  * Extracts images and passes them to handleAddAttachments.
  * For large text (>LARGE_PASTE_THRESHOLD), saves as a file attachment.
@@ -104,7 +199,80 @@ export function handlePasteEvent(
       const target = e.currentTarget as HTMLElement
       const editableElement =
         target.closest('[contenteditable="true"]') || target
+
+      // Check if the user already typed an opening fence (```lang) before pasting.
+      // If so, consume the fence and always create a code block with that language.
+      const fenceLanguage = consumeOpenFence(editableElement)
+      if (fenceLanguage !== null) {
+        const language = fenceLanguage || detectLanguage(text)
+        insertCodeBlockAtCursor(editableElement, language, text)
+        editableElement.dispatchEvent(new Event("input", { bubbles: true }))
+        return
+      }
+
+      // Check for fenced code blocks in pasted text
+      if (hasCodeBlocks(text)) {
+        const segments = parseCodeBlocks(text)
+        insertSegmentsAtCursor(segments, editableElement, addPastedText)
+        return
+      }
+
+      // Auto-detect code: first check if pasted from a code editor (VS Code, etc.),
+      // then fall back to heuristic text analysis
+      const fromEditor = isPastedFromCodeEditor(e.clipboardData)
+      const codeDetection = fromEditor
+        ? { isCode: true, language: detectLanguage(text) }
+        : looksLikeCode(text)
+      if (codeDetection.isCode) {
+        // Large auto-detected code: convert to file attachment if possible
+        if (text.length > LARGE_PASTE_THRESHOLD && addPastedText) {
+          addPastedText(text)
+          return
+        }
+        insertCodeBlockAtCursor(editableElement, codeDetection.language, text)
+        editableElement.dispatchEvent(new Event("input", { bubbles: true }))
+        return
+      }
+
       insertTextAtCursor(text, editableElement)
     }
+  }
+}
+
+/**
+ * Insert parsed segments (text + code blocks) at the current cursor position.
+ * Text segments are inserted via execCommand, code blocks are inserted as DOM elements.
+ */
+function insertSegmentsAtCursor(
+  segments: ReturnType<typeof parseCodeBlocks>,
+  editableElement: Element,
+  addPastedText?: AddPastedTextFn,
+): void {
+  let insertedCodeBlock = false
+
+  for (const segment of segments) {
+    if (segment.type === "text") {
+      if (segment.content) {
+        insertTextAtCursor(segment.content, editableElement)
+      }
+    } else {
+      // Code block segment
+      // If the code block is too large, convert to file attachment
+      if (segment.content.length > LARGE_PASTE_THRESHOLD && addPastedText) {
+        const fileContent = "```" + segment.language + "\n" + segment.content + "\n```"
+        addPastedText(fileContent)
+        continue
+      }
+
+      // Insert code block element at cursor position
+      insertCodeBlockAtCursor(editableElement, segment.language, segment.content)
+      insertedCodeBlock = true
+    }
+  }
+
+  // Only dispatch manual input event if code block elements were inserted
+  // (text segments already fire input events via execCommand)
+  if (insertedCodeBlock) {
+    editableElement.dispatchEvent(new Event("input", { bubbles: true }))
   }
 }
