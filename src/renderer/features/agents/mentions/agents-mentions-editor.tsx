@@ -464,14 +464,6 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
       atIndex = -1
       atPosition = null
     }
-    // Also validate @ is at start or after whitespace (catches pasted emails like user@domain.com)
-    if (atIndex !== -1 && atIndex > 0) {
-      const charBefore = textBeforeCursor.charAt(atIndex - 1)
-      if (!/\s/.test(charBefore)) {
-        atIndex = -1
-        atPosition = null
-      }
-    }
   }
 
   // Validate / trigger - check if space/newline after it

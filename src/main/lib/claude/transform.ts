@@ -344,7 +344,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     }
 
     // ===== USER MESSAGE (tool results) =====
-    if (msg.type === "user" && msg.message?.content) {
+    if (msg.type === "user" && msg.message?.content && Array.isArray(msg.message.content)) {
       // DEBUG: Log the message structure to understand tool_use_result
       console.log("[Transform DEBUG] User message:", {
         tool_use_result: msg.tool_use_result,

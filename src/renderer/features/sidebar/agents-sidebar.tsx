@@ -39,7 +39,7 @@ import {
   useRenameRemoteChat,
 } from "../../lib/hooks/use-remote-chats"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3 } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { remoteTrpc } from "../../lib/remote-trpc"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
@@ -1192,36 +1192,25 @@ const InboxButton = memo(function InboxButton() {
 // Isolated Automations Button - full-width navigation link matching web layout
 const AutomationsButton = memo(function AutomationsButton() {
   const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
-  const desktopView = useAtomValue(desktopViewAtom)
-  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
-  const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
-  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
 
   const handleClick = useCallback(() => {
-    setSelectedChatId(null)
-    setSelectedDraftId(null)
-    setShowNewChatForm(false)
-    setDesktopView("automations")
-  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
+    window.desktopApi.openExternal("https://21st.dev/agents/app/async/automations")
+  }, [])
 
   if (!automationsEnabled) return null
-
-  const isActive = desktopView === "automations" || desktopView === "automations-detail"
 
   return (
     <button
       type="button"
       onClick={handleClick}
       className={cn(
-        "flex items-center gap-2.5 w-full pl-2 pr-2 py-1.5 rounded-md text-sm transition-colors duration-150",
-        isActive
-          ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+        "group flex items-center gap-2.5 w-full pl-2 pr-2 py-1.5 rounded-md text-sm transition-colors duration-150",
+        "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
     >
       <SidebarAutomationsIcon className="h-4 w-4" />
       <span className="flex-1 text-left">Automations</span>
+      <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
     </button>
   )
 })
