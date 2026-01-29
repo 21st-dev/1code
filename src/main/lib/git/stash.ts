@@ -105,10 +105,15 @@ function parseCheckpointTrees(
   }
 }
 
+export type RollbackResult =
+  | { success: true; checkpointFound: true }
+  | { success: true; checkpointFound: false }
+  | { success: false; error: string }
+
 export async function applyRollbackStash(
   worktreePath: string,
   sdkMessageUuid: string,
-) {
+): Promise<RollbackResult> {
   try {
     const git = simpleGit(worktreePath)
 
@@ -120,7 +125,9 @@ export async function applyRollbackStash(
       console.warn(
         `[claude] Rollback checkpoint not found for sdkMessageUuid=${sdkMessageUuid}`,
       )
-      return true // This is fine, just skip
+      // Checkpoint not found - return success but indicate no checkpoint was applied
+      // The caller can decide whether to proceed with message truncation
+      return { success: true, checkpointFound: false }
     }
 
     const commitMessage = await git.raw([
@@ -134,7 +141,7 @@ export async function applyRollbackStash(
       console.error(
         `[claude] Rollback checkpoint missing tree metadata for sdkMessageUuid=${sdkMessageUuid}`,
       )
-      return false
+      return { success: false, error: "Checkpoint missing tree metadata" }
     }
 
     let lastError: unknown
@@ -144,7 +151,7 @@ export async function applyRollbackStash(
         await git.raw(["checkout-index", "-a", "-f"])
         await git.raw(["clean", "-fd"])
         await git.raw(["read-tree", indexTree])
-        return true
+        return { success: true, checkpointFound: true }
       } catch (error) {
         lastError = error
         if (attempt < APPLY_RETRIES) {
@@ -155,6 +162,7 @@ export async function applyRollbackStash(
     throw lastError
   } catch (e) {
     console.error("[claude] Failed to apply rollback checkpoint:", e)
-    return false
+    const errorMessage = e instanceof Error ? e.message : "Unknown error"
+    return { success: false, error: errorMessage }
   }
 }
