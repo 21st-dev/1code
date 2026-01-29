@@ -34,7 +34,7 @@ loader.config({ monaco })
 // Default editor options for read-only file viewing
 export const defaultEditorOptions: editor.IStandaloneEditorConstructionOptions = {
   readOnly: true,
-  minimap: { enabled: true },
+  minimap: { enabled: false },
   lineNumbers: "on",
   wordWrap: "off",
   automaticLayout: true,
