@@ -2024,6 +2024,9 @@ const ChatViewInner = memo(function ChatViewInner({
     (state) => state.allSubChats.find((sc) => sc.id === subChatId)?.name || "",
   )
 
+  // Desktop notifications for agent events
+  const { notifyAgentNeedsInput } = useDesktopNotifications()
+
   // Mutation for renaming sub-chat
   const renameSubChatMutation = api.agents.renameSubChat.useMutation({
     onError: (error) => {
@@ -2627,6 +2630,24 @@ const ChatViewInner = memo(function ChatViewInner({
       }
     }
   }, [subChatId, lastAssistantMessage, isStreaming, pendingQuestions, setPendingQuestionsMap])
+
+  // Track previous pending question toolUseId to detect new questions
+  const prevPendingQuestionToolUseIdRef = useRef<string | null>(null)
+
+  // Notify user when a new AskUserQuestion arrives (when window is not focused)
+  useEffect(() => {
+    if (pendingQuestions) {
+      // Only notify if this is a NEW question (different toolUseId)
+      if (prevPendingQuestionToolUseIdRef.current !== pendingQuestions.toolUseId) {
+        prevPendingQuestionToolUseIdRef.current = pendingQuestions.toolUseId
+        // notifyAgentNeedsInput already checks document.hasFocus() internally
+        notifyAgentNeedsInput(subChatName || "Agent")
+      }
+    } else {
+      // Clear the ref when there's no pending question
+      prevPendingQuestionToolUseIdRef.current = null
+    }
+  }, [pendingQuestions, subChatName, notifyAgentNeedsInput])
 
   // Helper to clear pending and expired questions for this subChat (used in callbacks)
   const clearPendingQuestionCallback = useCallback(() => {
