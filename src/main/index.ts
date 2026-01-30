@@ -3,7 +3,7 @@ import { app, BrowserWindow, Menu, session } from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
-import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
+import { AuthManager, getAuthManager as getAuthManagerFromModule, initAuthManager } from "./auth-manager"
 import {
   identify,
   initAnalytics,
@@ -18,29 +18,29 @@ import {
   initAutoUpdater,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
-import { closeDatabase, initDatabase } from "./lib/db"
 import {
-  getLaunchDirectory,
-  isCliInstalled,
   installCli,
-  uninstallCli,
+  isCliInstalled,
   parseLaunchDirectory,
+  uninstallCli
 } from "./lib/cli"
+import { closeDatabase, initDatabase } from "./lib/db"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
 import {
   createMainWindow,
   createWindow,
-  getWindow,
   getAllWindows,
+  getWindow,
 } from "./windows/main"
 import { windowManager } from "./windows/window-manager"
 
-import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
+import { AUTH_SERVER_PORT, IS_DEV } from "./constants"
 
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app
 const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
