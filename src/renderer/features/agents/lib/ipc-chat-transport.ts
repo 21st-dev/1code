@@ -2,6 +2,8 @@ import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
+  activeConfigAtom,
+  activeProfileIdAtom,
   agentsLoginModalOpenAtom,
   customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
@@ -144,19 +146,33 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       .find((m) => m.role === "assistant")
     const sessionId = (lastAssistant as any)?.metadata?.sessionId
 
-    // Read extended thinking setting dynamically (so toggle applies to existing chats)
-    const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
-    const maxThinkingTokens = thinkingEnabled ? 128_000 : undefined
     const historyEnabled = appStore.get(historyEnabledAtom)
 
     // Read model selection dynamically (so model changes apply to existing chats)
     const selectedModelId = appStore.get(lastSelectedModelIdAtom)
     const modelString = MODEL_ID_MAP[selectedModelId]
 
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
-    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+    // Read custom config - prefer profile config if active, fallback to legacy config
+    const activeProfileId = appStore.get(activeProfileIdAtom)
+    let customConfig: CustomClaudeConfig | undefined
+
+    if (activeProfileId) {
+      // Use profile config from activeConfigAtom
+      const profileConfig = appStore.get(activeConfigAtom)
+      if (profileConfig) {
+        customConfig = profileConfig
+      }
+    }
+
+    // Fallback to legacy config if no profile or profile has no config
+    if (!customConfig) {
+      const storedCustomConfig = appStore.get(customClaudeConfigAtom) as CustomClaudeConfig
+      customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+    }
+
+    // Read extended thinking setting dynamically (so toggle applies to existing chats)
+    const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
+    const maxThinkingTokens = thinkingEnabled ? 128_000 : undefined
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
@@ -172,7 +188,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
+    const configSource = activeProfileId ? `profile(${activeProfileId})` : (customConfig ? "legacy" : "none")
+    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"} source=${configSource}`)
 
     return new ReadableStream({
       start: (controller) => {
