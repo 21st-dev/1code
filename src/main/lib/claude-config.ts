@@ -12,9 +12,11 @@ import { projects } from "./db/schema"
 export const CLAUDE_CONFIG_PATH = path.join(os.homedir(), ".claude.json")
 
 export interface McpServerConfig {
+  type?: "stdio" | "http"
   command?: string
   args?: string[]
   url?: string
+  env?: Record<string, string>
   authType?: "oauth" | "bearer" | "none"
   _oauth?: {
     accessToken: string

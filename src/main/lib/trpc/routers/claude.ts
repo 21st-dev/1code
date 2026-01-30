@@ -18,7 +18,7 @@ import {
 import { getProjectMcpServers, GLOBAL_MCP_PATH, readClaudeConfig, type McpServerConfig } from "../../claude-config"
 import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
-import { ensureMcpTokensFresh, fetchMcpTools, fetchMcpToolsStdio, getMcpAuthStatus, startMcpOAuth } from "../../mcp-auth"
+import { ensureMcpTokensFresh, fetchMcpTools, fetchMcpToolsDetailed, fetchMcpToolsStdio, getMcpAuthStatus, startMcpOAuth } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { publicProcedure, router } from "../index"
 import { buildAllAgentsOption, syncAgentsToDatabase } from "./agent-utils"
@@ -2098,6 +2098,102 @@ ${prompt}
       return { groups: [], error: String(error) }
     }
   }),
+
+  /**
+   * Get MCP servers for a project with detailed tool information including signatures
+   * Used by the MCP sidebar section to display servers and their tools
+   */
+  getProjectMcpServers: publicProcedure
+    .input(z.object({ projectPath: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const config = await readClaudeConfig()
+
+        // Merge global + project servers
+        const globalServers = config.mcpServers || {}
+        const projectServers = getProjectMcpServers(config, input.projectPath) || {}
+        const allServers = { ...globalServers, ...projectServers }
+
+        if (Object.keys(allServers).length === 0) {
+          return { servers: [], projectPath: input.projectPath }
+        }
+
+        // Fetch detailed tools for each server
+        const serverResults = await Promise.all(
+          Object.entries(allServers).map(async ([name, serverConfig]) => {
+            const status = getServerStatusFromConfig(serverConfig)
+            const configObj = serverConfig as Record<string, unknown>
+
+            // Fetch detailed tools for connected HTTP servers only
+            let tools: Array<{
+              name: string
+              description?: string
+              inputSchema?: {
+                type: 'object'
+                properties?: Record<string, { type: string; description?: string }>
+                required?: string[]
+              }
+            }> = []
+            let serverInfo: { name?: string; version?: string } | undefined
+
+            // Stdio servers can't be queried via HTTP - they show with empty tools
+            const isStdioServer = serverConfig.type === "stdio" || (!serverConfig.url && serverConfig.command)
+
+            if (isStdioServer) {
+              // Stdio server - tools are managed by Claude Code SDK directly
+              serverInfo = { name }
+            } else if (status === "connected" && serverConfig.url) {
+              // HTTP server - fetch tools and server info
+              const oauth = serverConfig._oauth as { accessToken?: string } | undefined
+              const headers = serverConfig.headers as { Authorization?: string } | undefined
+              const accessToken = headers?.Authorization?.replace('Bearer ', '') || oauth?.accessToken
+
+              try {
+                tools = await fetchMcpToolsDetailed(serverConfig.url, accessToken)
+              } catch (err) {
+                console.warn(`[getProjectMcpServers] Failed to fetch tools for ${name}:`, err)
+              }
+
+              // Fetch server info if tools were fetched successfully
+              if (tools.length > 0) {
+                try {
+                  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
+                  const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js')
+
+                  const client = new Client({ name: '21st-desktop', version: '1.0.0' })
+                  const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+                    requestInit: accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {},
+                  })
+
+                  await client.connect(transport)
+                  const result = await client.listTools()
+                  await transport.close()
+
+                  serverInfo = { name: result._meta?.serverName || name }
+                } catch {
+                  serverInfo = { name }
+                }
+              } else {
+                serverInfo = { name }
+              }
+            }
+
+            return {
+              name,
+              status,
+              serverInfo,
+              tools,
+              transportType: isStdioServer ? "stdio" : "http",
+            }
+          })
+        )
+
+        return { servers: serverResults, projectPath: input.projectPath }
+      } catch (error) {
+        console.error("[getProjectMcpServers] Error:", error)
+        return { servers: [], projectPath: input.projectPath, error: String(error) }
+      }
+    }),
 
   /**
    * Cancel active session

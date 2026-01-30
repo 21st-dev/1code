@@ -66,6 +66,73 @@ export async function fetchMcpTools(
 }
 
 /**
+ * Detailed MCP tool information including name, description, and input schema
+ */
+export interface McpToolDetail {
+  name: string
+  description?: string
+  inputSchema?: {
+    type: 'object'
+    properties?: Record<string, { type: string; description?: string }>
+    required?: string[]
+  }
+}
+
+/**
+ * Fetch detailed tool information from an MCP server
+ * Returns full tool details including name, description, and input schema
+ */
+export async function fetchMcpToolsDetailed(
+  serverUrl: string,
+  accessToken?: string
+): Promise<McpToolDetail[]> {
+  let client: Client | null = null;
+  let transport: StreamableHTTPClientTransport | null = null;
+
+  try {
+    client = new Client({
+      name: '21st-desktop',
+      version: '1.0.0',
+    });
+
+    const requestInit: RequestInit = {};
+    if (accessToken) {
+      requestInit.headers = {
+        'Authorization': `Bearer ${accessToken}`,
+      };
+    }
+
+    transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
+      requestInit,
+    });
+
+    await client.connect(transport);
+
+    const result = await client.listTools();
+    const tools = result.tools || [];
+
+    console.log(`[MCP] Fetched ${tools.length} tools with details`);
+    return tools.map(t => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema as McpToolDetail['inputSchema'],
+    }));
+  } catch (error) {
+    console.error('[MCP] Failed to fetch tools detailed:', error);
+    return [];
+  } finally {
+    // Clean up the connection
+    try {
+      if (transport) {
+        await transport.close();
+      }
+    } catch {
+      // Ignore close errors
+    }
+  }
+}
+
+/**
  * Sensitive env vars to filter out when spawning MCP subprocesses
  */
 const BLOCKED_ENV_VARS = [
@@ -137,11 +204,12 @@ export async function fetchMcpToolsStdio(config: {
 
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL;
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
+const AUTH_PORT = IS_DEV ? 21331 : 21321;
 
 function getMcpOAuthRedirectUri(): string {
   return IS_DEV
-    ? 'http://localhost:21321/mcp-oauth/callback'
-    : 'http://127.0.0.1:21321/mcp-oauth/callback';
+    ? `http://localhost:${AUTH_PORT}/mcp-oauth/callback`
+    : `http://127.0.0.1:${AUTH_PORT}/mcp-oauth/callback`;
 }
 
 interface PendingOAuth {

@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/electron/main"
 import { app, BrowserWindow, Menu, session } from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
-import { join } from "path"
+import { dirname, join } from "path"
 import { AuthManager } from "./auth-manager"
 import {
   identify,
@@ -28,6 +28,9 @@ const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app
 const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+
+// Auth server port - use different port in dev to avoid conflict with production app
+const AUTH_PORT = IS_DEV ? 21331 : 21321
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
@@ -231,9 +234,9 @@ const FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 1024 1024" fill="n
 const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
 
 // Start local HTTP server for auth callbacks
-// This catches http://localhost:21321/auth/callback?code=xxx and /mcp-oauth/callback
+// This catches http://localhost:{AUTH_PORT}/auth/callback?code=xxx and /mcp-oauth/callback
 const server = createServer((req, res) => {
-    const url = new URL(req.url || "", "http://localhost:21321")
+    const url = new URL(req.url || "", `http://localhost:${AUTH_PORT}`)
 
     // Serve favicon
     if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
@@ -412,8 +415,8 @@ const server = createServer((req, res) => {
     }
   })
 
-server.listen(21321, () => {
-  console.log("[Auth Server] Listening on http://localhost:21321")
+server.listen(AUTH_PORT, () => {
+  console.log(`[Auth Server] Listening on http://localhost:${AUTH_PORT}`)
 })
 
 // Clean up stale lock files from crashed instances
@@ -737,6 +740,24 @@ if (gotTheLock) {
       }
     }, 3000)
 
+    // Start ii MCP servers (HTTP transport) and register in ~/.claude.json
+    setTimeout(async () => {
+      try {
+        const appPath = dirname(process.cwd())
+        const { startIiMcpServers, registerServersInConfig } = await import("./lib/ii-mcp-servers")
+
+        // Start servers
+        await startIiMcpServers(appPath)
+        console.log("[App] ii MCP servers started (HTTP)")
+
+        // Register in config
+        await registerServersInConfig()
+      } catch (error) {
+        console.warn("[App] Failed to start ii MCP servers:", error)
+        // Non-fatal - app works without ii MCP tools
+      }
+    }, 500)
+
     // Handle deep link from app launch (Windows/Linux)
     const deepLinkUrl = process.argv.find((arg) =>
       arg.startsWith(`${PROTOCOL}://`),
@@ -767,6 +788,14 @@ if (gotTheLock) {
     await cleanupGitWatchers()
     await shutdownAnalytics()
     await closeDatabase()
+    // Stop ii MCP servers and unregister from config
+    try {
+      const { stopIiMcpServers, unregisterServersFromConfig } = await import("./lib/ii-mcp-servers")
+      await stopIiMcpServers()
+      await unregisterServersFromConfig()
+    } catch {
+      // Ignore - servers may not have been registered
+    }
   })
 
   // Handle uncaught exceptions

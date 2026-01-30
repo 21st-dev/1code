@@ -115,6 +115,16 @@ export const commandsSectionCollapsedAtom = atomWithStorage(
 )
 
 /**
+ * MCP section collapsed state (shared across all chats)
+ */
+export const mcpSectionCollapsedAtom = atomWithStorage(
+  "mcp-section-collapsed",
+  true,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
  * File tree data per chat
  */
 export const workspaceFileTreeAtomFamily = atomFamily((chatId: string) =>

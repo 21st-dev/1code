@@ -89,12 +89,13 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { useSubChatDraftsCache, getSubChatDraftKey } from "../agents/lib/drafts"
 import { Checkbox } from "../../components/ui/checkbox"
 import { TypewriterText } from "../../components/ui/typewriter-text"
-import { workspaceFileTreeHeightAtom, workspaceFileTreeCollapsedAtom, savedChatStatesCollapsedAtom, agentsSectionCollapsedAtom, skillsSectionCollapsedAtom, commandsSectionCollapsedAtom } from "../../lib/atoms"
+import { workspaceFileTreeHeightAtom, workspaceFileTreeCollapsedAtom, savedChatStatesCollapsedAtom, agentsSectionCollapsedAtom, skillsSectionCollapsedAtom, commandsSectionCollapsedAtom, mcpSectionCollapsedAtom } from "../../lib/atoms"
 import { WorkspaceFileTree } from "../workspace-files"
 import { SavedChatStates } from "./components/saved-chat-states"
 import { AgentsSection } from "./components/agents-section"
 import { SkillsSection } from "./components/skills-section"
 import { CommandsSection } from "./components/commands-section"
+import { McpSection } from "./components/mcp-section"
 import { emitInsertText, emitForkSubChat, emitRestoreChatState } from "../agents/lib/drafts"
 import { selectedProjectAtom } from "../agents/atoms"
 
@@ -370,6 +371,13 @@ export function AgentsSubChatsSidebar({
   const toggleCommandsSectionCollapse = useCallback(() => {
     setCommandsSectionCollapsed(prev => !prev)
   }, [setCommandsSectionCollapsed])
+
+  // MCP section collapse state
+  const [mcpSectionCollapsed, setMcpSectionCollapsed] = useAtom(mcpSectionCollapsedAtom)
+
+  const toggleMcpSectionCollapse = useCallback(() => {
+    setMcpSectionCollapsed(prev => !prev)
+  }, [setMcpSectionCollapsed])
 
   // Handle file tree resize
   const handleFileTreeResizeStart = useCallback((e: React.PointerEvent) => {
@@ -2142,6 +2150,24 @@ export function AgentsSubChatsSidebar({
               onToggleCollapse={toggleCommandsSectionCollapse}
               onCommandClick={handleCommandClick}
               onDeleteCommand={handleDeleteCommand}
+            />
+          )}
+        </div>
+
+        {/* MCP Section */}
+        <div
+          className="relative z-10"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        >
+          {parentChatId && (
+            <McpSection
+              chatId={parentChatId}
+              projectPath={selectedProject?.path}
+              isCollapsed={mcpSectionCollapsed}
+              onToggleCollapse={toggleMcpSectionCollapse}
             />
           )}
         </div>

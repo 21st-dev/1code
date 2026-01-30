@@ -801,6 +801,7 @@ export {
   agentsSectionCollapsedAtom,
   skillsSectionCollapsedAtom,
   commandsSectionCollapsedAtom,
+  mcpSectionCollapsedAtom,
   workspaceFileTreeAtomFamily,
   expandedFoldersAtomFamily,
   type FileTreeNode,
