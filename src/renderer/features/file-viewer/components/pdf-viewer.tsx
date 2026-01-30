@@ -85,10 +85,10 @@ export function PdfViewer({
 
       {/* PDF iframe */}
       <div className="flex-1 min-h-0">
-        <webview
+        <iframe
           src={pdfUrl}
-          className="w-full h-full"
-          style={{ display: "flex" }}
+          className="w-full h-full border-0"
+          title="PDF Viewer"
         />
       </div>
     </div>

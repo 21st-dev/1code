@@ -27,6 +27,8 @@ import { getFileName, formatFileSize } from "../utils/file-utils"
 import { defaultEditorOptions, getMonacoTheme } from "./monaco-config"
 import { ImageViewer } from "./image-viewer"
 import { MarkdownViewer } from "./markdown-viewer"
+import { PdfViewer } from "./pdf-viewer"
+import { HtmlViewer } from "./html-viewer"
 
 interface FileViewerSidebarProps {
   filePath: string
@@ -249,6 +251,26 @@ export function FileViewerSidebar({
       return (
         <ViewerErrorBoundary viewerType="markdown" onReset={onClose}>
           <MarkdownViewer
+            filePath={filePath}
+            projectPath={projectPath}
+            onClose={onClose}
+          />
+        </ViewerErrorBoundary>
+      )
+    case "pdf":
+      return (
+        <ViewerErrorBoundary viewerType="pdf" onReset={onClose}>
+          <PdfViewer
+            filePath={filePath}
+            projectPath={projectPath}
+            onClose={onClose}
+          />
+        </ViewerErrorBoundary>
+      )
+    case "html":
+      return (
+        <ViewerErrorBoundary viewerType="html" onReset={onClose}>
+          <HtmlViewer
             filePath={filePath}
             projectPath={projectPath}
             onClose={onClose}

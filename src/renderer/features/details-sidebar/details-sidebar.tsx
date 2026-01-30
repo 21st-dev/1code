@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { ArrowUpRight, TerminalSquare, Box, ListTodo } from "lucide-react"
+import { ArrowUpRight, TerminalSquare, Box, ListTodo, Database } from "lucide-react"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
 import {
@@ -32,6 +32,7 @@ import { TodoWidget } from "./sections/todo-widget"
 import { PlanWidget } from "./sections/plan-widget"
 import { TerminalWidget } from "./sections/terminal-widget"
 import { ChangesWidget } from "./sections/changes-widget"
+import { SchemaWidget } from "./sections/schema-widget"
 import type { ParsedDiffFile } from "./types"
 import type { AgentMode } from "../agents/atoms"
 
@@ -195,6 +196,8 @@ export function DetailsSidebar({
         return TerminalSquare
       case "diff":
         return DiffIcon
+      case "schema":
+        return Database
       default:
         return Box
     }
@@ -397,6 +400,11 @@ export function DetailsSidebar({
                     onFileSelect={canOpenDiff ? onFileSelect : undefined}
                     diffDisplayMode={diffDisplayMode}
                   />
+                )
+
+              case "schema":
+                return (
+                  <SchemaWidget key="schema" chatId={chatId} />
                 )
 
               default:

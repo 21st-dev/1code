@@ -5650,6 +5650,21 @@ export function SettingsFilledIcon(props: IconProps) {
   )
 }
 
+export function DatabaseFilledIcon(props: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
+      <path d="M12 2C6.477 2 2 3.79 2 6V18C2 20.21 6.477 22 12 22C17.523 22 22 20.21 22 18V6C22 3.79 17.523 2 12 2ZM12 4C16.418 4 20 5.343 20 6C20 6.657 16.418 8 12 8C7.582 8 4 6.657 4 6C4 5.343 7.582 4 12 4ZM4 9.24C5.887 10.36 8.783 11 12 11C15.217 11 18.113 10.36 20 9.24V12C20 12.657 16.418 14 12 14C7.582 14 4 12.657 4 12V9.24ZM4 15.24C5.887 16.36 8.783 17 12 17C15.217 17 18.113 16.36 20 15.24V18C20 18.657 16.418 20 12 20C7.582 20 4 18.657 4 18V15.24Z" />
+    </svg>
+  )
+}
+
 // Diff view display mode icons
 export function IconSidePeek(props: IconProps) {
   return (

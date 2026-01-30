@@ -11,10 +11,11 @@ import {
 import { agentsSettingsDialogActiveTabAtom, devToolsUnlockedAtom, type SettingsTab } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
-import { BrainFilledIcon, BugFilledIcon, CustomAgentIconFilled, FlaskFilledIcon, KeyboardFilledIcon, OriginalMCPIcon, SkillIconFilled } from "../ui/icons"
+import { BrainFilledIcon, BugFilledIcon, CustomAgentIconFilled, FlaskFilledIcon, KeyboardFilledIcon, OriginalMCPIcon, SkillIconFilled, DatabaseFilledIcon } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
 import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
+import { AgentsDataConnectionsTab } from "./settings-tabs/agents-data-connections-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
 import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
 import { AgentsMcpTab } from "./settings-tabs/agents-mcp-tab"
@@ -134,6 +135,12 @@ const ADVANCED_TABS_BASE = [
     label: "MCP Servers",
     icon: OriginalMCPIcon,
     description: "Model Context Protocol servers",
+  },
+  {
+    id: "data" as SettingsTab,
+    label: "Data Connections",
+    icon: DatabaseFilledIcon,
+    description: "Connect to external databases",
   },
   {
     id: "beta" as SettingsTab,
@@ -362,6 +369,8 @@ export function AgentsSettingsDialog({
         return <AgentsCustomAgentsTab />
       case "mcp":
         return <AgentsMcpTab />
+      case "data":
+        return <AgentsDataConnectionsTab />
       case "beta":
         return <AgentsBetaTab />
       case "debug":

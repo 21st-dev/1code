@@ -27,6 +27,37 @@ export class AuthManager {
   }
 
   /**
+   * Try to restore authentication if token is expired but refresh token exists
+   * Call this on app startup before checking isAuthenticated()
+   * Returns true if successfully restored, false otherwise
+   */
+  async tryRestoreAuth(): Promise<boolean> {
+    // If already authenticated (token not expired), nothing to do
+    if (this.store.isAuthenticated()) {
+      return true
+    }
+
+    // Check if we have auth data with a refresh token
+    const authData = this.store.load()
+    if (!authData || !authData.refreshToken) {
+      console.log("[Auth] No refresh token available for restoration")
+      return false
+    }
+
+    // Token is expired but we have a refresh token - try to refresh
+    console.log("[Auth] Access token expired, attempting refresh...")
+    const success = await this.refresh()
+
+    if (success) {
+      console.log("[Auth] Successfully restored authentication via refresh token")
+    } else {
+      console.log("[Auth] Failed to restore authentication - user must re-login")
+    }
+
+    return success
+  }
+
+  /**
    * Set callback to be called when token is refreshed
    * This allows the main process to update cookies when tokens change
    */

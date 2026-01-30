@@ -119,7 +119,7 @@ const gitWatchers = new Map<string, { watcher: FSWatcher; refCount: number }>()
 
 // Git status cache with longer TTL (invalidated by .git watcher)
 const gitStatusCache = new Map<string, { status: Map<string, GitFileStatus>; timestamp: number }>()
-const GIT_STATUS_CACHE_TTL = 30000 // 30 seconds (longer since we watch .git)
+const GIT_STATUS_CACHE_TTL = 500 // 500ms - batch rapid operations but allow fast updates
 
 // Directories to ignore when scanning
 const IGNORED_DIRS = new Set([

@@ -852,6 +852,10 @@ if (gotTheLock) {
       console.error("[App] Failed to initialize database:", error)
     }
 
+    // Try to restore auth if token expired but refresh token exists
+    // This prevents requiring re-login when app is reopened after token expiry
+    await authManager.tryRestoreAuth()
+
     // Create main window
     createMainWindow()
 

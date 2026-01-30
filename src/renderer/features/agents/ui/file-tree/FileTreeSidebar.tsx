@@ -24,6 +24,7 @@ import { useAtomValue, useSetAtom } from "jotai"
 import { FileTreeNodeRow, type GitStatusMap } from "./FileTreeNode"
 import { Download } from "lucide-react"
 import { toast } from "sonner"
+import { useGitWatcher } from "../../../../lib/hooks/use-file-change-listener"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -167,6 +168,9 @@ export function FileTreeSidebar({
       },
     },
   )
+
+  // Use unified git watcher for cross-component invalidation (chokidar-based, most reliable)
+  useGitWatcher(projectPath)
 
   // Build tree from entries (all files are loaded upfront like VS Code)
   const tree = useMemo(() => buildFileTree(entries), [entries])

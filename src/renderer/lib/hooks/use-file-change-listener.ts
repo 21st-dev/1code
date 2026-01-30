@@ -59,6 +59,11 @@ export function useGitWatcher(worktreePath: string | null | undefined) {
           queryKey: [["changes", "getStatus"]],
         })
 
+        // Also invalidate file tree git status for real-time sync
+        queryClient.invalidateQueries({
+          queryKey: [["files", "gitStatus"]],
+        })
+
         // Also invalidate parsed diff if files were modified
         const hasModifiedFiles = data.changes.some(
           (change) => change.type === "change" || change.type === "add"

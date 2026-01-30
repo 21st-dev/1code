@@ -105,6 +105,7 @@
     "remark-gfm": "^4.0.1",
     "shiki": "^1.24.4",
     "simple-git": "^3.28.0",
+    "snowflake-sdk": "^2.3.3",
     "sonner": "^1.7.1",
     "streamdown": "^2.0.1",
     "superjson": "^2.2.2",

@@ -236,7 +236,7 @@ export function isDataFile(filePath: string): boolean {
 /**
  * File viewer type - determines which viewer component to use
  */
-export type FileViewerType = "code" | "image" | "markdown" | "unsupported"
+export type FileViewerType = "code" | "image" | "markdown" | "pdf" | "html" | "unsupported"
 
 /**
  * Image file extensions
@@ -246,7 +246,7 @@ const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ic
 /**
  * Binary/unsupported file extensions
  */
-const UNSUPPORTED_EXTENSIONS = [".pdf", ".exe", ".dll", ".so", ".dylib", ".bin", ".dat", ".zip", ".tar", ".gz", ".7z", ".rar"]
+const UNSUPPORTED_EXTENSIONS = [".exe", ".dll", ".so", ".dylib", ".bin", ".dat", ".zip", ".tar", ".gz", ".7z", ".rar"]
 
 /**
  * Get the appropriate viewer type for a file
@@ -263,7 +263,12 @@ export function getFileViewerType(filePath: string): FileViewerType {
   if ([".md", ".mdx", ".markdown"].includes(ext)) {
     return "markdown"
   }
-  // HTML files are shown as code (iframe preview has CSP issues in Electron)
+  if (ext === ".pdf") {
+    return "pdf"
+  }
+  if (ext === ".html" || ext === ".htm") {
+    return "html"
+  }
   return "code"
 }
 
