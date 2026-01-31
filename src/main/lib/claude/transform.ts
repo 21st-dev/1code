@@ -60,13 +60,25 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     if (currentToolCallId) {
       // Track this tool ID to avoid duplicates from assistant message
       emittedToolIds.add(currentToolCallId)
-      
+
+      let parsedInput = {}
+      if (accumulatedToolInput) {
+        try {
+          parsedInput = JSON.parse(accumulatedToolInput)
+        } catch (e) {
+          // Stream may have been interrupted mid-JSON (e.g. network error, abort)
+          // resulting in incomplete JSON like '{"prompt":"write co'
+          console.error("[transform] Failed to parse tool input JSON:", (e as Error).message, "partial:", accumulatedToolInput.slice(0, 120))
+          parsedInput = { _raw: accumulatedToolInput, _parseError: true }
+        }
+      }
+
       // Emit complete tool call with accumulated input
       yield {
         type: "tool-input-available",
         toolCallId: currentToolCallId,
         toolName: currentToolName || "unknown",
-        input: accumulatedToolInput ? JSON.parse(accumulatedToolInput) : {},
+        input: parsedInput,
       }
       currentToolCallId = null
       currentToolName = null

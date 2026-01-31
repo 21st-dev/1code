@@ -10,6 +10,13 @@ import {
   type ReactNode,
 } from "react"
 
+// Chromium 137+ Selection API extension for Shadow DOM support
+declare global {
+  interface Selection {
+    getComposedRanges?(options: { shadowRoots: ShadowRoot[] }): StaticRange[]
+  }
+}
+
 // Discriminated union for selection source
 export type TextSelectionSource =
   | { type: "assistant-message"; messageId: string }
@@ -48,56 +55,104 @@ interface TextSelectionProviderProps {
   children: ReactNode
 }
 
+// Collect all open shadow roots from diffs-container elements
+function getDiffShadowRoots(): ShadowRoot[] {
+  const roots: ShadowRoot[] = []
+  document.querySelectorAll("diffs-container").forEach((el) => {
+    const sr = (el as HTMLElement).shadowRoot
+    if (sr) roots.push(sr)
+  })
+  return roots
+}
+
+/**
+ * Convert a StaticRange to a live Range (needed for toString() and getBoundingClientRect()).
+ * StaticRange from getComposedRanges doesn't have these methods.
+ */
+function toLiveRange(staticRange: StaticRange): Range | null {
+  try {
+    const range = document.createRange()
+    range.setStart(staticRange.startContainer, staticRange.startOffset)
+    range.setEnd(staticRange.endContainer, staticRange.endOffset)
+    return range
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Get the selection range that works across Shadow DOM boundaries.
+ * Uses getComposedRanges (Chromium 137+) to resolve nodes inside shadow trees.
+ * Falls back to getRangeAt(0) for non-shadow selections.
+ *
+ * Returns the resolved range, the element at the start, and the extracted text.
+ * We extract text here because selection.toString() may be empty/incorrect
+ * for selections inside Shadow DOM.
+ */
+function getSelectionRange(selection: Selection): { range: Range; element: Element | null; text: string } | null {
+  // Try getComposedRanges first — works across Shadow DOM (Chromium 137+)
+  if (typeof selection.getComposedRanges === "function") {
+    const shadowRoots = getDiffShadowRoots()
+    try {
+      const ranges = selection.getComposedRanges({ shadowRoots })
+      if (ranges.length > 0) {
+        const staticRange = ranges[0]!
+        if (staticRange.startContainer === staticRange.endContainer && staticRange.startOffset === staticRange.endOffset) {
+          return null
+        }
+        const liveRange = toLiveRange(staticRange)
+        if (!liveRange) return null
+
+        const container = staticRange.startContainer
+        const element = container.nodeType === Node.TEXT_NODE
+          ? container.parentElement
+          : (container as Element)
+        const text = liveRange.toString()
+        return { range: liveRange, element, text }
+      }
+    } catch {
+      // Fall through to legacy path
+    }
+  }
+
+  // Legacy path — works for light DOM selections
+  if (selection.rangeCount === 0 || selection.isCollapsed) return null
+  const range = selection.getRangeAt(0)
+  const container = range.commonAncestorContainer
+  const element = container.nodeType === Node.TEXT_NODE
+    ? container.parentElement
+    : (container as Element)
+  const text = selection.toString()
+  return { range, element, text }
+}
+
 // Helper to extract line number from diff selection
+// @pierre/diffs uses data-line and data-line-type attributes on line rows
 function extractDiffLineInfo(element: Element): { lineNumber?: number; lineType?: "old" | "new" } {
-  // Find the closest table row (tr) which contains line number info
-  const row = element.closest("tr")
-  if (!row) return {}
+  const lineRow = element.closest?.("[data-line]") as HTMLElement | null
+  if (!lineRow) return {}
 
-  // @git-diff-view/react uses data attributes on line number cells
-  // Try to find line numbers from the row
-  const oldLineNumCell = row.querySelector("[data-line-num-old]")
-  const newLineNumCell = row.querySelector("[data-line-num-new]")
-
-  // Also check for class-based selectors as fallback
-  const lineNumCells = row.querySelectorAll(".diff-line-num")
+  const lineNum = lineRow.getAttribute("data-line")
+  const lineType = lineRow.getAttribute("data-line-type")
 
   let lineNumber: number | undefined
-  let lineType: "old" | "new" | undefined
+  let type: "old" | "new" | undefined
 
-  // Prefer new line number if available
-  if (newLineNumCell) {
-    const numAttr = newLineNumCell.getAttribute("data-line-num-new")
-    if (numAttr) {
-      lineNumber = parseInt(numAttr, 10)
-      lineType = "new"
+  if (lineNum) {
+    lineNumber = parseInt(lineNum, 10)
+  }
+
+  if (lineType) {
+    if (lineType === "change-deletion") {
+      type = "old"
+    } else if (lineType === "change-addition") {
+      type = "new"
+    } else {
+      type = "new"
     }
   }
 
-  // Fall back to old line number
-  if (!lineNumber && oldLineNumCell) {
-    const numAttr = oldLineNumCell.getAttribute("data-line-num-old")
-    if (numAttr) {
-      lineNumber = parseInt(numAttr, 10)
-      lineType = "old"
-    }
-  }
-
-  // Try text content of line number cells as last resort
-  if (!lineNumber && lineNumCells.length > 0) {
-    for (let i = 0; i < lineNumCells.length; i++) {
-      const cell = lineNumCells[i]
-      const text = cell?.textContent?.trim()
-      if (text && /^\d+$/.test(text)) {
-        lineNumber = parseInt(text, 10)
-        // Determine type based on cell class or position
-        lineType = cell?.classList.contains("diff-line-old-num") ? "old" : "new"
-        break
-      }
-    }
-  }
-
-  return { lineNumber, lineType }
+  return { lineNumber, lineType: type }
 }
 
 export function TextSelectionProvider({
@@ -122,7 +177,6 @@ export function TextSelectionProvider({
     let rafId: number | null = null
 
     const handleSelectionChange = () => {
-      // Cancel any pending frame to debounce rapid selection changes
       if (rafId !== null) {
         cancelAnimationFrame(rafId)
       }
@@ -131,118 +185,108 @@ export function TextSelectionProvider({
         rafId = null
 
         const selection = window.getSelection()
-
-        // No selection or collapsed (just cursor)
-        if (!selection || selection.isCollapsed) {
-          setState({
-            selectedText: null,
-            source: null,
-            selectionRect: null,
-          })
+        if (!selection) {
+          setState({ selectedText: null, source: null, selectionRect: null })
           return
         }
 
-        const text = selection.toString().trim()
+        // Get selection range — works across Shadow DOM via getComposedRanges
+        // We get text from the range directly, not selection.toString(),
+        // because selection.toString() may be empty for Shadow DOM selections
+        const result = getSelectionRange(selection)
+        if (!result) {
+          setState({ selectedText: null, source: null, selectionRect: null })
+          return
+        }
+
+        const { range, element, text: rawText } = result
+        const text = rawText.trim()
         if (!text) {
-          setState({
-            selectedText: null,
-            source: null,
-            selectionRect: null,
-          })
+          setState({ selectedText: null, source: null, selectionRect: null })
           return
         }
 
-        // Get the selection range
-        const range = selection.getRangeAt(0)
-        const container = range.commonAncestorContainer
-
-        // Find the element containing the selection
-        const element =
-          container.nodeType === Node.TEXT_NODE
-            ? container.parentElement
-            : (container as Element)
-
-        // Check for assistant message first
-        // Must be inside [data-assistant-message-id] element
-        const messageElement = element?.closest?.(
-          "[data-assistant-message-id]"
-        ) as HTMLElement | null
-
-        // Check for tool-edit (Edit/Write tool in chat)
-        // Use specific selector for Edit/Write tools only
-        const toolEditElement = element?.closest?.(
-          '[data-part-type="tool-Edit"], [data-part-type="tool-Write"]'
-        ) as HTMLElement | null
-
-        // Check for diff file - must be inside .agent-diff-wrapper (the actual code area)
-        // This prevents selection in diff headers, buttons, etc.
-        const diffWrapperElement = element?.closest?.(".agent-diff-wrapper") as HTMLElement | null
-        const diffElement = diffWrapperElement?.closest?.(
-          "[data-diff-file-path]"
-        ) as HTMLElement | null
-
-        // Check for file viewer content
-        const fileViewerElement = element?.closest?.(
-          "[data-file-viewer-path]"
-        ) as HTMLElement | null
-
-        // Check for plan sidebar content
-        const planElement = element?.closest?.(
-          "[data-plan-path]"
-        ) as HTMLElement | null
-
-        // Build the source based on what we found
-        // Priority: file-viewer > plan > tool-edit > diff > assistant-message
+        // --- Resolve source ---
         let source: TextSelectionSource | null = null
 
-        if (fileViewerElement) {
-          const filePath = fileViewerElement.getAttribute("data-file-viewer-path") || "unknown"
-          source = {
-            type: "file-viewer",
-            filePath,
-          }
-        }
+        if (element) {
+          // Check for file viewer content
+          const fileViewerElement = element.closest?.(
+            "[data-file-viewer-path]"
+          ) as HTMLElement | null
 
-        if (!source && planElement) {
-          // Plan selection - extract plan path from data attribute
-          const planPath = planElement.getAttribute("data-plan-path") || "unknown"
-          source = {
-            type: "plan",
-            planPath,
-          }
-        }
+          // Check for plan sidebar content
+          const planElement = element.closest?.(
+            "[data-plan-path]"
+          ) as HTMLElement | null
 
-        if (!source && toolEditElement) {
-          // Tool edit selection - extract file path from data attribute
-          const partType = toolEditElement.getAttribute("data-part-type")
-          const isWrite = partType === "tool-Write"
-          const filePath = toolEditElement.getAttribute("data-tool-file-path") || "unknown"
-          source = {
-            type: "tool-edit",
-            filePath,
-            isWrite,
-          }
-        }
+          // Check for assistant message
+          const messageElement = element.closest?.(
+            "[data-assistant-message-id]"
+          ) as HTMLElement | null
 
-        if (!source && diffElement && diffWrapperElement) {
-          // Only allow diff selection if inside the actual diff content wrapper
-          const filePath = diffElement.getAttribute("data-diff-file-path")
-          if (filePath) {
-            const lineInfo = element ? extractDiffLineInfo(element) : {}
-            source = {
-              type: "diff",
-              filePath,
-              lineNumber: lineInfo.lineNumber,
-              lineType: lineInfo.lineType,
+          // Check for tool-edit (Edit/Write tool in chat)
+          const toolEditElement = element.closest?.(
+            '[data-part-type="tool-Edit"], [data-part-type="tool-Write"]'
+          ) as HTMLElement | null
+
+          // Check for diff — element may be inside Shadow DOM of diffs-container
+          // With getComposedRanges, element is the actual node inside the shadow tree
+          // Walk up through shadow boundaries to find [data-diff-file-path]
+          const diffCard = (() => {
+            let node: Node | null = element
+            while (node) {
+              if (node instanceof HTMLElement) {
+                const card = node.closest("[data-diff-file-path]")
+                if (card) return card as HTMLElement
+              }
+              // Cross shadow boundary
+              const root = node.getRootNode()
+              if (root instanceof ShadowRoot) {
+                node = root.host
+                continue
+              }
+              break
+            }
+            return null
+          })()
+
+          // Priority: file-viewer > plan > tool-edit > diff > assistant-message
+          if (fileViewerElement) {
+            const filePath = fileViewerElement.getAttribute("data-file-viewer-path") || "unknown"
+            source = { type: "file-viewer", filePath }
+          }
+
+          if (!source && planElement) {
+            const planPath = planElement.getAttribute("data-plan-path") || "unknown"
+            source = { type: "plan", planPath }
+          }
+
+          if (!source && toolEditElement) {
+            const partType = toolEditElement.getAttribute("data-part-type")
+            const isWrite = partType === "tool-Write"
+            const filePath = toolEditElement.getAttribute("data-tool-file-path") || "unknown"
+            source = { type: "tool-edit", filePath, isWrite }
+          }
+
+          if (!source && diffCard) {
+            const filePath = diffCard.getAttribute("data-diff-file-path")
+            if (filePath) {
+              const lineInfo = extractDiffLineInfo(element)
+              source = {
+                type: "diff",
+                filePath,
+                lineNumber: lineInfo.lineNumber,
+                lineType: lineInfo.lineType,
+              }
             }
           }
-        }
 
-        // Fallback to assistant message (check last because tool-edit is nested inside)
-        if (!source && messageElement) {
-          const messageId = messageElement.getAttribute("data-assistant-message-id")
-          if (messageId) {
-            source = { type: "assistant-message", messageId }
+          if (!source && messageElement) {
+            const messageId = messageElement.getAttribute("data-assistant-message-id")
+            if (messageId) {
+              source = { type: "assistant-message", messageId }
+            }
           }
         }
 

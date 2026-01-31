@@ -120,6 +120,7 @@ export function AutomationsDetailView() {
   const [instructions, setInstructions] = useState("")
   const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS[0].id)
   const [addToInbox, setAddToInbox] = useState(true)
+  const [respondToTrigger, setRespondToTrigger] = useState(true)
   const [isEnabled, setIsEnabled] = useState(true)
   const [targetRepository, setTargetRepository] = useState("")
 
@@ -232,6 +233,7 @@ export function AutomationsDetailView() {
       setName(automation.name || "")
       setInstructions(automation.agent_prompt || "")
       setAddToInbox(automation.add_to_inbox ?? true)
+      setRespondToTrigger(automation.respond_to_trigger ?? true)
       setIsEnabled(automation.is_enabled ?? true)
       setTargetRepository(automation.target_repository || "")
       setLocalTriggers(
@@ -309,6 +311,7 @@ export function AutomationsDetailView() {
         name: name || "Untitled Automation",
         agentPrompt: instructions,
         addToInbox,
+        respondToTrigger,
         triggers: localTriggers.map((t) => ({
           platform: t.platform,
           trigger_type: t.trigger_type,
@@ -322,6 +325,7 @@ export function AutomationsDetailView() {
         name,
         agentPrompt: instructions,
         addToInbox,
+        respondToTrigger,
         isEnabled,
         triggers: localTriggers.map((t) => ({
           id: t.id,
@@ -333,7 +337,7 @@ export function AutomationsDetailView() {
       })
     }
   }, [
-    isCreateMode, teamId, name, instructions, addToInbox, isEnabled,
+    isCreateMode, teamId, name, instructions, addToInbox, respondToTrigger, isEnabled,
     localTriggers, targetRepository, automationId,
     createMutation, updateMutation,
   ])
@@ -362,6 +366,24 @@ export function AutomationsDetailView() {
   }, [])
 
   const isSaving = createMutation.isPending || updateMutation.isPending
+
+  // Determine where comments can be posted based on configured triggers
+  const commentTargetDescription = useMemo(() => {
+    const hasLinear = localTriggers.some((t) => t.platform === "linear")
+    const githubCommentTriggers = ["pr_opened", "pr_closed", "pr_merged", "pr_commits_pushed", "issue_opened", "issue_closed", "issue_comment_created"]
+    const hasGithubCommentable = localTriggers.some(
+      (t) => t.platform === "github" && githubCommentTriggers.includes(t.trigger_type)
+    )
+    const hasGithubNonCommentable = localTriggers.some(
+      (t) => t.platform === "github" && !githubCommentTriggers.includes(t.trigger_type)
+    )
+
+    if (hasGithubCommentable && hasLinear) return "Post comments on GitHub issues/PRs and Linear issues"
+    if (hasGithubCommentable) return "Post comments on GitHub issues/PRs"
+    if (hasLinear) return "Post comments on Linear issues"
+    if (hasGithubNonCommentable) return "No commentable triggers configured (push, branch, workflow triggers don't support comments)"
+    return "Post comments on the source issue/PR with progress and results"
+  }, [localTriggers])
 
   // ============================================================================
   // Render
@@ -612,6 +634,15 @@ export function AutomationsDetailView() {
                       <span className="text-xs text-muted-foreground">Show results in your inbox for review</span>
                     </div>
                     <Switch checked={addToInbox} onCheckedChange={setAddToInbox} />
+                  </div>
+
+                  {/* Respond to trigger toggle */}
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm text-foreground">Post comments</span>
+                      <span className="text-xs text-muted-foreground">{commentTargetDescription}</span>
+                    </div>
+                    <Switch checked={respondToTrigger} onCheckedChange={setRespondToTrigger} />
                   </div>
                 </div>
               </div>

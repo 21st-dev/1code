@@ -38,7 +38,7 @@ const THEME_TO_SHIKI_MAP: Record<string, BundledTheme> = {
 /**
  * Get the Shiki bundled theme for a given theme ID
  */
-function getShikiTheme(themeId: string, isDark: boolean): BundledTheme {
+export function getShikiTheme(themeId: string, isDark: boolean): BundledTheme {
   if (themeId in THEME_TO_SHIKI_MAP) {
     return THEME_TO_SHIKI_MAP[themeId]
   }

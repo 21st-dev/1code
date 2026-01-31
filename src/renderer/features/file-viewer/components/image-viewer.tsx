@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { fileViewerDisplayModeAtom } from "../../agents/atoms"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
-import { getFileName, formatFileSize } from "../utils/file-utils"
+import { getFileName } from "../utils/file-utils"
 
 const FILE_VIEWER_MODES = [
   { value: "side-peek" as const, label: "Sidebar", Icon: IconSidePeek },
@@ -116,7 +116,7 @@ export function ImageViewer({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1 ml-1">
             {(() => {
               const Icon = getFileIconByExtension(filePath)
               return Icon ? <Icon className="h-3.5 w-3.5 flex-shrink-0" /> : null
@@ -124,11 +124,6 @@ export function ImageViewer({
             <span className="text-sm font-medium truncate" title={filePath}>
               {fileName}
             </span>
-            {data?.ok && (
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                {formatFileSize(data.byteLength)}
-              </span>
-            )}
           </div>
         </div>
         {/* Right side: Actions */}

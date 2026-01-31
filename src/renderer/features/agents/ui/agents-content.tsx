@@ -272,8 +272,7 @@ export function AgentsContent() {
     }
   }, [isMobile, mobileViewMode, terminalSidebarOpen, setMobileViewMode])
 
-  // On mobile: hide native traffic lights when not in "chats" mode
-  // Traffic lights should only show in the agents list view
+  // On mobile: show/hide native traffic lights based on view mode
   useEffect(() => {
     if (!isMobile) return
     if (
@@ -282,10 +281,7 @@ export function AgentsContent() {
     )
       return
 
-    // Hide traffic lights when not in chats list mode
-    if (mobileViewMode !== "chats") {
-      window.desktopApi.setTrafficLightVisibility(false)
-    }
+    window.desktopApi.setTrafficLightVisibility(mobileViewMode === "chats")
   }, [isMobile, mobileViewMode])
 
   // Get recent chats for quick-switch dialog

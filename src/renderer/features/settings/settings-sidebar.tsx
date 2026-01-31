@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronLeft } from "lucide-react"
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
   EyeOpenFilledIcon,
   ProfileIconFilled,
@@ -10,7 +10,6 @@ import {
   agentsSettingsDialogActiveTabAtom,
   devToolsUnlockedAtom,
   isDesktopAtom,
-  isFullscreenAtom,
   type SettingsTab,
 } from "../../lib/atoms"
 import { cn } from "../../lib/utils"
@@ -22,13 +21,10 @@ import {
   FolderFilledIcon,
   KeyboardFilledIcon,
   OriginalMCPIcon,
+  PluginFilledIcon,
   SkillIconFilled,
 } from "../../components/ui/icons"
 import { desktopViewAtom } from "../agents/atoms"
-import {
-  TrafficLightSpacer,
-  TrafficLights,
-} from "../agents/components/traffic-light-spacer"
 
 // Check if we're in development mode
 const isDevelopment = import.meta.env.DEV
@@ -92,6 +88,11 @@ const ADVANCED_TABS_BASE = [
     label: "MCP Servers",
     icon: OriginalMCPIcon,
   },
+  {
+    id: "plugins" as SettingsTab,
+    label: "Plugins",
+    icon: PluginFilledIcon,
+  },
 ]
 
 // Debug tab definition
@@ -142,7 +143,13 @@ export function SettingsSidebar() {
   const [devToolsUnlocked, setDevToolsUnlocked] = useAtom(devToolsUnlockedAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const isDesktop = useAtomValue(isDesktopAtom)
-  const isFullscreen = useAtomValue(isFullscreenAtom)
+
+  // Hide native traffic lights when settings sidebar is shown
+  useEffect(() => {
+    if (!isDesktop) return
+    if (typeof window === "undefined" || !window.desktopApi?.setTrafficLightVisibility) return
+    window.desktopApi.setTrafficLightVisibility(false)
+  }, [isDesktop])
 
   // Beta tab click counter for unlocking devtools
   const betaClickCountRef = useRef(0)
@@ -181,34 +188,8 @@ export function SettingsSidebar() {
 
   return (
     <div className="flex flex-col h-full bg-tl-background" data-sidebar-content>
-      {/* Top area: drag region + traffic lights spacer (matches AgentsSidebar) */}
-      <div className="relative flex-shrink-0">
-        {/* Draggable area for window movement (hidden in fullscreen) */}
-        {isDesktop && !isFullscreen && (
-          <div
-            className="absolute inset-x-0 top-0 h-[32px] z-0"
-            style={{
-              // @ts-expect-error - WebKit-specific property
-              WebkitAppRegion: "drag",
-            }}
-            data-sidebar-content
-          />
-        )}
-
-        {/* Custom traffic lights */}
-        <TrafficLights
-          isHovered={true}
-          isFullscreen={isFullscreen}
-          isDesktop={isDesktop}
-          className="absolute left-4 top-[14px] z-20"
-        />
-
-        {/* Spacer for macOS traffic lights */}
-        <TrafficLightSpacer isFullscreen={isFullscreen} isDesktop={isDesktop} />
-      </div>
-
       {/* Back button */}
-      <div className="px-2 pt-1 pb-2">
+      <div className="px-2 pt-3 pb-2">
         <button
           onClick={handleBack}
           className="inline-flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm h-7 rounded-md text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"

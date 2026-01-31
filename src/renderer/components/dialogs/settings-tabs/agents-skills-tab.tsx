@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue } from "jotai"
 import { selectedProjectAtom, settingsSkillsSidebarWidthAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -305,6 +306,17 @@ export function AgentsSkillsTab() {
   const userSkills = filteredSkills.filter((s) => s.source === "user")
   const projectSkills = filteredSkills.filter((s) => s.source === "project")
 
+  const allSkillNames = useMemo(
+    () => [...userSkills, ...projectSkills].map((s) => s.name),
+    [userSkills, projectSkills]
+  )
+
+  const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
+    items: allSkillNames,
+    selectedItem: selectedSkillName,
+    onSelect: setSelectedSkillName,
+  })
+
   const selectedSkill = skills.find((s) => s.name === selectedSkillName) || null
 
   // Auto-select first skill when data loads
@@ -356,6 +368,7 @@ export function AgentsSkillsTab() {
               placeholder="Search skills..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={listKeyDown}
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
             <button
@@ -367,13 +380,13 @@ export function AgentsSkillsTab() {
             </button>
           </div>
           {/* Skill list */}
-          <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2">
+          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">Loading...</p>
               </div>
             ) : skills.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <SkillIcon className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">No skills</p>
                 <Button
@@ -404,15 +417,16 @@ export function AgentsSkillsTab() {
                         return (
                           <button
                             key={skill.name}
+                            data-item-id={skill.name}
                             onClick={() => setSelectedSkillName(skill.name)}
                             className={cn(
-                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer",
+                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
                                 ? "bg-foreground/5 text-foreground"
                                 : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                             )}
                           >
-                            <div className={cn("text-sm truncate", isSelected && "font-medium")}>
+                            <div className="text-sm truncate">
                               {skill.name}
                             </div>
                             {skill.description && (
@@ -439,15 +453,16 @@ export function AgentsSkillsTab() {
                         return (
                           <button
                             key={skill.name}
+                            data-item-id={skill.name}
                             onClick={() => setSelectedSkillName(skill.name)}
                             className={cn(
-                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer",
+                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
                                 ? "bg-foreground/5 text-foreground"
                                 : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                             )}
                           >
-                            <div className={cn("text-sm truncate", isSelected && "font-medium")}>
+                            <div className="text-sm truncate">
                               {skill.name}
                             </div>
                             {skill.description && (

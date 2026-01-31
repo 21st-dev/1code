@@ -16,7 +16,7 @@ export { PreviewUrlInput } from "./preview-url-input"
 
 // Diff components
 export { AgentDiffView, diffViewModeAtom } from "./agent-diff-view"
-export type { DiffStats, AgentDiffViewRef } from "./agent-diff-view"
+export type { DiffStats, AgentDiffViewRef, DiffViewMode } from "./agent-diff-view"
 
 // Exploring group component
 export { AgentExploringGroup } from "./agent-exploring-group"

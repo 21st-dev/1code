@@ -4,12 +4,15 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getEnabledPlugins } from "./claude-settings"
 
-interface FileCommand {
+export interface FileCommand {
   name: string
   description: string
   argumentHint?: string
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
+  pluginName?: string
   path: string
 }
 
@@ -19,6 +22,7 @@ interface FileCommand {
 function parseCommandMd(content: string): {
   description?: string
   argumentHint?: string
+  name?: string
 } {
   try {
     const { data } = matter(content)
@@ -29,6 +33,7 @@ function parseCommandMd(content: string): {
         typeof data["argument-hint"] === "string"
           ? data["argument-hint"]
           : undefined,
+      name: typeof data.name === "string" ? data.name : undefined,
     }
   } catch (err) {
     console.error("[commands] Failed to parse frontmatter:", err)
@@ -49,7 +54,7 @@ function isValidEntryName(name: string): boolean {
  */
 async function scanCommandsDirectory(
   dir: string,
-  source: "user" | "project",
+  source: "user" | "project" | "plugin",
   prefix = "",
 ): Promise<FileCommand[]> {
   const commands: FileCommand[] = []
@@ -82,11 +87,12 @@ async function scanCommandsDirectory(
         commands.push(...nestedCommands)
       } else if (entry.isFile() && entry.name.endsWith(".md")) {
         const baseName = entry.name.replace(/\.md$/, "")
-        const commandName = prefix ? `${prefix}:${baseName}` : baseName
+        const fallbackName = prefix ? `${prefix}:${baseName}` : baseName
 
         try {
           const content = await fs.readFile(fullPath, "utf-8")
           const parsed = parseCommandMd(content)
+          const commandName = parsed.name || fallbackName
 
           commands.push({
             name: commandName,
@@ -138,14 +144,35 @@ export const commandsRouter = router({
         )
       }
 
-      // Scan both directories in parallel
-      const [userCommands, projectCommands] = await Promise.all([
-        userCommandsPromise,
-        projectCommandsPromise,
+      // Discover plugin commands
+      const [enabledPluginSources, installedPlugins] = await Promise.all([
+        getEnabledPlugins(),
+        discoverInstalledPlugins(),
       ])
+      const enabledPlugins = installedPlugins.filter(
+        (p) => enabledPluginSources.includes(p.source),
+      )
+      const pluginCommandsPromises = enabledPlugins.map(async (plugin) => {
+        const paths = getPluginComponentPaths(plugin)
+        try {
+          const commands = await scanCommandsDirectory(paths.commands, "plugin")
+          return commands.map((cmd) => ({ ...cmd, pluginName: plugin.source }))
+        } catch {
+          return []
+        }
+      })
 
-      // Project commands first (more specific), then user commands
-      return [...projectCommands, ...userCommands]
+      // Scan all directories in parallel
+      const [userCommands, projectCommands, ...pluginCommandsArrays] =
+        await Promise.all([
+          userCommandsPromise,
+          projectCommandsPromise,
+          ...pluginCommandsPromises,
+        ])
+      const pluginCommands = pluginCommandsArrays.flat()
+
+      // Project commands first (more specific), then user commands, then plugin commands
+      return [...projectCommands, ...userCommands, ...pluginCommands]
     }),
 
   /**

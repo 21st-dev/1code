@@ -42,7 +42,7 @@ const FILE_VIEWER_MODES = [
   { value: "full-page" as const, label: "Fullscreen", Icon: IconFullPage },
 ]
 import { defaultEditorOptions, getMonacoTheme } from "./monaco-config"
-import { getFileName, formatFileSize } from "../utils/file-utils"
+import { getFileName } from "../utils/file-utils"
 
 interface MarkdownViewerProps {
   filePath: string
@@ -125,7 +125,6 @@ export function MarkdownViewer({
         <Header
           fileName={fileName}
           filePath={filePath}
-          byteLength={null}
           showPreview={showPreview}
           onToggleView={handleToggleView}
           onClose={onClose}
@@ -155,7 +154,6 @@ export function MarkdownViewer({
         <Header
           fileName={fileName}
           filePath={filePath}
-          byteLength={null}
           showPreview={showPreview}
           onToggleView={handleToggleView}
           onClose={onClose}
@@ -171,14 +169,12 @@ export function MarkdownViewer({
   }
 
   const content = data?.ok ? data.content : ""
-  const byteLength = data?.ok ? data.byteLength : null
 
   return (
     <div className="flex flex-col h-full bg-background">
       <Header
         fileName={fileName}
         filePath={filePath}
-        byteLength={byteLength}
         showPreview={showPreview}
         onToggleView={handleToggleView}
         onClose={onClose}
@@ -217,7 +213,6 @@ export function MarkdownViewer({
 function Header({
   fileName,
   filePath,
-  byteLength,
   showPreview,
   onToggleView,
   onClose,
@@ -225,7 +220,6 @@ function Header({
 }: {
   fileName: string
   filePath: string
-  byteLength: number | null
   showPreview: boolean
   onToggleView: () => void
   onClose: () => void
@@ -291,14 +285,9 @@ function Header({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-0 flex-1 ml-1">
           {Icon && <Icon className="h-3.5 w-3.5 flex-shrink-0" />}
           <span className="text-sm font-medium truncate">{fileName}</span>
-          {byteLength !== null && (
-            <span className="text-xs text-muted-foreground flex-shrink-0">
-              {formatFileSize(byteLength)}
-            </span>
-          )}
         </div>
       </div>
       {/* Right side: Actions */}

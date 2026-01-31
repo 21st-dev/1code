@@ -5,14 +5,22 @@ import { Button } from "../../ui/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtomValue } from "jotai"
 import { toast } from "sonner"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { OriginalMCPIcon } from "../../ui/icons"
+import { LoadingDot, OriginalMCPIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { selectedProjectAtom, settingsMcpSidebarWidthAtom } from "../../../features/agents/atoms"
+import {
+  AddMcpServerDialog,
+  EditMcpServerDialog,
+  getStatusText,
+  type McpServer,
+  type ScopeType,
+} from "./mcp"
 
 // Status indicator dot - exported for reuse in other components
 export function McpStatusDot({ status }: { status: string }) {
@@ -24,41 +32,12 @@ export function McpStatusDot({ status }: { status: string }) {
     case "needs-auth":
       return <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
     case "pending":
-      return <Loader2 className="w-3 h-3 text-muted-foreground animate-spin shrink-0" />
+      return <LoadingDot isLoading={true} className="w-3 h-3 text-muted-foreground shrink-0" />
     default:
       return <span className="w-2 h-2 rounded-full bg-muted-foreground/50 shrink-0" />
   }
 }
 
-function getStatusText(status: string): string {
-  switch (status) {
-    case "connected":
-      return "Connected"
-    case "failed":
-      return "Failed"
-    case "needs-auth":
-      return "Needs auth"
-    case "pending":
-      return "Connecting..."
-    default:
-      return status
-  }
-}
-
-interface McpToolInfo {
-  name: string
-  description?: string
-}
-
-interface McpServer {
-  name: string
-  status: string
-  tools: (McpToolInfo | string)[]
-  needsAuth: boolean
-  config: Record<string, unknown>
-  serverInfo?: { name: string; version: string }
-  error?: string
-}
 
 // Extract connection info from server config
 function getConnectionInfo(config: Record<string, unknown>) {
@@ -188,14 +167,14 @@ function McpServerDetail({ server, onAuth }: { server: McpServer; onAuth?: () =>
 function CreateMcpServerForm({
   onCreated,
   onCancel,
-  isSaving,
   hasProject,
 }: {
-  onCreated: (data: { name: string; type: "stdio" | "http"; command?: string; args?: string[]; url?: string; scope: "global" | "project" }) => void
+  onCreated: () => void
   onCancel: () => void
-  isSaving: boolean
   hasProject: boolean
 }) {
+  const addServerMutation = trpc.claude.addMcpServer.useMutation()
+  const isSaving = addServerMutation.isPending
   const [name, setName] = useState("")
   const [type, setType] = useState<"stdio" | "http">("stdio")
   const [command, setCommand] = useState("")
@@ -208,16 +187,23 @@ function CreateMcpServerForm({
     (type === "http" && url.trim().length > 0)
   )
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const parsedArgs = args.trim() ? args.split(/\s+/) : undefined
-    onCreated({
-      name: name.trim(),
-      type,
-      command: type === "stdio" ? command.trim() : undefined,
-      args: type === "stdio" ? parsedArgs : undefined,
-      url: type === "http" ? url.trim() : undefined,
-      scope,
-    })
+    try {
+      await addServerMutation.mutateAsync({
+        name: name.trim(),
+        transport: type,
+        command: type === "stdio" ? command.trim() : undefined,
+        args: type === "stdio" ? parsedArgs : undefined,
+        url: type === "http" ? url.trim() : undefined,
+        scope,
+      })
+      toast.success("Server added", { description: name.trim() })
+      onCreated()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add server"
+      toast.error("Failed to add", { description: message })
+    }
   }
 
   return (
@@ -317,6 +303,16 @@ export function AgentsMcpTab() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const selectedProject = useAtomValue(selectedProjectAtom)
 
+  // Dialog state for Add/Edit MCP server dialogs
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [editingServer, setEditingServer] = useState<{
+    server: McpServer
+    scope: ScopeType
+    projectPath: string | null
+  } | null>(null)
+
+  const updateMutation = trpc.claude.updateMcpServer.useMutation()
+
   // Focus search on "/" hotkey
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -381,6 +377,18 @@ export function AgentsMcpTab() {
       .filter((g) => g.mcpServers.length > 0)
   }, [sortedGroups, searchQuery])
 
+  // Flat list of all server keys for keyboard navigation
+  const allServerKeys = useMemo(
+    () => filteredGroups.flatMap((g) => g.mcpServers.map((s) => `${g.groupName}-${s.name}`)),
+    [filteredGroups]
+  )
+
+  const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
+    items: allServerKeys,
+    selectedItem: selectedServerKey,
+    onSelect: setSelectedServerKey,
+  })
+
   // Auto-select first server when data loads (sorted, so connected first)
   useEffect(() => {
     if (selectedServerKey || isLoadingConfig) return
@@ -421,24 +429,6 @@ export function AgentsMcpTab() {
     }
   }, [refetch])
 
-  const addServerMutation = trpc.claude.addMcpServer.useMutation()
-
-  const handleCreateServer = useCallback(async (data: {
-    name: string; type: "stdio" | "http"; command?: string; args?: string[]; url?: string; scope: "global" | "project"
-  }) => {
-    try {
-      await addServerMutation.mutateAsync({
-        ...data,
-        cwd: data.scope === "project" ? selectedProject?.path : undefined,
-      })
-      toast.success("Server added", { description: data.name })
-      setShowAddForm(false)
-      await handleRefresh(true)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to add server"
-      toast.error("Failed to add", { description: message })
-    }
-  }, [addServerMutation, selectedProject?.path, handleRefresh])
 
   const handleAuth = async (serverName: string, projectPath: string | null) => {
     try {
@@ -448,12 +438,41 @@ export function AgentsMcpTab() {
       })
       if (result.success) {
         toast.success(`${serverName} authenticated, refreshing...`)
-        await handleRefresh(false)
+        // Plugin servers get promoted to Global after OAuth — update selection
+        setSelectedServerKey(`Global-${serverName}`)
+        await handleRefresh(true)
       } else {
         toast.error(result.error || "Authentication failed")
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Authentication failed"
+      toast.error(message)
+    }
+  }
+
+  const getScopeFromGroup = (groupName: string): ScopeType => {
+    if (groupName.toLowerCase().includes("global") || groupName.toLowerCase().includes("user")) {
+      return "global"
+    }
+    return "project"
+  }
+
+  const isEditableGroup = (groupName: string): boolean => {
+    // Plugin-managed servers are not directly editable
+    return !groupName.toLowerCase().includes("plugin")
+  }
+
+  const handleToggleEnabled = async (server: McpServer, group: { groupName: string; projectPath: string | null }, enabled: boolean) => {
+    try {
+      await updateMutation.mutateAsync({
+        name: server.name,
+        scope: getScopeFromGroup(group.groupName),
+        projectPath: group.projectPath ?? undefined,
+        disabled: !enabled,
+      })
+      await handleRefresh(true)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to toggle server"
       toast.error(message)
     }
   }
@@ -481,6 +500,7 @@ export function AgentsMcpTab() {
               placeholder="Search servers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={listKeyDown}
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
             <button
@@ -492,13 +512,13 @@ export function AgentsMcpTab() {
             </button>
           </div>
           {/* Server list */}
-          <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2">
+          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoadingConfig ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
               </div>
             ) : totalServers === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <OriginalMCPIcon className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">No servers</p>
                 <Button
@@ -516,42 +536,53 @@ export function AgentsMcpTab() {
                 <p className="text-xs text-muted-foreground">No results found</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-0.5">
                 {filteredGroups.map((group) => (
-                  <div key={group.groupName}>
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      {group.groupName}
-                    </p>
-                    <div className="space-y-0.5">
-                      {group.mcpServers.map((server) => {
-                        const key = `${group.groupName}-${server.name}`
-                        const isSelected = selectedServerKey === key
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => setSelectedServerKey(key)}
-                            className={cn(
-                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer",
-                              isSelected
-                                ? "bg-foreground/5 text-foreground"
-                                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <McpStatusDot status={server.status} />
-                              <span className={cn("text-sm truncate flex-1", isSelected && "font-medium")}>
-                                {server.name}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground shrink-0">
-                                {server.status === "connected"
-                                  ? `${server.tools.length}`
-                                  : getStatusText(server.status)}
-                              </span>
+                  <div key={group.groupName} className="space-y-0.5">
+                    {group.mcpServers.map((server) => {
+                      const key = `${group.groupName}-${server.name}`
+                      const isSelected = selectedServerKey === key
+                      return (
+                        <button
+                          key={key}
+                          data-item-id={key}
+                          onClick={() => setSelectedServerKey(key)}
+                          className={cn(
+                            "w-full text-left py-1.5 pl-2 pr-2 rounded-md cursor-pointer group relative",
+                            "transition-colors duration-75",
+                            "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                            isSelected
+                              ? "bg-foreground/5 text-foreground"
+                              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                          )}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1">
+                                <span className="truncate block text-sm leading-tight flex-1">
+                                  {server.name}
+                                </span>
+                                <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center">
+                                  <McpStatusDot status={server.status} />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 min-w-0">
+                                <span className="truncate flex-1 min-w-0">
+                                  {group.groupName}
+                                </span>
+                                {server.status !== "pending" && (
+                                  <span className="flex-shrink-0">
+                                    {server.status === "connected"
+                                      ? `${server.tools.length} tool${server.tools.length !== 1 ? "s" : ""}`
+                                      : getStatusText(server.status)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </button>
-                        )
-                      })}
-                    </div>
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 ))}
               </div>
@@ -565,9 +596,8 @@ export function AgentsMcpTab() {
       <div className="flex-1 min-w-0 h-full overflow-hidden">
         {showAddForm ? (
           <CreateMcpServerForm
-            onCreated={handleCreateServer}
+            onCreated={() => { setShowAddForm(false); handleRefresh(true) }}
             onCancel={() => setShowAddForm(false)}
-            isSaving={addServerMutation.isPending}
             hasProject={!!selectedProject?.path}
           />
         ) : selectedServer ? (
@@ -601,6 +631,21 @@ export function AgentsMcpTab() {
           </div>
         )}
       </div>
+
+      <AddMcpServerDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        onServerAdded={() => handleRefresh(true)}
+      />
+      <EditMcpServerDialog
+        open={!!editingServer}
+        onOpenChange={(open) => { if (!open) setEditingServer(null) }}
+        server={editingServer?.server || null}
+        scope={editingServer?.scope || "global"}
+        projectPath={editingServer?.projectPath ?? undefined}
+        onServerUpdated={() => handleRefresh(true)}
+        onServerDeleted={() => handleRefresh(true)}
+      />
     </div>
   )
 }

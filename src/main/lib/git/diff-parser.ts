@@ -175,6 +175,16 @@ export function splitUnifiedDiffByFile(diffText: string): ParsedDiffFile[] {
     let deletions = 0
 
     for (const line of blockLines) {
+      if (line.startsWith("diff --git ")) {
+        // Fallback: parse paths from "diff --git a/path b/path"
+        // Needed for binary files that don't have ---/+++ lines
+        const match = line.match(/^diff --git a\/(.+) b\/(.+)$/)
+        if (match) {
+          if (!oldPath) oldPath = match[1]!
+          if (!newPath) newPath = match[2]!
+        }
+      }
+
       if (line.startsWith("Binary files ") && line.endsWith(" differ")) {
         isBinary = true
       }

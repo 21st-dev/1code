@@ -133,7 +133,7 @@ export function AgentsLayout() {
     setSelectedProject,
   ])
 
-  // Hide native traffic lights when sidebar is closed (no traffic lights needed when sidebar is closed)
+  // Show/hide native traffic lights based on sidebar state
   useEffect(() => {
     if (!isDesktop) return
     if (
@@ -142,12 +142,9 @@ export function AgentsLayout() {
     )
       return
 
-    // When sidebar is closed, hide native traffic lights
-    // When sidebar is open, TrafficLights component handles visibility
-    if (!sidebarOpen) {
-      window.desktopApi.setTrafficLightVisibility(false)
-    }
+    window.desktopApi.setTrafficLightVisibility(sidebarOpen)
   }, [sidebarOpen, isDesktop])
+
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
 
   // Desktop user state

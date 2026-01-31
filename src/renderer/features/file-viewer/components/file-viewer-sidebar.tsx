@@ -168,10 +168,12 @@ function UnsupportedViewer({
             mode={displayMode}
             onModeChange={setDisplayMode}
           />
-          <FileIcon filePath={filePath} />
-          <span className="text-sm font-medium truncate" title={filePath}>
-            {fileName}
-          </span>
+          <div className="flex items-center gap-2 min-w-0 flex-1 ml-1">
+            <FileIcon filePath={filePath} />
+            <span className="text-sm font-medium truncate" title={filePath}>
+              {fileName}
+            </span>
+          </div>
         </div>
       </div>
       <div className="flex-1 flex items-center justify-center p-4">
@@ -231,7 +233,7 @@ function CodeViewerHeader({
           mode={displayMode}
           onModeChange={setDisplayMode}
         />
-        <div className="flex items-center gap-2 min-w-0 flex-1 ml-1.5">
+        <div className="flex items-center gap-2 min-w-0 flex-1 ml-1">
           <FileIcon filePath={filePath} />
           <span className="text-sm font-medium truncate" title={filePath}>
             {fileName}

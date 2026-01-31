@@ -16,6 +16,7 @@ import { AgentsPreferencesTab } from "../../components/dialogs/settings-tabs/age
 import { AgentsProfileTab } from "../../components/dialogs/settings-tabs/agents-profile-tab"
 import { AgentsProjectsTab } from "../../components/dialogs/settings-tabs/agents-project-worktree-tab"
 import { AgentsSkillsTab } from "../../components/dialogs/settings-tabs/agents-skills-tab"
+import { AgentsPluginsTab } from "../../components/dialogs/settings-tabs/agents-plugins-tab"
 
 // Check if we're in development mode
 const isDevelopment = import.meta.env.DEV
@@ -56,6 +57,8 @@ export function SettingsContent() {
         return <AgentsCustomAgentsTab />
       case "mcp":
         return <AgentsMcpTab />
+      case "plugins":
+        return <AgentsPluginsTab />
       case "projects":
         return <AgentsProjectsTab />
       case "beta":
@@ -68,7 +71,7 @@ export function SettingsContent() {
   }
 
   // Two-panel tabs need full width and height, no scroll wrapper
-  const isTwoPanelTab = activeTab === "mcp" || activeTab === "skills" || activeTab === "agents" || activeTab === "projects" || activeTab === "keyboard"
+  const isTwoPanelTab = activeTab === "mcp" || activeTab === "skills" || activeTab === "agents" || activeTab === "projects" || activeTab === "keyboard" || activeTab === "plugins"
 
   if (isTwoPanelTab) {
     return (
@@ -79,8 +82,8 @@ export function SettingsContent() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-tl-background overflow-y-auto">
-      <div className="max-w-2xl mx-auto w-full">
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-2xl mx-auto">
         {renderTabContent()}
       </div>
     </div>

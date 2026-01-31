@@ -5823,3 +5823,22 @@ export function CloudIcon(props: IconProps) {
     </svg>
   )
 }
+
+// Plugin icon filled - puzzle piece for Plugins tab
+export function PluginFilledIcon(props: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      width="24"
+      height="24"
+      {...props}
+    >
+      <path
+        d="M10 3C10 2.44772 9.55228 2 9 2C8.44772 2 8 2.44772 8 3V6H7C5.34315 6 4 7.34315 4 9V14C4 16.7614 6.23858 19 9 19H11V21C11 21.5523 11.4477 22 12 22C12.5523 22 13 21.5523 13 21V19H15C17.7614 19 20 16.7614 20 14V9C20 7.34315 18.6569 6 17 6H16V3C16 2.44772 15.5523 2 15 2C14.4477 2 14 2.44772 14 3V6H10V3Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}

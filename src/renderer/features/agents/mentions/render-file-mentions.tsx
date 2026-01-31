@@ -99,7 +99,7 @@ interface ParsedMention {
 
 /**
  * Parse file/folder/skill/agent/tool/quote/diff/pasted mention ID into its components
- * Format: file:owner/repo:path/to/file.tsx or folder:owner/repo:path/to/folder or skill:skill-name or agent:agent-name or tool:mcp__server__toolname
+ * Format: file:owner/repo:path/to/file.tsx or folder:owner/repo:path/to/folder or skill:skill-name or agent:agent-name or tool:servername
  * Quote format: quote:preview_text:full_text (base64 encoded full text)
  * Diff format: diff:filepath:lineNumber:preview_text:full_text (base64 encoded full text)
  * Pasted format: pasted:filepath:size:preview_text
@@ -233,19 +233,27 @@ function parseMention(id: string): ParsedMention | null {
     }
   }
 
-  // Handle tool mentions (format: tool:mcp__servername__toolname)
+  // Handle tool mentions: tool:servername (MCP server) or tool:mcp__server__toolname (individual tool)
   if (isTool) {
     const toolPath = id.slice(MENTION_PREFIXES.TOOL.length)
-    // Extract readable name from tool path (e.g., mcp__figma__get_design -> Get design)
-    const parts = toolPath.split("__")
-    const toolName = parts.length >= 3 ? parts.slice(2).join("__") : toolPath
-    const displayName = toolName
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-      .trim()
+    if (toolPath.startsWith("mcp__")) {
+      const parts = toolPath.split("__")
+      const toolName = parts.length >= 3 ? parts.slice(2).join("__") : toolPath
+      const displayName = toolName
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim()
+      return {
+        id,
+        label: displayName,
+        path: toolPath,
+        repository: "",
+        type: "tool",
+      }
+    }
     return {
       id,
-      label: displayName,
+      label: toolPath,
       path: toolPath,
       repository: "",
       type: "tool",

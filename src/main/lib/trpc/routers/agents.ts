@@ -10,6 +10,8 @@ import {
   VALID_AGENT_MODELS,
   type FileAgent,
 } from "./agent-utils"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getEnabledPlugins } from "./claude-settings"
 
 // Shared procedure for listing agents
 const listAgentsProcedure = publicProcedure
@@ -30,12 +32,34 @@ const listAgentsProcedure = publicProcedure
       projectAgentsPromise = scanAgentsDirectory(projectAgentsDir, "project", input.cwd)
     }
 
-    const [userAgents, projectAgents] = await Promise.all([
-      userAgentsPromise,
-      projectAgentsPromise,
+    // Discover plugin agents
+    const [enabledPluginSources, installedPlugins] = await Promise.all([
+      getEnabledPlugins(),
+      discoverInstalledPlugins(),
     ])
+    const enabledPlugins = installedPlugins.filter(
+      (p) => enabledPluginSources.includes(p.source),
+    )
+    const pluginAgentsPromises = enabledPlugins.map(async (plugin) => {
+      const paths = getPluginComponentPaths(plugin)
+      try {
+        const agents = await scanAgentsDirectory(paths.agents, "plugin")
+        return agents.map((agent) => ({ ...agent, pluginName: plugin.source }))
+      } catch {
+        return []
+      }
+    })
 
-    return [...projectAgents, ...userAgents]
+    // Scan all directories in parallel
+    const [userAgents, projectAgents, ...pluginAgentsArrays] =
+      await Promise.all([
+        userAgentsPromise,
+        projectAgentsPromise,
+        ...pluginAgentsPromises,
+      ])
+    const pluginAgents = pluginAgentsArrays.flat()
+
+    return [...projectAgents, ...userAgents, ...pluginAgents]
   })
 
 export const agentsRouter = router({
@@ -80,6 +104,31 @@ export const agentsRouter = router({
           return {
             ...parsed,
             source,
+            path: agentPath,
+          }
+        } catch {
+          continue
+        }
+      }
+
+      // Search in plugin directories
+      const [enabledPluginSources, installedPlugins] = await Promise.all([
+        getEnabledPlugins(),
+        discoverInstalledPlugins(),
+      ])
+      const enabledPlugins = installedPlugins.filter(
+        (p) => enabledPluginSources.includes(p.source),
+      )
+      for (const plugin of enabledPlugins) {
+        const paths = getPluginComponentPaths(plugin)
+        const agentPath = path.join(paths.agents, `${input.name}.md`)
+        try {
+          const content = await fs.readFile(agentPath, "utf-8")
+          const parsed = parseAgentMd(content, `${input.name}.md`)
+          return {
+            ...parsed,
+            source: "plugin" as const,
+            pluginName: plugin.source,
             path: agentPath,
           }
         } catch {

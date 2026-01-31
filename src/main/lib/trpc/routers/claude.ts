@@ -15,7 +15,9 @@ import {
   logRawClaudeMessage,
   type UIMessageChunk,
 } from "../../claude"
-import { getProjectMcpServers, GLOBAL_MCP_PATH, readClaudeConfig, resolveProjectPathFromWorktree, updateClaudeConfigAtomic, type McpServerConfig } from "../../claude-config"
+import { getProjectMcpServers, GLOBAL_MCP_PATH, readClaudeConfig, removeMcpServerConfig, resolveProjectPathFromWorktree, updateClaudeConfigAtomic, updateMcpServerConfig, writeClaudeConfig, type McpServerConfig } from "../../claude-config"
+import { discoverPluginMcpServers } from "../../plugins"
+import { getEnabledPlugins, getApprovedPluginMcpServers } from "./claude-settings"
 import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import { ensureMcpTokensFresh, fetchMcpTools, fetchMcpToolsStdio, getMcpAuthStatus, startMcpOAuth, type McpToolInfo } from "../../mcp-auth"
@@ -24,8 +26,8 @@ import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 
 /**
- * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
- * Returns the cleaned prompt and lists of mentioned agents/skills/tools
+ * Parse @[agent:name], @[skill:name], and @[tool:servername] mentions from prompt text
+ * Returns the cleaned prompt and lists of mentioned agents/skills/MCP servers
  *
  * File mention formats:
  * - @[file:local:relative/path] - file inside project (relative path)
@@ -67,9 +69,8 @@ function parseMentions(prompt: string): {
         folderMentions.push(name)
         break
       case "tool":
-        // Validate tool name format: only alphanumeric, underscore, hyphen allowed
-        // This prevents prompt injection via malicious tool names
-        if (/^[a-zA-Z0-9_-]+$/.test(name)) {
+        // Validate: server name (alphanumeric, underscore, hyphen) or full tool id (mcp__server__tool)
+        if (/^[a-zA-Z0-9_-]+$/.test(name) || /^mcp__[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+$/.test(name)) {
           toolMentions.push(name)
         }
         break
@@ -93,11 +94,18 @@ function parseMentions(prompt: string): {
     .replace(/@\[folder:local:([^\]]+)\]/g, "$1")
     .replace(/@\[folder:external:([^\]]+)\]/g, "$1")
 
-  // Add tool usage hints if tools were mentioned
-  // Tool names are already validated to contain only safe characters
+  // Add usage hints for mentioned MCP servers or individual tools
+  // Names are already validated to contain only safe characters
   if (toolMentions.length > 0) {
     const toolHints = toolMentions
-      .map((t) => `Use the ${t} tool for this request.`)
+      .map((t) => {
+        if (t.startsWith("mcp__")) {
+          // Individual tool mention (from MCP widget): "Use the mcp__server__tool tool"
+          return `Use the ${t} tool for this request.`
+        }
+        // Server mention (from @ dropdown): "Use tools from the X MCP server"
+        return `Use tools from the ${t} MCP server for this request.`
+      })
       .join(" ")
     cleanedPrompt = `${toolHints}\n\n${cleanedPrompt}`
   }
@@ -446,6 +454,79 @@ export async function getAllMcpConfigHandler() {
       projectPath,
       mcpServers
     }))
+
+    // Plugin MCPs (from installed plugins)
+    const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
+      getEnabledPlugins(),
+      discoverPluginMcpServers(),
+      getApprovedPluginMcpServers(),
+    ])
+
+    for (const pluginConfig of pluginMcpConfigs) {
+      // Only show MCP servers from enabled plugins
+      if (!enabledPluginSources.includes(pluginConfig.pluginSource)) continue
+
+      const globalServerNames = config.mcpServers ? Object.keys(config.mcpServers) : []
+      if (Object.keys(pluginConfig.mcpServers).length > 0) {
+        const pluginMcpServers = (await Promise.all(
+          Object.entries(pluginConfig.mcpServers).map(async ([name, serverConfig]) => {
+            // Skip servers that have been promoted to ~/.claude.json (e.g., after OAuth)
+            if (globalServerNames.includes(name)) return null
+
+            const configObj = serverConfig as Record<string, unknown>
+            const identifier = `${pluginConfig.pluginSource}:${name}`
+            const isApproved = approvedServers.includes(identifier)
+
+            if (!isApproved) {
+              return { name, status: "pending-approval", tools: [] as McpToolInfo[], needsAuth: false, config: configObj, isApproved }
+            }
+
+            // Try to get status and tools for approved servers
+            let status = getServerStatusFromConfig(serverConfig)
+            const headers = serverConfig.headers as Record<string, string> | undefined
+            let tools: McpToolInfo[] = []
+            let needsAuth = false
+
+            try {
+              tools = await fetchToolsForServer(serverConfig)
+            } catch (error) {
+              console.error(`[MCP] Failed to fetch tools for plugin ${name}:`, error)
+            }
+
+            if (tools.length > 0) {
+              status = "connected"
+            } else {
+              // Same OAuth detection logic as regular MCP servers
+              if (serverConfig.url) {
+                try {
+                  const baseUrl = getMcpBaseUrl(serverConfig.url)
+                  const metadata = await fetchOAuthMetadata(baseUrl)
+                  needsAuth = !!metadata && !!metadata.authorization_endpoint
+                } catch {
+                  // If probe fails, assume no auth needed
+                }
+              } else if (serverConfig.authType === "oauth" || serverConfig.authType === "bearer") {
+                needsAuth = true
+              }
+
+              if (needsAuth && !headers?.Authorization) {
+                status = "needs-auth"
+              } else {
+                status = "failed"
+              }
+            }
+
+            return { name, status, tools, needsAuth, config: configObj, isApproved }
+          })
+        )).filter((s): s is NonNullable<typeof s> => s !== null)
+
+        groups.push({
+          groupName: `Plugin: ${pluginConfig.pluginSource}`,
+          projectPath: null,
+          mcpServers: pluginMcpServers,
+        })
+      }
+    }
 
     return { groups }
   } catch (error) {
@@ -904,7 +985,30 @@ export const claudeRouter = router({
                   // getProjectMcpServers resolves worktree paths internally
                   const globalServers = claudeConfig.mcpServers || {}
                   const projectServers = getProjectMcpServers(claudeConfig, lookupPath) || {}
-                  const allServers = { ...globalServers, ...projectServers }
+
+                  // Load plugin MCP servers (filtered by enabled plugins and approval)
+                  const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
+                    getEnabledPlugins(),
+                    discoverPluginMcpServers(),
+                    getApprovedPluginMcpServers(),
+                  ])
+
+                  const pluginServers: Record<string, McpServerConfig> = {}
+                  for (const config of pluginMcpConfigs) {
+                    if (enabledPluginSources.includes(config.pluginSource)) {
+                      for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
+                        if (!globalServers[name] && !projectServers[name]) {
+                          const identifier = `${config.pluginSource}:${name}`
+                          if (approvedServers.includes(identifier)) {
+                            pluginServers[name] = serverConfig
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  // Priority: project > global > plugin
+                  const allServers = { ...pluginServers, ...globalServers, ...projectServers }
 
                   // Filter to only working MCPs using scoped cache keys
                   if (workingMcpServers.size > 0) {
@@ -914,7 +1018,10 @@ export const claudeRouter = router({
                     for (const [name, config] of Object.entries(allServers)) {
                       // Use resolved project scope if server is from project, otherwise global
                       const scope = name in projectServers ? resolvedProjectPath : null
-                      if (workingMcpServers.get(mcpCacheKey(scope, name)) === true) {
+                      const cacheKey = mcpCacheKey(scope, name)
+                      // Include server if it's marked working, or if it's not in cache at all
+                      // (plugin servers won't be in the cache yet)
+                      if (workingMcpServers.get(cacheKey) === true || !workingMcpServers.has(cacheKey)) {
                         filtered[name] = config
                       }
                     }
@@ -2018,14 +2125,33 @@ ${prompt}
     .query(async ({ input }) => {
       try {
         const config = await readClaudeConfig()
-        const projectMcpServers = getProjectMcpServers(config, input.projectPath)
+        const globalServers = config.mcpServers || {}
+        const projectMcpServers = getProjectMcpServers(config, input.projectPath) || {}
 
-        if (!projectMcpServers) {
-          return { mcpServers: [], projectPath: input.projectPath }
+        // Merge global + project (project overrides global)
+        const merged = { ...globalServers, ...projectMcpServers }
+
+        // Add plugin MCP servers (enabled + approved only)
+        const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
+          getEnabledPlugins(),
+          discoverPluginMcpServers(),
+          getApprovedPluginMcpServers(),
+        ])
+
+        for (const pluginConfig of pluginMcpConfigs) {
+          if (!enabledPluginSources.includes(pluginConfig.pluginSource)) continue
+          for (const [name, serverConfig] of Object.entries(pluginConfig.mcpServers)) {
+            if (!merged[name]) {
+              const identifier = `${pluginConfig.pluginSource}:${name}`
+              if (approvedServers.includes(identifier)) {
+                merged[name] = serverConfig
+              }
+            }
+          }
         }
 
         // Convert to array format - determine status from config (no caching)
-        const mcpServers = Object.entries(projectMcpServers).map(([name, serverConfig]) => {
+        const mcpServers = Object.entries(merged).map(([name, serverConfig]) => {
           const configObj = serverConfig as Record<string, unknown>
           const status = getServerStatusFromConfig(configObj)
           const hasUrl = !!configObj.url
@@ -2124,43 +2250,54 @@ ${prompt}
 
   addMcpServer: publicProcedure
     .input(z.object({
-      name: z.string(),
-      type: z.enum(["stdio", "http"]),
+      name: z.string().min(1).regex(/^[a-zA-Z0-9_-]+$/, "Name must contain only letters, numbers, underscores, and hyphens"),
+      scope: z.enum(["global", "project"]),
+      projectPath: z.string().optional(),
+      transport: z.enum(["stdio", "http"]),
       command: z.string().optional(),
       args: z.array(z.string()).optional(),
-      url: z.string().optional(),
-      scope: z.enum(["global", "project"]),
-      cwd: z.string().optional(),
+      env: z.record(z.string()).optional(),
+      url: z.string().url().optional(),
+      authType: z.enum(["none", "oauth", "bearer"]).optional(),
+      bearerToken: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const serverName = input.name.trim()
-      if (!serverName) {
-        throw new Error("Server name is required")
-      }
-      if (input.type === "stdio" && !input.command?.trim()) {
+
+      if (input.transport === "stdio" && !input.command?.trim()) {
         throw new Error("Command is required for stdio servers")
       }
-      if (input.type === "http" && !input.url?.trim()) {
+      if (input.transport === "http" && !input.url?.trim()) {
         throw new Error("URL is required for HTTP servers")
       }
-      if (input.scope === "project" && !input.cwd) {
-        throw new Error("Project path (cwd) required for project-scoped servers")
+      if (input.scope === "project" && !input.projectPath) {
+        throw new Error("Project path required for project-scoped servers")
       }
 
       const serverConfig: McpServerConfig = {}
-      if (input.type === "stdio") {
+      if (input.transport === "stdio") {
         serverConfig.command = input.command!.trim()
         if (input.args && input.args.length > 0) {
           serverConfig.args = input.args
         }
+        if (input.env && Object.keys(input.env).length > 0) {
+          serverConfig.env = input.env
+        }
       } else {
         serverConfig.url = input.url!.trim()
+        if (input.authType) {
+          serverConfig.authType = input.authType
+        }
+        if (input.bearerToken) {
+          serverConfig.headers = { Authorization: `Bearer ${input.bearerToken}` }
+        }
       }
 
-      // Check existence before atomic update to avoid throwing inside the mutex
+      // Check existence before writing
       const existingConfig = await readClaudeConfig()
-      if (input.scope === "project" && input.cwd) {
-        if (existingConfig.projects?.[input.cwd]?.mcpServers?.[serverName]) {
+      const projectPath = input.projectPath
+      if (input.scope === "project" && projectPath) {
+        if (existingConfig.projects?.[projectPath]?.mcpServers?.[serverName]) {
           throw new Error(`Server "${serverName}" already exists in this project`)
         }
       } else {
@@ -2169,19 +2306,184 @@ ${prompt}
         }
       }
 
-      await updateClaudeConfigAtomic((config) => {
-        if (input.scope === "project" && input.cwd) {
-          config.projects = config.projects || {}
-          config.projects[input.cwd] = config.projects[input.cwd] || {}
-          config.projects[input.cwd].mcpServers = config.projects[input.cwd].mcpServers || {}
-          config.projects[input.cwd].mcpServers![serverName] = serverConfig
-        } else {
-          config.mcpServers = config.mcpServers || {}
-          config.mcpServers[serverName] = serverConfig
+      const config = updateMcpServerConfig(existingConfig, input.scope === "project" ? projectPath ?? null : null, serverName, serverConfig)
+      await writeClaudeConfig(config)
+
+      return { success: true, name: serverName }
+    }),
+
+  updateMcpServer: publicProcedure
+    .input(z.object({
+      name: z.string(),
+      scope: z.enum(["global", "project"]),
+      projectPath: z.string().optional(),
+      newName: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
+      command: z.string().optional(),
+      args: z.array(z.string()).optional(),
+      env: z.record(z.string()).optional(),
+      url: z.string().url().optional(),
+      authType: z.enum(["none", "oauth", "bearer"]).optional(),
+      bearerToken: z.string().optional(),
+      disabled: z.boolean().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const config = await readClaudeConfig()
+      const projectPath = input.scope === "project" ? input.projectPath : undefined
+
+      // Check server exists
+      let servers: Record<string, McpServerConfig> | undefined
+      if (projectPath) {
+        servers = config.projects?.[projectPath]?.mcpServers
+      } else {
+        servers = config.mcpServers
+      }
+      if (!servers?.[input.name]) {
+        throw new Error(`Server "${input.name}" not found`)
+      }
+
+      const existing = servers[input.name]
+
+      // Handle rename: create new, remove old
+      if (input.newName && input.newName !== input.name) {
+        if (servers[input.newName]) {
+          throw new Error(`Server "${input.newName}" already exists`)
         }
-        return config
-      })
+        const updated = removeMcpServerConfig(config, projectPath ?? null, input.name)
+        const finalConfig = updateMcpServerConfig(updated, projectPath ?? null, input.newName, existing)
+        await writeClaudeConfig(finalConfig)
+        return { success: true, name: input.newName }
+      }
+
+      // Build update object from provided fields
+      const update: Partial<McpServerConfig> = {}
+      if (input.command !== undefined) update.command = input.command
+      if (input.args !== undefined) update.args = input.args
+      if (input.env !== undefined) update.env = input.env
+      if (input.url !== undefined) update.url = input.url
+      if (input.disabled !== undefined) update.disabled = input.disabled
+
+      // Handle bearer token
+      if (input.bearerToken) {
+        update.authType = "bearer"
+        update.headers = { Authorization: `Bearer ${input.bearerToken}` }
+      }
+
+      // Handle authType changes
+      if (input.authType) {
+        update.authType = input.authType
+        if (input.authType === "none") {
+          // Clear auth-related fields
+          update.headers = undefined
+          update._oauth = undefined
+        }
+      }
+
+      const merged = { ...existing, ...update }
+      const updatedConfig = updateMcpServerConfig(config, projectPath ?? null, input.name, merged)
+      await writeClaudeConfig(updatedConfig)
 
       return { success: true, name: input.name }
+    }),
+
+  removeMcpServer: publicProcedure
+    .input(z.object({
+      name: z.string(),
+      scope: z.enum(["global", "project"]),
+      projectPath: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const config = await readClaudeConfig()
+      const projectPath = input.scope === "project" ? input.projectPath : undefined
+
+      // Check server exists
+      let servers: Record<string, McpServerConfig> | undefined
+      if (projectPath) {
+        servers = config.projects?.[projectPath]?.mcpServers
+      } else {
+        servers = config.mcpServers
+      }
+      if (!servers?.[input.name]) {
+        throw new Error(`Server "${input.name}" not found`)
+      }
+
+      const updated = removeMcpServerConfig(config, projectPath ?? null, input.name)
+      await writeClaudeConfig(updated)
+
+      return { success: true }
+    }),
+
+  setMcpBearerToken: publicProcedure
+    .input(z.object({
+      name: z.string(),
+      scope: z.enum(["global", "project"]),
+      projectPath: z.string().optional(),
+      token: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const config = await readClaudeConfig()
+      const projectPath = input.scope === "project" ? input.projectPath : undefined
+
+      // Check server exists
+      let servers: Record<string, McpServerConfig> | undefined
+      if (projectPath) {
+        servers = config.projects?.[projectPath]?.mcpServers
+      } else {
+        servers = config.mcpServers
+      }
+      if (!servers?.[input.name]) {
+        throw new Error(`Server "${input.name}" not found`)
+      }
+
+      const existing = servers[input.name]
+      const updated: McpServerConfig = {
+        ...existing,
+        authType: "bearer",
+        headers: { Authorization: `Bearer ${input.token}` },
+      }
+
+      const updatedConfig = updateMcpServerConfig(config, projectPath ?? null, input.name, updated)
+      await writeClaudeConfig(updatedConfig)
+
+      return { success: true }
+    }),
+
+  getPendingPluginMcpApprovals: publicProcedure
+    .input(z.object({ projectPath: z.string().optional() }))
+    .query(async ({ input }) => {
+      const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
+        getEnabledPlugins(),
+        discoverPluginMcpServers(),
+        getApprovedPluginMcpServers(),
+      ])
+
+      // Read global/project servers for conflict check
+      const config = await readClaudeConfig()
+      const globalServers = config.mcpServers || {}
+      const projectServers = input.projectPath ? getProjectMcpServers(config, input.projectPath) || {} : {}
+
+      const pending: Array<{
+        pluginSource: string
+        serverName: string
+        identifier: string
+        config: Record<string, unknown>
+      }> = []
+
+      for (const pluginConfig of pluginMcpConfigs) {
+        if (!enabledPluginSources.includes(pluginConfig.pluginSource)) continue
+
+        for (const [name, serverConfig] of Object.entries(pluginConfig.mcpServers)) {
+          const identifier = `${pluginConfig.pluginSource}:${name}`
+          if (!approvedServers.includes(identifier) && !globalServers[name] && !projectServers[name]) {
+            pending.push({
+              pluginSource: pluginConfig.pluginSource,
+              serverName: name,
+              identifier,
+              config: serverConfig as Record<string, unknown>,
+            })
+          }
+        }
+      }
+
+      return { pending }
     }),
 })

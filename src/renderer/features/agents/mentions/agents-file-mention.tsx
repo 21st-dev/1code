@@ -123,7 +123,7 @@ const CATEGORY_OPTIONS: FileMentionOption[] = [
   { id: "files", label: "Files & Folders", type: "category", path: "", repository: "" },
   { id: "skills", label: "Skills", type: "category", path: "", repository: "" },
   { id: "agents", label: "Agents", type: "category", path: "", repository: "" },
-  { id: "tools", label: "MCP Tools", type: "category", path: "", repository: "" },
+  { id: "tools", label: "MCP", type: "category", path: "", repository: "" },
 ]
 
 // Known file extensions with icons
@@ -345,26 +345,42 @@ function ToolIcon({ className }: { className?: string }) {
 }
 
 /**
- * Format MCP tool name for display
- * Converts snake_case/underscore names to readable format
- * e.g., "get_design_context" -> "Get design context"
+ * Create MCP icon SVG element directly via DOM API (avoids flushSync issues)
  */
-function formatToolName(toolName: string): string {
-  return toolName
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .replace(/\s+/g, " ")
-    .trim()
+function createMCPIconElement(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+  svg.setAttribute("viewBox", "0 0 24 24")
+  svg.setAttribute("fill", "none")
+  svg.className.baseVal = "h-3 w-3 text-muted-foreground flex-shrink-0"
+
+  const path1 = document.createElementNS("http://www.w3.org/2000/svg", "path")
+  path1.setAttribute("fill-rule", "evenodd")
+  path1.setAttribute("clip-rule", "evenodd")
+  path1.setAttribute("d", "M15.0915 3.8956C14.6865 3.50142 14.1437 3.28087 13.5785 3.28087C13.0133 3.28087 12.4705 3.50142 12.0655 3.8956L3.9966 11.8086C3.86157 11.9398 3.6807 12.0132 3.4924 12.0132C3.3041 12.0132 3.12322 11.9398 2.9882 11.8086C2.92209 11.7443 2.86955 11.6674 2.83366 11.5824C2.79778 11.4975 2.7793 11.4062 2.7793 11.314C2.7793 11.2218 2.79778 11.1305 2.83366 11.0456C2.86955 10.9606 2.92209 10.8837 2.9882 10.8194L11.0571 2.90647C11.732 2.24962 12.6367 1.8821 13.5785 1.8821C14.5203 1.8821 15.425 2.24962 16.0999 2.90647C16.4905 3.28628 16.7855 3.75318 16.961 4.26894C17.1364 4.7847 17.1872 5.33467 17.1092 5.87384C17.6555 5.79614 18.2124 5.84491 18.7369 6.0164C19.2614 6.18789 19.7395 6.47752 20.1344 6.86296L20.1763 6.90487C20.5068 7.22632 20.7695 7.61077 20.949 8.0355C21.1284 8.46023 21.2208 8.91661 21.2208 9.37768C21.2208 9.83874 21.1284 10.2951 20.949 10.7199C20.7695 11.1446 20.5068 11.529 20.1763 11.8505L12.8786 19.0065C12.8565 19.0279 12.839 19.0535 12.8271 19.0818C12.8151 19.1101 12.809 19.1405 12.809 19.1712C12.809 19.202 12.8151 19.2324 12.8271 19.2606C12.839 19.2889 12.8565 19.3145 12.8786 19.336L14.3773 20.8062C14.4435 20.8705 14.496 20.9474 14.5319 21.0323C14.5678 21.1173 14.5862 21.2086 14.5862 21.3008C14.5862 21.393 14.5678 21.4843 14.5319 21.5692C14.496 21.6542 14.4435 21.7311 14.3773 21.7953C14.2423 21.9266 14.0614 22 13.8731 22C13.6848 22 13.504 21.9266 13.3689 21.7953L11.8702 20.3259C11.7158 20.1759 11.5931 19.9965 11.5093 19.7982C11.4255 19.6 11.3823 19.3869 11.3823 19.1717C11.3823 18.9564 11.4255 18.7434 11.5093 18.5451C11.5931 18.3468 11.7158 18.1674 11.8702 18.0174L19.1679 10.8605C19.3661 10.6676 19.5236 10.4369 19.6312 10.1821C19.7388 9.92724 19.7942 9.65344 19.7942 9.37684C19.7942 9.10023 19.7388 8.82643 19.6312 8.5716C19.5236 8.31677 19.3661 8.08608 19.1679 7.89316L19.126 7.85208C18.7214 7.45833 18.1793 7.23779 17.6147 7.23732C17.0502 7.23685 16.5077 7.45648 16.1024 7.84957L10.0906 13.7457L10.0889 13.7474L10.0068 13.8287C9.87171 13.9602 9.69065 14.0338 9.50215 14.0338C9.31365 14.0338 9.1326 13.9602 8.99753 13.8287C8.93142 13.7644 8.87888 13.6875 8.843 13.6026C8.80712 13.5177 8.78863 13.4264 8.78863 13.3342C8.78863 13.2419 8.80712 13.1507 8.843 13.0657C8.87888 12.9808 8.93142 12.9039 8.99753 12.8396L15.094 6.86045C15.2917 6.66739 15.4487 6.43672 15.5559 6.18203C15.663 5.92735 15.7181 5.65379 15.7178 5.37749C15.7176 5.10119 15.6621 4.82773 15.5545 4.57322C15.4469 4.31872 15.2895 4.08832 15.0915 3.8956Z")
+  path1.setAttribute("fill", "currentColor")
+  svg.appendChild(path1)
+
+  const path2 = document.createElementNS("http://www.w3.org/2000/svg", "path")
+  path2.setAttribute("fill-rule", "evenodd")
+  path2.setAttribute("clip-rule", "evenodd")
+  path2.setAttribute("d", "M14.0817 5.87383C14.1478 5.80954 14.2004 5.73265 14.2362 5.64771C14.2721 5.56276 14.2906 5.47148 14.2906 5.37927C14.2906 5.28706 14.2721 5.19578 14.2362 5.11084C14.2004 5.02589 14.1478 4.949 14.0817 4.88471C13.9467 4.75322 13.7656 4.67964 13.5771 4.67964C13.3886 4.67964 13.2075 4.75322 13.0725 4.88471L7.10506 10.7373C6.77452 11.0587 6.51179 11.4432 6.33239 11.8679C6.15298 12.2926 6.06055 12.749 6.06055 13.2101C6.06055 13.6712 6.15298 14.1275 6.33239 14.5523C6.51179 14.977 6.77452 15.3615 7.10506 15.6829C7.78012 16.3396 8.68472 16.7069 9.62648 16.7069C10.5682 16.7069 11.4728 16.3396 12.1479 15.6829L18.1162 9.83032C18.1823 9.76603 18.2348 9.68914 18.2707 9.60419C18.3066 9.51925 18.3251 9.42797 18.3251 9.33576C18.3251 9.24355 18.3066 9.15227 18.2707 9.06732C18.2348 8.98238 18.1823 8.90549 18.1162 8.8412C17.9811 8.70971 17.8 8.63613 17.6115 8.63613C17.423 8.63613 17.242 8.70971 17.1069 8.8412L11.1395 14.6938C10.7345 15.088 10.1916 15.3085 9.62648 15.3085C9.06132 15.3085 8.51847 15.088 8.11346 14.6938C7.91524 14.5009 7.75769 14.2702 7.65012 14.0153C7.54254 13.7605 7.48712 13.4867 7.48712 13.2101C7.48712 12.9335 7.54254 12.6597 7.65012 12.4049C7.75769 12.15 7.91524 11.9193 8.11346 11.7264L14.0817 5.87383Z")
+  path2.setAttribute("fill", "currentColor")
+  svg.appendChild(path2)
+
+  return svg
 }
 
 // Create SVG icon element in DOM based on file extension or type
 export function createFileIconElement(filename: string, type?: "file" | "folder" | "skill" | "agent" | "category" | "tool"): SVGSVGElement {
+  // Tool type: create MCP icon directly via DOM API (flushSync is unreliable for this icon)
+  if (type === "tool") {
+    return createMCPIconElement()
+  }
+
   const IconComponent = type === "skill"
     ? SkillIcon
     : type === "agent"
       ? CustomAgentIcon
-    : type === "tool"
-      ? ToolIcon
     : type === "folder"
       ? FolderOpenIcon
       : (getFileIconByExtension(filename) ?? FilesIcon)
@@ -666,12 +682,7 @@ function renderTooltipContent(option: FileMentionOption) {
   }
 
   if (option.type === "tool") {
-    // Show full tool name (e.g., mcp__figma-local-mcp__get_figjam)
-    return (
-      <div className="text-xs text-muted-foreground font-mono">
-        {option.path}
-      </div>
-    )
+    return null
   }
 
   // Files - just path
@@ -884,54 +895,31 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       }))
   }, [customAgents, debouncedSearchText])
 
-  // Convert MCP tools to mention options (stable, doesn't depend on search)
-  // MCP tools have format like "mcp__servername__toolname"
+  // Convert MCP servers to mention options (show servers, not individual tools)
   const allToolOptions: FileMentionOption[] = useMemo(() => {
-    if (!sessionInfo?.tools || !sessionInfo?.mcpServers) return []
+    if (!sessionInfo?.mcpServers) return []
 
-    // Get connected MCP server names
-    const connectedServers = new Set(
-      sessionInfo.mcpServers
-        .filter(s => s.status === "connected")
-        .map(s => s.name)
-    )
+    const connectedServers = sessionInfo.mcpServers
+      .filter(s => s.status === "connected")
 
-    // Filter tools that belong to MCP servers (format: mcp__servername__toolname)
-    const mcpTools = sessionInfo.tools.filter(tool => {
-      if (!tool.startsWith("mcp__")) return false
-      const parts = tool.split("__")
-      if (parts.length < 3) return false
-      const serverName = parts[1]
-      return connectedServers.has(serverName)
-    })
-
-    return mcpTools.map(tool => {
-      const parts = tool.split("__")
-      const serverName = parts[1]
-      const toolName = parts.slice(2).join("__")
-      const displayName = formatToolName(toolName)
-      return {
-        id: `${MENTION_PREFIXES.TOOL}${tool}`,
-        label: displayName, // readable name without underscores
-        path: tool, // full tool name for tooltip/mention
-        repository: "",
-        truncatedPath: serverName, // show server name as context
-        type: "tool" as const,
-        mcpServer: serverName,
-      }
-    })
+    return connectedServers.map(server => ({
+      id: `${MENTION_PREFIXES.TOOL}${server.name}`,
+      label: server.name,
+      path: server.name,
+      repository: "",
+      truncatedPath: "",
+      type: "tool" as const,
+      mcpServer: server.name,
+    }))
   }, [sessionInfo])
 
-  // Filtered tool options based on search
+  // Filtered tool options based on search (searches by server name)
   const toolOptions: FileMentionOption[] = useMemo(() => {
     if (!debouncedSearchText) return allToolOptions
 
     const searchLower = debouncedSearchText.toLowerCase()
     return allToolOptions.filter(tool => {
-      // Search by: display name, raw tool name, full path, server name
-      return matchesMultiWordSearch(tool.label, searchLower) ||
-             matchesMultiWordSearch(tool.path, searchLower) ||
-             matchesMultiWordSearch(tool.mcpServer || "", searchLower)
+      return matchesMultiWordSearch(tool.label, searchLower)
     })
   }, [allToolOptions, debouncedSearchText])
 
@@ -1241,7 +1229,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
                       {(showingFilesList || hasOnlyFiles) ? "Files & Folders" :
                        showingSkillsList ? "Skills" :
                        showingAgentsList ? "Agents" :
-                       showingToolsList ? "MCP Tools" :
+                       showingToolsList ? "MCP Servers" :
                        "Results"}
                     </span>
                     {isFetching && !isLoading && (
@@ -1253,7 +1241,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
                   const isSelected = selectedIndex === index
                   const OptionIcon = getOptionIcon(option)
                   const isCategory = option.type === "category"
-                  const showTooltip = !isCategory && option.path
+                  const showTooltip = !isCategory && option.type !== "tool" && option.path
 
                   const itemContent = (
                     <div

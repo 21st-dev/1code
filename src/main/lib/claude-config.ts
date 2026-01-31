@@ -180,6 +180,38 @@ export function updateMcpServerConfig(
 }
 
 /**
+ * Remove an MCP server from config
+ * Use projectPath = GLOBAL_MCP_PATH (or null) for global MCP servers
+ * Automatically resolves worktree paths to original project paths
+ */
+export function removeMcpServerConfig(
+  config: ClaudeConfig,
+  projectPath: string | null,
+  serverName: string
+): ClaudeConfig {
+  // Global MCP servers
+  if (!projectPath || projectPath === GLOBAL_MCP_PATH) {
+    if (config.mcpServers?.[serverName]) {
+      delete config.mcpServers[serverName]
+    }
+    return config
+  }
+  // Project-specific MCP servers
+  const resolvedPath = resolveProjectPathFromWorktree(projectPath) || projectPath
+  if (config.projects?.[resolvedPath]?.mcpServers?.[serverName]) {
+    delete config.projects[resolvedPath].mcpServers[serverName]
+    // Clean up empty objects
+    if (Object.keys(config.projects[resolvedPath].mcpServers).length === 0) {
+      delete config.projects[resolvedPath].mcpServers
+    }
+    if (Object.keys(config.projects[resolvedPath]).length === 0) {
+      delete config.projects[resolvedPath]
+    }
+  }
+  return config
+}
+
+/**
  * Resolve original project path from a worktree path.
  * Supports legacy (~/.21st/worktrees/{projectId}/{chatId}/) and
  * new format (~/.21st/worktrees/{projectName}/{worktreeFolder}/).

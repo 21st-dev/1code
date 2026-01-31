@@ -1577,7 +1577,7 @@ export function NewChatForm({
   }, [])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col relative">
       {/* Header - Simple burger on mobile, AgentsHeaderControls on desktop */}
       <div className="flex-shrink-0 flex items-center justify-between bg-background p-1.5">
         <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -2128,40 +2128,7 @@ export function NewChatForm({
                   )}
                 </div>
 
-                {/* Worktree config banner - absolute positioned to avoid layout shift */}
-                {showWorktreeBanner && (
-                  <div className="absolute left-0 right-0 top-full mt-2 ml-[5px] mr-[5px] p-3 pb-4 bg-muted/50 rounded-lg border border-border space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Configure a worktree setup script to install dependencies or copy environment variables.
-                    </p>
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleConfigureWorktree}
-                      >
-                        Settings
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          const prompt = COMMAND_PROMPTS["worktree-setup"]
-                          if (prompt && validatedProject) {
-                            createChatMutation.mutate({
-                              projectId: validatedProject.id,
-                              name: "Worktree Setup",
-                              initialMessageParts: [{ type: "text", text: prompt }],
-                              useWorktree: false,
-                              mode: "agent",
-                            })
-                          }
-                        }}
-                      >
-                        Fill with AI
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                {/* Worktree config banner - moved to corner banner below */}
 
                 {/* File mention dropdown */}
                 {/* Desktop: use projectPath for local file search */}
@@ -2201,6 +2168,44 @@ export function NewChatForm({
           )}
         </div>
       </div>
+
+      {/* Worktree config banner - fixed bottom-right corner */}
+      {showWorktreeBanner && (
+        <div className="absolute bottom-4 right-4 max-w-sm p-3 pb-4 bg-muted/50 backdrop-blur-sm rounded-lg border border-border space-y-3 shadow-lg z-50">
+          <p className="text-sm text-muted-foreground">
+            Configure a worktree setup script to install dependencies or copy
+            environment variables.
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleConfigureWorktree}
+            >
+              Settings
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                const prompt = COMMAND_PROMPTS["worktree-setup"]
+                if (prompt && validatedProject) {
+                  createChatMutation.mutate({
+                    projectId: validatedProject.id,
+                    name: "Worktree Setup",
+                    initialMessageParts: [
+                      { type: "text", text: prompt },
+                    ],
+                    useWorktree: false,
+                    mode: "agent",
+                  })
+                }
+              }}
+            >
+              Fill with AI
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

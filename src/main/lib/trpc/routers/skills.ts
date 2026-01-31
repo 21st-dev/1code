@@ -4,11 +4,14 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getEnabledPlugins } from "./claude-settings"
 
-interface FileSkill {
+export interface FileSkill {
   name: string
   description: string
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
+  pluginName?: string
   path: string
   content: string
 }
@@ -35,7 +38,7 @@ function parseSkillMd(rawContent: string): { name?: string; description?: string
  */
 async function scanSkillsDirectory(
   dir: string,
-  source: "user" | "project",
+  source: "user" | "project" | "plugin",
   basePath?: string, // For project skills, the cwd to make paths relative to
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
@@ -127,13 +130,34 @@ const listSkillsProcedure = publicProcedure
       projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd)
     }
 
-    // Scan both directories in parallel
-    const [userSkills, projectSkills] = await Promise.all([
-      userSkillsPromise,
-      projectSkillsPromise,
+    // Discover plugin skills
+    const [enabledPluginSources, installedPlugins] = await Promise.all([
+      getEnabledPlugins(),
+      discoverInstalledPlugins(),
     ])
+    const enabledPlugins = installedPlugins.filter(
+      (p) => enabledPluginSources.includes(p.source),
+    )
+    const pluginSkillsPromises = enabledPlugins.map(async (plugin) => {
+      const paths = getPluginComponentPaths(plugin)
+      try {
+        const skills = await scanSkillsDirectory(paths.skills, "plugin")
+        return skills.map((skill) => ({ ...skill, pluginName: plugin.source }))
+      } catch {
+        return []
+      }
+    })
 
-    return [...projectSkills, ...userSkills]
+    // Scan all directories in parallel
+    const [userSkills, projectSkills, ...pluginSkillsArrays] =
+      await Promise.all([
+        userSkillsPromise,
+        projectSkillsPromise,
+        ...pluginSkillsPromises,
+      ])
+    const pluginSkills = pluginSkillsArrays.flat()
+
+    return [...projectSkills, ...userSkills, ...pluginSkills]
   })
 
 /**

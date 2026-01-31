@@ -1,8 +1,8 @@
 /**
- * MCP Tools Mention Provider
+ * MCP Servers Mention Provider
  *
- * Provides MCP (Model Context Protocol) tools from connected servers.
- * Tools are passed via the search context from the component that has access to sessionInfoAtom.
+ * Provides connected MCP (Model Context Protocol) servers for mentions.
+ * When a server is mentioned, Claude is hinted to use tools from that server.
  */
 
 import {
@@ -15,13 +15,11 @@ import {
 } from "../types"
 
 /**
- * Data payload for tool mentions
+ * Data payload for MCP server mentions
  */
 export interface ToolData {
-  fullName: string // mcp__servername__toolname
-  toolName: string // toolname
   serverName: string
-  displayName: string // Tool Name (formatted)
+  toolCount: number
 }
 
 /**
@@ -33,7 +31,7 @@ interface MCPServerInfo {
 }
 
 /**
- * Extended search context with MCP tools info
+ * Extended search context with MCP info
  */
 export interface ToolsSearchContext extends MentionSearchContext {
   mcpTools?: string[]
@@ -41,65 +39,42 @@ export interface ToolsSearchContext extends MentionSearchContext {
 }
 
 /**
- * Format MCP tool name for display
- * Converts snake_case/underscore names to readable format
- * e.g., "get_design_context" -> "Get design context"
+ * Get connected MCP servers from context with tool counts
  */
-function formatToolName(toolName: string): string {
-  return toolName
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .replace(/\s+/g, " ")
-    .trim()
-}
-
-/**
- * Get tools from context
- */
-function getToolsFromContext(context: ToolsSearchContext): ToolData[] {
-  if (!context.mcpTools || !context.mcpServers) {
+function getServersFromContext(context: ToolsSearchContext): ToolData[] {
+  if (!context.mcpServers) {
     return []
   }
 
-  // Get connected MCP server names
-  const connectedServers = new Set(
-    context.mcpServers
-      .filter((server) => server.status === "connected")
-      .map((server) => server.name)
-  )
+  const connectedServers = context.mcpServers
+    .filter((server) => server.status === "connected")
 
-  // Filter tools that belong to connected MCP servers
-  // Format: mcp__servername__toolname
-  const mcpTools = context.mcpTools.filter((tool) => {
-    if (!tool.startsWith("mcp__")) return false
-    const parts = tool.split("__")
-    if (parts.length < 3) return false
-    const serverName = parts[1]
-    return connectedServers.has(serverName)
-  })
-
-  return mcpTools.map((tool) => {
-    const parts = tool.split("__")
-    const serverName = parts[1] || ""
-    const toolName = parts.slice(2).join("__")
-
-    return {
-      fullName: tool,
-      toolName,
-      serverName,
-      displayName: formatToolName(toolName),
+  // Count tools per server
+  const toolCountByServer = new Map<string, number>()
+  if (context.mcpTools) {
+    for (const tool of context.mcpTools) {
+      if (!tool.startsWith("mcp__")) continue
+      const parts = tool.split("__")
+      if (parts.length < 3) continue
+      const serverName = parts[1]
+      toolCountByServer.set(serverName, (toolCountByServer.get(serverName) || 0) + 1)
     }
-  })
+  }
+
+  return connectedServers.map((server) => ({
+    serverName: server.name,
+    toolCount: toolCountByServer.get(server.name) || 0,
+  }))
 }
 
 /**
- * MCP Tools provider
+ * MCP Servers provider
  */
 export const toolsProvider = createMentionProvider<ToolData>({
   id: "tools",
-  name: "MCP Tools",
+  name: "MCP",
   category: {
-    label: "MCP Tools",
+    label: "MCP",
     priority: 60,
   },
   trigger: {
@@ -112,43 +87,36 @@ export const toolsProvider = createMentionProvider<ToolData>({
   async search(context: MentionSearchContext): Promise<MentionSearchResult<ToolData>> {
     const startTime = performance.now()
 
-    // Check for abort
     if (context.signal.aborted) {
       return { items: [], hasMore: false, timing: 0 }
     }
 
     try {
-      // Get tools from context (must be passed by the calling component)
-      const tools = getToolsFromContext(context as ToolsSearchContext)
+      const servers = getServersFromContext(context as ToolsSearchContext)
 
-      // Map to MentionItem format
-      let items: MentionItem<ToolData>[] = tools.map((tool) => ({
-        id: `${MENTION_PREFIXES.TOOL}${tool.fullName}`,
-        label: tool.displayName,
-        description: `${tool.serverName} / ${tool.toolName}`,
+      let items: MentionItem<ToolData>[] = servers.map((server) => ({
+        id: `${MENTION_PREFIXES.TOOL}${server.serverName}`,
+        label: server.serverName,
+        description: server.toolCount > 0 ? `${server.toolCount} tools` : "",
         icon: "tool",
-        data: tool,
-        // Search by multiple fields
-        keywords: [tool.toolName, tool.serverName, tool.fullName],
+        data: server,
+        keywords: [server.serverName],
         metadata: {
           type: "tool" as const,
         },
       }))
 
-      // Apply relevance sorting if there's a query
       if (context.query) {
         items = sortByRelevance(items, context.query)
       }
 
-      // Apply limit
       const limitedItems = items.slice(0, context.limit)
-
       const timing = performance.now() - startTime
 
       return {
         items: limitedItems,
         hasMore: items.length > context.limit,
-        totalCount: tools.length,
+        totalCount: servers.length,
         timing,
       }
     } catch (error) {
@@ -156,7 +124,7 @@ export const toolsProvider = createMentionProvider<ToolData>({
       return {
         items: [],
         hasMore: false,
-        warning: "Failed to load MCP tools",
+        warning: "Failed to load MCP servers",
         timing: performance.now() - startTime,
       }
     }
@@ -168,41 +136,41 @@ export const toolsProvider = createMentionProvider<ToolData>({
 
   deserialize(token: string): MentionItem<ToolData> | null {
     try {
-      // Check if this token belongs to us
       if (!token.startsWith(MENTION_PREFIXES.TOOL)) {
         return null
       }
 
-      // Parse: tool:mcp__servername__toolname
-      const fullName = token.slice(MENTION_PREFIXES.TOOL.length)
-
-      // Parse the full name
-      const parts = fullName.split("__")
-      if (parts.length < 3 || parts[0] !== "mcp") {
+      const value = token.slice(MENTION_PREFIXES.TOOL.length)
+      if (!value) {
         return null
       }
 
-      const serverName = parts[1] || ""
-      const toolName = parts.slice(2).join("__")
-
-      if (!toolName) {
-        return null
+      // Handle both formats: server name or mcp__server__tool
+      if (value.startsWith("mcp__")) {
+        const parts = value.split("__")
+        const serverName = parts[1] || value
+        const toolName = parts.length >= 3 ? parts.slice(2).join("__") : value
+        const displayName = toolName
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c: string) => c.toUpperCase())
+          .trim()
+        return {
+          id: token,
+          label: displayName,
+          description: serverName,
+          icon: "tool",
+          data: { serverName, toolCount: 0 },
+          metadata: { type: "tool" },
+        }
       }
 
       return {
         id: token,
-        label: formatToolName(toolName),
-        description: `${serverName} / ${toolName}`,
+        label: value,
+        description: "MCP Server",
         icon: "tool",
-        data: {
-          fullName,
-          toolName,
-          serverName,
-          displayName: formatToolName(toolName),
-        },
-        metadata: {
-          type: "tool",
-        },
+        data: { serverName: value, toolCount: 0 },
+        metadata: { type: "tool" },
       }
     } catch (error) {
       console.warn(`[ToolsProvider] Failed to deserialize token: ${token}`, error)
@@ -211,9 +179,8 @@ export const toolsProvider = createMentionProvider<ToolData>({
   },
 
   isAvailable(context) {
-    // Tools are available when we have MCP tools in context
-    const toolsContext = context as { mcpTools?: string[] }
-    return Array.isArray(toolsContext.mcpTools) && toolsContext.mcpTools.length > 0
+    const toolsContext = context as { mcpServers?: MCPServerInfo[] }
+    return Array.isArray(toolsContext.mcpServers) && toolsContext.mcpServers.some(s => s.status === "connected")
   },
 })
 

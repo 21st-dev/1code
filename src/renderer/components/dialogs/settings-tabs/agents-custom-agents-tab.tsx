@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue } from "jotai"
 import { selectedProjectAtom, settingsAgentsSidebarWidthAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -348,6 +349,17 @@ export function AgentsCustomAgentsTab() {
   const userAgents = filteredAgents.filter((a) => a.source === "user")
   const projectAgents = filteredAgents.filter((a) => a.source === "project")
 
+  const allAgentNames = useMemo(
+    () => [...userAgents, ...projectAgents].map((a) => a.name),
+    [userAgents, projectAgents]
+  )
+
+  const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
+    items: allAgentNames,
+    selectedItem: selectedAgentName,
+    onSelect: setSelectedAgentName,
+  })
+
   const selectedAgent = agents.find((a) => a.name === selectedAgentName) || null
 
   // Auto-select first agent when data loads
@@ -403,6 +415,7 @@ export function AgentsCustomAgentsTab() {
               placeholder="Search agents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={listKeyDown}
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
             <button
@@ -414,13 +427,13 @@ export function AgentsCustomAgentsTab() {
             </button>
           </div>
           {/* Agent list */}
-          <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2">
+          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">Loading...</p>
               </div>
             ) : agents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <CustomAgentIconFilled className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">No agents</p>
                 <Button
@@ -451,16 +464,17 @@ export function AgentsCustomAgentsTab() {
                         return (
                           <button
                             key={agent.name}
+                            data-item-id={agent.name}
                             onClick={() => setSelectedAgentName(agent.name)}
                             className={cn(
-                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer",
+                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
                                 ? "bg-foreground/5 text-foreground"
                                 : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                             )}
                           >
                             <div className="flex items-center gap-2">
-                              <span className={cn("text-sm truncate flex-1", isSelected && "font-medium")}>
+                              <span className="text-sm truncate flex-1">
                                 {agent.name}
                               </span>
                               {agent.model && agent.model !== "inherit" && (
@@ -493,16 +507,17 @@ export function AgentsCustomAgentsTab() {
                         return (
                           <button
                             key={agent.name}
+                            data-item-id={agent.name}
                             onClick={() => setSelectedAgentName(agent.name)}
                             className={cn(
-                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer",
+                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
                                 ? "bg-foreground/5 text-foreground"
                                 : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                             )}
                           >
                             <div className="flex items-center gap-2">
-                              <span className={cn("text-sm truncate flex-1", isSelected && "font-medium")}>
+                              <span className="text-sm truncate flex-1">
                                 {agent.name}
                               </span>
                               {agent.model && agent.model !== "inherit" && (

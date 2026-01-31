@@ -2,6 +2,8 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getEnabledPlugins } from "./claude-settings"
 
 // Valid model values for agents
 export const VALID_AGENT_MODELS = ["sonnet", "opus", "haiku", "inherit"] as const
@@ -19,7 +21,8 @@ export interface ParsedAgent {
 
 // Agent with source/path metadata
 export interface FileAgent extends ParsedAgent {
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
+  pluginName?: string
   path: string
 }
 
@@ -146,7 +149,36 @@ export async function loadAgent(
     }
   }
 
-  return null
+  // Search in plugin directories
+  const [enabledPluginSources, installedPlugins] = await Promise.all([
+    getEnabledPlugins(),
+    discoverInstalledPlugins(),
+  ])
+  const enabledPlugins = installedPlugins.filter(
+    (p) => enabledPluginSources.includes(p.source),
+  )
+  const pluginResults = await Promise.all(
+    enabledPlugins.map(async (plugin) => {
+      const paths = getPluginComponentPaths(plugin)
+      const agentPath = path.join(paths.agents, `${name}.md`)
+      try {
+        const content = await fs.readFile(agentPath, "utf-8")
+        const parsed = parseAgentMd(content, `${name}.md`)
+        if (parsed.description && parsed.prompt) {
+          return {
+            name: parsed.name || name,
+            description: parsed.description,
+            prompt: parsed.prompt,
+            tools: parsed.tools,
+            disallowedTools: parsed.disallowedTools,
+            model: parsed.model,
+          }
+        }
+      } catch {}
+      return null
+    }),
+  )
+  return pluginResults.find((r) => r !== null) ?? null
 }
 
 /**
@@ -155,7 +187,7 @@ export async function loadAgent(
  */
 export async function scanAgentsDirectory(
   dir: string,
-  source: "user" | "project",
+  source: "user" | "project" | "plugin",
   basePath?: string // For project agents, the cwd to make paths relative to
 ): Promise<FileAgent[]> {
   const agents: FileAgent[] = []

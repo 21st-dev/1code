@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useState, useRef, useEffect } from "react"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtom, useAtomValue } from "jotai"
 import { RotateCcw, Settings2 } from "lucide-react"
 import { cn } from "../../../lib/utils"
@@ -143,16 +144,17 @@ function ShortcutListItem({
   return (
     <button
       type="button"
+      data-item-id={action.id}
       onClick={onClick}
       className={cn(
-        "w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors duration-150 cursor-pointer",
+        "w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
         isSelected
           ? "bg-foreground/5 text-foreground"
           : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
         hasConflict && !isSelected && "bg-red-500/10"
       )}
     >
-      <span className={cn("text-sm truncate", isSelected && "font-medium")}>
+      <span className="text-sm truncate">
         {action.label}
       </span>
       <div className="flex items-center gap-0.5 ml-2 flex-shrink-0">
@@ -392,6 +394,20 @@ export function AgentsKeyboardTab() {
     return result
   }, [shortcutsByCategory, searchQuery])
 
+  // Flat list of all action IDs for keyboard navigation
+  const allActionIds = useMemo(
+    () => (["general", "workspaces", "agents"] as ShortcutCategory[]).flatMap(
+      (cat) => filteredShortcuts[cat].map((a) => a.id)
+    ),
+    [filteredShortcuts]
+  )
+
+  const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
+    items: allActionIds,
+    selectedItem: selectedActionId,
+    onSelect: (id) => { setSelectedActionId(id); setIsRecording(false) },
+  })
+
   // Get selected action
   const selectedAction = useMemo(
     () => selectedActionId ? getShortcutAction(selectedActionId) : null,
@@ -513,7 +529,7 @@ export function AgentsKeyboardTab() {
           </div>
 
           {/* Shortcuts list */}
-          <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2">
+          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {totalShortcuts === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
                 No shortcuts found
