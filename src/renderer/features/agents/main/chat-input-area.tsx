@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, Loader2, RefreshCw, Zap } from "lucide-react"
+import { ChevronDown, Loader2, MessageCircleQuestion, RefreshCw, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -400,7 +400,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: "agent" | "plan" | "ask"
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -849,8 +849,13 @@ export const ChatInputArea = memo(function ChatInputArea({
             }
             return
           case "agent":
-            if (subChatMode === "plan") {
+            if (subChatMode !== "agent") {
               updateMode("agent")
+            }
+            return
+          case "ask":
+            if (subChatMode !== "ask") {
+              updateMode("ask")
             }
             return
           case "compact":
@@ -1160,10 +1165,12 @@ export const ChatInputArea = memo(function ChatInputArea({
                       <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
                         {subChatMode === "plan" ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
+                        ) : subChatMode === "ask" ? (
+                          <MessageCircleQuestion className="h-3.5 w-3.5 shrink-0" />
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span className="truncate">{subChatMode === "plan" ? "Plan" : "Agent"}</span>
+                        <span className="truncate">{subChatMode === "plan" ? "Plan" : subChatMode === "ask" ? "Ask" : "Agent"}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
@@ -1224,7 +1231,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <AgentIcon className="w-4 h-4 text-muted-foreground" />
                           <span>Agent</span>
                         </div>
-                        {subChatMode !== "plan" && (
+                        {subChatMode === "agent" && (
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                         )}
                       </DropdownMenuItem>
@@ -1283,6 +1290,60 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                         )}
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                          updateMode("ask")
+                          setModeDropdownOpen(false)
+                        }}
+                        className="justify-between gap-2"
+                        onMouseEnter={(e) => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          const showTooltip = () => {
+                            setModeTooltip({
+                              visible: true,
+                              position: {
+                                top: rect.top,
+                                left: rect.right + 8,
+                              },
+                              mode: "ask",
+                            })
+                            hasShownTooltipRef.current = true
+                            tooltipTimeoutRef.current = null
+                          }
+                          if (hasShownTooltipRef.current) {
+                            showTooltip()
+                          } else {
+                            tooltipTimeoutRef.current = setTimeout(
+                              showTooltip,
+                              1000,
+                            )
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <MessageCircleQuestion className="w-4 h-4 text-muted-foreground" />
+                          <span>Ask</span>
+                        </div>
+                        {subChatMode === "ask" && (
+                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                        )}
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                     {modeTooltip?.visible &&
                       createPortal(
@@ -1301,7 +1362,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                             <span>
                               {modeTooltip.mode === "agent"
                                 ? "Apply changes directly without a plan"
-                                : "Create a plan before making changes"}
+                                : modeTooltip.mode === "ask"
+                                  ? "Ask questions without making any changes"
+                                  : "Create a plan before making changes"}
                             </span>
                           </div>
                         </div>,

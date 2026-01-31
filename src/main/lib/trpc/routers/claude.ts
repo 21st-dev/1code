@@ -193,6 +193,14 @@ const PLAN_MODE_BLOCKED_TOOLS = new Set([
   "NotebookEdit",
 ])
 
+// Ask mode: block tools that write or execute
+const ASK_MODE_BLOCKED_TOOLS = new Set([
+  "Edit",
+  "Write",
+  "Bash",
+  "NotebookEdit",
+])
+
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
     if (subChatId && pending.subChatId !== subChatId) continue
@@ -466,7 +474,7 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "agent", "ask"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
         customConfig: z
@@ -1133,8 +1141,10 @@ ${prompt}
                 permissionMode:
                   input.mode === "plan"
                     ? ("plan" as const)
-                    : ("bypassPermissions" as const),
-                ...(input.mode !== "plan" && {
+                    : input.mode === "ask"
+                      ? ("default" as const)
+                      : ("bypassPermissions" as const),
+                ...(input.mode === "agent" && {
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,
@@ -1197,6 +1207,15 @@ ${prompt}
                       toolInput.command = toolInput.cmd
                       delete toolInput.cmd
                       console.log('[Ollama] Fixed Bash tool: cmd -> command')
+                    }
+                  }
+
+                  if (input.mode === "ask") {
+                    if (ASK_MODE_BLOCKED_TOOLS.has(toolName)) {
+                      return {
+                        behavior: "deny",
+                        message: `Tool "${toolName}" is not available in Ask mode (read-only).`,
+                      }
                     }
                   }
 

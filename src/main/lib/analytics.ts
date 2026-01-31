@@ -301,7 +301,7 @@ export function trackWorkspaceDeleted(workspaceId: string) {
 export function trackMessageSent(data: {
   workspaceId: string
   subChatId?: string
-  mode: "plan" | "agent"
+  mode: "plan" | "agent" | "ask"
 }) {
   capture("message_sent", {
     workspace_id: data.workspaceId,

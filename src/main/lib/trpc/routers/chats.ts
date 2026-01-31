@@ -277,7 +277,7 @@ export const chatsRouter = router({
         baseBranch: z.string().optional(), // Branch to base the worktree off
         branchType: z.enum(["local", "remote"]).optional(), // Whether baseBranch is local or remote
         useWorktree: z.boolean().default(true), // If false, work directly in project dir
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "agent", "ask"]).default("agent"),
       }),
     )
     .mutation(async ({ input }) => {
@@ -636,7 +636,7 @@ export const chatsRouter = router({
       z.object({
         chatId: z.string(),
         name: z.string().optional(),
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "agent", "ask"]).default("agent"),
       }),
     )
     .mutation(({ input }) => {
@@ -776,7 +776,7 @@ export const chatsRouter = router({
    * Update sub-chat mode
    */
   updateSubChatMode: publicProcedure
-    .input(z.object({ id: z.string(), mode: z.enum(["plan", "agent"]) }))
+    .input(z.object({ id: z.string(), mode: z.enum(["plan", "agent", "ask"]) }))
     .mutation(({ input }) => {
       const db = getDatabase()
       return db

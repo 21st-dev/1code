@@ -230,7 +230,7 @@ export const api = {
           onError: (err) => opts?.onError?.(err),
         })
         return {
-          mutate: (args?: { subChatId: string; mode: "plan" | "agent" }) => {
+          mutate: (args?: { subChatId: string; mode: "plan" | "agent" | "ask" }) => {
             if (args?.subChatId && args?.mode) {
               mutation.mutate({ id: args.subChatId, mode: args.mode })
             }

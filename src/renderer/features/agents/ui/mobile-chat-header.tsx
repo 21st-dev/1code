@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { useAtomValue } from "jotai"
 import { loadingSubChatsAtom } from "../atoms"
-import { Plus, ChevronDown, Play, AlignJustify, FolderDown } from "lucide-react"
+import { Plus, ChevronDown, Play, AlignJustify, FolderDown, MessageCircleQuestion } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -188,6 +188,8 @@ export function MobileChatHeader({
                   <IconSpinner className="w-3.5 h-3.5 text-muted-foreground" />
                 ) : mode === "plan" ? (
                   <PlanIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                ) : mode === "ask" ? (
+                  <MessageCircleQuestion className="w-3.5 h-3.5 text-muted-foreground" />
                 ) : (
                   <AgentIcon className="w-3.5 h-3.5 text-muted-foreground" />
                 )}

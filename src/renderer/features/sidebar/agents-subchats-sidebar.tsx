@@ -61,7 +61,7 @@ import { isDesktopApp, getShortcutKey } from "../../lib/utils/platform"
 import { useResolvedHotkeyDisplay } from "../../lib/hotkeys"
 import { TrafficLightSpacer } from "../agents/components/traffic-light-spacer"
 import { PopoverTrigger } from "../../components/ui/popover"
-import { AlignJustify } from "lucide-react"
+import { AlignJustify, MessageCircleQuestion } from "lucide-react"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -128,6 +128,8 @@ const SidebarSearchHistoryPopover = memo(function SidebarSearchHistoryPopover({
             <IconSpinner className="w-4 h-4 text-muted-foreground" />
           ) : mode === "plan" ? (
             <PlanIcon className="w-4 h-4 text-muted-foreground" />
+          ) : mode === "ask" ? (
+            <MessageCircleQuestion className="w-4 h-4 text-muted-foreground" />
           ) : (
             <AgentIcon className="w-4 h-4 text-muted-foreground" />
           )}

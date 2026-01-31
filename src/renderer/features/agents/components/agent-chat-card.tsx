@@ -8,6 +8,7 @@ import {
   PlanIcon,
   AgentIcon,
 } from "../../../components/ui/canvas-icons"
+import { MessageCircleQuestion } from "lucide-react"
 import { useAtomValue } from "jotai"
 import { agentsUnseenChangesAtom, lastChatModesAtom } from "../atoms"
 
@@ -76,7 +77,7 @@ function ChatIconWithBadge({
 }: {
   isLoading: boolean
   hasUnseenChanges: boolean
-  lastMode: "plan" | "agent"
+  lastMode: "plan" | "agent" | "ask"
   isSelected?: boolean
   gitOwner?: string | null
   gitProvider?: string | null
@@ -113,6 +114,13 @@ function ChatIconWithBadge({
           <div className="w-2 h-2 rounded-full bg-[#307BD0]" />
         ) : lastMode === "plan" ? (
           <PlanIcon
+            className={cn(
+              "w-2.5 h-2.5",
+              isSelected ? "text-primary-foreground" : "text-muted-foreground",
+            )}
+          />
+        ) : lastMode === "ask" ? (
+          <MessageCircleQuestion
             className={cn(
               "w-2.5 h-2.5",
               isSelected ? "text-primary-foreground" : "text-muted-foreground",

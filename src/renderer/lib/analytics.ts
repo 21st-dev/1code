@@ -172,7 +172,7 @@ export function shutdown() {
 export function trackMessageSent(data: {
   workspaceId: string
   messageLength: number
-  mode: "plan" | "agent"
+  mode: "plan" | "agent" | "ask"
 }) {
   capture("message_sent", {
     workspace_id: data.workspaceId,

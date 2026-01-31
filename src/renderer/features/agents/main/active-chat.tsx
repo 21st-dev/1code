@@ -2135,7 +2135,7 @@ const ChatViewInner = memo(function ChatViewInner({
       }
 
       // Revert local state on error to maintain sync with database
-      const revertedMode: AgentMode = variables.mode === "plan" ? "agent" : "plan"
+      const revertedMode: AgentMode = "agent"
       setSubChatMode(revertedMode)
       // Also update store for consistency
       useAgentSubChatStore
@@ -4839,7 +4839,7 @@ export function ChatView({
   const agentSubChats = (agentChat?.subChats ?? []) as Array<{
     id: string
     name?: string | null
-    mode?: "plan" | "agent" | null
+    mode?: "plan" | "agent" | "ask" | null
     created_at?: Date | string | null
     updated_at?: Date | string | null
     messages?: any
@@ -5576,7 +5576,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           createdAt ?? existingLocal?.created_at ?? new Date().toISOString(),
         updated_at: updatedAt ?? existingLocal?.updated_at,
         mode:
-          (sc.mode as "plan" | "agent" | undefined) ||
+          (sc.mode as "plan" | "agent" | "ask" | undefined) ||
           existingLocal?.mode ||
           "agent",
       }

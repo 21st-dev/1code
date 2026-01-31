@@ -4,10 +4,10 @@ import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
 
 // Agent mode type - extensible for future modes like "debug"
-export type AgentMode = "agent" | "plan"
+export type AgentMode = "agent" | "plan" | "ask"
 
 // Ordered list of modes - Shift+Tab cycles through these
-export const AGENT_MODES: AgentMode[] = ["agent", "plan"]
+export const AGENT_MODES: AgentMode[] = ["agent", "plan", "ask"]
 
 // Get next mode in cycle (for Shift+Tab toggle)
 export function getNextMode(current: AgentMode): AgentMode {
@@ -462,10 +462,10 @@ export const archiveSearchQueryAtom = atom<string>("")
 // Repository filter for archive (null = all repositories)
 export const archiveRepositoryFilterAtom = atom<string | null>(null)
 
-// Track last used mode (plan/agent) per chat
-// Map<chatId, "plan" | "agent">
-export const lastChatModesAtom = atom<Map<string, "plan" | "agent">>(
-  new Map<string, "plan" | "agent">(),
+// Track last used mode (plan/agent/ask) per chat
+// Map<chatId, AgentMode>
+export const lastChatModesAtom = atom<Map<string, AgentMode>>(
+  new Map<string, AgentMode>(),
 )
 
 // Mobile view mode - chat (default, shows NewChatForm), chats list, preview, diff, or terminal

@@ -14,7 +14,7 @@ import {
 } from "../../details-sidebar/atoms"
 import { chatSourceModeAtom } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
-import { X, Plus, AlignJustify, Play, TerminalSquare } from "lucide-react"
+import { X, Plus, AlignJustify, Play, TerminalSquare, MessageCircleQuestion } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -108,6 +108,8 @@ const SearchHistoryPopover = memo(forwardRef<SearchHistoryPopoverRef, SearchHist
             <IconSpinner className="w-4 h-4 text-muted-foreground" />
           ) : mode === "plan" ? (
             <PlanIcon className="w-4 h-4 text-muted-foreground" />
+          ) : mode === "ask" ? (
+            <MessageCircleQuestion className="w-4 h-4 text-muted-foreground" />
           ) : (
             <AgentIcon className="w-4 h-4 text-muted-foreground" />
           )}
@@ -736,6 +738,8 @@ export function SubChatSelector({
                                 {/* Main mode icon */}
                                 {mode === "plan" ? (
                                   <PlanIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                                ) : mode === "ask" ? (
+                                  <MessageCircleQuestion className="w-3.5 h-3.5 text-muted-foreground" />
                                 ) : (
                                   <AgentIcon className="w-3.5 h-3.5 text-muted-foreground" />
                                 )}

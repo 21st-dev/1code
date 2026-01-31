@@ -2,7 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { AlignJustify, Plus, Zap } from "lucide-react"
+import { AlignJustify, MessageCircleQuestion, Plus, Zap } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Button } from "../../../components/ui/button"
@@ -393,7 +393,7 @@ export function NewChatForm({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: "agent" | "plan" | "ask"
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -1584,10 +1584,12 @@ export function NewChatForm({
                         <DropdownMenuTrigger className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
                           {agentMode === "plan" ? (
                             <PlanIcon className="h-3.5 w-3.5" />
+                          ) : agentMode === "ask" ? (
+                            <MessageCircleQuestion className="h-3.5 w-3.5" />
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
-                          <span>{agentMode === "plan" ? "Plan" : "Agent"}</span>
+                          <span>{agentMode === "plan" ? "Plan" : agentMode === "ask" ? "Ask" : "Agent"}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -1648,7 +1650,7 @@ export function NewChatForm({
                               <AgentIcon className="w-4 h-4 text-muted-foreground" />
                               <span>Agent</span>
                             </div>
-                            {agentMode !== "plan" && (
+                            {agentMode === "agent" && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                             )}
                           </DropdownMenuItem>
@@ -1707,6 +1709,60 @@ export function NewChatForm({
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                             )}
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (tooltipTimeoutRef.current) {
+                                clearTimeout(tooltipTimeoutRef.current)
+                                tooltipTimeoutRef.current = null
+                              }
+                              setModeTooltip(null)
+                              setAgentMode("ask")
+                              setModeDropdownOpen(false)
+                            }}
+                            className="justify-between gap-2"
+                            onMouseEnter={(e) => {
+                              if (tooltipTimeoutRef.current) {
+                                clearTimeout(tooltipTimeoutRef.current)
+                                tooltipTimeoutRef.current = null
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              const showTooltip = () => {
+                                setModeTooltip({
+                                  visible: true,
+                                  position: {
+                                    top: rect.top,
+                                    left: rect.right + 8,
+                                  },
+                                  mode: "ask",
+                                })
+                                hasShownTooltipRef.current = true
+                                tooltipTimeoutRef.current = null
+                              }
+                              if (hasShownTooltipRef.current) {
+                                showTooltip()
+                              } else {
+                                tooltipTimeoutRef.current = setTimeout(
+                                  showTooltip,
+                                  1000,
+                                )
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              if (tooltipTimeoutRef.current) {
+                                clearTimeout(tooltipTimeoutRef.current)
+                                tooltipTimeoutRef.current = null
+                              }
+                              setModeTooltip(null)
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <MessageCircleQuestion className="w-4 h-4 text-muted-foreground" />
+                              <span>Ask</span>
+                            </div>
+                            {agentMode === "ask" && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                         {modeTooltip?.visible &&
                           createPortal(
@@ -1725,7 +1781,9 @@ export function NewChatForm({
                                 <span>
                                   {modeTooltip.mode === "agent"
                                     ? "Apply changes directly without a plan"
-                                    : "Create a plan before making changes"}
+                                    : modeTooltip.mode === "ask"
+                                      ? "Ask questions without making any changes"
+                                      : "Create a plan before making changes"}
                                 </span>
                               </div>
                             </div>,

@@ -12,6 +12,7 @@ import {
   type SubChatFileChange,
 } from "../atoms"
 import { IconSpinner, PlanIcon, AgentIcon } from "../../../components/ui/icons"
+import { MessageCircleQuestion } from "lucide-react"
 import type { SubChatMeta } from "../stores/sub-chat-store"
 import { formatTimeAgo } from "../utils/format-time-ago"
 
@@ -66,6 +67,15 @@ function SubChatCard({
         <div className="pt-0.5 relative flex-shrink-0 h-4 w-4">
           {mode === "plan" ? (
             <PlanIcon
+              className={cn(
+                "w-4 h-4",
+                isSelected
+                  ? "text-primary-foreground"
+                  : "text-muted-foreground",
+              )}
+            />
+          ) : mode === "ask" ? (
+            <MessageCircleQuestion
               className={cn(
                 "w-4 h-4",
                 isSelected
