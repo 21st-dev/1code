@@ -136,6 +136,8 @@ import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
 import { exportChat, copyChat, type ExportFormat } from "../agents/lib/export-chat"
+import { modelProfilesAtom, lastUsedProfileIdAtom } from "../../lib/atoms"
+import { CheckIcon } from "../../components/ui/icons"
 
 // Feedback URL: uses env variable for hosted version, falls back to public Discord for open source
 const FEEDBACK_URL =
@@ -173,6 +175,66 @@ const GitHubAvatar = React.memo(function GitHubAvatar({
         onError={handleError}
       />
     </div>
+  )
+})
+
+// Model Profile submenu for context menu
+const ModelProfileSubmenu = React.memo(function ModelProfileSubmenu({
+  chatId,
+  currentProfileId,
+}: {
+  chatId: string
+  currentProfileId: string | null | undefined
+}) {
+  const profiles = useAtomValue(modelProfilesAtom)
+  const [lastUsedProfileId, setLastUsedProfileId] = useAtom(lastUsedProfileIdAtom)
+  const utils = trpc.useUtils()
+
+  // Use chat's profile or fall back to lastUsedProfileId
+  const effectiveProfileId = currentProfileId ?? lastUsedProfileId
+
+  const updateProfileMutation = trpc.chats.updateModelProfile.useMutation({
+    onSuccess: () => {
+      utils.chats.get.invalidate({ id: chatId })
+      utils.chats.list.invalidate()
+    },
+  })
+
+  // Filter out offline profiles
+  const displayProfiles = profiles.filter((p) => !p.isOffline)
+
+  const handleProfileChange = useCallback(
+    (profileId: string) => {
+      updateProfileMutation.mutate({ id: chatId, modelProfileId: profileId })
+      setLastUsedProfileId(profileId)
+    },
+    [chatId, updateProfileMutation, setLastUsedProfileId],
+  )
+
+  if (displayProfiles.length === 0) {
+    return (
+      <ContextMenuItem disabled>
+        No profiles configured
+      </ContextMenuItem>
+    )
+  }
+
+  return (
+    <>
+      {displayProfiles.map((profile) => {
+        const isSelected = profile.id === effectiveProfileId
+        return (
+          <ContextMenuItem
+            key={profile.id}
+            onClick={() => handleProfileChange(profile.id)}
+            className="justify-between"
+          >
+            <span className="truncate">{profile.name}</span>
+            {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0 ml-2" />}
+          </ContextMenuItem>
+        )
+      })}
+    </>
   )
 })
 
@@ -762,6 +824,15 @@ const AgentChatItem = React.memo(function AgentChatItem({
               <ContextMenuItem onClick={() => window.desktopApi?.newWindow({ chatId })}>
                 Open in new window
               </ContextMenuItem>
+            )}
+            {/* Model Profile submenu - only show for local chats */}
+            {!isRemote && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>Model Profile</ContextMenuSubTrigger>
+                <ContextMenuSubContent sideOffset={6} alignOffset={-4}>
+                  <ModelProfileSubmenu chatId={chatId} currentProfileId={null} />
+                </ContextMenuSubContent>
+              </ContextMenuSub>
             )}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => onArchive(chatId)} className="justify-between">

@@ -214,11 +214,20 @@ export type CustomClaudeConfig = {
   subagentModel?: string // CLAUDE_CODE_SUBAGENT_MODEL
 }
 
+// Model mapping within a profile - maps display names to actual model IDs
+export type ModelMapping = {
+  id: string           // Internal reference ID (e.g., "opus", "sonnet", "haiku")
+  displayName: string  // User-facing name (e.g., "Opus", "Sonnet 3.5")
+  modelId: string      // Actual model ID sent to API (e.g., "glm-4.7", "claude-3-opus-20240229")
+  supportsThinking?: boolean  // Whether this model supports extended thinking
+}
+
 // Model profile system - support multiple configs
 export type ModelProfile = {
   id: string
   name: string
   config: CustomClaudeConfig
+  models: ModelMapping[]  // Available models for this profile
   isOffline?: boolean // Mark as offline/Ollama profile
 }
 
@@ -240,6 +249,14 @@ export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
     token: 'ollama',
     baseUrl: 'http://localhost:11434',
   },
+  models: [
+    {
+      id: 'default',
+      displayName: 'Default',
+      modelId: modelName || 'qwen2.5-coder:7b',
+      supportsThinking: false,
+    },
+  ],
 })
 
 // Predefined offline profile for Ollama (legacy, uses default model)
@@ -252,6 +269,14 @@ export const OFFLINE_PROFILE: ModelProfile = {
     token: 'ollama',
     baseUrl: 'http://localhost:11434',
   },
+  models: [
+    {
+      id: 'default',
+      displayName: 'Default',
+      modelId: 'qwen2.5-coder:7b',
+      supportsThinking: false,
+    },
+  ],
 }
 
 // Legacy single config (deprecated, kept for backwards compatibility)
@@ -284,9 +309,69 @@ export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
   { getOnInit: true },
 )
 
+// Migration: add models array to existing profiles that don't have it
+if (typeof window !== "undefined") {
+  const profilesKey = "agents:model-profiles"
+  const stored = localStorage.getItem(profilesKey)
+  if (stored) {
+    try {
+      const profiles = JSON.parse(stored) as ModelProfile[]
+      let needsMigration = false
+      const migrated = profiles.map(profile => {
+        if (!profile.models || profile.models.length === 0) {
+          needsMigration = true
+          return {
+            ...profile,
+            models: [
+              {
+                id: 'default',
+                displayName: 'Default',
+                modelId: profile.config.model || 'claude-3-opus',
+                supportsThinking: true,
+              },
+            ],
+          }
+        }
+        return profile
+      })
+      if (needsMigration) {
+        localStorage.setItem(profilesKey, JSON.stringify(migrated))
+        console.log("[atoms] Migrated profiles to include models array")
+      }
+    } catch (e) {
+      console.error("[atoms] Failed to migrate profiles:", e)
+    }
+  }
+}
+
 // Active profile ID (null = use Claude Code default)
-export const activeProfileIdAtom = atomWithStorage<string | null>(
-  "agents:active-profile-id",
+// Renamed from activeProfileIdAtom - now serves as default for new chats
+export const lastUsedProfileIdAtom = atomWithStorage<string | null>(
+  "agents:last-used-profile-id",
+  null,
+  undefined,
+  { getOnInit: true },
+)
+
+// Migration: rename old key to new key
+if (typeof window !== "undefined") {
+  const oldKey = "agents:active-profile-id"
+  const newKey = "agents:last-used-profile-id"
+  const oldValue = localStorage.getItem(oldKey)
+  if (oldValue !== null && localStorage.getItem(newKey) === null) {
+    localStorage.setItem(newKey, oldValue)
+    localStorage.removeItem(oldKey)
+    console.log("[atoms] Migrated activeProfileId to lastUsedProfileId")
+  }
+}
+
+// Backwards compatibility alias
+export const activeProfileIdAtom = lastUsedProfileIdAtom
+
+// Selected model ID within the current profile (e.g., "main", "opus", "sonnet", "haiku", "subagent")
+// Used by ipc-chat-transport to determine which model from the profile to use
+export const selectedProfileModelIdAtom = atomWithStorage<string | null>(
+  "agents:selected-profile-model-id",
   null,
   undefined,
   { getOnInit: true },

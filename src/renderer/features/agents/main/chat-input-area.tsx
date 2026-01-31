@@ -85,6 +85,13 @@ import {
 } from "../../../lib/hooks/use-voice-recording"
 import { getResolvedHotkey } from "../../../lib/hotkeys"
 import { customHotkeysAtom } from "../../../lib/atoms"
+import { ProfileSelector, useEffectiveProfile, useEffectiveModel } from "../ui/profile-selector"
+import {
+  modelProfilesAtom,
+  lastUsedProfileIdAtom,
+  selectedProfileModelIdAtom,
+  type ModelMapping,
+} from "../../../lib/atoms"
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
@@ -177,6 +184,9 @@ export interface ChatInputAreaProps {
   onInputContentChange?: (hasContent: boolean) => void
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
+  // Per-workspace model profile (from chat data)
+  chatModelProfileId?: string | null
+  chatSelectedModelId?: string | null
 }
 
 /**
@@ -372,11 +382,94 @@ export const ChatInputArea = memo(function ChatInputArea({
   firstQueueItemId,
   onInputContentChange,
   onSubmitWithQuestionAnswer,
+  chatModelProfileId,
+  chatSelectedModelId,
 }: ChatInputAreaProps) {
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+
+  // Get effective profile and model from per-workspace settings
+  const effectiveProfile = useEffectiveProfile(chatModelProfileId)
+  const effectiveModel = useEffectiveModel(effectiveProfile, chatSelectedModelId)
+
+  // Derive available models from profile config (like settings do)
+  const profileModels = useMemo((): ModelMapping[] => {
+    if (!effectiveProfile?.config) return []
+    const models: ModelMapping[] = []
+    const config = effectiveProfile.config
+
+    // Add main model
+    if (config.model) {
+      models.push({
+        id: "main",
+        displayName: "Main",
+        modelId: config.model,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Opus model
+    if (config.defaultOpusModel) {
+      models.push({
+        id: "opus",
+        displayName: "Opus",
+        modelId: config.defaultOpusModel,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Sonnet model
+    if (config.defaultSonnetModel) {
+      models.push({
+        id: "sonnet",
+        displayName: "Sonnet",
+        modelId: config.defaultSonnetModel,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Haiku model
+    if (config.defaultHaikuModel) {
+      models.push({
+        id: "haiku",
+        displayName: "Haiku",
+        modelId: config.defaultHaikuModel,
+        supportsThinking: false,
+      })
+    }
+
+    // Add Subagent model
+    if (config.subagentModel) {
+      models.push({
+        id: "subagent",
+        displayName: "Subagent",
+        modelId: config.subagentModel,
+        supportsThinking: false,
+      })
+    }
+
+    return models
+  }, [effectiveProfile?.config])
+
+  // Selected model within profile - use global atom so ipc-chat-transport can read it
+  const [selectedProfileModelId, setSelectedProfileModelId] = useAtom(selectedProfileModelIdAtom)
+
+  // Get selected model from profile models
+  const selectedProfileModel = useMemo((): ModelMapping | null => {
+    if (profileModels.length === 0) return null
+    if (selectedProfileModelId) {
+      const found = profileModels.find((m) => m.id === selectedProfileModelId)
+      if (found) return found
+    }
+    return profileModels[0] ?? null
+  }, [profileModels, selectedProfileModelId])
+
+  // Reset selected model when profile changes
+  useEffect(() => {
+    setSelectedProfileModelId(null)
+  }, [effectiveProfile?.id])
 
   // Mention dropdown state
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
@@ -1134,9 +1227,15 @@ export const ChatInputArea = memo(function ChatInputArea({
               </div>
               <PromptInputActions className="w-full">
                 <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                  
 
-                  {/* Model selector - shows Ollama models when offline, Claude models when online */}
+                  {/* Profile selector - per-workspace model profile */}
+                  <ProfileSelector
+                    chatId={parentChatId}
+                    currentProfileId={chatModelProfileId ?? null}
+                    disabled={isStreaming}
+                  />
+
+                  {/* Model selector - shows Ollama models when offline, profile models, or Claude models */}
                   {availableModels.isOffline && availableModels.hasOllama ? (
                     // Offline mode: show Ollama model selector
                     <DropdownMenu
@@ -1182,9 +1281,54 @@ export const ChatInputArea = memo(function ChatInputArea({
                         })}
                       </DropdownMenuContent>
                     </DropdownMenu>
+                  ) : profileModels.length > 0 ? (
+                    // Profile mode: show models from selected profile config
+                    <DropdownMenu
+                      open={isModelDropdownOpen}
+                      onOpenChange={setIsModelDropdownOpen}
+                    >
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        >
+                          <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">
+                            {selectedProfileModel?.displayName || "Select model"}{" "}
+                            <span className="text-muted-foreground">
+                              ({selectedProfileModel?.modelId || ""})
+                            </span>
+                          </span>
+                          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[280px]">
+                        {profileModels.map((model) => {
+                          const isSelected = model.id === selectedProfileModel?.id
+                          return (
+                            <DropdownMenuItem
+                              key={model.id}
+                              onClick={() => setSelectedProfileModelId(model.id)}
+                              className="gap-2 justify-between"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span>
+                                  {model.displayName}{" "}
+                                  <span className="text-muted-foreground">
+                                    ({model.modelId})
+                                  </span>
+                                </span>
+                              </div>
+                              {isSelected && (
+                                <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                              )}
+                            </DropdownMenuItem>
+                          )
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : (
-                    // Online mode: show Claude model selector
-                    // Model selector works with custom profiles - selections map to profile's model settings
+                    // Fallback: show Claude model selector (no profile or empty profile)
                     <DropdownMenu
                       open={isModelDropdownOpen}
                       onOpenChange={setIsModelDropdownOpen}
@@ -1194,12 +1338,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 hover:text-foreground hover:bg-muted/50"
                         >
                           <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">
-                            {selectedModel?.name}
-                            {!hasCustomClaudeConfig && selectedModel?.id !== "default" && (
-                              null
-                            )}
-                          </span>
+                          <span className="truncate">{selectedModel?.name}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
@@ -1216,17 +1355,8 @@ export const ChatInputArea = memo(function ChatInputArea({
                               className="gap-2 justify-between"
                             >
                               <div className="flex items-center gap-1.5">
-                                {model.supportsThinking ? (
-                                  <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                ) : (
-                                  <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                )}
-                                <span>
-                                  {model.name}
-                                  {!hasCustomClaudeConfig && model.id !== "default" && (
-                                      null
-                                  )}
-                                </span>
+                                <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span>{model.name}</span>
                               </div>
                               {isSelected && (
                                 <CheckIcon className="h-3.5 w-3.5 shrink-0" />

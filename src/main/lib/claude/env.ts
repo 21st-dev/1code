@@ -147,7 +147,10 @@ function loadClaudeCliSettings(): Record<string, string> {
     const homeDir = os.homedir()
     const settingsPath = path.join(homeDir, ".claude", "settings.json")
     
+    console.log(`[claude-env] Looking for settings at: ${settingsPath}`)
+    
     if (!fs.existsSync(settingsPath)) {
+      console.log(`[claude-env] No settings.json found at ${settingsPath}`)
       return {}
     }
 
@@ -157,7 +160,10 @@ function loadClaudeCliSettings(): Record<string, string> {
     // Config values are stored in the 'env' object within settings.json
     if (settings && typeof settings === 'object' && settings.env && typeof settings.env === 'object') {
       console.log(`[claude-env] Loaded ${Object.keys(settings.env).length} vars from ${settingsPath}`)
+      console.log(`[claude-env] Detected keys: ${Object.keys(settings.env).join(', ')}`)
       return settings.env as Record<string, string>
+    } else {
+      console.log(`[claude-env] settings.json found but no 'env' object inside`)
     }
   } catch (error) {
     console.warn("[claude-env] Failed to load settings.json:", error)
@@ -239,6 +245,13 @@ export function getClaudeShellEnvironment(): Record<string, string> {
       Object.assign(env, platformEnv)
     }
   }
+
+  // Log detected config for debugging
+  console.log(`[claude-env] Final config detection:`)
+  console.log(`  - ANTHROPIC_API_KEY: ${env.ANTHROPIC_API_KEY ? '***' : 'not set'}`)
+  console.log(`  - ANTHROPIC_AUTH_TOKEN: ${env.ANTHROPIC_AUTH_TOKEN ? '***' : 'not set'}`)
+  console.log(`  - ANTHROPIC_BASE_URL: ${env.ANTHROPIC_BASE_URL || 'not set'}`)
+  console.log(`  - ANTHROPIC_MODEL: ${env.ANTHROPIC_MODEL || 'not set'}`)
 
   // 3. Cache and return
   cachedShellEnv = env

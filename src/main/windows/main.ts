@@ -631,7 +631,26 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     return { action: "deny" }
   })
 
-  // Handle window close
+  // Handle window close - hide to tray instead of closing
+  window.on("close", (event) => {
+    const isQuitting = (global as any).__isAppQuitting?.() || false
+    if (!isQuitting) {
+      event.preventDefault()
+      window.hide()
+      console.log(`[Main] Window ${window.id} hidden to tray`)
+      
+      // On macOS, hide dock icon when all windows are hidden
+      if (process.platform === "darwin" && app.dock) {
+        const allWindows = BrowserWindow.getAllWindows()
+        const visibleWindows = allWindows.filter(w => w.isVisible() && !w.isDestroyed())
+        if (visibleWindows.length === 0) {
+          app.dock.hide()
+          console.log("[Main] Dock icon hidden")
+        }
+      }
+    }
+  })
+  
   window.on("closed", () => {
     console.log(`[Main] Window ${window.id} closed`)
     // windowManager handles cleanup via 'closed' event listener

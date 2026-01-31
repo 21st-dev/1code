@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import {
@@ -57,6 +58,11 @@ import {
   customHotkeysAtom,
   chatSourceModeAtom,
   extendedThinkingEnabledAtom,
+  modelProfilesAtom,
+  lastUsedProfileIdAtom,
+  selectedProfileModelIdAtom,
+  type ModelProfile,
+  type ModelMapping,
 } from "../../../lib/atoms"
 // Desktop uses real tRPC
 import { toast } from "sonner"
@@ -109,6 +115,7 @@ import {
   type DraftProject,
 } from "../lib/drafts"
 import { CLAUDE_MODELS } from "../lib/models"
+import { Settings } from "lucide-react"
 // import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
 
@@ -235,6 +242,111 @@ export function NewChatForm({
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+
+  // Model profile state for new chats
+  const profiles = useAtomValue(modelProfilesAtom)
+  const [lastUsedProfileId, setLastUsedProfileId] = useAtom(lastUsedProfileIdAtom)
+
+  // Filter out offline profiles from display
+  const displayProfiles = profiles.filter((p) => !p.isOffline)
+
+  // Get effective profile (lastUsed or first available)
+  const effectiveProfile = useMemo(() => {
+    if (lastUsedProfileId) {
+      const found = profiles.find((p) => p.id === lastUsedProfileId)
+      if (found) return found
+    }
+    return displayProfiles[0] ?? null
+  }, [profiles, displayProfiles, lastUsedProfileId])
+
+  // Selected model within profile - use global atom so ipc-chat-transport can read it
+  const [selectedProfileModelId, setSelectedProfileModelId] = useAtom(selectedProfileModelIdAtom)
+
+  // Get effective model from profile
+  const effectiveProfileModel = useMemo((): ModelMapping | null => {
+    if (!effectiveProfile?.models || effectiveProfile.models.length === 0) {
+      return null
+    }
+    if (selectedProfileModelId) {
+      const found = effectiveProfile.models.find((m) => m.id === selectedProfileModelId)
+      if (found) return found
+    }
+    return effectiveProfile.models[0] ?? null
+  }, [effectiveProfile, selectedProfileModelId])
+
+  // Derive available models from profile config (like settings do)
+  const profileModels = useMemo((): ModelMapping[] => {
+    if (!effectiveProfile?.config) return []
+    const models: ModelMapping[] = []
+    const config = effectiveProfile.config
+
+    // Add main model
+    if (config.model) {
+      models.push({
+        id: "main",
+        displayName: "Main",
+        modelId: config.model,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Opus model
+    if (config.defaultOpusModel) {
+      models.push({
+        id: "opus",
+        displayName: "Opus",
+        modelId: config.defaultOpusModel,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Sonnet model
+    if (config.defaultSonnetModel) {
+      models.push({
+        id: "sonnet",
+        displayName: "Sonnet",
+        modelId: config.defaultSonnetModel,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Haiku model
+    if (config.defaultHaikuModel) {
+      models.push({
+        id: "haiku",
+        displayName: "Haiku",
+        modelId: config.defaultHaikuModel,
+        supportsThinking: false,
+      })
+    }
+
+    // Add Subagent model
+    if (config.subagentModel) {
+      models.push({
+        id: "subagent",
+        displayName: "Subagent",
+        modelId: config.subagentModel,
+        supportsThinking: false,
+      })
+    }
+
+    return models
+  }, [effectiveProfile?.config])
+
+  // Get selected model from profile models
+  const selectedProfileModel = useMemo((): ModelMapping | null => {
+    if (profileModels.length === 0) return null
+    if (selectedProfileModelId) {
+      const found = profileModels.find((m) => m.id === selectedProfileModelId)
+      if (found) return found
+    }
+    return profileModels[0] ?? null
+  }, [profileModels, selectedProfileModelId])
+
+  // Reset selected model when profile changes
+  useEffect(() => {
+    setSelectedProfileModelId(null)
+  }, [effectiveProfile?.id])
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
@@ -1559,7 +1671,49 @@ export function NewChatForm({
                   </div>
                   <PromptInputActions className="w-full">
                     <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                      {/* Model selector - shows Ollama models when offline, Claude models when online */}
+                      {/* Profile selector - only show when profiles exist */}
+                      {displayProfiles.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="flex items-center gap-1 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                            >
+                              <span className="truncate max-w-[80px]">
+                                {effectiveProfile?.name || "Default"}
+                              </span>
+                              <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-[200px]">
+                            {displayProfiles.map((profile) => {
+                              const isSelected = profile.id === effectiveProfile?.id
+                              return (
+                                <DropdownMenuItem
+                                  key={profile.id}
+                                  onClick={() => setLastUsedProfileId(profile.id)}
+                                  className="gap-2 justify-between"
+                                >
+                                  <span className="truncate">{profile.name}</span>
+                                  {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0" />}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSettingsActiveTab("models")
+                                setSettingsDialogOpen(true)
+                              }}
+                              className="gap-2"
+                            >
+                              <Settings className="h-3.5 w-3.5" />
+                              <span>Manage Profiles...</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+
+                      {/* Model selector - shows profile models, Ollama models when offline, or Claude models */}
                       {availableModels.isOffline && availableModels.hasOllama ? (
                         // Offline mode: show Ollama model selector
                         <DropdownMenu
@@ -1602,8 +1756,54 @@ export function NewChatForm({
                             })}
                           </DropdownMenuContent>
                         </DropdownMenu>
+                      ) : profileModels.length > 0 ? (
+                        // Profile mode: show models from selected profile config
+                        <DropdownMenu
+                          open={isModelDropdownOpen}
+                          onOpenChange={setIsModelDropdownOpen}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                            >
+                              <ClaudeCodeIcon className="h-3.5 w-3.5" />
+                              <span>
+                                {selectedProfileModel?.displayName || "Select model"}{" "}
+                                <span className="text-muted-foreground">
+                                  ({selectedProfileModel?.modelId || ""})
+                                </span>
+                              </span>
+                              <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-[280px]">
+                            {profileModels.map((model) => {
+                              const isSelected = model.id === selectedProfileModel?.id
+                              return (
+                                <DropdownMenuItem
+                                  key={model.id}
+                                  onClick={() => setSelectedProfileModelId(model.id)}
+                                  className="gap-2 justify-between"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span>
+                                      {model.displayName}{" "}
+                                      <span className="text-muted-foreground">
+                                        ({model.modelId})
+                                      </span>
+                                    </span>
+                                  </div>
+                                  {isSelected && (
+                                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       ) : (
-                        // Online mode: show Claude model selector
+                        // Fallback: show Claude model selector (no profile or empty profile)
                         <DropdownMenu
                           open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
                           onOpenChange={(open) => {

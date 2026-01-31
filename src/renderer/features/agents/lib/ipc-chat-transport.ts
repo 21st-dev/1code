@@ -8,6 +8,9 @@ import {
   enableTasksAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
+  modelProfilesAtom,
+  lastUsedProfileIdAtom,
+  selectedProfileModelIdAtom,
   selectedOllamaModelAtom,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
@@ -168,11 +171,56 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const enableTasks = appStore.get(enableTasksAtom)
 
     // Read model selection dynamically (so model changes apply to existing chats)
-    const selectedModelId = appStore.get(lastSelectedModelIdAtom)
-    const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
+    // First try to get model from profile system, then fall back to legacy MODEL_ID_MAP
+    const profiles = appStore.get(modelProfilesAtom)
+    const lastUsedProfileId = appStore.get(lastUsedProfileIdAtom)
+    const selectedProfileModelId = appStore.get(selectedProfileModelIdAtom)
+
+    // Find the effective profile
+    const effectiveProfile = lastUsedProfileId
+      ? profiles.find(p => p.id === lastUsedProfileId)
+      : profiles.filter(p => !p.isOffline)[0]
+
+    // Resolve model from profile config based on selected model ID
+    let modelString: string | undefined
+    if (effectiveProfile?.config) {
+      const config = effectiveProfile.config
+      switch (selectedProfileModelId) {
+        case "main":
+          modelString = config.model
+          break
+        case "opus":
+          modelString = config.defaultOpusModel
+          break
+        case "sonnet":
+          modelString = config.defaultSonnetModel
+          break
+        case "haiku":
+          modelString = config.defaultHaikuModel
+          break
+        case "subagent":
+          modelString = config.subagentModel
+          break
+        default:
+          // Default to main model if no specific selection
+          modelString = config.model
+      }
+    }
+
+    // Fall back to legacy model selection if no profile model found
+    if (!modelString) {
+      const selectedModelId = appStore.get(lastSelectedModelIdAtom)
+      modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
+    }
+
+    console.log(`[IPC Transport] Using model: ${modelString} (profile: ${effectiveProfile?.name || 'none'}, selectedProfileModelId: ${selectedProfileModelId})`)
 
     // Read active profile config (from profile system, supports multiple profiles)
-    const customConfig = appStore.get(activeConfigAtom)
+    // Override the model in customConfig with the selected model from profile
+    const baseCustomConfig = appStore.get(activeConfigAtom)
+    const customConfig = baseCustomConfig && modelString
+      ? { ...baseCustomConfig, model: modelString }
+      : baseCustomConfig
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)

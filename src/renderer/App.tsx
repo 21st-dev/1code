@@ -30,6 +30,7 @@ import {
 } from "./lib/atoms";
 import { appStore } from "./lib/jotai-store";
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider";
+import { useTrayEvents } from "./lib/tray-events";
 import { trpc } from "./lib/trpc";
 
 /**
@@ -178,6 +179,9 @@ function AppContent() {
 }
 
 export function App() {
+  // Listen for tray events (settings, workspace selection)
+  useTrayEvents();
+
   // Initialize analytics on mount
   useEffect(() => {
     initAnalytics();

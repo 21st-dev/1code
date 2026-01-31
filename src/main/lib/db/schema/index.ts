@@ -51,6 +51,9 @@ export const chats = sqliteTable("chats", {
   // PR tracking fields
   prUrl: text("pr_url"),
   prNumber: integer("pr_number"),
+  // Model profile fields (per-workspace model configuration)
+  modelProfileId: text("model_profile_id"),  // References profile ID from localStorage
+  selectedModelId: text("selected_model_id"), // Which model within the profile
 }, (table) => [
   index("chats_worktree_path_idx").on(table.worktreePath),
 ])

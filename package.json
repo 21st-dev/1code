@@ -166,6 +166,10 @@
       {
         "from": "resources/bin/VERSION",
         "to": "bin/VERSION"
+      },
+      {
+        "from": "build/trayTemplate.png",
+        "to": "trayTemplate.png"
       }
     ],
     "asar": true,

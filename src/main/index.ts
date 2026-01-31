@@ -28,6 +28,7 @@ import {
 } from "./lib/cli"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
+import { initTray, destroyTray } from "./lib/tray"
 import {
   createMainWindow,
   createWindow,
@@ -852,6 +853,9 @@ if (gotTheLock) {
       console.error("[App] Failed to initialize database:", error)
     }
 
+    // Initialize system tray
+    initTray()
+
     // Create main window
     createMainWindow()
 
@@ -903,9 +907,16 @@ if (gotTheLock) {
     }
   })
 
+  // Track when app is intentionally quitting (vs just closing windows)
+  let isQuitting = false
+  ;(global as any).__isAppQuitting = () => isQuitting
+
   // Cleanup before quit
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
+    isQuitting = true
+    ;(global as any).__isAppQuitting = () => true
+    destroyTray()
     cancelAllPendingOAuth()
     await cleanupGitWatchers()
     await shutdownAnalytics()

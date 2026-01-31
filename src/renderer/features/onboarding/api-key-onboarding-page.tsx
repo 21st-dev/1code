@@ -115,7 +115,8 @@ export function ApiKeyOnboardingPage() {
     const trimmedToken = token.trim()
     const trimmedBaseUrl = baseUrl.trim()
 
-    if (!trimmedModel || !trimmedToken || !trimmedBaseUrl) return
+    // Only model and baseUrl are required - token is optional for proxy configs
+    if (!trimmedModel || !trimmedBaseUrl) return
 
     setIsSubmitting(true)
 
@@ -167,8 +168,9 @@ export function ApiKeyOnboardingPage() {
     }
   }
 
+  // Token is optional if using a proxy (baseUrl) - proxy may handle auth
   const canSubmitCustomModel = Boolean(
-    model.trim() && token.trim() && baseUrl.trim()
+    model.trim() && baseUrl.trim() // Only model and baseUrl are required
   )
 
   // Simple API key input mode
@@ -299,7 +301,7 @@ export function ApiKeyOnboardingPage() {
 
           {/* API Token */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">API Token *</Label>
+            <Label className="text-sm font-medium">API Token (Optional for proxies)</Label>
             <Input
               type="password"
               value={token}
