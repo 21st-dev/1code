@@ -113,9 +113,7 @@ import {
   dataViewerSidebarOpenAtomFamily,
   dataViewerSidebarWidthAtom,
   viewedDataFileAtomFamily,
-  fileViewerSidebarOpenAtomFamily,
   fileViewerSidebarWidthAtom,
-  viewedSourceFileAtomFamily,
   agentsSubChatUnseenChangesAtom,
   agentsUnseenChangesAtom,
   fileSearchDialogOpenAtom,
@@ -4453,17 +4451,6 @@ export function ChatView({
   )
   const [isDataViewerSidebarOpen, setIsDataViewerSidebarOpen] = useAtom(dataViewerSidebarAtom)
   const [viewedDataFile, setViewedDataFile] = useAtom(viewedDataFileAtom)
-  // Per-chat file viewer sidebar state (for source code files)
-  const fileViewerSidebarAtom = useMemo(
-    () => fileViewerSidebarOpenAtomFamily(chatId),
-    [chatId],
-  )
-  const viewedSourceFileAtom = useMemo(
-    () => viewedSourceFileAtomFamily(chatId),
-    [chatId],
-  )
-  const [isFileViewerSidebarOpen, setIsFileViewerSidebarOpen] = useAtom(fileViewerSidebarAtom)
-  const [viewedSourceFile, setViewedSourceFile] = useAtom(viewedSourceFileAtom)
   const [isPlanSidebarOpen, setIsPlanSidebarOpen] = useAtom(planSidebarAtom)
   const currentPlanPathAtom = useMemo(
     () => currentPlanPathAtomFamily(activeSubChatIdForPlan || ""),
@@ -6582,13 +6569,11 @@ Make sure to preserve all functionality from both branches when resolving confli
                 setViewedDataFile(filePath)
                 setIsDataViewerSidebarOpen(true)
                 // Close file viewer (mutual exclusion - one sidebar at a time)
-                setIsFileViewerSidebarOpen(false)
-                setViewedSourceFile(null)
+                setFileViewerPath(null)
               }}
               onSelectSourceFile={(filePath) => {
-                // Source files: open in File Viewer, close Data Viewer
-                setViewedSourceFile(filePath)
-                setIsFileViewerSidebarOpen(true)
+                // Source files: open in File Viewer (uses display mode), close Data Viewer
+                setFileViewerPath(filePath)
                 // Close data viewer (mutual exclusion - one sidebar at a time)
                 setIsDataViewerSidebarOpen(false)
                 setViewedDataFile(null)
@@ -7199,35 +7184,6 @@ Make sure to preserve all functionality from both branches when resolving confli
               onClose={() => {
                 setIsDataViewerSidebarOpen(false)
                 setViewedDataFile(null)
-              }}
-            />
-          </ResizableSidebar>
-        )}
-
-        {/* File Viewer Sidebar - for viewing source code files with Monaco Editor */}
-        {isFileViewerSidebarOpen && viewedSourceFile && (worktreePath || originalProjectPath) && (
-          <ResizableSidebar
-            isOpen={isFileViewerSidebarOpen}
-            onClose={() => {
-              setIsFileViewerSidebarOpen(false)
-              setViewedSourceFile(null)
-            }}
-            widthAtom={fileViewerSidebarWidthAtom}
-            minWidth={350}
-            side="right"
-            animationDuration={0}
-            initialWidth={0}
-            exitWidth={0}
-            showResizeTooltip={true}
-            className="bg-background border-l"
-            style={{ borderLeftWidth: "0.5px", overflow: "hidden" }}
-          >
-            <FileViewerSidebar
-              filePath={viewedSourceFile}
-              projectPath={(worktreePath || originalProjectPath) as string}
-              onClose={() => {
-                setIsFileViewerSidebarOpen(false)
-                setViewedSourceFile(null)
               }}
             />
           </ResizableSidebar>
