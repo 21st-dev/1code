@@ -20,7 +20,31 @@ export const agentChatStore = {
 
   has: (id: string) => chats.has(id),
 
+  /**
+   * Abort any active stream for a sub-chat.
+   * Should be called before delete() to ensure proper cleanup.
+   */
+  abort: (id: string) => {
+    const chat = chats.get(id)
+    if (chat) {
+      try {
+        // Chat.stop() aborts the current stream
+        chat.stop()
+      } catch (e) {
+        // Ignore errors during abort - chat may already be stopped
+        console.debug(`[agentChatStore] Error stopping chat ${id}:`, e)
+      }
+    }
+    manuallyAborted.set(id, true)
+  },
+
+  /**
+   * Delete a chat instance and all associated data.
+   * IMPORTANT: Call abort() first if the chat may be streaming.
+   */
   delete: (id: string) => {
+    // Abort first to ensure stream is stopped
+    agentChatStore.abort(id)
     chats.delete(id)
     streamIds.delete(id)
     parentChatIds.delete(id)

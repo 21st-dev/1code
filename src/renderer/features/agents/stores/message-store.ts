@@ -2,6 +2,7 @@
 
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
+import { agentChatStore } from "./agent-chat-store"
 
 // Types
 export interface MessagePart {
@@ -85,6 +86,9 @@ function touchSubChat(subChatId: string) {
     const oldestSubChatId = subChatLRU.keys().next().value
     if (oldestSubChatId) {
       subChatLRU.delete(oldestSubChatId)
+      // CRITICAL: Abort any active stream before clearing caches
+      // This prevents background streams from continuing to consume resources
+      agentChatStore.abort(oldestSubChatId)
       clearSubChatCaches(oldestSubChatId)
     }
   }
