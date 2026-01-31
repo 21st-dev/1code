@@ -207,6 +207,11 @@ export type CustomClaudeConfig = {
   model: string
   token: string
   baseUrl: string
+  // Additional model configuration (optional)
+  defaultOpusModel?: string // ANTHROPIC_DEFAULT_OPUS_MODEL
+  defaultSonnetModel?: string // ANTHROPIC_DEFAULT_SONNET_MODEL
+  defaultHaikuModel?: string // ANTHROPIC_DEFAULT_HAIKU_MODEL
+  subagentModel?: string // CLAUDE_CODE_SUBAGENT_MODEL
 }
 
 // Model profile system - support multiple configs
@@ -260,6 +265,8 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
   undefined,
   { getOnInit: true },
 )
+
+// Migration block removed as per user request (legacy config no longer auto-migrates to "Migrated Config")
 
 // OpenAI API key for voice transcription (for users without paid subscription)
 export const openaiApiKeyAtom = atomWithStorage<string>(
@@ -360,7 +367,6 @@ export const activeConfigAtom = atom((get) => {
 
 // Preferences - Extended Thinking
 // When enabled, Claude will use extended thinking for deeper reasoning (128K tokens)
-// Note: Extended thinking disables response streaming
 export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
   "preferences:extended-thinking-enabled",
   false,

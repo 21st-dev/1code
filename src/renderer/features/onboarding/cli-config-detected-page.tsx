@@ -1,14 +1,17 @@
 "use client";
 
-import { useSetAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { useState } from "react";
 import { ChevronLeft, Check, ExternalLink } from "lucide-react";
 
 import { ClaudeCodeIcon, KeyFilledIcon } from "../../components/ui/icons";
 import {
+  activeProfileIdAtom,
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
   cliConfigDetectedShownAtom,
+  modelProfilesAtom,
+  type ModelProfile,
 } from "../../lib/atoms";
 import { trpc } from "../../lib/trpc";
 import { cn } from "../../lib/utils";
@@ -19,6 +22,8 @@ export function CliConfigDetectedPage() {
     apiKeyOnboardingCompletedAtom,
   );
   const setCliConfigDetectedShown = useSetAtom(cliConfigDetectedShownAtom);
+  const [profiles, setProfiles] = useAtom(modelProfilesAtom);
+  const [activeProfileId, setActiveProfileId] = useAtom(activeProfileIdAtom);
   const [isContinuing, setIsContinuing] = useState(false);
   const [showOAuthFlow, setShowOAuthFlow] = useState(false);
 
@@ -27,6 +32,34 @@ export function CliConfigDetectedPage() {
     trpc.claudeCode.hasExistingCliConfig.useQuery();
 
   const handleUseExistingConfig = () => {
+    const cliConfigData = cliConfig;
+    if (!cliConfigData) return;
+
+    // Prompt user to save as profile
+    const shouldSave = window.confirm(
+      "Would you like to save this configuration as a profile for easy switching later?",
+    );
+
+    if (shouldSave) {
+      const newProfile: ModelProfile = {
+        id: crypto.randomUUID(),
+        name: "Detected CLI Config",
+        config: {
+          model: cliConfigData.model || "claude-3-7-sonnet-20250219",
+          token: cliConfigData.apiKey || "",
+          baseUrl: cliConfigData.baseUrl || "https://api.anthropic.com",
+          // Additional model config (if available in CLI config)
+          defaultOpusModel: cliConfigData.defaultOpusModel || undefined,
+          defaultSonnetModel: cliConfigData.defaultSonnetModel || undefined,
+          defaultHaikuModel: cliConfigData.defaultHaikuModel || undefined,
+          subagentModel: cliConfigData.subagentModel || undefined,
+        },
+      };
+
+      setProfiles([...profiles, newProfile]);
+      setActiveProfileId(newProfile.id);
+    }
+
     setIsContinuing(true);
     // Mark CLI config detected as shown so we don't show this page again
     setCliConfigDetectedShown(true);

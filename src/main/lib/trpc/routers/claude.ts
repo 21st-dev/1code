@@ -474,6 +474,11 @@ export const claudeRouter = router({
             model: z.string().min(1),
             token: z.string().min(1),
             baseUrl: z.string().min(1),
+            // Additional model configuration (optional)
+            defaultOpusModel: z.string().optional(),
+            defaultSonnetModel: z.string().optional(),
+            defaultHaikuModel: z.string().optional(),
+            subagentModel: z.string().optional(),
           })
           .optional(),
         maxThinkingTokens: z.number().optional(), // Enable extended thinking
@@ -747,6 +752,12 @@ export const claudeRouter = router({
                 customEnv: {
                   ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
                   ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
+                  // Additional model configuration from profile
+                  ...(finalCustomConfig.model && { ANTHROPIC_MODEL: finalCustomConfig.model }),
+                  ...(finalCustomConfig.defaultOpusModel && { ANTHROPIC_DEFAULT_OPUS_MODEL: finalCustomConfig.defaultOpusModel }),
+                  ...(finalCustomConfig.defaultSonnetModel && { ANTHROPIC_DEFAULT_SONNET_MODEL: finalCustomConfig.defaultSonnetModel }),
+                  ...(finalCustomConfig.defaultHaikuModel && { ANTHROPIC_DEFAULT_HAIKU_MODEL: finalCustomConfig.defaultHaikuModel }),
+                  ...(finalCustomConfig.subagentModel && { CLAUDE_CODE_SUBAGENT_MODEL: finalCustomConfig.subagentModel }),
                 },
               }),
               enableTasks: input.enableTasks ?? true,
@@ -808,6 +819,64 @@ export const claudeRouter = router({
                 }
 
                 symlinksCreated.add(cacheKey)
+              }
+
+              // Write settings.json to isolated config dir with profile's env settings
+              // This ensures the CLI uses the selected profile instead of global ~/.claude/settings.json
+              try {
+                const isolatedSettingsPath = path.join(isolatedConfigDir, "settings.json")
+                const homeSettingsPath = path.join(os.homedir(), ".claude", "settings.json")
+                
+                // Read existing global settings (for non-env settings like permissions, plugins, etc.)
+                let baseSettings: Record<string, any> = {}
+                try {
+                  const globalSettings = await fs.readFile(homeSettingsPath, "utf-8")
+                  baseSettings = JSON.parse(globalSettings)
+                } catch {
+                  // No global settings file, start fresh
+                }
+                
+                // Build env section from profile config (overrides global env)
+                const profileEnv: Record<string, string> = {}
+                if (finalCustomConfig) {
+                  if (finalCustomConfig.token) {
+                    profileEnv.ANTHROPIC_AUTH_TOKEN = finalCustomConfig.token
+                  }
+                  if (finalCustomConfig.baseUrl) {
+                    profileEnv.ANTHROPIC_BASE_URL = finalCustomConfig.baseUrl
+                  }
+                  if (finalCustomConfig.model) {
+                    profileEnv.ANTHROPIC_MODEL = finalCustomConfig.model
+                  }
+                  if (finalCustomConfig.defaultOpusModel) {
+                    profileEnv.ANTHROPIC_DEFAULT_OPUS_MODEL = finalCustomConfig.defaultOpusModel
+                  }
+                  if (finalCustomConfig.defaultSonnetModel) {
+                    profileEnv.ANTHROPIC_DEFAULT_SONNET_MODEL = finalCustomConfig.defaultSonnetModel
+                  }
+                  if (finalCustomConfig.defaultHaikuModel) {
+                    profileEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL = finalCustomConfig.defaultHaikuModel
+                  }
+                  if (finalCustomConfig.subagentModel) {
+                    profileEnv.CLAUDE_CODE_SUBAGENT_MODEL = finalCustomConfig.subagentModel
+                  }
+                }
+                
+                // Merge: keep global non-env settings, but replace env with profile settings
+                const isolatedSettings = {
+                  ...baseSettings,
+                  env: Object.keys(profileEnv).length > 0 ? profileEnv : undefined,
+                }
+                
+                // Remove env key entirely if no profile config (use OAuth)
+                if (!isolatedSettings.env) {
+                  delete isolatedSettings.env
+                }
+                
+                await fs.writeFile(isolatedSettingsPath, JSON.stringify(isolatedSettings, null, 2))
+                console.log(`[claude] Wrote profile settings to ${isolatedSettingsPath}`)
+              } catch (settingsErr) {
+                console.error(`[claude] Failed to write isolated settings.json:`, settingsErr)
               }
 
               // Read MCP servers from ~/.claude.json for the original project path
@@ -965,13 +1034,14 @@ export const claudeRouter = router({
 
             // Log SDK configuration for debugging
             if (isUsingOllama) {
+              const envRecord = finalEnv as Record<string, string | undefined>
               console.log('[Ollama Debug] SDK Configuration:', {
                 model: resolvedModel,
-                baseUrl: finalEnv.ANTHROPIC_BASE_URL,
+                baseUrl: envRecord.ANTHROPIC_BASE_URL,
                 cwd: input.cwd,
                 configDir: isolatedConfigDir,
-                hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-                tokenPreview: finalEnv.ANTHROPIC_AUTH_TOKEN?.slice(0, 10) + '...',
+                hasAuthToken: !!envRecord.ANTHROPIC_AUTH_TOKEN,
+                tokenPreview: envRecord.ANTHROPIC_AUTH_TOKEN?.slice(0, 10) + '...',
               })
               console.log('[Ollama Debug] Session settings:', {
                 resumeSessionId: resumeSessionId || 'none (first message)',

@@ -235,7 +235,13 @@ export const subChatModeAtomFamily = atomFamily((subChatId: string) =>
 )
 
 // Model ID to full Claude model string mapping
+// When a custom profile is active, these map to the profile's model settings:
+// - default: uses profile.model (ANTHROPIC_MODEL)
+// - opus: uses profile.defaultOpusModel (ANTHROPIC_DEFAULT_OPUS_MODEL)
+// - sonnet: uses profile.defaultSonnetModel (ANTHROPIC_DEFAULT_SONNET_MODEL)
+// - haiku: uses profile.defaultHaikuModel (ANTHROPIC_DEFAULT_HAIKU_MODEL)
 export const MODEL_ID_MAP: Record<string, string> = {
+  default: "default",
   opus: "opus",
   sonnet: "sonnet",
   haiku: "haiku",

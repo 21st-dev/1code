@@ -5,6 +5,13 @@ import {
 } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu"
+import { Badge } from "../../../components/ui/badge"
+import {
   AgentIcon,
   AttachIcon,
   CheckIcon,
@@ -63,10 +70,12 @@ import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
 import {
+  activeProfileIdAtom,
   chatSourceModeAtom,
   customClaudeConfigAtom,
   defaultAgentModeAtom,
   isDesktopAtom, isFullscreenAtom,
+  modelProfilesAtom,
   normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
   soundNotificationsEnabledAtom
@@ -366,6 +375,44 @@ const getAgentIcon = (agentId: string, className?: string) => {
     default:
       return null
   }
+}
+
+// Model Profile Selector component for quick profile switching
+function ModelProfileSelector() {
+  const [profiles] = useAtom(modelProfilesAtom)
+  const [activeProfileId, setActiveProfileId] = useAtom(activeProfileIdAtom)
+
+  const activeProfile = profiles.find((p) => p.id === activeProfileId)
+  const customProfiles = profiles.filter((p) => !p.isOffline)
+
+  if (customProfiles.length === 0) return null
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-7 gap-1 ml-2">
+          <span className="text-xs">
+            {activeProfile ? activeProfile.name : "System"}
+          </span>
+          <ChevronDown className="h-3 w-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        {/* System (No Profile) option removed as per request - forcing use of named profiles */}
+        {customProfiles.map((profile) => (
+          <DropdownMenuItem
+            key={profile.id}
+            onClick={() => setActiveProfileId(profile.id)}
+          >
+            <span>{profile.name}</span>
+            {activeProfileId === profile.id && (
+              <Badge className="ml-auto text-xs">Active</Badge>
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 // Copy button component with tooltip feedback (matches project style)
@@ -6469,6 +6516,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                         isTerminalOpen={isTerminalSidebarOpen}
                         chatId={chatId}
                       />
+                      <ModelProfileSelector />
                       {/* Open Locally button - desktop only, sandbox mode */}
                       {showOpenLocally && (
                         <Tooltip delayDuration={500}>

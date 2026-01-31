@@ -12,8 +12,11 @@ import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
   customClaudeConfigAtom,
+  modelProfilesAtom,
+  activeProfileIdAtom,
   type CustomClaudeConfig,
 } from "../../lib/atoms"
+import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
 
 // Check if the key looks like a valid Anthropic API key
@@ -24,6 +27,8 @@ const isValidApiKey = (key: string) => {
 
 export function ApiKeyOnboardingPage() {
   const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
+  const [profiles, setProfiles] = useAtom(modelProfilesAtom)
+  const setActiveProfileId = useSetAtom(activeProfileIdAtom)
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
@@ -34,11 +39,20 @@ export function ApiKeyOnboardingPage() {
   const defaultModel = "claude-sonnet-4-20250514"
   const defaultBaseUrl = "https://api.anthropic.com"
 
+  // Query for existing CLI config (to pre-fill form with detected proxy)
+  const { data: cliConfig } = trpc.claudeCode.hasExistingCliConfig.useQuery()
+
   const [apiKey, setApiKey] = useState(storedConfig.token)
   const [model, setModel] = useState(storedConfig.model || "")
   const [token, setToken] = useState(storedConfig.token)
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl || "")
+  // Optional model configuration fields
+  const [defaultOpusModel, setDefaultOpusModel] = useState(storedConfig.defaultOpusModel || "")
+  const [defaultSonnetModel, setDefaultSonnetModel] = useState(storedConfig.defaultSonnetModel || "")
+  const [defaultHaikuModel, setDefaultHaikuModel] = useState(storedConfig.defaultHaikuModel || "")
+  const [subagentModel, setSubagentModel] = useState(storedConfig.subagentModel || "")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [hasAppliedCliConfig, setHasAppliedCliConfig] = useState(false)
 
   // Sync from stored config on mount
   useEffect(() => {
@@ -48,7 +62,31 @@ export function ApiKeyOnboardingPage() {
     }
     if (storedConfig.model) setModel(storedConfig.model)
     if (storedConfig.baseUrl) setBaseUrl(storedConfig.baseUrl)
+    if (storedConfig.defaultOpusModel) setDefaultOpusModel(storedConfig.defaultOpusModel)
+    if (storedConfig.defaultSonnetModel) setDefaultSonnetModel(storedConfig.defaultSonnetModel)
+    if (storedConfig.defaultHaikuModel) setDefaultHaikuModel(storedConfig.defaultHaikuModel)
+    if (storedConfig.subagentModel) setSubagentModel(storedConfig.subagentModel)
   }, [])
+
+  // Pre-fill form with detected CLI config (proxy settings) if available
+  useEffect(() => {
+    // Only proceed if we have config and haven't applied it yet
+    if (cliConfig && !hasAppliedCliConfig && isCustomModel) {
+      setHasAppliedCliConfig(true)
+      
+      // Pre-fill with detected values if the current state is empty
+      if (cliConfig.apiKey && token === "") {
+        setToken(cliConfig.apiKey)
+        setApiKey(cliConfig.apiKey)
+      }
+      if (cliConfig.baseUrl && baseUrl === "") setBaseUrl(cliConfig.baseUrl)
+      if (cliConfig.model && model === "") setModel(cliConfig.model)
+      if (cliConfig.defaultOpusModel && defaultOpusModel === "") setDefaultOpusModel(cliConfig.defaultOpusModel)
+      if (cliConfig.defaultSonnetModel && defaultSonnetModel === "") setDefaultSonnetModel(cliConfig.defaultSonnetModel)
+      if (cliConfig.defaultHaikuModel && defaultHaikuModel === "") setDefaultHaikuModel(cliConfig.defaultHaikuModel)
+      if (cliConfig.subagentModel && subagentModel === "") setSubagentModel(cliConfig.subagentModel)
+    }
+  }, [cliConfig, hasAppliedCliConfig, isCustomModel, token, baseUrl, model, defaultOpusModel, defaultSonnetModel, defaultHaikuModel, subagentModel])
 
   const handleBack = () => {
     setBillingMethod(null)
@@ -71,7 +109,7 @@ export function ApiKeyOnboardingPage() {
     setIsSubmitting(false)
   }
 
-  // Submit for custom model mode (all three fields)
+  // Submit for custom model mode (all fields)
   const submitCustomModel = () => {
     const trimmedModel = model.trim()
     const trimmedToken = token.trim()
@@ -85,8 +123,29 @@ export function ApiKeyOnboardingPage() {
       model: trimmedModel,
       token: trimmedToken,
       baseUrl: trimmedBaseUrl,
+      defaultOpusModel: defaultOpusModel.trim() || undefined,
+      defaultSonnetModel: defaultSonnetModel.trim() || undefined,
+      defaultHaikuModel: defaultHaikuModel.trim() || undefined,
+      subagentModel: subagentModel.trim() || undefined,
     }
+    
+    // Save to legacy config atom
     setStoredConfig(config)
+    
+    // Also create a profile in modelProfilesAtom so it shows in settings
+    const newProfileId = crypto.randomUUID()
+    const newProfile = {
+      id: newProfileId,
+      name: "Default", // Saved as Default as requested
+      config,
+    }
+    
+    // Add new profile (keep existing profiles like offline profile)
+    setProfiles([...profiles, newProfile])
+    
+    // Set as active profile
+    setActiveProfileId(newProfileId)
+    
     setApiKeyOnboardingCompleted(true)
 
     setIsSubmitting(false)
@@ -188,22 +247,22 @@ export function ApiKeyOnboardingPage() {
 
   // Custom model mode with all fields
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
+    <div className="h-screen w-screen flex flex-col items-center bg-background select-none overflow-y-auto">
       {/* Draggable title bar area */}
       <div
-        className="fixed top-0 left-0 right-0 h-10"
+        className="fixed top-0 left-0 right-0 h-10 z-10"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
 
       {/* Back button - fixed in top left corner below traffic lights */}
       <button
         onClick={handleBack}
-        className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
+        className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors z-10"
       >
         <ChevronLeft className="h-5 w-5" />
       </button>
 
-      <div className="w-full max-w-[440px] space-y-8 px-4">
+      <div className="w-full max-w-[440px] space-y-6 px-4 py-16">
         {/* Header with dual icons */}
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
@@ -226,23 +285,21 @@ export function ApiKeyOnboardingPage() {
 
         {/* Form Fields */}
         <div className="space-y-4">
-          {/* Model Name */}
+          {/* Base URL */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Model name</Label>
+            <Label className="text-sm font-medium">Base URL *</Label>
             <Input
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="claude-sonnet-4-20250514"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://api.anthropic.com"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">
-              Model identifier for API requests
-            </p>
+            <p className="text-xs text-muted-foreground">API endpoint URL</p>
           </div>
 
           {/* API Token */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">API token</Label>
+            <Label className="text-sm font-medium">API Token *</Label>
             <Input
               type="password"
               value={token}
@@ -255,16 +312,80 @@ export function ApiKeyOnboardingPage() {
             </p>
           </div>
 
-          {/* Base URL */}
+          {/* Default Model */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Base URL</Label>
+            <Label className="text-sm font-medium">Default Model *</Label>
             <Input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.anthropic.com"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="claude-sonnet-4-5-thinking"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">API endpoint URL</p>
+            <p className="text-xs text-muted-foreground">
+              Model identifier for API requests
+            </p>
+          </div>
+
+          {/* Optional Model Configuration Section */}
+          <div className="pt-2 border-t border-border/50">
+            <p className="text-xs text-muted-foreground mb-3 font-medium">
+              Additional Model Configuration (Optional)
+            </p>
+          </div>
+
+          {/* 2-column grid for optional model fields */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Default Opus Model */}
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Default Opus Model
+              </Label>
+              <Input
+                value={defaultOpusModel}
+                onChange={(e) => setDefaultOpusModel(e.target.value)}
+                placeholder="claude-opus-4-5-thinking"
+                className="w-full h-8"
+              />
+            </div>
+
+            {/* Default Sonnet Model */}
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Default Sonnet Model
+              </Label>
+              <Input
+                value={defaultSonnetModel}
+                onChange={(e) => setDefaultSonnetModel(e.target.value)}
+                placeholder="claude-sonnet-4-5-thinking"
+                className="w-full h-8"
+              />
+            </div>
+
+            {/* Default Haiku Model */}
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Default Haiku Model
+              </Label>
+              <Input
+                value={defaultHaikuModel}
+                onChange={(e) => setDefaultHaikuModel(e.target.value)}
+                placeholder="claude-sonnet-4-5"
+                className="w-full h-8"
+              />
+            </div>
+
+            {/* Subagent Model */}
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Subagent Model
+              </Label>
+              <Input
+                value={subagentModel}
+                onChange={(e) => setSubagentModel(e.target.value)}
+                placeholder="claude-sonnet-4-5-thinking"
+                className="w-full h-8"
+              />
+            </div>
           </div>
         </div>
 

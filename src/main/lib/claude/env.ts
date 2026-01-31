@@ -138,6 +138,35 @@ function stripSensitiveKeys(env: Record<string, string>): void {
 }
 
 /**
+ * Load Claude Code CLI settings from disk (~/.claude/settings.json)
+ * This is needed because some users configure Claude Code via 'claude config'
+ * which writes to this file, and these settings might not be in the shell env.
+ */
+function loadClaudeCliSettings(): Record<string, string> {
+  try {
+    const homeDir = os.homedir()
+    const settingsPath = path.join(homeDir, ".claude", "settings.json")
+    
+    if (!fs.existsSync(settingsPath)) {
+      return {}
+    }
+
+    const content = fs.readFileSync(settingsPath, 'utf-8')
+    const settings = JSON.parse(content)
+    
+    // Config values are stored in the 'env' object within settings.json
+    if (settings && typeof settings === 'object' && settings.env && typeof settings.env === 'object') {
+      console.log(`[claude-env] Loaded ${Object.keys(settings.env).length} vars from ${settingsPath}`)
+      return settings.env as Record<string, string>
+    }
+  } catch (error) {
+    console.warn("[claude-env] Failed to load settings.json:", error)
+  }
+  
+  return {}
+}
+
+/**
  * Load full shell environment.
  * - Windows: Derives PATH from process.env + common install locations (no shell spawn)
  * - macOS/Linux: Spawns interactive login shell to capture PATH from shell profiles
@@ -148,62 +177,72 @@ export function getClaudeShellEnvironment(): Record<string, string> {
     return { ...cachedShellEnv }
   }
 
-  // Windows: use platform provider to build environment
+  let env: Record<string, string> = {}
+
+  // 1. Load settings from ~/.claude/settings.json
+  // These are the lowest priority of the "external" configs, but higher than defaults.
+  // We start with these, then overlay shell env on top.
+  const fileSettings = loadClaudeCliSettings()
+  Object.assign(env, fileSettings)
+
+  // 2. Load shell environment
   if (isWindows()) {
     console.log(
       "[claude-env] Windows detected, deriving PATH without shell invocation"
     )
 
     // Use platform provider to build environment
-    const env = platform.buildEnvironment()
-
-    // Strip sensitive keys
-    stripSensitiveKeys(env)
+    const platformEnv = platform.buildEnvironment()
+    stripSensitiveKeys(platformEnv)
+    
+    Object.assign(env, platformEnv)
 
     console.log(
       `[claude-env] Built Windows environment with ${Object.keys(env).length} vars`
     )
-    cachedShellEnv = env
-    return { ...env }
+  } else {
+    // macOS/Linux: spawn interactive login shell to get full environment
+    const shell = getDefaultShell()
+    const command = `echo -n "${DELIMITER}"; env; echo -n "${DELIMITER}"; exit`
+
+    try {
+      const output = execSync(`${shell} -ilc '${command}'`, {
+        encoding: "utf8",
+        timeout: 5000,
+        env: {
+          // Prevent Oh My Zsh from blocking with auto-update prompts
+          DISABLE_AUTO_UPDATE: "true",
+          // Minimal env to bootstrap the shell
+          HOME: os.homedir(),
+          USER: os.userInfo().username,
+          SHELL: shell,
+        },
+      })
+
+      const shellEnv = parseEnvOutput(output)
+      stripSensitiveKeys(shellEnv)
+
+      console.log(
+        `[claude-env] Loaded ${Object.keys(shellEnv).length} environment variables from shell`
+      )
+      
+      // Overlay shell env on top of file settings
+      Object.assign(env, shellEnv)
+    } catch (error) {
+      console.error("[claude-env] Failed to load shell environment:", error)
+
+      // Fallback: use platform provider
+      const platformEnv = platform.buildEnvironment()
+      stripSensitiveKeys(platformEnv)
+
+      console.log("[claude-env] Using fallback environment from platform provider")
+      Object.assign(env, platformEnv)
+    }
   }
 
-  // macOS/Linux: spawn interactive login shell to get full environment
-  const shell = getDefaultShell()
-  const command = `echo -n "${DELIMITER}"; env; echo -n "${DELIMITER}"; exit`
-
-  try {
-    const output = execSync(`${shell} -ilc '${command}'`, {
-      encoding: "utf8",
-      timeout: 5000,
-      env: {
-        // Prevent Oh My Zsh from blocking with auto-update prompts
-        DISABLE_AUTO_UPDATE: "true",
-        // Minimal env to bootstrap the shell
-        HOME: os.homedir(),
-        USER: os.userInfo().username,
-        SHELL: shell,
-      },
-    })
-
-    const env = parseEnvOutput(output)
-    stripSensitiveKeys(env)
-
-    console.log(
-      `[claude-env] Loaded ${Object.keys(env).length} environment variables from shell`
-    )
-    cachedShellEnv = env
-    return { ...env }
-  } catch (error) {
-    console.error("[claude-env] Failed to load shell environment:", error)
-
-    // Fallback: use platform provider
-    const env = platform.buildEnvironment()
-    stripSensitiveKeys(env)
-
-    console.log("[claude-env] Using fallback environment from platform provider")
-    cachedShellEnv = env
-    return { ...env }
-  }
+  // 3. Cache and return
+  cachedShellEnv = env
+  return { ...env }
 }
 
 /**

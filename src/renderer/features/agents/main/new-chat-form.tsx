@@ -2,9 +2,8 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { AlignJustify, Plus, Zap } from "lucide-react"
+import { AlignJustify, BrainIcon, Plus, RouteIcon, Zap } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { createPortal } from "react-dom"
 import { Button } from "../../../components/ui/button"
 import {
   DropdownMenu,
@@ -13,14 +12,12 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import {
-  AgentIcon,
   AttachIcon,
   BranchIcon,
   CheckIcon,
   ClaudeCodeIcon,
   CursorIcon,
   IconChevronDown,
-  PlanIcon,
   SearchIcon,
 } from "../../../components/ui/icons"
 import {
@@ -59,6 +56,7 @@ import {
   selectedOllamaModelAtom,
   customHotkeysAtom,
   chatSourceModeAtom,
+  extendedThinkingEnabledAtom,
 } from "../../../lib/atoms"
 // Desktop uses real tRPC
 import { toast } from "sonner"
@@ -229,6 +227,8 @@ export function NewChatForm({
   const toggleMode = useCallback(() => {
     setAgentMode(getNextMode)
   }, [])
+  // Extended thinking toggle
+  const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
@@ -389,15 +389,6 @@ export function NewChatForm({
   const [slashSearchText, setSlashSearchText] = useState("")
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 })
 
-  // Mode tooltip state (floating tooltip like canvas)
-  const [modeTooltip, setModeTooltip] = useState<{
-    visible: boolean
-    position: { top: number; left: number }
-    mode: "agent" | "plan"
-  } | null>(null)
-  const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasShownTooltipRef = useRef(false)
-  const [modeDropdownOpen, setModeDropdownOpen] = useState(false)
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
 
   // Voice input state
@@ -1410,6 +1401,8 @@ export function NewChatForm({
     [validatedProject?.path, handleAddAttachments, trpcUtils],
   )
 
+  const selectedModelSupportsThinking = selectedModel?.supportsThinking ?? false
+  
   // Context items for images, files, and pasted text files
   const contextItems =
     images.length > 0 || files.length > 0 || pastedTexts.length > 0 ? (
@@ -1566,173 +1559,6 @@ export function NewChatForm({
                   </div>
                   <PromptInputActions className="w-full">
                     <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                      {/* Mode toggle (Agent/Plan) */}
-                      <DropdownMenu
-                        open={modeDropdownOpen}
-                        onOpenChange={(open) => {
-                          setModeDropdownOpen(open)
-                          if (!open) {
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
-                            }
-                            setModeTooltip(null)
-                            hasShownTooltipRef.current = false
-                          }
-                        }}
-                      >
-                        <DropdownMenuTrigger className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                          {agentMode === "plan" ? (
-                            <PlanIcon className="h-3.5 w-3.5" />
-                          ) : (
-                            <AgentIcon className="h-3.5 w-3.5" />
-                          )}
-                          <span>{agentMode === "plan" ? "Plan" : "Agent"}</span>
-                          <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          sideOffset={6}
-                          className="!min-w-[116px] !w-[116px]"
-                          onCloseAutoFocus={(e) => e.preventDefault()}
-                        >
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("agent")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect =
-                                e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "agent",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Agent</span>
-                            </div>
-                            {agentMode !== "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("plan")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect = e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "plan",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Plan</span>
-                            </div>
-                            {agentMode === "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                        {modeTooltip?.visible &&
-                          createPortal(
-                            <div
-                              className="fixed z-[100000]"
-                              style={{
-                                top: modeTooltip.position.top + 14,
-                                left: modeTooltip.position.left,
-                                transform: "translateY(-50%)",
-                              }}
-                            >
-                              <div
-                                data-tooltip="true"
-                                className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
-                              >
-                                <span>
-                                  {modeTooltip.mode === "agent"
-                                    ? "Apply changes directly without a plan"
-                                    : "Create a plan before making changes"}
-                                </span>
-                              </div>
-                            </div>,
-                            document.body,
-                          )}
-                      </DropdownMenu>
-
                       {/* Model selector - shows Ollama models when offline, Claude models when online */}
                       {availableModels.isOffline && availableModels.hasOllama ? (
                         // Offline mode: show Ollama model selector
@@ -1742,7 +1568,7 @@ export function NewChatForm({
                         >
                           <DropdownMenuTrigger asChild>
                             <button
-                              className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 border border-border"
+                              className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                             >
                               <Zap className="h-4 w-4" />
                               <span>{currentOllamaModel || "Select model"}</span>
@@ -1790,10 +1616,10 @@ export function NewChatForm({
                             <button
                               disabled={hasCustomClaudeConfig}
                               className={cn(
-                                "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-[background-color,color] duration-150 ease-out rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                                "flex items-center gap-1.5 px-2 py-1 text-sm transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                                 hasCustomClaudeConfig
-                                  ? "opacity-70 cursor-not-allowed"
-                                  : "hover:text-foreground hover:bg-muted/50",
+                                  ? "opacity-50 cursor-not-allowed text-muted-foreground"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                               )}
                             >
                               <ClaudeCodeIcon className="h-3.5 w-3.5" />
@@ -1803,7 +1629,7 @@ export function NewChatForm({
                                 ) : (
                                   <>
                                     {selectedModel?.name}{" "}
-                                    <span className="text-muted-foreground">4.5</span>
+                                    {/* <span className="text-muted-foreground">4.5</span> */}
                                   </>
                                 )}
                               </span>
@@ -1826,7 +1652,6 @@ export function NewChatForm({
                                     <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                     <span>
                                       {model.name}{" "}
-                                      <span className="text-muted-foreground">4.5</span>
                                     </span>
                                   </div>
                                   {isSelected && (
@@ -1838,6 +1663,45 @@ export function NewChatForm({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
+
+                      {/* Thinking toggle - simple toggle button */}
+                      <button
+                        onClick={() => {
+                          if (selectedModelSupportsThinking) {
+                            setThinkingEnabled(!thinkingEnabled)
+                          }
+                        }}
+                        disabled={!selectedModelSupportsThinking}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 text-sm transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                          !selectedModelSupportsThinking
+                            ? "opacity-40 cursor-not-allowed text-muted-foreground"
+                            : thinkingEnabled
+                              ? "text-[#D4846C] hover:text-[#E8A08C] hover:bg-[#D4846C]/10"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        )}
+                      >
+                        <BrainIcon className="h-3.5 w-3.5 shrink-0" />
+                        {thinkingEnabled && (
+                          <span className="font-medium">Thinking</span>
+                        )}
+                      </button>
+
+                      {/* Mode toggle (Agent/Plan) - simple toggle button */}
+                      <button
+                        onClick={toggleMode}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 text-sm transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                          agentMode === "plan"
+                            ? "text-[#D4846C] hover:text-[#E8A08C] hover:bg-[#D4846C]/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        )}
+                      >
+                        <RouteIcon className="h-3.5 w-3.5 shrink-0" />
+                        {agentMode === "plan" && (
+                          <span className="font-medium">Plan</span>
+                        )}
+                      </button>
                     </div>
 
                     <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">

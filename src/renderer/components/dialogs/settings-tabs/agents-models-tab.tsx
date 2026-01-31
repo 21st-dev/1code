@@ -1,13 +1,11 @@
 import { useAtom, useSetAtom } from "jotai"
 import { MoreHorizontal, Plus } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   openaiApiKeyAtom,
-  type CustomClaudeConfig,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Badge } from "../../ui/badge"
@@ -20,6 +18,7 @@ import {
 } from "../../ui/dropdown-menu"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
+import { ModelProfilesSection } from "./model-profiles-section"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -36,12 +35,6 @@ function useIsNarrowScreen(): boolean {
   }, [])
 
   return isNarrow
-}
-
-const EMPTY_CONFIG: CustomClaudeConfig = {
-  model: "",
-  token: "",
-  baseUrl: "",
 }
 
 // Account row component
@@ -247,10 +240,6 @@ function AnthropicAccountsSection() {
 }
 
 export function AgentsModelsTab() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
-  const [model, setModel] = useState(storedConfig.model)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
-  const [token, setToken] = useState(storedConfig.token)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom,
   )
@@ -267,56 +256,8 @@ export function AgentsModelsTab() {
   const trpcUtils = trpc.useUtils()
 
   useEffect(() => {
-    setModel(storedConfig.model)
-    setBaseUrl(storedConfig.baseUrl)
-    setToken(storedConfig.token)
-  }, [storedConfig.model, storedConfig.baseUrl, storedConfig.token])
-
-  useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
   }, [storedOpenAIKey])
-
-  const savedConfigRef = useRef(storedConfig)
-
-  const handleBlurSave = useCallback(() => {
-    const trimmedModel = model.trim()
-    const trimmedBaseUrl = baseUrl.trim()
-    const trimmedToken = token.trim()
-
-    // Only save if all fields are filled
-    if (trimmedModel && trimmedBaseUrl && trimmedToken) {
-      const next: CustomClaudeConfig = {
-        model: trimmedModel,
-        token: trimmedToken,
-        baseUrl: trimmedBaseUrl,
-      }
-      if (
-        next.model !== savedConfigRef.current.model ||
-        next.token !== savedConfigRef.current.token ||
-        next.baseUrl !== savedConfigRef.current.baseUrl
-      ) {
-        setStoredConfig(next)
-        savedConfigRef.current = next
-      }
-    } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
-      // All cleared — reset
-      if (savedConfigRef.current.model || savedConfigRef.current.token || savedConfigRef.current.baseUrl) {
-        setStoredConfig(EMPTY_CONFIG)
-        savedConfigRef.current = EMPTY_CONFIG
-      }
-    }
-  }, [model, baseUrl, token, setStoredConfig])
-
-  const handleReset = () => {
-    setStoredConfig(EMPTY_CONFIG)
-    savedConfigRef.current = EMPTY_CONFIG
-    setModel("")
-    setBaseUrl("")
-    setToken("")
-    toast.success("Model settings reset")
-  }
-
-  const canReset = Boolean(model.trim() || baseUrl.trim() || token.trim())
 
   const handleClaudeCodeSetup = () => {
     // Don't disconnect - just open onboarding to add a new account
@@ -398,74 +339,20 @@ export function AgentsModelsTab() {
         <AnthropicAccountsSection />
       </div>
 
+      {/* Model Profiles */}
       <div className="space-y-2">
         <div className="pb-2 flex items-center justify-between">
-          <h4 className="text-sm font-medium text-foreground">
-            Override Model
-          </h4>
-          {canReset && (
-            <Button variant="ghost" size="sm" onClick={handleReset} className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10">
-              Reset
-            </Button>
-          )}
+          <div>
+            <h4 className="text-sm font-medium text-foreground">
+              Model Profiles
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Manage your proxy configurations
+            </p>
+          </div>
         </div>
-        <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Model name</Label>
-              <p className="text-xs text-muted-foreground">
-                Model identifier to use for requests
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                onBlur={handleBlurSave}
-                className="w-full"
-                placeholder="claude-3-7-sonnet-20250219"
-              />
-            </div>
-          </div>
 
-          <div className="flex items-center justify-between p-4 border-t border-border">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">API token</Label>
-              <p className="text-xs text-muted-foreground">
-                ANTHROPIC_AUTH_TOKEN env
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                onBlur={handleBlurSave}
-                className="w-full"
-                placeholder="sk-ant-..."
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border-t border-border">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Base URL</Label>
-              <p className="text-xs text-muted-foreground">
-                ANTHROPIC_BASE_URL env
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                onBlur={handleBlurSave}
-                className="w-full"
-                placeholder="https://api.anthropic.com"
-              />
-            </div>
-          </div>
-
-        </div>
+        <ModelProfilesSection />
       </div>
 
       {/* OpenAI API Key for Voice Input */}
