@@ -39,6 +39,10 @@ export default defineConfig({
       "import.meta.env.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL": JSON.stringify(
         process.env.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL || ""
       ),
+      // Web app URL for auth - defaults to production
+      "import.meta.env.MAIN_VITE_WEB_APP_URL": JSON.stringify(
+        process.env.MAIN_VITE_WEB_APP_URL || "https://anchor.kosal.io"
+      ),
     },
     build: {
       lib: {

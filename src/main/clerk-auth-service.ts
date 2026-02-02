@@ -7,9 +7,9 @@ import {
   type ClerkTokens,
 } from "./clerk-token-store"
 
-// Web app URL - will be set from environment
+// Web app URL - baked in at build time, defaults to production
 const WEB_APP_URL =
-  process.env.MAIN_VITE_WEB_APP_URL || "http://localhost:3000"
+  import.meta.env.MAIN_VITE_WEB_APP_URL || "https://anchor.kosal.io"
 const API_URL = `${WEB_APP_URL}/api`
 
 export interface ClerkUser {

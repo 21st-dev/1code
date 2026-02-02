@@ -11,7 +11,6 @@ import {
   createTeamDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
-  agentsHelpPopoverOpenAtom,
   agentsShortcutsDialogOpenAtom,
   selectedAgentChatIdsAtom,
   isAgentMultiSelectModeAtom,
@@ -94,7 +93,6 @@ import {
 } from "../agents/atoms"
 import { NetworkStatus } from "../../components/ui/network-status"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
-import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
 import { pluralize } from "../agents/utils/pluralize"
 import { useNewChatDrafts, deleteNewChatDraft, type NewChatDraft } from "../agents/lib/drafts"
@@ -106,10 +104,6 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
-
-// Feedback URL: uses env variable for hosted version, falls back to public Discord for open source
-const FEEDBACK_URL =
-  import.meta.env.VITE_FEEDBACK_URL || "https://discord.gg/8ektTZGnj4"
 
 // Component to render chat icon with loading status
 const ChatIcon = React.memo(function ChatIcon({
@@ -1199,58 +1193,6 @@ const SidebarHeader = memo(function SidebarHeader({
         </div>
       </div>
     </div>
-  )
-})
-
-// Isolated Help Section - subscribes to agentsHelpPopoverOpenAtom internally
-// to prevent sidebar re-renders when popover opens/closes
-interface HelpSectionProps {
-  isMobile: boolean
-}
-
-const HelpSection = memo(function HelpSection({ isMobile }: HelpSectionProps) {
-  const [helpPopoverOpen, setHelpPopoverOpen] = useAtom(agentsHelpPopoverOpenAtom)
-  const [blockHelpTooltip, setBlockHelpTooltip] = useState(false)
-  const prevHelpPopoverOpen = useRef(false)
-  const helpButtonRef = useRef<HTMLButtonElement>(null)
-
-  // Handle tooltip blocking when popover closes
-  useEffect(() => {
-    if (prevHelpPopoverOpen.current && !helpPopoverOpen) {
-      helpButtonRef.current?.blur()
-      setBlockHelpTooltip(true)
-      const timer = setTimeout(() => setBlockHelpTooltip(false), 300)
-      prevHelpPopoverOpen.current = helpPopoverOpen
-      return () => clearTimeout(timer)
-    }
-    prevHelpPopoverOpen.current = helpPopoverOpen
-  }, [helpPopoverOpen])
-
-  return (
-    <Tooltip
-      delayDuration={500}
-      open={helpPopoverOpen || blockHelpTooltip ? false : undefined}
-    >
-      <TooltipTrigger asChild>
-        <div>
-          <AgentsHelpPopover
-            open={helpPopoverOpen}
-            onOpenChange={setHelpPopoverOpen}
-            isMobile={isMobile}
-          >
-            <button
-              ref={helpButtonRef}
-              type="button"
-              className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-              suppressHydrationWarning
-            >
-              <QuestionCircleIcon className="h-4 w-4" />
-            </button>
-          </AgentsHelpPopover>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>Help</TooltipContent>
-    </Tooltip>
   )
 })
 
@@ -2587,9 +2529,6 @@ export function AgentsSidebar({
                   <TooltipContent>Settings</TooltipContent>
                 </Tooltip>
 
-                {/* Help Button - isolated component to prevent sidebar re-renders */}
-                <HelpSection isMobile={isMobileFullscreen} />
-
                 {/* Archive Button - isolated component to prevent sidebar re-renders */}
                 <ArchiveSection archivedChatsCount={archivedChatsCount} />
               </div>
@@ -2597,18 +2536,6 @@ export function AgentsSidebar({
               <div className="flex-1" />
             </div>
 
-            {/* Feedback Button */}
-            <ButtonCustom
-              onClick={() => window.open(FEEDBACK_URL, "_blank")}
-              variant="outline"
-              size="sm"
-              className={cn(
-                "px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg gap-1.5",
-                isMobileFullscreen ? "h-10" : "h-7",
-              )}
-            >
-              <span className="text-sm font-medium">Feedback</span>
-            </ButtonCustom>
           </motion.div>
         )}
       </AnimatePresence>
