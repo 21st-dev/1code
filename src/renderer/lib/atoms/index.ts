@@ -313,7 +313,7 @@ export const localStorageModelProfilesAtom = atomWithStorage<ModelProfile[]>(
 // This atom automatically handles:
 // - Desktop mode: Uses localStorage, syncs to database
 // - Web mode: Loads from database via tRPC
-export { modelProfilesAtom, useSyncModelProfiles, activeConfigAtom } from "./model-profiles-sync"
+export { modelProfilesAtom, useSyncModelProfiles, activeConfigAtom, normalizeCustomClaudeConfig } from "./model-profiles-sync"
 
 // Migration: add models array to existing profiles that don't have it
 if (typeof window !== "undefined") {

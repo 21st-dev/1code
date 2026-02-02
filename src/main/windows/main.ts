@@ -474,14 +474,36 @@ function registerIpcHandlers(): void {
 
   // Chat data sync - subscribe to broadcasts from WebSocket server
   // This allows desktop clients to receive messages from web clients
+  const chatSubscriptions = new Map<string, () => void>()
+
   ipcMain.handle("chat:subscribe", (event, subChatId: string) => {
+    // Clean up existing subscription if any
+    const existing = chatSubscriptions.get(subChatId)
+    if (existing) {
+      existing()
+      chatSubscriptions.delete(subChatId)
+    }
+
     const unsubscribe = subscribeToChatData(subChatId, (data: any) => {
       // Send chat data to this renderer process
       event.sender.send("chat:data", subChatId, data)
     })
 
-    // Return unsubscribe function for cleanup
-    return unsubscribe
+    // Store subscription for later cleanup
+    chatSubscriptions.set(subChatId, unsubscribe)
+
+    // Return success (not the function - functions can't be cloned over IPC)
+    return { success: true, subChatId }
+  })
+
+  ipcMain.handle("chat:unsubscribe", (_event, subChatId: string) => {
+    const unsubscribe = chatSubscriptions.get(subChatId)
+    if (unsubscribe) {
+      unsubscribe()
+      chatSubscriptions.delete(subChatId)
+      return { success: true }
+    }
+    return { success: false, error: "No subscription found" }
   })
 }
 

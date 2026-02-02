@@ -242,20 +242,17 @@ contextBridge.exposeInMainWorld("desktopApi", {
     ipcRenderer.on("chat:data", dataHandler)
 
     // Register subscription with main process
-    ipcRenderer.invoke("chat:subscribe", subChatId).then((unsubscribe) => {
-      // Store unsubscribe function for cleanup
-      ;(ipcRenderer as any).__chatUnsubscribeMap = (ipcRenderer as any).__chatUnsubscribeMap || new Map()
-      ;(ipcRenderer as any).__chatUnsubscribeMap.set(subChatId, unsubscribe)
+    ipcRenderer.invoke("chat:subscribe", subChatId).catch((err) => {
+      console.error("[preload] Failed to subscribe to chat:", err)
     })
 
     // Return cleanup function
     return () => {
       ipcRenderer.removeListener("chat:data", dataHandler)
-      const unsubscribe = (ipcRenderer as any).__chatUnsubscribeMap?.get(subChatId)
-      if (unsubscribe) {
-        unsubscribe()
-        ;(ipcRenderer as any).__chatUnsubscribeMap.delete(subChatId)
-      }
+      // Call unsubscribe IPC handler (functions can't be passed over IPC)
+      ipcRenderer.invoke("chat:unsubscribe", subChatId).catch((err) => {
+        console.error("[preload] Failed to unsubscribe from chat:", err)
+      })
     }
   },
 })

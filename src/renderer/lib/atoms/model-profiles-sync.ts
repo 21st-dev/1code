@@ -12,7 +12,7 @@ import { OFFLINE_PROFILE, type ModelProfile, type CustomClaudeConfig } from "./i
 import { isRemoteMode } from "../remote-transport"
 
 // Helper to normalize custom config (moved from index.ts to break circular dependency)
-function normalizeCustomClaudeConfig(
+export function normalizeCustomClaudeConfig(
   config: CustomClaudeConfig,
 ): CustomClaudeConfig | undefined {
   const model = config.model.trim()
