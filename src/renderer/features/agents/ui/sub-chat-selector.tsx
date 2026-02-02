@@ -14,7 +14,7 @@ import {
 } from "../../details-sidebar/atoms"
 import { chatSourceModeAtom } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
-import { X, Plus, AlignJustify, Play, TerminalSquare } from "lucide-react"
+import { X, Plus, AlignJustify, Play, TerminalSquare, FileText } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -178,6 +178,9 @@ interface SubChatSelectorProps {
   canOpenTerminal?: boolean
   isTerminalOpen?: boolean
   chatId?: string
+  onOpenSpecKit?: () => void
+  canOpenSpecKit?: boolean
+  isSpecKitOpen?: boolean
 }
 
 export function SubChatSelector({
@@ -194,6 +197,9 @@ export function SubChatSelector({
   canOpenTerminal = false,
   isTerminalOpen = false,
   chatId,
+  onOpenSpecKit,
+  canOpenSpecKit = false,
+  isSpecKitOpen = false,
 }: SubChatSelectorProps) {
   // Use shallow comparison to prevent re-renders when arrays have same content
   const { activeSubChatId, openSubChatIds, pinnedSubChatIds, allSubChats, parentChatId, togglePinSubChat } = useAgentSubChatStore(
@@ -957,6 +963,37 @@ export function SubChatSelector({
             <TooltipContent side="bottom">
               <span>Open terminal</span>
               {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+
+      {/* SpecKit button - visible on desktop when speckit can be opened */}
+      {!isMobile && canOpenSpecKit && (
+        <div
+          className="rounded-md bg-background/10 backdrop-blur-[10px] flex items-center justify-center"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenSpecKit?.()}
+                className={cn(
+                  "h-6 w-6 p-0 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center hover:bg-foreground/10",
+                  isSpecKitOpen && "bg-foreground/10"
+                )}
+              >
+                <FileText className="h-4 w-4" />
+                <span className="sr-only">SpecKit</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <span>{isSpecKitOpen ? "Close SpecKit" : "Open SpecKit"}</span>
             </TooltipContent>
           </Tooltip>
         </div>

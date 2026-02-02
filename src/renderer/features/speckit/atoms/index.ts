@@ -54,3 +54,12 @@ export const speckitSelectedFeatureAtom = atom<string | null>(null)
  * null means follow the detected step from workflow state
  */
 export const speckitActiveStepAtom = atom<string | null>(null)
+
+/**
+ * Step to start the workflow modal at
+ *
+ * Used when opening the workflow modal from a specific context
+ * (e.g., "constitution" when clicking Create Constitution)
+ * null means start at the detected step from workflow state
+ */
+export const speckitWorkflowStartStepAtom = atom<string | null>(null)

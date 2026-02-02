@@ -20,6 +20,7 @@ import {
   speckitCurrentDocumentAtom,
   speckitExecutionIdAtom,
   speckitActiveStepAtom,
+  speckitWorkflowStartStepAtom,
 } from "../atoms"
 import { useWorkflowState, useExecuteCommand, useCommandOutput } from "../hooks"
 import { WORKFLOW_STEPS_ORDER, type WorkflowStepName, type ArtifactType } from "../types"
@@ -66,6 +67,7 @@ export const WorkflowModal = memo(function WorkflowModal({
 }: WorkflowModalProps) {
   const [isOpen, setIsOpen] = useAtom(speckitModalOpenAtom)
   const [activeStep, setActiveStep] = useAtom(speckitActiveStepAtom)
+  const [startStep, setStartStep] = useAtom(speckitWorkflowStartStepAtom)
   const executionId = useAtomValue(speckitExecutionIdAtom)
   const setCurrentDocument = useSetAtom(speckitCurrentDocumentAtom)
 
@@ -162,17 +164,26 @@ export const WorkflowModal = memo(function WorkflowModal({
     }
   }, [effectiveStep])
 
+  // Handle start step when modal opens
+  useEffect(() => {
+    if (isOpen && startStep) {
+      setActiveStep(startStep)
+      setStartStep(null)
+    }
+  }, [isOpen, startStep, setActiveStep, setStartStep])
+
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
       setActiveStep(null)
+      setStartStep(null)
       setStaleWarningDismissed(false)
       setShowSkipWarning(false)
       setShowOutput(false)
       clearOutput()
       resetExecution()
     }
-  }, [isOpen, setActiveStep, clearOutput, resetExecution])
+  }, [isOpen, setActiveStep, setStartStep, clearOutput, resetExecution])
 
   // Handle step navigation
   const handleStepClick = useCallback(

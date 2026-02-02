@@ -93,6 +93,8 @@ import { FileViewerSidebar } from "../../file-viewer"
 import { FileSearchDialog } from "../../file-viewer/components/file-search-dialog"
 import { terminalSidebarOpenAtomFamily, terminalDisplayModeAtom, terminalBottomHeightAtom } from "../../terminal/atoms"
 import { TerminalSidebar, TerminalBottomPanelContent } from "../../terminal/terminal-sidebar"
+import { SpecKitSidebar } from "../../speckit/components/speckit-sidebar"
+import { speckitDrawerOpenAtom } from "../../speckit/atoms"
 import { ResizableBottomPanel } from "@/components/ui/resizable-bottom-panel"
 import {
   agentsChangesPanelCollapsedAtom,
@@ -4397,6 +4399,9 @@ export function ChatView({
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
   const terminalDisplayMode = useAtomValue(terminalDisplayModeAtom)
 
+  // SpecKit sidebar state
+  const [isSpecKitSidebarOpen, setIsSpecKitSidebarOpen] = useAtom(speckitDrawerOpenAtom)
+
   // Keyboard shortcut: Cmd+J to toggle terminal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -6477,6 +6482,9 @@ Make sure to preserve all functionality from both branches when resolving confli
                         canOpenTerminal={!!worktreePath}
                         isTerminalOpen={isTerminalSidebarOpen}
                         chatId={chatId}
+                        onOpenSpecKit={() => setIsSpecKitSidebarOpen(!isSpecKitSidebarOpen)}
+                        canOpenSpecKit={!!worktreePath}
+                        isSpecKitOpen={isSpecKitSidebarOpen}
                       />
                       {/* Open Locally button - desktop only, sandbox mode */}
                       {showOpenLocally && (
@@ -6966,6 +6974,16 @@ Make sure to preserve all functionality from both branches when resolving confli
             chatId={chatId}
             cwd={worktreePath}
             workspaceId={chatId}
+          />
+        )}
+
+        {/* SpecKit Sidebar - shows when worktree exists (desktop only) */}
+        {worktreePath && (
+          <SpecKitSidebar
+            isOpen={isSpecKitSidebarOpen}
+            onClose={() => setIsSpecKitSidebarOpen(false)}
+            chatId={chatId}
+            projectPath={worktreePath}
           />
         )}
 

@@ -7,9 +7,9 @@
  * @see specs/001-speckit-ui-integration/plan.md
  */
 
-import { memo, useCallback, useState } from "react"
+import { memo, useCallback, useState, useEffect } from "react"
 import { useSetAtom } from "jotai"
-import { FileText, Plus, RefreshCw, Sparkles, ExternalLink } from "lucide-react"
+import { FileText, RefreshCw, Sparkles, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { trpc } from "@/lib/trpc"
@@ -17,6 +17,8 @@ import { MarkdownView } from "./markdown-view"
 import { WorkflowModal } from "./workflow-modal"
 import { ConstitutionSection } from "./constitution-section"
 import { FeaturesTable } from "./features-table"
+import { InitializationPrompt } from "./initialization-prompt"
+import { SubmoduleWarning } from "./submodule-warning"
 import { speckitModalOpenAtom, speckitWorkflowStartStepAtom } from "../atoms"
 import {
   WORKFLOW_STEP_LABELS,
@@ -78,6 +80,24 @@ export const PlanPage = memo(function PlanPage({
       { enabled: !!projectPath }
     )
 
+  // Query submodule status (T123)
+  const { data: submoduleStatus } =
+    trpc.speckit.checkSubmodule.useQuery(
+      { projectPath: projectPath || "" },
+      { enabled: !!projectPath }
+    )
+
+  // State for submodule warning dialog (T124)
+  const [showSubmoduleWarning, setShowSubmoduleWarning] = useState(false)
+  const [submoduleWarningDismissed, setSubmoduleWarningDismissed] = useState(false)
+
+  // Show submodule warning if not initialized and not dismissed
+  useEffect(() => {
+    if (submoduleStatus && !submoduleStatus.initialized && !submoduleWarningDismissed) {
+      setShowSubmoduleWarning(true)
+    }
+  }, [submoduleStatus, submoduleWarningDismissed])
+
   // Query current artifact content based on workflow state
   const { data: specArtifact } = trpc.speckit.getArtifact.useQuery(
     {
@@ -107,12 +127,6 @@ export const PlanPage = memo(function PlanPage({
     }
   )
 
-  // Initialize mutation
-  const initMutation = trpc.speckit.initializeSpecKit.useMutation({
-    onSuccess: () => {
-      refetchWorkflow()
-    },
-  })
 
   // No project selected
   if (!projectPath) {
@@ -141,53 +155,36 @@ export const PlanPage = memo(function PlanPage({
     )
   }
 
-  // Not initialized - show init prompt
+  // Not initialized - show InitializationPrompt component
   if (initStatus && !initStatus.initialized) {
+    // Check if this is a partial initialization (some components exist but not all)
+    const isPartialInit = initStatus.missingComponents.length > 0 &&
+      initStatus.missingComponents.length < 5 // Less than all components missing
+
     return (
-      <div className="flex flex-col h-full p-4">
-        <div className="flex items-center justify-center flex-1 text-center">
-          <div className="max-w-[280px]">
-            <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm font-medium mb-2">SpecKit Not Initialized</p>
-            <p className="text-xs text-muted-foreground mb-4">
-              Initialize ii-spec to enable feature specification workflows.
-            </p>
-            {initStatus.missingComponents.length > 0 && (
-              <div className="text-xs text-muted-foreground mb-4 text-left bg-muted/50 rounded-md p-2">
-                <p className="font-medium mb-1">Missing:</p>
-                <ul className="list-disc list-inside">
-                  {initStatus.missingComponents.slice(0, 3).map((c) => (
-                    <li key={c} className="truncate">
-                      {c}
-                    </li>
-                  ))}
-                  {initStatus.missingComponents.length > 3 && (
-                    <li>+{initStatus.missingComponents.length - 3} more</li>
-                  )}
-                </ul>
-              </div>
-            )}
-            <Button
-              size="sm"
-              onClick={() => initMutation.mutate({ projectPath })}
-              disabled={initMutation.isPending}
-            >
-              {initMutation.isPending ? (
-                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Plus className="h-4 w-4 mr-2" />
-              )}
-              Initialize SpecKit
-            </Button>
-          </div>
-        </div>
-      </div>
+      <InitializationPrompt
+        projectPath={projectPath}
+        missingComponents={initStatus.missingComponents}
+        isPartial={isPartialInit}
+        onInitialized={() => {
+          // Refetch all relevant queries
+          refetchWorkflow()
+        }}
+      />
     )
   }
 
   // Main workflow view
   return (
     <div className="flex flex-col h-full">
+      {/* Submodule Warning Dialog (T124) */}
+      <SubmoduleWarning
+        open={showSubmoduleWarning}
+        onOpenChange={setShowSubmoduleWarning}
+        message={submoduleStatus?.message}
+        onDismiss={() => setSubmoduleWarningDismissed(true)}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-10 border-b border-border/50 flex-shrink-0">
         <div className="flex items-center gap-2">

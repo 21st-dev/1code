@@ -288,11 +288,11 @@
 
 ### Implementation for User Story 5
 
-- [ ] T120 [US5] Verify .gitmodules file contains correct ii-spec submodule URL pointing to forked repository
-- [ ] T121 [US5] Verify submodule initialization works by testing `git submodule update --init` command in fresh clone
-- [ ] T122 [US5] Verify app can access ii-spec submodule by testing trpc.speckit.executeCommand with `/speckit.specify` command
-- [ ] T123 [US5] Add submodule verification check to app startup sequence detecting missing/uninitialized submodule in src/main/index.ts
-- [ ] T124 [US5] Implement user warning dialog when submodule not initialized showing instructions to run `git submodule update --init` in src/renderer/app.tsx or error boundary
+- [X] T120 [US5] Verify .gitmodules file contains correct ii-spec submodule URL pointing to forked repository
+- [X] T121 [US5] Verify submodule initialization works by testing `git submodule update --init` command in fresh clone
+- [X] T122 [US5] Verify app can access ii-spec submodule by testing trpc.speckit.executeCommand with `/speckit.specify` command
+- [X] T123 [US5] Add submodule verification check to app startup sequence detecting missing/uninitialized submodule in src/main/index.ts
+- [X] T124 [US5] Implement user warning dialog when submodule not initialized showing instructions to run `git submodule update --init` in src/renderer/app.tsx or error boundary
 
 **Checkpoint**: User Story 5 complete - submodule integration verified and error handling in place
 
@@ -306,13 +306,13 @@
 
 ### Implementation
 
-- [ ] T125 Create InitializationPrompt component in src/renderer/features/speckit/components/initialization-prompt.tsx with heading "Initialize SpecKit" and description
-- [ ] T126 Add initialization detection logic to PlanPage checking initStatus.initialized before rendering constitution/features sections in src/renderer/features/speckit/components/plan-page.tsx
-- [ ] T127 Implement "Initialize SpecKit" button in InitializationPrompt calling trpc.speckit.initializeSpecKit in src/renderer/features/speckit/components/initialization-prompt.tsx
-- [ ] T128 Add loading state and progress indicator during initialization in InitializationPrompt in src/renderer/features/speckit/components/initialization-prompt.tsx
-- [ ] T129 Implement initialization success handling refreshing Plan page UI to show constitution/features sections in src/renderer/features/speckit/components/initialization-prompt.tsx
-- [ ] T130 Add initialization error handling showing error message from ii-spec with retry button in src/renderer/features/speckit/components/initialization-prompt.tsx
-- [ ] T131 Add partial initialization detection showing "Re-initialize SpecKit" with missing components list in src/renderer/features/speckit/components/initialization-prompt.tsx
+- [X] T125 Create InitializationPrompt component in src/renderer/features/speckit/components/initialization-prompt.tsx with heading "Initialize SpecKit" and description
+- [X] T126 Add initialization detection logic to PlanPage checking initStatus.initialized before rendering constitution/features sections in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T127 Implement "Initialize SpecKit" button in InitializationPrompt calling trpc.speckit.initializeSpecKit in src/renderer/features/speckit/components/initialization-prompt.tsx
+- [X] T128 Add loading state and progress indicator during initialization in InitializationPrompt in src/renderer/features/speckit/components/initialization-prompt.tsx
+- [X] T129 Implement initialization success handling refreshing Plan page UI to show constitution/features sections in src/renderer/features/speckit/components/initialization-prompt.tsx
+- [X] T130 Add initialization error handling showing error message from ii-spec with retry button in src/renderer/features/speckit/components/initialization-prompt.tsx
+- [X] T131 Add partial initialization detection showing "Re-initialize SpecKit" with missing components list in src/renderer/features/speckit/components/initialization-prompt.tsx
 
 **Checkpoint**: Initialization detection complete - users can initialize SpecKit with one click
 
