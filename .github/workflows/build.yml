@@ -18,53 +18,58 @@ on:
           - linux
 
 jobs:
-  # NOTE: macOS build disabled - no Apple Developer account for code signing
-  # Build macOS locally with: bun run release
-  #
-  # build-mac:
-  #   if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'mac' || github.event_name == 'push' }}
-  #   runs-on: macos-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Setup Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.11'
-  #     - name: Install setuptools (for distutils)
-  #       run: pip install setuptools
-  #     - name: Setup Bun
-  #       uses: oven-sh/setup-bun@v1
-  #       with:
-  #         bun-version: latest
-  #     - name: Install dependencies
-  #       run: bun install
-  #     - name: Download Claude Code binaries
-  #       run: bun run claude:download:all
-  #     - name: Build
-  #       run: bun run build
-  #       env:
-  #         MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY: ${{ secrets.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY }}
-  #         MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE }}
-  #         MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY }}
-  #         MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL }}
-  #     - name: Package macOS
-  #       run: bun run package:mac
-  #       env:
-  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #         CSC_LINK: ${{ secrets.CSC_LINK }}
-  #         CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-  #         APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
-  #         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-  #         APPLE_ID: ${{ secrets.APPLE_ID }}
-  #         APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-  #     - name: Upload macOS artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: anchor-mac
-  #         path: |
-  #           release/*.dmg
-  #           release/*-mac.zip
-  #         retention-days: 30
+  build-mac:
+    if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'mac' || github.event_name == 'push' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install setuptools (for distutils)
+        run: pip install setuptools
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Download Claude Code binaries
+        run: bun run claude:download:all
+
+      - name: Build
+        run: bun run build
+        env:
+          MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY: ${{ secrets.MAIN_VITE_CLAUDE_CODE_USE_FOUNDRY }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_RESOURCE }}
+          MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY: ${{ secrets.MAIN_VITE_ANTHROPIC_FOUNDRY_API_KEY }}
+          MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.MAIN_VITE_ANTHROPIC_DEFAULT_OPUS_MODEL }}
+
+      - name: Package macOS
+        run: bun run package:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: anchor-mac
+          path: |
+            release/*.dmg
+            release/*-mac.zip
+          retention-days: 30
 
   build-windows:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows' || github.event_name == 'push' }}
@@ -165,7 +170,7 @@ jobs:
           retention-days: 30
 
   release:
-    needs: [build-windows, build-linux]
+    needs: [build-mac, build-windows, build-linux]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -180,8 +185,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/kcode-windows/*
-            artifacts/kcode-linux/*
+            artifacts/anchor-mac/*
+            artifacts/anchor-windows/*
+            artifacts/anchor-linux/*
           draft: true
           generate_release_notes: true
         env:
