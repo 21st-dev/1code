@@ -2,6 +2,7 @@ import * as fs from "fs/promises"
 import type { Dirent } from "fs"
 import * as path from "path"
 import * as os from "os"
+import * as semver from "semver"
 import type { McpServerConfig } from "../claude-config"
 
 export interface PluginInfo {
@@ -40,6 +41,70 @@ export interface PluginMcpConfig {
 let pluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
 let mcpCache: { configs: PluginMcpConfig[]; timestamp: number } | null = null
 const CACHE_TTL_MS = 30000 // 30 seconds - plugins don't change often during a session
+
+/**
+ * Safely parse a version string, returning a valid semver or "0.0.0" as fallback.
+ * Uses semver.coerce() to handle non-standard formats like "v1.2" or "1.2".
+ */
+function safeParseVersion(version: string): string {
+  if (!version) return "0.0.0"
+
+  // Try to coerce non-standard versions to valid semver
+  const coerced = semver.coerce(version)
+  if (coerced) {
+    return coerced.version
+  }
+
+  // If coercion fails, check if it's already valid
+  if (semver.valid(version)) {
+    return version
+  }
+
+  // Log warning for debugging
+  console.warn(`Invalid plugin version format: "${version}", defaulting to 0.0.0`)
+  return "0.0.0"
+}
+
+/**
+ * Deduplicates plugins by keeping only the highest version of each plugin
+ * per marketplace. Uses composite key `marketplace:name` for grouping.
+ *
+ * @param plugins - Array of discovered plugins (may contain duplicates)
+ * @returns Array with only the highest version of each plugin per marketplace
+ */
+function deduplicatePluginsByVersion(plugins: PluginInfo[]): PluginInfo[] {
+  // Group plugins by composite key (marketplace:name)
+  const pluginMap = new Map<string, PluginInfo>()
+
+  for (const plugin of plugins) {
+    const key = `${plugin.marketplace}:${plugin.name}`
+    const existing = pluginMap.get(key)
+
+    if (!existing) {
+      // First occurrence of this plugin
+      pluginMap.set(key, plugin)
+      continue
+    }
+
+    // Compare versions and keep the higher one
+    const existingVersion = safeParseVersion(existing.version)
+    const currentVersion = safeParseVersion(plugin.version)
+
+    try {
+      if (semver.gt(currentVersion, existingVersion)) {
+        pluginMap.set(key, plugin)
+      }
+    } catch (error) {
+      // semver.gt can throw for truly invalid versions after coercion
+      // In this case, keep the existing one (first wins for invalid versions)
+      console.warn(
+        `Version comparison failed for ${key}: "${plugin.version}" vs "${existing.version}"`
+      )
+    }
+  }
+
+  return Array.from(pluginMap.values())
+}
 
 /**
  * Clear plugin caches (for testing/manual invalidation)
@@ -129,8 +194,11 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
     }
   }
 
-  pluginCache = { plugins, timestamp: Date.now() }
-  return plugins
+  // Deduplicate: keep only highest version of each plugin per marketplace
+  const deduplicatedPlugins = deduplicatePluginsByVersion(plugins)
+
+  pluginCache = { plugins: deduplicatedPlugins, timestamp: Date.now() }
+  return deduplicatedPlugins
 }
 
 /**
