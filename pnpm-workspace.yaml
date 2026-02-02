@@ -1,0 +1,10 @@
+ignoredBuiltDependencies:
+  - better-sqlite3
+  - core-js
+  - esbuild
+  - lzma-native
+  - node-pty
+  - protobufjs
+
+onlyBuiltDependencies:
+  - electron

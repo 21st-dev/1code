@@ -20,6 +20,7 @@ import {
   clearAgentChatSelectionAtom,
   selectedAgentChatsCountAtom,
   isDesktopAtom,
+  isRemoteModeAtom,
   isFullscreenAtom,
   showOfflineModeFeaturesAtom,
   chatSourceModeAtom,
@@ -28,6 +29,7 @@ import {
   showWorkspaceIconAtom,
   betaKanbanEnabledAtom,
   betaAutomationsEnabledAtom,
+  remoteAccessDialogOpenAtom,
 } from "../../lib/atoms"
 import {
   useRemoteChats,
@@ -39,7 +41,7 @@ import {
   useRenameRemoteChat,
 } from "../../lib/hooks/use-remote-chats"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight, Globe } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { remoteTrpc } from "../../lib/remote-trpc"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
@@ -136,6 +138,8 @@ import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
 import { exportChat, copyChat, type ExportFormat } from "../agents/lib/export-chat"
+import { modelProfilesAtom, lastUsedProfileIdAtom } from "../../lib/atoms"
+import { CheckIcon } from "../../components/ui/icons"
 
 // Feedback URL: uses env variable for hosted version, falls back to public Discord for open source
 const FEEDBACK_URL =
@@ -173,6 +177,66 @@ const GitHubAvatar = React.memo(function GitHubAvatar({
         onError={handleError}
       />
     </div>
+  )
+})
+
+// Model Profile submenu for context menu
+const ModelProfileSubmenu = React.memo(function ModelProfileSubmenu({
+  chatId,
+  currentProfileId,
+}: {
+  chatId: string
+  currentProfileId: string | null | undefined
+}) {
+  const profiles = useAtomValue(modelProfilesAtom)
+  const [lastUsedProfileId, setLastUsedProfileId] = useAtom(lastUsedProfileIdAtom)
+  const utils = trpc.useUtils()
+
+  // Use chat's profile or fall back to lastUsedProfileId
+  const effectiveProfileId = currentProfileId ?? lastUsedProfileId
+
+  const updateProfileMutation = trpc.chats.updateModelProfile.useMutation({
+    onSuccess: () => {
+      utils.chats.get.invalidate({ id: chatId })
+      utils.chats.list.invalidate()
+    },
+  })
+
+  // Filter out offline profiles
+  const displayProfiles = profiles.filter((p) => !p.isOffline)
+
+  const handleProfileChange = useCallback(
+    (profileId: string) => {
+      updateProfileMutation.mutate({ id: chatId, modelProfileId: profileId })
+      setLastUsedProfileId(profileId)
+    },
+    [chatId, updateProfileMutation, setLastUsedProfileId],
+  )
+
+  if (displayProfiles.length === 0) {
+    return (
+      <ContextMenuItem disabled>
+        No profiles configured
+      </ContextMenuItem>
+    )
+  }
+
+  return (
+    <>
+      {displayProfiles.map((profile) => {
+        const isSelected = profile.id === effectiveProfileId
+        return (
+          <ContextMenuItem
+            key={profile.id}
+            onClick={() => handleProfileChange(profile.id)}
+            className="justify-between"
+          >
+            <span className="truncate">{profile.name}</span>
+            {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0 ml-2" />}
+          </ContextMenuItem>
+        )
+      })}
+    </>
   )
 })
 
@@ -763,6 +827,15 @@ const AgentChatItem = React.memo(function AgentChatItem({
                 Open in new window
               </ContextMenuItem>
             )}
+            {/* Model Profile submenu - only show for local chats */}
+            {!isRemote && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>Model Profile</ContextMenuSubTrigger>
+                <ContextMenuSubContent sideOffset={6} alignOffset={-4}>
+                  <ModelProfileSubmenu chatId={chatId} currentProfileId={null} />
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => onArchive(chatId)} className="justify-between">
               Archive workspace
@@ -1066,6 +1139,26 @@ const ArchiveButton = memo(forwardRef<HTMLButtonElement, React.ButtonHTMLAttribu
 ))
 
 // Isolated Kanban Button - clears selection to show Kanban view
+// Remote Access Button - opens dialog to enable/disable remote access
+const RemoteAccessButton = memo(function RemoteAccessButton() {
+  const setRemoteAccessDialogOpen = useSetAtom(remoteAccessDialogOpenAtom)
+
+  return (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => setRemoteAccessDialogOpen(true)}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+        >
+          <Globe className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>Remote Access</TooltipContent>
+    </Tooltip>
+  )
+})
+
 const KanbanButton = memo(function KanbanButton() {
   const kanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
@@ -1671,6 +1764,7 @@ export function AgentsSidebar({
 
   // Global desktop/fullscreen state from atoms (initialized in AgentsLayout)
   const isDesktop = useAtomValue(isDesktopAtom)
+  const isRemoteMode = useAtomValue(isRemoteModeAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
 
   // Multi-select state
@@ -1779,7 +1873,18 @@ export function AgentsSidebar({
   }, [])
 
   // Fetch all local chats (no project filter)
-  const { data: localChats } = trpc.chats.list.useQuery({})
+  const { data: localChats, isLoading: isChatsLoading, error: chatsError } = trpc.chats.list.useQuery(
+    {}, // empty input
+    // Poll every 5 seconds in remote mode to sync with desktop changes
+    isRemoteMode ? { refetchInterval: 5000 } : {},
+  )
+
+  // Debug: Log chat data in remote mode
+  useEffect(() => {
+    if (isRemoteMode) {
+      console.log('[AgentsSidebar] Remote mode - localChats:', localChats, 'isLoading:', isChatsLoading, 'error:', chatsError)
+    }
+  }, [isRemoteMode, localChats, isChatsLoading, chatsError])
 
   // Fetch user's teams (same as web) - always enabled to allow merged list
   const { data: teams, isLoading: isTeamsLoading, isError: isTeamsError } = useUserTeams(true)
@@ -1921,7 +2026,11 @@ export function AgentsSidebar({
   )
 
   // Fetch all projects for git info
-  const { data: projects } = trpc.projects.list.useQuery()
+  const { data: projects } = trpc.projects.list.useQuery(
+    undefined, // no input
+    // Poll every 5 seconds in remote mode to sync with desktop changes
+    isRemoteMode ? { refetchInterval: 5000 } : undefined,
+  )
 
   // Auto-import hook for "Open Locally" functionality
   const { getMatchingProjects, autoImport, isImporting } = useAutoImport()
@@ -1933,7 +2042,11 @@ export function AgentsSidebar({
   }, [projects])
 
   // Fetch all archived chats (to get count)
-  const { data: archivedChats } = trpc.chats.listArchived.useQuery({})
+  const { data: archivedChats } = trpc.chats.listArchived.useQuery(
+    undefined, // no input
+    // Poll every 5 seconds in remote mode to sync with desktop changes
+    isRemoteMode ? { refetchInterval: 5000 } : {},
+  )
   const archivedChatsCount = archivedChats?.length ?? 0
 
   // Get utils outside of callbacks - hooks must be called at top level
@@ -3398,28 +3511,33 @@ export function AgentsSidebar({
           >
             <div className="flex items-center">
               <div className="flex items-center gap-1">
-                {/* Settings Button */}
-                <Tooltip delayDuration={500}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsActiveTab("preferences")
-                        setSettingsDialogOpen(true)
-                      }}
-                      className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                    >
-                      <SettingsIcon className="h-4 w-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Settings{settingsHotkey && <> <Kbd>{settingsHotkey}</Kbd></>}</TooltipContent>
-                </Tooltip>
+                {/* Settings Button - hide in remote mode */}
+                {!isRemoteMode && (
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsActiveTab("preferences")
+                          setSettingsDialogOpen(true)
+                        }}
+                        className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                      >
+                        <SettingsIcon className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Settings{settingsHotkey && <> <Kbd>{settingsHotkey}</Kbd></>}</TooltipContent>
+                  </Tooltip>
+                )}
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />
 
                 {/* Kanban View Button - isolated component */}
                 <KanbanButton />
+
+                {/* Remote Access Button - hide in remote mode */}
+                {!isRemoteMode && <RemoteAccessButton />}
 
                 {/* Archive Button - isolated component to prevent sidebar re-renders */}
                 <ArchiveSection archivedChatsCount={archivedChatsCount} />

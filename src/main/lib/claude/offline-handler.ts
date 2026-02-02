@@ -8,6 +8,11 @@ export type CustomClaudeConfig = {
   model: string
   token: string
   baseUrl: string
+  // Additional model configuration (optional)
+  defaultOpusModel?: string // ANTHROPIC_DEFAULT_OPUS_MODEL
+  defaultSonnetModel?: string // ANTHROPIC_DEFAULT_SONNET_MODEL
+  defaultHaikuModel?: string // ANTHROPIC_DEFAULT_HAIKU_MODEL
+  subagentModel?: string // CLAUDE_CODE_SUBAGENT_MODEL
 }
 
 export type OfflineCheckResult = {

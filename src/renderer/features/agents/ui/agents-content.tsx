@@ -32,6 +32,7 @@ import {
   betaKanbanEnabledAtom,
   betaAutomationsEnabledAtom,
   chatSourceModeAtom,
+  isRemoteModeAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { KanbanView } from "../../kanban"
@@ -166,20 +167,33 @@ export function AgentsContent() {
     }
   }, [activeSubChatName])
 
+  // Check if running in remote mode (web browser)
+  const isRemoteMode = useAtomValue(isRemoteModeAtom)
+
   // Fetch teams for header
   const { data: teams } = api.teams.getUserTeams.useQuery(undefined, {
     enabled: !!selectedTeamId,
+    // Poll every 5 seconds in remote mode to sync with desktop changes
+    refetchInterval: isRemoteMode ? 5000 : false,
   })
   const selectedTeam = teams?.find((t: any) => t.id === selectedTeamId) as any
 
   // Fetch agent chats for keyboard navigation and mobile view
   const { data: agentChats } = api.agents.getAgentChats.useQuery(
     { teamId: selectedTeamId! },
-    { enabled: !!selectedTeamId },
+    {
+      enabled: !!selectedTeamId,
+      // Poll every 5 seconds in remote mode to sync with desktop changes
+      refetchInterval: isRemoteMode ? 5000 : false,
+    },
   )
 
   // Fetch all projects for git info (like sidebar does)
-  const { data: projects } = trpc.projects.list.useQuery()
+  const { data: projects } = trpc.projects.list.useQuery(
+    undefined, // no input
+    // Poll every 5 seconds in remote mode to sync with desktop changes
+    isRemoteMode ? { refetchInterval: 5000 } : undefined,
+  )
 
   // Create map for quick project lookup by id
   const projectsMap = useMemo(() => {

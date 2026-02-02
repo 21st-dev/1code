@@ -18,6 +18,7 @@ import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
 import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
+import { RemoteAccessDialog } from "../../components/dialogs/remote-access-dialog"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { AgentsSidebar } from "../sidebar/agents-sidebar"
@@ -241,6 +242,7 @@ export function AgentsLayout() {
       {/* Global queue processor - handles message queues for all sub-chats */}
       <QueueProcessor />
       <ClaudeLoginModal />
+      <RemoteAccessDialog />
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />

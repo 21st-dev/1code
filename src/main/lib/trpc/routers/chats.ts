@@ -426,6 +426,48 @@ export const chatsRouter = router({
     }),
 
   /**
+   * Update chat's model profile (per-workspace model configuration)
+   */
+  updateModelProfile: publicProcedure
+    .input(z.object({
+      id: z.string(),
+      modelProfileId: z.string().nullable(),
+    }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(chats)
+        .set({
+          modelProfileId: input.modelProfileId,
+          updatedAt: new Date(),
+        })
+        .where(eq(chats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
+   * Update chat's selected model within the current profile
+   */
+  updateSelectedModel: publicProcedure
+    .input(z.object({
+      id: z.string(),
+      selectedModelId: z.string().nullable(),
+    }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(chats)
+        .set({
+          selectedModelId: input.selectedModelId,
+          updatedAt: new Date(),
+        })
+        .where(eq(chats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
    * Archive a chat (also kills any terminal processes in the workspace)
    * Optionally deletes the worktree to free disk space
    */

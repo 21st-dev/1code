@@ -118,7 +118,13 @@ export const claudeCodeRouter = router({
     return {
       hasConfig,
       hasApiKey: !!shellEnv.ANTHROPIC_API_KEY,
+      apiKey: shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN || null,
       baseUrl: shellEnv.ANTHROPIC_BASE_URL || null,
+      model: shellEnv.ANTHROPIC_MODEL || null,
+      defaultOpusModel: shellEnv.ANTHROPIC_DEFAULT_OPUS_MODEL || null,
+      defaultSonnetModel: shellEnv.ANTHROPIC_DEFAULT_SONNET_MODEL || null,
+      defaultHaikuModel: shellEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || null,
+      subagentModel: shellEnv.CLAUDE_CODE_SUBAGENT_MODEL || null,
     }
   }),
 

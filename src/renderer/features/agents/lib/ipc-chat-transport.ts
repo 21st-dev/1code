@@ -2,14 +2,15 @@ import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
+  activeConfigAtom,
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
-  type CustomClaudeConfig,
-  customClaudeConfigAtom,
   enableTasksAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
-  normalizeCustomClaudeConfig,
+  modelProfilesAtom,
+  lastUsedProfileIdAtom,
+  selectedProfileModelIdAtom,
   selectedOllamaModelAtom,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
@@ -170,13 +171,63 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const enableTasks = appStore.get(enableTasksAtom)
 
     // Read model selection dynamically (so model changes apply to existing chats)
-    const selectedModelId = appStore.get(lastSelectedModelIdAtom)
-    const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
+    // First try to get model from profile system, then fall back to legacy MODEL_ID_MAP
+    const profiles = appStore.get(modelProfilesAtom)
+    const lastUsedProfileId = appStore.get(lastUsedProfileIdAtom)
+    const selectedProfileModelId = appStore.get(selectedProfileModelIdAtom)
 
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
-    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+    // Find the effective profile
+    const effectiveProfile = lastUsedProfileId
+      ? profiles.find(p => p.id === lastUsedProfileId)
+      : profiles.filter(p => !p.isOffline)[0]
+
+    // Resolve model from profile config based on selected model ID
+    let modelString: string | undefined
+    if (effectiveProfile?.config) {
+      const config = effectiveProfile.config
+      switch (selectedProfileModelId) {
+        case "main":
+          modelString = config.model
+          break
+        case "opus":
+          modelString = config.defaultOpusModel
+          break
+        case "sonnet":
+          modelString = config.defaultSonnetModel
+          break
+        case "haiku":
+          modelString = config.defaultHaikuModel
+          break
+        case "subagent":
+          modelString = config.subagentModel
+          break
+        default:
+          // Default to main model if no specific selection
+          modelString = config.model
+      }
+    }
+
+    // Fall back to legacy model selection if no profile model found
+    if (!modelString) {
+      const selectedModelId = appStore.get(lastSelectedModelIdAtom)
+      modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
+    }
+
+    console.log(`[IPC Transport] Using model: ${modelString} (profile: ${effectiveProfile?.name || 'none'}, selectedProfileModelId: ${selectedProfileModelId})`)
+
+    // Read active profile config (from profile system, supports multiple profiles)
+    // Override the model in customConfig with the selected model from profile
+    let baseCustomConfig: any
+    try {
+      baseCustomConfig = appStore.get(activeConfigAtom)
+      console.log('[IPC Transport] baseCustomConfig:', baseCustomConfig ? 'FOUND' : 'NOT FOUND', baseCustomConfig)
+    } catch (error) {
+      console.error('[IPC Transport] ERROR getting activeConfigAtom:', error)
+      baseCustomConfig = undefined
+    }
+    const customConfig = baseCustomConfig && modelString
+      ? { ...baseCustomConfig, model: modelString }
+      : baseCustomConfig
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
@@ -463,10 +514,47 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
           },
         )
 
+        // Also subscribe to broadcasts from WebSocket server (for sync with web clients)
+        // This allows desktop to receive messages sent from web clients
+        let broadcastUnsubscribe: (() => void) | null = null
+        if (window.desktopApi?.subscribeToChatData) {
+          try {
+            broadcastUnsubscribe = window.desktopApi.subscribeToChatData(
+              this.config.subChatId,
+              (data: any) => {
+                // Received broadcast from web client, forward to controller
+                console.log(`[SD] Broadcast from web:`, data.type || "no-type")
+                if (data.type === "complete") {
+                  try {
+                    controller.close()
+                  } catch {
+                    // Already closed
+                  }
+                } else if (data.type === "error") {
+                  controller.error(new Error(data.error || "Unknown error"))
+                } else {
+                  // Regular data chunk
+                  try {
+                    controller.enqueue(data)
+                  } catch {
+                    // Controller closed, ignore
+                  }
+                }
+              }
+            )
+          } catch (err) {
+            console.error(`[SD] Failed to subscribe to chat broadcasts:`, err)
+          }
+        }
+
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
           console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
           sub.unsubscribe()
+          // Clean up broadcast subscription
+          if (broadcastUnsubscribe) {
+            broadcastUnsubscribe()
+          }
           // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
           try {
             controller.close()

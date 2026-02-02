@@ -28,6 +28,7 @@ import {
 } from "./lib/cli"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
+import { initTray, destroyTray } from "./lib/tray"
 import {
   createMainWindow,
   createWindow,
@@ -852,8 +853,12 @@ if (gotTheLock) {
       console.error("[App] Failed to initialize database:", error)
     }
 
-    // Create main window
+    // Create main window FIRST (before tray initialization)
+    // This prevents tray from creating a duplicate window
     createMainWindow()
+
+    // Initialize system tray (after main window exists)
+    initTray()
 
     // Initialize auto-updater (production only)
     if (app.isPackaged) {
@@ -903,9 +908,25 @@ if (gotTheLock) {
     }
   })
 
+  // Track when app is intentionally quitting (vs just closing windows)
+  let isQuitting = false
+  ;(global as any).__isAppQuitting = () => isQuitting
+
   // Cleanup before quit
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
+    isQuitting = true
+    ;(global as any).__isAppQuitting = () => true
+
+    // Disable remote access first
+    try {
+      const { disableRemoteAccess } = await import("./lib/remote-access")
+      await disableRemoteAccess()
+    } catch (error) {
+      console.warn("[App] Failed to disable remote access:", error)
+    }
+
+    destroyTray()
     cancelAllPendingOAuth()
     await cleanupGitWatchers()
     await shutdownAnalytics()

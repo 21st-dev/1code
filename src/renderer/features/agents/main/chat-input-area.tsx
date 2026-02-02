@@ -1,9 +1,8 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, Loader2, RefreshCw, Zap } from "lucide-react"
+import { BrainIcon, ChevronDown, Loader2, NotebookIcon, RefreshCw, RouteIcon, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/button"
 import {
@@ -86,6 +85,13 @@ import {
 } from "../../../lib/hooks/use-voice-recording"
 import { getResolvedHotkey } from "../../../lib/hotkeys"
 import { customHotkeysAtom } from "../../../lib/atoms"
+import { ProfileSelector, useEffectiveProfile, useEffectiveModel } from "../ui/profile-selector"
+import {
+  modelProfilesAtom,
+  lastUsedProfileIdAtom,
+  selectedProfileModelIdAtom,
+  type ModelMapping,
+} from "../../../lib/atoms"
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
@@ -178,6 +184,9 @@ export interface ChatInputAreaProps {
   onInputContentChange?: (hasContent: boolean) => void
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
+  // Per-workspace model profile (from chat data)
+  chatModelProfileId?: string | null
+  chatSelectedModelId?: string | null
 }
 
 /**
@@ -373,11 +382,94 @@ export const ChatInputArea = memo(function ChatInputArea({
   firstQueueItemId,
   onInputContentChange,
   onSubmitWithQuestionAnswer,
+  chatModelProfileId,
+  chatSelectedModelId,
 }: ChatInputAreaProps) {
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+
+  // Get effective profile and model from per-workspace settings
+  const effectiveProfile = useEffectiveProfile(chatModelProfileId)
+  const effectiveModel = useEffectiveModel(effectiveProfile, chatSelectedModelId)
+
+  // Derive available models from profile config (like settings do)
+  const profileModels = useMemo((): ModelMapping[] => {
+    if (!effectiveProfile?.config) return []
+    const models: ModelMapping[] = []
+    const config = effectiveProfile.config
+
+    // Add main model
+    if (config.model) {
+      models.push({
+        id: "main",
+        displayName: "Main",
+        modelId: config.model,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Opus model
+    if (config.defaultOpusModel) {
+      models.push({
+        id: "opus",
+        displayName: "Opus",
+        modelId: config.defaultOpusModel,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Sonnet model
+    if (config.defaultSonnetModel) {
+      models.push({
+        id: "sonnet",
+        displayName: "Sonnet",
+        modelId: config.defaultSonnetModel,
+        supportsThinking: true,
+      })
+    }
+
+    // Add Haiku model
+    if (config.defaultHaikuModel) {
+      models.push({
+        id: "haiku",
+        displayName: "Haiku",
+        modelId: config.defaultHaikuModel,
+        supportsThinking: false,
+      })
+    }
+
+    // Add Subagent model
+    if (config.subagentModel) {
+      models.push({
+        id: "subagent",
+        displayName: "Subagent",
+        modelId: config.subagentModel,
+        supportsThinking: false,
+      })
+    }
+
+    return models
+  }, [effectiveProfile?.config])
+
+  // Selected model within profile - use global atom so ipc-chat-transport can read it
+  const [selectedProfileModelId, setSelectedProfileModelId] = useAtom(selectedProfileModelIdAtom)
+
+  // Get selected model from profile models
+  const selectedProfileModel = useMemo((): ModelMapping | null => {
+    if (profileModels.length === 0) return null
+    if (selectedProfileModelId) {
+      const found = profileModels.find((m) => m.id === selectedProfileModelId)
+      if (found) return found
+    }
+    return profileModels[0] ?? null
+  }, [profileModels, selectedProfileModelId])
+
+  // Reset selected model when profile changes
+  useEffect(() => {
+    setSelectedProfileModelId(null)
+  }, [effectiveProfile?.id])
 
   // Mention dropdown state
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
@@ -395,15 +487,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [slashSearchText, setSlashSearchText] = useState("")
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 })
 
-  // Mode dropdown state
-  const [modeDropdownOpen, setModeDropdownOpen] = useState(false)
-  const [modeTooltip, setModeTooltip] = useState<{
-    visible: boolean
-    position: { top: number; left: number }
-    mode: "agent" | "plan"
-  } | null>(null)
-  const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasShownTooltipRef = useRef(false)
+
 
   // Model dropdown state
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
@@ -441,6 +525,9 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+
+  // Check if selected model supports thinking
+  const selectedModelSupportsThinking = selectedModel?.supportsThinking ?? true
 
   // MCP status - from getAllMcpConfig query (provides global/local grouping)
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
@@ -941,7 +1028,6 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        // @ts-expect-error - Electron's webUtils API
         const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
 
         let mentionId: string
@@ -1141,175 +1227,15 @@ export const ChatInputArea = memo(function ChatInputArea({
               </div>
               <PromptInputActions className="w-full">
                 <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                  {/* Mode toggle (Agent/Plan) */}
-                  <DropdownMenu
-                    open={modeDropdownOpen}
-                    onOpenChange={(open) => {
-                      setModeDropdownOpen(open)
-                      if (!open) {
-                        if (tooltipTimeoutRef.current) {
-                          clearTimeout(tooltipTimeoutRef.current)
-                          tooltipTimeoutRef.current = null
-                        }
-                        setModeTooltip(null)
-                        hasShownTooltipRef.current = false
-                      }
-                    }}
-                  >
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                        {subChatMode === "plan" ? (
-                          <PlanIcon className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                          <AgentIcon className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        <span className="truncate">{subChatMode === "plan" ? "Plan" : "Agent"}</span>
-                        <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      sideOffset={6}
-                      className="!min-w-[116px] !w-[116px]"
-                      onCloseAutoFocus={(e) => e.preventDefault()}
-                    >
-                      <DropdownMenuItem
-                        onClick={() => {
-                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          updateMode("agent")
-                          setModeDropdownOpen(false)
-                        }}
-                        className="justify-between gap-2"
-                        onMouseEnter={(e) => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          const rect = e.currentTarget.getBoundingClientRect()
-                          const showTooltip = () => {
-                            setModeTooltip({
-                              visible: true,
-                              position: {
-                                top: rect.top,
-                                left: rect.right + 8,
-                              },
-                              mode: "agent",
-                            })
-                            hasShownTooltipRef.current = true
-                            tooltipTimeoutRef.current = null
-                          }
-                          if (hasShownTooltipRef.current) {
-                            showTooltip()
-                          } else {
-                            tooltipTimeoutRef.current = setTimeout(
-                              showTooltip,
-                              1000,
-                            )
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Agent</span>
-                        </div>
-                        {subChatMode !== "plan" && (
-                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          updateMode("plan")
-                          setModeDropdownOpen(false)
-                        }}
-                        className="justify-between gap-2"
-                        onMouseEnter={(e) => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          const rect = e.currentTarget.getBoundingClientRect()
-                          const showTooltip = () => {
-                            setModeTooltip({
-                              visible: true,
-                              position: {
-                                top: rect.top,
-                                left: rect.right + 8,
-                              },
-                              mode: "plan",
-                            })
-                            hasShownTooltipRef.current = true
-                            tooltipTimeoutRef.current = null
-                          }
-                          if (hasShownTooltipRef.current) {
-                            showTooltip()
-                          } else {
-                            tooltipTimeoutRef.current = setTimeout(
-                              showTooltip,
-                              1000,
-                            )
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Plan</span>
-                        </div>
-                        {subChatMode === "plan" && (
-                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                    {modeTooltip?.visible &&
-                      createPortal(
-                        <div
-                          className="fixed z-[100000]"
-                          style={{
-                            top: modeTooltip.position.top + 14,
-                            left: modeTooltip.position.left,
-                            transform: "translateY(-50%)",
-                          }}
-                        >
-                          <div
-                            data-tooltip="true"
-                            className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
-                          >
-                            <span>
-                              {modeTooltip.mode === "agent"
-                                ? "Apply changes directly without a plan"
-                                : "Create a plan before making changes"}
-                            </span>
-                          </div>
-                        </div>,
-                        document.body,
-                      )}
-                  </DropdownMenu>
 
-                  {/* Model selector - shows Ollama models when offline, Claude models when online */}
+                  {/* Profile selector - per-workspace model profile */}
+                  <ProfileSelector
+                    chatId={parentChatId}
+                    currentProfileId={chatModelProfileId ?? null}
+                    disabled={isStreaming}
+                  />
+
+                  {/* Model selector - shows Ollama models when offline, profile models, or Claude models */}
                   {availableModels.isOffline && availableModels.hasOllama ? (
                     // Offline mode: show Ollama model selector
                     <DropdownMenu
@@ -1355,37 +1281,64 @@ export const ChatInputArea = memo(function ChatInputArea({
                         })}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  ) : (
-                    // Online mode: show Claude model selector
+                  ) : profileModels.length > 0 ? (
+                    // Profile mode: show models from selected profile config
                     <DropdownMenu
-                      open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
-                      onOpenChange={(open) => {
-                        if (!hasCustomClaudeConfig) {
-                          setIsModelDropdownOpen(open)
-                        }
-                      }}
+                      open={isModelDropdownOpen}
+                      onOpenChange={setIsModelDropdownOpen}
                     >
                       <DropdownMenuTrigger asChild>
                         <button
-                          disabled={hasCustomClaudeConfig}
-                          className={cn(
-                            "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                            hasCustomClaudeConfig
-                              ? "opacity-70 cursor-not-allowed"
-                              : "hover:text-foreground hover:bg-muted/50",
-                          )}
+                          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                         >
                           <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">
-                            {hasCustomClaudeConfig ? (
-                              "Custom Model"
-                            ) : (
-                              <>
-                                {selectedModel?.name}{" "}
-                                <span className="text-muted-foreground">4.5</span>
-                              </>
-                            )}
+                            {selectedProfileModel?.displayName || "Select model"}{" "}
+                            <span className="text-muted-foreground">
+                              ({selectedProfileModel?.modelId || ""})
+                            </span>
                           </span>
+                          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[280px]">
+                        {profileModels.map((model) => {
+                          const isSelected = model.id === selectedProfileModel?.id
+                          return (
+                            <DropdownMenuItem
+                              key={model.id}
+                              onClick={() => setSelectedProfileModelId(model.id)}
+                              className="gap-2 justify-between"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span>
+                                  {model.displayName}{" "}
+                                  <span className="text-muted-foreground">
+                                    ({model.modelId})
+                                  </span>
+                                </span>
+                              </div>
+                              {isSelected && (
+                                <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                              )}
+                            </DropdownMenuItem>
+                          )
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    // Fallback: show Claude model selector (no profile or empty profile)
+                    <DropdownMenu
+                      open={isModelDropdownOpen}
+                      onOpenChange={setIsModelDropdownOpen}
+                    >
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 hover:text-foreground hover:bg-muted/50"
+                        >
+                          <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{selectedModel?.name}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
@@ -1403,10 +1356,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             >
                               <div className="flex items-center gap-1.5">
                                 <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span>
-                                  {model.name}{" "}
-                                  <span className="text-muted-foreground">4.5</span>
-                                </span>
+                                <span>{model.name}</span>
                               </div>
                               {isSelected && (
                                 <CheckIcon className="h-3.5 w-3.5 shrink-0" />
@@ -1414,24 +1364,48 @@ export const ChatInputArea = memo(function ChatInputArea({
                             </DropdownMenuItem>
                           )
                         })}
-                        <DropdownMenuSeparator />
-                        <div
-                          className="flex items-center justify-between px-1.5 py-1.5 mx-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm">Thinking</span>
-                          </div>
-                          <Switch
-                            checked={thinkingEnabled}
-                            onCheckedChange={setThinkingEnabled}
-                            className="scale-75"
-                          />
-                        </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
+
+                  {/* Thinking toggle - simple toggle button */}
+                  <button
+                    onClick={() => {
+                      if (selectedModelSupportsThinking) {
+                        setThinkingEnabled(!thinkingEnabled)
+                      }
+                    }}
+                    disabled={!selectedModelSupportsThinking}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 text-sm transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                      !selectedModelSupportsThinking
+                        ? "opacity-40 cursor-not-allowed text-muted-foreground"
+                        : thinkingEnabled
+                          ? "text-[#D4846C] hover:text-[#E8A08C] hover:bg-[#D4846C]/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <BrainIcon className="h-3.5 w-3.5 shrink-0" />
+                    {thinkingEnabled && (
+                      <span className="font-medium">Thinking</span>
+                    )}
+                  </button>
+
+                  {/* Mode toggle (Agent/Plan) - simple toggle button */}
+                  <button
+                    onClick={toggleMode}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 text-sm transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                      subChatMode === "plan"
+                        ? "text-[#D4846C] hover:text-[#E8A08C] hover:bg-[#D4846C]/10"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <RouteIcon className="h-3.5 w-3.5 shrink-0" />
+                    {subChatMode === "plan" && (
+                      <span className="font-medium">Plan</span>
+                    )}
+                  </button>
 
                 </div>
 

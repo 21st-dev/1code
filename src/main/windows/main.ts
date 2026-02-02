@@ -16,6 +16,7 @@ import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
+import { subscribeToChatData } from "../lib/remote-access/ws-server"
 
 // Helper to get window from IPC event
 function getWindowFromEvent(
@@ -452,6 +453,58 @@ function registerIpcHandlers(): void {
 
   // Register VS Code theme scanner IPC handlers
   registerThemeScannerIPC()
+
+  // Remote access IPC handlers
+  ipcMain.handle("remote-access:get-status", async () => {
+    const { getRemoteAccessStatus } = await import("../lib/remote-access")
+    return getRemoteAccessStatus()
+  })
+
+  ipcMain.handle("remote-access:enable", async () => {
+    const { enableRemoteAccess, getRemoteAccessStatus } = await import("../lib/remote-access")
+    await enableRemoteAccess()
+    return getRemoteAccessStatus()
+  })
+
+  ipcMain.handle("remote-access:disable", async () => {
+    const { disableRemoteAccess, getRemoteAccessStatus } = await import("../lib/remote-access")
+    await disableRemoteAccess()
+    return getRemoteAccessStatus()
+  })
+
+  // Chat data sync - subscribe to broadcasts from WebSocket server
+  // This allows desktop clients to receive messages from web clients
+  const chatSubscriptions = new Map<string, () => void>()
+
+  ipcMain.handle("chat:subscribe", (event, subChatId: string) => {
+    // Clean up existing subscription if any
+    const existing = chatSubscriptions.get(subChatId)
+    if (existing) {
+      existing()
+      chatSubscriptions.delete(subChatId)
+    }
+
+    const unsubscribe = subscribeToChatData(subChatId, (data: any) => {
+      // Send chat data to this renderer process
+      event.sender.send("chat:data", subChatId, data)
+    })
+
+    // Store subscription for later cleanup
+    chatSubscriptions.set(subChatId, unsubscribe)
+
+    // Return success (not the function - functions can't be cloned over IPC)
+    return { success: true, subChatId }
+  })
+
+  ipcMain.handle("chat:unsubscribe", (_event, subChatId: string) => {
+    const unsubscribe = chatSubscriptions.get(subChatId)
+    if (unsubscribe) {
+      unsubscribe()
+      chatSubscriptions.delete(subChatId)
+      return { success: true }
+    }
+    return { success: false, error: "No subscription found" }
+  })
 }
 
 /**
@@ -630,7 +683,26 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     return { action: "deny" }
   })
 
-  // Handle window close
+  // Handle window close - hide to tray instead of closing
+  window.on("close", (event) => {
+    const isQuitting = (global as any).__isAppQuitting?.() || false
+    if (!isQuitting) {
+      event.preventDefault()
+      window.hide()
+      console.log(`[Main] Window ${window.id} hidden to tray`)
+      
+      // On macOS, hide dock icon when all windows are hidden
+      if (process.platform === "darwin" && app.dock) {
+        const allWindows = BrowserWindow.getAllWindows()
+        const visibleWindows = allWindows.filter(w => w.isVisible() && !w.isDestroyed())
+        if (visibleWindows.length === 0) {
+          app.dock.hide()
+          console.log("[Main] Dock icon hidden")
+        }
+      }
+    }
+  })
+  
   window.on("closed", () => {
     console.log(`[Main] Window ${window.id} closed`)
     // windowManager handles cleanup via 'closed' event listener

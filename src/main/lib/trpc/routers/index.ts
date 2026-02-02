@@ -18,6 +18,8 @@ import { commandsRouter } from "./commands"
 import { voiceRouter } from "./voice"
 import { pluginsRouter } from "./plugins"
 import { createGitRouter } from "../../git"
+import { remoteAccessRouter } from "./remote-access"
+import { modelProfilesRouter } from "./model-profiles"
 import { BrowserWindow } from "electron"
 
 /**
@@ -46,6 +48,8 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     plugins: pluginsRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
+    remoteAccess: remoteAccessRouter,
+    modelProfiles: modelProfilesRouter,
   })
 }
 

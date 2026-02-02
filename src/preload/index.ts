@@ -221,6 +221,40 @@ contextBridge.exposeInMainWorld("desktopApi", {
   // VS Code theme scanning
   scanVSCodeThemes: () => ipcRenderer.invoke("vscode:scan-themes"),
   loadVSCodeTheme: (themePath: string) => ipcRenderer.invoke("vscode:load-theme", themePath),
+
+  // Remote access
+  getRemoteAccessStatus: () => ipcRenderer.invoke("remote-access:get-status"),
+  enableRemoteAccess: () => ipcRenderer.invoke("remote-access:enable"),
+  disableRemoteAccess: () => ipcRenderer.invoke("remote-access:disable"),
+  onRemoteAccessStatusChange: (callback: (status: any) => void) => {
+    const handler = (_event: unknown, status: any) => callback(status)
+    ipcRenderer.on("remote-access:status", handler)
+    return () => ipcRenderer.removeListener("remote-access:status", handler)
+  },
+
+  // Chat data sync - subscribe to broadcasts from WebSocket server
+  subscribeToChatData: (subChatId: string, callback: (data: any) => void) => {
+    const dataHandler = (_event: unknown, chatId: string, data: any) => {
+      if (chatId === subChatId) {
+        callback(data)
+      }
+    }
+    ipcRenderer.on("chat:data", dataHandler)
+
+    // Register subscription with main process
+    ipcRenderer.invoke("chat:subscribe", subChatId).catch((err) => {
+      console.error("[preload] Failed to subscribe to chat:", err)
+    })
+
+    // Return cleanup function
+    return () => {
+      ipcRenderer.removeListener("chat:data", dataHandler)
+      // Call unsubscribe IPC handler (functions can't be passed over IPC)
+      ipcRenderer.invoke("chat:unsubscribe", subChatId).catch((err) => {
+        console.error("[preload] Failed to unsubscribe from chat:", err)
+      })
+    }
+  },
 })
 
 // Type definitions
@@ -354,6 +388,18 @@ export interface DesktopApi {
   // VS Code theme scanning
   scanVSCodeThemes: () => Promise<DiscoveredTheme[]>
   loadVSCodeTheme: (themePath: string) => Promise<VSCodeThemeData>
+  // Remote access
+  getRemoteAccessStatus: () => Promise<{
+    status: "disabled" | "downloading" | "starting" | "active" | "error"
+    progress?: number
+    url?: string
+    pin?: string
+    clients?: number
+    message?: string
+  }>
+  enableRemoteAccess: () => Promise<any>
+  disableRemoteAccess: () => Promise<any>
+  onRemoteAccessStatusChange: (callback: (status: any) => void) => () => void
 }
 
 declare global {

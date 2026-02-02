@@ -204,18 +204,50 @@ export const agentsSettingsDialogOpenAtom = atom(
   }
 )
 
-export type CustomClaudeConfig = {
-  model: string
-  token: string
-  baseUrl: string
+// Model profile types (defined here to avoid circular dependencies)
+export type ModelMapping = {
+  id: string           // Internal reference ID (e.g., "opus", "sonnet", "haiku")
+  displayName: string  // User-facing name (e.g., "Opus", "Sonnet 3.5")
+  modelId: string      // Actual model ID sent to API (e.g., "glm-4.7", "claude-3-opus-20240229")
+  supportsThinking?: boolean  // Whether this model supports extended thinking
 }
 
-// Model profile system - support multiple configs
+export type CustomClaudeConfig = {
+  model: string
+  token?: string
+  baseUrl: string
+  // Additional model configuration (optional)
+  defaultOpusModel?: string // ANTHROPIC_DEFAULT_OPUS_MODEL
+  defaultSonnetModel?: string // ANTHROPIC_DEFAULT_SONNET_MODEL
+  defaultHaikuModel?: string // ANTHROPIC_DEFAULT_HAIKU_MODEL
+  subagentModel?: string // CLAUDE_CODE_SUBAGENT_MODEL
+}
+
 export type ModelProfile = {
   id: string
   name: string
   config: CustomClaudeConfig
-  isOffline?: boolean // Mark as offline/Ollama profile
+  models: ModelMapping[]
+  isOffline?: boolean
+}
+
+export const OFFLINE_PROFILE: ModelProfile = {
+  id: 'offline-ollama',
+  name: 'Offline (Ollama)',
+  isOffline: true,
+  config: {
+    model: 'qwen2.5-coder:7b',
+    token: 'ollama',
+    baseUrl: 'http://localhost:11434',
+  },
+  models: [
+    {
+      id: 'default',
+      displayName: 'Default',
+      modelId: 'qwen2.5-coder:7b',
+      supportsThinking: false,
+    },
+  ],
 }
 
 // Selected Ollama model for offline mode
@@ -236,19 +268,15 @@ export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
     token: 'ollama',
     baseUrl: 'http://localhost:11434',
   },
+  models: [
+    {
+      id: 'default',
+      displayName: 'Default',
+      modelId: modelName || 'qwen2.5-coder:7b',
+      supportsThinking: false,
+    },
+  ],
 })
-
-// Predefined offline profile for Ollama (legacy, uses default model)
-export const OFFLINE_PROFILE: ModelProfile = {
-  id: 'offline-ollama',
-  name: 'Offline (Ollama)',
-  isOffline: true,
-  config: {
-    model: 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
-  },
-}
 
 // Legacy single config (deprecated, kept for backwards compatibility)
 export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
@@ -262,6 +290,8 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
   { getOnInit: true },
 )
 
+// Migration block removed as per user request (legacy config no longer auto-migrates to "Migrated Config")
+
 // OpenAI API key for voice transcription (for users without paid subscription)
 export const openaiApiKeyAtom = atomWithStorage<string>(
   "agents:openai-api-key",
@@ -270,17 +300,84 @@ export const openaiApiKeyAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-// New: Model profiles storage
-export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
+// New: Model profiles storage (localStorage-based for desktop)
+// Renamed to localStorageModelProfilesAtom - use modelProfilesAtom from model-profiles-sync.ts instead
+export const localStorageModelProfilesAtom = atomWithStorage<ModelProfile[]>(
   "agents:model-profiles",
   [OFFLINE_PROFILE], // Start with offline profile
   undefined,
   { getOnInit: true },
 )
 
+// Re-export the database-synced model profiles atom
+// This atom automatically handles:
+// - Desktop mode: Uses localStorage, syncs to database
+// - Web mode: Loads from database via tRPC
+export { modelProfilesAtom, useSyncModelProfiles, activeConfigAtom, normalizeCustomClaudeConfig } from "./model-profiles-sync"
+
+// Migration: add models array to existing profiles that don't have it
+if (typeof window !== "undefined") {
+  const profilesKey = "agents:model-profiles"
+  const stored = localStorage.getItem(profilesKey)
+  if (stored) {
+    try {
+      const profiles = JSON.parse(stored) as ModelProfile[]
+      let needsMigration = false
+      const migrated = profiles.map(profile => {
+        if (!profile.models || profile.models.length === 0) {
+          needsMigration = true
+          return {
+            ...profile,
+            models: [
+              {
+                id: 'default',
+                displayName: 'Default',
+                modelId: profile.config.model || 'claude-3-opus',
+                supportsThinking: true,
+              },
+            ],
+          }
+        }
+        return profile
+      })
+      if (needsMigration) {
+        localStorage.setItem(profilesKey, JSON.stringify(migrated))
+        console.log("[atoms] Migrated profiles to include models array")
+      }
+    } catch (e) {
+      console.error("[atoms] Failed to migrate profiles:", e)
+    }
+  }
+}
+
 // Active profile ID (null = use Claude Code default)
-export const activeProfileIdAtom = atomWithStorage<string | null>(
-  "agents:active-profile-id",
+// Renamed from activeProfileIdAtom - now serves as default for new chats
+export const lastUsedProfileIdAtom = atomWithStorage<string | null>(
+  "agents:last-used-profile-id",
+  null,
+  undefined,
+  { getOnInit: true },
+)
+
+// Migration: rename old key to new key
+if (typeof window !== "undefined") {
+  const oldKey = "agents:active-profile-id"
+  const newKey = "agents:last-used-profile-id"
+  const oldValue = localStorage.getItem(oldKey)
+  if (oldValue !== null && localStorage.getItem(newKey) === null) {
+    localStorage.setItem(newKey, oldValue)
+    localStorage.removeItem(oldKey)
+    console.log("[atoms] Migrated activeProfileId to lastUsedProfileId")
+  }
+}
+
+// Backwards compatibility alias
+export const activeProfileIdAtom = lastUsedProfileIdAtom
+
+// Selected model ID within the current profile (e.g., "main", "opus", "sonnet", "haiku", "subagent")
+// Used by ipc-chat-transport to determine which model from the profile to use
+export const selectedProfileModelIdAtom = atomWithStorage<string | null>(
+  "agents:selected-profile-model-id",
   null,
   undefined,
   { getOnInit: true },
@@ -313,55 +410,8 @@ export const showOfflineModeFeaturesAtom = atomWithStorage<boolean>(
 // Network status (updated from main process)
 export const networkOnlineAtom = atom<boolean>(true)
 
-export function normalizeCustomClaudeConfig(
-  config: CustomClaudeConfig,
-): CustomClaudeConfig | undefined {
-  const model = config.model.trim()
-  const token = config.token.trim()
-  const baseUrl = config.baseUrl.trim()
-
-  if (!model || !token || !baseUrl) return undefined
-
-  return { model, token, baseUrl }
-}
-
-// Get active config (considering network status and auto-fallback)
-export const activeConfigAtom = atom((get) => {
-  const activeProfileId = get(activeProfileIdAtom)
-  const profiles = get(modelProfilesAtom)
-  const legacyConfig = get(customClaudeConfigAtom)
-  const networkOnline = get(networkOnlineAtom)
-  const autoOffline = get(autoOfflineModeAtom)
-
-  // If auto-offline enabled and no internet, use offline profile
-  if (!networkOnline && autoOffline) {
-    const offlineProfile = profiles.find(p => p.isOffline)
-    if (offlineProfile) {
-      return offlineProfile.config
-    }
-  }
-
-  // If specific profile is selected, use it
-  if (activeProfileId) {
-    const profile = profiles.find(p => p.id === activeProfileId)
-    if (profile) {
-      return profile.config
-    }
-  }
-
-  // Fallback to legacy config if set
-  const normalized = normalizeCustomClaudeConfig(legacyConfig)
-  if (normalized) {
-    return normalized
-  }
-
-  // No custom config
-  return undefined
-})
-
 // Preferences - Extended Thinking
 // When enabled, Claude will use extended thinking for deeper reasoning (128K tokens)
-// Note: Extended thinking disables response streaming
 export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
   "preferences:extended-thinking-enabled",
   false,
@@ -712,6 +762,17 @@ export const updateInfoAtom = atom<UpdateInfo | null>(null)
 // Whether app is running in Electron desktop environment
 export const isDesktopAtom = atom<boolean>(false)
 
+// Whether app is running in remote mode (web browser, not desktop)
+// In remote mode, certain desktop-only features should be hidden
+export const isRemoteModeAtom = atom<boolean>(() => {
+  // Check if running in remote mode (no desktopApi or has remote auth token)
+  if (typeof window === "undefined") return false
+  // If we have a stored remote auth PIN, we're in remote mode
+  if (sessionStorage.getItem("remote_ws_auth")) return true
+  // If desktopApi is missing, we're in remote mode
+  return !window.desktopApi
+})
+
 // Fullscreen state - null means not initialized yet
 // null = not yet loaded, false = not fullscreen, true = fullscreen
 export const isFullscreenAtom = atom<boolean | null>(null)
@@ -748,6 +809,15 @@ export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
 // Only relevant when billingMethod is "api-key"
 export const apiKeyOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:api-key-completed",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+// Whether user has seen the CLI config detected page
+// This tracks if the user was shown the "Configuration Detected" screen
+export const cliConfigDetectedShownAtom = atomWithStorage<boolean>(
+  "onboarding:cli-config-detected-shown",
   false,
   undefined,
   { getOnInit: true },
@@ -846,3 +916,9 @@ export const mcpApprovalDialogOpenAtom = atom<boolean>(false)
 
 // Pending MCP approvals to show in the dialog
 export const pendingMcpApprovalsAtom = atom<PendingMcpApproval[]>([])
+
+// ============================================
+// REMOTE ACCESS ATOMS
+// ============================================
+
+export * from "./remote-access"
