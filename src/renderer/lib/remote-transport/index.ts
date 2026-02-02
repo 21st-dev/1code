@@ -35,6 +35,49 @@ const pendingRequests = new Map<string, PendingRequest>()
 const subscriptionHandlers = new Map<string, Set<(data: unknown) => void>>()
 let requestId = 0
 
+// Connection state listeners
+type ConnectionState = "connecting" | "connected" | "disconnected"
+const connectionStateListeners = new Set<(state: ConnectionState) => void>()
+let currentConnectionState: ConnectionState = "connecting"
+
+/**
+ * Notify listeners of connection state change
+ */
+function notifyConnectionStateChange(state: ConnectionState) {
+  currentConnectionState = state
+  for (const listener of connectionStateListeners) {
+    try {
+      listener(state)
+    } catch (err) {
+      console.error("[RemoteTransport] Error in connection state listener:", err)
+    }
+  }
+}
+
+/**
+ * Subscribe to connection state changes
+ * Returns unsubscribe function
+ */
+export function onConnectionStateChange(callback: (state: ConnectionState) => void): () => void {
+  connectionStateListeners.add(callback)
+  // Immediately call with current state
+  try {
+    callback(currentConnectionState)
+  } catch (err) {
+    console.error("[RemoteTransport] Error in initial connection state callback:", err)
+  }
+  return () => {
+    connectionStateListeners.delete(callback)
+  }
+}
+
+/**
+ * Get current connection state
+ */
+export function getConnectionState(): ConnectionState {
+  return currentConnectionState
+}
+
 /**
  * Check if we're running in remote browser mode
  * Robust check that works even after desktopApi is mocked
@@ -65,10 +108,14 @@ export function connect(): Promise<void> {
     return Promise.resolve()
   }
 
+  // Notify we're connecting
+  notifyConnectionStateChange("connecting")
+
   connectionPromise = new Promise((resolve, reject) => {
     const pin = getStoredPin()
     if (!pin) {
       // Redirect to login page
+      notifyConnectionStateChange("disconnected")
       window.location.href = "/login"
       reject(new Error("No PIN stored"))
       return
@@ -94,6 +141,7 @@ export function connect(): Promise<void> {
       if (message.type === "auth_success") {
         console.log("[RemoteTransport] Authentication successful")
         isAuthenticated = true
+        notifyConnectionStateChange("connected")
         connectionPromise = null
         resolve()
         return
@@ -102,6 +150,7 @@ export function connect(): Promise<void> {
       if (message.type === "auth_failed") {
         console.error("[RemoteTransport] Authentication failed")
         isAuthenticated = false
+        notifyConnectionStateChange("disconnected")
         sessionStorage.removeItem("remote_ws_auth")
         window.location.href = "/login"
         reject(new Error("Authentication failed"))
@@ -145,6 +194,7 @@ export function connect(): Promise<void> {
 
     ws.onerror = (error) => {
       console.error("[RemoteTransport] WebSocket error:", error)
+      notifyConnectionStateChange("disconnected")
       connectionPromise = null
       reject(new Error("WebSocket connection failed"))
     }
@@ -154,6 +204,7 @@ export function connect(): Promise<void> {
       ws = null
       isAuthenticated = false
       connectionPromise = null
+      notifyConnectionStateChange("disconnected")
     }
   })
 

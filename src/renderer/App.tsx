@@ -1,6 +1,6 @@
 import { Provider as JotaiProvider, useAtomValue, useSetAtom } from "jotai";
 import { ThemeProvider, useTheme } from "next-themes";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { TRPCProvider } from "./contexts/TRPCProvider";
@@ -32,6 +32,11 @@ import { appStore } from "./lib/jotai-store";
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider";
 import { useTrayEvents } from "./lib/tray-events";
 import { trpc } from "./lib/trpc";
+import { initRemoteTransport } from "./lib/remote-transport/init";
+import { isRemoteMode } from "./lib/remote-transport";
+import { ModelProfilesSync } from "./components/model-profiles-sync";
+import { ConnectionErrorOverlay } from "./components/ui/connection-error-overlay";
+import { useRemoteConnection } from "./lib/hooks/use-remote-connection";
 
 /**
  * Custom Toaster that adapts to theme
@@ -125,6 +130,8 @@ function AppContent() {
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery();
 
+  const isRemote = useMemo(() => isRemoteMode(), []);
+
   // Validated project - only valid if exists in DB
   const validatedProject = useMemo(() => {
     if (!selectedProject) return null;
@@ -135,6 +142,12 @@ function AppContent() {
     const exists = projects.some((p) => p.id === selectedProject.id);
     return exists ? selectedProject : null;
   }, [selectedProject, projects, isLoadingProjects]);
+
+  // If in remote mode, bypass all onboarding and go straight to layout
+  // The desktop app handles auth/config, and we can select projects from the sidebar
+  if (isRemote) {
+    return <AgentsLayout />;
+  }
 
   // Determine which page to show:
   // 1. No billing method selected -> BillingMethodPage OR CliConfigDetectedPage
@@ -179,6 +192,22 @@ function AppContent() {
 }
 
 export function App() {
+  const [remoteReady, setRemoteReady] = useState(!isRemoteMode());
+
+  // Track remote connection state (for connection error overlay)
+  useRemoteConnection();
+
+  // Initialize remote transport if running in browser
+  useEffect(() => {
+    if (isRemoteMode()) {
+      initRemoteTransport().then((success) => {
+        if (success) {
+          setRemoteReady(true);
+        }
+      });
+    }
+  }, []);
+
   // Listen for tray events (settings, workspace selection)
   useTrayEvents();
 
@@ -217,6 +246,15 @@ export function App() {
     };
   }, []);
 
+  // Show loading while remote transport initializes
+  if (!remoteReady) {
+    return (
+      <div className="h-screen w-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Connecting...</div>
+      </div>
+    );
+  }
+
   return (
     <WindowProvider>
       <JotaiProvider store={appStore}>
@@ -224,6 +262,8 @@ export function App() {
           <VSCodeThemeProvider>
             <TooltipProvider delayDuration={100}>
               <TRPCProvider>
+                <ModelProfilesSync />
+                <ConnectionErrorOverlay />
                 <div
                   data-agents-page
                   className="h-screen w-screen bg-background text-foreground overflow-hidden"

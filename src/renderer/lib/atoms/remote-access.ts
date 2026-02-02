@@ -12,3 +12,7 @@ export type RemoteAccessStatus =
 export const remoteAccessStatusAtom = atom<RemoteAccessStatus>({ status: "disabled" })
 
 export const remoteAccessDialogOpenAtom = atom(false)
+
+// Connection state for remote mode (web client)
+export type ConnectionState = "connecting" | "connected" | "disconnected"
+export const remoteConnectionStateAtom = atom<ConnectionState>("connected")
