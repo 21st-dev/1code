@@ -9,7 +9,7 @@
 
 import { memo, useCallback, useState, useEffect } from "react"
 import { useSetAtom } from "jotai"
-import { FileText, RefreshCw, Sparkles } from "lucide-react"
+import { FileText, RefreshCw, Sparkles, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc"
 import { WorkflowModal } from "./workflow-modal"
@@ -18,7 +18,14 @@ import { SubmoduleWarning } from "./submodule-warning"
 import { SpecErrorBoundary } from "./speckit-error-boundary"
 import { OverviewSection } from "./overview-section"
 import { CurrentBranchSection } from "./current-branch-section"
-import { speckitModalOpenAtom, speckitWorkflowStartStepAtom } from "../atoms"
+import {
+  speckitModalOpenAtom,
+  speckitWorkflowStartStepAtom,
+  speckitCurrentBranchNameAtom,
+  speckitWorkflowStartModeAtom,
+} from "../atoms"
+import { WorkflowStartMode } from "../types/workflow"
+import { useBranchDetection } from "../hooks/useBranchDetection"
 
 interface PlanPageProps {
   /** Chat/workspace ID */
@@ -45,11 +52,23 @@ export const PlanPage = memo(function PlanPage({
 }: PlanPageProps) {
   const setModalOpen = useSetAtom(speckitModalOpenAtom)
   const setWorkflowStartStep = useSetAtom(speckitWorkflowStartStepAtom)
+  const setBranchName = useSetAtom(speckitCurrentBranchNameAtom)
+  const setWorkflowStartMode = useSetAtom(speckitWorkflowStartModeAtom)
+
+  // Branch detection for conditional button visibility
+  const { isNamedFeature } = useBranchDetection()
 
   // Open workflow modal
   const handleOpenWorkflow = useCallback(() => {
     setModalOpen(true)
   }, [setModalOpen])
+
+  // Handle new feature - opens workflow modal in empty state
+  const handleNewFeature = useCallback(() => {
+    setWorkflowStartMode(WorkflowStartMode.NewFeature)
+    setWorkflowStartStep(null)
+    setModalOpen(true)
+  }, [setWorkflowStartMode, setWorkflowStartStep, setModalOpen])
 
   // Handle create constitution - opens workflow modal at constitution step
   const handleCreateConstitution = useCallback(() => {
@@ -109,6 +128,13 @@ export const PlanPage = memo(function PlanPage({
   // Detect if on feature branch
   const isOnFeatureBranch = workflowState?.branchName &&
     workflowState.currentStep !== "no-feature"
+
+  // Update branch name atom when workflow state changes
+  useEffect(() => {
+    if (workflowState?.branchName) {
+      setBranchName(workflowState.branchName)
+    }
+  }, [workflowState?.branchName, setBranchName])
 
 
   // No project selected
@@ -179,6 +205,18 @@ export const PlanPage = memo(function PlanPage({
           <span className="text-sm font-medium">Spec</span>
         </div>
         <div className="flex items-center gap-1">
+          {/* New Feature button - only visible on named feature branches */}
+          {isNamedFeature && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={handleNewFeature}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              New Feature
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
