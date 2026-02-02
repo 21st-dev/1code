@@ -573,3 +573,165 @@ With 4 developers after Phase 2 complete:
 - **Skip Clarify Warning**: Shows warning when skipping clarify, but allows user to continue
 - Commit after each logical group of tasks
 - Stop at any checkpoint to validate independently
+
+---
+
+## Bug Fix: Plan Page and Workflow Modal Issues (2026-02-02)
+
+**Feature Branch**: `001-speckit-ui-integration`
+**Purpose**: Fix two critical UI issues in the SpecKit Plan page integration
+
+**Issues Fixed**:
+1. New Feature Flow button visibility - button should only appear on named feature branches
+2. Workflow modal height - both panes must occupy 100% of available container height
+
+### Implementation Strategy
+
+This is a bug fix affecting two related issues. Tasks are organized to enable independent implementation and testing.
+
+**MVP Scope**: Complete both fixes as a single deliverable - they are tightly coupled through the Plan page component.
+
+**Parallel Execution**: Type creation tasks (T201-T205) can run in parallel. Button fix (T206-T209) and modal fix (T210-T213) can run in parallel after types are created.
+
+---
+
+### Phase 1: Setup - Create Types and Utilities
+
+**Goal**: Establish the branch detection foundation used by all subsequent changes.
+
+- [x] T201 Create `src/renderer/features/speckit/types/branch.ts` with `BranchType` enum, `PROTECTED_BRANCHES` constant, `isProtectedBranch()`, and `isNamedFeatureBranch()` utility functions
+- [x] T202 Create `src/renderer/features/speckit/types/workflow.ts` with `WorkflowStartMode` enum
+- [x] T203 Update `src/renderer/features/speckit/atoms/index.ts` to add `speckitWorkflowStartModeAtom`, `speckitWorkflowStartStepAtom`, `speckitCurrentBranchTypeAtom`, and `speckitCurrentBranchNameAtom`
+- [x] T204 Create `src/renderer/features/speckit/hooks/useBranchDetection.ts` hook that returns branch detection results
+- [x] T205 Update `src/renderer/features/speckit/types/index.ts` to export new types from `branch.ts` and `workflow.ts`
+
+---
+
+### Phase 2: Foundational - Add Branch Name Source
+
+**Goal**: Connect the branch detection utilities to a source of truth for the current branch name.
+
+- [x] T206 [P] Read `src/renderer/features/speckit/components/plan-page.tsx` to find where the current branch name is obtained
+- [x] T207 [P] Add the branch name value to `speckitCurrentBranchNameAtom` on component mount or use existing atom if available
+
+---
+
+### Phase 3: User Story 1 - Fix New Feature Flow Button Visibility
+
+**Story Goal**: The "New Feature Flow" button appears only on named feature branches (not main/master/internal/staging/dev) and clicking it opens the workflow modal in empty state.
+
+**Independent Test**: Verify button visibility rules on different branch types and that clicking opens the modal correctly.
+
+**Acceptance Criteria**:
+- Button visible on `001-test-feature` branch
+- Button hidden on `main`, `master`, `internal`, `staging`, `dev` branches
+- Clicking button opens workflow modal in empty state
+
+- [x] T208 [P] [US1-FIX] Read `src/renderer/features/speckit/components/plan-page.tsx` to locate the header section where buttons are rendered
+- [x] T209 [P] [US1-FIX] Add conditional rendering of "New Feature" button using `useBranchDetection()` hook, showing only when `isNamedFeature === true`
+- [x] T210 [US1-FIX] Implement `handleNewFeature` function that sets `speckitWorkflowStartModeAtom` to `NEW_FEATURE`, clears `speckitWorkflowStartStepAtom`, and opens the modal
+- [x] T211 [US1-FIX] Wire up the button's `onClick` to call `handleNewFeature`
+
+---
+
+### Phase 4: User Story 2 - Fix Workflow Modal Height
+
+**Story Goal**: Both left and right panes of the workflow modal occupy 100% of available container height regardless of content volume.
+
+**Independent Test**: Open the modal with minimal and maximal content, verify both panes always fill available height.
+
+**Acceptance Criteria**:
+- Both panes fill 100% of available height with minimal content
+- Both panes fill 100% of available height with maximal content
+- Height updates correctly on browser resize
+
+- [x] T212 [P] [US2-FIX] Read `src/renderer/features/speckit/components/workflow-modal.tsx` to identify the flex container structure
+- [x] T213 [P] [US2-FIX] Add `min-h-0` class to the main flex container (`div className="flex-1 flex overflow-hidden"`)
+- [x] T214 [P] [US2-FIX] Add `min-h-0` class to the left pane container (`div className="flex-1 flex flex-col border-r border-border overflow-hidden"`)
+- [x] T215 [US2-FIX] Add `h-full` class to `DocumentPane` component usage to ensure it fills full height
+
+---
+
+### Phase 5: Validation
+
+**Goal**: Verify the complete fix works correctly.
+
+- [ ] T216 Test button visibility on protected branches (main, dev, staging)
+- [ ] T217 Test button visibility on named feature branch (`001-test`)
+- [ ] T218 Test modal height with minimal content
+- [ ] T219 Test modal height with maximal content
+- [ ] T220 Test browser resize behavior
+- [ ] T221 Review all modified files for consistent TypeScript types and no `any` usage
+
+---
+
+### Dependencies
+
+```
+Phase 1 (Types) ──► Phase 2 (Branch Source)
+                       │
+                       ├──► Phase 3 (US1: Button)
+                       │
+                       └──► Phase 4 (US2: Modal)
+                                │
+                                ▼
+                          Phase 5 (Validation)
+```
+
+**Critical Path**: T201 → T202 → T203 → T204 → T205 → T206 → T207 → T208 → T209 → T210 → T211
+**Modal fix tasks** (T212-T215) can run in parallel with button tasks (T208-T211) after Phase 2
+
+---
+
+### Parallel Execution Examples
+
+**After Phase 2 completes**, the following tasks can run in parallel:
+
+| Parallel Group | Tasks | Why Parallel |
+|----------------|-------|--------------|
+| Group A | T208, T212 | Read different source files |
+| Group B | T209, T213, T214 | Implement CSS/class changes |
+| Group C | T210, T215 | Complete logic for different features |
+
+**Example Parallel Execution**:
+```
+T201 ──► T202 ──► T203 ──► T204 ──► T205
+                                    │
+                                    ▼
+T206 ───────────────────────────────┤
+                                    ├──► T208 ──► T209 ──► T210 ──► T211 (US1)
+                                    │
+                                    ├──► T212 ──► T213 ──► T214 ──► T215 (US2)
+                                    │
+                                    ▼
+                                  T216-T221 (Validation)
+```
+
+---
+
+### Task Summary
+
+| Phase | Tasks | Description |
+|-------|-------|-------------|
+| Phase 1 | T201-T205 | Create types and utilities |
+| Phase 2 | T206-T207 | Connect branch name source |
+| Phase 3 | T208-T211 | Fix New Feature button visibility |
+| Phase 4 | T212-T215 | Fix modal height issues |
+| Phase 5 | T216-T221 | Validation and testing |
+
+**New Tasks**: 21 (T201-T221)
+**Total Tasks in File**: 214 (193 original + 21 new)
+
+---
+
+### File Reference
+
+| File | Tasks |
+|------|-------|
+| `src/renderer/features/speckit/types/branch.ts` | T201 |
+| `src/renderer/features/speckit/types/workflow.ts` | T202 |
+| `src/renderer/features/speckit/atoms/index.ts` | T203 |
+| `src/renderer/features/speckit/hooks/useBranchDetection.ts` | T204 |
+| `src/renderer/features/speckit/types/index.ts` | T205 |
+| `src/renderer/features/speckit/components/plan-page.tsx` | T206-T211 |
+| `src/renderer/features/speckit/components/workflow-modal.tsx` | T212-T215 |

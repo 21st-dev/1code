@@ -421,9 +421,9 @@ export const WorkflowModal = memo(function WorkflowModal({
         )}
 
         {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Left Pane - Step Content or Command Output */}
-          <div className="flex-1 flex flex-col border-r border-border overflow-hidden">
+          <div className="flex-1 flex flex-col border-r border-border overflow-hidden min-h-0">
             {showOutput && outputLines.length > 0 ? (
               <ChatPane
                 outputLines={outputLines}
@@ -468,7 +468,7 @@ export const WorkflowModal = memo(function WorkflowModal({
           </div>
 
           {/* Right Pane - Document Preview */}
-          <div className="w-[45%] flex-shrink-0 overflow-hidden">
+          <div className="w-[45%] flex-shrink-0 overflow-hidden min-h-0 h-full">
             <DocumentPane
               projectPath={projectPath}
               featureBranch={branchName || ""}

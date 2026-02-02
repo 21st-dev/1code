@@ -48,3 +48,18 @@ export type {
   ArtifactType,
   DocumentDisplayState,
 } from "./ui-models"
+
+// Branch types
+export {
+  BranchType,
+  PROTECTED_BRANCHES,
+  type ProtectedBranchName,
+  isProtectedBranch,
+  isNamedFeatureBranch,
+  parseFeatureBranch,
+} from "./branch"
+
+// Workflow mode types
+export {
+  WorkflowStartMode,
+} from "./workflow"

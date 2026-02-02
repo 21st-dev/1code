@@ -9,6 +9,7 @@
 
 import { atom } from "jotai"
 import type { DocumentDisplayState } from "../types"
+import type { WorkflowStartMode } from "../types/workflow"
 
 /**
  * Whether the SpecKit workflow modal is open
@@ -63,3 +64,25 @@ export const speckitActiveStepAtom = atom<string | null>(null)
  * null means start at the detected step from workflow state
  */
 export const speckitWorkflowStartStepAtom = atom<string | null>(null)
+
+/**
+ * Workflow start mode - controls how workflow opens
+ *
+ * 'continue': Resume from current branch state
+ * 'new-feature': Open in empty state for new feature
+ */
+export const speckitWorkflowStartModeAtom = atom<WorkflowStartMode>(
+  WorkflowStartMode.Continue
+)
+
+/**
+ * Current branch type for UI decisions
+ *
+ * Used to determine if New Feature button should be visible
+ */
+export const speckitCurrentBranchTypeAtom = atom<'NAMED_FEATURE' | 'PROTECTED' | null>(null)
+
+/**
+ * Current branch name (for display and logic)
+ */
+export const speckitCurrentBranchNameAtom = atom<string | null>(null)
