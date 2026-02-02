@@ -11,9 +11,11 @@ import type { ConstitutionPreview } from "../types"
 /**
  * Extract principle names from constitution content
  *
- * Looks for markdown headers like:
+ * Looks for markdown headers in various formats:
  * - ## Principle I - Desktop-First
  * - ## Principle II - Git Worktree Isolation
+ * - ### I. Desktop-First Experience
+ * - ### II. Git Worktree Isolation (NON-NEGOTIABLE)
  *
  * @param constitutionContent - The constitution.md file content
  * @returns Array of principle names
@@ -23,10 +25,25 @@ export function extractPrincipleNames(constitutionContent: string): string[] {
   const principleNames: string[] = []
 
   for (const line of lines) {
-    // Match markdown headers like "## Principle I - Desktop-First"
-    const match = line.match(/^##\s+Principle\s+[IVX]+\s+-\s+(.+)$/i)
-    if (match) {
-      principleNames.push(match[1].trim())
+    // Pattern 1: "## Principle I - Desktop-First"
+    const pattern1 = line.match(/^##\s+Principle\s+[IVX]+\s+-\s+(.+)$/i)
+    if (pattern1) {
+      principleNames.push(pattern1[1].trim())
+      continue
+    }
+
+    // Pattern 2: "### I. Desktop-First Experience" (with optional parenthetical)
+    const pattern2 = line.match(/^###\s+[IVX]+\.\s+(.+?)(?:\s+\(.+\))?$/i)
+    if (pattern2) {
+      principleNames.push(pattern2[1].trim())
+      continue
+    }
+
+    // Pattern 3: "## I. Desktop-First Experience" (H2 with Roman numeral)
+    const pattern3 = line.match(/^##\s+[IVX]+\.\s+(.+?)(?:\s+\(.+\))?$/i)
+    if (pattern3) {
+      principleNames.push(pattern3[1].trim())
+      continue
     }
   }
 
