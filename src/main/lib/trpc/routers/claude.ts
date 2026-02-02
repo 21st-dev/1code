@@ -403,6 +403,8 @@ export async function warmupMcpCache(): Promise<void> {
             env: buildClaudeEnv(),
             permissionMode: "bypassPermissions" as const,
             allowDangerouslySkipPermissions: true,
+            // Use bundled binary to avoid "spawn node ENOENT" errors
+            pathToClaudeCodeExecutable: getBundledClaudeBinaryPath(),
           }
         })
 
@@ -1587,7 +1589,20 @@ export const claudeRouter = router({
               let errorContext = "Claude streaming error"
               let errorCategory = "UNKNOWN"
 
-              if (err.message?.includes("exited with code")) {
+              // Check for session-not-found error in stderr
+              const isSessionNotFound = stderrOutput?.includes("No conversation found with session ID")
+
+              if (isSessionNotFound) {
+                // Clear the invalid session ID from database so next attempt starts fresh
+                console.log(`[claude] Session not found - clearing invalid sessionId from database`)
+                db.update(subChats)
+                  .set({ sessionId: null })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+
+                errorContext = "Previous session expired. Please try again."
+                errorCategory = "SESSION_EXPIRED"
+              } else if (err.message?.includes("exited with code")) {
                 errorContext = "Claude Code process crashed"
                 errorCategory = "PROCESS_CRASH"
               } else if (err.message?.includes("ENOENT")) {
