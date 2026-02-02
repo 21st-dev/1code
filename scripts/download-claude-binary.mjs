@@ -127,23 +127,25 @@ function calculateSha256(filePath) {
 }
 
 /**
- * Get latest version from manifest
+ * Get latest version from GCS bucket
  */
 async function getLatestVersion() {
   console.log("Fetching latest Claude Code version...")
 
   try {
-    // Fetch the "latest" file from GCS which contains the current stable version
+    // Fetch from the same endpoint that install.sh uses
     const response = await fetch(`${DIST_BASE}/latest`)
-    const version = (await response.text()).trim()
-    if (version && /^\d+\.\d+\.\d+$/.test(version)) {
-      return version
+    if (response.ok) {
+      const version = (await response.text()).trim()
+      if (version && /^\d+\.\d+\.\d+$/.test(version)) {
+        return version
+      }
     }
-  } catch {
-    // Fallback
+  } catch (error) {
+    console.warn(`Failed to fetch latest version: ${error.message}`)
   }
 
-  // Fallback to known version
+  // Fallback to known version (should be updated periodically)
   return "2.1.17"
 }
 
