@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, stat } from "node:fs/promises";
-import os from "node:os";
+import os, { devNull } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import simpleGit from "simple-git";
@@ -150,6 +150,21 @@ export async function createWorktree(
 			}
 		}
 
+		// Resolve startPoint to commit hash to avoid Windows escaping issues with ^{commit}
+		const git = simpleGit(mainRepoPath);
+		let commitHash: string;
+		try {
+			commitHash = (await git.revparse([`${startPoint}^{commit}`])).trim();
+		} catch {
+			// Fallback to local branch if origin/branch doesn't exist
+			const localBranch = startPoint.replace(/^origin\//, "");
+			try {
+				commitHash = (await git.revparse([`${localBranch}^{commit}`])).trim();
+			} catch {
+				commitHash = (await git.revparse([startPoint])).trim();
+			}
+		}
+
 		await execFileAsync(
 			"git",
 			[
@@ -160,10 +175,7 @@ export async function createWorktree(
 				worktreePath,
 				"-b",
 				branch,
-				// Append ^{commit} to force Git to treat the startPoint as a commit,
-				// not a branch ref. This prevents implicit upstream tracking when
-				// creating a new branch from a remote branch like origin/main.
-				`${startPoint}^{commit}`,
+				commitHash,
 			],
 			{ env, timeout: 120_000 },
 		);
@@ -987,7 +999,7 @@ export async function getWorktreeDiff(
 						"diff",
 						"--no-color",
 						"--no-index",
-						"/dev/null",
+						devNull,
 						file,
 					]);
 					if (fileDiff) {

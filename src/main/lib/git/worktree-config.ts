@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir, access } from "node:fs/promises"
-import { join, dirname } from "node:path"
+import { join, dirname, isAbsolute } from "node:path"
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
 
@@ -50,7 +50,7 @@ export async function detectWorktreeConfig(
 ): Promise<DetectedWorktreeConfig> {
   // 1. Check custom path if provided
   if (customPath) {
-    const fullPath = customPath.startsWith("/")
+    const fullPath = isAbsolute(customPath)
       ? customPath
       : join(projectPath, customPath)
     const config = await readJsonFile<WorktreeConfig>(fullPath)
@@ -122,7 +122,7 @@ export async function saveWorktreeConfig(
     targetPath = join(projectPath, ONECODE_CONFIG_PATH)
   } else {
     // Custom path
-    targetPath = target.startsWith("/") ? target : join(projectPath, target)
+    targetPath = isAbsolute(target) ? target : join(projectPath, target)
   }
 
   try {

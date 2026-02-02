@@ -36,6 +36,20 @@ export async function getShellEnvironment(): Promise<Record<string, string>> {
 		return { ...cachedEnv };
 	}
 
+	// On Windows, use process.env directly (no Unix shell available)
+	if (process.platform === "win32") {
+		const fallback: Record<string, string> = {};
+		for (const [key, value] of Object.entries(process.env)) {
+			if (typeof value === "string") {
+				fallback[key] = value;
+			}
+		}
+		cachedEnv = fallback;
+		cacheTime = now;
+		isFallbackCache = false;
+		return { ...fallback };
+	}
+
 	const shell =
 		process.env.SHELL ||
 		(process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");
