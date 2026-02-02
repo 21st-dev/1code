@@ -475,3 +475,188 @@ const feature = SpecKitFeatureSchema.parse(unknownData)
 // Type-only import
 function processFeature(feature: SpecKitFeature) { ... }
 ```
+
+---
+
+## Appendix A: Branch Detection Types (2026-02-02 Update)
+
+Added for "New Feature Flow" button visibility fix.
+
+### BranchType Enum
+
+```typescript
+// src/renderer/features/speckit/types/branch.ts
+
+/**
+ * Classification of Git branches for UI display decisions
+ */
+export enum BranchType {
+  NamedFeature = 'NAMED_FEATURE',
+  Protected = 'PROTECTED',
+}
+
+/**
+ * Protected branch names that should not show feature creation UI
+ */
+export const PROTECTED_BRANCHES = [
+  'main',
+  'master',
+  'internal',
+  'staging',
+  'dev',
+] as const
+
+export type ProtectedBranchName = typeof PROTECTED_BRANCHES[number]
+
+/**
+ * Check if a branch name is a protected branch
+ */
+export function isProtectedBranch(branchName: string): boolean {
+  return PROTECTED_BRANCHES.includes(branchName as ProtectedBranchName)
+}
+
+/**
+ * Check if a branch name is a named feature branch
+ * Named feature branches follow pattern: ###-short-name (e.g., 001-speckit-ui-integration)
+ */
+export function isNamedFeatureBranch(branchName: string): boolean {
+  if (isProtectedBranch(branchName)) {
+    return false
+  }
+  // Pattern: 3 digits followed by dash and name
+  return /^\d{3}-.+/.test(branchName)
+}
+```
+
+### WorkflowStartMode Enum
+
+```typescript
+// src/renderer/features/speckit/types/workflow.ts
+
+/**
+ * Workflow start mode - determines how the workflow modal opens
+ */
+export enum WorkflowStartMode {
+  Continue = 'CONTINUE',     // Resume from current state (default)
+  NewFeature = 'NEW_FEATURE', // Start new feature workflow (empty state)
+}
+```
+
+### UI Atoms (Jotai)
+
+```typescript
+// src/renderer/features/speckit/atoms/workflowAtoms.ts
+
+import { atom } from 'jotai'
+import { WorkflowStartMode } from '../types/workflow'
+
+/**
+ * Workflow start mode - controls how workflow opens
+ */
+export const speckitWorkflowStartModeAtom = atom<WorkflowStartMode>(
+  WorkflowStartMode.Continue
+)
+
+/**
+ * When starting a new feature, override the starting step
+ */
+export const speckitWorkflowStartStepAtom = atom<string | undefined>(undefined)
+
+/**
+ * Current branch type for UI decisions
+ */
+export const speckitCurrentBranchTypeAtom = atom<'NAMED_FEATURE' | 'PROTECTED' | null>(null)
+
+/**
+ * Current branch name (for display and logic)
+ */
+export const speckitCurrentBranchNameAtom = atom<string | null>(null)
+```
+
+### useBranchDetection Hook
+
+```typescript
+// src/renderer/features/speckit/hooks/useBranchDetection.ts
+
+import { useCallback } from 'react'
+import { useAtomValue, useSetAtom } from 'jotai'
+import {
+  speckitCurrentBranchNameAtom,
+  speckitCurrentBranchTypeAtom,
+} from '../atoms'
+import {
+  isNamedFeatureBranch,
+  isProtectedBranch,
+  parseFeatureBranch,
+} from '../types/branch'
+
+interface BranchDetectionResult {
+  branchName: string | null
+  branchType: 'NAMED_FEATURE' | 'PROTECTED' | null
+  isNamedFeature: boolean
+  isProtected: boolean
+  featureInfo: { number: string; name: string } | null
+}
+
+export function useBranchDetection(): BranchDetectionResult {
+  const branchName = useAtomValue(speckitCurrentBranchNameAtom)
+  const setBranchType = useSetAtom(speckitCurrentBranchTypeAtom)
+
+  const detect = useCallback((name: string | null) => {
+    if (!name) {
+      setBranchType(null)
+      return {
+        branchName: null,
+        branchType: null,
+        isNamedFeature: false,
+        isProtected: false,
+        featureInfo: null,
+      }
+    }
+
+    if (isProtectedBranch(name)) {
+      setBranchType('PROTECTED')
+      return {
+        branchName: name,
+        branchType: 'PROTECTED',
+        isNamedFeature: false,
+        isProtected: true,
+        featureInfo: null,
+      }
+    }
+
+    if (isNamedFeatureBranch(name)) {
+      setBranchType('NAMED_FEATURE')
+      const info = parseFeatureBranch(name)
+      return {
+        branchName: name,
+        branchType: 'NAMED_FEATURE',
+        isNamedFeature: true,
+        isProtected: false,
+        featureInfo: info ? { number: info.featureNumber, name: info.featureName } : null,
+      }
+    }
+
+    setBranchType(null)
+    return {
+      branchName: name,
+      branchType: null,
+      isNamedFeature: false,
+      isProtected: false,
+      featureInfo: null,
+    }
+  }, [setBranchType])
+
+  return detect(branchName)
+}
+```
+
+### Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `src/renderer/features/speckit/types/branch.ts` | **NEW** - Branch type definitions |
+| `src/renderer/features/speckit/types/workflow.ts` | **NEW** - Workflow mode types |
+| `src/renderer/features/speckit/hooks/useBranchDetection.ts` | **NEW** - Branch detection hook |
+| `src/renderer/features/speckit/atoms/workflowAtoms.ts` | **UPDATE** - Add new atoms |
+| `src/renderer/features/speckit/types/index.ts` | **UPDATE** - Export new types |

@@ -9,7 +9,7 @@
 
 import { atom } from "jotai"
 import type { DocumentDisplayState } from "../types"
-import type { WorkflowStartMode } from "../types/workflow"
+import { WorkflowStartMode } from "../types/workflow"
 
 /**
  * Whether the SpecKit workflow modal is open
@@ -79,8 +79,10 @@ export const speckitWorkflowStartModeAtom = atom<WorkflowStartMode>(
  * Current branch type for UI decisions
  *
  * Used to determine if New Feature button should be visible
+ * 'NAMED': main/master/dev/staging/internal - show New Feature button
+ * 'FEATURE': feat/*, feature/*, 001-* etc. - hide New Feature button
  */
-export const speckitCurrentBranchTypeAtom = atom<'NAMED_FEATURE' | 'PROTECTED' | null>(null)
+export const speckitCurrentBranchTypeAtom = atom<'NAMED' | 'FEATURE' | null>(null)
 
 /**
  * Current branch name (for display and logic)

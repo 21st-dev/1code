@@ -19,9 +19,9 @@ import {
  */
 export interface BranchDetectionResult {
   branchName: string | null
-  branchType: 'NAMED_FEATURE' | 'PROTECTED' | null
-  isNamedFeature: boolean
-  isProtected: boolean
+  branchType: 'NAMED' | 'FEATURE' | null
+  isNamedBranch: boolean
+  isFeatureBranch: boolean
   featureInfo: { number: string; name: string } | null
 }
 
@@ -29,6 +29,7 @@ export interface BranchDetectionResult {
  * Hook to detect and classify the current Git branch
  *
  * Used to determine if the New Feature button should be visible
+ * (only visible on named branches like main/master/dev/staging/internal)
  * and to provide branch information to UI components
  */
 export function useBranchDetection(): BranchDetectionResult {
@@ -41,42 +42,32 @@ export function useBranchDetection(): BranchDetectionResult {
       return {
         branchName: null,
         branchType: null,
-        isNamedFeature: false,
-        isProtected: false,
+        isNamedBranch: false,
+        isFeatureBranch: false,
         featureInfo: null,
       }
     }
 
     if (isProtectedBranch(name)) {
-      setBranchType('PROTECTED')
+      setBranchType('NAMED')
       return {
         branchName: name,
-        branchType: 'PROTECTED' as const,
-        isNamedFeature: false,
-        isProtected: true,
+        branchType: 'NAMED' as const,
+        isNamedBranch: true,
+        isFeatureBranch: false,
         featureInfo: null,
       }
     }
 
-    if (isNamedFeatureBranch(name)) {
-      setBranchType('NAMED_FEATURE')
-      const info = parseFeatureBranch(name)
-      return {
-        branchName: name,
-        branchType: 'NAMED_FEATURE' as const,
-        isNamedFeature: true,
-        isProtected: false,
-        featureInfo: info ? { number: info.featureNumber, name: info.featureName } : null,
-      }
-    }
-
-    setBranchType(null)
+    // All other branches (feat/*, feature/*, 001-*, etc.) are feature branches
+    const info = parseFeatureBranch(name)
+    setBranchType('FEATURE')
     return {
       branchName: name,
-      branchType: null,
-      isNamedFeature: false,
-      isProtected: false,
-      featureInfo: null,
+      branchType: 'FEATURE' as const,
+      isNamedBranch: false,
+      isFeatureBranch: true,
+      featureInfo: info ? { number: info.featureNumber, name: info.featureName } : null,
     }
   }, [setBranchType])
 

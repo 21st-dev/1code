@@ -56,7 +56,7 @@ export const PlanPage = memo(function PlanPage({
   const setWorkflowStartMode = useSetAtom(speckitWorkflowStartModeAtom)
 
   // Branch detection for conditional button visibility
-  const { isNamedFeature } = useBranchDetection()
+  const { isNamedBranch } = useBranchDetection()
 
   // Open workflow modal
   const handleOpenWorkflow = useCallback(() => {
@@ -205,8 +205,8 @@ export const PlanPage = memo(function PlanPage({
           <span className="text-sm font-medium">Spec</span>
         </div>
         <div className="flex items-center gap-1">
-          {/* New Feature button - only visible on named feature branches */}
-          {isNamedFeature && (
+          {/* New Feature button - only visible on named branches (main/master/dev/etc) */}
+          {isNamedBranch && (
             <Button
               variant="ghost"
               size="sm"
@@ -217,15 +217,18 @@ export const PlanPage = memo(function PlanPage({
               New Feature
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs"
-            onClick={handleOpenWorkflow}
-          >
-            <Sparkles className="h-3 w-3 mr-1" />
-            Workflow
-          </Button>
+          {/* Workflow button - only visible on feature branches */}
+          {!isNamedBranch && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={handleOpenWorkflow}
+            >
+              <Sparkles className="h-3 w-3 mr-1" />
+              Workflow
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
