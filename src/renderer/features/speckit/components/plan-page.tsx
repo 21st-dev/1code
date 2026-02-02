@@ -84,6 +84,20 @@ export const PlanPage = memo(function PlanPage({
   // State for submodule warning dialog (T124)
   const [showSubmoduleWarning, setShowSubmoduleWarning] = useState(false)
   const [submoduleWarningDismissed, setSubmoduleWarningDismissed] = useState(false)
+  const [prevProjectPath, setPrevProjectPath] = useState(projectPath)
+  const [prevSubmoduleStatus, setPrevSubmoduleStatus] = useState<boolean | null>(null)
+
+  // Reset warning dismissal when project or submodule status changes
+  useEffect(() => {
+    if (
+      projectPath !== prevProjectPath ||
+      (submoduleStatus && submoduleStatus.initialized !== prevSubmoduleStatus)
+    ) {
+      setSubmoduleWarningDismissed(false)
+      setPrevProjectPath(projectPath)
+      setPrevSubmoduleStatus(submoduleStatus?.initialized ?? null)
+    }
+  }, [projectPath, prevProjectPath, submoduleStatus, prevSubmoduleStatus])
 
   // Show submodule warning if not initialized and not dismissed
   useEffect(() => {

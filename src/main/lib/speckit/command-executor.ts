@@ -39,10 +39,53 @@ interface CommandExecution {
   projectPath: string
   command: string
   startedAt: Date
+  cancelling?: boolean
+  killTimer?: NodeJS.Timeout
 }
 
 // Active command executions
 const executions = new Map<string, CommandExecution>()
+
+/**
+ * Build safe environment for subprocess.
+ * Only includes whitelisted variables to prevent leakage.
+ *
+ * This function creates a minimal environment with only the variables
+ * necessary for the specify CLI to function properly. This prevents
+ * accidental leakage of sensitive environment variables.
+ *
+ * @returns Environment variables object
+ */
+function buildSafeEnvironment(): Record<string, string> {
+  const safeEnv: Record<string, string> = {
+    // Required for specify CLI
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
+
+    // Terminal configuration
+    FORCE_COLOR: "1",
+    TERM: process.env.TERM || "xterm-256color",
+
+    // Path (needed to find commands)
+    PATH: process.env.PATH || "",
+
+    // Home directory (needed for config files)
+    HOME: process.env.HOME || process.env.USERPROFILE || "",
+
+    // User info (needed by git)
+    USER: process.env.USER || "",
+
+    // Platform-specific (Windows)
+    ...(process.platform === "win32" ? {
+      USERPROFILE: process.env.USERPROFILE || "",
+      APPDATA: process.env.APPDATA || "",
+    } : {}),
+  }
+
+  // Remove empty values
+  return Object.fromEntries(
+    Object.entries(safeEnv).filter(([_, v]) => v !== "")
+  )
+}
 
 /**
  * Execute an ii-spec command via subprocess
@@ -63,33 +106,28 @@ export function executeCommand(
   const executionId = crypto.randomUUID()
   const emitter = new EventEmitter()
 
-  // Build the full command
-  // The command format is expected to be like "/speckit.specify" with args
-  // We need to transform this to call the actual ii-spec CLI
-  const fullCommand = buildCommandString(command, args)
+  // SECURITY FIX: Build command array instead of string to prevent injection
+  // No longer uses shell=true, which prevents command injection attacks
+  const [cmd, cmdArgs] = buildCommandArray(command, args)
 
-  // Spawn the process
-  const proc = spawn(fullCommand, {
+  // SECURITY FIX: Spawn WITHOUT shell - prevents command injection
+  // Using shell: false means special characters in args are treated as literals
+  const proc = spawn(cmd, cmdArgs, {
     cwd: projectPath,
-    shell: true,
-    env: {
-      ...process.env,
-      // Ensure ANTHROPIC_API_KEY is passed through
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-      // Force color output
-      FORCE_COLOR: "1",
-    },
+    shell: false,  // CRITICAL: No shell = No injection
+    env: buildSafeEnvironment(),  // SECURITY FIX: Whitelist environment variables
   })
 
   // Store execution
-  executions.set(executionId, {
+  const execution: CommandExecution = {
     id: executionId,
     process: proc,
     emitter,
     projectPath,
     command,
     startedAt: new Date(),
-  })
+  }
+  executions.set(executionId, execution)
 
   // Handle stdout
   proc.stdout?.on("data", (data: Buffer) => {
@@ -106,6 +144,12 @@ export function executeCommand(
   // Handle process exit
   proc.on("close", (code, signal) => {
     emitter.emit("done", { code, signal } satisfies CommandDoneEvent)
+
+    // Clear kill timer if set
+    if (execution.killTimer) {
+      clearTimeout(execution.killTimer)
+    }
+
     // Cleanup after a short delay to allow subscribers to process final events
     setTimeout(() => {
       executions.delete(executionId)
@@ -126,59 +170,94 @@ export function executeCommand(
 }
 
 /**
- * Build the actual command string to execute
+ * SECURITY FIX: Build command array for safe execution without shell.
+ * Returns [command, args[]] to be used with spawn(cmd, args, { shell: false })
  *
- * Transforms the command format (e.g., "/speckit.specify") into
- * the actual CLI command.
+ * This replaces the old buildCommandString() which used shell=true and was
+ * vulnerable to command injection attacks.
  *
- * @param command - The command (e.g., "/speckit.specify")
+ * @param command - The command to execute (e.g., "speckit.specify")
  * @param args - The arguments string
- * @returns The full command string to execute
+ * @returns Tuple of [command, arguments array]
  */
-function buildCommandString(command: string, args: string): string {
-  // Strip the leading slash if present
+function buildCommandArray(command: string, args: string): [string, string[]] {
   const cleanCommand = command.startsWith("/") ? command.slice(1) : command
-
-  // The ii-spec commands use the "specify" CLI
-  // Commands like "speckit.specify" become "specify specify <args>"
-  // Commands like "speckit.plan" become "specify plan <args>"
-  // Commands like "speckit.clarify" become "specify clarify <args>"
-
-  // Extract the actual command from speckit.xxx format
   const parts = cleanCommand.split(".")
+
   if (parts.length !== 2 || parts[0] !== "speckit") {
-    // If not in speckit.xxx format, just run as-is
-    return args ? `${cleanCommand} ${args}` : cleanCommand
+    // Non-SpecKit command: validate it's allowed
+    throw new Error(`Invalid command format: ${command}. Only 'speckit.*' commands are allowed.`)
   }
 
-  const specifyCommand = parts[1] // e.g., "specify", "plan", "clarify", "tasks"
+  const specifyCommand = parts[1]
 
   // Special handling for initialization
   if (specifyCommand === "init") {
-    return `specify init . --ai claude`
+    return ["specify", ["init", ".", "--ai", "claude"]]
   }
 
-  // Build the specify command
-  const escapedArgs = args ? escapeShellArg(args) : ""
-  return escapedArgs
-    ? `specify ${specifyCommand} ${escapedArgs}`
-    : `specify ${specifyCommand}`
+  // Parse args string into proper arguments
+  const argArray = args ? parseCommandArgs(args) : []
+  return ["specify", [specifyCommand, ...argArray]]
 }
 
 /**
- * Escape a string for safe shell usage
+ * Parse command arguments string into array.
+ * Handles quoted strings properly.
  *
- * @param arg - The argument to escape
- * @returns The escaped argument
+ * @param argsString - The arguments as a string
+ * @returns Array of arguments
  */
-function escapeShellArg(arg: string): string {
-  // For simple alphanumeric strings, no escaping needed
-  if (/^[a-zA-Z0-9_\-./]+$/.test(arg)) {
-    return arg
+function parseCommandArgs(argsString: string): string[] {
+  // Simple argument parser - handles quoted strings
+  const args: string[] = []
+  const regex = /"([^"]+)"|'([^']+)'|(\S+)/g
+  let match
+  while ((match = regex.exec(argsString)) !== null) {
+    args.push(match[1] || match[2] || match[3])
   }
-  // Wrap in single quotes and escape any single quotes within
-  return `'${arg.replace(/'/g, "'\\''")}'`
+  return args
 }
+
+// OLD CODE (kept for reference - can be removed after testing):
+// /**
+//  * Build the actual command string to execute
+//  *
+//  * Transforms the command format (e.g., "/speckit.specify") into
+//  * the actual CLI command.
+//  *
+//  * @param command - The command (e.g., "/speckit.specify")
+//  * @param args - The arguments string
+//  * @returns The full command string to execute
+//  */
+// function buildCommandString(command: string, args: string): string {
+//   const cleanCommand = command.startsWith("/") ? command.slice(1) : command
+//   const parts = cleanCommand.split(".")
+//   if (parts.length !== 2 || parts[0] !== "speckit") {
+//     return args ? `${cleanCommand} ${args}` : cleanCommand
+//   }
+//   const specifyCommand = parts[1]
+//   if (specifyCommand === "init") {
+//     return `specify init . --ai claude`
+//   }
+//   const escapedArgs = args ? escapeShellArg(args) : ""
+//   return escapedArgs
+//     ? `specify ${specifyCommand} ${escapedArgs}`
+//     : `specify ${specifyCommand}`
+// }
+//
+// /**
+//  * Escape a string for safe shell usage
+//  *
+//  * @param arg - The argument to escape
+//  * @returns The escaped argument
+//  */
+// function escapeShellArg(arg: string): string {
+//   if (/^[a-zA-Z0-9_\-./]+$/.test(arg)) {
+//     return arg
+//   }
+//   return `'${arg.replace(/'/g, "'\\''")}'`
+// }
 
 /**
  * Get the event emitter for a running command
@@ -194,6 +273,11 @@ export function getExecutionEmitter(executionId: string): EventEmitter | null {
 /**
  * Cancel a running command execution
  *
+ * SECURITY FIX: Properly handle race conditions during cancellation.
+ * - Marks execution as cancelling to prevent double-cancel
+ * - Waits for actual process exit before emitting done event
+ * - Schedules SIGKILL if SIGTERM doesn't work within 1 second
+ *
  * @param executionId - The execution ID to cancel
  * @returns True if the command was found and killed, false otherwise
  */
@@ -203,26 +287,59 @@ export function cancelExecution(executionId: string): boolean {
     return false
   }
 
-  // Try to kill the process
+  // Mark as cancelling to prevent double-cancel
+  if (execution.cancelling) {
+    return true
+  }
+  execution.cancelling = true
+
+  // Try to kill gracefully
   const killed = execution.process.kill("SIGTERM")
 
-  // If SIGTERM doesn't work after a short delay, try SIGKILL
-  if (killed) {
-    setTimeout(() => {
-      if (executions.has(executionId)) {
-        execution.process.kill("SIGKILL")
-      }
-    }, 1000)
+  if (!killed) {
+    // Process already dead or kill failed
+    executions.delete(executionId)
+    return false
   }
 
-  // Emit done event with signal
-  execution.emitter.emit("done", { code: null, signal: "SIGTERM" } satisfies CommandDoneEvent)
+  // Schedule forceful kill if process doesn't exit
+  const killTimer = setTimeout(() => {
+    // Check if process still exists
+    if (executions.has(executionId)) {
+      const exec = executions.get(executionId)
+      if (exec && !exec.process.killed) {
+        console.warn(`[CommandExecutor] Process ${executionId} didn't respond to SIGTERM, sending SIGKILL`)
+        exec.process.kill("SIGKILL")
+      }
+    }
+  }, 1000)
 
-  // Clean up
-  executions.delete(executionId)
+  // Store timer reference for cleanup
+  execution.killTimer = killTimer
 
-  return killed
+  // Don't emit done yet - wait for actual process exit
+  // The 'close' event handler will emit done
+  return true
 }
+
+// OLD CODE (kept for reference - can be removed after testing):
+// export function cancelExecution(executionId: string): boolean {
+//   const execution = executions.get(executionId)
+//   if (!execution) {
+//     return false
+//   }
+//   const killed = execution.process.kill("SIGTERM")
+//   if (killed) {
+//     setTimeout(() => {
+//       if (executions.has(executionId)) {
+//         execution.process.kill("SIGKILL")
+//       }
+//     }, 1000)
+//   }
+//   execution.emitter.emit("done", { code: null, signal: "SIGTERM" } satisfies CommandDoneEvent)
+//   executions.delete(executionId)
+//   return killed
+// }
 
 /**
  * Get information about a running execution

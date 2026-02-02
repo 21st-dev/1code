@@ -76,6 +76,7 @@ export const WorkflowModal = memo(function WorkflowModal({
   const [staleWarningDismissed, setStaleWarningDismissed] = useState(false)
   const [showSkipWarning, setShowSkipWarning] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
+  const [prevOpen, setPrevOpen] = useState(isOpen)
 
   // Fetch workflow state
   const {
@@ -164,17 +165,18 @@ export const WorkflowModal = memo(function WorkflowModal({
     }
   }, [effectiveStep])
 
-  // Handle start step when modal opens
+  // Reset all state when modal opens/closes
   useEffect(() => {
-    if (isOpen && startStep) {
-      setActiveStep(startStep)
-      setStartStep(null)
-    }
-  }, [isOpen, startStep, setActiveStep, setStartStep])
-
-  // Reset state when modal closes
-  useEffect(() => {
-    if (!isOpen) {
+    if (isOpen && !prevOpen) {
+      // Opening: Reset to initial state
+      if (startStep) {
+        setActiveStep(startStep)
+        setStartStep(null)
+      }
+      setStaleWarningDismissed(false)
+      setShowSkipWarning(false)
+    } else if (!isOpen && prevOpen) {
+      // Closing: Reset state
       setActiveStep(null)
       setStartStep(null)
       setStaleWarningDismissed(false)
@@ -183,7 +185,18 @@ export const WorkflowModal = memo(function WorkflowModal({
       clearOutput()
       resetExecution()
     }
-  }, [isOpen, setActiveStep, setStartStep, clearOutput, resetExecution])
+    setPrevOpen(isOpen)
+  }, [isOpen, prevOpen, startStep, setActiveStep, setStartStep, clearOutput, resetExecution])
+
+  // Reset dismissals when step changes
+  useEffect(() => {
+    setStaleWarningDismissed(false)
+  }, [effectiveStep])
+
+  // Reset dismissals when project changes
+  useEffect(() => {
+    setStaleWarningDismissed(false)
+  }, [projectPath])
 
   // Handle step navigation
   const handleStepClick = useCallback(
@@ -230,6 +243,7 @@ export const WorkflowModal = memo(function WorkflowModal({
 
   const handleConfirmSkip = useCallback(() => {
     setShowSkipWarning(false)
+    setStaleWarningDismissed(false)
     setActiveStep("plan")
   }, [setActiveStep])
 

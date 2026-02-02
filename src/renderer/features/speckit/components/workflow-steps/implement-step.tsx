@@ -277,7 +277,7 @@ const TaskItem = memo(function TaskItem({
   branchName: string
   isCopied: boolean
   onCopy: () => void
-  onStart: () => void
+  onStart?: () => void
 }) {
   return (
     <div
@@ -348,6 +348,27 @@ const TaskItem = memo(function TaskItem({
 
       {/* Actions */}
       <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Start Task Button (only show if callback provided and task not complete) */}
+        {onStart && !task.isComplete && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="default"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={onStart}
+              >
+                <Code2 className="h-3.5 w-3.5 mr-1" />
+                Start
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p className="text-xs">Start implementation for this task</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {/* Copy button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

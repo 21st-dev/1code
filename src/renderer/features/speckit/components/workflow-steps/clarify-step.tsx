@@ -7,7 +7,7 @@
  * @see specs/001-speckit-ui-integration/plan.md
  */
 
-import { memo, useState, useCallback, useMemo } from "react"
+import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { HelpCircle, Send, Loader2, CheckCircle2, SkipForward } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -45,6 +45,16 @@ export const ClarifyStep = memo(function ClarifyStep({
       return acc
     }, {} as Record<string, string>)
   )
+
+  // Reset answers when questions change to prevent stale data
+  useEffect(() => {
+    setAnswers(
+      questions.reduce((acc, q, index) => {
+        acc[`Q${index + 1}`] = ""
+        return acc
+      }, {} as Record<string, string>)
+    )
+  }, [questions])
 
   // Track which questions are answered
   const answeredCount = useMemo(

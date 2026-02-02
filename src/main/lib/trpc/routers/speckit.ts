@@ -36,7 +36,7 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { observable } from "@trpc/server/observable"
 import { shell } from "electron"
-import { execSync } from "child_process"
+import { execSync, execFileSync } from "child_process"
 import { watch, type FSWatcher } from "fs"
 import path from "path"
 
@@ -59,6 +59,8 @@ import {
   type WorkflowState,
   type WorkflowStepName,
 } from "../../speckit/state-detector"
+
+import { validateBranchName } from "../../speckit/security-utils"
 
 import {
   executeCommand as execSpecKitCommand,
@@ -128,7 +130,35 @@ const FeatureSchema = z.object({
 // File Watchers Registry
 // ============================================================================
 
-const fileWatchers = new Map<string, FSWatcher>()
+// Interface for watcher entries with timestamps
+interface WatcherEntry {
+  watcher: FSWatcher
+  watchId: string
+  projectPath: string
+  directory: string
+  createdAt: Date
+  lastActivity: Date
+}
+
+// Replace the simple Map with typed Map
+const fileWatchers = new Map<string, WatcherEntry>()
+
+// Periodic cleanup of stale watchers (every 5 minutes)
+const WATCHER_TIMEOUT_MS = 5 * 60 * 1000
+const cleanupInterval = setInterval(() => {
+  const now = Date.now()
+  const staleWatchers: string[] = []
+
+  for (const [watchId, entry] of fileWatchers.entries()) {
+    if (now - entry.lastActivity.getTime() > WATCHER_TIMEOUT_MS) {
+      console.warn(`[SpecKit] Cleaning up stale file watcher: ${watchId}`)
+      entry.watcher.close()
+      staleWatchers.push(watchId)
+    }
+  }
+
+  staleWatchers.forEach(id => fileWatchers.delete(id))
+}, 60000) // Check every minute
 
 // ============================================================================
 // Router Definition
@@ -565,14 +595,18 @@ export const speckitRouter = router({
     .input(
       z.object({
         projectPath: z.string(),
-        branch: z.string(),
+        branch: z.string().refine(
+          (b) => validateBranchName(b),
+          { message: "Invalid Git branch name format. Branch names can only contain letters, numbers, hyphens, underscores, dots, and slashes." }
+        ),
       })
     )
     .mutation(({ input }) => {
       const { projectPath, branch } = input
 
       try {
-        execSync(`git checkout ${branch}`, {
+        // Use execFileSync with array args - no shell injection possible
+        execFileSync("git", ["checkout", branch], {
           cwd: projectPath,
           encoding: "utf-8",
           timeout: 30000,
@@ -582,7 +616,7 @@ export const speckitRouter = router({
           error: undefined,
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error"
+        const message = error instanceof Error ? error.message : "Unknown error switching branch"
         return {
           success: false,
           error: message,
@@ -634,15 +668,15 @@ export const speckitRouter = router({
     .mutation(({ input }) => {
       const { projectPath, directory } = input
       const watchPath = path.join(projectPath, directory)
-      const watchId = `${projectPath}:${directory}`
+      const watchId = `${projectPath}::${directory}` // CHANGED: Use :: instead of : for Windows compatibility
 
       // Close existing watcher if any
       const existingWatcher = fileWatchers.get(watchId)
       if (existingWatcher) {
-        existingWatcher.close()
+        existingWatcher.watcher.close()
+        fileWatchers.delete(watchId)
       }
 
-      // Create new watcher (we'll set up the actual watching in the subscription)
       return { watchId }
     }),
 
@@ -653,7 +687,14 @@ export const speckitRouter = router({
     .input(z.object({ watchId: z.string() }))
     .subscription(({ input }) => {
       return observable<{ event: "add" | "change" | "unlink"; filePath: string }>((emit) => {
-        const [projectPath, directory] = input.watchId.split(":")
+        // CHANGED: Split on :: instead of : to avoid Windows drive letter issues
+        const [projectPath, directory] = input.watchId.split("::")
+
+        if (!projectPath || !directory) {
+          emit.error(new Error(`Invalid watchId format: ${input.watchId}`))
+          return
+        }
+
         const watchPath = path.join(projectPath, directory)
 
         if (!checkFileExists(watchPath)) {
@@ -663,13 +704,27 @@ export const speckitRouter = router({
 
         const watcher = watch(watchPath, { recursive: true }, (eventType, filename) => {
           if (filename) {
-            // Map fs events to our event types
             const event = eventType === "rename" ? "add" : "change"
             emit.next({ event, filePath: filename })
+
+            // Update last activity timestamp
+            const entry = fileWatchers.get(input.watchId)
+            if (entry) {
+              entry.lastActivity = new Date()
+            }
           }
         })
 
-        fileWatchers.set(input.watchId, watcher)
+        // Store watcher as WatcherEntry, not just the watcher
+        const watcherEntry: WatcherEntry = {
+          watcher,
+          watchId: input.watchId,
+          projectPath,
+          directory,
+          createdAt: new Date(),
+          lastActivity: new Date(),
+        }
+        fileWatchers.set(input.watchId, watcherEntry)
 
         return () => {
           watcher.close()

@@ -160,6 +160,11 @@ export const FeaturesTable = memo(function FeaturesTable({
   // Pagination state
   const [currentPage, setCurrentPage] = useState(0)
 
+  // Reset pagination when project changes
+  useEffect(() => {
+    setCurrentPage(0)
+  }, [projectPath])
+
   // Query features list with pagination
   const {
     data: featuresData,

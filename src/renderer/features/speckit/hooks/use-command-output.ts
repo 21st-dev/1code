@@ -13,6 +13,11 @@ import { trpc } from "@/lib/trpc"
 import { speckitLoadingAtom, speckitExecutionIdAtom } from "../atoms"
 import type { CommandOutputEvent } from "../types"
 
+const MAX_OUTPUT_LINES = 10000
+const LINE_TRIM_THRESHOLD = 9000 // When to start trimming
+const MAX_RAW_OUTPUT_SIZE = 1024 * 1024 // 1MB
+const RAW_OUTPUT_TRIM_SIZE = 512 * 1024 // Keep 512KB when trimming
+
 interface OutputLine {
   /** Unique line ID */
   id: string
@@ -33,6 +38,30 @@ interface UseCommandOutputOptions {
   onComplete?: () => void
   /** Callback when error occurs */
   onError?: (error: Error) => void
+}
+
+/**
+ * Circular buffer for output lines.
+ * Keeps most recent N lines, discards oldest when limit reached.
+ * Prevents unbounded memory growth during long-running commands.
+ *
+ * @param existingLines - Current output lines array
+ * @param newLine - New line to add
+ * @returns Updated array with trimming applied if needed
+ */
+function addOutputLine(
+  existingLines: OutputLine[],
+  newLine: OutputLine
+): OutputLine[] {
+  const updated = [...existingLines, newLine]
+
+  // Trim if we exceed threshold
+  if (updated.length > MAX_OUTPUT_LINES) {
+    // Keep most recent LINE_TRIM_THRESHOLD lines
+    return updated.slice(updated.length - LINE_TRIM_THRESHOLD)
+  }
+
+  return updated
 }
 
 /**
@@ -79,7 +108,6 @@ export function useCommandOutput({
         }
 
         if (data.chunk) {
-          // Add to output lines
           const newLine: OutputLine = {
             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             stream: data.stream,
@@ -87,10 +115,20 @@ export function useCommandOutput({
             timestamp: Date.now(),
           }
 
-          setOutputLines((prev) => [...prev, newLine])
-          setRawOutput((prev) => prev + data.chunk)
+          // Use circular buffer to prevent unbounded growth
+          setOutputLines((prev) => addOutputLine(prev, newLine))
 
-          // Check for error indicators
+          // For rawOutput, also implement a max size to prevent memory issues
+          setRawOutput((prev) => {
+            const updated = prev + data.chunk
+            // Keep max 1MB of raw output
+            if (updated.length > MAX_RAW_OUTPUT_SIZE) {
+              // Keep most recent 512KB
+              return updated.slice(updated.length - RAW_OUTPUT_TRIM_SIZE)
+            }
+            return updated
+          })
+
           if (data.stream === "stderr") {
             setHasError(true)
           }

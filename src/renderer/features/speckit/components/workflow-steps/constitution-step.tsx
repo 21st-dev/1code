@@ -8,7 +8,7 @@
  */
 
 import { memo } from "react"
-import { ScrollText, Sparkles, Loader2, CheckCircle2, ExternalLink } from "lucide-react"
+import { ScrollText, Sparkles, Loader2, CheckCircle2, ExternalLink, BookOpen, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MarkdownView } from "../markdown-view"
 
@@ -86,65 +86,63 @@ export const ConstitutionStep = memo(function ConstitutionStep({
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">
       {/* Header */}
-      <div className="mb-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ScrollText className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Project Constitution</h2>
-            <span className="flex items-center gap-1 text-xs text-green-600">
+      <div className="mb-6 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-2">
+          <BookOpen className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">Project Constitution</h2>
+          {/* Show completion badge when completed */}
+          {isCompleted && (
+            <span className="ml-auto text-xs bg-green-500/10 text-green-700 dark:text-green-400 px-2 py-1 rounded-full flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3" />
-              Active
+              Created
             </span>
-          </div>
-          {onOpenInEditor && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onOpenInEditor}
-              className="text-muted-foreground"
-            >
-              <ExternalLink className="h-3.5 w-3.5 mr-1" />
-              Edit
-            </Button>
           )}
         </div>
-        <p className="text-sm text-muted-foreground mt-1">
-          Review your project's guiding principles. These will inform all feature specifications.
+        <p className="text-sm text-muted-foreground">
+          {isCompleted
+            ? "Your project constitution has been created and defines the guiding principles."
+            : "Create your project's constitution to define guiding principles and constraints."}
         </p>
       </div>
 
-      {/* Constitution Content */}
-      <div className="flex-1 overflow-y-auto bg-muted/20 rounded-lg p-4 border border-border/50">
-        {isExecuting ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Creating constitution...</p>
-            </div>
+      {/* Content Section - Conditional rendering based on isCompleted */}
+      {isCompleted ? (
+        // Show read-only constitution content when completed
+        <div className="flex-1 overflow-y-auto border border-border/50 rounded-lg p-4 bg-muted/10">
+          {constitutionContent ? (
+            <MarkdownView content={constitutionContent} size="md" />
+          ) : (
+            <p className="text-sm text-muted-foreground">Constitution content not available</p>
+          )}
+        </div>
+      ) : (
+        // Show creation prompt when not completed
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground mb-6">
+              The constitution will be created in <code className="text-xs">.specify/memory/constitution.md</code>
+            </p>
+            <Button
+              onClick={() => onCreate()}
+              disabled={isExecuting}
+              size="lg"
+            >
+              {isExecuting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Constitution...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Create Constitution
+                </>
+              )}
+            </Button>
           </div>
-        ) : constitutionContent ? (
-          <MarkdownView content={constitutionContent} size="md" />
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <p className="text-sm">Constitution content will appear here</p>
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-border/50 mt-4 flex-shrink-0">
-        <p className="text-xs text-muted-foreground">
-          Your constitution is ready. Proceed to specify a new feature.
-        </p>
-        <Button
-          onClick={onProceed}
-          disabled={isExecuting}
-          className="min-w-[180px]"
-        >
-          <CheckCircle2 className="h-4 w-4 mr-2" />
-          Continue to Specify
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   )
 })

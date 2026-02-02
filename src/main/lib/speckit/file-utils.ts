@@ -13,6 +13,7 @@
 import fs from "fs"
 import path from "path"
 import { execSync } from "child_process"
+import { validatePathInProject } from "./security-utils"
 
 /**
  * Get the current Git branch name
@@ -97,7 +98,20 @@ export function listFeatureDirectories(projectPath: string): string[] {
   try {
     const entries = fs.readdirSync(specsDir, { withFileTypes: true })
     return entries
-      .filter((entry) => entry.isDirectory() && /^\d{3}-/.test(entry.name))
+      .filter((entry) => {
+        if (!entry.isDirectory() || !/^\d{3}-/.test(entry.name)) {
+          return false
+        }
+
+        // SECURITY: Validate each feature path is within project
+        const featurePath = path.join(specsDir, entry.name)
+        if (!validatePathInProject(projectPath, featurePath)) {
+          console.warn(`Skipping feature directory outside project: ${entry.name}`)
+          return false
+        }
+
+        return true
+      })
       .map((entry) => entry.name)
       .sort()
   } catch {
@@ -168,7 +182,14 @@ export function getArtifactPath(
   featureBranch: string,
   artifactType: "spec" | "plan" | "research" | "tasks"
 ): string {
-  return path.join(projectPath, "specs", featureBranch, `${artifactType}.md`)
+  const artifactPath = path.join(projectPath, "specs", featureBranch, `${artifactType}.md`)
+
+  // SECURITY: Validate path is within project to prevent traversal attacks
+  if (!validatePathInProject(projectPath, artifactPath)) {
+    throw new Error(`Path traversal detected: ${featureBranch}`)
+  }
+
+  return artifactPath
 }
 
 /**
@@ -178,7 +199,14 @@ export function getArtifactPath(
  * @returns The full path to the constitution file
  */
 export function getConstitutionPath(projectPath: string): string {
-  return path.join(projectPath, ".specify", "memory", "constitution.md")
+  const constitutionPath = path.join(projectPath, ".specify", "memory", "constitution.md")
+
+  // SECURITY: Validate path is within project
+  if (!validatePathInProject(projectPath, constitutionPath)) {
+    throw new Error("Invalid constitution path")
+  }
+
+  return constitutionPath
 }
 
 /**
@@ -211,19 +239,22 @@ export function checkSubmoduleStatus(projectPath: string): {
   }
 
   // Check if the submodule has content (not just an empty directory)
-  // A properly initialized submodule should have at least these files
+  // A properly initialized submodule should have ALL of these files
   const expectedFiles = ["README.md", "pyproject.toml", "templates"]
-  const hasContent = expectedFiles.some((file) =>
+  const hasContent = expectedFiles.every((file) =>  // CHANGED: from .some() to .every()
     fs.existsSync(path.join(submodulePath, file))
   )
 
   if (!hasContent) {
+    const missingFiles = expectedFiles.filter(file =>
+      !fs.existsSync(path.join(submodulePath, file))
+    )
     return {
       initialized: false,
       exists: true,
       hasContent: false,
       submodulePath,
-      message: "ii-spec submodule exists but is not initialized. Run: git submodule update --init --recursive",
+      message: `ii-spec submodule exists but is missing files: ${missingFiles.join(", ")}. Run: git submodule update --init --recursive`,
     }
   }
 

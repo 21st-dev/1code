@@ -7,7 +7,7 @@
  * @see specs/001-speckit-ui-integration/spec.md (US3)
  */
 
-import { memo, useCallback, useState, useMemo } from "react"
+import { memo, useCallback, useState, useMemo, useEffect } from "react"
 import {
   FileText,
   FileCode,
@@ -188,6 +188,7 @@ export const FeatureDetailModal = memo(function FeatureDetailModal({
 }: FeatureDetailModalProps) {
   // Active tab state
   const [activeTab, setActiveTab] = useState<Exclude<ArtifactType, "constitution">>("spec")
+  const [closeTimer, setCloseTimer] = useState<NodeJS.Timeout | null>(null)
 
   // Mutation for opening file in editor
   const openFileMutation = trpc.speckit.openFileInEditor.useMutation()
@@ -206,12 +207,31 @@ export const FeatureDetailModal = memo(function FeatureDetailModal({
       onOpenChange(newOpen)
       if (!newOpen) {
         onClose?.()
-        // Reset to first tab when closing
-        setTimeout(() => setActiveTab("spec"), 200)
+
+        // Clear any pending timer
+        if (closeTimer) {
+          clearTimeout(closeTimer)
+        }
+
+        // Reset tab with managed timeout
+        const timer = setTimeout(() => {
+          setActiveTab("spec")
+          setCloseTimer(null)
+        }, 200)
+        setCloseTimer(timer)
       }
     },
-    [onOpenChange, onClose]
+    [onOpenChange, onClose, closeTimer]
   )
+
+  // Cleanup timer on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (closeTimer) {
+        clearTimeout(closeTimer)
+      }
+    }
+  }, [closeTimer])
 
   // Determine which tabs have content
   const tabsWithContent = useMemo(() => {
