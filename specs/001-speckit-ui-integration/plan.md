@@ -288,7 +288,7 @@ function detectWorkflowState(projectPath: string): WorkflowState {
 
 **See**: `INITIALIZATION_DETECTION.md` for complete details
 
-### Component Hierarchy
+### Component Hierarchy (v1)
 
 ```
 Plan Page (Drawer Widget)
@@ -315,6 +315,56 @@ Workflow Modal (Full-Screen)
 └── Document Pane (Right)
     ├── Live artifact preview (markdown) - for Constitution/Specify/Clarify/Plan/Tasks
     └── Task List with Copy Buttons - for Implement step
+```
+
+### Component Hierarchy (v2 - Refactored)
+
+**Key Changes**:
+- Rename "SpecKit" → "Spec" throughout UI
+- Split Plan page into Overview + Current Branch sections
+- Tabbed view for Spec/Plan/Tasks (not stepper steps)
+- Collapsible phases with phase-level copy buttons
+
+```
+Spec Plan Page (Drawer Widget) - Renamed from "SpecKit Plan Page"
+│
+├── Section 1: Overview (Always visible)
+│   ├── Initialization Check
+│   │   └── If not initialized → InitializationPrompt
+│   ├── Constitution Section (if initialized)
+│   │   ├── "Edit Constitution" Button
+│   │   └── Principles Preview (condensed)
+│   └── Features List (if initialized)
+│       ├── "New Feature" Button → Opens Modal
+│       └── Features Table
+│           └── Columns: ID | Name | Description | Branch | Artifacts
+│
+└── Section 2: Current Branch (if on feature branch)
+    ├── Branch Header (e.g., "001-speckit-ui-integration")
+    ├── Workflow Progress Indicator
+    │   └── Shows: Spec → Plan → Tasks → Implement
+    └── Tabbed Content
+        ├── Tab 1: Specification (renders spec.md)
+        ├── Tab 2: Plan (renders plan.md)
+        ├── Tab 3: Tasks (renders tasks.md)
+        └── Tab 4: Implement (if tasks.md exists)
+            └── Task List by Phase (collapsible)
+                ├── Phase Header (e.g., "Phase 0: Submodule Relocation")
+                │   ├── Copy button → `/speckit.implement [branch] Phase-0`
+                │   └── Collapse/Expand toggle
+                └── Task Items (when expanded)
+                    └── Copy button → `/speckit.implement [branch] T001`
+
+Workflow Modal (Full-Screen) - For "New Feature" flow
+├── Stepper (Top) - Constitution | Specify | Clarify | Plan | Tasks | Implement
+├── Warning Banners (conditional)
+├── Chat Pane (Left) - Command execution
+└── Document Pane (Right)
+    ├── Live artifact preview (Constitution/Specify/Clarify/Plan/Tasks)
+    └── Implement Step: Task List by Collapsible Phases
+        └── Phase N: [Title]
+            ├── [Copy Phase] button
+            └── Tasks with [Copy Task] buttons
 ```
 
 ### Workflow Step Completion Detection

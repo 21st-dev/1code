@@ -14,8 +14,8 @@ The analysis covers cross-artifact consistency between spec.md (31 functional re
 
 | Metric | Value |
 |--------|-------|
-| Total Requirements | 36 |
-| Total Tasks | 163 |
+| Total Requirements | 45 (36 v1 + 9 v2) |
+| Total Tasks | 193 |
 | Requirement Coverage | 100% |
 | Constitution Alignment | 100% |
 | Ambiguities Found | 0 |
@@ -23,10 +23,19 @@ The analysis covers cross-artifact consistency between spec.md (31 functional re
 | Underspecifications | 0 |
 
 **Updates Made**:
+
+**v1 Updates** (Initial clarifications):
 - Added FR-032 to FR-036 for Implement step, stale warnings, skip warnings, and free navigation
 - Added 12 new tasks (T090.1 to T090.12) for these requirements
 - Updated plan.md with correct phase count and workflow step completion table
 - Clarified that tasks.md existence = workflow at "implement" step
+
+**v2 Updates** (UI Refinements):
+- Added FR-037 to FR-045 for "SpecKit" → "Spec" rename, Plan page restructure, collapsible phases
+- Added 30 new tasks (T152 to T181) in Phase 10 for v2 refinements
+- Updated plan.md with v2 component hierarchy showing Overview + Current Branch sections
+- Added collapsible phase structure with phase-level and task-level copy buttons
+- Updated copy button format to include branch name: `/speckit.implement [branch-name] [task-id]`
 
 ---
 

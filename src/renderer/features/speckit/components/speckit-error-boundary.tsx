@@ -1,7 +1,7 @@
 /**
- * SpecKitErrorBoundary Component
+ * SpecErrorBoundary Component
  *
- * Error boundary that catches rendering errors in SpecKit components
+ * Error boundary that catches rendering errors in Spec components
  * and displays a user-friendly fallback UI.
  *
  * @see specs/001-speckit-ui-integration/tasks.md (T140)
@@ -30,14 +30,14 @@ interface State {
 }
 
 /**
- * Error boundary for SpecKit components
+ * Error boundary for Spec components
  *
  * Catches rendering errors and displays a fallback UI with:
  * - User-friendly error message
  * - Error details (in development)
  * - Reset button to retry rendering
  */
-export class SpecKitErrorBoundary extends Component<Props, State> {
+export class SpecErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props)
     this.state = { hasError: false, error: null, errorInfo: null }
@@ -49,7 +49,7 @@ export class SpecKitErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
     // Log error to console in development
-    console.error("[SpecKit Error]", error, errorInfo)
+    console.error("[Spec Error]", error, errorInfo)
     this.setState({ errorInfo })
   }
 
@@ -60,7 +60,7 @@ export class SpecKitErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      const { fallbackTitle = "SpecKit Error" } = this.props
+      const { fallbackTitle = "Spec Error" } = this.props
       const isDev = process.env.NODE_ENV === "development"
 
       return (
@@ -68,7 +68,7 @@ export class SpecKitErrorBoundary extends Component<Props, State> {
           <AlertTriangle className="h-10 w-10 text-destructive mb-4" />
           <h3 className="text-lg font-semibold mb-2">{fallbackTitle}</h3>
           <p className="text-sm text-muted-foreground mb-4 max-w-md">
-            Something went wrong while rendering SpecKit. This may be due to a
+            Something went wrong while rendering Spec. This may be due to a
             temporary issue or missing data.
           </p>
 
@@ -97,4 +97,4 @@ export class SpecKitErrorBoundary extends Component<Props, State> {
   }
 }
 
-export default SpecKitErrorBoundary
+export default SpecErrorBoundary

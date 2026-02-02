@@ -93,7 +93,7 @@ import { FileViewerSidebar } from "../../file-viewer"
 import { FileSearchDialog } from "../../file-viewer/components/file-search-dialog"
 import { terminalSidebarOpenAtomFamily, terminalDisplayModeAtom, terminalBottomHeightAtom } from "../../terminal/atoms"
 import { TerminalSidebar, TerminalBottomPanelContent } from "../../terminal/terminal-sidebar"
-import { SpecKitSidebar } from "../../speckit/components/speckit-sidebar"
+import { SpecSidebar } from "../../speckit/components/speckit-sidebar"
 import { speckitDrawerOpenAtom } from "../../speckit/atoms"
 import { ResizableBottomPanel } from "@/components/ui/resizable-bottom-panel"
 import {
@@ -4399,7 +4399,7 @@ export function ChatView({
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
   const terminalDisplayMode = useAtomValue(terminalDisplayModeAtom)
 
-  // SpecKit sidebar state
+  // Spec sidebar state
   const [isSpecKitSidebarOpen, setIsSpecKitSidebarOpen] = useAtom(speckitDrawerOpenAtom)
 
   // Keyboard shortcut: Cmd+J to toggle terminal
@@ -6977,9 +6977,9 @@ Make sure to preserve all functionality from both branches when resolving confli
           />
         )}
 
-        {/* SpecKit Sidebar - shows when worktree exists (desktop only) */}
+        {/* Spec Sidebar - shows when worktree exists (desktop only) */}
         {worktreePath && (
-          <SpecKitSidebar
+          <SpecSidebar
             isOpen={isSpecKitSidebarOpen}
             onClose={() => setIsSpecKitSidebarOpen(false)}
             chatId={chatId}

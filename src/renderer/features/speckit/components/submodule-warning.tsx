@@ -56,10 +56,10 @@ export function SubmoduleWarning({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            SpecKit Submodule Not Initialized
+            Spec Submodule Not Initialized
           </DialogTitle>
           <DialogDescription>
-            The ii-spec submodule is required for SpecKit features to work
+            The ii-spec submodule is required for Spec features to work
             properly.
           </DialogDescription>
         </DialogHeader>
@@ -98,7 +98,7 @@ export function SubmoduleWarning({
             <p>After running the command:</p>
             <ol className="list-decimal list-inside space-y-1 ml-2">
               <li>Restart the application</li>
-              <li>Open the SpecKit panel again</li>
+              <li>Open the Spec panel again</li>
             </ol>
           </div>
         </div>

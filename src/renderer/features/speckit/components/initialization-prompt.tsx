@@ -1,7 +1,7 @@
 /**
  * InitializationPrompt Component
  *
- * Displays when SpecKit is not initialized, with one-click setup.
+ * Displays when Spec is not initialized, with one-click setup.
  * Shows missing components and handles initialization with progress feedback.
  *
  * @see specs/001-speckit-ui-integration/plan.md Phase 8
@@ -27,10 +27,10 @@ interface InitializationPromptProps {
 type InitState = "idle" | "initializing" | "success" | "error"
 
 /**
- * InitializationPrompt - Prompts user to initialize SpecKit
+ * InitializationPrompt - Prompts user to initialize Spec
  *
  * Displays:
- * - Description of SpecKit
+ * - Description of Spec
  * - List of missing components (if any)
  * - Initialize/Re-initialize button
  * - Progress indicator during initialization
@@ -47,7 +47,7 @@ export const InitializationPrompt = memo(function InitializationPrompt({
 
   const utils = trpc.useUtils()
 
-  const initMutation = trpc.speckit.initializeSpecKit.useMutation({
+  const initMutation = trpc.speckit.initializeSpec.useMutation({
     onMutate: () => {
       setInitState("initializing")
       setErrorMessage("")
@@ -88,7 +88,7 @@ export const InitializationPrompt = memo(function InitializationPrompt({
         <div className="flex items-center justify-center flex-1 text-center">
           <div className="max-w-[280px]">
             <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
-            <p className="text-sm font-medium mb-2">SpecKit Initialized</p>
+            <p className="text-sm font-medium mb-2">Spec Initialized</p>
             <p className="text-xs text-muted-foreground">
               Setting up your workspace...
             </p>
@@ -132,7 +132,7 @@ export const InitializationPrompt = memo(function InitializationPrompt({
         <div className="flex items-center justify-center flex-1 text-center">
           <div className="max-w-[280px]">
             <RefreshCw className="h-10 w-10 animate-spin text-primary mx-auto mb-3" />
-            <p className="text-sm font-medium mb-2">Initializing SpecKit</p>
+            <p className="text-sm font-medium mb-2">Initializing Spec</p>
             <p className="text-xs text-muted-foreground mb-2">
               Setting up project structure...
             </p>
@@ -154,11 +154,11 @@ export const InitializationPrompt = memo(function InitializationPrompt({
         <div className="max-w-[280px]">
           <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm font-medium mb-2">
-            {isPartial ? "Re-initialize SpecKit" : "Initialize SpecKit"}
+            {isPartial ? "Re-initialize Spec" : "Initialize Spec"}
           </p>
           <p className="text-xs text-muted-foreground mb-4">
             {isPartial
-              ? "Some SpecKit components are missing. Re-initialize to restore them."
+              ? "Some Spec components are missing. Re-initialize to restore them."
               : "Initialize ii-spec to enable feature specification workflows."}
           </p>
 
@@ -195,7 +195,7 @@ export const InitializationPrompt = memo(function InitializationPrompt({
             ) : (
               <Plus className="h-4 w-4 mr-2" />
             )}
-            {isPartial ? "Re-initialize SpecKit" : "Initialize SpecKit"}
+            {isPartial ? "Re-initialize Spec" : "Initialize Spec"}
           </Button>
 
           {/* Command hint */}

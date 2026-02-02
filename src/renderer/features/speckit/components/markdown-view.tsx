@@ -1,7 +1,7 @@
 /**
  * MarkdownView Component
  *
- * Renders markdown content for SpecKit artifacts (spec, plan, tasks, constitution).
+ * Renders markdown content for Spec artifacts (spec, plan, tasks, constitution).
  * Wraps the existing ChatMarkdownRenderer with memoization for performance.
  *
  * @see specs/001-speckit-ui-integration/plan.md
@@ -23,7 +23,7 @@ interface MarkdownViewProps {
 }
 
 /**
- * MarkdownView - Renders markdown content for SpecKit
+ * MarkdownView - Renders markdown content for Spec
  *
  * Uses the existing ChatMarkdownRenderer with additional memoization
  * to prevent unnecessary re-renders when viewing artifacts.

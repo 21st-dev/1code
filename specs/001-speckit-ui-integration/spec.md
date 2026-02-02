@@ -122,7 +122,7 @@ Developers need the SpecKit codebase embedded as a Git submodule (forked to the 
 
 ## Requirements *(mandatory)*
 
-### Functional Requirements
+### Functional Requirements (v1 - Core Workflow)
 
 - **FR-001**: System MUST add a SpecKit icon button to the top action bar in the same visual group as the Git and Terminal buttons
 - **FR-002**: System MUST open the right drawer when the SpecKit icon button is clicked, displaying the Plan page component
@@ -160,6 +160,18 @@ Developers need the SpecKit codebase embedded as a Git submodule (forked to the 
 - **FR-034**: System MUST display all tasks with full descriptions in the Implement step, showing task ID, description, and file paths
 - **FR-035**: System MUST provide a copy button for each task in the Implement step that copies the task reference to clipboard
 - **FR-036**: System MUST allow users to freely navigate between any completed workflow steps in the stepper to view or modify artifacts
+
+### Functional Requirements (v2 - UI Refinements & Post-Implementation Workflow)
+
+- **FR-037**: System MUST rename "SpecKit" to "Spec" throughout the UI (icon button label, page titles, modal titles)
+- **FR-038**: System MUST restructure Plan page into two sections: "Overview" section (constitution + features list) and "Current Branch" section (workflow progress for active feature)
+- **FR-039**: System MUST display current branch workflow section showing Specification, Plan, and Tasks as tabbed sections (not separate workflow steps)
+- **FR-040**: System MUST show phase numbers and titles in the Implement step task list (e.g., "Phase 0: Submodule Relocation")
+- **FR-041**: System MUST make each phase collapsible/expandable to show/hide tasks within that phase in the Implement step
+- **FR-042**: System MUST provide a copy button for each phase in the Implement step that copies `/speckit.implement [branch-name] [phase-number]` to clipboard
+- **FR-043**: System MUST update task copy buttons in the Implement step to copy `/speckit.implement [branch-name] [task-id]` format (including branch name)
+- **FR-044**: System MUST show phase copy button tooltip explaining "Copy command to implement all tasks in this phase"
+- **FR-045**: System MUST show task copy button tooltip explaining "Copy command to implement this specific task"
 
 ### Key Entities
 

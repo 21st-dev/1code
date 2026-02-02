@@ -10,8 +10,11 @@
 import { memo, useMemo, useCallback, useState } from "react"
 import { Check, Copy, CheckCircle2, Code2, FileCode, Square, CheckSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { PhaseSection } from "../phase-section"
+import { trpc } from "@/lib/trpc"
 
 interface ParsedTask {
   /** Task ID (e.g., "T001") */
@@ -28,6 +31,15 @@ interface ParsedTask {
   filePaths: string[]
   /** Phase this task belongs to */
   phase?: string
+  /** Phase number */
+  phaseNumber?: string
+}
+
+interface PhaseInfo {
+  /** Phase number (e.g., "0", "1", "2") */
+  number: string
+  /** Phase title (e.g., "Submodule Relocation (Infrastructure)") */
+  title: string
 }
 
 interface ImplementStepProps {
@@ -35,6 +47,8 @@ interface ImplementStepProps {
   tasksContent: string
   /** Feature branch name */
   featureBranch: string
+  /** Project path for fetching branch info */
+  projectPath: string
   /** Callback when user wants to start implementation */
   onStartImplementation?: (taskId: string) => void
 }
@@ -42,30 +56,38 @@ interface ImplementStepProps {
 /**
  * Parse tasks.md content into structured task list
  */
-function parseTasksContent(content: string): { tasks: ParsedTask[]; phases: string[] } {
+function parseTasksContent(content: string): { tasks: ParsedTask[]; phaseInfoMap: Map<string, PhaseInfo> } {
   const tasks: ParsedTask[] = []
-  const phases: string[] = []
+  const phaseInfoMap = new Map<string, PhaseInfo>()
   let currentPhase: string | undefined
+  let currentPhaseNumber: string | undefined
 
   const lines = content.split("\n")
 
   for (const line of lines) {
-    // Match phase headers (e.g., "## Phase 4: User Story 4")
-    const phaseMatch = line.match(/^##\s+Phase\s+\d+[:\s]+(.+)$/i)
+    // Match phase headers (e.g., "## Phase 4: User Story 4" or "## Phase 0: Submodule Relocation")
+    const phaseMatch = line.match(/^##\s+Phase\s+(\d+)[:\s]+(.+)$/i)
     if (phaseMatch) {
-      currentPhase = phaseMatch[1].trim()
-      if (!phases.includes(currentPhase)) {
-        phases.push(currentPhase)
+      const phaseNumber = phaseMatch[1]
+      const phaseTitle = phaseMatch[2].trim()
+      currentPhase = phaseTitle
+      currentPhaseNumber = phaseNumber
+
+      if (!phaseInfoMap.has(phaseTitle)) {
+        phaseInfoMap.set(phaseTitle, {
+          number: phaseNumber,
+          title: phaseTitle,
+        })
       }
       continue
     }
 
-    // Match task lines (e.g., "- [ ] T066 [P] [US4] Description...")
+    // Match task lines (e.g., "- [ ] T066 [P] [US4] Description..." or "- [X] T001 ...")
     const taskMatch = line.match(
-      /^-\s+\[([ xX])\]\s+(T\d+(?:\.\d+)?)\s*(\[P\])?\s*(\[US\d+\])?\s+(.+)$/
+      /^-\s+\[([ xX])\]\s+(T\d+(?:\.\d+)?)\s*(\[P\])?\s*(\[V2\])?\s*(\[US\d+\])?\s+(.+)$/
     )
     if (taskMatch) {
-      const [, checkmark, id, parallel, userStory, description] = taskMatch
+      const [, checkmark, id, parallel, , userStory, description] = taskMatch
       const isComplete = checkmark.toLowerCase() === "x"
       const isParallel = !!parallel
 
@@ -81,11 +103,12 @@ function parseTasksContent(content: string): { tasks: ParsedTask[]; phases: stri
         userStory: userStory?.replace(/[\[\]]/g, ""),
         filePaths,
         phase: currentPhase,
+        phaseNumber: currentPhaseNumber,
       })
     }
   }
 
-  return { tasks, phases }
+  return { tasks, phaseInfoMap }
 }
 
 /**
@@ -94,11 +117,19 @@ function parseTasksContent(content: string): { tasks: ParsedTask[]; phases: stri
 export const ImplementStep = memo(function ImplementStep({
   tasksContent,
   featureBranch,
+  projectPath,
   onStartImplementation,
 }: ImplementStepProps) {
   const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null)
 
-  const { tasks, phases } = useMemo(() => parseTasksContent(tasksContent), [tasksContent])
+  // Get current branch name
+  const { data: branchData } = trpc.speckit.getCurrentBranch.useQuery(
+    { projectPath },
+    { enabled: !!projectPath }
+  )
+  const branchName = branchData?.branchName || featureBranch
+
+  const { tasks, phaseInfoMap } = useMemo(() => parseTasksContent(tasksContent), [tasksContent])
 
   // Group tasks by phase
   const tasksByPhase = useMemo(() => {
@@ -119,20 +150,20 @@ export const ImplementStep = memo(function ImplementStep({
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
   const handleCopyTask = useCallback(async (task: ParsedTask) => {
-    const taskRef = `${task.id}: ${task.description}`
+    const command = `/speckit.implement ${branchName} ${task.id}`
 
     try {
-      await navigator.clipboard.writeText(taskRef)
+      await navigator.clipboard.writeText(command)
       setCopiedTaskId(task.id)
-      toast.success("Task reference copied", {
-        description: `Use "/speckit.implement ${task.id}" in a new chat`,
+      toast.success("Task command copied", {
+        description: `Use "${command}" in a new chat to implement this task`,
       })
 
       setTimeout(() => setCopiedTaskId(null), 2000)
     } catch {
-      toast.error("Failed to copy task reference")
+      toast.error("Failed to copy command")
     }
-  }, [])
+  }, [branchName])
 
   const handleStartTask = useCallback(
     (task: ParsedTask) => {
@@ -165,38 +196,42 @@ export const ImplementStep = memo(function ImplementStep({
         </div>
 
         <p className="text-sm text-muted-foreground mt-3">
-          Click the copy button to copy a task reference. Start a new chat and use{" "}
-          <code className="px-1 py-0.5 bg-muted rounded text-xs">/speckit.implement [task-id]</code>{" "}
-          to implement a specific task.
+          Click the copy button next to a task or phase to copy the implementation command. Start a new chat and paste the command to begin implementation.
         </p>
       </div>
 
-      {/* Task List */}
-      <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-        {Object.entries(tasksByPhase).map(([phase, phaseTasks]) => (
-          <div key={phase}>
-            {/* Phase Header */}
-            <div className="flex items-center gap-2 mb-3 sticky top-0 bg-background py-1">
-              <h3 className="text-sm font-medium text-muted-foreground">{phase}</h3>
-              <span className="text-xs text-muted-foreground/70">
-                ({phaseTasks.filter((t) => t.isComplete).length}/{phaseTasks.length})
-              </span>
-            </div>
+      {/* Task List with Collapsible Phases */}
+      <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+        {Object.entries(tasksByPhase).map(([phase, phaseTasks]) => {
+          const phaseInfo = phaseInfoMap.get(phase)
+          const completedTasks = phaseTasks.filter((t) => t.isComplete).length
 
-            {/* Tasks */}
-            <div className="space-y-2">
-              {phaseTasks.map((task) => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  isCopied={copiedTaskId === task.id}
-                  onCopy={() => handleCopyTask(task)}
-                  onStart={() => handleStartTask(task)}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+          return (
+            <PhaseSection
+              key={phase}
+              phaseNumber={phaseInfo?.number || "?"}
+              phaseTitle={phase}
+              branchName={branchName}
+              totalTasks={phaseTasks.length}
+              completedTasks={completedTasks}
+              defaultOpen={true}
+            >
+              {/* Tasks */}
+              <div className="space-y-2">
+                {phaseTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    branchName={branchName}
+                    isCopied={copiedTaskId === task.id}
+                    onCopy={() => handleCopyTask(task)}
+                    onStart={() => handleStartTask(task)}
+                  />
+                ))}
+              </div>
+            </PhaseSection>
+          )
+        })}
 
         {tasks.length === 0 && (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -233,11 +268,13 @@ ImplementStep.displayName = "ImplementStep"
  */
 const TaskItem = memo(function TaskItem({
   task,
+  branchName,
   isCopied,
   onCopy,
   onStart,
 }: {
   task: ParsedTask
+  branchName: string
   isCopied: boolean
   onCopy: () => void
   onStart: () => void
@@ -311,19 +348,26 @@ const TaskItem = memo(function TaskItem({
 
       {/* Actions */}
       <div className="flex items-center gap-1 flex-shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={onCopy}
-          disabled={isCopied}
-        >
-          {isCopied ? (
-            <Check className="h-3.5 w-3.5 text-green-500" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={onCopy}
+              disabled={isCopied}
+            >
+              {isCopied ? (
+                <Check className="h-3.5 w-3.5 text-green-500" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <p className="text-xs">Copy command to implement this specific task</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 /**
  * FeaturesTable Component
  *
- * Displays a table of all previous SpecKit features with their artifacts.
+ * Displays a table of all previous Spec features with their artifacts.
  * Allows clicking on a feature to open the FeatureDetailModal.
  *
  * @see specs/001-speckit-ui-integration/spec.md (US3)

@@ -1,8 +1,8 @@
 /**
- * SpecKit Sidebar Component
+ * Spec Sidebar Component
  *
- * Right sidebar drawer for SpecKit workflow management.
- * Opens when the SpecKit button is clicked in the toolbar.
+ * Right sidebar drawer for Spec workflow management.
+ * Opens when the Spec button is clicked in the toolbar.
  *
  * @see specs/001-speckit-ui-integration/plan.md
  */
@@ -25,7 +25,7 @@ export const speckitSidebarWidthAtom = atomWithStorage<number>(
   { getOnInit: true }
 )
 
-interface SpecKitSidebarProps {
+interface SpecSidebarProps {
   /** Whether the sidebar is open */
   isOpen: boolean
   /** Callback when sidebar should close */
@@ -37,14 +37,14 @@ interface SpecKitSidebarProps {
 }
 
 /**
- * SpecKitSidebar - Right drawer containing the SpecKit workflow page
+ * SpecSidebar - Right drawer containing the Spec workflow page
  */
-export const SpecKitSidebar = memo(function SpecKitSidebar({
+export const SpecSidebar = memo(function SpecSidebar({
   isOpen,
   onClose,
   chatId,
   projectPath,
-}: SpecKitSidebarProps) {
+}: SpecSidebarProps) {
   return (
     <ResizableSidebar
       isOpen={isOpen}
@@ -71,14 +71,14 @@ export const SpecKitSidebar = memo(function SpecKitSidebar({
                   size="icon"
                   onClick={onClose}
                   className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                  aria-label="Close SpecKit"
+                  aria-label="Close Spec"
                 >
                   <IconDoubleChevronRight className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Close SpecKit</TooltipContent>
+              <TooltipContent side="bottom">Close Spec</TooltipContent>
             </Tooltip>
-            <span className="text-sm font-medium">SpecKit</span>
+            <span className="text-sm font-medium">Spec</span>
           </div>
         </div>
 
@@ -95,4 +95,4 @@ export const SpecKitSidebar = memo(function SpecKitSidebar({
   )
 })
 
-SpecKitSidebar.displayName = "SpecKitSidebar"
+SpecSidebar.displayName = "SpecSidebar"

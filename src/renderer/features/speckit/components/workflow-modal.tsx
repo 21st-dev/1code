@@ -1,7 +1,7 @@
 /**
  * WorkflowModal Component
  *
- * Full-screen modal for the SpecKit workflow.
+ * Full-screen modal for the Spec workflow.
  * Dual-pane interface with chat pane (left) and document pane (right).
  *
  * @see specs/001-speckit-ui-integration/plan.md
@@ -352,10 +352,10 @@ export const WorkflowModal = memo(function WorkflowModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 h-14 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-4">
-            <h2 id="workflow-modal-title" className="text-lg font-semibold">SpecKit Workflow</h2>
+            <h2 id="workflow-modal-title" className="text-lg font-semibold">Spec Workflow</h2>
             {/* Hidden description for screen readers */}
             <span id="workflow-modal-description" className="sr-only">
-              Create and manage feature specifications using the SpecKit workflow. Current step: {effectiveStep}
+              Create and manage feature specifications using the Spec workflow. Current step: {effectiveStep}
             </span>
             {branchName && (
               <span className="text-sm text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">

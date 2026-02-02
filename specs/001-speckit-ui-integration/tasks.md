@@ -361,6 +361,65 @@
 
 ---
 
+## Phase 10: v2 - UI Refinements & Post-Implementation Workflow
+
+**Purpose**: Refactor UI based on v2 requirements (FR-037 to FR-045)
+
+**Key Changes**:
+- Rename "SpecKit" → "Spec" throughout UI
+- Restructure Plan page with Overview + Current Branch sections
+- Add collapsible phases with phase-level copy buttons in Implement step
+- Update copy button format to include branch name
+
+### Global Renaming (FR-037)
+
+- [X] T152 [P] [V2] Rename "SpecKit" to "Spec" in icon button label in src/renderer/features/agents/ui/sub-chat-selector.tsx
+- [X] T153 [P] [V2] Rename "SpecKit Plan Page" to "Spec Plan Page" in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T154 [P] [V2] Rename "SpecKit" to "Spec" in WorkflowModal title in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T155 [P] [V2] Update all user-facing text from "SpecKit" to "Spec" in InitializationPrompt in src/renderer/features/speckit/components/initialization-prompt.tsx
+- [X] T156 [P] [V2] Update atom names from `speckit*` to `spec*` (optional - SKIPPED: kept for backward compat and internal consistency)
+
+### Plan Page Restructure (FR-038, FR-039)
+
+- [X] T157 [V2] Refactor PlanPage into two main sections: Overview and Current Branch in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T158 [V2] Create OverviewSection component containing constitution and features list in src/renderer/features/speckit/components/overview-section.tsx
+- [X] T159 [V2] Create CurrentBranchSection component with branch header and workflow progress in src/renderer/features/speckit/components/current-branch-section.tsx
+- [X] T160 [V2] Implement branch detection in PlanPage showing CurrentBranchSection only when on feature branch in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T161 [V2] Create WorkflowProgressIndicator component showing Spec → Plan → Tasks → Implement progress in src/renderer/features/speckit/components/workflow-progress-indicator.tsx
+- [X] T162 [V2] Create tabbed interface for Specification/Plan/Tasks/Implement in CurrentBranchSection using Radix Tabs in src/renderer/features/speckit/components/current-branch-section.tsx
+- [X] T163 [V2] Wire Specification tab to render spec.md using trpc.speckit.getArtifact in src/renderer/features/speckit/components/current-branch-section.tsx
+- [X] T164 [V2] Wire Plan tab to render plan.md using trpc.speckit.getArtifact in src/renderer/features/speckit/components/current-branch-section.tsx
+- [X] T165 [V2] Wire Tasks tab to render tasks.md using trpc.speckit.getArtifact in src/renderer/features/speckit/components/current-branch-section.tsx
+- [X] T166 [V2] Wire Implement tab to show task list by phase (only if tasks.md exists) in src/renderer/features/speckit/components/current-branch-section.tsx
+
+### Implement Step - Collapsible Phases (FR-040, FR-041)
+
+- [X] T167 [V2] Refactor ImplementStep to group tasks by phase instead of flat list in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T168 [V2] Parse phase headers from tasks.md (e.g., "## Phase 0: Submodule Relocation") in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T169 [V2] Create PhaseSection component with collapsible/expandable UI using Radix Collapsible in src/renderer/features/speckit/components/phase-section.tsx
+- [X] T170 [V2] Display phase number and title in PhaseSection header (e.g., "Phase 0: Submodule Relocation") in src/renderer/features/speckit/components/phase-section.tsx
+- [X] T171 [V2] Implement collapse/expand toggle in PhaseSection header in src/renderer/features/speckit/components/phase-section.tsx
+- [X] T172 [V2] Group tasks under their respective phases in ImplementStep rendering in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+
+### Phase & Task Copy Buttons (FR-042, FR-043, FR-044, FR-045)
+
+- [X] T173 [V2] Add phase-level copy button to PhaseSection header in src/renderer/features/speckit/components/phase-section.tsx
+- [X] T174 [V2] Implement phase copy button onClick to copy `/speckit.implement [branch-name] Phase-[N]` format in src/renderer/features/speckit/components/phase-section.tsx
+- [X] T175 [V2] Add tooltip "Copy command to implement all tasks in this phase" to phase copy button in src/renderer/features/speckit/components/phase-section.tsx
+- [X] T176 [V2] Update task copy button to include branch name: `/speckit.implement [branch-name] [task-id]` in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T177 [V2] Add tooltip "Copy command to implement this specific task" to task copy button in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T178 [V2] Get current branch name using trpc.speckit.getCurrentBranch for copy button format in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T179 [V2] Update toast notification message to reflect new format with branch name in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+
+### Current Branch Section Integration
+
+- [X] T180 [V2] Apply same collapsible phase structure to Implement tab in CurrentBranchSection (reuse PhaseSection component) in src/renderer/features/speckit/components/current-branch-section.tsx
+- [X] T181 [V2] Ensure phase/task copy buttons work consistently in both WorkflowModal and CurrentBranchSection contexts in src/renderer/features/speckit/components/phase-section.tsx
+
+**Checkpoint**: v2 complete - UI refactored with improved structure and usability
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -375,6 +434,7 @@
 - **Phase 7 (US5 - Submodule)**: Depends on Phase 0 completion - Verification only, can run anytime after Phase 0
 - **Phase 8 (Initialization)**: Depends on Phase 2 completion - Should complete before US2/US3/US4 integration testing
 - **Phase 9 (Polish)**: Depends on all desired user stories being complete
+- **Phase 10 (v2 Refinements)**: Depends on Phases 3-6 completion - Refactors existing UI components
 
 ### User Story Dependencies
 
@@ -505,7 +565,7 @@ With 4 developers after Phase 2 complete:
 - US1 provides access point - should complete before US2/US3/US4 can be tested
 - US4 is highest value (P1) but requires US1 + Phase 8 (Initialization)
 - All file paths are absolute from repository root
-- **Total tasks: 163** (10 phases + 5 user stories + polish)
+- **Total tasks: 193** (11 phases: 0-10, including v2 refinements)
 - **Workflow Completion**: tasks.md exists = workflow at "implement" step (complete)
 - **Implement Step**: Shows task list with copy buttons; user runs `/speckit.implement [task-id]` in new chat
 - **Free Navigation**: Users can click any completed stepper step to return and modify
