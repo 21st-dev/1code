@@ -62,62 +62,62 @@
 
 ### Backend Utilities
 
-- [ ] T014 [P] Create src/main/lib/speckit/ directory for ii-spec integration utilities
-- [ ] T015 [P] Implement getCurrentBranch() function in src/main/lib/speckit/file-utils.ts to read current Git branch using execSync
-- [ ] T016 [P] Implement parseFeatureBranch() function in src/main/lib/speckit/file-utils.ts to extract feature number and name from branch pattern /^(\d{3})-(.+)$/
-- [ ] T017 [P] Implement checkFileExists() function in src/main/lib/speckit/file-utils.ts using fs.existsSync()
-- [ ] T018 [P] Implement readFileContent() function in src/main/lib/speckit/file-utils.ts using fs.readFileSync()
-- [ ] T019 [P] Implement listFeatureDirectories() function in src/main/lib/speckit/file-utils.ts to list specs/ directory and filter by /^\d{3}-/ pattern
-- [ ] T020 [P] Implement detectWorkflowState() function in src/main/lib/speckit/state-detector.ts using file-based state detection logic from plan.md
-- [ ] T021 [P] Implement parseClarificationQuestions() function in src/main/lib/speckit/state-detector.ts to extract [NEEDS CLARIFICATION: ...] markers from spec.md
-- [ ] T022 [P] Implement executeCommand() function in src/main/lib/speckit/command-executor.ts to spawn ii-spec commands using child_process.spawn()
-- [ ] T023 [P] Implement getExecutionEmitter() function in src/main/lib/speckit/command-executor.ts to retrieve EventEmitter for streaming output
-- [ ] T024 [P] Implement cancelExecution() function in src/main/lib/speckit/command-executor.ts to kill running subprocess
+- [X] T014 [P] Create src/main/lib/speckit/ directory for ii-spec integration utilities
+- [X] T015 [P] Implement getCurrentBranch() function in src/main/lib/speckit/file-utils.ts to read current Git branch using execSync
+- [X] T016 [P] Implement parseFeatureBranch() function in src/main/lib/speckit/file-utils.ts to extract feature number and name from branch pattern /^(\d{3})-(.+)$/
+- [X] T017 [P] Implement checkFileExists() function in src/main/lib/speckit/file-utils.ts using fs.existsSync()
+- [X] T018 [P] Implement readFileContent() function in src/main/lib/speckit/file-utils.ts using fs.readFileSync()
+- [X] T019 [P] Implement listFeatureDirectories() function in src/main/lib/speckit/file-utils.ts to list specs/ directory and filter by /^\d{3}-/ pattern
+- [X] T020 [P] Implement detectWorkflowState() function in src/main/lib/speckit/state-detector.ts using file-based state detection logic from plan.md
+- [X] T021 [P] Implement parseClarificationQuestions() function in src/main/lib/speckit/state-detector.ts to extract [NEEDS CLARIFICATION: ...] markers from spec.md
+- [X] T022 [P] Implement executeCommand() function in src/main/lib/speckit/command-executor.ts to spawn ii-spec commands using child_process.spawn()
+- [X] T023 [P] Implement getExecutionEmitter() function in src/main/lib/speckit/command-executor.ts to retrieve EventEmitter for streaming output
+- [X] T024 [P] Implement cancelExecution() function in src/main/lib/speckit/command-executor.ts to kill running subprocess
 
 ### tRPC Router (15 Procedures)
 
-- [ ] T025 Create src/main/lib/trpc/routers/speckit.ts with router skeleton and Zod schemas from contracts/trpc-router.ts
-- [ ] T026 [P] Implement checkInitialization procedure in src/main/lib/trpc/routers/speckit.ts checking .specify/ directory structure
-- [ ] T027 [P] Implement initializeSpecKit procedure in src/main/lib/trpc/routers/speckit.ts executing `specify init . --ai claude`
-- [ ] T028 Implement getWorkflowState procedure in src/main/lib/trpc/routers/speckit.ts using detectWorkflowState() from state-detector.ts
-- [ ] T029 [P] Implement getConstitution procedure in src/main/lib/trpc/routers/speckit.ts reading .specify/memory/constitution.md
-- [ ] T030 [P] Implement getFeaturesList procedure in src/main/lib/trpc/routers/speckit.ts using listFeatureDirectories() and reading descriptions from spec.md files
-- [ ] T031 [P] Implement getArtifact procedure in src/main/lib/trpc/routers/speckit.ts reading specs/{branch}/{artifactType}.md files
-- [ ] T032 [P] Implement getFeatureDescription procedure in src/main/lib/trpc/routers/speckit.ts parsing spec.md first paragraph
-- [ ] T033 Implement executeCommand procedure in src/main/lib/trpc/routers/speckit.ts using executeCommand() from command-executor.ts
-- [ ] T034 Implement onCommandOutput subscription in src/main/lib/trpc/routers/speckit.ts using observable pattern and getExecutionEmitter()
-- [ ] T035 [P] Implement cancelCommand procedure in src/main/lib/trpc/routers/speckit.ts using cancelExecution()
-- [ ] T036 [P] Implement getCurrentBranch procedure in src/main/lib/trpc/routers/speckit.ts using getCurrentBranch() from file-utils.ts
-- [ ] T037 [P] Implement getFeatureBranches procedure in src/main/lib/trpc/routers/speckit.ts listing all branches matching /^\d{3}-/ pattern
-- [ ] T038 [P] Implement switchBranch procedure in src/main/lib/trpc/routers/speckit.ts executing `git checkout <branch>`
-- [ ] T039 [P] Implement openFileInEditor procedure in src/main/lib/trpc/routers/speckit.ts using Electron shell.openPath()
-- [ ] T040 [P] Implement watchDirectory procedure in src/main/lib/trpc/routers/speckit.ts using fs.watch() on specs/ or .specify/
-- [ ] T041 [P] Implement onFileChange subscription in src/main/lib/trpc/routers/speckit.ts emitting file change events
-- [ ] T042 Register speckit router in src/main/lib/trpc/index.ts appRouter
+- [X] T025 Create src/main/lib/trpc/routers/speckit.ts with router skeleton and Zod schemas from contracts/trpc-router.ts
+- [X] T026 [P] Implement checkInitialization procedure in src/main/lib/trpc/routers/speckit.ts checking .specify/ directory structure
+- [X] T027 [P] Implement initializeSpecKit procedure in src/main/lib/trpc/routers/speckit.ts executing `specify init . --ai claude`
+- [X] T028 Implement getWorkflowState procedure in src/main/lib/trpc/routers/speckit.ts using detectWorkflowState() from state-detector.ts
+- [X] T029 [P] Implement getConstitution procedure in src/main/lib/trpc/routers/speckit.ts reading .specify/memory/constitution.md
+- [X] T030 [P] Implement getFeaturesList procedure in src/main/lib/trpc/routers/speckit.ts using listFeatureDirectories() and reading descriptions from spec.md files
+- [X] T031 [P] Implement getArtifact procedure in src/main/lib/trpc/routers/speckit.ts reading specs/{branch}/{artifactType}.md files
+- [X] T032 [P] Implement getFeatureDescription procedure in src/main/lib/trpc/routers/speckit.ts parsing spec.md first paragraph
+- [X] T033 Implement executeCommand procedure in src/main/lib/trpc/routers/speckit.ts using executeCommand() from command-executor.ts
+- [X] T034 Implement onCommandOutput subscription in src/main/lib/trpc/routers/speckit.ts using observable pattern and getExecutionEmitter()
+- [X] T035 [P] Implement cancelCommand procedure in src/main/lib/trpc/routers/speckit.ts using cancelExecution()
+- [X] T036 [P] Implement getCurrentBranch procedure in src/main/lib/trpc/routers/speckit.ts using getCurrentBranch() from file-utils.ts
+- [X] T037 [P] Implement getFeatureBranches procedure in src/main/lib/trpc/routers/speckit.ts listing all branches matching /^\d{3}-/ pattern
+- [X] T038 [P] Implement switchBranch procedure in src/main/lib/trpc/routers/speckit.ts executing `git checkout <branch>`
+- [X] T039 [P] Implement openFileInEditor procedure in src/main/lib/trpc/routers/speckit.ts using Electron shell.openPath()
+- [X] T040 [P] Implement watchDirectory procedure in src/main/lib/trpc/routers/speckit.ts using fs.watch() on specs/ or .specify/
+- [X] T041 [P] Implement onFileChange subscription in src/main/lib/trpc/routers/speckit.ts emitting file change events
+- [X] T042 Register speckit router in src/main/lib/trpc/index.ts appRouter
 
 ### Frontend Types (Shared by All Stories)
 
-- [ ] T043 [P] Create src/renderer/features/speckit/types/ directory
-- [ ] T044 [P] Create ArtifactPresenceSchema and type in src/renderer/features/speckit/types/feature.ts
-- [ ] T045 [P] Create SpecKitFeatureSchema and type in src/renderer/features/speckit/types/feature.ts with Zod validation
-- [ ] T046 [P] Create ConstitutionSchema and type in src/renderer/features/speckit/types/constitution.ts
-- [ ] T047 [P] Create WorkflowStateSchema and type in src/renderer/features/speckit/types/workflow-state.ts with all workflow step names
-- [ ] T048 [P] Create ClarificationQuestionSchema and type in src/renderer/features/speckit/types/workflow-state.ts
-- [ ] T049 [P] Create InitializationStatusSchema and type in src/renderer/features/speckit/types/initialization.ts
-- [ ] T050 [P] Create FeatureTableRow interface in src/renderer/features/speckit/types/ui-models.ts
-- [ ] T051 [P] Create ConstitutionPreview interface in src/renderer/features/speckit/types/ui-models.ts
-- [ ] T052 Export all types from src/renderer/features/speckit/types/index.ts
+- [X] T043 [P] Create src/renderer/features/speckit/types/ directory
+- [X] T044 [P] Create ArtifactPresenceSchema and type in src/renderer/features/speckit/types/feature.ts
+- [X] T045 [P] Create SpecKitFeatureSchema and type in src/renderer/features/speckit/types/feature.ts with Zod validation
+- [X] T046 [P] Create ConstitutionSchema and type in src/renderer/features/speckit/types/constitution.ts
+- [X] T047 [P] Create WorkflowStateSchema and type in src/renderer/features/speckit/types/workflow-state.ts with all workflow step names
+- [X] T048 [P] Create ClarificationQuestionSchema and type in src/renderer/features/speckit/types/workflow-state.ts
+- [X] T049 [P] Create InitializationStatusSchema and type in src/renderer/features/speckit/types/initialization.ts
+- [X] T050 [P] Create FeatureTableRow interface in src/renderer/features/speckit/types/ui-models.ts
+- [X] T051 [P] Create ConstitutionPreview interface in src/renderer/features/speckit/types/ui-models.ts
+- [X] T052 Export all types from src/renderer/features/speckit/types/index.ts
 
 ### Frontend Atoms (Shared UI State)
 
-- [ ] T053 Create src/renderer/features/speckit/atoms/index.ts with speckitModalOpenAtom (boolean)
-- [ ] T054 [P] Add speckitCurrentDocumentAtom to src/renderer/features/speckit/atoms/index.ts with type { type, content } | null
-- [ ] T055 [P] Add speckitLoadingAtom to src/renderer/features/speckit/atoms/index.ts (boolean)
+- [X] T053 Create src/renderer/features/speckit/atoms/index.ts with speckitModalOpenAtom (boolean)
+- [X] T054 [P] Add speckitCurrentDocumentAtom to src/renderer/features/speckit/atoms/index.ts with type { type, content } | null
+- [X] T055 [P] Add speckitLoadingAtom to src/renderer/features/speckit/atoms/index.ts (boolean)
 
 ### Shared Components & Utilities
 
-- [ ] T056 [P] Create extractPrincipleNames() utility function in src/renderer/features/speckit/utils/constitution-parser.ts to extract principle headers from markdown
-- [ ] T057 [P] Create markdown rendering component MarkdownView in src/renderer/features/speckit/components/markdown-view.tsx using react-markdown with remark-gfm and syntax highlighting
+- [X] T056 [P] Create extractPrincipleNames() utility function in src/renderer/features/speckit/utils/constitution-parser.ts to extract principle headers from markdown
+- [X] T057 [P] Create markdown rendering component MarkdownView in src/renderer/features/speckit/components/markdown-view.tsx using react-markdown with remark-gfm and syntax highlighting
 
 **Checkpoint**: Foundation complete - all user stories can now proceed in parallel
 
@@ -131,14 +131,14 @@
 
 ### Implementation for User Story 1
 
-- [ ] T058 [P] [US1] Create src/renderer/features/speckit/components/ directory
-- [ ] T059 [US1] Create PlanPage component skeleton in src/renderer/features/speckit/components/plan-page.tsx with basic layout structure
-- [ ] T060 [US1] Add SpecKit icon button (FileText from lucide-react) to top action bar in src/renderer/features/layout/top-action-bar.tsx in same group as Git and Terminal buttons
-- [ ] T061 [US1] Create drawer state atom speckitDrawerOpenAtom in src/renderer/features/speckit/atoms/index.ts or reuse existing drawer atoms
-- [ ] T062 [US1] Wire SpecKit icon button onClick to toggle drawer open/closed in src/renderer/features/layout/top-action-bar.tsx
-- [ ] T063 [US1] Add 'speckit' case to drawer content switch statement in src/renderer/features/layout/drawer-content.tsx rendering PlanPage component
-- [ ] T064 [US1] Implement drawer content switching logic to show PlanPage when activeView is 'speckit' in src/renderer/features/layout/drawer-content.tsx
-- [ ] T065 [US1] Add toggle behavior so clicking SpecKit button when drawer is open with Plan page closes the drawer in src/renderer/features/layout/top-action-bar.tsx
+- [X] T058 [P] [US1] Create src/renderer/features/speckit/components/ directory
+- [X] T059 [US1] Create PlanPage component skeleton in src/renderer/features/speckit/components/plan-page.tsx with basic layout structure
+- [X] T060 [US1] Add SpecKit icon button (FileText from lucide-react) to sub-chat-selector.tsx in same group as Terminal button
+- [X] T061 [US1] Create drawer state atom speckitDrawerOpenAtom in src/renderer/features/speckit/atoms/index.ts
+- [X] T062 [US1] Wire SpecKit icon button onClick to toggle drawer open/closed via props from active-chat.tsx
+- [X] T063 [US1] Create SpecKitSidebar component in src/renderer/features/speckit/components/speckit-sidebar.tsx using ResizableSidebar pattern
+- [X] T064 [US1] Add SpecKitSidebar to active-chat.tsx rendering PlanPage when drawer is open
+- [X] T065 [US1] Add toggle behavior so clicking SpecKit button when drawer is open closes it
 
 **Checkpoint**: User Story 1 complete - SpecKit icon button opens Plan page in right drawer with toggle functionality
 
@@ -154,76 +154,76 @@
 
 ### Workflow Modal (Full-Screen Interface)
 
-- [ ] T066 [P] [US4] Create WorkflowModal component in src/renderer/features/speckit/components/workflow-modal.tsx with full-screen dialog layout
-- [ ] T067 [P] [US4] Create workflow stepper UI in src/renderer/features/speckit/components/workflow-stepper.tsx showing: Constitution | Specify | Clarify | Plan | Tasks | Implement
-- [ ] T068 [US4] Add dual-pane layout to WorkflowModal with chat pane (left) and document pane (right) in src/renderer/features/speckit/components/workflow-modal.tsx
-- [ ] T069 [US4] Create chat pane component ChatPane in src/renderer/features/speckit/components/chat-pane.tsx for command execution and output streaming
-- [ ] T070 [US4] Create document pane component DocumentPane in src/renderer/features/speckit/components/document-pane.tsx for live artifact preview using MarkdownView
-- [ ] T071 [US4] Wire speckitModalOpenAtom to WorkflowModal open/close state in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T066 [P] [US4] Create WorkflowModal component in src/renderer/features/speckit/components/workflow-modal.tsx with full-screen dialog layout
+- [X] T067 [P] [US4] Create workflow stepper UI in src/renderer/features/speckit/components/workflow-stepper.tsx showing: Constitution | Specify | Clarify | Plan | Tasks | Implement
+- [X] T068 [US4] Add dual-pane layout to WorkflowModal with chat pane (left) and document pane (right) in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T069 [US4] Create chat pane component ChatPane in src/renderer/features/speckit/components/chat-pane.tsx for command execution and output streaming
+- [X] T070 [US4] Create document pane component DocumentPane in src/renderer/features/speckit/components/document-pane.tsx for live artifact preview using MarkdownView
+- [X] T071 [US4] Wire speckitModalOpenAtom to WorkflowModal open/close state in src/renderer/features/speckit/components/workflow-modal.tsx
 
 ### Workflow State Management
 
-- [ ] T072 [P] [US4] Create useWorkflowState custom hook in src/renderer/features/speckit/hooks/use-workflow-state.ts wrapping trpc.speckit.getWorkflowState.useQuery
-- [ ] T073 [P] [US4] Create useExecuteCommand custom hook in src/renderer/features/speckit/hooks/use-execute-command.ts wrapping trpc.speckit.executeCommand.useMutation
-- [ ] T074 [P] [US4] Create useCommandOutput custom hook in src/renderer/features/speckit/hooks/use-command-output.ts wrapping trpc.speckit.onCommandOutput.useSubscription
+- [X] T072 [P] [US4] Create useWorkflowState custom hook in src/renderer/features/speckit/hooks/use-workflow-state.ts wrapping trpc.speckit.getWorkflowState.useQuery
+- [X] T073 [P] [US4] Create useExecuteCommand custom hook in src/renderer/features/speckit/hooks/use-execute-command.ts wrapping trpc.speckit.executeCommand.useMutation
+- [X] T074 [P] [US4] Create useCommandOutput custom hook in src/renderer/features/speckit/hooks/use-command-output.ts wrapping trpc.speckit.onCommandOutput.useSubscription
 
 ### Workflow Steps Implementation
 
-- [ ] T075 [US4] Create SpecifyStep component in src/renderer/features/speckit/components/workflow-steps/specify-step.tsx with feature description input form
-- [ ] T076 [US4] Implement form submit handler in SpecifyStep calling useExecuteCommand with `/speckit.specify` command in src/renderer/features/speckit/components/workflow-steps/specify-step.tsx
-- [ ] T077 [US4] Create ClarifyStep component in src/renderer/features/speckit/components/workflow-steps/clarify-step.tsx displaying clarification questions from WorkflowState
-- [ ] T078 [US4] Implement clarification question answer form in ClarifyStep with textarea for each question in src/renderer/features/speckit/components/workflow-steps/clarify-step.tsx
-- [ ] T079 [US4] Implement form submit handler in ClarifyStep calling useExecuteCommand with `/speckit.clarify` command and answers in src/renderer/features/speckit/components/workflow-steps/clarify-step.tsx
-- [ ] T080 [US4] Create PlanStep component in src/renderer/features/speckit/components/workflow-steps/plan-step.tsx with auto-initiate plan generation button
-- [ ] T081 [US4] Implement plan approval UI in PlanStep showing generated plan.md with approve/regenerate actions in src/renderer/features/speckit/components/workflow-steps/plan-step.tsx
-- [ ] T082 [US4] Create TasksStep component in src/renderer/features/speckit/components/workflow-steps/tasks-step.tsx with auto-generate tasks button
-- [ ] T083 [US4] Implement tasks generation completion UI in TasksStep showing success message and link to tasks.md in src/renderer/features/speckit/components/workflow-steps/tasks-step.tsx
+- [X] T075 [US4] Create SpecifyStep component in src/renderer/features/speckit/components/workflow-steps/specify-step.tsx with feature description input form
+- [X] T076 [US4] Implement form submit handler in SpecifyStep calling useExecuteCommand with `/speckit.specify` command in src/renderer/features/speckit/components/workflow-steps/specify-step.tsx
+- [X] T077 [US4] Create ClarifyStep component in src/renderer/features/speckit/components/workflow-steps/clarify-step.tsx displaying clarification questions from WorkflowState
+- [X] T078 [US4] Implement clarification question answer form in ClarifyStep with textarea for each question in src/renderer/features/speckit/components/workflow-steps/clarify-step.tsx
+- [X] T079 [US4] Implement form submit handler in ClarifyStep calling useExecuteCommand with `/speckit.clarify` command and answers in src/renderer/features/speckit/components/workflow-steps/clarify-step.tsx
+- [X] T080 [US4] Create PlanStep component in src/renderer/features/speckit/components/workflow-steps/plan-step.tsx with auto-initiate plan generation button
+- [X] T081 [US4] Implement plan approval UI in PlanStep showing generated plan.md with approve/regenerate actions in src/renderer/features/speckit/components/workflow-steps/plan-step.tsx
+- [X] T082 [US4] Create TasksStep component in src/renderer/features/speckit/components/workflow-steps/tasks-step.tsx with auto-generate tasks button
+- [X] T083 [US4] Implement tasks generation completion UI in TasksStep showing success message and link to tasks.md in src/renderer/features/speckit/components/workflow-steps/tasks-step.tsx
 
 ### Command Execution & Output Streaming
 
-- [ ] T084 [US4] Implement real-time command output streaming display in ChatPane using useCommandOutput hook in src/renderer/features/speckit/components/chat-pane.tsx
-- [ ] T085 [US4] Add stdout/stderr differentiation styling in ChatPane (stdout: normal, stderr: error red) in src/renderer/features/speckit/components/chat-pane.tsx
-- [ ] T086 [US4] Implement command cancellation button in ChatPane calling trpc.speckit.cancelCommand in src/renderer/features/speckit/components/chat-pane.tsx
-- [ ] T087 [US4] Add loading/executing state indicators with progress spinners in ChatPane in src/renderer/features/speckit/components/chat-pane.tsx
+- [X] T084 [US4] Implement real-time command output streaming display in ChatPane using useCommandOutput hook in src/renderer/features/speckit/components/chat-pane.tsx
+- [X] T085 [US4] Add stdout/stderr differentiation styling in ChatPane (stdout: normal, stderr: error red) in src/renderer/features/speckit/components/chat-pane.tsx
+- [X] T086 [US4] Implement command cancellation button in ChatPane calling trpc.speckit.cancelCommand in src/renderer/features/speckit/components/chat-pane.tsx
+- [X] T087 [US4] Add loading/executing state indicators with progress spinners in ChatPane in src/renderer/features/speckit/components/chat-pane.tsx
 
 ### Live Artifact Preview
 
-- [ ] T088 [US4] Implement auto-refresh artifact content in DocumentPane polling trpc.speckit.getArtifact when workflow step completes in src/renderer/features/speckit/components/document-pane.tsx
-- [ ] T089 [US4] Add artifact type tabs (Spec | Plan | Research | Tasks) to DocumentPane in src/renderer/features/speckit/components/document-pane.tsx
-- [ ] T090 [US4] Wire artifact tabs to speckitCurrentDocumentAtom for display in src/renderer/features/speckit/components/document-pane.tsx
+- [X] T088 [US4] Implement auto-refresh artifact content in DocumentPane polling trpc.speckit.getArtifact when workflow step completes in src/renderer/features/speckit/components/document-pane.tsx
+- [X] T089 [US4] Add artifact type tabs (Spec | Plan | Research | Tasks) to DocumentPane in src/renderer/features/speckit/components/document-pane.tsx
+- [X] T090 [US4] Wire artifact tabs to speckitCurrentDocumentAtom for display in src/renderer/features/speckit/components/document-pane.tsx
 
 ### Implement Step (Task List with Copy Buttons)
 
-- [ ] T090.1 [US4] Create ImplementStep component in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx with task list layout
-- [ ] T090.2 [US4] Implement task list parsing from tasks.md file in ImplementStep using trpc.speckit.getArtifact in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
-- [ ] T090.3 [US4] Display each task with full description (task ID, description text, file paths) in ImplementStep in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
-- [ ] T090.4 [US4] Add copy button per task that copies task reference (e.g., "T001") to clipboard using navigator.clipboard.writeText() in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
-- [ ] T090.5 [US4] Show toast notification on successful copy with message "Task reference copied. Use /speckit.implement [task-id] in a new chat" in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T090.1 [US4] Create ImplementStep component in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx with task list layout
+- [X] T090.2 [US4] Implement task list parsing from tasks.md file in ImplementStep using trpc.speckit.getArtifact in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T090.3 [US4] Display each task with full description (task ID, description text, file paths) in ImplementStep in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T090.4 [US4] Add copy button per task that copies task reference (e.g., "T001") to clipboard using navigator.clipboard.writeText() in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
+- [X] T090.5 [US4] Show toast notification on successful copy with message "Task reference copied. Use /speckit.implement [task-id] in a new chat" in src/renderer/features/speckit/components/workflow-steps/implement-step.tsx
 
 ### Stale Warning & Skip Warning Banners
 
-- [ ] T090.6 [US4] Create StaleWarningBanner component in src/renderer/features/speckit/components/stale-warning-banner.tsx showing non-blocking warning when downstream artifacts exist
-- [ ] T090.7 [US4] Add stale detection logic to WorkflowModal checking if current step has downstream artifacts (e.g., navigating to Specify when plan.md exists) in src/renderer/features/speckit/components/workflow-modal.tsx
-- [ ] T090.8 [US4] Create SkipClarifyWarningBanner component in src/renderer/features/speckit/components/skip-clarify-warning.tsx showing warning when user tries to skip Clarify step
-- [ ] T090.9 [US4] Add skip detection logic when user clicks Plan step before completing Clarify, showing warning but allowing continue in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T090.6 [US4] Create StaleWarningBanner component in src/renderer/features/speckit/components/stale-warning-banner.tsx showing non-blocking warning when downstream artifacts exist
+- [X] T090.7 [US4] Add stale detection logic to WorkflowModal checking if current step has downstream artifacts (e.g., navigating to Specify when plan.md exists) in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T090.8 [US4] Create SkipClarifyWarningBanner component in src/renderer/features/speckit/components/skip-clarify-warning.tsx showing warning when user tries to skip Clarify step
+- [X] T090.9 [US4] Add skip detection logic when user clicks Plan step before completing Clarify, showing warning but allowing continue in src/renderer/features/speckit/components/workflow-modal.tsx
 
 ### Stepper Navigation (Free Movement Between Completed Steps)
 
-- [ ] T090.10 [US4] Make stepper steps clickable for completed steps in src/renderer/features/speckit/components/workflow-stepper.tsx
-- [ ] T090.11 [US4] Implement step navigation handler that checks step completion before allowing navigation in src/renderer/features/speckit/components/workflow-stepper.tsx
-- [ ] T090.12 [US4] Integrate stale warning trigger when navigating backward to a previous step in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T090.10 [US4] Make stepper steps clickable for completed steps in src/renderer/features/speckit/components/workflow-stepper.tsx
+- [X] T090.11 [US4] Implement step navigation handler that checks step completion before allowing navigation in src/renderer/features/speckit/components/workflow-stepper.tsx
+- [X] T090.12 [US4] Integrate stale warning trigger when navigating backward to a previous step in src/renderer/features/speckit/components/workflow-modal.tsx
 
 ### Error Handling & Recovery
 
-- [ ] T091 [US4] Implement error message display in ChatPane showing ii-spec errors as-is from stderr in src/renderer/features/speckit/components/chat-pane.tsx
-- [ ] T092 [US4] Add error recovery suggestions UI (e.g., "Command failed - try again" with retry button) in ChatPane in src/renderer/features/speckit/components/chat-pane.tsx
-- [ ] T093 [US4] Implement workflow step failure handling preserving state and allowing resume in WorkflowModal in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T091 [US4] Implement error message display in ChatPane showing ii-spec errors as-is from stderr in src/renderer/features/speckit/components/chat-pane.tsx
+- [X] T092 [US4] Add error recovery suggestions UI (e.g., "Command failed - try again" with retry button) in ChatPane in src/renderer/features/speckit/components/chat-pane.tsx
+- [X] T093 [US4] Implement workflow step failure handling preserving state and allowing resume in WorkflowModal in src/renderer/features/speckit/components/workflow-modal.tsx
 
 ### Integration with Plan Page
 
-- [ ] T094 [US4] Add "New Feature" button to PlanPage opening WorkflowModal in src/renderer/features/speckit/components/plan-page.tsx
-- [ ] T095 [US4] Wire "New Feature" button onClick to set speckitModalOpenAtom to true in src/renderer/features/speckit/components/plan-page.tsx
-- [ ] T096 [US4] Implement features list refresh after workflow completion using React Query invalidation in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T094 [US4] Add "New Feature" button to PlanPage opening WorkflowModal in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T095 [US4] Wire "New Feature" button onClick to set speckitModalOpenAtom to true in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T096 [US4] Implement features list refresh after workflow completion using React Query invalidation in src/renderer/features/speckit/components/plan-page.tsx
 
 **Checkpoint**: User Story 4 complete - users can create new features through full guided workflow with real-time feedback
 
