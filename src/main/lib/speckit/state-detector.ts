@@ -1,13 +1,30 @@
 /**
- * Workflow state detection for ii-spec integration
+ * Workflow State Detection for ii-spec Integration
  *
- * Detects the current workflow state by:
- * 1. Reading current Git branch
- * 2. Parsing feature number/name from branch
- * 3. Checking which artifact files exist
- * 4. Parsing spec.md for clarification markers
+ * Core state detection module that determines the current workflow state
+ * by reading from the file system and Git. This is the source of truth
+ * for workflow progression.
  *
- * NO database or memory state - all read from file system
+ * ## Detection Process
+ *
+ * 1. **Git Branch Detection**: Read current Git branch name
+ * 2. **Feature Parsing**: Extract feature number/name from branch (e.g., "001-my-feature")
+ * 3. **Artifact Detection**: Check which files exist in specs/{branch}/
+ * 4. **Clarification Check**: Parse spec.md for [NEEDS CLARIFICATION] markers
+ * 5. **Step Determination**: Calculate current workflow step based on artifacts
+ *
+ * ## Error Handling
+ *
+ * This module uses graceful degradation - if Git or file operations fail,
+ * it returns a safe default state rather than throwing errors. This ensures
+ * the UI remains functional even when the project is not a Git repository
+ * or when files are temporarily inaccessible.
+ *
+ * ## No Persistent State
+ *
+ * All state is derived from the file system at read time. There is no
+ * database, cache, or in-memory state management. This ensures the UI
+ * always reflects the actual project state.
  *
  * @see specs/001-speckit-ui-integration/II_SPEC_NATIVE_ARCHITECTURE.md
  */
@@ -186,40 +203,64 @@ function determineCurrentStep(
  * - [NEEDS CLARIFICATION: question text]
  * - [NEEDS CLARIFICATION] question text
  *
+ * ## Error Handling
+ *
+ * This function handles corrupted or malformed spec.md files gracefully:
+ * - Returns empty array if content is null/undefined/empty
+ * - Catches regex errors and returns empty array
+ * - Limits maximum number of questions to prevent infinite loops
+ * - Truncates excessively long question text
+ *
  * @param specContent - The spec.md file content
- * @returns Array of clarification questions
+ * @returns Array of clarification questions (empty array if parsing fails)
  */
 export function parseClarificationQuestions(
   specContent: string
 ): ClarificationQuestion[] {
-  const questions: ClarificationQuestion[] = []
-
-  // Pattern 1: [NEEDS CLARIFICATION: question text]
-  const pattern1 = /\[NEEDS CLARIFICATION:\s*([^\]]+)\]/gi
-  let match
-  let index = 1
-
-  while ((match = pattern1.exec(specContent)) !== null) {
-    questions.push({
-      question: match[1].trim(),
-      topic: `Clarification ${index}`,
-    })
-    index++
+  // Handle null/undefined/empty content gracefully
+  if (!specContent || typeof specContent !== "string") {
+    return []
   }
 
-  // Pattern 2: [NEEDS CLARIFICATION] followed by text
-  const pattern2 = /\[NEEDS CLARIFICATION\]\s*:?\s*([^\n\[\]]+)/gi
+  const questions: ClarificationQuestion[] = []
+  const MAX_QUESTIONS = 50 // Prevent excessive parsing
+  const MAX_QUESTION_LENGTH = 500 // Truncate overly long questions
 
-  while ((match = pattern2.exec(specContent)) !== null) {
-    const questionText = match[1].trim()
-    // Avoid duplicates
-    if (!questions.some((q) => q.question === questionText)) {
-      questions.push({
-        question: questionText,
-        topic: `Clarification ${index}`,
-      })
-      index++
+  try {
+    // Pattern 1: [NEEDS CLARIFICATION: question text]
+    const pattern1 = /\[NEEDS CLARIFICATION:\s*([^\]]+)\]/gi
+    let match
+    let index = 1
+
+    while ((match = pattern1.exec(specContent)) !== null && questions.length < MAX_QUESTIONS) {
+      const questionText = match[1].trim().slice(0, MAX_QUESTION_LENGTH)
+      if (questionText) {
+        questions.push({
+          question: questionText,
+          topic: `Clarification ${index}`,
+        })
+        index++
+      }
     }
+
+    // Pattern 2: [NEEDS CLARIFICATION] followed by text
+    const pattern2 = /\[NEEDS CLARIFICATION\]\s*:?\s*([^\n\[\]]+)/gi
+
+    while ((match = pattern2.exec(specContent)) !== null && questions.length < MAX_QUESTIONS) {
+      const questionText = match[1].trim().slice(0, MAX_QUESTION_LENGTH)
+      // Avoid duplicates and empty questions
+      if (questionText && !questions.some((q) => q.question === questionText)) {
+        questions.push({
+          question: questionText,
+          topic: `Clarification ${index}`,
+        })
+        index++
+      }
+    }
+  } catch (error) {
+    // If regex parsing fails, return empty array rather than crashing
+    console.error("[SpecKit] Failed to parse clarification questions:", error)
+    return []
   }
 
   return questions

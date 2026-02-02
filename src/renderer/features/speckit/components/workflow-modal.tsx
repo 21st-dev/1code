@@ -7,7 +7,7 @@
  * @see specs/001-speckit-ui-integration/plan.md
  */
 
-import { memo, useState, useCallback, useEffect, useMemo } from "react"
+import { memo, useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { X } from "lucide-react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
@@ -346,11 +346,17 @@ export const WorkflowModal = memo(function WorkflowModal({
       <DialogContent
         className="max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden"
         showCloseButton={false}
+        aria-labelledby="workflow-modal-title"
+        aria-describedby="workflow-modal-description"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 h-14 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold">SpecKit Workflow</h2>
+            <h2 id="workflow-modal-title" className="text-lg font-semibold">SpecKit Workflow</h2>
+            {/* Hidden description for screen readers */}
+            <span id="workflow-modal-description" className="sr-only">
+              Create and manage feature specifications using the SpecKit workflow. Current step: {effectiveStep}
+            </span>
             {branchName && (
               <span className="text-sm text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
                 {branchName}
@@ -368,15 +374,17 @@ export const WorkflowModal = memo(function WorkflowModal({
               compact
             />
 
-            {/* Close Button */}
+            {/* Close Button (Esc also closes via Radix Dialog) */}
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsOpen(false)}
               className="h-8 w-8"
+              aria-label="Close workflow modal (Escape)"
+              title="Close (Esc)"
             >
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
+              <X className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">Close workflow modal</span>
             </Button>
           </div>
         </div>

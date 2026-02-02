@@ -42,35 +42,41 @@ export const DocumentPane = memo(function DocumentPane({
   showConstitution = true,
   onOpenInEditor,
 }: DocumentPaneProps) {
-  // Query artifacts based on branch
+  // Query artifacts based on branch with caching (30 second stale time)
+  const cacheConfig = {
+    enabled: !!featureBranch,
+    refetchOnWindowFocus: false,
+    staleTime: 30000, // 30 seconds - prevents unnecessary refetches
+  }
+
   const { data: specArtifact, isLoading: specLoading, refetch: refetchSpec } =
     trpc.speckit.getArtifact.useQuery(
       { projectPath, featureBranch, artifactType: "spec" },
-      { enabled: !!featureBranch, refetchOnWindowFocus: false }
+      cacheConfig
     )
 
   const { data: planArtifact, isLoading: planLoading, refetch: refetchPlan } =
     trpc.speckit.getArtifact.useQuery(
       { projectPath, featureBranch, artifactType: "plan" },
-      { enabled: !!featureBranch, refetchOnWindowFocus: false }
+      cacheConfig
     )
 
   const { data: researchArtifact, isLoading: researchLoading, refetch: refetchResearch } =
     trpc.speckit.getArtifact.useQuery(
       { projectPath, featureBranch, artifactType: "research" },
-      { enabled: !!featureBranch, refetchOnWindowFocus: false }
+      cacheConfig
     )
 
   const { data: tasksArtifact, isLoading: tasksLoading, refetch: refetchTasks } =
     trpc.speckit.getArtifact.useQuery(
       { projectPath, featureBranch, artifactType: "tasks" },
-      { enabled: !!featureBranch, refetchOnWindowFocus: false }
+      cacheConfig
     )
 
   const { data: constitution, isLoading: constitutionLoading, refetch: refetchConstitution } =
     trpc.speckit.getConstitution.useQuery(
       { projectPath },
-      { enabled: showConstitution, refetchOnWindowFocus: false }
+      { enabled: showConstitution, refetchOnWindowFocus: false, staleTime: 30000 }
     )
 
   // Get current artifact data

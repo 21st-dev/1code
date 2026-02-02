@@ -1,13 +1,35 @@
 /**
  * SpecKit tRPC Router (ii-spec Native Architecture)
  *
- * This router reflects the ii-spec native approach where:
+ * This router provides the backend API for the SpecKit UI integration.
+ * It follows the ii-spec native approach where all workflow state is
+ * owned by ii-spec via the file system.
+ *
+ * ## Architecture
+ *
+ * - **State Detection**: Reads Git branch and file system to detect workflow state
+ * - **File Access**: Provides read access to artifacts (spec.md, plan.md, etc.)
+ * - **Command Execution**: Executes ii-spec commands via subprocess
+ * - **File Watching**: Monitors specs/ and .specify/ for changes
+ *
+ * ## Key Principles
+ *
  * - ii-spec owns all workflow state via files (specs/, .specify/)
  * - Current Git branch determines active feature
  * - UI reads files and executes ii-spec commands via subprocess
  * - NO custom workflow state management needed
  *
+ * ## Procedure Categories
+ *
+ * - **Initialization**: checkInitialization, initializeSpecKit, checkSubmodule
+ * - **State Detection**: getWorkflowState, getCurrentBranch
+ * - **File Reading**: getConstitution, getFeaturesList, getArtifact
+ * - **Command Execution**: executeCommand, onCommandOutput, cancelCommand
+ * - **Git Operations**: getFeatureBranches, switchBranch
+ * - **File System**: watchDirectory, onFileChange, openFileInEditor
+ *
  * @see specs/001-speckit-ui-integration/II_SPEC_NATIVE_ARCHITECTURE.md
+ * @module main/lib/trpc/routers/speckit
  */
 
 import { z } from "zod"
@@ -263,7 +285,24 @@ export const speckitRouter = router({
     }),
 
   /**
-   * List all features (from specs/ directory)
+   * List all features from the specs/ directory
+   *
+   * Reads the specs/ directory and returns a paginated list of features.
+   * Each feature includes its ID, name, branch, description, and artifact presence.
+   *
+   * @param projectPath - The project root path
+   * @param limit - Maximum number of features to return (default: 100)
+   * @param offset - Number of features to skip for pagination (default: 0)
+   * @returns Object with features array and total count for pagination
+   *
+   * @example
+   * ```typescript
+   * const { features, total } = await trpc.speckit.getFeaturesList.query({
+   *   projectPath: '/path/to/project',
+   *   limit: 10,
+   *   offset: 0,
+   * })
+   * ```
    */
   getFeaturesList: publicProcedure
     .input(

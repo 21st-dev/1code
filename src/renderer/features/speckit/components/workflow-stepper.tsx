@@ -7,7 +7,7 @@
  * @see specs/001-speckit-ui-integration/plan.md
  */
 
-import { memo, useCallback } from "react"
+import { memo, useCallback, useEffect, useState } from "react"
 import { Check, Circle, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -54,6 +54,11 @@ function isStepClickable(
 
 /**
  * WorkflowStepper - Progress indicator with navigation
+ *
+ * Features:
+ * - Visual step indicators with completion state
+ * - Clickable navigation to completed steps
+ * - Screen reader announcements for step transitions
  */
 export const WorkflowStepper = memo(function WorkflowStepper({
   currentStep,
@@ -62,6 +67,17 @@ export const WorkflowStepper = memo(function WorkflowStepper({
   enableNavigation = true,
   compact = false,
 }: WorkflowStepperProps) {
+  // Track step changes for screen reader announcements
+  const [announcement, setAnnouncement] = useState("")
+
+  // Announce step changes to screen readers
+  useEffect(() => {
+    const stepLabel = WORKFLOW_STEP_LABELS[activeStep || currentStep]
+    const isCompleted = isStepCompleted(activeStep || currentStep, currentStep)
+    const status = isCompleted ? "completed" : "current"
+    setAnnouncement(`Workflow step: ${stepLabel}, ${status}`)
+  }, [activeStep, currentStep])
+
   const handleStepClick = useCallback(
     (step: WorkflowStepName) => {
       if (isStepClickable(step, currentStep, enableNavigation)) {
@@ -83,6 +99,15 @@ export const WorkflowStepper = memo(function WorkflowStepper({
       role="navigation"
       aria-label="Workflow steps"
     >
+      {/* Live region for screen reader announcements */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {announcement}
+      </div>
       {visibleSteps.map((step, index) => {
         const isCompleted = isStepCompleted(step, currentStep)
         const isCurrent = step === currentStep

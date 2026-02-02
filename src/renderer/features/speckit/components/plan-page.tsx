@@ -19,6 +19,7 @@ import { ConstitutionSection } from "./constitution-section"
 import { FeaturesTable } from "./features-table"
 import { InitializationPrompt } from "./initialization-prompt"
 import { SubmoduleWarning } from "./submodule-warning"
+import { SpecKitErrorBoundary } from "./speckit-error-boundary"
 import { speckitModalOpenAtom, speckitWorkflowStartStepAtom } from "../atoms"
 import {
   WORKFLOW_STEP_LABELS,
@@ -174,8 +175,12 @@ export const PlanPage = memo(function PlanPage({
     )
   }
 
-  // Main workflow view
+  // Main workflow view - wrapped in error boundary
   return (
+    <SpecKitErrorBoundary
+      fallbackTitle="SpecKit Failed to Load"
+      onReset={() => refetchWorkflow()}
+    >
     <div className="flex flex-col h-full">
       {/* Submodule Warning Dialog (T124) */}
       <SubmoduleWarning
@@ -350,6 +355,7 @@ export const PlanPage = memo(function PlanPage({
         )}
       </div>
     </div>
+    </SpecKitErrorBoundary>
   )
 })
 

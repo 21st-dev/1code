@@ -983,13 +983,16 @@ export function SubChatSelector({
                 variant="ghost"
                 size="icon"
                 onClick={() => onOpenSpecKit?.()}
+                aria-label={isSpecKitOpen ? "Close SpecKit workflow panel" : "Open SpecKit workflow panel"}
+                aria-pressed={isSpecKitOpen}
+                aria-expanded={isSpecKitOpen}
                 className={cn(
                   "h-6 w-6 p-0 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center hover:bg-foreground/10",
                   isSpecKitOpen && "bg-foreground/10"
                 )}
               >
-                <FileText className="h-4 w-4" />
-                <span className="sr-only">SpecKit</span>
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">{isSpecKitOpen ? "Close SpecKit" : "Open SpecKit"}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">

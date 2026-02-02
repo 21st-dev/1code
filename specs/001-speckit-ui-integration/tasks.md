@@ -324,38 +324,38 @@
 
 ### Performance Optimization
 
-- [ ] T132 [P] Implement features list pagination in FeaturesTable using limit/offset from trpc.speckit.getFeaturesList in src/renderer/features/speckit/components/features-table.tsx
-- [ ] T133 [P] Add React.memo() to MarkdownView component preventing unnecessary re-renders in src/renderer/features/speckit/components/markdown-view.tsx
-- [ ] T134 [P] Implement artifact content caching in DocumentPane using React Query cache in src/renderer/features/speckit/components/document-pane.tsx
-- [ ] T135 [P] Add debouncing to workflow state polling reducing query frequency in src/renderer/features/speckit/hooks/use-workflow-state.ts
+- [X] T132 [P] Implement features list pagination in FeaturesTable using limit/offset from trpc.speckit.getFeaturesList in src/renderer/features/speckit/components/features-table.tsx
+- [X] T133 [P] Add React.memo() to MarkdownView component preventing unnecessary re-renders in src/renderer/features/speckit/components/markdown-view.tsx
+- [X] T134 [P] Implement artifact content caching in DocumentPane using React Query cache in src/renderer/features/speckit/components/document-pane.tsx
+- [X] T135 [P] Add debouncing to workflow state polling reducing query frequency in src/renderer/features/speckit/hooks/use-workflow-state.ts
 
 ### Accessibility
 
-- [ ] T136 [P] Add ARIA labels to SpecKit icon button in src/renderer/features/layout/top-action-bar.tsx
-- [ ] T137 [P] Add keyboard shortcuts for workflow modal (Esc to close) in src/renderer/features/speckit/components/workflow-modal.tsx
-- [ ] T138 [P] Implement focus management in modal dialogs trapping focus within modal in src/renderer/features/speckit/components/workflow-modal.tsx and src/renderer/features/speckit/components/feature-detail-modal.tsx
-- [ ] T139 [P] Add screen reader announcements for workflow step transitions in src/renderer/features/speckit/components/workflow-stepper.tsx
+- [X] T136 [P] Add ARIA labels to SpecKit icon button in src/renderer/features/agents/ui/sub-chat-selector.tsx
+- [X] T137 [P] Add keyboard shortcuts for workflow modal (Esc to close) in src/renderer/features/speckit/components/workflow-modal.tsx
+- [X] T138 [P] Implement focus management in modal dialogs trapping focus within modal in src/renderer/features/speckit/components/workflow-modal.tsx and src/renderer/features/speckit/components/feature-detail-modal.tsx
+- [X] T139 [P] Add screen reader announcements for workflow step transitions in src/renderer/features/speckit/components/workflow-stepper.tsx
 
 ### Error Handling & Edge Cases
 
-- [ ] T140 [P] Add error boundary around PlanPage catching rendering errors in src/renderer/features/speckit/components/plan-page.tsx
-- [ ] T141 [P] Implement graceful degradation when Git operations fail showing user-friendly error messages in all components calling Git procedures
-- [ ] T142 [P] Add file watcher integration refreshing features list when specs/ directory changes using trpc.speckit.watchDirectory in src/renderer/features/speckit/components/plan-page.tsx
-- [ ] T143 [P] Handle corrupted spec.md files showing parsing error instead of crashing in src/main/lib/speckit/state-detector.ts
+- [X] T140 [P] Add error boundary around PlanPage catching rendering errors in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T141 [P] Implement graceful degradation when Git operations fail showing user-friendly error messages in all components calling Git procedures
+- [X] T142 [P] Add file watcher integration refreshing features list when specs/ directory changes using trpc.speckit.watchDirectory in src/renderer/features/speckit/components/features-table.tsx
+- [X] T143 [P] Handle corrupted spec.md files showing parsing error instead of crashing in src/main/lib/speckit/state-detector.ts
 
 ### Documentation & Developer Experience
 
-- [ ] T144 [P] Add JSDoc comments to all tRPC procedures in src/main/lib/trpc/routers/speckit.ts
-- [ ] T145 [P] Add inline code comments explaining workflow state detection logic in src/main/lib/speckit/state-detector.ts
-- [ ] T146 [P] Add component props TypeScript interfaces with JSDoc in all new components
-- [ ] T147 Update quickstart.md with actual implementation file paths and verification steps
+- [X] T144 [P] Add JSDoc comments to all tRPC procedures in src/main/lib/trpc/routers/speckit.ts
+- [X] T145 [P] Add inline code comments explaining workflow state detection logic in src/main/lib/speckit/state-detector.ts
+- [X] T146 [P] Add component props TypeScript interfaces with JSDoc in all new components
+- [X] T147 Update quickstart.md with actual implementation file paths and verification steps
 
 ### Code Cleanup
 
-- [ ] T148 [P] Remove any TODO comments and replace with proper implementations or GitHub issues
-- [ ] T149 [P] Run linter and fix all warnings in src/main/lib/speckit/ and src/renderer/features/speckit/
-- [ ] T150 [P] Verify all imports use absolute paths via aliases (e.g., @/features/speckit) not relative paths
-- [ ] T151 Run quickstart.md validation steps ensuring all commands execute successfully
+- [X] T148 [P] Remove any TODO comments and replace with proper implementations or GitHub issues
+- [X] T149 [P] Run linter and fix all warnings in src/main/lib/speckit/ and src/renderer/features/speckit/
+- [X] T150 [P] Verify all imports use absolute paths via aliases (e.g., @/features/speckit) not relative paths
+- [X] T151 Run quickstart.md validation steps ensuring all commands execute successfully
 
 **Checkpoint**: Polish complete - feature ready for production use
 
