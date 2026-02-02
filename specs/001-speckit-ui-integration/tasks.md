@@ -237,16 +237,16 @@
 
 ### Implementation for User Story 2
 
-- [ ] T097 [P] [US2] Create ConstitutionSection component in src/renderer/features/speckit/components/constitution-section.tsx with section heading and view button
-- [ ] T098 [US2] Implement trpc.speckit.getConstitution query hook in ConstitutionSection component in src/renderer/features/speckit/components/constitution-section.tsx
-- [ ] T099 [US2] Add constitution preview UI showing extracted principle names using extractPrincipleNames() utility in src/renderer/features/speckit/components/constitution-section.tsx
-- [ ] T100 [US2] Create "View Constitution" button opening constitution in modal or expandable section in src/renderer/features/speckit/components/constitution-section.tsx
-- [ ] T101 [US2] Implement full constitution modal dialog ConstitutionModal in src/renderer/features/speckit/components/constitution-modal.tsx rendering markdown using MarkdownView component
-- [ ] T102 [US2] Wire "View Constitution" button to open ConstitutionModal in src/renderer/features/speckit/components/constitution-section.tsx
-- [ ] T103 [US2] Add "Edit Constitution" button in ConstitutionModal calling trpc.speckit.openFileInEditor with .specify/memory/constitution.md path in src/renderer/features/speckit/components/constitution-modal.tsx
-- [ ] T104 [US2] Implement "No constitution found" message when constitution doesn't exist with "Create Constitution" action in src/renderer/features/speckit/components/constitution-section.tsx
-- [ ] T105 [US2] Wire "Create Constitution" button to execute `/speckit.constitution` command in src/renderer/features/speckit/components/constitution-section.tsx
-- [ ] T106 [US2] Add ConstitutionSection to PlanPage layout above features section in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T097 [P] [US2] Create ConstitutionSection component in src/renderer/features/speckit/components/constitution-section.tsx with section heading and view button
+- [X] T098 [US2] Implement trpc.speckit.getConstitution query hook in ConstitutionSection component in src/renderer/features/speckit/components/constitution-section.tsx
+- [X] T099 [US2] Add constitution preview UI showing extracted principle names using extractPrincipleNames() utility in src/renderer/features/speckit/components/constitution-section.tsx
+- [X] T100 [US2] Create "View Constitution" button opening constitution in modal or expandable section in src/renderer/features/speckit/components/constitution-section.tsx
+- [X] T101 [US2] Implement full constitution modal dialog ConstitutionModal in src/renderer/features/speckit/components/constitution-modal.tsx rendering markdown using MarkdownView component
+- [X] T102 [US2] Wire "View Constitution" button to open ConstitutionModal in src/renderer/features/speckit/components/constitution-section.tsx
+- [X] T103 [US2] Add "Edit Constitution" button in ConstitutionModal calling trpc.speckit.openFileInEditor with .specify/memory/constitution.md path in src/renderer/features/speckit/components/constitution-modal.tsx
+- [X] T104 [US2] Implement "No constitution found" message when constitution doesn't exist with "Create Constitution" action in src/renderer/features/speckit/components/constitution-section.tsx
+- [X] T105 [US2] Wire "Create Constitution" button to execute `/speckit.constitution` command in src/renderer/features/speckit/components/constitution-section.tsx
+- [X] T106 [US2] Add ConstitutionSection to PlanPage layout above features section in src/renderer/features/speckit/components/plan-page.tsx
 
 **Checkpoint**: User Story 2 complete - users can view and edit constitution from Plan page
 
@@ -260,19 +260,19 @@
 
 ### Implementation for User Story 3
 
-- [ ] T107 [P] [US3] Create FeaturesTable component in src/renderer/features/speckit/components/features-table.tsx with table layout (ID | Name | Description | Branch | Artifacts)
-- [ ] T108 [US3] Implement trpc.speckit.getFeaturesList query hook in FeaturesTable component in src/renderer/features/speckit/components/features-table.tsx
-- [ ] T109 [US3] Add table row rendering mapping SpecKitFeature to FeatureTableRow display format in src/renderer/features/speckit/components/features-table.tsx
-- [ ] T110 [US3] Implement artifact presence indicators showing checkmarks for existing artifacts (spec ✓, plan ✓, etc.) in src/renderer/features/speckit/components/features-table.tsx
-- [ ] T111 [US3] Add "No features yet" empty state message when features list is empty in src/renderer/features/speckit/components/features-table.tsx
-- [ ] T112 [US3] Create feature selection onClick handler opening FeatureDetailModal in src/renderer/features/speckit/components/features-table.tsx
-- [ ] T113 [US3] Create FeatureDetailModal component in src/renderer/features/speckit/components/feature-detail-modal.tsx with tabs for Specification | Plan | Research | Tasks
-- [ ] T114 [US3] Implement artifact tabs switching in FeatureDetailModal calling trpc.speckit.getArtifact for selected artifact type in src/renderer/features/speckit/components/feature-detail-modal.tsx
-- [ ] T115 [US3] Add markdown rendering of artifact content in FeatureDetailModal using MarkdownView component in src/renderer/features/speckit/components/feature-detail-modal.tsx
-- [ ] T116 [US3] Implement "Open in Editor" button per artifact in FeatureDetailModal calling trpc.speckit.openFileInEditor in src/renderer/features/speckit/components/feature-detail-modal.tsx
-- [ ] T117 [US3] Add loading states for artifact content fetching in FeatureDetailModal in src/renderer/features/speckit/components/feature-detail-modal.tsx
-- [ ] T118 [US3] Add error handling for missing artifacts showing "Artifact not found" message in FeatureDetailModal in src/renderer/features/speckit/components/feature-detail-modal.tsx
-- [ ] T119 [US3] Add FeaturesTable to PlanPage layout below constitution section in src/renderer/features/speckit/components/plan-page.tsx
+- [X] T107 [P] [US3] Create FeaturesTable component in src/renderer/features/speckit/components/features-table.tsx with table layout (ID | Name | Description | Branch | Artifacts)
+- [X] T108 [US3] Implement trpc.speckit.getFeaturesList query hook in FeaturesTable component in src/renderer/features/speckit/components/features-table.tsx
+- [X] T109 [US3] Add table row rendering mapping SpecKitFeature to FeatureTableRow display format in src/renderer/features/speckit/components/features-table.tsx
+- [X] T110 [US3] Implement artifact presence indicators showing checkmarks for existing artifacts (spec ✓, plan ✓, etc.) in src/renderer/features/speckit/components/features-table.tsx
+- [X] T111 [US3] Add "No features yet" empty state message when features list is empty in src/renderer/features/speckit/components/features-table.tsx
+- [X] T112 [US3] Create feature selection onClick handler opening FeatureDetailModal in src/renderer/features/speckit/components/features-table.tsx
+- [X] T113 [US3] Create FeatureDetailModal component in src/renderer/features/speckit/components/feature-detail-modal.tsx with tabs for Specification | Plan | Research | Tasks
+- [X] T114 [US3] Implement artifact tabs switching in FeatureDetailModal calling trpc.speckit.getArtifact for selected artifact type in src/renderer/features/speckit/components/feature-detail-modal.tsx
+- [X] T115 [US3] Add markdown rendering of artifact content in FeatureDetailModal using MarkdownView component in src/renderer/features/speckit/components/feature-detail-modal.tsx
+- [X] T116 [US3] Implement "Open in Editor" button per artifact in FeatureDetailModal calling trpc.speckit.openFileInEditor in src/renderer/features/speckit/components/feature-detail-modal.tsx
+- [X] T117 [US3] Add loading states for artifact content fetching in FeatureDetailModal in src/renderer/features/speckit/components/feature-detail-modal.tsx
+- [X] T118 [US3] Add error handling for missing artifacts showing "Artifact not found" message in FeatureDetailModal in src/renderer/features/speckit/components/feature-detail-modal.tsx
+- [X] T119 [US3] Add FeaturesTable to PlanPage layout below constitution section in src/renderer/features/speckit/components/plan-page.tsx
 
 **Checkpoint**: User Story 3 complete - users can browse all features and view their artifacts
 

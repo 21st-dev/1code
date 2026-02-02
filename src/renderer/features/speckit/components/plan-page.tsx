@@ -7,7 +7,7 @@
  * @see specs/001-speckit-ui-integration/plan.md
  */
 
-import { memo, useCallback } from "react"
+import { memo, useCallback, useState } from "react"
 import { useSetAtom } from "jotai"
 import { FileText, Plus, RefreshCw, Sparkles, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,9 @@ import { cn } from "@/lib/utils"
 import { trpc } from "@/lib/trpc"
 import { MarkdownView } from "./markdown-view"
 import { WorkflowModal } from "./workflow-modal"
-import { speckitModalOpenAtom } from "../atoms"
+import { ConstitutionSection } from "./constitution-section"
+import { FeaturesTable } from "./features-table"
+import { speckitModalOpenAtom, speckitWorkflowStartStepAtom } from "../atoms"
 import {
   WORKFLOW_STEP_LABELS,
   WORKFLOW_STEPS_ORDER,
@@ -46,11 +48,18 @@ export const PlanPage = memo(function PlanPage({
   onClose,
 }: PlanPageProps) {
   const setModalOpen = useSetAtom(speckitModalOpenAtom)
+  const setWorkflowStartStep = useSetAtom(speckitWorkflowStartStepAtom)
 
   // Open workflow modal
   const handleOpenWorkflow = useCallback(() => {
     setModalOpen(true)
   }, [setModalOpen])
+
+  // Handle create constitution - opens workflow modal at constitution step
+  const handleCreateConstitution = useCallback(() => {
+    setWorkflowStartStep("constitution")
+    setModalOpen(true)
+  }, [setWorkflowStartStep, setModalOpen])
 
   // Query workflow state
   const {
@@ -211,6 +220,19 @@ export const PlanPage = memo(function PlanPage({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Constitution Section */}
+        {projectPath && (
+          <ConstitutionSection
+            projectPath={projectPath}
+            onCreateConstitution={handleCreateConstitution}
+          />
+        )}
+
+        {/* Features Table */}
+        {projectPath && (
+          <FeaturesTable projectPath={projectPath} />
+        )}
+
         {/* Current Feature Info */}
         {workflowState?.branchName && (
           <div className="bg-muted/30 rounded-lg p-3">
