@@ -36,14 +36,11 @@ export function validatePathInProject(projectPath: string, filePath: string): bo
   // Get the relative path from project to file
   const relativePath = path.relative(resolvedProject, resolvedFile)
 
-  // If the relative path starts with "..", the file is outside the project
   // If the relative path is empty, it's the project root itself (valid)
-  // If the relative path is absolute, it's outside the project
-  return (
-    relativePath !== "" &&
-    !relativePath.startsWith("..") &&
-    !path.isAbsolute(relativePath)
-  )
+  if (relativePath === "") return true
+
+  // Check for traversal attempts or absolute paths
+  return !relativePath.startsWith("..") && !path.isAbsolute(relativePath)
 }
 
 /**

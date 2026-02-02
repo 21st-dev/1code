@@ -137,28 +137,13 @@ interface WatcherEntry {
   projectPath: string
   directory: string
   createdAt: Date
-  lastActivity: Date
 }
 
 // Replace the simple Map with typed Map
 const fileWatchers = new Map<string, WatcherEntry>()
 
-// Periodic cleanup of stale watchers (every 5 minutes)
-const WATCHER_TIMEOUT_MS = 5 * 60 * 1000
-const cleanupInterval = setInterval(() => {
-  const now = Date.now()
-  const staleWatchers: string[] = []
-
-  for (const [watchId, entry] of fileWatchers.entries()) {
-    if (now - entry.lastActivity.getTime() > WATCHER_TIMEOUT_MS) {
-      console.warn(`[SpecKit] Cleaning up stale file watcher: ${watchId}`)
-      entry.watcher.close()
-      staleWatchers.push(watchId)
-    }
-  }
-
-  staleWatchers.forEach(id => fileWatchers.delete(id))
-}, 60000) // Check every minute
+// File watchers are cleaned up via subscription cleanup callbacks
+// No time-based cleanup needed - subscription lifecycle manages watcher lifecycle
 
 // ============================================================================
 // Router Definition
@@ -706,12 +691,6 @@ export const speckitRouter = router({
           if (filename) {
             const event = eventType === "rename" ? "add" : "change"
             emit.next({ event, filePath: filename })
-
-            // Update last activity timestamp
-            const entry = fileWatchers.get(input.watchId)
-            if (entry) {
-              entry.lastActivity = new Date()
-            }
           }
         })
 
@@ -722,7 +701,6 @@ export const speckitRouter = router({
           projectPath,
           directory,
           createdAt: new Date(),
-          lastActivity: new Date(),
         }
         fileWatchers.set(input.watchId, watcherEntry)
 
