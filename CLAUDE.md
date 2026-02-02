@@ -250,3 +250,10 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 - Git worktree per chat (isolation)
 - Claude Code execution in worktree path
 - Full feature parity with web app
+
+## Active Technologies
+- TypeScript 5.4.5, React 19, Electron 33.4.5 (001-speckit-ui-integration)
+- SQLite (via Drizzle ORM) for application data; file system for SpecKit artifacts (.specify/ and specs/ directories) (001-speckit-ui-integration)
+
+## Recent Changes
+- 001-speckit-ui-integration: Added TypeScript 5.4.5, React 19, Electron 33.4.5
