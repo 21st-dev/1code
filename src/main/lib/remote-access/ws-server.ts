@@ -46,6 +46,16 @@ const authenticatedClients = new Map<WebSocket, AuthenticatedClient>()
 // Subscription handlers - map of channel pattern to active subscriptions
 const subscriptionCleanups = new Map<string, () => void>()
 
+// Shared chat subscriptions - one Observable per subChatId, broadcast to all clients
+interface SharedChatSubscription {
+  observable: any
+  subscription: any
+  clients: Set<WebSocket>
+  // Event emitter for IPC clients to listen
+  listeners: Set<(data: any) => void>
+}
+const sharedChatSubscriptions = new Map<string, SharedChatSubscription>()
+
 // MIME types for static files
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -401,6 +411,75 @@ export function broadcast(channel: string, data: unknown): void {
 }
 
 /**
+ * Broadcast chat data to all clients subscribed to a specific subChat
+ * This is called when chat updates come from IPC (desktop) or WebSocket (web)
+ */
+export function broadcastChatData(subChatId: string, data: any): void {
+  const sharedSub = sharedChatSubscriptions.get(subChatId)
+  if (!sharedSub) {
+    // No subscription exists for this chat
+    return
+  }
+
+  console.log(`[WS] Broadcasting chat data to ${sharedSub.clients.size} WebSocket clients and ${sharedSub.listeners.size} IPC listeners for subChatId: ${subChatId}`)
+
+  // Broadcast to WebSocket clients
+  for (const clientWs of sharedSub.clients) {
+    send(clientWs, {
+      id: null,
+      type: "subscription",
+      data: data,
+    })
+  }
+
+  // Broadcast to IPC listeners (desktop clients)
+  for (const listener of sharedSub.listeners) {
+    try {
+      listener(data)
+    } catch (err) {
+      console.error(`[WS] Error in IPC listener:`, err)
+    }
+  }
+}
+
+/**
+ * Subscribe to chat data from IPC (desktop client)
+ * Returns unsubscribe function
+ */
+export function subscribeToChatData(subChatId: string, callback: (data: any) => void): () => void {
+  let sharedSub = sharedChatSubscriptions.get(subChatId)
+
+  if (!sharedSub) {
+    // Create a placeholder subscription without an Observable
+    // This allows IPC clients to register listeners before any WebSocket client connects
+    sharedSub = {
+      observable: null,
+      subscription: null,
+      clients: new Set(),
+      listeners: new Set(),
+    }
+    sharedChatSubscriptions.set(subChatId, sharedSub)
+  }
+
+  sharedSub.listeners.add(callback)
+  console.log(`[WS] IPC listener added for subChatId: ${subChatId}. Total listeners: ${sharedSub.listeners.size}`)
+
+  // Return unsubscribe function
+  return () => {
+    sharedSub!.listeners.delete(callback)
+    console.log(`[WS] IPC listener removed for subChatId: ${subChatId}. Remaining listeners: ${sharedSub!.listeners.size}`)
+
+    // Clean up if no clients or listeners left
+    if (sharedSub!.clients.size === 0 && sharedSub!.listeners.size === 0) {
+      if (sharedSub!.subscription) {
+        sharedSub!.subscription.unsubscribe()
+      }
+      sharedChatSubscriptions.delete(subChatId)
+    }
+  }
+}
+
+/**
  * Handle incoming WebSocket message
  */
 async function handleMessage(
@@ -451,115 +530,156 @@ async function handleMessage(
       // Handle subscriptions (streaming)
       // For claude.chat, routerName is "claude" and procedureName is "chat"
       if (routerName === "claude" && procedureName === "chat") {
-        console.log(`[WS] Starting claude.chat subscription: ${message.id}`)
-        console.log(`[WS] Chat params:`, JSON.stringify(message.params, null, 2))
-
-        // Access the claude router (procedures are direct properties, not in _def)
-        const claudeRouter = (router as any).claude
-        if (!claudeRouter) {
-          throw new Error(`claude router not found`)
+        const subChatId = message.params?.subChatId
+        if (!subChatId) {
+          throw new Error(`subChatId is required for chat subscription`)
         }
 
-        // The chat procedure is a direct property on the router
-        const chatProcedure = claudeRouter.chat
-        if (!chatProcedure) {
-          console.error(`[WS] Available procedures in claude router:`, Object.keys(claudeRouter).filter(k => !k.startsWith('_')))
-          throw new Error(`chat procedure not found in claude router`)
-        }
+        console.log(`[WS] Starting claude.chat subscription for subChatId: ${subChatId}`)
 
-        console.log(`[WS] Chat procedure found, type:`, typeof chatProcedure)
+        // Check if there's already a shared subscription for this subChatId
+        let sharedSub = sharedChatSubscriptions.get(subChatId)
 
-        // tRPC procedures store their implementation in _def.resolver
-        // For subscriptions, the resolver is the function that returns an Observable
-        const procedureDef = chatProcedure._def
-        if (!procedureDef) {
-          throw new Error(`chat procedure _def not found`)
-        }
+        if (!sharedSub) {
+          // Create new shared subscription
+          console.log(`[WS] Creating new shared subscription for ${subChatId}`)
 
-        // For subscriptions, the implementation is in _def.resolver
-        const subscriptionFn = procedureDef.resolver
-        if (!subscriptionFn || typeof subscriptionFn !== 'function') {
-          console.error(`[WS] Procedure _def keys:`, Object.keys(procedureDef))
-          throw new Error(`chat procedure resolver not found or not a function`)
-        }
+          // Access the claude router
+          const claudeRouter = (router as any).claude
+          if (!claudeRouter) {
+            throw new Error(`claude router not found`)
+          }
 
-        // Create context for the subscription
-        const ctx = {
-          getWindow: () => BrowserWindow.getFocusedWindow(),
-        }
+          const chatProcedure = claudeRouter.chat
+          if (!chatProcedure) {
+            throw new Error(`chat procedure not found`)
+          }
 
-        // Call the raw subscription function with { input, type, ctx, path }
-        // This bypasses the client-side checks in the procedure wrapper
-        let observable
-        try {
-          observable = subscriptionFn({
+          const procedureDef = chatProcedure._def
+          if (!procedureDef) {
+            throw new Error(`chat procedure _def not found`)
+          }
+
+          const subscriptionFn = procedureDef.resolver
+          if (!subscriptionFn || typeof subscriptionFn !== 'function') {
+            throw new Error(`chat procedure resolver not found`)
+          }
+
+          const ctx = {
+            getWindow: () => BrowserWindow.getFocusedWindow(),
+          }
+
+          // Create the Observable
+          const observable = subscriptionFn({
             input: message.params,
             type: 'subscription',
             ctx,
             path: 'claude.chat',
           })
-        } catch (err) {
-          console.error(`[WS] Error calling claude.chat subscription:`, err)
-          send(ws, {
-            id: message.id,
-            type: "error",
-            error: err instanceof Error ? err.message : "Unknown error",
+
+          if (typeof observable?.subscribe !== 'function') {
+            throw new Error(`chat subscription did not return Observable`)
+          }
+
+          // Subscribe and broadcast to all clients (WebSocket + IPC)
+          const subscription = observable.subscribe({
+            next: (data: any) => {
+              console.log(`[WS] Broadcasting chat data to ${sharedSub?.clients.size || 0} WS clients, ${sharedSub?.listeners.size || 0} IPC listeners:`, data.type || "no-type")
+              // Broadcast to all WebSocket clients subscribed to this subChat
+              if (sharedSub) {
+                for (const clientWs of sharedSub.clients) {
+                  send(clientWs, {
+                    id: null,
+                    type: "subscription",
+                    data: data,
+                  })
+                }
+                // Also notify IPC listeners (desktop clients)
+                for (const listener of sharedSub.listeners) {
+                  try {
+                    listener(data)
+                  } catch (err) {
+                    console.error(`[WS] Error in IPC listener:`, err)
+                  }
+                }
+              }
+            },
+            error: (err: any) => {
+              console.error(`[WS] Chat subscription error:`, err)
+              if (sharedSub) {
+                for (const clientWs of sharedSub.clients) {
+                  send(clientWs, {
+                    id: null,
+                    type: "error",
+                    error: err.message,
+                  })
+                }
+                for (const listener of sharedSub.listeners) {
+                  try {
+                    listener({ type: "error", error: err.message })
+                  } catch (err) {
+                    console.error(`[WS] Error in IPC listener:`, err)
+                  }
+                }
+              }
+            },
+            complete: () => {
+              console.log(`[WS] Chat subscription complete for ${subChatId}`)
+              if (sharedSub) {
+                for (const clientWs of sharedSub.clients) {
+                  send(clientWs, {
+                    id: null,
+                    type: "result",
+                    data: { completed: true },
+                  })
+                }
+                for (const listener of sharedSub.listeners) {
+                  try {
+                    listener({ type: "complete" })
+                  } catch (err) {
+                    console.error(`[WS] Error in IPC listener:`, err)
+                  }
+                }
+              }
+            }
           })
-          return
+
+          // Create shared subscription object with listeners set
+          // Preserve existing listeners if this is being recreated
+          const existingListeners = sharedChatSubscriptions.get(subChatId)?.listeners || new Set()
+          sharedSub = {
+            observable,
+            subscription,
+            clients: new Set(),
+            listeners: existingListeners,
+          }
+          sharedChatSubscriptions.set(subChatId, sharedSub)
         }
 
-        // Check if the result is actually an Observable
-        if (typeof observable?.subscribe !== 'function') {
-          console.error(`[WS] claude.chat did not return an Observable. Result:`, typeof observable)
-          if (observable) {
-            console.error(`[WS] Result constructor:`, observable.constructor?.name)
-            console.error(`[WS] Result keys:`, Object.keys(observable))
-          }
-          send(ws, {
-            id: message.id,
-            type: "error",
-            error: `claude.chat returned ${typeof observable} instead of Observable`,
-          })
-          return
-        }
+        // Add this client to the shared subscription
+        sharedSub.clients.add(ws)
+        console.log(`[WS] Client added to shared subscription ${subChatId}. Total clients: ${sharedSub.clients.size}`)
 
-        console.log(`[WS] Observable created, subscribing...`)
-
-        const sub = observable.subscribe({
-          next: (data: any) => {
-            console.log(`[WS] Chat data chunk:`, data.type || "no-type")
-            send(ws, {
-              id: message.id,
-              type: "subscription",
-              data: data,
-            })
-          },
-          error: (err: any) => {
-            console.error(`[WS] Chat subscription error:`, err)
-            send(ws, {
-              id: message.id,
-              type: "error",
-              error: err.message,
-            })
-          },
-          complete: () => {
-            console.log(`[WS] Chat subscription complete: ${message.id}`)
-            send(ws, {
-              id: message.id,
-              type: "result",
-              data: { completed: true },
-            })
-          }
+        // Send success response
+        send(ws, {
+          id: message.id,
+          type: "result",
+          data: { subscribed: true, subChatId },
         })
 
-        // Store unsubscription for cleanup
-        const cleanupId = `sub-${message.id}`
-        const cleanup = () => sub.unsubscribe()
-        subscriptionCleanups.set(cleanupId, cleanup)
-
+        // Clean up client from subscription on disconnect
         ws.on("close", () => {
-          cleanup()
-          subscriptionCleanups.delete(cleanupId)
+          if (sharedSub) {
+            sharedSub.clients.delete(ws)
+            console.log(`[WS] Client removed from shared subscription ${subChatId}. Remaining clients: ${sharedSub.clients.size}`)
+
+            // Clean up subscription if no clients left
+            if (sharedSub.clients.size === 0) {
+              console.log(`[WS] No clients left for ${subChatId}, cleaning up subscription`)
+              sharedSub.subscription.unsubscribe()
+              sharedChatSubscriptions.delete(subChatId)
+            }
+          }
         })
 
         return

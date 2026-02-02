@@ -514,8 +514,54 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
           },
         )
 
+        // Also subscribe to broadcasts from WebSocket server (for sync with web clients)
+        // This allows desktop to receive messages sent from web clients
+        let broadcastUnsubscribe: (() => void) | null = null
+        if (window.desktopApi?.subscribeToChatData) {
+          try {
+            broadcastUnsubscribe = window.desktopApi.subscribeToChatData(
+              this.config.subChatId,
+              (data: any) => {
+                // Received broadcast from web client, forward to controller
+                console.log(`[SD] Broadcast from web:`, data.type || "no-type")
+                if (data.type === "complete") {
+                  try {
+                    controller.close()
+                  } catch {
+                    // Already closed
+                  }
+                } else if (data.type === "error") {
+                  controller.error(new Error(data.error || "Unknown error"))
+                } else {
+                  // Regular data chunk
+                  try {
+                    controller.enqueue(data)
+                  } catch {
+                    // Controller closed, ignore
+                  }
+                }
+              }
+            )
+          } catch (err) {
+            console.error(`[SD] Failed to subscribe to chat broadcasts:`, err)
+          }
+        }
+
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
+          console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+          sub.unsubscribe()
+          // Clean up broadcast subscription
+          if (broadcastUnsubscribe) {
+            broadcastUnsubscribe()
+          }
+          // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
+          try {
+            controller.close()
+          } catch {
+            // Already closed
+          }
+        })
           console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
           sub.unsubscribe()
           // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })

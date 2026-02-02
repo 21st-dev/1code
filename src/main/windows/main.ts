@@ -452,6 +452,37 @@ function registerIpcHandlers(): void {
 
   // Register VS Code theme scanner IPC handlers
   registerThemeScannerIPC()
+
+  // Remote access IPC handlers
+  ipcMain.handle("remote-access:get-status", async () => {
+    const { getRemoteAccessStatus } = await import("../lib/remote-access")
+    return getRemoteAccessStatus()
+  })
+
+  ipcMain.handle("remote-access:enable", async () => {
+    const { enableRemoteAccess, getRemoteAccessStatus } = await import("../lib/remote-access")
+    await enableRemoteAccess()
+    return getRemoteAccessStatus()
+  })
+
+  ipcMain.handle("remote-access:disable", async () => {
+    const { disableRemoteAccess, getRemoteAccessStatus } = await import("../lib/remote-access")
+    await disableRemoteAccess()
+    return getRemoteAccessStatus()
+  })
+
+  // Chat data sync - subscribe to broadcasts from WebSocket server
+  // This allows desktop clients to receive messages from web clients
+  ipcMain.handle("chat:subscribe", (event, subChatId: string) => {
+    const { subscribeToChatData } = require("../lib/remote-access/ws-server")
+    const unsubscribe = subscribeToChatData(subChatId, (data: any) => {
+      // Send chat data to this renderer process
+      event.sender.send("chat:data", subChatId, data)
+    })
+
+    // Return unsubscribe function for cleanup
+    return unsubscribe
+  })
 }
 
 /**
