@@ -661,3 +661,128 @@ chmod -R u+rw .specify/ specs/
 - **API Reference**: See `contracts/trpc-router-simplified.ts`
 - **Entity Definitions**: See `data-model-simplified.md`
 - **ii-spec Documentation**: See `submodules/ii-spec/README.md`
+
+---
+
+## Appendix A: Fix Plan Page and Workflow Modal Issues (2026-02-02)
+
+**Bug Fix**: Two related issues in the SpecKit UI
+
+### Issue 1: New Feature Flow Button Visibility
+
+**Problem**: The "New Feature Flow" button should:
+- Appear only on named feature branches (e.g., `001-speckit-ui-integration`)
+- NOT appear on protected branches (main, master, internal, staging, dev)
+- Clicking should open workflow modal in empty state
+
+**Current State**: Button is not implemented
+
+### Issue 2: Workflow Modal Height
+
+**Problem**: Both panes don't occupy full available height when content is sparse
+
+**Root Cause**: Missing `min-h-0` on flex containers
+
+### Implementation Steps
+
+#### Step 1: Create Branch Type Utilities
+
+```typescript
+// src/renderer/features/speckit/types/branch.ts
+
+export enum BranchType {
+  NamedFeature = 'NAMED_FEATURE',
+  Protected = 'PROTECTED',
+}
+
+export const PROTECTED_BRANCHES = [
+  'main',
+  'master',
+  'internal',
+  'staging',
+  'dev',
+] as const
+
+export function isProtectedBranch(branchName: string): boolean {
+  return PROTECTED_BRANCHES.includes(branchName as any)
+}
+
+export function isNamedFeatureBranch(branchName: string): boolean {
+  if (isProtectedBranch(branchName)) return false
+  return /^\d{3}-.+/.test(branchName)
+}
+```
+
+#### Step 2: Add Branch Detection Hook
+
+```typescript
+// src/renderer/features/speckit/hooks/useBranchDetection.ts
+
+import { useBranchDetection } from '@/features/speckit/hooks/useBranchDetection'
+
+export function PlanPageHeader() {
+  const { isNamedFeature } = useBranchDetection()
+
+  return (
+    <div className="flex items-center justify-between px-4 h-10 border-b border-border/50">
+      <div className="flex items-center gap-2">
+        <FileText className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Spec</span>
+      </div>
+      <div className="flex items-center gap-1">
+        {isNamedFeature && (
+          <Button variant="ghost" size="sm" onClick={handleNewFeature}>
+            <Plus className="h-3 w-3 mr-1" />
+            New Feature
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={handleOpenWorkflow}>
+          <Sparkles className="h-3 w-3 mr-1" />
+          Workflow
+        </Button>
+      </div>
+    </div>
+  )
+}
+```
+
+#### Step 3: Fix Modal Height
+
+```typescript
+// In workflow-modal.tsx - BEFORE
+<div className="flex-1 flex overflow-hidden">
+  <div className="flex-1 flex flex-col border-r border-border overflow-hidden">
+
+// In workflow-modal.tsx - AFTER
+<div className="flex-1 flex overflow-hidden min-h-0">
+  <div className="flex-1 flex flex-col border-r border-border overflow-hidden min-h-0">
+```
+
+#### Step 4: Handle New Feature Click
+
+```typescript
+function handleNewFeature() {
+  setSpeckitWorkflowStartModeAtom(WorkflowStartMode.NewFeature)
+  setSpeckitWorkflowStartStepAtom(undefined)  // Empty state
+  setSpeckitModalOpenAtom(true)
+}
+```
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/renderer/features/speckit/components/plan-page.tsx` | Add conditional "New Feature" button |
+| `src/renderer/features/speckit/components/workflow-modal.tsx` | Add `min-h-0` classes |
+| `src/renderer/features/speckit/types/branch.ts` | **NEW** - Branch type utilities |
+| `src/renderer/features/speckit/hooks/useBranchDetection.ts` | **NEW** - Hook for branch detection |
+
+### Testing Checklist
+
+- [ ] Button visible on `001-test-feature` branch
+- [ ] Button hidden on `main` branch
+- [ ] Button hidden on `dev` branch
+- [ ] Clicking button opens modal in empty state
+- [ ] Modal both panes fill height with minimal content
+- [ ] Modal both panes fill height with maximal content
+- [ ] Resize browser - height updates correctly
