@@ -21,9 +21,10 @@ import {
   speckitExecutionIdAtom,
   speckitActiveStepAtom,
   speckitWorkflowStartStepAtom,
+  speckitWorkflowStartModeAtom,
 } from "../atoms"
 import { useWorkflowState, useExecuteCommand, useCommandOutput } from "../hooks"
-import { WORKFLOW_STEPS_ORDER, type WorkflowStepName, type ArtifactType } from "../types"
+import { WORKFLOW_STEPS_ORDER, type WorkflowStepName, type ArtifactType, WorkflowStartMode } from "../types"
 
 import { WorkflowStepper } from "./workflow-stepper"
 import { ChatPane } from "./chat-pane"
@@ -68,6 +69,7 @@ export const WorkflowModal = memo(function WorkflowModal({
   const [isOpen, setIsOpen] = useAtom(speckitModalOpenAtom)
   const [activeStep, setActiveStep] = useAtom(speckitActiveStepAtom)
   const [startStep, setStartStep] = useAtom(speckitWorkflowStartStepAtom)
+  const startMode = useAtomValue(speckitWorkflowStartModeAtom)
   const executionId = useAtomValue(speckitExecutionIdAtom)
   const setCurrentDocument = useSetAtom(speckitCurrentDocumentAtom)
 
@@ -145,7 +147,16 @@ export const WorkflowModal = memo(function WorkflowModal({
   const openInEditorMutation = trpc.speckit.openFileInEditor.useMutation()
 
   // Determine effective step (active override or detected)
-  const effectiveStep = (activeStep as WorkflowStepName) || currentStep || "specify"
+  // When starting a new feature, override the default step based on constitution status
+  const determineStartStep = (): WorkflowStepName => {
+    if (startStep) return startStep as WorkflowStepName
+    if (startMode === WorkflowStartMode.NewFeature) {
+      // For new features, start at constitution if it doesn't exist, otherwise specify
+      return constitution?.exists ? "specify" : "constitution"
+    }
+    return (currentStep as WorkflowStepName) || "specify"
+  }
+  const effectiveStep = (activeStep as WorkflowStepName) || determineStartStep()
 
   // Check for stale artifacts when navigating
   const staleArtifacts = useMemo(() => {
@@ -358,13 +369,14 @@ export const WorkflowModal = memo(function WorkflowModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent
-        className="max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden"
+        className="max-w-[95vw] w-[95vw] p-0 gap-0 overflow-hidden flex flex-col"
+        style={{ height: "90vh", maxHeight: "90vh" } as React.CSSProperties}
         showCloseButton={false}
         aria-labelledby="workflow-modal-title"
         aria-describedby="workflow-modal-description"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 h-14 border-b border-border flex-shrink-0">
+        <div className="flex-none px-6 h-14 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h2 id="workflow-modal-title" className="text-lg font-semibold">Spec Workflow</h2>
             {/* Hidden description for screen readers */}
