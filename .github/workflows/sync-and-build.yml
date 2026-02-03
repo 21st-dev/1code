@@ -100,6 +100,7 @@ jobs:
           git push origin main
           git push origin --tags
 
+  # ==================== WINDOWS ====================
   build-windows:
     needs: [check-upstream, sync-upstream]
     if: needs.check-upstream.outputs.should_build == 'true'
@@ -130,8 +131,10 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
 
-      - name: Package for Windows
+      - name: Package for Windows (NSIS + Portable)
         run: bun run package:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -145,10 +148,11 @@ jobs:
             release/*.zip
           retention-days: 5
 
-  build-macos:
+  # ==================== macOS ARM64 (M1/M2) ====================
+  build-macos-arm64:
     needs: [check-upstream, sync-upstream]
     if: needs.check-upstream.outputs.should_build == 'true'
-    runs-on: macos-latest
+    runs-on: macos-14  # M1 runner
 
     steps:
       - name: Checkout
@@ -174,59 +178,174 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Download Claude binary
+      - name: Download Claude binary (arm64)
         run: bun run claude:download
         continue-on-error: true
 
       - name: Build
         run: bun run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
 
-      - name: Package for macOS
-        run: bun run package:mac
+      - name: Package for macOS ARM64
+        run: |
+          npx electron-builder --mac --arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Для подписи добавь эти секреты:
+          # Для подписи раскомментируй:
           # CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
           # CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
           # APPLE_ID: ${{ secrets.APPLE_ID }}
           # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Upload macOS artifacts
+      - name: Upload macOS ARM64 artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-build
+          name: macos-arm64-build
           path: |
-            release/*.dmg
-            release/*.zip
+            release/*-arm64.dmg
+            release/*-arm64-mac.zip
+            release/*-arm64*.dmg
           retention-days: 5
 
+  # ==================== macOS x64 (Intel) ====================
+  build-macos-x64:
+    needs: [check-upstream, sync-upstream]
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: macos-13  # Intel runner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Download Claude binary (x64)
+        run: bun run claude:download
+        continue-on-error: true
+
+      - name: Build
+        run: bun run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Package for macOS x64
+        run: |
+          npx electron-builder --mac --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS x64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x64-build
+          path: |
+            release/*.dmg
+            release/*-mac.zip
+          retention-days: 5
+
+  # ==================== LINUX ====================
+  build-linux:
+    needs: [check-upstream, sync-upstream]
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Download Claude binary
+        run: bun run claude:download
+        continue-on-error: true
+
+      - name: Build
+        run: bun run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Package for Linux (AppImage + DEB)
+        run: bun run package:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            release/*.AppImage
+            release/*.deb
+          retention-days: 5
+
+  # ==================== CREATE RELEASE ====================
   create-release:
-    needs: [check-upstream, build-windows, build-macos]
+    needs: [check-upstream, build-windows, build-macos-arm64, build-macos-x64, build-linux]
     if: needs.check-upstream.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Download Windows artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: windows-build
-          path: ./artifacts/windows
+          path: ./artifacts
 
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-build
-          path: ./artifacts/macos
-
-      - name: List artifacts
+      - name: List all artifacts
         run: |
-          echo "=== Windows ==="
-          ls -la ./artifacts/windows/ || echo "No Windows artifacts"
-          echo "=== macOS ==="
-          ls -la ./artifacts/macos/ || echo "No macOS artifacts"
+          echo "=== All artifacts ==="
+          find ./artifacts -type f -name "*" | head -50
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p ./release-files
+          find ./artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" \) -exec cp {} ./release-files/ \;
+          echo "=== Release files ==="
+          ls -la ./release-files/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -239,13 +358,23 @@ jobs:
             This release was automatically built from [21st-dev/1code](https://github.com/21st-dev/1code) release `${{ needs.check-upstream.outputs.release_tag }}`.
 
             ### Downloads
-            - **Windows**: `.exe` installer
-            - **macOS**: `.dmg` installer
 
-            > Note: macOS builds are unsigned. You may need to right-click and select "Open" on first launch.
-          files: |
-            ./artifacts/windows/*
-            ./artifacts/macos/*
+            | Platform | File | Notes |
+            |----------|------|-------|
+            | **Windows** | `.exe` | NSIS installer |
+            | **Windows** | `portable.exe` | Portable version |
+            | **macOS (Apple Silicon)** | `*-arm64.dmg` | For M1/M2/M3 Macs |
+            | **macOS (Intel)** | `.dmg` | For Intel Macs |
+            | **Linux** | `.AppImage` | Universal Linux |
+            | **Linux** | `.deb` | Debian/Ubuntu |
+
+            ### Notes
+            - macOS builds are unsigned. Right-click → Open on first launch.
+            - Windows may show SmartScreen warning. Click "More info" → "Run anyway".
+
+            ---
+            *Built automatically by GitHub Actions*
+          files: ./release-files/*
           draft: false
           prerelease: false
         env:
