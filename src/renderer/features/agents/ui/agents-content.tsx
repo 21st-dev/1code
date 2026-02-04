@@ -20,7 +20,6 @@ import {
   agentsSidebarOpenAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatsSidebarWidthAtom,
-  desktopViewAtom,
 } from "../atoms"
 import {
   selectedTeamIdAtom,
@@ -30,12 +29,10 @@ import {
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
   betaKanbanEnabledAtom,
-  betaAutomationsEnabledAtom,
   chatSourceModeAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { KanbanView } from "../../kanban"
-import { AutomationsView, AutomationsDetailView, InboxView } from "../../automations"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
@@ -61,21 +58,18 @@ import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { isDesktopApp } from "../../../lib/utils/platform"
-import { SettingsContent } from "../../settings/settings-content"
 // Desktop mock
 const useIsAdmin = () => false
 
 // Main Component
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
-  const desktopView = useAtomValue(desktopViewAtom)
   const setSelectedChatIsRemote = useSetAtom(selectedChatIsRemoteAtom)
   const setChatSourceMode = useSetAtom(chatSourceModeAtom)
   const chatSourceMode = useAtomValue(chatSourceModeAtom)
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
-  const betaAutomationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [previewSidebarOpen, setPreviewSidebarOpen] = useAtom(
@@ -811,16 +805,8 @@ export function AgentsContent() {
         data-agents-page
         data-mobile-view
       >
-        {/* Mobile: Settings/Automations/Inbox fullscreen views */}
-        {desktopView === "settings" ? (
-          <SettingsContent />
-        ) : betaAutomationsEnabled && desktopView === "automations" ? (
-          <AutomationsView />
-        ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
-          <AutomationsDetailView />
-        ) : betaAutomationsEnabled && desktopView === "inbox" ? (
-          <InboxView />
-        ) : mobileViewMode === "chats" ? (
+        {/* Mobile: Chats list and chat view */}
+        {mobileViewMode === "chats" ? (
           // Chats List Mode (default) - uses AgentsSidebar in fullscreen
           <AgentsSidebar
             userId={userId}
@@ -950,15 +936,7 @@ export function AgentsContent() {
           className="flex-1 min-w-0 overflow-hidden"
           style={{ minWidth: "350px" }}
         >
-          {desktopView === "settings" ? (
-            <SettingsContent />
-          ) : betaAutomationsEnabled && desktopView === "automations" ? (
-            <AutomationsView />
-          ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
-            <AutomationsDetailView />
-          ) : betaAutomationsEnabled && desktopView === "inbox" ? (
-            <InboxView />
-          ) : selectedChatId ? (
+          {selectedChatId ? (
             <div className="h-full flex flex-col relative overflow-hidden">
               <ChatView
                 key={`${chatSourceMode}-${selectedChatId}`}

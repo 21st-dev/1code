@@ -4,7 +4,6 @@
  */
 
 import type { SettingsTab } from "../../../lib/atoms"
-import type { DesktopView } from "../atoms"
 
 // ============================================================================
 // TYPES
@@ -19,7 +18,6 @@ export interface AgentActionContext {
   setSelectedChatId?: (id: string | null) => void
   setSelectedDraftId?: (id: string | null) => void
   setShowNewChatForm?: (show: boolean) => void
-  setDesktopView?: (view: DesktopView) => void
 
   // UI states
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
@@ -63,9 +61,10 @@ const openShortcutsAction: AgentActionDefinition = {
   hotkey: "?",
   handler: async (context) => {
     // Open settings page on Keyboard tab
+    // Settings are now opened via the icon bar drawer system
     context.setSettingsActiveTab?.("keyboard")
-    context.setDesktopView?.("settings")
     context.setSidebarOpen?.(true)
+    // Note: Settings drawer is now controlled by the icon bar
     return { success: true }
   },
 }
@@ -84,8 +83,6 @@ const createNewAgentAction: AgentActionDefinition = {
     context.setSelectedDraftId?.(null)
     // Explicitly show new chat form
     context.setShowNewChatForm?.(true)
-    // Clear automations/inbox view
-    context.setDesktopView?.(null)
     return { success: true }
   },
 }
@@ -97,9 +94,10 @@ const openSettingsAction: AgentActionDefinition = {
   category: "general",
   hotkey: ["cmd+,", "ctrl+,"],
   handler: async (context) => {
+    // Settings are now opened via the icon bar drawer system
     context.setSettingsActiveTab?.("preferences")
-    context.setDesktopView?.("settings")
     context.setSidebarOpen?.(true)
+    // Note: Settings drawer is now controlled by the icon bar
     return { success: true }
   },
 }
@@ -139,8 +137,6 @@ const openKanbanAction: AgentActionDefinition = {
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)
     context.setShowNewChatForm?.(false)
-    // Clear automations/inbox view
-    context.setDesktopView?.(null)
     return { success: true }
   },
 }
@@ -151,10 +147,11 @@ const openAutomationsAction: AgentActionDefinition = {
   description: "Open automations page",
   category: "navigation",
   handler: async (context) => {
+    // Automations are now opened via the icon bar drawer system
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)
     context.setShowNewChatForm?.(false)
-    context.setDesktopView?.("automations")
+    // Note: Automations drawer is now controlled by the icon bar
     return { success: true }
   },
 }
@@ -178,10 +175,11 @@ const openInboxAction: AgentActionDefinition = {
   description: "Open inbox",
   category: "navigation",
   handler: async (context) => {
+    // Inbox is now opened via the icon bar drawer system
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)
     context.setShowNewChatForm?.(false)
-    context.setDesktopView?.("inbox")
+    // Note: Inbox drawer is now controlled by the icon bar
     return { success: true }
   },
 }

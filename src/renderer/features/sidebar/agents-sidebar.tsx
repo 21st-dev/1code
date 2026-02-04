@@ -28,6 +28,7 @@ import {
   showWorkspaceIconAtom,
   betaKanbanEnabledAtom,
   betaAutomationsEnabledAtom,
+  agentsSettingsDialogOpenAtom,
 } from "../../lib/atoms"
 import {
   useRemoteChats,
@@ -116,7 +117,6 @@ import {
   justCreatedIdsAtom,
   undoStackAtom,
   pendingUserQuestionsAtom,
-  desktopViewAtom,
   type UndoItem,
 } from "../agents/atoms"
 import { NetworkStatus } from "../../components/ui/network-status"
@@ -131,6 +131,7 @@ import {
   TrafficLightSpacer,
   TrafficLights,
 } from "../agents/components/traffic-light-spacer"
+import { useDrawerState } from "../layout/hooks/useDrawerState"
 import { useHotkeys } from "react-hotkeys-hook"
 import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
@@ -1071,7 +1072,6 @@ const KanbanButton = memo(function KanbanButton() {
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
 
   // Resolved hotkey for tooltip (respects custom bindings)
   const openKanbanHotkey = useResolvedHotkeyDisplay("open-kanban")
@@ -1081,8 +1081,7 @@ const KanbanButton = memo(function KanbanButton() {
     setSelectedChatId(null)
     setSelectedDraftId(null)
     setShowNewChatForm(false)
-    setDesktopView(null) // Clear automations/inbox view
-  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
+  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm])
 
   // Hide button if feature is disabled
   if (!kanbanEnabled) return null
@@ -1141,12 +1140,13 @@ function SidebarAutomationsIcon(props: React.SVGProps<SVGSVGElement>) {
 // Isolated Inbox Button - full-width navigation link matching web layout
 const InboxButton = memo(function InboxButton() {
   const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
-  const desktopView = useAtomValue(desktopViewAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
   const teamId = useAtomValue(selectedTeamIdAtom)
+
+  // Use drawer system instead of desktopView
+  const { toggleDrawer, isOpen, activeIconId } = useDrawerState('main', 'right')
 
   const { data: unreadData } = useQuery({
     queryKey: ["automations", "inboxUnreadCount", teamId],
@@ -1160,12 +1160,12 @@ const InboxButton = memo(function InboxButton() {
     setSelectedChatId(null)
     setSelectedDraftId(null)
     setShowNewChatForm(false)
-    setDesktopView("inbox")
-  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
+    toggleDrawer('inbox')
+  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, toggleDrawer])
 
   if (!automationsEnabled) return null
 
-  const isActive = desktopView === "inbox"
+  const isActive = isOpen && activeIconId === 'inbox'
 
   return (
     <button
@@ -1659,7 +1659,6 @@ export function AgentsSidebar({
   const autoAdvanceTarget = useAtomValue(autoAdvanceTargetAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
   // Use ref instead of state to avoid re-renders on hover
@@ -1737,17 +1736,7 @@ export function AgentsSidebar({
   )
 
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
-  const setDesktopViewForSettings = useSetAtom(desktopViewAtom)
-  const setSidebarOpenForSettings = useSetAtom(agentsSidebarOpenAtom)
-  // Navigate to settings page instead of opening a dialog
-  const setSettingsDialogOpen = useCallback((open: boolean) => {
-    if (open) {
-      setDesktopViewForSettings("settings")
-      setSidebarOpenForSettings(true)
-    } else {
-      setDesktopViewForSettings(null)
-    }
-  }, [setDesktopViewForSettings, setSidebarOpenForSettings])
+  const [settingsDialogOpen, setSettingsDialogOpen] = useAtom(agentsSettingsDialogOpenAtom)
   const { isLoaded: isAuthLoaded } = useCombinedAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const setCreateTeamDialogOpen = useSetAtom(createTeamDialogOpenAtom)
@@ -2548,7 +2537,6 @@ export function AgentsSidebar({
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
     setShowNewChatForm(true) // Explicitly show new chat form
-    setDesktopView(null) // Clear automations/inbox view
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2625,7 +2613,6 @@ export function AgentsSidebar({
     // Sync chatSourceMode for ChatView to load data from correct source
     setChatSourceMode(isRemote ? "sandbox" : "local")
     setShowNewChatForm(false) // Clear new chat form state when selecting a workspace
-    setDesktopView(null) // Clear automations/inbox view when selecting a chat
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -3182,11 +3169,7 @@ export function AgentsSidebar({
         </div>
       </div>
 
-      {/* Navigation Links - Inbox & Automations */}
-      <div className="px-2 pb-3 flex-shrink-0 space-y-0.5 -mx-1">
-        <InboxButton />
-        <AutomationsButton />
-      </div>
+      {/* Navigation Links - Inbox & Automations (removed in MIG4 - now in icon bars) */}
 
       {/* Scrollable Agents List */}
       <div className="flex-1 min-h-0 relative">
@@ -3398,22 +3381,7 @@ export function AgentsSidebar({
           >
             <div className="flex items-center">
               <div className="flex items-center gap-1">
-                {/* Settings Button */}
-                <Tooltip delayDuration={500}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsActiveTab("preferences")
-                        setSettingsDialogOpen(true)
-                      }}
-                      className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                    >
-                      <SettingsIcon className="h-4 w-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Settings{settingsHotkey && <> <Kbd>{settingsHotkey}</Kbd></>}</TooltipContent>
-                </Tooltip>
+                {/* Settings Button removed in MIG4 - now in icon bar */}
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />

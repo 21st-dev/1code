@@ -1,6 +1,5 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
-import { desktopViewAtom as _desktopViewAtom } from "../../features/agents/atoms"
 
 // ============================================
 // RE-EXPORT FROM FEATURES/AGENTS/ATOMS (source of truth)
@@ -74,13 +73,11 @@ export {
   getNextMode,
 
   // Desktop view navigation (Automations / Inbox)
-  desktopViewAtom,
   automationDetailIdAtom,
   automationTemplateParamsAtom,
   inboxSelectedChatIdAtom,
   agentsInboxSidebarWidthAtom,
   inboxMobileViewModeAtom,
-  type DesktopView,
   type AutomationTemplateParams,
   type InboxMobileViewMode,
 } from "../../features/agents/atoms"
@@ -196,13 +193,7 @@ export type SettingsTab =
   | "beta"
   | "keyboard"
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("preferences")
-// Derived atom: maps settings open/close to desktopView navigation
-export const agentsSettingsDialogOpenAtom = atom(
-  (get) => get(_desktopViewAtom) === "settings",
-  (_get, set, open: boolean) => {
-    set(_desktopViewAtom, open ? "settings" : null)
-  }
-)
+export const agentsSettingsDialogOpenAtom = atom<boolean>(false)
 
 export type CustomClaudeConfig = {
   model: string
@@ -846,3 +837,4 @@ export const mcpApprovalDialogOpenAtom = atom<boolean>(false)
 
 // Pending MCP approvals to show in the dialog
 export const pendingMcpApprovalsAtom = atom<PendingMcpApproval[]>([])
+

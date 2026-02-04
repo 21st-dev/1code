@@ -4,11 +4,9 @@ import "./automations-styles.css"
 import { useAtomValue, useSetAtom, useAtom } from "jotai"
 import { selectedTeamIdAtom } from "../../lib/atoms"
 import {
-  desktopViewAtom,
   automationDetailIdAtom,
   automationTemplateParamsAtom,
   agentsSidebarOpenAtom,
-  agentsMobileViewModeAtom,
 } from "../agents/atoms"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
 import { IconSpinner, IconChevronDown, ExternalLinkIcon } from "../../components/ui/icons"
@@ -103,11 +101,9 @@ export function AutomationsDetailView() {
   const teamId = useAtomValue(selectedTeamIdAtom)
   const automationId = useAtomValue(automationDetailIdAtom)
   const templateParams = useAtomValue(automationTemplateParamsAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
   const setAutomationDetailId = useSetAtom(automationDetailIdAtom)
   const setTemplateParams = useSetAtom(automationTemplateParamsAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
-  const setMobileViewMode = useSetAtom(agentsMobileViewModeAtom)
   const isMobile = useIsMobile()
   const queryClient = useQueryClient()
 
@@ -292,8 +288,8 @@ export function AutomationsDetailView() {
   const doNavigateBack = useCallback(() => {
     setAutomationDetailId(null)
     setTemplateParams(null)
-    setDesktopView("automations")
-  }, [setAutomationDetailId, setTemplateParams, setDesktopView])
+    // Navigation handled by drawer system
+  }, [setAutomationDetailId, setTemplateParams])
 
   const handleBack = useCallback(() => {
     // In create mode, warn about unsaved changes if there's any content

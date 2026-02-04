@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { ChevronLeft } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
@@ -24,7 +24,6 @@ import {
   PluginFilledIcon,
   SkillIconFilled,
 } from "../../components/ui/icons"
-import { desktopViewAtom } from "../agents/atoms"
 
 // Check if we're in development mode
 const isDevelopment = import.meta.env.DEV
@@ -141,7 +140,6 @@ function TabButton({ tab, isActive, onClick }: TabButtonProps) {
 export function SettingsSidebar() {
   const [activeTab, setActiveTab] = useAtom(agentsSettingsDialogActiveTabAtom)
   const [devToolsUnlocked, setDevToolsUnlocked] = useAtom(devToolsUnlockedAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
   const isDesktop = useAtomValue(isDesktopAtom)
 
   // Hide native traffic lights when settings sidebar is shown
@@ -183,8 +181,9 @@ export function SettingsSidebar() {
   }
 
   const handleBack = useCallback(() => {
-    setDesktopView(null)
-  }, [setDesktopView])
+    // Drawer will handle closing via its own mechanism
+    // This component is now rendered inside a drawer, so we don't need to manage navigation
+  }, [])
 
   return (
     <div className="flex flex-col h-full bg-tl-background" data-sidebar-content>

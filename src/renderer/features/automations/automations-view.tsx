@@ -4,11 +4,9 @@ import "./automations-styles.css"
 import { useAtomValue, useSetAtom, useAtom } from "jotai"
 import { selectedTeamIdAtom } from "../../lib/atoms"
 import {
-  desktopViewAtom,
   automationDetailIdAtom,
   automationTemplateParamsAtom,
   agentsSidebarOpenAtom,
-  agentsMobileViewModeAtom,
 } from "../agents/atoms"
 import { Logo } from "../../components/ui/logo"
 import { useState, useMemo, useCallback } from "react"
@@ -28,21 +26,15 @@ import {
 
 export function AutomationsView() {
   const teamId = useAtomValue(selectedTeamIdAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
   const setAutomationDetailId = useSetAtom(automationDetailIdAtom)
   const setTemplateParams = useSetAtom(automationTemplateParamsAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
-  const setMobileViewMode = useSetAtom(agentsMobileViewModeAtom)
   const isMobile = useIsMobile()
 
   const handleSidebarToggle = useCallback(() => {
-    if (isMobile) {
-      setDesktopView(null)
-      setMobileViewMode("chats")
-    } else {
-      setSidebarOpen(true)
-    }
-  }, [isMobile, setDesktopView, setMobileViewMode, setSidebarOpen])
+    // Just open the main sidebar - drawer will handle the rest
+    setSidebarOpen(true)
+  }, [setSidebarOpen])
 
   const [activeTab, setActiveTab] = useState<ViewTab>("active")
   const [searchQuery, setSearchQuery] = useState("")
@@ -82,7 +74,7 @@ export function AutomationsView() {
   const handleNewAutomation = () => {
     setAutomationDetailId("new")
     setTemplateParams(null)
-    setDesktopView("automations-detail")
+    // Navigation handled by drawer system
   }
 
   const handleUseTemplate = (template: typeof AUTOMATION_TEMPLATES[number]) => {
@@ -93,13 +85,13 @@ export function AutomationsView() {
       trigger: template.triggerType,
       instructions: template.instructions,
     })
-    setDesktopView("automations-detail")
+    // Navigation handled by drawer system
   }
 
   const handleAutomationClick = (automationId: string) => {
     setAutomationDetailId(automationId)
     setTemplateParams(null)
-    setDesktopView("automations-detail")
+    // Navigation handled by drawer system
   }
 
   const isGithubConnected = githubStatus?.isConnected ?? false

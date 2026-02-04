@@ -1,10 +1,8 @@
-import { useAtomValue, useSetAtom } from "jotai"
-import { useEffect } from "react"
+import { useAtomValue } from "jotai"
 import {
   agentsSettingsDialogActiveTabAtom,
   devToolsUnlockedAtom,
 } from "../../lib/atoms"
-import { desktopViewAtom } from "../agents/atoms"
 import { AgentsAppearanceTab } from "../../components/dialogs/settings-tabs/agents-appearance-tab"
 import { AgentsBetaTab } from "../../components/dialogs/settings-tabs/agents-beta-tab"
 import { AgentsCustomAgentsTab } from "../../components/dialogs/settings-tabs/agents-custom-agents-tab"
@@ -25,19 +23,6 @@ export function SettingsContent() {
   const activeTab = useAtomValue(agentsSettingsDialogActiveTabAtom)
   const devToolsUnlocked = useAtomValue(devToolsUnlockedAtom)
   const showDebugTab = isDevelopment || devToolsUnlocked
-  const setDesktopView = useSetAtom(desktopViewAtom)
-
-  // Escape key closes settings
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault()
-        setDesktopView(null)
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [setDesktopView])
 
   const renderTabContent = () => {
     switch (activeTab) {

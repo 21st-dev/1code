@@ -1,0 +1,277 @@
+/**
+ * CustomizableLayout Component (GENERIC)
+ * Feature: 004-customizable-sidebars
+ * Task: COMP-005, COMP-007, COMP-008
+ *
+ * Main layout orchestrator that:
+ * - Wraps all icon bars and drawers in a DndContext for drag-and-drop
+ * - Renders icon bars based on configuration registry
+ * - Manages drawer state for each icon bar
+ * - Provides main content area for application
+ *
+ * Design: GENERIC architecture - works with ANY number of icon bars through configuration.
+ * Adding new bars requires only updating the registry, no code changes here.
+ */
+
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  KeyboardSensor,
+  TouchSensor,
+} from '@dnd-kit/core'
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import type { CustomizableLayoutProps, IconBarDefinition, Icon, IconLayoutConfig } from '../types/icon-bar.types'
+import { IconBar } from './IconBar'
+import { AssociatedDrawer } from './AssociatedDrawer'
+import { useIconLayoutStore } from '../stores/icon-layout-store'
+import {
+  drawerOpenAtomFamily,
+  drawerActiveIconAtomFamily,
+  drawerWidthAtomFamily,
+  dragOperationAtom,
+} from '../atoms/drawer-atoms'
+import { Button } from '@/renderer/components/ui/button'
+import { cn } from '@/renderer/lib/utils'
+
+/**
+ * Helper component to render an icon bar with its drawer state
+ * Necessary because Jotai hooks must be called unconditionally
+ */
+interface IconBarRendererProps {
+  bar: IconBarDefinition
+  workspaceId: string
+  icons: Icon[]
+  getBarIcons: (barId: string) => any[]
+}
+
+function IconBarRenderer({ bar, workspaceId, icons, getBarIcons }: IconBarRendererProps) {
+  const barIcons = getBarIcons(bar.id)
+
+  // Hook calls must be at the component level
+  const [isOpen, setIsOpen] = useAtom(drawerOpenAtomFamily({ workspaceId, barId: bar.id }))
+  const [activeIconId, setActiveIconId] = useAtom(drawerActiveIconAtomFamily({ workspaceId, barId: bar.id }))
+
+  const handleIconClick = (iconId: string) => {
+    if (isOpen && activeIconId === iconId) {
+      // Same icon clicked - toggle off (close drawer)
+      setIsOpen(false)
+      setActiveIconId(null)
+    } else {
+      // Different icon or drawer closed - open/switch to this icon
+      setIsOpen(true)
+      setActiveIconId(iconId)
+    }
+  }
+
+  return (
+    <IconBar
+      bar={bar}
+      iconConfigs={barIcons}
+      iconRegistry={icons}
+      activeIconId={activeIconId}
+      onIconClick={handleIconClick}
+      // isDragOver will be added in COMP-006
+    />
+  )
+}
+
+/**
+ * Helper component to render a drawer with its state
+ */
+interface DrawerRendererProps {
+  bar: IconBarDefinition
+  workspaceId: string
+  icons: Icon[]
+}
+
+function DrawerRenderer({ bar, workspaceId, icons }: DrawerRendererProps) {
+  const [isOpen, setIsOpen] = useAtom(drawerOpenAtomFamily({ workspaceId, barId: bar.id }))
+  const [activeIconId, setActiveIconId] = useAtom(drawerActiveIconAtomFamily({ workspaceId, barId: bar.id }))
+  const widthAtom = drawerWidthAtomFamily(bar.id)
+
+  const handleClose = () => {
+    setIsOpen(false)
+    setActiveIconId(null)
+  }
+
+  const handlePageChange = (iconId: string) => {
+    setActiveIconId(iconId)
+  }
+
+  return (
+    <AssociatedDrawer
+      bar={bar}
+      isOpen={isOpen}
+      activeIconId={activeIconId}
+      widthAtom={widthAtom}
+      onClose={handleClose}
+      icons={icons}
+      onPageChange={handlePageChange}
+      workspaceId={workspaceId}
+    />
+  )
+}
+
+/**
+ * COMP-005: CustomizableLayout Component
+ *
+ * Orchestrates the entire customizable icon bar system with drag-and-drop support.
+ *
+ * Architecture:
+ * - DndContext provides drag-and-drop context for all icon bars
+ * - Each icon bar renders independently based on configuration
+ * - Each drawer is associated with one icon bar
+ * - Main content area receives remaining space
+ *
+ * @param workspaceId - Workspace identifier for state isolation
+ * @param iconBars - Icon bar definitions from registry
+ * @param icons - Available icons registry
+ * @param children - Main content area (e.g., chat interface)
+ *
+ * @example
+ * <CustomizableLayout
+ *   workspaceId="main"
+ *   iconBars={ICON_BAR_REGISTRY}
+ *   icons={ICON_REGISTRY}
+ * >
+ *   <MainChatInterface />
+ * </CustomizableLayout>
+ */
+export function CustomizableLayout({
+  workspaceId,
+  iconBars,
+  icons,
+  children,
+}: CustomizableLayoutProps) {
+  // Get icon layout configuration from Zustand store
+  const { config, getBarIcons } = useIconLayoutStore()
+
+  // Get current drag operation state for DragOverlay
+  const [dragOperation] = useAtom(dragOperationAtom)
+
+  // Filter bars by placement for rendering
+  const topBars = iconBars.filter(bar => bar.placement === 'top')
+  const bottomBars = iconBars.filter(bar => bar.placement === 'bottom')
+  const leftBars = iconBars.filter(bar => bar.placement === 'left')
+  const rightBars = iconBars.filter(bar => bar.placement === 'right')
+
+  // Find the icon being dragged for the DragOverlay preview
+  const draggedIcon = dragOperation.activeIconId
+    ? icons.find(icon => icon.id === dragOperation.activeIconId)
+    : null
+
+  return (
+    <DndContext
+      // Drag handlers will be added in COMP-006
+      // onDragStart={handleDragStart}
+      // onDragOver={handleDragOver}
+      // onDragEnd={handleDragEnd}
+      // onDragCancel={handleDragCancel}
+
+      // Sensors will be configured in COMP-008
+      // sensors={sensors}
+
+      // Collision detection will be configured in COMP-006
+      // collisionDetection={closestCenter}
+    >
+      {/* Main layout container */}
+      <div className="flex h-full w-full flex-col">
+        {/* Top icon bars (horizontal) */}
+        {topBars.map(bar => (
+          <IconBarRenderer
+            key={bar.id}
+            bar={bar}
+            workspaceId={workspaceId}
+            icons={icons}
+            getBarIcons={getBarIcons}
+          />
+        ))}
+
+        {/* Middle section: main content + side icon bars + drawers */}
+        <div className="relative flex flex-1 overflow-hidden">
+          {/* Left icon bars (vertical) */}
+          {leftBars.map(bar => (
+            <IconBarRenderer
+              key={bar.id}
+              bar={bar}
+              workspaceId={workspaceId}
+              icons={icons}
+              getBarIcons={getBarIcons}
+            />
+          ))}
+
+          {/* Main content area */}
+          <div className="flex-1 overflow-hidden">
+            {children}
+          </div>
+
+          {/* Right icon bars (vertical) */}
+          {rightBars.map(bar => (
+            <IconBarRenderer
+              key={bar.id}
+              bar={bar}
+              workspaceId={workspaceId}
+              icons={icons}
+              getBarIcons={getBarIcons}
+            />
+          ))}
+
+          {/* Associated drawers for all bars */}
+          {/* Drawers are positioned absolutely and slide in from their configured side */}
+          <div className="pointer-events-none absolute inset-0">
+            {iconBars.map(bar => (
+              <DrawerRenderer
+                key={`drawer-${bar.id}`}
+                bar={bar}
+                workspaceId={workspaceId}
+                icons={icons}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom icon bars (horizontal) */}
+        {bottomBars.map(bar => (
+          <IconBarRenderer
+            key={bar.id}
+            bar={bar}
+            workspaceId={workspaceId}
+            icons={icons}
+            getBarIcons={getBarIcons}
+          />
+        ))}
+      </div>
+
+      {/* COMP-007: DragOverlay shows icon preview during drag */}
+      <DragOverlay
+        dropAnimation={{
+          duration: 200,
+          easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        {draggedIcon ? (
+          <div className="cursor-grabbing">
+            <Button
+              variant="default"
+              size="icon"
+              className={cn(
+                'pointer-events-none shadow-lg ring-2 ring-primary/50',
+                'bg-primary text-primary-foreground',
+              )}
+            >
+              {typeof draggedIcon.icon === 'function' ? (
+                <draggedIcon.icon className="h-4 w-4" />
+              ) : (
+                draggedIcon.icon
+              )}
+            </Button>
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  )
+}

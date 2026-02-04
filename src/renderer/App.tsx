@@ -14,6 +14,7 @@ import {
   BillingMethodPage,
   SelectRepoPage,
 } from "./features/onboarding"
+import { runMigration } from "./features/layout/utils/migration"
 import { identify, initAnalytics, shutdown } from "./lib/analytics"
 import {
   anthropicOnboardingCompletedAtom, apiKeyOnboardingCompletedAtom,
@@ -135,6 +136,14 @@ function AppContent() {
 }
 
 export function App() {
+  // MIG5-001: Run icon bar system migration on app startup
+  useEffect(() => {
+    const migrationResult = runMigration()
+    if (!migrationResult.success && migrationResult.error) {
+      console.error('[App] Icon bar migration failed:', migrationResult.error)
+    }
+  }, [])
+
   // Initialize analytics on mount
   useEffect(() => {
     initAnalytics()

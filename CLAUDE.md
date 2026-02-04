@@ -254,6 +254,8 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 ## Active Technologies
 - TypeScript 5.4.5, React 19, Electron 33.4.5 (001-speckit-ui-integration)
 - SQLite (via Drizzle ORM) for application data; file system for SpecKit artifacts (.specify/ and specs/ directories) (001-speckit-ui-integration)
+- TypeScript 5.4.5, React 19, Electron 33.4.5 + Jotai (UI state), Zustand (persistent state), Radix UI (components), dnd-kit (drag-and-drop) (004-customizable-sidebars)
+- localStorage for icon configuration, Jotai atoms for runtime drawer state (004-customizable-sidebars)
 
 ## Recent Changes
 - 001-speckit-ui-integration: Added TypeScript 5.4.5, React 19, Electron 33.4.5

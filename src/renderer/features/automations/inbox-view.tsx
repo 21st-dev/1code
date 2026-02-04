@@ -1,13 +1,12 @@
 "use client"
 
 import "./inbox-styles.css"
-import { useAtomValue, useSetAtom, useAtom } from "jotai"
+import { useAtomValue, useAtom } from "jotai"
 import { selectedTeamIdAtom, isDesktopAtom, isFullscreenAtom } from "../../lib/atoms"
 import {
   inboxSelectedChatIdAtom,
   agentsInboxSidebarWidthAtom,
   agentsSidebarOpenAtom,
-  agentsMobileViewModeAtom,
   inboxMobileViewModeAtom,
 } from "../agents/atoms"
 import { IconSpinner, SettingsIcon } from "../../components/ui/icons"
@@ -35,7 +34,6 @@ import { GitHubIcon } from "../../icons"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { ArrowUpDown, AlignJustify } from "lucide-react"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
-import { desktopViewAtom } from "../agents/atoms"
 import { remoteTrpc } from "../../lib/remote-trpc"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
@@ -84,8 +82,6 @@ export function InboxView() {
   const teamId = useAtomValue(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(inboxSelectedChatIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
-  const setAgentsMobileViewMode = useSetAtom(agentsMobileViewModeAtom)
   const [mobileViewMode, setMobileViewMode] = useAtom(inboxMobileViewModeAtom)
   const isMobile = useIsMobile()
   const isDesktop = useAtomValue(isDesktopAtom)
@@ -131,9 +127,10 @@ export function InboxView() {
   }, [setMobileViewMode, setSelectedChatId])
 
   const handleMobileBackToChats = useCallback(() => {
-    setDesktopView(null)
-    setAgentsMobileViewMode("chats")
-  }, [setDesktopView, setAgentsMobileViewMode])
+    // On mobile, just close this view by setting mobile view mode
+    // The drawer system will handle navigation
+    setSidebarOpen(true)
+  }, [setSidebarOpen])
 
   // Initialize sub-chat store when chat is selected
   useEffect(() => {

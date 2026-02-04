@@ -13,7 +13,7 @@ import {
   customHotkeysAtom,
   betaKanbanEnabledAtom,
 } from "../../lib/atoms"
-import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom, desktopViewAtom, fileSearchDialogOpenAtom } from "../agents/atoms"
+import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom, fileSearchDialogOpenAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -27,7 +27,9 @@ import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../agents/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
-import { SettingsSidebar } from "../settings/settings-sidebar"
+import { CustomizableLayout } from "./components/CustomizableLayout"
+import { ICON_BAR_REGISTRY } from "./utils/icon-bar-registry"
+import { ICON_REGISTRY } from "./constants/icon-registry"
 
 // ============================================================================
 // Constants
@@ -87,14 +89,12 @@ export function AgentsLayout() {
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [sidebarWidth, setSidebarWidth] = useAtom(agentsSidebarWidthAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
-  const desktopView = useAtomValue(desktopViewAtom)
   const setFileSearchDialogOpen = useSetAtom(fileSearchDialogOpenAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
@@ -220,7 +220,6 @@ export function AgentsLayout() {
     setSelectedChatId,
     setSelectedDraftId,
     setShowNewChatForm,
-    setDesktopView,
     setSidebarOpen,
     setSettingsActiveTab,
     setFileSearchDialogOpen,
@@ -234,8 +233,6 @@ export function AgentsLayout() {
     setSidebarOpen(false)
   }, [setSidebarOpen])
 
-  const isSettingsView = desktopView === "settings"
-
   return (
     <TooltipProvider delayDuration={300}>
       {/* Global queue processor - handles message queues for all sub-chats */}
@@ -244,39 +241,43 @@ export function AgentsLayout() {
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - switches between chat list and settings nav */}
-          <ResizableSidebar
-          isOpen={!isMobile && sidebarOpen}
-          onClose={handleCloseSidebar}
-          widthAtom={agentsSidebarWidthAtom}
-          minWidth={SIDEBAR_MIN_WIDTH}
-          maxWidth={SIDEBAR_MAX_WIDTH}
-          side="left"
-          closeHotkey={SIDEBAR_CLOSE_HOTKEY}
-          animationDuration={SIDEBAR_ANIMATION_DURATION}
-          initialWidth={0}
-          exitWidth={0}
-          showResizeTooltip={!isSettingsView}
-          className="overflow-hidden bg-background border-r"
-          style={{ borderRightWidth: "0.5px" }}
-        >
-          {isSettingsView ? (
-            <SettingsSidebar />
-          ) : (
-            <AgentsSidebar
-              desktopUser={desktopUser}
-              onSignOut={handleSignOut}
-              onToggleSidebar={handleCloseSidebar}
-            />
-          )}
-        </ResizableSidebar>
 
+        {/* CustomizableLayout with icon bars and drawers */}
+        <CustomizableLayout
+          workspaceId="main"
+          iconBars={ICON_BAR_REGISTRY}
+          icons={ICON_REGISTRY}
+        >
           {/* Main Content */}
-          <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-            <AgentsContent />
+          <div className="flex flex-1 overflow-hidden">
+            {/* Left Sidebar - chat list */}
+            <ResizableSidebar
+              isOpen={!isMobile && sidebarOpen}
+              onClose={handleCloseSidebar}
+              widthAtom={agentsSidebarWidthAtom}
+              minWidth={SIDEBAR_MIN_WIDTH}
+              maxWidth={SIDEBAR_MAX_WIDTH}
+              side="left"
+              closeHotkey={SIDEBAR_CLOSE_HOTKEY}
+              animationDuration={SIDEBAR_ANIMATION_DURATION}
+              initialWidth={0}
+              exitWidth={0}
+              className="overflow-hidden bg-background border-r"
+              style={{ borderRightWidth: "0.5px" }}
+            >
+              <AgentsSidebar
+                desktopUser={desktopUser}
+                onSignOut={handleSignOut}
+                onToggleSidebar={handleCloseSidebar}
+              />
+            </ResizableSidebar>
+
+            {/* Main Content */}
+            <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+              <AgentsContent />
+            </div>
           </div>
-        </div>
+        </CustomizableLayout>
 
         {/* Update Banner */}
         <UpdateBanner />
