@@ -124,6 +124,12 @@ function decryptToken(encrypted: string): string {
   return safeStorage.decryptString(buffer)
 }
 
+function decryptIfNeeded(token: string): string {
+  if (!token) return token
+  if (!token.startsWith("enc:")) return token
+  return decryptToken(token.slice(4))
+}
+
 /**
  * Get Claude Code OAuth token from local SQLite
  * Returns null if not connected
@@ -553,7 +559,7 @@ export const claudeRouter = router({
         customConfig: z
           .object({
             model: z.string().min(1),
-            token: z.string().min(1),
+            token: z.string(),
             baseUrl: z.string().min(1),
           })
           .optional(),
@@ -708,15 +714,21 @@ export const claudeRouter = router({
             // Use offline config if available
             const finalCustomConfig = offlineResult.config || input.customConfig
             const isUsingOllama = offlineResult.isUsingOllama
+            const resolvedCustomConfig = finalCustomConfig
+              ? {
+                  ...finalCustomConfig,
+                  token: decryptIfNeeded(finalCustomConfig.token),
+                }
+              : undefined
 
             // Track connection method for analytics
             let connectionMethod = "claude-subscription" // default (Claude Code OAuth)
             if (isUsingOllama) {
               connectionMethod = "offline-ollama"
-            } else if (finalCustomConfig) {
+            } else if (resolvedCustomConfig) {
               // Has custom config = either API key or custom model
-              const isDefaultAnthropicUrl = !finalCustomConfig.baseUrl ||
-                finalCustomConfig.baseUrl.includes("anthropic.com")
+              const isDefaultAnthropicUrl = !resolvedCustomConfig.baseUrl ||
+                resolvedCustomConfig.baseUrl.includes("anthropic.com")
               connectionMethod = isDefaultAnthropicUrl ? "api-key" : "custom-model"
             }
             setConnectionMethod(connectionMethod)
@@ -824,10 +836,12 @@ export const claudeRouter = router({
 
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
             const claudeEnv = buildClaudeEnv({
-              ...(finalCustomConfig && {
+              ...(resolvedCustomConfig && {
                 customEnv: {
-                  ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
-                  ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
+                  ...(resolvedCustomConfig.token && {
+                    ANTHROPIC_AUTH_TOKEN: resolvedCustomConfig.token,
+                  }),
+                  ANTHROPIC_BASE_URL: resolvedCustomConfig.baseUrl,
                 },
               }),
               enableTasks: input.enableTasks ?? true,
@@ -983,7 +997,14 @@ export const claudeRouter = router({
 
             // Build final env - only add OAuth token if we have one AND no existing API config
             // Existing CLI config takes precedence over OAuth
-            const finalEnv = {
+            const finalEnv: {
+              [key: string]: string | undefined
+              CLAUDE_CODE_OAUTH_TOKEN?: string
+              CLAUDE_CONFIG_DIR: string
+              ANTHROPIC_BASE_URL?: string
+              ANTHROPIC_AUTH_TOKEN?: string
+              ANTHROPIC_API_KEY?: string
+            } = {
               ...claudeEnv,
               ...(claudeCodeToken && !hasExistingApiConfig && {
                 CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
@@ -1012,25 +1033,27 @@ export const claudeRouter = router({
             console.log(`[claude] ========== END SESSION DEBUG ==========`)
 
             console.log(`[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`)
-            if (finalCustomConfig) {
+            if (resolvedCustomConfig) {
               const redactedConfig = {
-                ...finalCustomConfig,
-                token: `${finalCustomConfig.token.slice(0, 6)}...`,
+                ...resolvedCustomConfig,
+                token: resolvedCustomConfig.token
+                  ? `${resolvedCustomConfig.token.slice(0, 6)}...`
+                  : "",
               }
               if (isUsingOllama) {
-                console.log(`[Ollama] Using offline mode - Model: ${finalCustomConfig.model}, Base URL: ${finalCustomConfig.baseUrl}`)
+                console.log(`[Ollama] Using offline mode - Model: ${resolvedCustomConfig.model}, Base URL: ${resolvedCustomConfig.baseUrl}`)
               } else {
                 console.log(`[claude] Custom config: ${JSON.stringify(redactedConfig)}`)
               }
             }
 
-            const resolvedModel = finalCustomConfig?.model || input.model
+            const resolvedModel = resolvedCustomConfig?.model || input.model
 
             // DEBUG: If using Ollama, test if it's actually responding
-            if (isUsingOllama && finalCustomConfig) {
+            if (isUsingOllama && resolvedCustomConfig) {
               console.log('[Ollama Debug] Testing Ollama connectivity...')
               try {
-                const testResponse = await fetch(`${finalCustomConfig.baseUrl}/api/tags`, {
+                const testResponse = await fetch(`${resolvedCustomConfig.baseUrl}/api/tags`, {
                   signal: AbortSignal.timeout(2000)
                 })
                 if (testResponse.ok) {
@@ -1038,12 +1061,12 @@ export const claudeRouter = router({
                   const models = data.models?.map((m: any) => m.name) || []
                   console.log('[Ollama Debug] Ollama is responding. Available models:', models)
 
-                  if (!models.includes(finalCustomConfig.model)) {
-                    console.error(`[Ollama Debug] WARNING: Model "${finalCustomConfig.model}" not found in Ollama!`)
+                  if (!models.includes(resolvedCustomConfig.model)) {
+                    console.error(`[Ollama Debug] WARNING: Model "${resolvedCustomConfig.model}" not found in Ollama!`)
                     console.error(`[Ollama Debug] Available models:`, models)
                     console.error(`[Ollama Debug] This will likely cause the stream to hang or fail silently.`)
                   } else {
-                    console.log(`[Ollama Debug] ✓ Model "${finalCustomConfig.model}" is available`)
+                    console.log(`[Ollama Debug] ✓ Model "${resolvedCustomConfig.model}" is available`)
                   }
                 } else {
                   console.error('[Ollama Debug] Ollama returned error:', testResponse.status)
@@ -1468,8 +1491,8 @@ ${prompt}
 
             if (isUsingOllama) {
               console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
-              console.log(`[Ollama] Model: ${finalCustomConfig?.model}`)
-              console.log(`[Ollama] Base URL: ${finalCustomConfig?.baseUrl}`)
+              console.log(`[Ollama] Model: ${resolvedCustomConfig?.model}`)
+              console.log(`[Ollama] Base URL: ${resolvedCustomConfig?.baseUrl}`)
               console.log(`[Ollama] Prompt: "${typeof input.prompt === 'string' ? input.prompt.slice(0, 100) : 'N/A'}..."`)
               console.log(`[Ollama] CWD: ${input.cwd}`)
             }
@@ -1536,7 +1559,7 @@ ${prompt}
                   console.error(`[CLAUDE SDK ERROR] CWD: ${input.cwd}`)
                   console.error(`[CLAUDE SDK ERROR] Mode: ${input.mode}`)
                   console.error(`[CLAUDE SDK ERROR] Session ID: ${msgAny.session_id || 'none'}`)
-                  console.error(`[CLAUDE SDK ERROR] Has custom config: ${!!finalCustomConfig}`)
+                  console.error(`[CLAUDE SDK ERROR] Has custom config: ${!!resolvedCustomConfig}`)
                   console.error(`[CLAUDE SDK ERROR] Is using Ollama: ${isUsingOllama}`)
                   console.error(`[CLAUDE SDK ERROR] Model: ${resolvedModel || 'default'}`)
                   console.error(`[CLAUDE SDK ERROR] Has OAuth token: ${!!claudeCodeToken}`)
@@ -1794,7 +1817,7 @@ ${prompt}
                   console.error(`[Ollama]   2. Model failed to start generating (check Ollama logs: ollama logs)`)
                   console.error(`[Ollama]   3. Network issue between Claude SDK and Ollama`)
                   console.error(`[Ollama] ===== NEXT STEPS =====`)
-                  console.error(`[Ollama]   1. Check if model works: curl http://localhost:11434/api/generate -d '{"model":"${finalCustomConfig?.model}","prompt":"test"}'`)
+                  console.error(`[Ollama]   1. Check if model works: curl http://localhost:11434/api/generate -d '{"model":"${resolvedCustomConfig?.model}","prompt":"test"}'`)
                   console.error(`[Ollama]   2. Check Ollama version supports Messages API`)
                   console.error(`[Ollama]   3. Try using a proxy that converts Anthropic API → Ollama format`)
                 }
@@ -2377,6 +2400,127 @@ ${prompt}
       return { success: true }
     }),
 
+  fetchModels: publicProcedure
+    .input(
+      z.object({
+        baseUrl: z.string().min(1),
+        token: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const cleanUrl = input.baseUrl.replace(/\/$/, "")
+      const authToken = input.token ? decryptIfNeeded(input.token) : ""
+
+      const debugInfo: {
+        ollama?: { ok: boolean; status?: number; error?: string }
+        openai?: { ok: boolean; status?: number; error?: string }
+      } = {}
+
+      try {
+        const ollamaRes = await fetch(`${cleanUrl}/api/tags`)
+        debugInfo.ollama = {
+          ok: ollamaRes.ok,
+          status: ollamaRes.status,
+        }
+        if (ollamaRes.ok) {
+          const data = (await ollamaRes.json()) as { models?: Array<{ name?: string }> }
+          if (Array.isArray(data.models)) {
+            const models = data.models
+              .map((model: { name?: string }) => model.name)
+              .filter((name: string | undefined): name is string => Boolean(name))
+            if (models.length > 0) {
+              return {
+                models,
+                status: {
+                  success: true,
+                  source: "ollama" as const,
+                  details: debugInfo,
+                },
+              }
+            }
+            debugInfo.ollama.error = "No models found in Ollama response"
+          } else {
+            debugInfo.ollama.error = "Ollama response missing 'models' array"
+          }
+        } else {
+          debugInfo.ollama.error = `Ollama endpoint returned HTTP ${ollamaRes.status}`
+        }
+      } catch (error) {
+        console.warn("[models] Failed to fetch Ollama tags:", error)
+        const message = error instanceof Error ? error.message : String(error)
+        debugInfo.ollama = {
+          ok: false,
+          error: `Failed to fetch Ollama tags: ${message}`,
+        }
+      }
+
+      try {
+        const res = await fetch(`${cleanUrl}/v1/models`, {
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        })
+        debugInfo.openai = {
+          ok: res.ok,
+          status: res.status,
+        }
+        if (res.ok) {
+          const data = (await res.json()) as { data?: Array<{ id?: string }> }
+          if (Array.isArray(data.data)) {
+            const models = data.data
+              .map((model: { id?: string }) => model.id)
+              .filter((id: string | undefined): id is string => Boolean(id))
+            if (models.length > 0) {
+              return {
+                models,
+                status: {
+                  success: true,
+                  source: "openai" as const,
+                  details: debugInfo,
+                },
+              }
+            }
+            debugInfo.openai.error =
+              "No models found in OpenAI-compatible response"
+          } else {
+            debugInfo.openai.error =
+              "OpenAI-compatible response missing 'data' array"
+          }
+        } else {
+          debugInfo.openai.error =
+            `OpenAI-compatible endpoint returned HTTP ${res.status}`
+        }
+      } catch (error) {
+        console.warn("[models] Failed to fetch OpenAI-compatible models:", error)
+        const message = error instanceof Error ? error.message : String(error)
+        debugInfo.openai = {
+          ok: false,
+          error: `Failed to fetch OpenAI-compatible models: ${message}`,
+        }
+      }
+
+      return {
+        models: [] as string[],
+        status: {
+          success: false,
+          source: "none" as const,
+          reason:
+            "Failed to fetch models from both Ollama and OpenAI-compatible endpoints",
+          details: debugInfo,
+        },
+      }
+    }),
+
+  encryptToken: publicProcedure
+    .input(
+      z.object({
+        token: z.string().min(1),
+      }),
+    )
+    .mutation(({ input }) => {
+      const encrypted = safeStorage.isEncryptionAvailable()
+        ? safeStorage.encryptString(input.token).toString("base64")
+        : Buffer.from(input.token, "utf-8").toString("base64")
+      return { encrypted: `enc:${encrypted}` }
+    }),
   getPendingPluginMcpApprovals: publicProcedure
     .input(z.object({ projectPath: z.string().optional() }))
     .query(async ({ input }) => {

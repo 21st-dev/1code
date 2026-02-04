@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { ChevronLeft } from "lucide-react"
 
 import { IconSpinner, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
@@ -11,10 +11,13 @@ import { Logo } from "../../components/ui/logo"
 import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
-  customClaudeConfigAtom,
-  type CustomClaudeConfig,
+  activeProviderIdAtom,
+  modelProvidersAtom,
 } from "../../lib/atoms"
+import { lastSelectedModelIdAtom } from "../agents/atoms"
+import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
+import { toast } from "sonner"
 
 // Check if the key looks like a valid Anthropic API key
 const isValidApiKey = (key: string) => {
@@ -23,7 +26,9 @@ const isValidApiKey = (key: string) => {
 }
 
 export function ApiKeyOnboardingPage() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
+  const [providers, setProviders] = useAtom(modelProvidersAtom)
+  const [, setActiveProviderId] = useAtom(activeProviderIdAtom)
+  const [, setLastSelectedModelId] = useAtom(lastSelectedModelIdAtom)
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
@@ -34,45 +39,51 @@ export function ApiKeyOnboardingPage() {
   const defaultModel = "claude-sonnet-4-20250514"
   const defaultBaseUrl = "https://api.anthropic.com"
 
-  const [apiKey, setApiKey] = useState(storedConfig.token)
-  const [model, setModel] = useState(storedConfig.model || "")
-  const [token, setToken] = useState(storedConfig.token)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl || "")
+  const [apiKey, setApiKey] = useState("")
+  const [model, setModel] = useState("")
+  const [token, setToken] = useState("")
+  const [baseUrl, setBaseUrl] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Sync from stored config on mount
-  useEffect(() => {
-    if (storedConfig.token) {
-      setApiKey(storedConfig.token)
-      setToken(storedConfig.token)
-    }
-    if (storedConfig.model) setModel(storedConfig.model)
-    if (storedConfig.baseUrl) setBaseUrl(storedConfig.baseUrl)
-  }, [])
+  const encryptTokenMutation = trpc.claude.encryptToken.useMutation()
 
   const handleBack = () => {
     setBillingMethod(null)
   }
 
   // Submit for API key mode (simple - just the key)
-  const submitApiKey = (key: string) => {
+  const submitApiKey = async (key: string) => {
     if (!isValidApiKey(key)) return
 
     setIsSubmitting(true)
 
-    const config: CustomClaudeConfig = {
-      model: defaultModel,
-      token: key.trim(),
-      baseUrl: defaultBaseUrl,
+    try {
+      const { encrypted } = await encryptTokenMutation.mutateAsync({
+        token: key.trim(),
+      })
+      const providerId = `provider-${Date.now()}`
+      setProviders([
+        ...providers,
+        {
+          id: providerId,
+          name: "Anthropic API",
+          baseUrl: defaultBaseUrl,
+          token: encrypted,
+          models: [defaultModel],
+          isOffline: false,
+        },
+      ])
+      setActiveProviderId(providerId)
+      setLastSelectedModelId(defaultModel)
+      setApiKeyOnboardingCompleted(true)
+    } catch (error) {
+      toast.error("Failed to secure API token")
+    } finally {
+      setIsSubmitting(false)
     }
-    setStoredConfig(config)
-    setApiKeyOnboardingCompleted(true)
-
-    setIsSubmitting(false)
   }
 
   // Submit for custom model mode (all three fields)
-  const submitCustomModel = () => {
+  const submitCustomModel = async () => {
     const trimmedModel = model.trim()
     const trimmedToken = token.trim()
     const trimmedBaseUrl = baseUrl.trim()
@@ -81,15 +92,30 @@ export function ApiKeyOnboardingPage() {
 
     setIsSubmitting(true)
 
-    const config: CustomClaudeConfig = {
-      model: trimmedModel,
-      token: trimmedToken,
-      baseUrl: trimmedBaseUrl,
+    try {
+      const { encrypted } = await encryptTokenMutation.mutateAsync({
+        token: trimmedToken,
+      })
+      const providerId = `provider-${Date.now()}`
+      setProviders([
+        ...providers,
+        {
+          id: providerId,
+          name: "Custom Provider",
+          baseUrl: trimmedBaseUrl,
+          token: encrypted,
+          models: [trimmedModel],
+          isOffline: false,
+        },
+      ])
+      setActiveProviderId(providerId)
+      setLastSelectedModelId(trimmedModel)
+      setApiKeyOnboardingCompleted(true)
+    } catch (error) {
+      toast.error("Failed to secure API token")
+    } finally {
+      setIsSubmitting(false)
     }
-    setStoredConfig(config)
-    setApiKeyOnboardingCompleted(true)
-
-    setIsSubmitting(false)
   }
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -64,10 +64,9 @@ import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
 import {
   chatSourceModeAtom,
-  customClaudeConfigAtom,
   defaultAgentModeAtom,
   isDesktopAtom, isFullscreenAtom,
-  normalizeCustomClaudeConfig,
+  activeProviderIdAtom,
   selectedOllamaModelAtom,
   soundNotificationsEnabledAtom
 } from "../../../lib/atoms"
@@ -4298,11 +4297,8 @@ export function ChatView({
 
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
   const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+  const activeProviderId = useAtomValue(activeProviderIdAtom)
   const setLoadingSubChats = useSetAtom(loadingSubChatsAtom)
   const unseenChanges = useAtomValue(agentsUnseenChangesAtom)
   const setUnseenChanges = useSetAtom(agentsUnseenChangesAtom)
@@ -6711,9 +6707,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                           >
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
                             <span>
-                              {hasCustomClaudeConfig ? (
-                                "Custom Model"
-                              ) : (
+                              {activeProviderId ? "Custom Model" : (
                                 <>
                                   Sonnet{" "}
                                   <span className="text-muted-foreground">
