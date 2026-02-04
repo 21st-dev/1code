@@ -248,6 +248,74 @@ export const OFFLINE_PROVIDER: ModelProvider = {
   baseUrl: 'http://localhost:11434',
 }
 
+const LEGACY_CUSTOM_CONFIG_KEY = "agents:claude-custom-config"
+const PROVIDERS_STORAGE_KEY = "agents:model-providers"
+const ACTIVE_PROVIDER_KEY = "agents:active-provider-id"
+const LAST_SELECTED_MODEL_KEY = "agents:lastSelectedModelId"
+
+const runLegacyCustomConfigMigration = (): void => {
+  if (typeof window === "undefined") return
+  if (!("localStorage" in window)) return
+
+  try {
+    const legacyRaw = window.localStorage.getItem(LEGACY_CUSTOM_CONFIG_KEY)
+    if (!legacyRaw) return
+
+    const providersRaw = window.localStorage.getItem(PROVIDERS_STORAGE_KEY)
+    const providers = providersRaw
+      ? (JSON.parse(providersRaw) as ModelProvider[])
+      : null
+
+    const legacy = JSON.parse(legacyRaw) as CustomClaudeConfig
+    if (!legacy?.model || !legacy?.baseUrl) {
+      window.localStorage.removeItem(LEGACY_CUSTOM_CONFIG_KEY)
+      return
+    }
+    const legacyToken = legacy.token ?? ""
+
+    const hasExistingCustomProvider = Array.isArray(providers)
+      ? providers.some(
+          (provider) =>
+            !provider?.isOffline &&
+            provider?.baseUrl === legacy.baseUrl &&
+            provider?.token === legacyToken &&
+            provider?.models?.includes(legacy.model),
+        )
+      : false
+
+    if (hasExistingCustomProvider) {
+      window.localStorage.removeItem(LEGACY_CUSTOM_CONFIG_KEY)
+      return
+    }
+
+    const providerId = `legacy-${crypto.randomUUID()}`
+    const nextProviders = Array.isArray(providers)
+      ? [...providers]
+      : [OFFLINE_PROVIDER]
+
+    nextProviders.push({
+      id: providerId,
+      name: "Legacy Custom Config",
+      baseUrl: legacy.baseUrl,
+      token: legacyToken,
+      models: [legacy.model],
+      isOffline: false,
+    })
+
+    window.localStorage.setItem(
+      PROVIDERS_STORAGE_KEY,
+      JSON.stringify(nextProviders),
+    )
+    window.localStorage.setItem(ACTIVE_PROVIDER_KEY, providerId)
+    window.localStorage.setItem(LAST_SELECTED_MODEL_KEY, legacy.model)
+    window.localStorage.removeItem(LEGACY_CUSTOM_CONFIG_KEY)
+  } catch (error) {
+    console.warn("[models] Failed to migrate legacy custom config:", error)
+  }
+}
+
+runLegacyCustomConfigMigration()
+
 // OpenAI API key for voice transcription (for users without paid subscription)
 export const openaiApiKeyAtom = atomWithStorage<string>(
   "agents:openai-api-key",

@@ -6,7 +6,9 @@ import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
   activeProviderIdAtom,
+  lastSelectedModelIdAtom,
   modelProvidersAtom,
+  MODEL_ID_MAP,
   openaiApiKeyAtom,
   type ModelProvider,
 } from "../../../lib/atoms"
@@ -314,7 +316,7 @@ function ModelProviderDialog({
     }
 
     const newProvider: ModelProvider = {
-      id: provider?.id || `provider-${Date.now()}`,
+      id: provider?.id || `provider-${crypto.randomUUID()}`,
       name,
       baseUrl,
       token: storedToken,
@@ -345,7 +347,10 @@ function ModelProviderDialog({
         setModelsText(result.models.join("\n"))
         toast.success(`Found ${result.models.length} models`)
       } else {
-        toast.error("No models returned. Check URL or enter model manually.")
+        if (result.status?.details) {
+          console.warn("[models] Discovery details:", result.status.details)
+        }
+        toast.error(result.status?.reason || "No models returned. Check URL or enter model manually.")
       }
     } catch (err) {
       console.error("[models] Model discovery failed:", err)
@@ -429,6 +434,7 @@ function ModelProviderDialog({
 function ModelProvidersList() {
   const [providers, setProviders] = useAtom(modelProvidersAtom)
   const [activeProviderId, setActiveProviderId] = useAtom(activeProviderIdAtom)
+  const setLastSelectedModelId = useSetAtom(lastSelectedModelIdAtom)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProvider, setEditingProvider] = useState<ModelProvider | undefined>(undefined)
   const encryptTokenMutation = trpc.claude.encryptToken.useMutation()
@@ -490,6 +496,7 @@ function ModelProvidersList() {
     if (window.confirm("Are you sure you want to delete this provider?")) {
       if (activeProviderId === id) {
         setActiveProviderId(null)
+        setLastSelectedModelId(MODEL_ID_MAP.opus)
       }
       setProviders(providers.filter(p => p.id !== id))
       toast.success("Provider deleted")

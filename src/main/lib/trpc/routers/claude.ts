@@ -2411,39 +2411,102 @@ ${prompt}
       const cleanUrl = input.baseUrl.replace(/\/$/, "")
       const authToken = input.token ? decryptIfNeeded(input.token) : ""
 
+      const debugInfo: {
+        ollama?: { ok: boolean; status?: number; error?: string }
+        openai?: { ok: boolean; status?: number; error?: string }
+      } = {}
+
       try {
         const ollamaRes = await fetch(`${cleanUrl}/api/tags`)
+        debugInfo.ollama = {
+          ok: ollamaRes.ok,
+          status: ollamaRes.status,
+        }
         if (ollamaRes.ok) {
-          const data = await ollamaRes.json()
+          const data = (await ollamaRes.json()) as { models?: Array<{ name?: string }> }
           if (Array.isArray(data.models)) {
             const models = data.models
               .map((model: { name?: string }) => model.name)
               .filter((name: string | undefined): name is string => Boolean(name))
-            return { models }
+            if (models.length > 0) {
+              return {
+                models,
+                status: {
+                  success: true,
+                  source: "ollama" as const,
+                  details: debugInfo,
+                },
+              }
+            }
+            debugInfo.ollama.error = "No models found in Ollama response"
+          } else {
+            debugInfo.ollama.error = "Ollama response missing 'models' array"
           }
+        } else {
+          debugInfo.ollama.error = `Ollama endpoint returned HTTP ${ollamaRes.status}`
         }
       } catch (error) {
         console.warn("[models] Failed to fetch Ollama tags:", error)
+        const message = error instanceof Error ? error.message : String(error)
+        debugInfo.ollama = {
+          ok: false,
+          error: `Failed to fetch Ollama tags: ${message}`,
+        }
       }
 
       try {
         const res = await fetch(`${cleanUrl}/v1/models`, {
           headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         })
+        debugInfo.openai = {
+          ok: res.ok,
+          status: res.status,
+        }
         if (res.ok) {
-          const data = await res.json()
+          const data = (await res.json()) as { data?: Array<{ id?: string }> }
           if (Array.isArray(data.data)) {
             const models = data.data
               .map((model: { id?: string }) => model.id)
               .filter((id: string | undefined): id is string => Boolean(id))
-            return { models }
+            if (models.length > 0) {
+              return {
+                models,
+                status: {
+                  success: true,
+                  source: "openai" as const,
+                  details: debugInfo,
+                },
+              }
+            }
+            debugInfo.openai.error =
+              "No models found in OpenAI-compatible response"
+          } else {
+            debugInfo.openai.error =
+              "OpenAI-compatible response missing 'data' array"
           }
+        } else {
+          debugInfo.openai.error =
+            `OpenAI-compatible endpoint returned HTTP ${res.status}`
         }
       } catch (error) {
         console.warn("[models] Failed to fetch OpenAI-compatible models:", error)
+        const message = error instanceof Error ? error.message : String(error)
+        debugInfo.openai = {
+          ok: false,
+          error: `Failed to fetch OpenAI-compatible models: ${message}`,
+        }
       }
 
-      return { models: [] as string[] }
+      return {
+        models: [] as string[],
+        status: {
+          success: false,
+          source: "none" as const,
+          reason:
+            "Failed to fetch models from both Ollama and OpenAI-compatible endpoints",
+          details: debugInfo,
+        },
+      }
     }),
 
   encryptToken: publicProcedure
