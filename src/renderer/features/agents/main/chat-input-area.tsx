@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, Loader2, RefreshCw, Zap } from "lucide-react"
+import { ChevronDown, Loader2, RefreshCw, Zap, Globe } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "../../../components/ui/dropdown-menu"
 import {
   AgentIcon,
@@ -44,11 +45,11 @@ import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
   autoOfflineModeAtom,
-  customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
-  normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom,
+  modelProvidersAtom,
+  activeProviderIdAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
@@ -61,7 +62,7 @@ import {
   clearSubChatDraft,
   saveSubChatDraftWithAttachments,
 } from "../lib/drafts"
-import { CLAUDE_MODELS } from "../lib/models"
+import { getAvailableModels, type ClaudeModel } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
 import {
   AgentsFileMention,
@@ -89,13 +90,15 @@ import { customHotkeysAtom } from "../../../lib/atoms"
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
+  const [providers] = useAtom(modelProvidersAtom)
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
   const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
     refetchInterval: showOfflineFeatures ? 30000 : false,
     enabled: showOfflineFeatures, // Only query Ollama when offline mode is enabled
   })
 
-  const baseModels = CLAUDE_MODELS
+  // Combine standard models + custom providers
+  const baseModels = useMemo(() => getAvailableModels(providers), [providers])
 
   const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
   const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
@@ -408,26 +411,44 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Model dropdown state
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
   const [lastSelectedModelId, setLastSelectedModelId] = useAtom(lastSelectedModelIdAtom)
+  const [activeProviderId, setActiveProviderId] = useAtom(activeProviderIdAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
+  const providers = useAtomValue(modelProvidersAtom)
   const availableModels = useAvailableModels()
   const autoOfflineMode = useAtomValue(autoOfflineModeAtom)
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
   const [selectedModel, setSelectedModel] = useState(
     () => availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[0],
   )
+  const providerNameById = useMemo(() => {
+    const entries = providers.map((provider) => [provider.id, provider.name] as const)
+    return new Map(entries)
+  }, [providers])
 
   // Sync selectedModel when atom value changes (e.g., after localStorage hydration)
   useEffect(() => {
-    const model = availableModels.models.find((m) => m.id === lastSelectedModelId)
+    // Priority: 1. Active Provider, 2. Last Selected Model
+    let model: ClaudeModel | undefined
+    if (activeProviderId) {
+      model = availableModels.models.find((m) => m.providerId === activeProviderId && m.id === lastSelectedModelId)
+      if (!model) {
+        model = availableModels.models.find((m) => m.providerId === activeProviderId)
+      }
+    } 
+    
+    if (!model) {
+      model = availableModels.models.find((m) => m.id === lastSelectedModelId)
+    }
+
+    if (!model && activeProviderId) {
+      setActiveProviderId(null)
+      model = availableModels.models[0]
+    }
+
     if (model && model.id !== selectedModel.id) {
       setSelectedModel(model)
     }
-  }, [lastSelectedModelId])
-
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+  }, [lastSelectedModelId, activeProviderId, availableModels.models, setActiveProviderId, selectedModel.id])
 
   // Determine current Ollama model (selected or recommended)
   const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
@@ -554,15 +575,13 @@ export const ChatInputArea = memo(function ChatInputArea({
       if (e.metaKey && e.key === "/") {
         e.preventDefault()
         e.stopPropagation()
-        if (!hasCustomClaudeConfig) {
-          setIsModelDropdownOpen(true)
-        }
+        setIsModelDropdownOpen(true)
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [hasCustomClaudeConfig])
+  }, [])
 
   // Voice input handlers
   const handleVoiceMouseDown = useCallback(async () => {
@@ -941,7 +960,6 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        // @ts-expect-error - Electron's webUtils API
         const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
 
         let mentionId: string
@@ -1358,45 +1376,35 @@ export const ChatInputArea = memo(function ChatInputArea({
                   ) : (
                     // Online mode: show Claude model selector
                     <DropdownMenu
-                      open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
-                      onOpenChange={(open) => {
-                        if (!hasCustomClaudeConfig) {
-                          setIsModelDropdownOpen(open)
-                        }
-                      }}
+                      open={isModelDropdownOpen}
+                      onOpenChange={setIsModelDropdownOpen}
                     >
                       <DropdownMenuTrigger asChild>
                         <button
-                          disabled={hasCustomClaudeConfig}
-                          className={cn(
-                            "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                            hasCustomClaudeConfig
-                              ? "opacity-70 cursor-not-allowed"
-                              : "hover:text-foreground hover:bg-muted/50",
-                          )}
+                          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 hover:text-foreground hover:bg-muted/50"
                         >
-                          <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
+                          {selectedModel?.isCustom ? (
+                            <Globe className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
+                          )}
                           <span className="truncate">
-                            {hasCustomClaudeConfig ? (
-                              "Custom Model"
-                            ) : (
-                              <>
-                                {selectedModel?.name}{" "}
-                                <span className="text-muted-foreground">4.5</span>
-                              </>
-                            )}
+                            {selectedModel?.name || "Select Model"}
+                            {!selectedModel?.isCustom && <span className="text-muted-foreground ml-1">4.5</span>}
                           </span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[200px]">
-                        {availableModels.models.map((model) => {
-                          const isSelected = selectedModel?.id === model.id
+                      <DropdownMenuContent align="start" className="w-[220px]">
+                        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">Standard Models</DropdownMenuLabel>
+                        {availableModels.models.filter(m => !m.isCustom).map((model) => {
+                          const isSelected = selectedModel?.id === model.id && !activeProviderId
                           return (
                             <DropdownMenuItem
                               key={model.id}
                               onClick={() => {
                                 setSelectedModel(model)
+                                setActiveProviderId(null)
                                 setLastSelectedModelId(model.id)
                               }}
                               className="gap-2 justify-between"
@@ -1414,6 +1422,39 @@ export const ChatInputArea = memo(function ChatInputArea({
                             </DropdownMenuItem>
                           )
                         })}
+                        
+                        {availableModels.models.some(m => m.isCustom) && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">Custom Providers</DropdownMenuLabel>
+                            {availableModels.models.filter(m => m.isCustom).map((model) => {
+                              const isSelected = activeProviderId === model.providerId && lastSelectedModelId === model.id
+                              const providerName = model.providerId ? providerNameById.get(model.providerId) : undefined
+                              return (
+                                <DropdownMenuItem
+                                  key={`${model.providerId || "custom"}:${model.id}`}
+                                  onClick={() => {
+                                    setSelectedModel(model)
+                                    if (model.providerId) setActiveProviderId(model.providerId)
+                                    setLastSelectedModelId(model.id)
+                                  }}
+                                  className="gap-2 justify-between"
+                                >
+                                  <div className="flex items-center gap-1.5 overflow-hidden">
+                                    <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span className="truncate" title={model.id}>
+                                      {providerName ? `${providerName} • ${model.name}` : model.name}
+                                    </span>
+                                  </div>
+                                  {isSelected && (
+                                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </>
+                        )}
+
                         <DropdownMenuSeparator />
                         <div
                           className="flex items-center justify-between px-1.5 py-1.5 mx-1"

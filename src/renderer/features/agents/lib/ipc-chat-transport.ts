@@ -2,17 +2,20 @@ import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
+  activeProviderIdAtom,
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
   type CustomClaudeConfig,
-  customClaudeConfigAtom,
   enableTasksAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
-  normalizeCustomClaudeConfig,
+  getOfflineProvider,
+  modelProvidersAtom,
+  networkOnlineAtom,
   selectedOllamaModelAtom,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
+  simulateOfflineAtom,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
@@ -171,19 +174,69 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read model selection dynamically (so model changes apply to existing chats)
     const selectedModelId = appStore.get(lastSelectedModelIdAtom)
-    const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
+    const activeProviderId = appStore.get(activeProviderIdAtom)
+    const providers = appStore.get(modelProvidersAtom)
+    const activeProvider = activeProviderId
+      ? providers.find((p) => p.id === activeProviderId)
+      : undefined
 
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
-    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
-
-    // Get selected Ollama model for offline mode
+    // Offline mode detection
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
-    // Check if offline mode is enabled in settings
     const showOfflineFeatures = appStore.get(showOfflineModeFeaturesAtom)
     const autoOfflineMode = appStore.get(autoOfflineModeAtom)
+    const networkOnline = appStore.get(networkOnlineAtom)
+    const simulateOffline = appStore.get(simulateOfflineAtom)
+    const isOffline = simulateOffline || !networkOnline
     const offlineModeEnabled = showOfflineFeatures && autoOfflineMode
+
+    let customConfig: CustomClaudeConfig | undefined
+    if (offlineModeEnabled && isOffline) {
+      const offlineProvider = getOfflineProvider(selectedOllamaModel)
+      customConfig = {
+        model: offlineProvider.models[0],
+        token: offlineProvider.token,
+        baseUrl: offlineProvider.baseUrl,
+      }
+    } else if (activeProvider) {
+      const modelId = activeProvider.models.includes(selectedModelId)
+        ? selectedModelId
+        : activeProvider.models[0]
+      customConfig = {
+        model: modelId,
+        token: activeProvider.token,
+        baseUrl: activeProvider.baseUrl,
+      }
+    }
+
+    const modelString =
+      customConfig?.model ||
+      MODEL_ID_MAP[selectedModelId] ||
+      selectedModelId ||
+      "opus"
+
+    if (
+      customConfig?.token &&
+      !customConfig.token.startsWith("enc:") &&
+      customConfig.token !== "ollama"
+    ) {
+      try {
+        const { encrypted } = await trpcClient.claude.encryptToken.mutate({
+          token: customConfig.token,
+        })
+        customConfig = { ...customConfig, token: encrypted }
+        if (activeProviderId) {
+          const providers = appStore.get(modelProvidersAtom)
+          const updatedProviders = providers.map((provider) =>
+            provider.id === activeProviderId
+              ? { ...provider, token: encrypted }
+              : provider,
+          )
+          appStore.set(modelProvidersAtom, updatedProviders)
+        }
+      } catch (err) {
+        console.error("[models] Failed to encrypt custom model token:", err)
+      }
+    }
 
     const currentMode =
       useAgentSubChatStore

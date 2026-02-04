@@ -1,13 +1,14 @@
 import { useAtom, useSetAtom } from "jotai"
-import { MoreHorizontal, Plus } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { MoreHorizontal, Plus, Trash, RefreshCw, Server, Globe, Pencil } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
-  customClaudeConfigAtom,
+  activeProviderIdAtom,
+  modelProvidersAtom,
   openaiApiKeyAtom,
-  type CustomClaudeConfig,
+  type ModelProvider,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Badge } from "../../ui/badge"
@@ -20,6 +21,15 @@ import {
 } from "../../ui/dropdown-menu"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
+import { Textarea } from "../../ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../ui/dialog"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -36,12 +46,6 @@ function useIsNarrowScreen(): boolean {
   }, [])
 
   return isNarrow
-}
-
-const EMPTY_CONFIG: CustomClaudeConfig = {
-  model: "",
-  token: "",
-  baseUrl: "",
 }
 
 // Account row component
@@ -246,11 +250,326 @@ function AnthropicAccountsSection() {
   )
 }
 
+function ModelProviderDialog({
+  provider,
+  onSave,
+  onClose,
+  open,
+  onOpenChange,
+}: {
+  provider?: ModelProvider
+  onSave: (provider: ModelProvider) => void
+  onClose: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [name, setName] = useState(provider?.name || "")
+  const [baseUrl, setBaseUrl] = useState(provider?.baseUrl || "")
+  const [token, setToken] = useState(provider?.token || "")
+  const hasStoredToken = Boolean(provider?.token?.startsWith("enc:"))
+  const [modelsText, setModelsText] = useState(
+    provider?.models?.join("\n") || "",
+  )
+  const [isFetching, setIsFetching] = useState(false)
+  const encryptTokenMutation = trpc.claude.encryptToken.useMutation()
+  const fetchModelsMutation = trpc.claude.fetchModels.useMutation()
+
+  const parseModels = (value: string) =>
+    value
+      .split(/[\n,]/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+
+  // Reset state when profile changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      setName(provider?.name || "")
+      setBaseUrl(provider?.baseUrl || "")
+      const rawToken = provider?.token || ""
+      setToken(rawToken.startsWith("enc:") ? "" : rawToken)
+      setModelsText(provider?.models?.join("\n") || "")
+    }
+  }, [open, provider])
+
+  const handleSave = async () => {
+    const models = parseModels(modelsText)
+    if (!name || !baseUrl || models.length === 0) {
+      toast.error("Name, Base URL, and at least one model are required")
+      return
+    }
+
+    let storedToken = token || ""
+    if (!storedToken && provider?.token?.startsWith("enc:")) {
+      storedToken = provider.token
+    }
+    if (storedToken && !storedToken.startsWith("enc:")) {
+      try {
+        const result = await encryptTokenMutation.mutateAsync({ token: storedToken })
+        storedToken = result.encrypted
+      } catch (err) {
+        console.error("[models] Failed to encrypt token:", err)
+        toast.error("Failed to secure API token")
+        return
+      }
+    }
+
+    const newProvider: ModelProvider = {
+      id: provider?.id || `provider-${Date.now()}`,
+      name,
+      baseUrl,
+      token: storedToken,
+      models,
+      isOffline: false,
+    }
+
+    onSave(newProvider)
+    onOpenChange(false)
+  }
+
+  const fetchModels = async () => {
+    if (!baseUrl) {
+      toast.error("Enter a Base URL first")
+      return
+    }
+
+    setIsFetching(true)
+
+    try {
+      const fallbackToken =
+        token || (provider?.token?.startsWith("enc:") ? provider.token : "")
+      const result = await fetchModelsMutation.mutateAsync({
+        baseUrl,
+        token: fallbackToken || undefined,
+      })
+      if (result.models.length > 0) {
+        setModelsText(result.models.join("\n"))
+        toast.success(`Found ${result.models.length} models`)
+      } else {
+        toast.error("No models returned. Check URL or enter model manually.")
+      }
+    } catch (err) {
+      console.error("[models] Model discovery failed:", err)
+      toast.error("Failed to connect to endpoint")
+    } finally {
+      setIsFetching(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>{provider ? "Edit Provider" : "Add Provider"}</DialogTitle>
+          <DialogDescription>
+            Configure a custom model provider (e.g. Ollama, LM Studio, vLLM).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Provider Name</Label>
+            <Input 
+              id="name" 
+              placeholder="My Local LLM" 
+              value={name} 
+              onChange={(e) => setName(e.target.value)} 
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="baseUrl">Base URL</Label>
+            <div className="flex gap-2">
+              <Input 
+                id="baseUrl" 
+                placeholder="http://localhost:11434" 
+                value={baseUrl} 
+                onChange={(e) => setBaseUrl(e.target.value)} 
+              />
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={fetchModels} 
+                disabled={isFetching || !baseUrl}
+                title="Fetch available models"
+              >
+                {isFetching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">e.g. http://localhost:11434 (Ollama) or http://localhost:1234 (LM Studio)</p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="models">Models</Label>
+            <Textarea
+              id="models"
+              placeholder="one model per line"
+              value={modelsText}
+              onChange={(e) => setModelsText(e.target.value)}
+              rows={5}
+            />
+            <p className="text-xs text-muted-foreground">Enter one model per line, or fetch from the provider.</p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="token">API Token (Optional)</Label>
+            <Input 
+              id="token" 
+              type="password" 
+              placeholder={hasStoredToken ? "•••• (stored)" : "sk-..."} 
+              value={token} 
+              onChange={(e) => setToken(e.target.value)} 
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onClose()}>Cancel</Button>
+          <Button onClick={handleSave}>Save Provider</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ModelProvidersList() {
+  const [providers, setProviders] = useAtom(modelProvidersAtom)
+  const [activeProviderId, setActiveProviderId] = useAtom(activeProviderIdAtom)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingProvider, setEditingProvider] = useState<ModelProvider | undefined>(undefined)
+  const encryptTokenMutation = trpc.claude.encryptToken.useMutation()
+
+  useEffect(() => {
+    const needsEncryption = providers.filter(
+      (p) => p.token && !p.token.startsWith("enc:"),
+    )
+    if (needsEncryption.length === 0) return
+
+    let cancelled = false
+    const encryptAll = async () => {
+      const updates = await Promise.all(
+        needsEncryption.map(async (provider) => {
+          try {
+            const result = await encryptTokenMutation.mutateAsync({
+              token: provider.token,
+            })
+            return {
+              ...provider,
+              token: result.encrypted,
+            }
+          } catch (err) {
+            console.error("[models] Failed to encrypt stored token:", err)
+            return provider
+          }
+        }),
+      )
+
+      if (cancelled) return
+      setProviders((current) =>
+        current.map((p) => updates.find((u) => u.id === p.id) || p),
+      )
+    }
+
+    encryptAll()
+    return () => {
+      cancelled = true
+    }
+  }, [providers, encryptTokenMutation, setProviders])
+
+  const handleSave = (provider: ModelProvider) => {
+    if (editingProvider) {
+      setProviders(providers.map(p => p.id === provider.id ? provider : p))
+      toast.success("Provider updated")
+    } else {
+      setProviders([...providers, provider])
+      toast.success("Provider added")
+    }
+    setEditingProvider(undefined)
+  }
+
+  const handleEdit = (provider: ModelProvider) => {
+    setEditingProvider(provider)
+    setDialogOpen(true)
+  }
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this provider?")) {
+      if (activeProviderId === id) {
+        setActiveProviderId(null)
+      }
+      setProviders(providers.filter(p => p.id !== id))
+      toast.success("Provider deleted")
+    }
+  }
+
+  const handleClose = () => {
+    setDialogOpen(false)
+    setTimeout(() => setEditingProvider(undefined), 300) // Delay clearing to allow dialog close anim
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-foreground">Custom Providers</h4>
+        <Button size="sm" variant="outline" onClick={() => { setEditingProvider(undefined); setDialogOpen(true); }}>
+          <Plus className="h-3 w-3 mr-1" />
+          Add Provider
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {providers.length === 0 ? (
+          <div className="p-4 border border-dashed border-border rounded-lg text-center text-sm text-muted-foreground">
+            No providers configured. Add one to use external models.
+          </div>
+        ) : (
+          <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
+            {providers.map(provider => (
+              <div key={provider.id} className="flex items-center justify-between p-3 hover:bg-muted/50">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0">
+                    {provider.isOffline ? (
+                      <div className="h-8 w-8 rounded bg-blue-500/10 flex items-center justify-center text-blue-500">
+                        <Server className="h-4 w-4" />
+                      </div>
+                    ) : (
+                      <div className="h-8 w-8 rounded bg-purple-500/10 flex items-center justify-center text-purple-500">
+                        <Globe className="h-4 w-4" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium flex items-center gap-2">
+                      {provider.name}
+                      {provider.isOffline && <Badge variant="secondary" className="text-[10px] h-4">OFFLINE</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {provider.models.length} model{provider.models.length === 1 ? "" : "s"} • {provider.baseUrl}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => handleEdit(provider)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  {!provider.isOffline && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-500" onClick={() => handleDelete(provider.id)}>
+                      <Trash className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <ModelProviderDialog 
+        open={dialogOpen} 
+        onOpenChange={setDialogOpen}
+        provider={editingProvider}
+        onSave={handleSave}
+        onClose={handleClose}
+      />
+    </div>
+  )
+}
+
 export function AgentsModelsTab() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
-  const [model, setModel] = useState(storedConfig.model)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
-  const [token, setToken] = useState(storedConfig.token)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom,
   )
@@ -267,61 +586,10 @@ export function AgentsModelsTab() {
   const trpcUtils = trpc.useUtils()
 
   useEffect(() => {
-    setModel(storedConfig.model)
-    setBaseUrl(storedConfig.baseUrl)
-    setToken(storedConfig.token)
-  }, [storedConfig.model, storedConfig.baseUrl, storedConfig.token])
-
-  useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
   }, [storedOpenAIKey])
 
-  const savedConfigRef = useRef(storedConfig)
-
-  const handleBlurSave = useCallback(() => {
-    const trimmedModel = model.trim()
-    const trimmedBaseUrl = baseUrl.trim()
-    const trimmedToken = token.trim()
-
-    // Only save if all fields are filled
-    if (trimmedModel && trimmedBaseUrl && trimmedToken) {
-      const next: CustomClaudeConfig = {
-        model: trimmedModel,
-        token: trimmedToken,
-        baseUrl: trimmedBaseUrl,
-      }
-      if (
-        next.model !== savedConfigRef.current.model ||
-        next.token !== savedConfigRef.current.token ||
-        next.baseUrl !== savedConfigRef.current.baseUrl
-      ) {
-        setStoredConfig(next)
-        savedConfigRef.current = next
-      }
-    } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
-      // All cleared — reset
-      if (savedConfigRef.current.model || savedConfigRef.current.token || savedConfigRef.current.baseUrl) {
-        setStoredConfig(EMPTY_CONFIG)
-        savedConfigRef.current = EMPTY_CONFIG
-      }
-    }
-  }, [model, baseUrl, token, setStoredConfig])
-
-  const handleReset = () => {
-    setStoredConfig(EMPTY_CONFIG)
-    savedConfigRef.current = EMPTY_CONFIG
-    setModel("")
-    setBaseUrl("")
-    setToken("")
-    toast.success("Model settings reset")
-  }
-
-  const canReset = Boolean(model.trim() || baseUrl.trim() || token.trim())
-
   const handleClaudeCodeSetup = () => {
-    // Don't disconnect - just open onboarding to add a new account
-    // The previous code was calling disconnectClaudeCode.mutate() which
-    // deleted the active account when users tried to add a new one
     setSettingsOpen(false)
     setAnthropicOnboardingCompleted(false)
   }
@@ -362,8 +630,8 @@ export function AgentsModelsTab() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header - hidden on narrow screens since it's in the navigation bar */}
+    <div className="p-6 space-y-8">
+      {/* Header */}
       {!isNarrowScreen && (
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">
           <h3 className="text-sm font-semibold text-foreground">Models</h3>
@@ -398,75 +666,8 @@ export function AgentsModelsTab() {
         <AnthropicAccountsSection />
       </div>
 
-      <div className="space-y-2">
-        <div className="pb-2 flex items-center justify-between">
-          <h4 className="text-sm font-medium text-foreground">
-            Override Model
-          </h4>
-          {canReset && (
-            <Button variant="ghost" size="sm" onClick={handleReset} className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10">
-              Reset
-            </Button>
-          )}
-        </div>
-        <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Model name</Label>
-              <p className="text-xs text-muted-foreground">
-                Model identifier to use for requests
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                onBlur={handleBlurSave}
-                className="w-full"
-                placeholder="claude-3-7-sonnet-20250219"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border-t border-border">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">API token</Label>
-              <p className="text-xs text-muted-foreground">
-                ANTHROPIC_AUTH_TOKEN env
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                onBlur={handleBlurSave}
-                className="w-full"
-                placeholder="sk-ant-..."
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border-t border-border">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Base URL</Label>
-              <p className="text-xs text-muted-foreground">
-                ANTHROPIC_BASE_URL env
-              </p>
-            </div>
-            <div className="flex-shrink-0 w-80">
-              <Input
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                onBlur={handleBlurSave}
-                className="w-full"
-                placeholder="https://api.anthropic.com"
-              />
-            </div>
-          </div>
-
-        </div>
-      </div>
+      {/* Custom Providers Section */}
+      <ModelProvidersList />
 
       {/* OpenAI API Key for Voice Input */}
       <div className="space-y-2">

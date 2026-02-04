@@ -210,11 +210,13 @@ export type CustomClaudeConfig = {
   baseUrl: string
 }
 
-// Model profile system - support multiple configs
-export type ModelProfile = {
+// Model provider system - support multiple models per provider
+export type ModelProvider = {
   id: string
   name: string
-  config: CustomClaudeConfig
+  baseUrl: string
+  token: string
+  models: string[]
   isOffline?: boolean // Mark as offline/Ollama profile
 }
 
@@ -227,40 +229,24 @@ export const selectedOllamaModelAtom = atomWithStorage<string | null>(
 )
 
 // Helper to get offline profile with selected model
-export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
+export const getOfflineProvider = (modelName?: string | null): ModelProvider => ({
   id: 'offline-ollama',
   name: 'Offline (Ollama)',
   isOffline: true,
-  config: {
-    model: modelName || 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
-  },
+  models: [modelName || 'qwen2.5-coder:7b'],
+  token: 'ollama',
+  baseUrl: 'http://localhost:11434',
 })
 
 // Predefined offline profile for Ollama (legacy, uses default model)
-export const OFFLINE_PROFILE: ModelProfile = {
+export const OFFLINE_PROVIDER: ModelProvider = {
   id: 'offline-ollama',
   name: 'Offline (Ollama)',
   isOffline: true,
-  config: {
-    model: 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
-  },
+  models: ['qwen2.5-coder:7b'],
+  token: 'ollama',
+  baseUrl: 'http://localhost:11434',
 }
-
-// Legacy single config (deprecated, kept for backwards compatibility)
-export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
-  "agents:claude-custom-config",
-  {
-    model: "",
-    token: "",
-    baseUrl: "",
-  },
-  undefined,
-  { getOnInit: true },
-)
 
 // OpenAI API key for voice transcription (for users without paid subscription)
 export const openaiApiKeyAtom = atomWithStorage<string>(
@@ -270,17 +256,17 @@ export const openaiApiKeyAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-// New: Model profiles storage
-export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
-  "agents:model-profiles",
-  [OFFLINE_PROFILE], // Start with offline profile
+// New: Model providers storage
+export const modelProvidersAtom = atomWithStorage<ModelProvider[]>(
+  "agents:model-providers",
+  [OFFLINE_PROVIDER], // Start with offline provider
   undefined,
   { getOnInit: true },
 )
 
 // Active profile ID (null = use Claude Code default)
-export const activeProfileIdAtom = atomWithStorage<string | null>(
-  "agents:active-profile-id",
+export const activeProviderIdAtom = atomWithStorage<string | null>(
+  "agents:active-provider-id",
   null,
   undefined,
   { getOnInit: true },
@@ -313,51 +299,6 @@ export const showOfflineModeFeaturesAtom = atomWithStorage<boolean>(
 // Network status (updated from main process)
 export const networkOnlineAtom = atom<boolean>(true)
 
-export function normalizeCustomClaudeConfig(
-  config: CustomClaudeConfig,
-): CustomClaudeConfig | undefined {
-  const model = config.model.trim()
-  const token = config.token.trim()
-  const baseUrl = config.baseUrl.trim()
-
-  if (!model || !token || !baseUrl) return undefined
-
-  return { model, token, baseUrl }
-}
-
-// Get active config (considering network status and auto-fallback)
-export const activeConfigAtom = atom((get) => {
-  const activeProfileId = get(activeProfileIdAtom)
-  const profiles = get(modelProfilesAtom)
-  const legacyConfig = get(customClaudeConfigAtom)
-  const networkOnline = get(networkOnlineAtom)
-  const autoOffline = get(autoOfflineModeAtom)
-
-  // If auto-offline enabled and no internet, use offline profile
-  if (!networkOnline && autoOffline) {
-    const offlineProfile = profiles.find(p => p.isOffline)
-    if (offlineProfile) {
-      return offlineProfile.config
-    }
-  }
-
-  // If specific profile is selected, use it
-  if (activeProfileId) {
-    const profile = profiles.find(p => p.id === activeProfileId)
-    if (profile) {
-      return profile.config
-    }
-  }
-
-  // Fallback to legacy config if set
-  const normalized = normalizeCustomClaudeConfig(legacyConfig)
-  if (normalized) {
-    return normalized
-  }
-
-  // No custom config
-  return undefined
-})
 
 // Preferences - Extended Thinking
 // When enabled, Claude will use extended thinking for deeper reasoning (128K tokens)

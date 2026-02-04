@@ -1,6 +1,6 @@
 {
   "name": "21st-desktop",
-  "version": "0.0.54",
+  "version": "0.0.55",
   "private": true,
   "description": "1Code - UI for parallel work with AI agents",
   "author": {
@@ -115,18 +115,19 @@
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",
+    "@electron/rebuild": "^4.0.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/diff": "^8.0.0",
     "@types/node": "^20.17.50",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260204.1",
     "@vitejs/plugin-react": "^4.3.4",
     "@welldone-software/why-did-you-render": "^10.0.1",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.8",
     "electron": "~39.4.0",
     "electron-builder": "^25.1.8",
-    "@electron/rebuild": "^4.0.3",
     "electron-vite": "^3.0.0",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
