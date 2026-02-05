@@ -36,6 +36,7 @@ import { GitPullRequest, Eye } from "lucide-react";
 import type { ChangedFile as HistoryChangedFile } from "../../../shared/changes-types";
 import { viewedFilesAtomFamily, type ViewedFileState } from "../agents/atoms";
 import { Kbd } from "../../components/ui/kbd";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 
 // Memoized file item component with context menu to prevent re-renders
 const ChangesFileItemWithContext = memo(function ChangesFileItemWithContext({
@@ -128,16 +129,27 @@ const ChangesFileItemWithContext = memo(function ChangesFileItemWithContext({
 						onClick={(e) => e.stopPropagation()}
 						className="size-4 shrink-0 border-muted-foreground/50"
 					/>
-					<div className="flex-1 min-w-0 flex items-center overflow-hidden">
-						{dirPath && (
-							<span className="text-xs text-muted-foreground truncate flex-shrink min-w-0">
-								{dirPath}/
-							</span>
-						)}
-						<span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">
-							{fileName}
-						</span>
-					</div>
+					<Tooltip delayDuration={500}>
+						<TooltipTrigger asChild>
+							<div className="flex-1 min-w-0 flex items-center overflow-hidden">
+								{dirPath && (
+									<span className="text-xs text-muted-foreground truncate flex-shrink min-w-0">
+										{dirPath}/
+									</span>
+								)}
+								<span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">
+									{fileName}
+								</span>
+							</div>
+						</TooltipTrigger>
+						<TooltipContent
+							side="right"
+							sideOffset={40}
+							className="text-xs text-muted-foreground break-all max-w-[420px] bg-background"
+						>
+							{file.path}
+						</TooltipContent>
+					</Tooltip>
 					<div className="shrink-0 flex items-center gap-1.5">
 						{isViewed && (
 							<div className="size-4 rounded bg-emerald-500/20 flex items-center justify-center">
@@ -232,6 +244,8 @@ interface ChangesViewProps {
 	onCreatePr?: () => void;
 	/** Called after a successful commit to reset diff view state */
 	onCommitSuccess?: () => void;
+	/** Called after discarding/deleting changes to refresh diff */
+	onDiscardSuccess?: () => void;
 	/** Available subchats for filtering */
 	subChats?: SubChatFilterItem[];
 	/** Currently selected subchat ID for filtering (passed from Review button) */
@@ -257,6 +271,7 @@ export function ChangesView({
 	onFileOpenPinned,
 	onCreatePr,
 	onCommitSuccess,
+	onDiscardSuccess,
 	subChats = [],
 	initialSubChatFilter = null,
 	chatId,
@@ -304,8 +319,8 @@ export function ChangesView({
 
 	// Handle successful commit - reset local state and notify parent
 	const handleCommitSuccess = useCallback(() => {
-		// Reset selection state so new files will be auto-selected
-		setHasInitializedSelection(false);
+		// Clear commit selection without re-initializing auto-select
+		// (prevents remaining files from being re-selected after commit)
 		setSelectedForCommit(new Set());
 		// Notify parent to reset diff view selection
 		onCommitSuccess?.();
@@ -340,6 +355,7 @@ export function ChangesView({
 		onSuccess: () => {
 			toast.success("Changes discarded");
 			refetch();
+			onDiscardSuccess?.();
 		},
 		onError: (error) => {
 			toast.error(`Failed to discard changes: ${error.message}`);
@@ -349,6 +365,7 @@ export function ChangesView({
 		onSuccess: () => {
 			toast.success("File deleted");
 			refetch();
+			onDiscardSuccess?.();
 		},
 		onError: (error) => {
 			toast.error(`Failed to delete file: ${error.message}`);
@@ -360,6 +377,7 @@ export function ChangesView({
 		onSuccess: () => {
 			toast.success("Changes discarded");
 			refetch();
+			onDiscardSuccess?.();
 		},
 		onError: (error) => {
 			toast.error(`Failed to discard changes: ${error.message}`);
@@ -369,6 +387,7 @@ export function ChangesView({
 		onSuccess: () => {
 			toast.success("Files deleted");
 			refetch();
+			onDiscardSuccess?.();
 		},
 		onError: (error) => {
 			toast.error(`Failed to delete files: ${error.message}`);
@@ -394,6 +413,7 @@ export function ChangesView({
 	const [subChatFilter, setSubChatFilter] = useState<string | null>(initialSubChatFilter);
 	const [activeTab, setActiveTab] = useState<"changes" | "history">("changes");
 	const fileListRef = useRef<HTMLDivElement>(null);
+	const prevAllPathsRef = useRef<Set<string>>(new Set());
 
 	// Update subchat filter when initialSubChatFilter changes (e.g., from Review button)
 	useEffect(() => {
@@ -418,6 +438,7 @@ export function ChangesView({
 		setHasInitializedSelection(false);
 		setSelectedForCommit(new Set());
 		setHighlightedFiles(new Set());
+		prevAllPathsRef.current = new Set();
 	}, [worktreePath, initialSubChatFilter]);
 
 	// Combine all files into a flat list
@@ -447,13 +468,36 @@ export function ChangesView({
 		return files;
 	}, [status]);
 
-	// Initialize selection - select all files by default when data loads
+	// Initialize selection, then auto-select newly added paths on subsequent updates
 	useEffect(() => {
+		const allPaths = new Set(allFiles.map(f => f.file.path));
+
 		if (!hasInitializedSelection && allFiles.length > 0) {
-			const allPaths = new Set(allFiles.map(f => f.file.path));
 			setSelectedForCommit(allPaths);
 			setHasInitializedSelection(true);
+			prevAllPathsRef.current = allPaths;
+			return;
 		}
+
+		const prevPaths = prevAllPathsRef.current;
+		const newPaths: string[] = [];
+		for (const path of allPaths) {
+			if (!prevPaths.has(path)) {
+				newPaths.push(path);
+			}
+		}
+
+		if (newPaths.length > 0) {
+			setSelectedForCommit(prev => {
+				const next = new Set(prev);
+				for (const path of newPaths) {
+					next.add(path);
+				}
+				return next;
+			});
+		}
+
+		prevAllPathsRef.current = allPaths;
 	}, [allFiles, hasInitializedSelection]);
 
 	// Get file paths for selected subchat filter

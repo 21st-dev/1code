@@ -607,11 +607,13 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   },
 
   // System tools
-  "system-Compact": {
+  "tool-Compact": {
     icon: Minimize2,
     title: (part) => {
       const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
+        part.state !== "output-available" &&
+        part.state !== "output-error" &&
+        part.state !== "result"
       return isPending ? "Compacting..." : "Compacted"
     },
     variant: "simple",

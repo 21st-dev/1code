@@ -136,6 +136,7 @@ export interface ChatInputAreaProps {
   onStop: () => Promise<void>
   onCompact: () => void
   onCreateNewSubChat?: () => void
+  onModeChange?: (newMode: AgentMode) => void
   // State from parent
   isStreaming: boolean
   isCompacting: boolean
@@ -218,6 +219,7 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.onStop !== nextProps.onStop ||
     prevProps.onCompact !== nextProps.onCompact ||
     prevProps.onCreateNewSubChat !== nextProps.onCreateNewSubChat ||
+    prevProps.onModeChange !== nextProps.onModeChange ||
     prevProps.onAddAttachments !== nextProps.onAddAttachments ||
     prevProps.onRemoveImage !== nextProps.onRemoveImage ||
     prevProps.onRemoveFile !== nextProps.onRemoveFile ||
@@ -343,6 +345,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   onStop,
   onCompact,
   onCreateNewSubChat,
+  onModeChange,
   isStreaming,
   isCompacting,
   images,
@@ -404,6 +407,12 @@ export const ChatInputArea = memo(function ChatInputArea({
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
+
+  useEffect(() => {
+    if (!modeDropdownOpen) {
+      setModeTooltip(null)
+    }
+  }, [modeDropdownOpen])
 
   // Model dropdown state
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
@@ -504,9 +513,13 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Helper to update mode (atomFamily + Zustand store sync)
   const updateMode = useCallback((newMode: AgentMode) => {
+    if (onModeChange) {
+      onModeChange(newMode)
+      return
+    }
     setSubChatMode(newMode)
     useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
-  }, [setSubChatMode, subChatId])
+  }, [onModeChange, setSubChatMode, subChatId])
 
   // Toggle mode helper
   const toggleMode = useCallback(() => {
@@ -1013,7 +1026,26 @@ export const ChatInputArea = memo(function ChatInputArea({
   )
 
   return (
-    <div className="px-2 pb-2 shadow-sm shadow-background relative z-10">
+    <div
+      ref={(el) => {
+        if (!el) return
+        if (el.dataset.observed) return
+        el.dataset.observed = "true"
+        const parent = el.parentElement
+        const observer = new ResizeObserver((entries) => {
+          const { height, width } = entries[0]?.contentRect ?? {
+            height: 0,
+            width: 0,
+          }
+          el.style.setProperty("--chat-input-height", `${height}px`)
+          el.style.setProperty("--chat-input-width", `${width}px`)
+          parent?.style.setProperty("--chat-input-height", `${height}px`)
+          parent?.style.setProperty("--chat-input-width", `${width}px`)
+        })
+        observer.observe(el)
+      }}
+      className="px-2 pb-2 shadow-sm shadow-background relative z-10"
+    >
       <div className="w-full max-w-2xl mx-auto">
         <div
           className="relative w-full"
@@ -1380,10 +1412,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             {hasCustomClaudeConfig ? (
                               "Custom Model"
                             ) : (
-                              <>
-                                {selectedModel?.name}{" "}
-                                <span className="text-muted-foreground">4.5</span>
-                              </>
+                              selectedModel?.name
                             )}
                           </span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
@@ -1403,10 +1432,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             >
                               <div className="flex items-center gap-1.5">
                                 <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span>
-                                  {model.name}{" "}
-                                  <span className="text-muted-foreground">4.5</span>
-                                </span>
+                                <span>{model.name}</span>
                               </div>
                               {isSelected && (
                                 <CheckIcon className="h-3.5 w-3.5 shrink-0" />
@@ -1457,7 +1483,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       {/* Context window indicator - click to compact */}
                       <AgentContextIndicator
                         tokenData={messageTokenData}
-                        onCompact={onCompact}
+                        // onCompact={onCompact}
                         isCompacting={isCompacting}
                         disabled={isStreaming}
                       />

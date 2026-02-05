@@ -599,7 +599,7 @@ export function SubChatSelector({
           variant="ghost"
           size="icon"
           onClick={onBackToChats}
-          className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
+          className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
           aria-label="Back to chats"
           style={{
             // @ts-expect-error - WebKit-specific property

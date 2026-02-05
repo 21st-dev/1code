@@ -2,7 +2,7 @@ import { useCallback } from "react"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import { useSetAtom } from "jotai"
-import { selectedAgentChatIdAtom } from "../atoms"
+import { selectedAgentChatIdAtom, desktopViewAtom } from "../atoms"
 import { chatSourceModeAtom } from "../../../lib/atoms"
 import type { RemoteChat } from "../../../lib/remote-api"
 
@@ -17,14 +17,21 @@ interface Project {
 export function useAutoImport() {
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setChatSourceMode = useSetAtom(chatSourceModeAtom)
+  const setDesktopView = useSetAtom(desktopViewAtom)
   const utils = trpc.useUtils()
 
   const importMutation = trpc.sandboxImport.importSandboxChat.useMutation({
     onSuccess: (result) => {
       toast.success("Opened locally")
+
+      // Invalidate list queries so sidebar updates
+      utils.chats.list.invalidate()
+      utils.projects.list.invalidate()
+
+      // Switch to local chat view — let the normal architecture load the chat
       setChatSourceMode("local")
       setSelectedChatId(result.chatId)
-      utils.chats.list.invalidate()
+      setDesktopView(null)
     },
     onError: (error) => {
       toast.error(`Import failed: ${error.message}`)

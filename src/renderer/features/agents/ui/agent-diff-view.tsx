@@ -81,6 +81,8 @@ import { trpcClient } from "../../../lib/trpc"
 import { remoteApi } from "../../../lib/remote-api"
 export type DiffViewMode = "unified" | "split"
 
+const LARGE_DIFF_LINE_THRESHOLD = 2000
+
 // Simple fast string hash (djb2 algorithm) for content change detection
 function hashString(str: string): string {
   let hash = 5381
@@ -539,6 +541,7 @@ const FileDiffCard = memo(function FileDiffCard({
   chatId,
 }: FileDiffCardProps) {
   const diffCardRef = useRef<HTMLDivElement>(null)
+  const isLargeDiff = file.additions + file.deletions >= LARGE_DIFF_LINE_THRESHOLD
 
   // Build FileDiffMetadata from file content (enables clickable "N unmodified lines" sections)
   // Computed whenever fileContent is available, not just when fully expanded
@@ -546,6 +549,11 @@ const FileDiffCard = memo(function FileDiffCard({
   const [isExpandLoading, setIsExpandLoading] = useState(false)
 
   useEffect(() => {
+    if (isLargeDiff) {
+      setFileDiffMeta(null)
+      setIsExpandLoading(false)
+      return
+    }
     if (!fileContent) {
       setFileDiffMeta(null)
       return
@@ -579,7 +587,7 @@ const FileDiffCard = memo(function FileDiffCard({
       }
     })
     return () => cancelAnimationFrame(frame)
-  }, [fileContent, file.diffText, file.oldPath, file.newPath])
+  }, [fileContent, file.diffText, file.oldPath, file.newPath, isLargeDiff])
 
   // tRPC mutations for file operations
   const openInFinderMutation = trpcClient.external.openInFinder.mutate
@@ -744,7 +752,7 @@ const FileDiffCard = memo(function FileDiffCard({
           </div>
 
           {/* Expand/Collapse full file button - only show if content is available */}
-          {!isCollapsed && !file.isBinary && hasContent && (
+          {!isCollapsed && !file.isBinary && !isLargeDiff && hasContent && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -903,6 +911,34 @@ const FileDiffCard = memo(function FileDiffCard({
           {file.isBinary ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">
               Binary file diff can't be rendered.
+            </div>
+          ) : isLargeDiff ? (
+            <div className="px-3 py-3 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  File is too large to display here
+                </div>
+                {absolutePath && (
+                  <div className="flex shrink-0 items-center gap-0 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleRevealInFinder}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      <FolderIcon className="size-3.5" />
+                      Finder
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenInPreferredEditor}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      <ExternalLinkIcon className="size-3.5" />
+                      {editorMeta.label}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : !file.isValid ? (
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-950/30">
@@ -1547,7 +1583,9 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
 
         try {
           // Limit files to prefetch to prevent overwhelming the system
-          const filesToProcess = fileDiffs.slice(0, MAX_PREFETCH_FILES)
+          const filesToProcess = fileDiffs
+            .filter((file) => file.additions + file.deletions < LARGE_DIFF_LINE_THRESHOLD)
+            .slice(0, MAX_PREFETCH_FILES)
 
           // Build list of files to fetch (filter out /dev/null)
           const filesToFetch = filesToProcess

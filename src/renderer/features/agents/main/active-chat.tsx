@@ -80,6 +80,8 @@ import { trpc, trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
 import { ChangesPanel } from "../../changes"
+import { useCommitActions } from "../../changes/components/commit-input"
+import { usePushAction } from "../../changes/hooks/use-push-action"
 import { DiffCenterPeekDialog } from "../../changes/components/diff-center-peek-dialog"
 import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
@@ -184,7 +186,7 @@ import {
 } from "../search"
 import { agentChatStore } from "../stores/agent-chat-store"
 import { EMPTY_QUEUE, useMessageQueueStore } from "../stores/message-queue-store"
-import { clearSubChatCaches, isRollingBackAtom, rollbackHandlerAtom, syncMessagesWithStatusAtom } from "../stores/message-store"
+import { clearSubChatCaches, isRollingBackAtom, syncMessagesWithStatusAtom } from "../stores/message-store"
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import {
   useAgentSubChatStore,
@@ -343,9 +345,9 @@ const CodexIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 // Model options for Claude Code
 const claudeModels = [
-  { id: "opus", name: "Opus" },
-  { id: "sonnet", name: "Sonnet" },
-  { id: "haiku", name: "Haiku" },
+  { id: "opus", name: "Opus 4.6" },
+  { id: "sonnet", name: "Sonnet 4.5" },
+  { id: "haiku", name: "Haiku 4.5" },
 ]
 
 // Agent providers
@@ -867,9 +869,14 @@ const ScrollToBottomButton = memo(function ScrollToBottomButton({
               transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
               onClick={onScrollToBottom}
               className={cn(
-                "absolute right-4 p-2 rounded-full bg-background border border-border shadow-md hover:bg-accent active:scale-[0.97] transition-colors z-20",
-                hasStackedCards ? "bottom-44 sm:bottom-36" : "bottom-32 sm:bottom-24"
+                "absolute p-2 rounded-full bg-background border border-border shadow-md hover:bg-accent active:scale-[0.97] transition-[color,background-color,bottom] duration-200 z-20",
               )}
+              style={{
+                right: "0.75rem",
+                // Wide screen (container > 48rem): button sits in bottom-right corner
+                // Narrow screen (container <= 48rem): button lifts above the input
+                bottom: "clamp(0.75rem, (48rem - var(--chat-container-width, 0px)) * 1000, calc(var(--chat-input-height, 4rem) + 1rem))",
+              }}
               aria-label="Scroll to bottom"
             >
               <ArrowDown className="h-4 w-4 text-muted-foreground" />
@@ -1054,6 +1061,8 @@ interface DiffSidebarContentProps {
   onCreatePr?: () => void
   // Called after successful commit to reset diff view state
   onCommitSuccess?: () => void
+  // Called after discarding/deleting changes to refresh diff
+  onDiscardSuccess?: () => void
   // Subchats with changed files for filtering
   subChats?: Array<{ id: string; name: string; filePaths: string[]; fileCount: number }>
   // Initial subchat filter (e.g., from Review button)
@@ -1117,6 +1126,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
   diffMode,
   setDiffMode,
   onCreatePr,
+  onDiscardSuccess,
   subChats = [],
 }: Omit<DiffSidebarContentProps, 'selectedFilePath' | 'onFileSelect' | 'onCommitSuccess' | 'initialSubChatFilter' | 'onSelectNextFile'>) {
   // Get values from context instead of props
@@ -1282,6 +1292,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
               onFileOpenPinned={() => {}}
               onCreatePr={onCreatePr}
               onCommitSuccess={handleCommitSuccess}
+              onDiscardSuccess={onDiscardSuccess}
               subChats={subChats}
               initialSubChatFilter={filteredSubChatId}
               chatId={chatId}
@@ -1395,6 +1406,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
             onFileOpenPinned={() => {}}
             onCreatePr={onCreatePr}
             onCommitSuccess={handleCommitSuccess}
+            onDiscardSuccess={onDiscardSuccess}
             subChats={subChats}
             initialSubChatFilter={filteredSubChatId}
             chatId={chatId}
@@ -1605,7 +1617,7 @@ const DiffStateProvider = memo(function DiffStateProvider({
     })
     setTimeout(() => {
       fetchDiffStats()
-    }, 500)
+    }, 2000)
   }, [setSelectedFilePath, setFilteredDiffFiles, setParsedFileDiffs, setDiffContent, setPrefetchedFileContents, setDiffStats, fetchDiffStats])
 
   const handleCloseDiff = useCallback(() => {
@@ -1691,6 +1703,7 @@ interface DiffSidebarRendererProps {
   isCommittingToPr: boolean
   subChatsWithFiles: Array<{ id: string; name: string; filePaths: string[]; fileCount: number }>
   setDiffStats: (stats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }) => void
+  onDiscardSuccess?: () => void
 }
 
 const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
@@ -1737,9 +1750,24 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
   isCommittingToPr,
   subChatsWithFiles,
   setDiffStats,
+  onDiscardSuccess,
 }: DiffSidebarRendererProps) {
   // Get callbacks and state from context
   const { handleCloseDiff, viewedCount, handleViewedCountChange } = useDiffState()
+
+  const handleReviewWithAI = useCallback(() => {
+    if (diffDisplayMode !== "side-peek") {
+      handleCloseDiff()
+    }
+    handleReview()
+  }, [diffDisplayMode, handleCloseDiff, handleReview])
+
+  const handleCreatePrWithAI = useCallback(() => {
+    if (diffDisplayMode !== "side-peek") {
+      handleCloseDiff()
+    }
+    handleCreatePr()
+  }, [diffDisplayMode, handleCloseDiff, handleCreatePr])
 
   // Width for responsive layouts - use stored width for sidebar, fixed for dialog/fullpage
   const effectiveWidth = diffDisplayMode === "side-peek"
@@ -1766,11 +1794,11 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
           isSyncStatusLoading={isGitStatusLoading}
           aheadOfDefault={gitStatus?.ahead ?? 0}
           behindDefault={gitStatus?.behind ?? 0}
-          onReview={handleReview}
+          onReview={handleReviewWithAI}
           isReviewing={isReviewing}
           onCreatePr={handleCreatePrDirect}
           isCreatingPr={isCreatingPr}
-          onCreatePrWithAI={handleCreatePr}
+          onCreatePrWithAI={handleCreatePrWithAI}
           isCreatingPrWithAI={isCreatingPr}
           onMergePr={handleMergePr}
           isMergingPr={mergePrMutation.isPending}
@@ -1826,6 +1854,7 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
         diffMode={diffMode}
         setDiffMode={setDiffMode}
         onCreatePr={handleCreatePrDirect}
+        onDiscardSuccess={onDiscardSuccess}
         subChats={subChatsWithFiles}
       />
     </div>
@@ -2491,20 +2520,25 @@ const ChatViewInner = memo(function ChatViewInner({
   const [pendingPrMessage, setPendingPrMessage] = useAtom(pendingPrMessageAtom)
 
   useEffect(() => {
-    if (pendingPrMessage && !isStreaming && isActive) {
+    if (pendingPrMessage?.subChatId === subChatId && !isStreaming && isActive) {
       // Clear the pending message immediately to prevent double-sending
       setPendingPrMessage(null)
 
       // Send the message to Claude
       sendMessage({
         role: "user",
-        parts: [{ type: "text", text: pendingPrMessage }],
+        parts: [{ type: "text", text: pendingPrMessage.message }],
       })
 
       // Reset creating PR state after message is sent
       setIsCreatingPr(false)
+
+      // Ensure the target sub-chat is focused after sending
+      const store = useAgentSubChatStore.getState()
+      store.addToOpenSubChats(subChatId)
+      store.setActiveSubChat(subChatId)
     }
-  }, [pendingPrMessage, isStreaming, isActive, sendMessage, setPendingPrMessage])
+  }, [pendingPrMessage, isStreaming, isActive, sendMessage, setPendingPrMessage, setIsCreatingPr, subChatId])
 
   // Watch for pending Review message and send it
   const [pendingReviewMessage, setPendingReviewMessage] = useAtom(
@@ -2575,18 +2609,42 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // Pre-compute token data for ChatInputArea to avoid passing unstable messages array
   // This prevents ChatInputArea from re-rendering on every streaming chunk
+  // NOTE: Tokens are counted since the last completed compact boundary.
   const messageTokenData = useMemo(() => {
+    let startIndex = 0
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      const parts = (msg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+      if (
+        parts?.some(
+          (part) =>
+            part.type === "tool-Compact" &&
+            (part.state === "output-available" || part.state === "result"),
+        )
+      ) {
+        // Include the compact result itself in the token window
+        startIndex = i
+      }
+    }
+
     let totalInputTokens = 0
     let totalOutputTokens = 0
     let totalCostUsd = 0
-    for (const msg of messages) {
+    for (let i = startIndex; i < messages.length; i++) {
+      const msg = messages[i]
       if (msg.metadata) {
         totalInputTokens += msg.metadata.inputTokens || 0
         totalOutputTokens += msg.metadata.outputTokens || 0
         totalCostUsd += msg.metadata.totalCostUsd || 0
       }
     }
-    return { totalInputTokens, totalOutputTokens, totalCostUsd, messageCount: messages.length }
+    const messageCount = Math.max(0, messages.length - startIndex)
+    return {
+      totalInputTokens,
+      totalOutputTokens,
+      totalCostUsd,
+      messageCount,
+    }
   }, [messages])
 
   // Track previous streaming state to detect stream stop
@@ -2990,6 +3048,14 @@ const ChatViewInner = memo(function ChatViewInner({
     // Only check after streaming ends
     if (isStreaming) return
 
+    // Don't run until agentChat has loaded so we know the real existingPrUrl
+    if (existingPrUrl === undefined) return
+
+    // Sync ref when existingPrUrl loads (prevents re-detection on remount)
+    if (existingPrUrl && !detectedPrUrlRef.current) {
+      detectedPrUrlRef.current = existingPrUrl
+    }
+
     // Look through messages for PR URLs
     for (const msg of messages) {
       if (msg.role !== "assistant") continue
@@ -3024,7 +3090,7 @@ const ChatViewInner = memo(function ChatViewInner({
         break // Only process first PR URL found
       }
     }
-  }, [messages, isStreaming, parentChatId])
+  }, [messages, isStreaming, parentChatId, existingPrUrl])
 
   // Track plan Edit completions to trigger sidebar refetch
   const triggerPlanEditRefetch = useSetAtom(
@@ -3061,6 +3127,7 @@ const ChatViewInner = memo(function ChatViewInner({
     subChatId,
     isStreaming,
     parentChatId,
+    projectPath,
   )
 
   // Rollback handler - truncates messages to the clicked assistant message and restores git state
@@ -3118,13 +3185,7 @@ const ChatViewInner = memo(function ChatViewInner({
     ],
   )
 
-  // Expose rollback handler/state via atoms for message action bar
-  const setRollbackHandler = useSetAtom(rollbackHandlerAtom)
-  useEffect(() => {
-    setRollbackHandler(() => handleRollback)
-    return () => setRollbackHandler(null)
-  }, [handleRollback, setRollbackHandler])
-
+  // Sync local isRollingBack state to global atom (prevents multiple rollbacks across chats)
   const setIsRollingBackAtom = useSetAtom(isRollingBackAtom)
   useEffect(() => {
     setIsRollingBackAtom(isRollingBack)
@@ -3994,8 +4055,31 @@ const ChatViewInner = memo(function ChatViewInner({
   useLayoutEffect(() => {
     // Skip syncing for inactive tabs - they shouldn't update global atoms
     if (!isActive) return
+    // DEBUG: track layout effect timing
+    const switchStart = (globalThis as any).__switchStart
+    if (switchStart) {
+      fetch('http://localhost:7799/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:'switch',msg:'useLayoutEffect:syncMessages',data:{subChatId:subChatId.slice(-8),msgCount:messages.length,sinceSwitch:+((performance.now()-switchStart)).toFixed(2)},ts:Date.now()})}).catch(()=>{})
+    }
     syncMessages({ messages, status, subChatId })
+    // DEBUG: after sync
+    if (switchStart) {
+      fetch('http://localhost:7799/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:'switch',msg:'useLayoutEffect:afterSync',data:{subChatId:subChatId.slice(-8),sinceSwitch:+((performance.now()-switchStart)).toFixed(2)},ts:Date.now()})}).catch(()=>{})
+    }
   }, [messages, status, subChatId, syncMessages, isActive])
+
+  // DEBUG: measure time to first paint after subchat switch
+  useEffect(() => {
+    if (!isActive) return
+    const switchStart = (globalThis as any).__switchStart
+    if (!switchStart) return
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const paintTime = performance.now()
+        fetch('http://localhost:7799/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:'switch',msg:'firstPaint',data:{subChatId:subChatId.slice(-8),sinceSwitch:+((paintTime-switchStart)).toFixed(2)},ts:Date.now()})}).catch(()=>{})
+        ;(globalThis as any).__switchStart = null // clear to stop logging
+      })
+    })
+  }, [isActive, subChatId])
 
   // Sync status to global streaming status store for queue processing
   const setStreamingStatus = useStreamingStatusStore((s) => s.setStatus)
@@ -4058,16 +4142,22 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // Calculate top offset for search bar based on sub-chat selector
   const searchBarTopOffset = isSubChatsSidebarOpen ? "52px" : undefined
+  const shouldShowStatusCard =
+    isStreaming || isCompacting || changedFilesForSubChat.length > 0
+  const shouldShowStackedCards =
+    !displayQuestions && (queue.length > 0 || shouldShowStatusCard)
 
   return (
     <SearchHighlightProvider>
       <div className="flex flex-col flex-1 min-h-0 relative">
-        {/* Text selection popover for adding text to context */}
-        <TextSelectionPopover
-          onAddToContext={addTextContext}
-          onQuickComment={handleQuickComment}
-          onFocusInput={handleFocusInput}
-        />
+        {/* Text selection popover for adding text to context - only render for active tab to avoid keep-alive portal collision */}
+        {isActive && (
+          <TextSelectionPopover
+            onAddToContext={addTextContext}
+            onQuickComment={handleQuickComment}
+            onFocusInput={handleFocusInput}
+          />
+        )}
 
         {/* Quick comment input */}
         {quickCommentState && (
@@ -4113,11 +4203,20 @@ const ChatViewInner = memo(function ChatViewInner({
 
           chatContainerRef.current = el
 
-          // Setup ResizeObserver for --chat-container-height CSS variable
+          // Setup ResizeObserver for --chat-container-height/width CSS variables
+          // Variables are set on both the element itself and the parent (relative wrapper)
+          // so siblings like ScrollToBottomButton can also access them
           if (el) {
+            const parent = el.parentElement
             const observer = new ResizeObserver((entries) => {
-              const height = entries[0]?.contentRect.height ?? 0
+              const { height, width } = entries[0]?.contentRect ?? {
+                height: 0,
+                width: 0,
+              }
               el.style.setProperty("--chat-container-height", `${height}px`)
+              el.style.setProperty("--chat-container-width", `${width}px`)
+              parent?.style.setProperty("--chat-container-height", `${height}px`)
+              parent?.style.setProperty("--chat-container-width", `${width}px`)
             })
             observer.observe(el)
             chatContainerObserverRef.current = observer
@@ -4150,6 +4249,7 @@ const ChatViewInner = memo(function ChatViewInner({
               ToolCallComponent={AgentToolCall}
               MessageGroupWrapper={MessageGroup}
               toolRegistry={AgentToolRegistry}
+              onRollback={handleRollback}
             />
           </div>
         </div>
@@ -4171,8 +4271,7 @@ const ChatViewInner = memo(function ChatViewInner({
       )}
 
       {/* Stacked cards container - queue + status */}
-      {!displayQuestions &&
-        (queue.length > 0 || changedFilesForSubChat.length > 0) && (
+      {shouldShowStackedCards && (
           <div className="px-2 -mb-6 relative z-10">
             <div className="w-full max-w-2xl mx-auto px-2">
               {/* Queue indicator card - top card */}
@@ -4182,11 +4281,11 @@ const ChatViewInner = memo(function ChatViewInner({
                   onRemoveItem={handleRemoveFromQueue}
                   onSendNow={handleSendFromQueue}
                   isStreaming={isStreaming}
-                  hasStatusCardBelow={changedFilesForSubChat.length > 0}
+                  hasStatusCardBelow={shouldShowStatusCard}
                 />
               )}
-              {/* Status card - bottom card, only when there are changed files */}
-              {changedFilesForSubChat.length > 0 && (
+              {/* Status card - bottom card */}
+              {shouldShowStatusCard && (
                 <SubChatStatusCard
                   chatId={parentChatId}
                   subChatId={subChatId}
@@ -4211,6 +4310,7 @@ const ChatViewInner = memo(function ChatViewInner({
         onStop={handleStop}
         onCompact={handleCompact}
         onCreateNewSubChat={onCreateNewSubChat}
+        onModeChange={handleModeChange}
         isStreaming={isStreaming}
         isCompacting={isCompacting}
         images={images}
@@ -4247,7 +4347,7 @@ const ChatViewInner = memo(function ChatViewInner({
         <ScrollToBottomButton
           containerRef={chatContainerRef}
           onScrollToBottom={scrollToBottom}
-          hasStackedCards={!displayQuestions && (queue.length > 0 || changedFilesForSubChat.length > 0)}
+          hasStackedCards={shouldShowStackedCards}
           subChatId={subChatId}
           isActive={isActive}
         />
@@ -4268,6 +4368,7 @@ export function ChatView({
   onOpenPreview,
   onOpenDiff,
   onOpenTerminal,
+  hideHeader = false,
 }: {
   chatId: string
   isSidebarOpen: boolean
@@ -4279,6 +4380,7 @@ export function ChatView({
   onOpenPreview?: () => void
   onOpenDiff?: () => void
   onOpenTerminal?: () => void
+  hideHeader?: boolean
 }) {
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedModelId] = useAtom(lastSelectedModelIdAtom)
@@ -4573,7 +4675,7 @@ export function ChatView({
   }, [diffDisplayMode])
 
   // Handle Diff + Details sidebar conflict (side-peek mode only)
-  // - If Diff opens in side-peek while Details is open: switch Diff to center-peek (dialog) mode
+  // - If Diff opens in side-peek while Details is open: close Details and remember
   // - If user manually switches Diff to side-peek while Details is open: close Details and remember
   // - If Details opens while Diff is in side-peek mode: close Diff and remember
   const prevDiffStateRef = useRef<{ isOpen: boolean; mode: string; detailsOpen: boolean }>({
@@ -4598,10 +4700,11 @@ export function ChatView({
         auto.diffClosedByDetails = true
         setIsDiffSidebarOpen(false)
       }
-      // Diff just opened in side-peek mode → switch to dialog (don't close Details)
+      // Diff just opened in side-peek mode → close Details and remember
       // Skip if we're restoring Diff after Details closed
       else if (!prev.isOpen && !isRestoringDiffRef.current) {
-        setDiffDisplayMode("center-peek")
+        auto.detailsClosedBy = "diff"
+        setIsDetailsSidebarOpen(false)
       }
       // User manually switched to side-peek while Diff was already open → close Details and remember
       else if (prev.isOpen && prev.mode !== "side-peek") {
@@ -4694,12 +4797,8 @@ export function ChatView({
     }
   }, [isDiffSidebarOpen, storedDiffSidebarWidth])
 
-  // Track changed files across all sub-chats for throttled diff refresh
+  // Track changed files across all sub-chats for filtering
   const subChatFiles = useAtomValue(subChatFilesAtom)
-  // Initialize to Date.now() to prevent double-fetch on mount
-  // (the "mount" effect already fetches, throttle should wait)
-  const lastDiffFetchTimeRef = useRef<number>(Date.now())
-  const DIFF_THROTTLE_MS = 2000 // Max 1 fetch per 2 seconds
 
   // Clear "unseen changes" when chat is opened
   useEffect(() => {
@@ -5025,12 +5124,6 @@ export function ChatView({
   // Desktop uses worktreePath, web uses sandboxUrl
   const chatWorkingDir = worktreePath || sandboxUrl
 
-  // Listen for file changes from Claude Write/Edit tools and invalidate git status
-  useFileChangeListener(worktreePath)
-
-  // Subscribe to GitWatcher for real-time file system monitoring (chokidar on main process)
-  useGitWatcher(worktreePath)
-
   // Plugin MCP approval - disabled for now since official marketplace plugins
   // are trusted by default. Will re-enable when third-party plugin support is added.
 
@@ -5288,7 +5381,7 @@ export function ChatView({
     }
     fetchDiffStatsDebounceRef.current = setTimeout(() => {
       fetchDiffStats()
-    }, 500) // 500ms debounce to avoid spamming if multiple streams end
+    }, 2000) // 2s debounce to avoid spamming if multiple streams end
   }, [fetchDiffStats])
 
   // Ref to hold the latest fetchDiffStatsDebounced for use in onFinish callbacks
@@ -5311,38 +5404,48 @@ export function ChatView({
     }
   }, [isDiffSidebarOpen, fetchDiffStats])
 
-  // Calculate total file count across all sub-chats for change detection
-  const totalSubChatFileCount = useMemo(() => {
-    let count = 0
-    subChatFiles.forEach((files) => {
-      count += files.length
-    })
-    return count
-  }, [subChatFiles])
+  // Throttled diff refresh for filesystem events (file edits, git ops)
+  // Initialize to Date.now() to prevent double-fetch on mount
+  // (the "mount" effect already fetches, throttle should wait)
+  const lastDiffFetchTimeRef = useRef<number>(Date.now())
+  const DIFF_THROTTLE_MS = 2000 // Max 1 fetch per 2 seconds
+  const diffRefreshTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Throttled refetch when sub-chat files change (agent edits/writes files)
-  // This keeps the top-right diff sidebar in sync with the bottom "Generated X files" bar
-  useEffect(() => {
-    // Skip if no files tracked yet (initial state)
-    if (totalSubChatFileCount === 0) return
-
+  const scheduleDiffRefresh = useCallback(() => {
     const now = Date.now()
     const timeSinceLastFetch = now - lastDiffFetchTimeRef.current
 
     if (timeSinceLastFetch >= DIFF_THROTTLE_MS) {
-      // Enough time passed, fetch immediately
       lastDiffFetchTimeRef.current = now
       fetchDiffStats()
-    } else {
-      // Schedule fetch for when throttle window ends
-      const delay = DIFF_THROTTLE_MS - timeSinceLastFetch
-      const timer = setTimeout(() => {
-        lastDiffFetchTimeRef.current = Date.now()
-        fetchDiffStats()
-      }, delay)
-      return () => clearTimeout(timer)
+      return
     }
-  }, [totalSubChatFileCount, fetchDiffStats])
+
+    const delay = DIFF_THROTTLE_MS - timeSinceLastFetch
+    if (diffRefreshTimerRef.current) {
+      clearTimeout(diffRefreshTimerRef.current)
+    }
+    diffRefreshTimerRef.current = setTimeout(() => {
+      diffRefreshTimerRef.current = null
+      lastDiffFetchTimeRef.current = Date.now()
+      fetchDiffStats()
+    }, delay)
+  }, [fetchDiffStats])
+
+  useEffect(() => {
+    return () => {
+      if (diffRefreshTimerRef.current) {
+        clearTimeout(diffRefreshTimerRef.current)
+        diffRefreshTimerRef.current = null
+      }
+    }
+  }, [])
+
+  // Listen for file changes from Claude Write/Edit tools and refresh diff
+  useFileChangeListener(worktreePath, { onChange: scheduleDiffRefresh })
+
+  // Subscribe to GitWatcher for real-time file system monitoring (chokidar on main process)
+  useGitWatcher(worktreePath, { onChange: scheduleDiffRefresh, debounceMs: 200 })
 
   // Handle Create PR (Direct) - pushes branch and opens GitHub compare URL
   const handleCreatePrDirect = useCallback(async () => {
@@ -5370,6 +5473,18 @@ export function ChatView({
 
     setIsCreatingPr(true)
     try {
+      const activeSubChatId = useAgentSubChatStore.getState().activeSubChatId
+      if (!activeSubChatId) {
+        toast.error("No active chat available", { position: "top-center" })
+        setIsCreatingPr(false)
+        return
+      }
+
+      // Ensure the target sub-chat is focused before sending
+      const store = useAgentSubChatStore.getState()
+      store.addToOpenSubChats(activeSubChatId)
+      store.setActiveSubChat(activeSubChatId)
+
       // Get PR context from backend
       const context = await trpcClient.chats.getPrContext.query({ chatId })
       if (!context) {
@@ -5380,7 +5495,7 @@ export function ChatView({
 
       // Generate message and set it for ChatViewInner to send
       const message = generatePrMessage(context)
-      setPendingPrMessage(message)
+      setPendingPrMessage({ message, subChatId: activeSubChatId })
       // Don't reset isCreatingPr here - it will be reset after message is sent
     } catch (error) {
       toast.error(
@@ -5389,7 +5504,7 @@ export function ChatView({
       )
       setIsCreatingPr(false)
     }
-  }, [chatId, setPendingPrMessage])
+  }, [chatId, setPendingPrMessage, setIsCreatingPr])
 
   // Handle Commit to existing PR - sends a message to Claude to commit and push
   // selectedPaths parameter is optional - if provided, only those files will be mentioned
@@ -5402,6 +5517,18 @@ export function ChatView({
 
     try {
       setIsCommittingToPr(true)
+      const activeSubChatId = useAgentSubChatStore.getState().activeSubChatId
+      if (!activeSubChatId) {
+        toast.error("No active chat available", { position: "top-center" })
+        setIsCommittingToPr(false)
+        return
+      }
+
+      // Ensure the target sub-chat is focused before sending
+      const store = useAgentSubChatStore.getState()
+      store.addToOpenSubChats(activeSubChatId)
+      store.setActiveSubChat(activeSubChatId)
+
       const context = await trpcClient.chats.getPrContext.query({ chatId })
       if (!context) {
         toast.error("Could not get git context", { position: "top-center" })
@@ -5409,7 +5536,7 @@ export function ChatView({
       }
 
       const message = generateCommitToPrMessage(context)
-      setPendingPrMessage(message)
+      setPendingPrMessage({ message, subChatId: activeSubChatId })
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to prepare commit request",
@@ -5418,7 +5545,7 @@ export function ChatView({
     } finally {
       setIsCommittingToPr(false)
     }
-  }, [chatId, setPendingPrMessage])
+  }, [chatId, setPendingPrMessage, setIsCommittingToPr])
 
   // Handle Review - sends a message to Claude to review the diff
   const setPendingReviewMessage = useSetAtom(pendingReviewMessageAtom)
@@ -5481,8 +5608,41 @@ Make sure to preserve all functionality from both branches when resolving confli
   // Fetch git status for sync counts (pushCount, pullCount, hasUpstream)
   const { data: gitStatus, refetch: refetchGitStatus, isLoading: isGitStatusLoading } = trpc.changes.getStatus.useQuery(
     { worktreePath: worktreePath || "" },
-    { enabled: !!worktreePath && isDiffSidebarOpen, staleTime: 30000 }
+    { enabled: !!worktreePath && (isDiffSidebarOpen || isDetailsSidebarOpen), staleTime: 30000 }
   )
+
+  const handleCommitChangesRefresh = useCallback(() => {
+    refetchGitStatus()
+    scheduleDiffRefresh()
+  }, [refetchGitStatus, scheduleDiffRefresh])
+
+  const {
+    commit: commitChanges,
+    isPending: isCommittingChanges,
+  } = useCommitActions({
+    worktreePath,
+    chatId,
+    onRefresh: handleCommitChangesRefresh,
+  })
+
+  const { push: pushBranch, isPending: isPushing } = usePushAction({
+    worktreePath,
+    hasUpstream: gitStatus?.hasUpstream ?? true,
+    onSuccess: handleCommitChangesRefresh,
+  })
+
+  const handleCommitChanges = useCallback((selectedPaths: string[]) => {
+    commitChanges({ filePaths: selectedPaths })
+  }, [commitChanges])
+
+  const handleCommitAndPush = useCallback(async (selectedPaths: string[]) => {
+    const didCommit = await commitChanges({ filePaths: selectedPaths })
+    if (didCommit) {
+      pushBranch()
+    }
+  }, [commitChanges, pushBranch])
+
+  const isCommittingCombined = isCommittingChanges || isPushing
 
   // Refetch git status and diff stats when window gains focus
   useEffect(() => {
@@ -6390,10 +6550,11 @@ Make sure to preserve all functionality from both branches when resolving confli
 
   // Determine if chat header should be hidden
   const shouldHideChatHeader =
-    subChatsSidebarMode === "sidebar" &&
+    hideHeader ||
+    (subChatsSidebarMode === "sidebar" &&
     isPreviewSidebarOpen &&
     isDiffSidebarOpen &&
-    !isMobileFullscreen
+    !isMobileFullscreen)
 
   // No early return - let the UI render with loading state handled by activeChat check below
 
@@ -6840,6 +7001,7 @@ Make sure to preserve all functionality from both branches when resolving confli
               isCommittingToPr={isCommittingToPr}
               subChatsWithFiles={subChatsWithFiles}
               setDiffStats={setDiffStats}
+              onDiscardSuccess={scheduleDiffRefresh}
             />
           </DiffStateProvider>
         )}
@@ -6998,8 +7160,12 @@ Make sure to preserve all functionality from both branches when resolving confli
             setIsDiffSidebarOpen={setIsDiffSidebarOpen}
             diffStats={diffStats}
             parsedFileDiffs={parsedFileDiffs}
-            onCommit={handleCommitToPr}
-            isCommitting={isCommittingToPr}
+            onCommit={worktreePath ? handleCommitChanges : undefined}
+            onCommitAndPush={worktreePath ? handleCommitAndPush : undefined}
+            isCommitting={isCommittingCombined}
+            gitStatus={gitStatus}
+            isGitStatusLoading={isGitStatusLoading}
+            currentBranch={branchData?.current}
             onExpandTerminal={() => setIsTerminalSidebarOpen(true)}
             onExpandPlan={() => setIsPlanSidebarOpen(true)}
             onExpandDiff={() => setIsDiffSidebarOpen(true)}

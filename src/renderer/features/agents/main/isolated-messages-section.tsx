@@ -26,6 +26,7 @@ interface IsolatedMessagesSectionProps {
   stickyTopClass: string
   sandboxSetupError?: string
   onRetrySetup?: () => void
+  onRollback?: (msg: any) => void
   // Components passed from parent - must be stable references
   UserBubbleComponent: React.ComponentType<{
     messageId: string
@@ -55,6 +56,7 @@ function areSectionPropsEqual(
     prev.stickyTopClass === next.stickyTopClass &&
     prev.sandboxSetupError === next.sandboxSetupError &&
     prev.onRetrySetup === next.onRetrySetup &&
+    prev.onRollback === next.onRollback &&
     prev.UserBubbleComponent === next.UserBubbleComponent &&
     prev.ToolCallComponent === next.ToolCallComponent &&
     prev.MessageGroupWrapper === next.MessageGroupWrapper &&
@@ -70,6 +72,7 @@ export const IsolatedMessagesSection = memo(function IsolatedMessagesSection({
   stickyTopClass,
   sandboxSetupError,
   onRetrySetup,
+  onRollback,
   UserBubbleComponent,
   ToolCallComponent,
   MessageGroupWrapper,
@@ -109,6 +112,7 @@ export const IsolatedMessagesSection = memo(function IsolatedMessagesSection({
           stickyTopClass={stickyTopClass}
           sandboxSetupError={sandboxSetupError}
           onRetrySetup={onRetrySetup}
+          onRollback={onRollback}
           UserBubbleComponent={UserBubbleComponent}
           ToolCallComponent={ToolCallComponent}
           MessageGroupWrapper={MessageGroupWrapper}

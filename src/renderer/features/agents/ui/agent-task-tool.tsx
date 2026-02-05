@@ -52,13 +52,13 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 
   const description = part.input?.description || ""
 
-  // Use startedAt from backend for persistent timing across re-renders
-  const startedAt = part.startedAt as number | undefined
+  // Get startedAt from providerMetadata (passed through AI SDK)
+  const startedAt = (part.callProviderMetadata?.custom?.startedAt as number | undefined)
+    ?? (part.startedAt as number | undefined)
 
-  // Track elapsed time while task is running using backend timestamp
+  // Tick elapsed time while task is running
   useEffect(() => {
     if (isPending && startedAt) {
-      // Set initial elapsed time immediately
       setElapsedMs(Date.now() - startedAt)
 
       const interval = setInterval(() => {
@@ -69,7 +69,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   }, [isPending, startedAt])
 
   // Use output duration from Claude Code if available, otherwise use our tracked time
-  const outputDuration = part.output?.duration || part.output?.duration_ms
+  const outputDuration = part.output?.totalDurationMs || part.output?.duration || part.output?.duration_ms
   const displayMs = !isPending && outputDuration ? outputDuration : elapsedMs
   const elapsedTimeDisplay = formatElapsedTime(displayMs)
 
@@ -82,11 +82,20 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 
   const hasNestedTools = nestedTools.length > 0
 
-  // Build subtitle - always show description
+  // Build subtitle - show latest tool activity when running, description otherwise
   const getSubtitle = () => {
+    if (isPending && hasNestedTools) {
+      const lastTool = nestedTools[nestedTools.length - 1]
+      const meta = lastTool ? AgentToolRegistry[lastTool.type] : null
+      if (meta) {
+        const title = meta.title(lastTool)
+        const sub = meta.subtitle?.(lastTool)
+        return sub ? `${title} ${sub}` : title
+      }
+    }
     if (description) {
-      const truncated = description.length > 60 
-        ? description.slice(0, 57) + "..." 
+      const truncated = description.length > 60
+        ? description.slice(0, 57) + "..."
         : description
       return truncated
     }

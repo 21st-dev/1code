@@ -7,11 +7,10 @@ import { Button } from "../../../components/ui/button"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import { useSetAtom } from "jotai"
-import { selectedAgentChatIdAtom } from "../atoms"
+import { selectedAgentChatIdAtom, desktopViewAtom } from "../atoms"
 import { chatSourceModeAtom } from "../../../lib/atoms"
 import type { RemoteChat } from "../../../lib/remote-api"
 import { Folder, Download, Check } from "lucide-react"
-import { agentChatStore } from "../stores/agent-chat-store"
 
 interface Project {
   id: string
@@ -45,6 +44,7 @@ export function OpenLocallyDialog({
   const openAtRef = useRef<number>(0)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setChatSourceMode = useSetAtom(chatSourceModeAtom)
+  const setDesktopView = useSetAtom(desktopViewAtom)
   const utils = trpc.useUtils()
 
   // For multiple projects view
@@ -54,22 +54,17 @@ export function OpenLocallyDialog({
   const locateMutation = trpc.projects.locateAndAddProject.useMutation()
 
   const importMutation = trpc.sandboxImport.importSandboxChat.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: (result) => {
       toast.success("Opened locally")
 
-      // 1. Clear stale Chat instances from cache
-      agentChatStore.clear()
-
-      // 2. Invalidate list queries
+      // Invalidate list queries so sidebar updates
       utils.chats.list.invalidate()
       utils.projects.list.invalidate()
 
-      // 3. Prefetch: Wait for chat data to be in cache before switching
-      await utils.chats.get.fetch({ id: result.chatId })
-
-      // 4. Now safe to switch - data is ready
+      // Switch to local chat view — let the normal architecture load the chat
       setChatSourceMode("local")
       setSelectedChatId(result.chatId)
+      setDesktopView(null)
       onClose()
     },
     onError: (error) => {
@@ -80,22 +75,17 @@ export function OpenLocallyDialog({
   const pickDestMutation = trpc.projects.pickCloneDestination.useMutation()
 
   const cloneMutation = trpc.sandboxImport.cloneFromSandbox.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: (result) => {
       toast.success("Cloned and opened locally")
 
-      // 1. Clear stale Chat instances from cache
-      agentChatStore.clear()
-
-      // 2. Invalidate list queries
-      utils.projects.list.invalidate()
+      // Invalidate list queries so sidebar updates
       utils.chats.list.invalidate()
+      utils.projects.list.invalidate()
 
-      // 3. Prefetch: Wait for chat data to be in cache before switching
-      await utils.chats.get.fetch({ id: result.chatId })
-
-      // 4. Now safe to switch - data is ready
+      // Switch to local chat view — let the normal architecture load the chat
       setChatSourceMode("local")
       setSelectedChatId(result.chatId)
+      setDesktopView(null)
       onClose()
     },
     onError: (error) => {

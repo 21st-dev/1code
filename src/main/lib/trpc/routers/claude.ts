@@ -15,15 +15,34 @@ import {
   logRawClaudeMessage,
   type UIMessageChunk,
 } from "../../claude"
-import { getProjectMcpServers, GLOBAL_MCP_PATH, readClaudeConfig, removeMcpServerConfig, resolveProjectPathFromWorktree, updateClaudeConfigAtomic, updateMcpServerConfig, writeClaudeConfig, type McpServerConfig } from "../../claude-config"
-import { discoverPluginMcpServers } from "../../plugins"
-import { getEnabledPlugins, getApprovedPluginMcpServers } from "./claude-settings"
+import {
+  getProjectMcpServers,
+  GLOBAL_MCP_PATH,
+  readClaudeConfig,
+  removeMcpServerConfig,
+  resolveProjectPathFromWorktree,
+  updateMcpServerConfig,
+  writeClaudeConfig,
+  type McpServerConfig,
+} from "../../claude-config"
 import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
-import { ensureMcpTokensFresh, fetchMcpTools, fetchMcpToolsStdio, getMcpAuthStatus, startMcpOAuth, type McpToolInfo } from "../../mcp-auth"
+import {
+  ensureMcpTokensFresh,
+  fetchMcpTools,
+  fetchMcpToolsStdio,
+  getMcpAuthStatus,
+  startMcpOAuth,
+  type McpToolInfo,
+} from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
+import { discoverPluginMcpServers } from "../../plugins"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
+import {
+  getApprovedPluginMcpServers,
+  getEnabledPlugins,
+} from "./claude-settings"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:servername] mentions from prompt text
@@ -70,7 +89,10 @@ function parseMentions(prompt: string): {
         break
       case "tool":
         // Validate: server name (alphanumeric, underscore, hyphen) or full tool id (mcp__server__tool)
-        if (/^[a-zA-Z0-9_-]+$/.test(name) || /^mcp__[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+$/.test(name)) {
+        if (
+          /^[a-zA-Z0-9_-]+$/.test(name) ||
+          /^mcp__[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+$/.test(name)
+        ) {
           toolMentions.push(name)
         }
         break
@@ -110,7 +132,14 @@ function parseMentions(prompt: string): {
     cleanedPrompt = `${toolHints}\n\n${cleanedPrompt}`
   }
 
-  return { cleanedPrompt, agentMentions, skillMentions, fileMentions, folderMentions, toolMentions }
+  return {
+    cleanedPrompt,
+    agentMentions,
+    skillMentions,
+    fileMentions,
+    folderMentions,
+    toolMentions,
+  }
 }
 
 /**
@@ -137,20 +166,46 @@ function getClaudeCodeToken(): string | null {
       .where(eq(claudeCodeCredentials.id, "default"))
       .get()
 
+    console.log("[claude-auth] ========== CLAUDE CODE AUTH DEBUG ==========")
+    console.log(
+      "[claude-auth] Credential record:",
+      cred
+        ? {
+            id: cred.id,
+            hasOauthToken: !!cred.oauthToken,
+            encryptedTokenLength: cred.oauthToken?.length ?? 0,
+            connectedAt: cred.connectedAt,
+            userId: cred.userId,
+          }
+        : null,
+    )
+
     if (!cred?.oauthToken) {
-      console.log("[claude] No Claude Code credentials found")
+      console.log("[claude-auth] No Claude Code credentials found")
+      console.log("[claude-auth] ============================================")
       return null
     }
 
-    return decryptToken(cred.oauthToken)
+    const decrypted = decryptToken(cred.oauthToken)
+    console.log("[claude-auth] Token decrypted successfully")
+    console.log(
+      "[claude-auth] Token preview:",
+      decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
+    )
+    console.log("[claude-auth] Token total length:", decrypted.length)
+    console.log("[claude-auth] ============================================")
+
+    return decrypted
   } catch (error) {
-    console.error("[claude] Error getting Claude Code token:", error)
+    console.error("[claude-auth] Error getting Claude Code token:", error)
     return null
   }
 }
 
 // Dynamic import for ESM module - CACHED to avoid re-importing on every message
-let cachedClaudeQuery: typeof import("@anthropic-ai/claude-agent-sdk").query | null = null
+let cachedClaudeQuery:
+  | typeof import("@anthropic-ai/claude-agent-sdk").query
+  | null = null
 const getClaudeQuery = async () => {
   if (cachedClaudeQuery) {
     return cachedClaudeQuery
@@ -179,10 +234,13 @@ function mcpCacheKey(scope: string | null, serverName: string): string {
 const symlinksCreated = new Set<string>()
 
 // Cache for MCP config (avoid re-reading ~/.claude.json on every message)
-const mcpConfigCache = new Map<string, {
-  config: Record<string, any> | undefined
-  mtime: number
-}>()
+const mcpConfigCache = new Map<
+  string,
+  {
+    config: Record<string, any> | undefined
+    mtime: number
+  }
+>()
 
 const pendingToolApprovals = new Map<
   string,
@@ -196,10 +254,7 @@ const pendingToolApprovals = new Map<
   }
 >()
 
-const PLAN_MODE_BLOCKED_TOOLS = new Set([
-  "Bash",
-  "NotebookEdit",
-])
+const PLAN_MODE_BLOCKED_TOOLS = new Set(["Bash", "NotebookEdit"])
 
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
@@ -258,7 +313,7 @@ function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
   }
 
   // If HTTP server with explicit authType (oauth/bearer), needs auth
-  if (serverConfig.url && (["oauth", "bearer"].includes(authType ?? ""))) {
+  if (serverConfig.url && ["oauth", "bearer"].includes(authType ?? "")) {
     return "needs-auth"
   }
 
@@ -267,15 +322,17 @@ function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
   return "connected"
 }
 
-const MCP_FETCH_TIMEOUT_MS = 10_000
+const MCP_FETCH_TIMEOUT_MS = 40_000
 
 /**
  * Fetch tools from an MCP server (HTTP or stdio transport)
- * Times out after 10 seconds to prevent slow MCPs from blocking the cache update
+ * Times out after MCP_FETCH_TIMEOUT_MS seconds to prevent slow MCPs from blocking the cache update
  */
-async function fetchToolsForServer(serverConfig: McpServerConfig): Promise<McpToolInfo[]> {
+async function fetchToolsForServer(
+  serverConfig: McpServerConfig,
+): Promise<McpToolInfo[]> {
   const timeoutPromise = new Promise<McpToolInfo[]>((_, reject) =>
-    setTimeout(() => reject(new Error('Timeout')), MCP_FETCH_TIMEOUT_MS)
+    setTimeout(() => reject(new Error("Timeout")), MCP_FETCH_TIMEOUT_MS),
   )
 
   const fetchPromise = (async () => {
@@ -325,14 +382,19 @@ export async function getAllMcpConfigHandler() {
 
     const config = await readClaudeConfig()
 
-    const convertServers = async (servers: Record<string, McpServerConfig> | undefined, scope: string | null) => {
+    const convertServers = async (
+      servers: Record<string, McpServerConfig> | undefined,
+      scope: string | null,
+    ) => {
       if (!servers) return []
 
       const results = await Promise.all(
         Object.entries(servers).map(async ([name, serverConfig]) => {
           const configObj = serverConfig as Record<string, unknown>
           let status = getServerStatusFromConfig(serverConfig)
-          const headers = serverConfig.headers as Record<string, string> | undefined
+          const headers = serverConfig.headers as
+            | Record<string, string>
+            | undefined
 
           let tools: McpToolInfo[] = []
           let needsAuth = false
@@ -357,7 +419,10 @@ export async function getAllMcpConfigHandler() {
               } catch {
                 // If probe fails, assume no auth needed
               }
-            } else if (serverConfig.authType === "oauth" || serverConfig.authType === "bearer") {
+            } else if (
+              serverConfig.authType === "oauth" ||
+              serverConfig.authType === "bearer"
+            ) {
               needsAuth = true
             }
 
@@ -370,7 +435,7 @@ export async function getAllMcpConfigHandler() {
           }
 
           return { name, status, tools, needsAuth, config: configObj }
-        })
+        }),
       )
 
       return results
@@ -381,7 +446,13 @@ export async function getAllMcpConfigHandler() {
       groupName: string
       projectPath: string | null
       promise: Promise<{
-        mcpServers: Array<{ name: string; status: string; tools: McpToolInfo[]; needsAuth: boolean; config: Record<string, unknown> }>
+        mcpServers: Array<{
+          name: string
+          status: string
+          tools: McpToolInfo[]
+          needsAuth: boolean
+          config: Record<string, unknown>
+        }>
         duration: number
       }>
     }> = []
@@ -393,132 +464,181 @@ export async function getAllMcpConfigHandler() {
         projectPath: null,
         promise: (async () => {
           const start = Date.now()
-          const freshServers = await ensureMcpTokensFresh(config.mcpServers!, GLOBAL_MCP_PATH)
+          const freshServers = await ensureMcpTokensFresh(
+            config.mcpServers!,
+            GLOBAL_MCP_PATH,
+          )
           const mcpServers = await convertServers(freshServers, null) // null = global scope
           return { mcpServers, duration: Date.now() - start }
-        })()
+        })(),
       })
     } else {
       groupTasks.push({
         groupName: "Global",
         projectPath: null,
-        promise: Promise.resolve({ mcpServers: [], duration: 0 })
+        promise: Promise.resolve({ mcpServers: [], duration: 0 }),
       })
     }
 
     // Project MCPs
     if (config.projects) {
-      for (const [projectPath, projectConfig] of Object.entries(config.projects)) {
-        if (projectConfig.mcpServers && Object.keys(projectConfig.mcpServers).length > 0) {
+      for (const [projectPath, projectConfig] of Object.entries(
+        config.projects,
+      )) {
+        if (
+          projectConfig.mcpServers &&
+          Object.keys(projectConfig.mcpServers).length > 0
+        ) {
           const groupName = path.basename(projectPath) || projectPath
           groupTasks.push({
             groupName,
             projectPath,
             promise: (async () => {
               const start = Date.now()
-              const freshServers = await ensureMcpTokensFresh(projectConfig.mcpServers!, projectPath)
+              const freshServers = await ensureMcpTokensFresh(
+                projectConfig.mcpServers!,
+                projectPath,
+              )
               const mcpServers = await convertServers(freshServers, projectPath) // projectPath = scope
               return { mcpServers, duration: Date.now() - start }
-            })()
+            })(),
           })
         }
       }
     }
 
     // Process all groups in parallel
-    const results = await Promise.all(groupTasks.map(t => t.promise))
+    const results = await Promise.all(groupTasks.map((t) => t.promise))
 
     // Build groups with timing info
     const groupsWithTiming = groupTasks.map((task, i) => ({
       groupName: task.groupName,
       projectPath: task.projectPath,
       mcpServers: results[i].mcpServers,
-      duration: results[i].duration
+      duration: results[i].duration,
     }))
 
     // Log performance (sorted by duration DESC)
     const totalDuration = Date.now() - totalStart
-    const workingCount = [...workingMcpServers.values()].filter(v => v).length
-    const sortedByDuration = [...groupsWithTiming].sort((a, b) => b.duration - a.duration)
+    const workingCount = [...workingMcpServers.values()].filter((v) => v).length
+    const sortedByDuration = [...groupsWithTiming].sort(
+      (a, b) => b.duration - a.duration,
+    )
 
-    console.log(`[MCP] Cache updated in ${totalDuration}ms. Working: ${workingCount}/${workingMcpServers.size}`)
+    console.log(
+      `[MCP] Cache updated in ${totalDuration}ms. Working: ${workingCount}/${workingMcpServers.size}`,
+    )
     for (const g of sortedByDuration) {
       if (g.mcpServers.length > 0) {
-        console.log(`[MCP]   ${g.groupName}: ${g.duration}ms (${g.mcpServers.length} servers)`)
+        console.log(
+          `[MCP]   ${g.groupName}: ${g.duration}ms (${g.mcpServers.length} servers)`,
+        )
       }
     }
 
     // Return groups without timing info
-    const groups = groupsWithTiming.map(({ groupName, projectPath, mcpServers }) => ({
-      groupName,
-      projectPath,
-      mcpServers
-    }))
+    const groups = groupsWithTiming.map(
+      ({ groupName, projectPath, mcpServers }) => ({
+        groupName,
+        projectPath,
+        mcpServers,
+      }),
+    )
 
     // Plugin MCPs (from installed plugins)
-    const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
-      getEnabledPlugins(),
-      discoverPluginMcpServers(),
-      getApprovedPluginMcpServers(),
-    ])
+    const [enabledPluginSources, pluginMcpConfigs, approvedServers] =
+      await Promise.all([
+        getEnabledPlugins(),
+        discoverPluginMcpServers(),
+        getApprovedPluginMcpServers(),
+      ])
 
     for (const pluginConfig of pluginMcpConfigs) {
       // Only show MCP servers from enabled plugins
       if (!enabledPluginSources.includes(pluginConfig.pluginSource)) continue
 
-      const globalServerNames = config.mcpServers ? Object.keys(config.mcpServers) : []
+      const globalServerNames = config.mcpServers
+        ? Object.keys(config.mcpServers)
+        : []
       if (Object.keys(pluginConfig.mcpServers).length > 0) {
-        const pluginMcpServers = (await Promise.all(
-          Object.entries(pluginConfig.mcpServers).map(async ([name, serverConfig]) => {
-            // Skip servers that have been promoted to ~/.claude.json (e.g., after OAuth)
-            if (globalServerNames.includes(name)) return null
+        const pluginMcpServers = (
+          await Promise.all(
+            Object.entries(pluginConfig.mcpServers).map(
+              async ([name, serverConfig]) => {
+                // Skip servers that have been promoted to ~/.claude.json (e.g., after OAuth)
+                if (globalServerNames.includes(name)) return null
 
-            const configObj = serverConfig as Record<string, unknown>
-            const identifier = `${pluginConfig.pluginSource}:${name}`
-            const isApproved = approvedServers.includes(identifier)
+                const configObj = serverConfig as Record<string, unknown>
+                const identifier = `${pluginConfig.pluginSource}:${name}`
+                const isApproved = approvedServers.includes(identifier)
 
-            if (!isApproved) {
-              return { name, status: "pending-approval", tools: [] as McpToolInfo[], needsAuth: false, config: configObj, isApproved }
-            }
-
-            // Try to get status and tools for approved servers
-            let status = getServerStatusFromConfig(serverConfig)
-            const headers = serverConfig.headers as Record<string, string> | undefined
-            let tools: McpToolInfo[] = []
-            let needsAuth = false
-
-            try {
-              tools = await fetchToolsForServer(serverConfig)
-            } catch (error) {
-              console.error(`[MCP] Failed to fetch tools for plugin ${name}:`, error)
-            }
-
-            if (tools.length > 0) {
-              status = "connected"
-            } else {
-              // Same OAuth detection logic as regular MCP servers
-              if (serverConfig.url) {
-                try {
-                  const baseUrl = getMcpBaseUrl(serverConfig.url)
-                  const metadata = await fetchOAuthMetadata(baseUrl)
-                  needsAuth = !!metadata && !!metadata.authorization_endpoint
-                } catch {
-                  // If probe fails, assume no auth needed
+                if (!isApproved) {
+                  return {
+                    name,
+                    status: "pending-approval",
+                    tools: [] as McpToolInfo[],
+                    needsAuth: false,
+                    config: configObj,
+                    isApproved,
+                  }
                 }
-              } else if (serverConfig.authType === "oauth" || serverConfig.authType === "bearer") {
-                needsAuth = true
-              }
 
-              if (needsAuth && !headers?.Authorization) {
-                status = "needs-auth"
-              } else {
-                status = "failed"
-              }
-            }
+                // Try to get status and tools for approved servers
+                let status = getServerStatusFromConfig(serverConfig)
+                const headers = serverConfig.headers as
+                  | Record<string, string>
+                  | undefined
+                let tools: McpToolInfo[] = []
+                let needsAuth = false
 
-            return { name, status, tools, needsAuth, config: configObj, isApproved }
-          })
-        )).filter((s): s is NonNullable<typeof s> => s !== null)
+                try {
+                  tools = await fetchToolsForServer(serverConfig)
+                } catch (error) {
+                  console.error(
+                    `[MCP] Failed to fetch tools for plugin ${name}:`,
+                    error,
+                  )
+                }
+
+                if (tools.length > 0) {
+                  status = "connected"
+                } else {
+                  // Same OAuth detection logic as regular MCP servers
+                  if (serverConfig.url) {
+                    try {
+                      const baseUrl = getMcpBaseUrl(serverConfig.url)
+                      const metadata = await fetchOAuthMetadata(baseUrl)
+                      needsAuth =
+                        !!metadata && !!metadata.authorization_endpoint
+                    } catch {
+                      // If probe fails, assume no auth needed
+                    }
+                  } else if (
+                    serverConfig.authType === "oauth" ||
+                    serverConfig.authType === "bearer"
+                  ) {
+                    needsAuth = true
+                  }
+
+                  if (needsAuth && !headers?.Authorization) {
+                    status = "needs-auth"
+                  } else {
+                    status = "failed"
+                  }
+                }
+
+                return {
+                  name,
+                  status,
+                  tools,
+                  needsAuth,
+                  config: configObj,
+                  isApproved,
+                }
+              },
+            ),
+          )
+        ).filter((s): s is NonNullable<typeof s> => s !== null)
 
         groups.push({
           groupName: `Plugin: ${pluginConfig.pluginSource}`,
@@ -584,7 +704,9 @@ export const claudeRouter = router({
         let lastChunkType = ""
         // Shared sessionId for cleanup to save on abort
         let currentSessionId: string | null = null
-        console.log(`[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`)
+        console.log(
+          `[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`,
+        )
 
         // Track if observable is still active (not unsubscribed)
         let isObservableActive = true
@@ -649,19 +771,21 @@ export const claudeRouter = router({
             const existingSessionId = existing?.sessionId || null
 
             // Get resumeSessionAt UUID only if shouldResume flag was set (by rollbackToMessage)
-            const lastAssistantMsg = [...existingMessages].reverse().find(
-              (m: any) => m.role === "assistant"
-            )
+            const lastAssistantMsg = [...existingMessages]
+              .reverse()
+              .find((m: any) => m.role === "assistant")
             const resumeAtUuid = lastAssistantMsg?.metadata?.shouldResume
-              ? (lastAssistantMsg?.metadata?.sdkMessageUuid || null)
+              ? lastAssistantMsg?.metadata?.sdkMessageUuid || null
               : null
             const historyEnabled = input.historyEnabled === true
 
             // Check if last message is already this user message (avoid duplicate)
             const lastMsg = existingMessages[existingMessages.length - 1]
+            const lastMsgText = lastMsg?.parts?.find(
+              (p: any) => p.type === "text",
+            )?.text
             const isDuplicate =
-              lastMsg?.role === "user" &&
-              lastMsg?.parts?.[0]?.text === input.prompt
+              lastMsg?.role === "user" && lastMsgText === input.prompt
 
             // 2. Create user message and save BEFORE streaming (skip if duplicate)
             let userMessage: any
@@ -671,10 +795,23 @@ export const claudeRouter = router({
               userMessage = lastMsg
               messagesToSave = existingMessages
             } else {
+              const parts: any[] = [{ type: "text", text: input.prompt }]
+              if (input.images && input.images.length > 0) {
+                for (const img of input.images) {
+                  parts.push({
+                    type: "data-image",
+                    data: {
+                      base64Data: img.base64Data,
+                      mediaType: img.mediaType,
+                      filename: img.filename,
+                    },
+                  })
+                }
+              }
               userMessage = {
                 id: crypto.randomUUID(),
                 role: "user",
-                parts: [{ type: "text", text: input.prompt }],
+                parts,
               }
               messagesToSave = [...existingMessages, userMessage]
 
@@ -699,8 +836,11 @@ export const claudeRouter = router({
             )
 
             if (offlineResult.error) {
-              emitError(new Error(offlineResult.error), 'Offline mode unavailable')
-              safeEmit({ type: 'finish' } as UIMessageChunk)
+              emitError(
+                new Error(offlineResult.error),
+                "Offline mode unavailable",
+              )
+              safeEmit({ type: "finish" } as UIMessageChunk)
               safeComplete()
               return
             }
@@ -715,9 +855,12 @@ export const claudeRouter = router({
               connectionMethod = "offline-ollama"
             } else if (finalCustomConfig) {
               // Has custom config = either API key or custom model
-              const isDefaultAnthropicUrl = !finalCustomConfig.baseUrl ||
+              const isDefaultAnthropicUrl =
+                !finalCustomConfig.baseUrl ||
                 finalCustomConfig.baseUrl.includes("anthropic.com")
-              connectionMethod = isDefaultAnthropicUrl ? "api-key" : "custom-model"
+              connectionMethod = isDefaultAnthropicUrl
+                ? "api-key"
+                : "custom-model"
             }
             setConnectionMethod(connectionMethod)
 
@@ -730,7 +873,9 @@ export const claudeRouter = router({
               claudeQuery = await getClaudeQuery()
             } catch (sdkError) {
               emitError(sdkError, "Failed to load Claude SDK")
-              console.log(`[SD] M:END sub=${subId} reason=sdk_load_error n=${chunkCount}`)
+              console.log(
+                `[SD] M:END sub=${subId} reason=sdk_load_error n=${chunkCount}`,
+              )
               safeEmit({ type: "finish" } as UIMessageChunk)
               safeComplete()
               return
@@ -750,14 +895,21 @@ export const claudeRouter = router({
             const stderrLines: string[] = []
 
             // Parse mentions from prompt (agents, skills, files, folders)
-            const { cleanedPrompt, agentMentions, skillMentions } = parseMentions(input.prompt)
+            const { cleanedPrompt, agentMentions, skillMentions } =
+              parseMentions(input.prompt)
 
             // Build agents option for SDK (proper registration via options.agents)
-            const agentsOption = await buildAgentsOption(agentMentions, input.cwd)
+            const agentsOption = await buildAgentsOption(
+              agentMentions,
+              input.cwd,
+            )
 
             // Log if agents were mentioned
             if (agentMentions.length > 0) {
-              console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
+              console.log(
+                `[claude] Registering agents via SDK:`,
+                Object.keys(agentsOption),
+              )
             }
 
             // Log if skills were mentioned
@@ -845,7 +997,7 @@ export const claudeRouter = router({
             const isolatedConfigDir = path.join(
               app.getPath("userData"),
               "claude-sessions",
-              isUsingOllama ? input.chatId : input.subChatId
+              isUsingOllama ? input.chatId : input.subChatId,
             )
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
@@ -870,8 +1022,14 @@ export const claudeRouter = router({
 
                 // Symlink skills directory if source exists and target doesn't
                 try {
-                  const skillsSourceExists = await fs.stat(skillsSource).then(() => true).catch(() => false)
-                  const skillsTargetExists = await fs.lstat(skillsTarget).then(() => true).catch(() => false)
+                  const skillsSourceExists = await fs
+                    .stat(skillsSource)
+                    .then(() => true)
+                    .catch(() => false)
+                  const skillsTargetExists = await fs
+                    .lstat(skillsTarget)
+                    .then(() => true)
+                    .catch(() => false)
                   if (skillsSourceExists && !skillsTargetExists) {
                     await fs.symlink(skillsSource, skillsTarget, "dir")
                   }
@@ -881,8 +1039,14 @@ export const claudeRouter = router({
 
                 // Symlink agents directory if source exists and target doesn't
                 try {
-                  const agentsSourceExists = await fs.stat(agentsSource).then(() => true).catch(() => false)
-                  const agentsTargetExists = await fs.lstat(agentsTarget).then(() => true).catch(() => false)
+                  const agentsSourceExists = await fs
+                    .stat(agentsSource)
+                    .then(() => true)
+                    .catch(() => false)
+                  const agentsTargetExists = await fs
+                    .lstat(agentsTarget)
+                    .then(() => true)
+                    .catch(() => false)
                   if (agentsSourceExists && !agentsTargetExists) {
                     await fs.symlink(agentsSource, agentsTarget, "dir")
                   }
@@ -922,17 +1086,27 @@ export const claudeRouter = router({
                   if (cached && cached.mtime === currentMtime) {
                     claudeConfig = cached.config
                   } else {
-                    claudeConfig = JSON.parse(await fs.readFile(claudeJsonSource, "utf-8"))
-                    mcpConfigCache.set(claudeJsonSource, { config: claudeConfig, mtime: currentMtime })
+                    claudeConfig = JSON.parse(
+                      await fs.readFile(claudeJsonSource, "utf-8"),
+                    )
+                    mcpConfigCache.set(claudeJsonSource, {
+                      config: claudeConfig,
+                      mtime: currentMtime,
+                    })
                   }
 
                   // Merge global + project servers (project overrides global)
                   // getProjectMcpServers resolves worktree paths internally
                   const globalServers = claudeConfig.mcpServers || {}
-                  const projectServers = getProjectMcpServers(claudeConfig, lookupPath) || {}
+                  const projectServers =
+                    getProjectMcpServers(claudeConfig, lookupPath) || {}
 
                   // Load plugin MCP servers (filtered by enabled plugins and approval)
-                  const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
+                  const [
+                    enabledPluginSources,
+                    pluginMcpConfigs,
+                    approvedServers,
+                  ] = await Promise.all([
                     getEnabledPlugins(),
                     discoverPluginMcpServers(),
                     getApprovedPluginMcpServers(),
@@ -941,7 +1115,9 @@ export const claudeRouter = router({
                   const pluginServers: Record<string, McpServerConfig> = {}
                   for (const config of pluginMcpConfigs) {
                     if (enabledPluginSources.includes(config.pluginSource)) {
-                      for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
+                      for (const [name, serverConfig] of Object.entries(
+                        config.mcpServers,
+                      )) {
                         if (!globalServers[name] && !projectServers[name]) {
                           const identifier = `${config.pluginSource}:${name}`
                           if (approvedServers.includes(identifier)) {
@@ -953,27 +1129,40 @@ export const claudeRouter = router({
                   }
 
                   // Priority: project > global > plugin
-                  const allServers = { ...pluginServers, ...globalServers, ...projectServers }
+                  const allServers = {
+                    ...pluginServers,
+                    ...globalServers,
+                    ...projectServers,
+                  }
 
                   // Filter to only working MCPs using scoped cache keys
                   if (workingMcpServers.size > 0) {
                     const filtered: Record<string, any> = {}
                     // Resolve worktree path to original project path to match cache keys
-                    const resolvedProjectPath = resolveProjectPathFromWorktree(lookupPath) || lookupPath
+                    const resolvedProjectPath =
+                      resolveProjectPathFromWorktree(lookupPath) || lookupPath
                     for (const [name, config] of Object.entries(allServers)) {
                       // Use resolved project scope if server is from project, otherwise global
-                      const scope = name in projectServers ? resolvedProjectPath : null
+                      const scope =
+                        name in projectServers ? resolvedProjectPath : null
                       const cacheKey = mcpCacheKey(scope, name)
                       // Include server if it's marked working, or if it's not in cache at all
                       // (plugin servers won't be in the cache yet)
-                      if (workingMcpServers.get(cacheKey) === true || !workingMcpServers.has(cacheKey)) {
+                      if (
+                        workingMcpServers.get(cacheKey) === true ||
+                        !workingMcpServers.has(cacheKey)
+                      ) {
                         filtered[name] = config
                       }
                     }
                     mcpServersForSdk = filtered
-                    const skipped = Object.keys(allServers).length - Object.keys(filtered).length
+                    const skipped =
+                      Object.keys(allServers).length -
+                      Object.keys(filtered).length
                     if (skipped > 0) {
-                      console.log(`[claude] Filtered out ${skipped} non-working MCP(s)`)
+                      console.log(
+                        `[claude] Filtered out ${skipped} non-working MCP(s)`,
+                      )
                     }
                   } else {
                     mcpServersForSdk = allServers
@@ -983,58 +1172,114 @@ export const claudeRouter = router({
                 console.error(`[claude] Failed to read MCP config:`, configErr)
               }
             } catch (mkdirErr) {
-              console.error(`[claude] Failed to setup isolated config dir:`, mkdirErr)
+              console.error(
+                `[claude] Failed to setup isolated config dir:`,
+                mkdirErr,
+              )
             }
 
             // Check if user has existing API key or proxy configured in their shell environment
             // If so, use that instead of OAuth (allows using custom API proxies)
             // Based on PR #29 by @sa4hnd
-            const hasExistingApiConfig = !!(claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_BASE_URL)
+            const hasExistingApiConfig = !!(
+              claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_BASE_URL
+            )
 
             if (hasExistingApiConfig) {
-              console.log(`[claude] Using existing CLI config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${claudeEnv.ANTHROPIC_BASE_URL || "default"}`)
+              console.log(
+                `[claude] Using existing CLI config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${claudeEnv.ANTHROPIC_BASE_URL || "default"}`,
+              )
             }
 
             // Build final env - only add OAuth token if we have one AND no existing API config
             // Existing CLI config takes precedence over OAuth
             const finalEnv = {
               ...claudeEnv,
-              ...(claudeCodeToken && !hasExistingApiConfig && {
-                CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
-              }),
+              // ...(claudeCodeToken &&
+              //   !hasExistingApiConfig && {
+              //     CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
+              //   }),
               // Re-enable CLAUDE_CONFIG_DIR now that we properly map MCP configs
               CLAUDE_CONFIG_DIR: isolatedConfigDir,
             }
 
+            // Log auth method being used
+            console.log("[claude-auth] ========== AUTH METHOD USED ==========")
+            console.log(
+              "[claude-auth] hasExistingApiConfig:",
+              hasExistingApiConfig,
+            )
+            console.log(
+              "[claude-auth] claudeCodeToken available:",
+              !!claudeCodeToken,
+            )
+            console.log(
+              "[claude-auth] Using CLAUDE_CODE_OAUTH_TOKEN:",
+              !!finalEnv.CLAUDE_CODE_OAUTH_TOKEN,
+            )
+            console.log(
+              "[claude-auth] Using ANTHROPIC_API_KEY:",
+              !!finalEnv.ANTHROPIC_API_KEY,
+            )
+            console.log(
+              "[claude-auth] Using ANTHROPIC_BASE_URL:",
+              finalEnv.ANTHROPIC_BASE_URL || "(default)",
+            )
+            console.log(
+              "[claude-auth] Using ANTHROPIC_AUTH_TOKEN:",
+              !!finalEnv.ANTHROPIC_AUTH_TOKEN,
+            )
+            console.log(
+              "[claude-auth] ============================================",
+            )
+
             // Get bundled Claude binary path
             const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-            const resumeSessionId = input.sessionId || existingSessionId || undefined
+            const resumeSessionId =
+              input.sessionId || existingSessionId || undefined
 
             // DEBUG: Session resume path tracing
             const expectedSanitizedCwd = input.cwd.replace(/[/.]/g, "-")
-            const expectedSessionPath = path.join(isolatedConfigDir, "projects", expectedSanitizedCwd, `${resumeSessionId}.jsonl`)
+            const expectedSessionPath = path.join(
+              isolatedConfigDir,
+              "projects",
+              expectedSanitizedCwd,
+              `${resumeSessionId}.jsonl`,
+            )
             console.log(`[claude] ========== SESSION DEBUG ==========`)
             console.log(`[claude] subChatId: ${input.subChatId}`)
             console.log(`[claude] cwd: ${input.cwd}`)
-            console.log(`[claude] sanitized cwd (expected): ${expectedSanitizedCwd}`)
+            console.log(
+              `[claude] sanitized cwd (expected): ${expectedSanitizedCwd}`,
+            )
             console.log(`[claude] CLAUDE_CONFIG_DIR: ${isolatedConfigDir}`)
-            console.log(`[claude] Expected session path: ${expectedSessionPath}`)
+            console.log(
+              `[claude] Expected session path: ${expectedSessionPath}`,
+            )
             console.log(`[claude] Session ID to resume: ${resumeSessionId}`)
-            console.log(`[claude] Existing sessionId from DB: ${existingSessionId}`)
+            console.log(
+              `[claude] Existing sessionId from DB: ${existingSessionId}`,
+            )
             console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
             console.log(`[claude] ========== END SESSION DEBUG ==========`)
 
-            console.log(`[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`)
+            console.log(
+              `[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`,
+            )
             if (finalCustomConfig) {
               const redactedConfig = {
                 ...finalCustomConfig,
                 token: `${finalCustomConfig.token.slice(0, 6)}...`,
               }
               if (isUsingOllama) {
-                console.log(`[Ollama] Using offline mode - Model: ${finalCustomConfig.model}, Base URL: ${finalCustomConfig.baseUrl}`)
+                console.log(
+                  `[Ollama] Using offline mode - Model: ${finalCustomConfig.model}, Base URL: ${finalCustomConfig.baseUrl}`,
+                )
               } else {
-                console.log(`[claude] Custom config: ${JSON.stringify(redactedConfig)}`)
+                console.log(
+                  `[claude] Custom config: ${JSON.stringify(redactedConfig)}`,
+                )
               }
             }
 
@@ -1042,28 +1287,46 @@ export const claudeRouter = router({
 
             // DEBUG: If using Ollama, test if it's actually responding
             if (isUsingOllama && finalCustomConfig) {
-              console.log('[Ollama Debug] Testing Ollama connectivity...')
+              console.log("[Ollama Debug] Testing Ollama connectivity...")
               try {
-                const testResponse = await fetch(`${finalCustomConfig.baseUrl}/api/tags`, {
-                  signal: AbortSignal.timeout(2000)
-                })
+                const testResponse = await fetch(
+                  `${finalCustomConfig.baseUrl}/api/tags`,
+                  {
+                    signal: AbortSignal.timeout(2000),
+                  },
+                )
                 if (testResponse.ok) {
                   const data = await testResponse.json()
                   const models = data.models?.map((m: any) => m.name) || []
-                  console.log('[Ollama Debug] Ollama is responding. Available models:', models)
+                  console.log(
+                    "[Ollama Debug] Ollama is responding. Available models:",
+                    models,
+                  )
 
                   if (!models.includes(finalCustomConfig.model)) {
-                    console.error(`[Ollama Debug] WARNING: Model "${finalCustomConfig.model}" not found in Ollama!`)
+                    console.error(
+                      `[Ollama Debug] WARNING: Model "${finalCustomConfig.model}" not found in Ollama!`,
+                    )
                     console.error(`[Ollama Debug] Available models:`, models)
-                    console.error(`[Ollama Debug] This will likely cause the stream to hang or fail silently.`)
+                    console.error(
+                      `[Ollama Debug] This will likely cause the stream to hang or fail silently.`,
+                    )
                   } else {
-                    console.log(`[Ollama Debug] ✓ Model "${finalCustomConfig.model}" is available`)
+                    console.log(
+                      `[Ollama Debug] ✓ Model "${finalCustomConfig.model}" is available`,
+                    )
                   }
                 } else {
-                  console.error('[Ollama Debug] Ollama returned error:', testResponse.status)
+                  console.error(
+                    "[Ollama Debug] Ollama returned error:",
+                    testResponse.status,
+                  )
                 }
               } catch (err) {
-                console.error('[Ollama Debug] Failed to connect to Ollama:', err)
+                console.error(
+                  "[Ollama Debug] Failed to connect to Ollama:",
+                  err,
+                )
               }
             }
 
@@ -1072,13 +1335,21 @@ export const claudeRouter = router({
             let mcpServersFiltered: Record<string, any> | undefined
 
             if (isUsingOllama) {
-              console.log('[Ollama] Skipping MCP servers to speed up initialization')
+              console.log(
+                "[Ollama] Skipping MCP servers to speed up initialization",
+              )
               mcpServersFiltered = undefined
             } else {
               // Ensure MCP tokens are fresh (refresh if within 5 min of expiry)
-              if (mcpServersForSdk && Object.keys(mcpServersForSdk).length > 0) {
+              if (
+                mcpServersForSdk &&
+                Object.keys(mcpServersForSdk).length > 0
+              ) {
                 const lookupPath = input.projectPath || input.cwd
-                mcpServersFiltered = await ensureMcpTokensFresh(mcpServersForSdk, lookupPath)
+                mcpServersFiltered = await ensureMcpTokensFresh(
+                  mcpServersForSdk,
+                  lookupPath,
+                )
               } else {
                 mcpServersFiltered = mcpServersForSdk
               }
@@ -1086,20 +1357,21 @@ export const claudeRouter = router({
 
             // Log SDK configuration for debugging
             if (isUsingOllama) {
-              console.log('[Ollama Debug] SDK Configuration:', {
+              console.log("[Ollama Debug] SDK Configuration:", {
                 model: resolvedModel,
                 baseUrl: finalEnv.ANTHROPIC_BASE_URL,
                 cwd: input.cwd,
                 configDir: isolatedConfigDir,
                 hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-                tokenPreview: finalEnv.ANTHROPIC_AUTH_TOKEN?.slice(0, 10) + '...',
+                tokenPreview:
+                  finalEnv.ANTHROPIC_AUTH_TOKEN?.slice(0, 10) + "...",
               })
-              console.log('[Ollama Debug] Session settings:', {
-                resumeSessionId: resumeSessionId || 'none (first message)',
-                mode: resumeSessionId ? 'resume' : 'continue',
+              console.log("[Ollama Debug] Session settings:", {
+                resumeSessionId: resumeSessionId || "none (first message)",
+                mode: resumeSessionId ? "resume" : "continue",
                 note: resumeSessionId
-                  ? 'Resuming existing session to maintain chat history'
-                  : 'Starting new session with continue mode'
+                  ? "Resuming existing session to maintain chat history"
+                  : "Starting new session with continue mode",
               })
             }
 
@@ -1109,7 +1381,9 @@ export const claudeRouter = router({
               const agentsMdPath = path.join(input.cwd, "AGENTS.md")
               agentsMdContent = await fs.readFile(agentsMdPath, "utf-8")
               if (agentsMdContent.trim()) {
-                console.log(`[claude] Found AGENTS.md at ${agentsMdPath} (${agentsMdContent.length} chars)`)
+                console.log(
+                  `[claude] Found AGENTS.md at ${agentsMdPath} (${agentsMdContent.length} chars)`,
+                )
               } else {
                 agentsMdContent = undefined
               }
@@ -1120,63 +1394,75 @@ export const claudeRouter = router({
             // For Ollama: embed context AND history directly in prompt
             // Ollama doesn't have server-side sessions, so we must include full history
             let finalQueryPrompt: string | AsyncIterable<any> = prompt
-            if (isUsingOllama && typeof prompt === 'string') {
+            if (isUsingOllama && typeof prompt === "string") {
               // Format conversation history from existingMessages (excluding current message)
               // IMPORTANT: Include tool calls info so model knows what files were read/edited
-              let historyText = ''
+              let historyText = ""
               if (existingMessages.length > 0) {
                 const historyParts: string[] = []
                 for (const msg of existingMessages) {
-                  if (msg.role === 'user') {
+                  if (msg.role === "user") {
                     // Extract text from user message parts
-                    const textParts = msg.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text) || []
+                    const textParts =
+                      msg.parts
+                        ?.filter((p: any) => p.type === "text")
+                        .map((p: any) => p.text) || []
                     if (textParts.length > 0) {
-                      historyParts.push(`User: ${textParts.join('\n')}`)
+                      historyParts.push(`User: ${textParts.join("\n")}`)
                     }
-                  } else if (msg.role === 'assistant') {
+                  } else if (msg.role === "assistant") {
                     // Extract text AND tool calls from assistant message parts
                     const parts = msg.parts || []
                     const textParts: string[] = []
                     const toolSummaries: string[] = []
 
                     for (const p of parts) {
-                      if (p.type === 'text' && p.text) {
+                      if (p.type === "text" && p.text) {
                         textParts.push(p.text)
-                      } else if (p.type === 'tool_use' || p.type === 'tool-use') {
+                      } else if (
+                        p.type === "tool_use" ||
+                        p.type === "tool-use"
+                      ) {
                         // Include brief tool call info - this is critical for context!
-                        const toolName = p.name || p.tool || 'unknown'
+                        const toolName = p.name || p.tool || "unknown"
                         const toolInput = p.input || {}
                         // Extract key info based on tool type
                         let toolInfo = `[Used ${toolName}`
-                        if (toolName === 'Read' && (toolInput.file_path || toolInput.file)) {
+                        if (
+                          toolName === "Read" &&
+                          (toolInput.file_path || toolInput.file)
+                        ) {
                           toolInfo += `: ${toolInput.file_path || toolInput.file}`
-                        } else if (toolName === 'Edit' && toolInput.file_path) {
+                        } else if (toolName === "Edit" && toolInput.file_path) {
                           toolInfo += `: ${toolInput.file_path}`
-                        } else if (toolName === 'Write' && toolInput.file_path) {
+                        } else if (
+                          toolName === "Write" &&
+                          toolInput.file_path
+                        ) {
                           toolInfo += `: ${toolInput.file_path}`
-                        } else if (toolName === 'Glob' && toolInput.pattern) {
+                        } else if (toolName === "Glob" && toolInput.pattern) {
                           toolInfo += `: ${toolInput.pattern}`
-                        } else if (toolName === 'Grep' && toolInput.pattern) {
+                        } else if (toolName === "Grep" && toolInput.pattern) {
                           toolInfo += `: "${toolInput.pattern}"`
-                        } else if (toolName === 'Bash' && toolInput.command) {
+                        } else if (toolName === "Bash" && toolInput.command) {
                           const cmd = String(toolInput.command).slice(0, 50)
-                          toolInfo += `: ${cmd}${toolInput.command.length > 50 ? '...' : ''}`
+                          toolInfo += `: ${cmd}${toolInput.command.length > 50 ? "..." : ""}`
                         }
-                        toolInfo += ']'
+                        toolInfo += "]"
                         toolSummaries.push(toolInfo)
                       }
                     }
 
                     // Combine text and tool summaries
-                    let assistantContent = ''
+                    let assistantContent = ""
                     if (textParts.length > 0) {
-                      assistantContent = textParts.join('\n')
+                      assistantContent = textParts.join("\n")
                     }
                     if (toolSummaries.length > 0) {
                       if (assistantContent) {
-                        assistantContent += '\n' + toolSummaries.join(' ')
+                        assistantContent += "\n" + toolSummaries.join(" ")
                       } else {
-                        assistantContent = toolSummaries.join(' ')
+                        assistantContent = toolSummaries.join(" ")
                       }
                     }
                     if (assistantContent) {
@@ -1186,21 +1472,25 @@ export const claudeRouter = router({
                 }
                 if (historyParts.length > 0) {
                   // Limit history to last ~10000 chars to avoid context overflow
-                  let history = historyParts.join('\n\n')
+                  let history = historyParts.join("\n\n")
                   if (history.length > 10000) {
-                    history = '...(earlier messages truncated)...\n\n' + history.slice(-10000)
+                    history =
+                      "...(earlier messages truncated)...\n\n" +
+                      history.slice(-10000)
                   }
                   historyText = `[CONVERSATION HISTORY]
 ${history}
 [/CONVERSATION HISTORY]
 
 `
-                  console.log(`[Ollama] Added ${historyParts.length} messages to history (${history.length} chars)`)
+                  console.log(
+                    `[Ollama] Added ${historyParts.length} messages to history (${history.length} chars)`,
+                  )
                 }
               }
 
               const ollamaContext = `[CONTEXT]
-You are a coding assistant in OFFLINE mode (Ollama model: ${resolvedModel || 'unknown'}).
+You are a coding assistant in OFFLINE mode (Ollama model: ${resolvedModel || "unknown"}).
 Project: ${input.projectPath || input.cwd}
 Working directory: ${input.cwd}
 
@@ -1214,17 +1504,21 @@ IMPORTANT: When using tools, use these EXACT parameter names:
 
 When asked about the project, use Glob to find files and Read to examine them.
 Be concise and helpful.
-[/CONTEXT]${agentsMdContent ? `
+[/CONTEXT]${
+                agentsMdContent
+                  ? `
 
 [AGENTS.MD]
 ${agentsMdContent}
-[/AGENTS.MD]` : ''}
+[/AGENTS.MD]`
+                  : ""
+              }
 
 ${historyText}[CURRENT REQUEST]
 ${prompt}
 [/CURRENT REQUEST]`
               finalQueryPrompt = ollamaContext
-              console.log('[Ollama] Context prefix added to prompt')
+              console.log("[Ollama] Context prefix added to prompt")
             }
 
             // System prompt config - use preset for both Claude and Ollama
@@ -1247,10 +1541,18 @@ ${prompt}
                 cwd: input.cwd,
                 systemPrompt: systemPromptConfig,
                 // Register mentioned agents with SDK via options.agents (skip for Ollama - not supported)
-                ...(!isUsingOllama && Object.keys(agentsOption).length > 0 && { agents: agentsOption }),
+                ...(!isUsingOllama &&
+                  Object.keys(agentsOption).length > 0 && {
+                    agents: agentsOption,
+                  }),
                 // Pass filtered MCP servers (only working/unknown ones, skip failed/needs-auth)
-                ...(mcpServersFiltered && Object.keys(mcpServersFiltered).length > 0 && { mcpServers: mcpServersFiltered }),
-                env: finalEnv,
+                ...(mcpServersFiltered &&
+                  Object.keys(mcpServersFiltered).length > 0 && {
+                    mcpServers: mcpServersFiltered,
+                  }),
+                env: {
+                  ...finalEnv,
+                },
                 permissionMode:
                   input.mode === "plan"
                     ? ("plan" as const)
@@ -1260,7 +1562,9 @@ ${prompt}
                 }),
                 includePartialMessages: true,
                 // Load skills from project and user directories (skip for Ollama - not supported)
-                ...(!isUsingOllama && { settingSources: ["project" as const, "user" as const] }),
+                ...(!isUsingOllama && {
+                  settingSources: ["project" as const, "user" as const],
+                }),
                 canUseTool: async (
                   toolName: string,
                   toolInput: Record<string, unknown>,
@@ -1270,34 +1574,50 @@ ${prompt}
                   // Local models often use slightly wrong parameter names
                   if (isUsingOllama) {
                     // Read: "file" -> "file_path"
-                    if (toolName === "Read" && toolInput.file && !toolInput.file_path) {
+                    if (
+                      toolName === "Read" &&
+                      toolInput.file &&
+                      !toolInput.file_path
+                    ) {
                       toolInput.file_path = toolInput.file
                       delete toolInput.file
-                      console.log('[Ollama] Fixed Read tool: file -> file_path')
+                      console.log("[Ollama] Fixed Read tool: file -> file_path")
                     }
                     // Write: "file" -> "file_path", "content" is usually correct
-                    if (toolName === "Write" && toolInput.file && !toolInput.file_path) {
+                    if (
+                      toolName === "Write" &&
+                      toolInput.file &&
+                      !toolInput.file_path
+                    ) {
                       toolInput.file_path = toolInput.file
                       delete toolInput.file
-                      console.log('[Ollama] Fixed Write tool: file -> file_path')
+                      console.log(
+                        "[Ollama] Fixed Write tool: file -> file_path",
+                      )
                     }
                     // Edit: "file" -> "file_path"
-                    if (toolName === "Edit" && toolInput.file && !toolInput.file_path) {
+                    if (
+                      toolName === "Edit" &&
+                      toolInput.file &&
+                      !toolInput.file_path
+                    ) {
                       toolInput.file_path = toolInput.file
                       delete toolInput.file
-                      console.log('[Ollama] Fixed Edit tool: file -> file_path')
+                      console.log("[Ollama] Fixed Edit tool: file -> file_path")
                     }
                     // Glob: "path" might be passed as "directory" or "dir"
                     if (toolName === "Glob") {
                       if (toolInput.directory && !toolInput.path) {
                         toolInput.path = toolInput.directory
                         delete toolInput.directory
-                        console.log('[Ollama] Fixed Glob tool: directory -> path')
+                        console.log(
+                          "[Ollama] Fixed Glob tool: directory -> path",
+                        )
                       }
                       if (toolInput.dir && !toolInput.path) {
                         toolInput.path = toolInput.dir
                         delete toolInput.dir
-                        console.log('[Ollama] Fixed Glob tool: dir -> path')
+                        console.log("[Ollama] Fixed Glob tool: dir -> path")
                       }
                     }
                     // Grep: "query" -> "pattern", "directory" -> "path"
@@ -1305,19 +1625,27 @@ ${prompt}
                       if (toolInput.query && !toolInput.pattern) {
                         toolInput.pattern = toolInput.query
                         delete toolInput.query
-                        console.log('[Ollama] Fixed Grep tool: query -> pattern')
+                        console.log(
+                          "[Ollama] Fixed Grep tool: query -> pattern",
+                        )
                       }
                       if (toolInput.directory && !toolInput.path) {
                         toolInput.path = toolInput.directory
                         delete toolInput.directory
-                        console.log('[Ollama] Fixed Grep tool: directory -> path')
+                        console.log(
+                          "[Ollama] Fixed Grep tool: directory -> path",
+                        )
                       }
                     }
                     // Bash: "cmd" -> "command"
-                    if (toolName === "Bash" && toolInput.cmd && !toolInput.command) {
+                    if (
+                      toolName === "Bash" &&
+                      toolInput.cmd &&
+                      !toolInput.command
+                    ) {
                       toolInput.command = toolInput.cmd
                       delete toolInput.cmd
-                      console.log('[Ollama] Fixed Bash tool: cmd -> command')
+                      console.log("[Ollama] Fixed Bash tool: cmd -> command")
                     }
                   }
 
@@ -1333,6 +1661,11 @@ ${prompt}
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
+                      }
+                    } else if (toolName == "ExitPlanMode") {
+                      return {
+                        behavior: "deny",
+                        message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
@@ -1378,7 +1711,9 @@ ${prompt}
 
                     // Find the tool part in accumulated parts
                     const askToolPart = parts.find(
-                      (p) => p.toolCallId === toolUseID && p.type === "tool-AskUserQuestion"
+                      (p) =>
+                        p.toolCallId === toolUseID &&
+                        p.type === "tool-AskUserQuestion",
                     )
 
                     if (!response.approved) {
@@ -1452,512 +1787,627 @@ ${prompt}
               },
             }
 
-            // 5. Run Claude SDK
-            let stream
-            try {
-              stream = claudeQuery(queryOptions)
-            } catch (queryError) {
-              console.error(
-                "[CLAUDE] ✗ Failed to create SDK query:",
-                queryError,
-              )
-              emitError(queryError, "Failed to start Claude query")
-              console.log(`[SD] M:END sub=${subId} reason=query_error n=${chunkCount}`)
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
-              return
-            }
-
+            // Auto-retry for transient API errors (e.g., false-positive USAGE_POLICY_VIOLATION)
+            const MAX_POLICY_RETRIES = 2
+            let policyRetryCount = 0
+            let policyRetryNeeded = false
             let messageCount = 0
-            let lastError: Error | null = null
-            let firstMessageReceived = false
-            // Track last assistant message UUID for rollback support
-            // Only assigned to metadata AFTER the stream completes (not during generation)
-            let lastAssistantUuid: string | null = null
-            const streamIterationStart = Date.now()
 
-            // Plan mode: track ExitPlanMode to stop after plan is complete
-            let planCompleted = false
-            let exitPlanModeToolCallId: string | null = null
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              policyRetryNeeded = false
+              messageCount = 0
 
-            if (isUsingOllama) {
-              console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
-              console.log(`[Ollama] Model: ${finalCustomConfig?.model}`)
-              console.log(`[Ollama] Base URL: ${finalCustomConfig?.baseUrl}`)
-              console.log(`[Ollama] Prompt: "${typeof input.prompt === 'string' ? input.prompt.slice(0, 100) : 'N/A'}..."`)
-              console.log(`[Ollama] CWD: ${input.cwd}`)
-            }
+              // 5. Run Claude SDK
+              let stream
+              try {
+                stream = claudeQuery(queryOptions)
+              } catch (queryError) {
+                console.error(
+                  "[CLAUDE] ✗ Failed to create SDK query:",
+                  queryError,
+                )
+                emitError(queryError, "Failed to start Claude query")
+                console.log(
+                  `[SD] M:END sub=${subId} reason=query_error n=${chunkCount}`,
+                )
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return
+              }
 
-            try {
-              for await (const msg of stream) {
-                if (abortController.signal.aborted) {
-                  if (isUsingOllama) console.log(`[Ollama] Stream aborted by user`)
-                  break
-                }
+              let lastError: Error | null = null
+              let firstMessageReceived = false
+              // Track last assistant message UUID for rollback support
+              // Only assigned to metadata AFTER the stream completes (not during generation)
+              let lastAssistantUuid: string | null = null
+              const streamIterationStart = Date.now()
 
-                messageCount++
+              // Plan mode: track ExitPlanMode to stop after plan is complete
+              let exitPlanModeToolCallId: string | null = null
 
-                // Extra logging for Ollama to diagnose issues
-                if (isUsingOllama) {
-                  const msgAnyPreview = msg as any
-                  console.log(`[Ollama] ===== MESSAGE #${messageCount} =====`)
-                  console.log(`[Ollama] Type: ${msgAnyPreview.type}`)
-                  console.log(`[Ollama] Subtype: ${msgAnyPreview.subtype || 'none'}`)
-                  if (msgAnyPreview.event) {
-                    console.log(`[Ollama] Event: ${msgAnyPreview.event.type}`, {
-                      delta_type: msgAnyPreview.event.delta?.type,
-                      content_block_type: msgAnyPreview.event.content_block?.type
-                    })
-                  }
-                  if (msgAnyPreview.message?.content) {
-                    console.log(`[Ollama] Message content blocks:`, msgAnyPreview.message.content.length)
-                    msgAnyPreview.message.content.forEach((block: any, idx: number) => {
-                      console.log(`[Ollama]   Block ${idx}: type=${block.type}, text_length=${block.text?.length || 0}`)
-                    })
-                  }
-                }
+              if (isUsingOllama) {
+                console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
+                console.log(`[Ollama] Model: ${finalCustomConfig?.model}`)
+                console.log(`[Ollama] Base URL: ${finalCustomConfig?.baseUrl}`)
+                console.log(
+                  `[Ollama] Prompt: "${typeof input.prompt === "string" ? input.prompt.slice(0, 100) : "N/A"}..."`,
+                )
+                console.log(`[Ollama] CWD: ${input.cwd}`)
+              }
 
-                // Warn if SDK initialization is slow (MCP delay)
-                if (!firstMessageReceived) {
-                  firstMessageReceived = true
-                  const timeToFirstMessage = Date.now() - streamIterationStart
-                  if (isUsingOllama) {
-                    console.log(`[Ollama] Time to first message: ${timeToFirstMessage}ms`)
-                  }
-                  if (timeToFirstMessage > 5000) {
-                    console.warn(`[claude] SDK initialization took ${(timeToFirstMessage / 1000).toFixed(1)}s (MCP servers loading?)`)
-                  }
-                }
-
-                // Log raw message for debugging
-                logRawClaudeMessage(input.chatId, msg)
-
-                // Check for error messages from SDK (error can be embedded in message payload!)
-                const msgAny = msg as any
-                if (msgAny.type === "error" || msgAny.error) {
-                  // Extract detailed error text from message content if available
-                  // This is where the actual error description lives (e.g., "API Error: Claude Code is unable to respond...")
-                  const messageText = msgAny.message?.content?.[0]?.text
-                  const sdkError = messageText || msgAny.error || msgAny.message || "Unknown SDK error"
-                  lastError = new Error(sdkError)
-
-                  // Detailed SDK error logging in main process
-                  console.error(`[CLAUDE SDK ERROR] ========================================`)
-                  console.error(`[CLAUDE SDK ERROR] Raw error: ${sdkError}`)
-                  console.error(`[CLAUDE SDK ERROR] Message type: ${msgAny.type}`)
-                  console.error(`[CLAUDE SDK ERROR] SubChat ID: ${input.subChatId}`)
-                  console.error(`[CLAUDE SDK ERROR] Chat ID: ${input.chatId}`)
-                  console.error(`[CLAUDE SDK ERROR] CWD: ${input.cwd}`)
-                  console.error(`[CLAUDE SDK ERROR] Mode: ${input.mode}`)
-                  console.error(`[CLAUDE SDK ERROR] Session ID: ${msgAny.session_id || 'none'}`)
-                  console.error(`[CLAUDE SDK ERROR] Has custom config: ${!!finalCustomConfig}`)
-                  console.error(`[CLAUDE SDK ERROR] Is using Ollama: ${isUsingOllama}`)
-                  console.error(`[CLAUDE SDK ERROR] Model: ${resolvedModel || 'default'}`)
-                  console.error(`[CLAUDE SDK ERROR] Has OAuth token: ${!!claudeCodeToken}`)
-                  console.error(`[CLAUDE SDK ERROR] MCP servers: ${mcpServersFiltered ? Object.keys(mcpServersFiltered).join(', ') : 'none'}`)
-                  console.error(`[CLAUDE SDK ERROR] Full message:`, JSON.stringify(msgAny, null, 2))
-                  console.error(`[CLAUDE SDK ERROR] ========================================`)
-
-                  // Categorize SDK-level errors
-                  // Use the raw error code (e.g., "invalid_request") for category matching
-                  const rawErrorCode = msgAny.error || ""
-                  let errorCategory = "SDK_ERROR"
-                  // Default errorContext to the full error text (which may include detailed message)
-                  let errorContext = sdkError
-
-                  if (
-                    rawErrorCode === "authentication_failed" ||
-                    sdkError.includes("authentication")
-                  ) {
-                    errorCategory = "AUTH_FAILED_SDK"
-                    errorContext =
-                      "Authentication failed - not logged into Claude Code CLI"
-                  } else if (
-                    String(sdkError).includes("invalid_token") ||
-                    String(sdkError).includes("Invalid access token")
-                  ) {
-                    errorCategory = "MCP_INVALID_TOKEN"
-                    errorContext = "Invalid access token. Update MCP settings"
-                  } else if (
-                    rawErrorCode === "invalid_api_key" ||
-                    sdkError.includes("api_key")
-                  ) {
-                    errorCategory = "INVALID_API_KEY_SDK"
-                    errorContext = "Invalid API key in Claude Code CLI"
-                  } else if (
-                    rawErrorCode === "rate_limit_exceeded" ||
-                    sdkError.includes("rate")
-                  ) {
-                    errorCategory = "RATE_LIMIT_SDK"
-                    errorContext = "Session limit reached"
-                  } else if (
-                    rawErrorCode === "overloaded" ||
-                    sdkError.includes("overload")
-                  ) {
-                    errorCategory = "OVERLOADED_SDK"
-                    errorContext = "Claude is overloaded, try again later"
-                  } else if (
-                    rawErrorCode === "invalid_request" ||
-                    sdkError.includes("Usage Policy") ||
-                    sdkError.includes("violate")
-                  ) {
-                    // Usage Policy violation - keep the full detailed error text
-                    errorCategory = "USAGE_POLICY_VIOLATION"
-                    // errorContext already contains the full message from sdkError
-                  }
-
-                  // Emit auth-error for authentication failures, regular error otherwise
-                  if (errorCategory === "AUTH_FAILED_SDK") {
-                    safeEmit({
-                      type: "auth-error",
-                      errorText: errorContext,
-                    } as UIMessageChunk)
-                  } else {
-                    safeEmit({
-                      type: "error",
-                      errorText: errorContext,
-                      debugInfo: {
-                        category: errorCategory,
-                        rawErrorCode,
-                        sessionId: msgAny.session_id,
-                        messageId: msgAny.message?.id,
-                      },
-                    } as UIMessageChunk)
-                  }
-
-                  console.log(`[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`)
-                  console.error(`[SD] SDK Error details:`, {
-                    errorCategory,
-                    errorContext: errorContext.slice(0, 200), // Truncate for log readability
-                    rawErrorCode,
-                    sessionId: msgAny.session_id,
-                    messageId: msgAny.message?.id,
-                    fullMessage: JSON.stringify(msgAny, null, 2),
-                  })
-                  safeEmit({ type: "finish" } as UIMessageChunk)
-                  safeComplete()
-                  return
-                }
-
-                // Track sessionId for rollback support (available on all messages)
-                if (msgAny.session_id) {
-                  metadata.sessionId = msgAny.session_id
-                  currentSessionId = msgAny.session_id // Share with cleanup
-                }
-
-                // Track UUID from assistant messages for resumeSessionAt
-                if (msgAny.type === "assistant" && msgAny.uuid) {
-                  lastAssistantUuid = msgAny.uuid
-                }
-
-                // When result arrives, assign the last assistant UUID to metadata
-                // It will be emitted as part of the merged message-metadata chunk below
-                if (msgAny.type === "result" && historyEnabled && lastAssistantUuid && !abortController.signal.aborted) {
-                  metadata.sdkMessageUuid = lastAssistantUuid
-                }
-
-                // Debug: Log system messages from SDK
-                if (msgAny.type === "system") {
-                  // Full log to see all fields including MCP errors
-                  console.log(`[SD] SYSTEM message: subtype=${msgAny.subtype}`, JSON.stringify({
-                    cwd: msgAny.cwd,
-                    mcp_servers: msgAny.mcp_servers,
-                    tools: msgAny.tools,
-                    plugins: msgAny.plugins,
-                    permissionMode: msgAny.permissionMode,
-                  }, null, 2))
-                }
-
-                // Transform and emit + accumulate
-                for (const chunk of transform(msg)) {
-                  chunkCount++
-                  lastChunkType = chunk.type
-
-                  // For message-metadata, inject sdkMessageUuid before emitting
-                  // so the frontend receives the full merged metadata in one chunk
-                  if (chunk.type === "message-metadata" && metadata.sdkMessageUuid) {
-                    chunk.messageMetadata = { ...chunk.messageMetadata, sdkMessageUuid: metadata.sdkMessageUuid }
-                  }
-
-                  // Use safeEmit to prevent throws when observer is closed
-                  if (!safeEmit(chunk)) {
-                    // Observer closed (user clicked Stop), break out of loop
-                    console.log(`[SD] M:EMIT_CLOSED sub=${subId} type=${chunk.type} n=${chunkCount}`)
+              try {
+                for await (const msg of stream) {
+                  if (abortController.signal.aborted) {
+                    if (isUsingOllama)
+                      console.log(`[Ollama] Stream aborted by user`)
                     break
                   }
 
-                  // Accumulate based on chunk type
-                  switch (chunk.type) {
-                    case "text-delta":
-                      currentText += chunk.delta
-                      break
-                    case "text-end":
-                      if (currentText.trim()) {
-                        parts.push({ type: "text", text: currentText })
-                        currentText = ""
-                      }
-                      break
-                    case "tool-input-available":
-                      // DEBUG: Log tool calls
-                      console.log(`[SD] M:TOOL_CALL sub=${subId} toolName="${chunk.toolName}" mode=${input.mode} callId=${chunk.toolCallId}`)
+                  messageCount++
 
-                      // Track ExitPlanMode toolCallId so we can stop when it completes
-                      if (input.mode === "plan" && chunk.toolName === "ExitPlanMode") {
-                        console.log(`[SD] M:PLAN_TOOL_DETECTED sub=${subId} callId=${chunk.toolCallId}`)
-                        exitPlanModeToolCallId = chunk.toolCallId
-                      }
-
-                      parts.push({
-                        type: `tool-${chunk.toolName}`,
-                        toolCallId: chunk.toolCallId,
-                        toolName: chunk.toolName,
-                        input: chunk.input,
-                        state: "call",
-                        startedAt: Date.now(),
-                      })
-                      break
-                    case "tool-output-available":
-                      const toolPart = parts.find(
-                        (p) =>
-                          p.type?.startsWith("tool-") &&
-                          p.toolCallId === chunk.toolCallId,
+                  // Extra logging for Ollama to diagnose issues
+                  if (isUsingOllama) {
+                    const msgAnyPreview = msg as any
+                    console.log(`[Ollama] ===== MESSAGE #${messageCount} =====`)
+                    console.log(`[Ollama] Type: ${msgAnyPreview.type}`)
+                    console.log(
+                      `[Ollama] Subtype: ${msgAnyPreview.subtype || "none"}`,
+                    )
+                    if (msgAnyPreview.event) {
+                      console.log(
+                        `[Ollama] Event: ${msgAnyPreview.event.type}`,
+                        {
+                          delta_type: msgAnyPreview.event.delta?.type,
+                          content_block_type:
+                            msgAnyPreview.event.content_block?.type,
+                        },
                       )
-                      if (toolPart) {
-                        toolPart.result = chunk.output
-                        toolPart.output = chunk.output // Backwards compatibility for the UI that relies on output field
-                        toolPart.state = "result"
+                    }
+                    if (msgAnyPreview.message?.content) {
+                      console.log(
+                        `[Ollama] Message content blocks:`,
+                        msgAnyPreview.message.content.length,
+                      )
+                      msgAnyPreview.message.content.forEach(
+                        (block: any, idx: number) => {
+                          console.log(
+                            `[Ollama]   Block ${idx}: type=${block.type}, text_length=${block.text?.length || 0}`,
+                          )
+                        },
+                      )
+                    }
+                  }
 
-                        // Notify renderer about file changes for Write/Edit tools
-                        if (toolPart.type === "tool-Write" || toolPart.type === "tool-Edit") {
-                          const filePath = toolPart.input?.file_path
-                          if (filePath) {
-                            const windows = BrowserWindow.getAllWindows()
-                            for (const win of windows) {
-                              win.webContents.send("file-changed", {
-                                filePath,
-                                type: toolPart.type,
-                                subChatId: input.subChatId
-                              })
+                  // Warn if SDK initialization is slow (MCP delay)
+                  if (!firstMessageReceived) {
+                    firstMessageReceived = true
+                    const timeToFirstMessage = Date.now() - streamIterationStart
+                    if (isUsingOllama) {
+                      console.log(
+                        `[Ollama] Time to first message: ${timeToFirstMessage}ms`,
+                      )
+                    }
+                    if (timeToFirstMessage > 5000) {
+                      console.warn(
+                        `[claude] SDK initialization took ${(timeToFirstMessage / 1000).toFixed(1)}s (MCP servers loading?)`,
+                      )
+                    }
+                  }
+
+                  // Log raw message for debugging
+                  logRawClaudeMessage(input.chatId, msg)
+
+                  // Check for error messages from SDK (error can be embedded in message payload!)
+                  const msgAny = msg as any
+                  if (msgAny.type === "error" || msgAny.error) {
+                    // Extract detailed error text from message content if available
+                    // This is where the actual error description lives (e.g., "API Error: Claude Code is unable to respond...")
+                    const messageText = msgAny.message?.content?.[0]?.text
+                    const sdkError =
+                      messageText ||
+                      msgAny.error ||
+                      msgAny.message ||
+                      "Unknown SDK error"
+                    lastError = new Error(sdkError)
+
+                    // Detailed SDK error logging in main process
+                    console.error(
+                      `[CLAUDE SDK ERROR] ========================================`,
+                    )
+                    console.error(`[CLAUDE SDK ERROR] Raw error: ${sdkError}`)
+                    console.error(
+                      `[CLAUDE SDK ERROR] Message type: ${msgAny.type}`,
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] SubChat ID: ${input.subChatId}`,
+                    )
+                    console.error(`[CLAUDE SDK ERROR] Chat ID: ${input.chatId}`)
+                    console.error(`[CLAUDE SDK ERROR] CWD: ${input.cwd}`)
+                    console.error(`[CLAUDE SDK ERROR] Mode: ${input.mode}`)
+                    console.error(
+                      `[CLAUDE SDK ERROR] Session ID: ${msgAny.session_id || "none"}`,
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] Has custom config: ${!!finalCustomConfig}`,
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] Is using Ollama: ${isUsingOllama}`,
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] Model: ${resolvedModel || "default"}`,
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] Has OAuth token: ${!!claudeCodeToken}`,
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] MCP servers: ${mcpServersFiltered ? Object.keys(mcpServersFiltered).join(", ") : "none"}`,
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] Full message:`,
+                      JSON.stringify(msgAny, null, 2),
+                    )
+                    console.error(
+                      `[CLAUDE SDK ERROR] ========================================`,
+                    )
+
+                    // Categorize SDK-level errors
+                    // Use the raw error code (e.g., "invalid_request") for category matching
+                    const rawErrorCode = msgAny.error || ""
+                    let errorCategory = "SDK_ERROR"
+                    // Default errorContext to the full error text (which may include detailed message)
+                    let errorContext = sdkError
+
+                    if (
+                      rawErrorCode === "authentication_failed" ||
+                      sdkError.includes("authentication")
+                    ) {
+                      errorCategory = "AUTH_FAILED_SDK"
+                      errorContext =
+                        "Authentication failed - not logged into Claude Code CLI"
+                    } else if (
+                      String(sdkError).includes("invalid_token") ||
+                      String(sdkError).includes("Invalid access token")
+                    ) {
+                      errorCategory = "MCP_INVALID_TOKEN"
+                      errorContext = "Invalid access token. Update MCP settings"
+                    } else if (
+                      rawErrorCode === "invalid_api_key" ||
+                      sdkError.includes("api_key")
+                    ) {
+                      errorCategory = "INVALID_API_KEY_SDK"
+                      errorContext = "Invalid API key in Claude Code CLI"
+                    } else if (
+                      rawErrorCode === "rate_limit_exceeded" ||
+                      sdkError.includes("rate")
+                    ) {
+                      errorCategory = "RATE_LIMIT_SDK"
+                      errorContext = "Session limit reached"
+                    } else if (
+                      rawErrorCode === "overloaded" ||
+                      sdkError.includes("overload")
+                    ) {
+                      errorCategory = "OVERLOADED_SDK"
+                      errorContext = "Claude is overloaded, try again later"
+                    } else if (
+                      rawErrorCode === "invalid_request" ||
+                      sdkError.includes("Usage Policy") ||
+                      sdkError.includes("violate")
+                    ) {
+                      errorCategory = "USAGE_POLICY_VIOLATION"
+                    }
+
+                    // Auto-retry on false-positive policy violations (gateway-level rejections)
+                    if (
+                      errorCategory === "USAGE_POLICY_VIOLATION" &&
+                      policyRetryCount < MAX_POLICY_RETRIES &&
+                      !abortController.signal.aborted
+                    ) {
+                      policyRetryCount++
+                      policyRetryNeeded = true
+                      console.log(
+                        `[claude] USAGE_POLICY_VIOLATION - silent retry (attempt ${policyRetryCount}/${MAX_POLICY_RETRIES})`,
+                      )
+                      break // break for-await loop to retry
+                    }
+
+                    // Emit auth-error for authentication failures, regular error otherwise
+                    if (errorCategory === "AUTH_FAILED_SDK") {
+                      safeEmit({
+                        type: "auth-error",
+                        errorText: errorContext,
+                      } as UIMessageChunk)
+                    } else {
+                      safeEmit({
+                        type: "error",
+                        errorText: errorContext,
+                        debugInfo: {
+                          category: errorCategory,
+                          rawErrorCode,
+                          sessionId: msgAny.session_id,
+                          messageId: msgAny.message?.id,
+                        },
+                      } as UIMessageChunk)
+                    }
+
+                    console.log(
+                      `[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`,
+                    )
+                    console.error(`[SD] SDK Error details:`, {
+                      errorCategory,
+                      errorContext: errorContext.slice(0, 200), // Truncate for log readability
+                      rawErrorCode,
+                      sessionId: msgAny.session_id,
+                      messageId: msgAny.message?.id,
+                      fullMessage: JSON.stringify(msgAny, null, 2),
+                    })
+                    safeEmit({ type: "finish" } as UIMessageChunk)
+                    safeComplete()
+                    return
+                  }
+
+                  // Track sessionId for rollback support (available on all messages)
+                  if (msgAny.session_id) {
+                    metadata.sessionId = msgAny.session_id
+                    currentSessionId = msgAny.session_id // Share with cleanup
+                  }
+
+                  // Track UUID from assistant messages for resumeSessionAt
+                  if (msgAny.type === "assistant" && msgAny.uuid) {
+                    lastAssistantUuid = msgAny.uuid
+                  }
+
+                  // When result arrives, assign the last assistant UUID to metadata
+                  // It will be emitted as part of the merged message-metadata chunk below
+                  if (
+                    msgAny.type === "result" &&
+                    historyEnabled &&
+                    lastAssistantUuid &&
+                    !abortController.signal.aborted
+                  ) {
+                    metadata.sdkMessageUuid = lastAssistantUuid
+                  }
+
+                  // Debug: Log system messages from SDK
+                  if (msgAny.type === "system") {
+                    // Full log to see all fields including MCP errors
+                    console.log(
+                      `[SD] SYSTEM message: subtype=${msgAny.subtype}`,
+                      JSON.stringify(
+                        {
+                          cwd: msgAny.cwd,
+                          mcp_servers: msgAny.mcp_servers,
+                          tools: msgAny.tools,
+                          plugins: msgAny.plugins,
+                          permissionMode: msgAny.permissionMode,
+                        },
+                        null,
+                        2,
+                      ),
+                    )
+                  }
+
+                  // Transform and emit + accumulate
+                  for (const chunk of transform(msg)) {
+                    chunkCount++
+                    lastChunkType = chunk.type
+
+                    // For message-metadata, inject sdkMessageUuid before emitting
+                    // so the frontend receives the full merged metadata in one chunk
+                    if (
+                      chunk.type === "message-metadata" &&
+                      metadata.sdkMessageUuid
+                    ) {
+                      chunk.messageMetadata = {
+                        ...chunk.messageMetadata,
+                        sdkMessageUuid: metadata.sdkMessageUuid,
+                      }
+                    }
+
+                    // Use safeEmit to prevent throws when observer is closed
+                    if (!safeEmit(chunk)) {
+                      // Observer closed (user clicked Stop), break out of loop
+                      console.log(
+                        `[SD] M:EMIT_CLOSED sub=${subId} type=${chunk.type} n=${chunkCount}`,
+                      )
+                      break
+                    }
+
+                    // Accumulate based on chunk type
+                    switch (chunk.type) {
+                      case "text-delta":
+                        currentText += chunk.delta
+                        break
+                      case "text-end":
+                        if (currentText.trim()) {
+                          parts.push({ type: "text", text: currentText })
+                          currentText = ""
+                        }
+                        break
+                      case "tool-input-available":
+                        // DEBUG: Log tool calls
+                        console.log(
+                          `[SD] M:TOOL_CALL sub=${subId} toolName="${chunk.toolName}" mode=${input.mode} callId=${chunk.toolCallId}`,
+                        )
+
+                        // Track ExitPlanMode toolCallId so we can stop when it completes
+                        if (
+                          input.mode === "plan" &&
+                          chunk.toolName === "ExitPlanMode"
+                        ) {
+                          console.log(
+                            `[SD] M:PLAN_TOOL_DETECTED sub=${subId} callId=${chunk.toolCallId}`,
+                          )
+                          exitPlanModeToolCallId = chunk.toolCallId
+                        }
+
+                        parts.push({
+                          type: `tool-${chunk.toolName}`,
+                          toolCallId: chunk.toolCallId,
+                          toolName: chunk.toolName,
+                          input: chunk.input,
+                          state: "call",
+                          startedAt: Date.now(),
+                        })
+                        break
+                      case "tool-output-available":
+                        const toolPart = parts.find(
+                          (p) =>
+                            p.type?.startsWith("tool-") &&
+                            p.toolCallId === chunk.toolCallId,
+                        )
+                        if (toolPart) {
+                          toolPart.result = chunk.output
+                          toolPart.output = chunk.output // Backwards compatibility for the UI that relies on output field
+                          toolPart.state = "result"
+
+                          // Notify renderer about file changes for Write/Edit tools
+                          if (
+                            toolPart.type === "tool-Write" ||
+                            toolPart.type === "tool-Edit"
+                          ) {
+                            const filePath = toolPart.input?.file_path
+                            if (filePath) {
+                              const windows = BrowserWindow.getAllWindows()
+                              for (const win of windows) {
+                                win.webContents.send("file-changed", {
+                                  filePath,
+                                  type: toolPart.type,
+                                  subChatId: input.subChatId,
+                                })
+                              }
                             }
                           }
                         }
-
-                        // Check if ExitPlanMode just completed - stop the stream
-                        if (exitPlanModeToolCallId && chunk.toolCallId === exitPlanModeToolCallId) {
-                          console.log(`[SD] M:PLAN_FINISH sub=${subId} - ExitPlanMode completed, emitting finish`)
-                          planCompleted = true
-                          safeEmit({ type: "finish" } as UIMessageChunk)
-                        }
-                      }
-                      break
-                    case "message-metadata":
-                      metadata = { ...metadata, ...chunk.messageMetadata }
-                      break
-                    case "system-Compact":
-                      // Add system-Compact to parts so it renders in the chat
-                      // Find existing part by toolCallId or add new one
-                      const existingCompact = parts.find(
-                        (p) => p.type === "system-Compact" && p.toolCallId === chunk.toolCallId
-                      )
-                      if (existingCompact) {
-                        existingCompact.state = chunk.state
-                      } else {
-                        parts.push({
-                          type: "system-Compact",
-                          toolCallId: chunk.toolCallId,
-                          state: chunk.state,
-                        })
-                      }
-                      break
+                        break
+                      case "message-metadata":
+                        metadata = { ...metadata, ...chunk.messageMetadata }
+                        break
+                    }
                   }
-
-                  // Break from chunk loop if plan is done
-                  if (planCompleted) {
-                    console.log(`[SD] M:PLAN_BREAK_CHUNK sub=${subId}`)
+                  // Break from stream loop if observer closed (user clicked Stop)
+                  if (!isObservableActive) {
+                    console.log(`[SD] M:OBSERVER_CLOSED_STREAM sub=${subId}`)
                     break
                   }
                 }
-                // Break from stream loop if observer closed (user clicked Stop)
-                if (!isObservableActive) {
-                  console.log(`[SD] M:OBSERVER_CLOSED_STREAM sub=${subId}`)
-                  break
-                }
-                // Break from stream loop if plan completed
-                if (planCompleted) {
-                  console.log(`[SD] M:PLAN_BREAK_STREAM sub=${subId}`)
-                  break
-                }
-              }
 
-              // Warn if stream yielded no messages (offline mode issue)
-              const streamDuration = Date.now() - streamIterationStart
-              if (isUsingOllama) {
-                console.log(`[Ollama] ===== STREAM COMPLETED =====`)
-                console.log(`[Ollama] Total messages: ${messageCount}`)
-                console.log(`[Ollama] Duration: ${streamDuration}ms`)
-                console.log(`[Ollama] Chunks emitted: ${chunkCount}`)
-              }
-
-              if (messageCount === 0) {
-                console.error(`[claude] Stream yielded no messages - model not responding`)
+                // Warn if stream yielded no messages (offline mode issue)
+                const streamDuration = Date.now() - streamIterationStart
                 if (isUsingOllama) {
-                  console.error(`[Ollama] ===== DIAGNOSIS =====`)
-                  console.error(`[Ollama] Problem: Stream completed but NO messages received from SDK`)
-                  console.error(`[Ollama] This usually means:`)
-                  console.error(`[Ollama]   1. Ollama doesn't support Anthropic Messages API format (/v1/messages)`)
-                  console.error(`[Ollama]   2. Model failed to start generating (check Ollama logs: ollama logs)`)
-                  console.error(`[Ollama]   3. Network issue between Claude SDK and Ollama`)
-                  console.error(`[Ollama] ===== NEXT STEPS =====`)
-                  console.error(`[Ollama]   1. Check if model works: curl http://localhost:11434/api/generate -d '{"model":"${finalCustomConfig?.model}","prompt":"test"}'`)
-                  console.error(`[Ollama]   2. Check Ollama version supports Messages API`)
-                  console.error(`[Ollama]   3. Try using a proxy that converts Anthropic API → Ollama format`)
+                  console.log(`[Ollama] ===== STREAM COMPLETED =====`)
+                  console.log(`[Ollama] Total messages: ${messageCount}`)
+                  console.log(`[Ollama] Duration: ${streamDuration}ms`)
+                  console.log(`[Ollama] Chunks emitted: ${chunkCount}`)
                 }
-              } else if (messageCount === 1 && isUsingOllama) {
-                console.warn(`[Ollama] Only received 1 message (likely just init). No actual content generated.`)
-              }
-            } catch (streamError) {
-              // This catches errors during streaming (like process exit)
-              const err = streamError as Error
-              const stderrOutput = stderrLines.join("\n")
 
-              if (isUsingOllama) {
-                console.error(`[Ollama] ===== STREAM ERROR =====`)
-                console.error(`[Ollama] Error message: ${err.message}`)
-                console.error(`[Ollama] Error stack:`, err.stack)
-                console.error(`[Ollama] Messages received before error: ${messageCount}`)
-                if (stderrOutput) {
-                  console.error(`[Ollama] Claude binary stderr:`, stderrOutput)
+                if (messageCount === 0) {
+                  console.error(
+                    `[claude] Stream yielded no messages - model not responding`,
+                  )
+                  if (isUsingOllama) {
+                    console.error(`[Ollama] ===== DIAGNOSIS =====`)
+                    console.error(
+                      `[Ollama] Problem: Stream completed but NO messages received from SDK`,
+                    )
+                    console.error(`[Ollama] This usually means:`)
+                    console.error(
+                      `[Ollama]   1. Ollama doesn't support Anthropic Messages API format (/v1/messages)`,
+                    )
+                    console.error(
+                      `[Ollama]   2. Model failed to start generating (check Ollama logs: ollama logs)`,
+                    )
+                    console.error(
+                      `[Ollama]   3. Network issue between Claude SDK and Ollama`,
+                    )
+                    console.error(`[Ollama] ===== NEXT STEPS =====`)
+                    console.error(
+                      `[Ollama]   1. Check if model works: curl http://localhost:11434/api/generate -d '{"model":"${finalCustomConfig?.model}","prompt":"test"}'`,
+                    )
+                    console.error(
+                      `[Ollama]   2. Check Ollama version supports Messages API`,
+                    )
+                    console.error(
+                      `[Ollama]   3. Try using a proxy that converts Anthropic API → Ollama format`,
+                    )
+                  }
+                } else if (messageCount === 1 && isUsingOllama) {
+                  console.warn(
+                    `[Ollama] Only received 1 message (likely just init). No actual content generated.`,
+                  )
                 }
-              }
+              } catch (streamError) {
+                // This catches errors during streaming (like process exit)
+                const err = streamError as Error
+                const stderrOutput = stderrLines.join("\n")
 
-              // Build detailed error message with category
-              let errorContext = "Claude streaming error"
-              let errorCategory = "UNKNOWN"
+                if (isUsingOllama) {
+                  console.error(`[Ollama] ===== STREAM ERROR =====`)
+                  console.error(`[Ollama] Error message: ${err.message}`)
+                  console.error(`[Ollama] Error stack:`, err.stack)
+                  console.error(
+                    `[Ollama] Messages received before error: ${messageCount}`,
+                  )
+                  if (stderrOutput) {
+                    console.error(
+                      `[Ollama] Claude binary stderr:`,
+                      stderrOutput,
+                    )
+                  }
+                }
 
-              // Check for session-not-found error in stderr
-              const isSessionNotFound = stderrOutput?.includes("No conversation found with session ID")
+                // Build detailed error message with category
+                let errorContext = "Claude streaming error"
+                let errorCategory = "UNKNOWN"
 
-              if (isSessionNotFound) {
-                // Clear the invalid session ID from database so next attempt starts fresh
-                console.log(`[claude] Session not found - clearing invalid sessionId from database`)
-                db.update(subChats)
-                  .set({ sessionId: null })
-                  .where(eq(subChats.id, input.subChatId))
-                  .run()
+                // Check for session-not-found error in stderr
+                const isSessionNotFound = stderrOutput?.includes(
+                  "No conversation found with session ID",
+                )
 
-                errorContext = "Previous session expired. Please try again."
-                errorCategory = "SESSION_EXPIRED"
-              } else if (err.message?.includes("exited with code")) {
-                errorContext = "Claude Code process crashed"
-                errorCategory = "PROCESS_CRASH"
-              } else if (err.message?.includes("ENOENT")) {
-                errorContext = "Required executable not found in PATH"
-                errorCategory = "EXECUTABLE_NOT_FOUND"
-              } else if (
-                err.message?.includes("authentication") ||
-                err.message?.includes("401")
-              ) {
-                errorContext = "Authentication failed - check your API key"
-                errorCategory = "AUTH_FAILURE"
-              } else if (
-                err.message?.includes("invalid_api_key") ||
-                err.message?.includes("Invalid API Key") ||
-                stderrOutput?.includes("invalid_api_key")
-              ) {
-                errorContext = "Invalid API key"
-                errorCategory = "INVALID_API_KEY"
-              } else if (
-                err.message?.includes("rate_limit") ||
-                err.message?.includes("429")
-              ) {
-                errorContext = "Session limit reached"
-                errorCategory = "RATE_LIMIT"
-              } else if (
-                err.message?.includes("network") ||
-                err.message?.includes("ECONNREFUSED") ||
-                err.message?.includes("fetch failed")
-              ) {
-                errorContext = "Network error - check your connection"
-                errorCategory = "NETWORK_ERROR"
-              }
+                if (isSessionNotFound) {
+                  // Clear the invalid session ID from database so next attempt starts fresh
+                  console.log(
+                    `[claude] Session not found - clearing invalid sessionId from database`,
+                  )
+                  db.update(subChats)
+                    .set({ sessionId: null })
+                    .where(eq(subChats.id, input.subChatId))
+                    .run()
 
-              // Track error in Sentry (only if app is ready and Sentry is available)
-              if (app.isReady() && app.isPackaged) {
-                try {
-                  const Sentry = await import("@sentry/electron/main")
-                  Sentry.captureException(err, {
-                    tags: {
-                      errorCategory,
-                      mode: input.mode,
-                    },
-                    extra: {
+                  errorContext = "Previous session expired. Please try again."
+                  errorCategory = "SESSION_EXPIRED"
+                } else if (err.message?.includes("exited with code")) {
+                  errorContext = "Claude Code process crashed"
+                  errorCategory = "PROCESS_CRASH"
+                } else if (err.message?.includes("ENOENT")) {
+                  errorContext = "Required executable not found in PATH"
+                  errorCategory = "EXECUTABLE_NOT_FOUND"
+                } else if (
+                  err.message?.includes("authentication") ||
+                  err.message?.includes("401")
+                ) {
+                  errorContext = "Authentication failed - check your API key"
+                  errorCategory = "AUTH_FAILURE"
+                } else if (
+                  err.message?.includes("invalid_api_key") ||
+                  err.message?.includes("Invalid API Key") ||
+                  stderrOutput?.includes("invalid_api_key")
+                ) {
+                  errorContext = "Invalid API key"
+                  errorCategory = "INVALID_API_KEY"
+                } else if (
+                  err.message?.includes("rate_limit") ||
+                  err.message?.includes("429")
+                ) {
+                  errorContext = "Session limit reached"
+                  errorCategory = "RATE_LIMIT"
+                } else if (
+                  err.message?.includes("network") ||
+                  err.message?.includes("ECONNREFUSED") ||
+                  err.message?.includes("fetch failed")
+                ) {
+                  errorContext = "Network error - check your connection"
+                  errorCategory = "NETWORK_ERROR"
+                }
+
+                // Track error in Sentry (only if app is ready and Sentry is available)
+                if (app.isReady() && app.isPackaged) {
+                  try {
+                    const Sentry = await import("@sentry/electron/main")
+                    Sentry.captureException(err, {
+                      tags: {
+                        errorCategory,
+                        mode: input.mode,
+                      },
+                      extra: {
+                        context: errorContext,
+                        cwd: input.cwd,
+                        stderr: stderrOutput || "(no stderr captured)",
+                        chatId: input.chatId,
+                        subChatId: input.subChatId,
+                      },
+                    })
+                  } catch {
+                    // Sentry not available or failed to import - ignore
+                  }
+                }
+
+                // Send error with stderr output to frontend (only if not aborted by user)
+                if (!abortController.signal.aborted) {
+                  safeEmit({
+                    type: "error",
+                    errorText: stderrOutput
+                      ? `${errorContext}: ${err.message}\n\nProcess output:\n${stderrOutput}`
+                      : `${errorContext}: ${err.message}`,
+                    debugInfo: {
                       context: errorContext,
+                      category: errorCategory,
                       cwd: input.cwd,
+                      mode: input.mode,
                       stderr: stderrOutput || "(no stderr captured)",
-                      chatId: input.chatId,
-                      subChatId: input.subChatId,
                     },
-                  })
-                } catch {
-                  // Sentry not available or failed to import - ignore
+                  } as UIMessageChunk)
                 }
-              }
 
-              // Send error with stderr output to frontend (only if not aborted by user)
-              if (!abortController.signal.aborted) {
-                safeEmit({
-                  type: "error",
-                  errorText: stderrOutput
-                    ? `${errorContext}: ${err.message}\n\nProcess output:\n${stderrOutput}`
-                    : `${errorContext}: ${err.message}`,
-                  debugInfo: {
-                    context: errorContext,
-                    category: errorCategory,
-                    cwd: input.cwd,
-                    mode: input.mode,
-                    stderr: stderrOutput || "(no stderr captured)",
-                  },
-                } as UIMessageChunk)
-              }
-
-              // ALWAYS save accumulated parts before returning (even on abort/error)
-              console.log(`[SD] M:CATCH_SAVE sub=${subId} aborted=${abortController.signal.aborted} parts=${parts.length}`)
-              if (currentText.trim()) {
-                parts.push({ type: "text", text: currentText })
-              }
-              if (parts.length > 0) {
-                const assistantMessage = {
-                  id: crypto.randomUUID(),
-                  role: "assistant",
-                  parts,
-                  metadata,
+                // ALWAYS save accumulated parts before returning (even on abort/error)
+                console.log(
+                  `[SD] M:CATCH_SAVE sub=${subId} aborted=${abortController.signal.aborted} parts=${parts.length}`,
+                )
+                if (currentText.trim()) {
+                  parts.push({ type: "text", text: currentText })
                 }
-                const finalMessages = [...messagesToSave, assistantMessage]
-                db.update(subChats)
-                  .set({
-                    messages: JSON.stringify(finalMessages),
-                    sessionId: metadata.sessionId,
-                    streamId: null,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(subChats.id, input.subChatId))
-                  .run()
-                db.update(chats)
-                  .set({ updatedAt: new Date() })
-                  .where(eq(chats.id, input.chatId))
-                  .run()
+                if (parts.length > 0) {
+                  const assistantMessage = {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    parts,
+                    metadata,
+                  }
+                  const finalMessages = [...messagesToSave, assistantMessage]
+                  db.update(subChats)
+                    .set({
+                      messages: JSON.stringify(finalMessages),
+                      sessionId: metadata.sessionId,
+                      streamId: null,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(subChats.id, input.subChatId))
+                    .run()
+                  db.update(chats)
+                    .set({ updatedAt: new Date() })
+                    .where(eq(chats.id, input.chatId))
+                    .run()
 
-                // Create snapshot stash for rollback support (on error)
-                if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
-                  await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+                  // Create snapshot stash for rollback support (on error)
+                  if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
+                    await createRollbackStash(
+                      input.cwd,
+                      metadata.sdkMessageUuid,
+                    )
+                  }
                 }
+
+                console.log(
+                  `[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`,
+                )
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return
               }
 
-              console.log(`[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`)
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
-              return
-            }
+              // Retry if policy violation detected (transient false positive)
+              // Escalating delay: 3s first retry, 6s second retry
+              if (policyRetryNeeded) {
+                const delayMs = policyRetryCount <= 1 ? 3000 : 6000
+                console.log(
+                  `[claude] Policy retry ${policyRetryCount}/${MAX_POLICY_RETRIES} - waiting ${delayMs / 1000}s`,
+                )
+                await new Promise((resolve) => setTimeout(resolve, delayMs))
+                continue
+              }
+              break
+            } // end policyRetryLoop
 
             // 6. Check if we got any response
             if (messageCount === 0 && !abortController.signal.aborted) {
@@ -1965,7 +2415,9 @@ ${prompt}
                 new Error("No response received from Claude"),
                 "Empty response",
               )
-              console.log(`[SD] M:END sub=${subId} reason=no_response n=${chunkCount}`)
+              console.log(
+                `[SD] M:END sub=${subId} reason=no_response n=${chunkCount}`,
+              )
               safeEmit({ type: "finish" } as UIMessageChunk)
               safeComplete()
               return
@@ -1973,7 +2425,9 @@ ${prompt}
 
             // 7. Save final messages to DB
             // ALWAYS save accumulated parts, even on abort (so user sees partial responses after reload)
-            console.log(`[SD] M:SAVE sub=${subId} aborted=${abortController.signal.aborted} parts=${parts.length}`)
+            console.log(
+              `[SD] M:SAVE sub=${subId} aborted=${abortController.signal.aborted} parts=${parts.length}`,
+            )
 
             // Flush any remaining text
             if (currentText.trim()) {
@@ -2025,11 +2479,15 @@ ${prompt}
             }
 
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
-            console.log(`[SD] M:END sub=${subId} reason=ok n=${chunkCount} last=${lastChunkType} t=${duration}s`)
+            console.log(
+              `[SD] M:END sub=${subId} reason=ok n=${chunkCount} last=${lastChunkType} t=${duration}s`,
+            )
             safeComplete()
           } catch (error) {
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
-            console.log(`[SD] M:END sub=${subId} reason=unexpected_error n=${chunkCount} t=${duration}s`)
+            console.log(
+              `[SD] M:END sub=${subId} reason=unexpected_error n=${chunkCount} t=${duration}s`,
+            )
             emitError(error, "Unexpected error")
             safeEmit({ type: "finish" } as UIMessageChunk)
             safeComplete()
@@ -2040,7 +2498,9 @@ ${prompt}
 
         // Cleanup on unsubscribe
         return () => {
-          console.log(`[SD] M:CLEANUP sub=${subId} sessionId=${currentSessionId || 'none'}`)
+          console.log(
+            `[SD] M:CLEANUP sub=${subId} sessionId=${currentSessionId || "none"}`,
+          )
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()
           activeSessions.delete(input.subChatId)
@@ -2070,21 +2530,26 @@ ${prompt}
       try {
         const config = await readClaudeConfig()
         const globalServers = config.mcpServers || {}
-        const projectMcpServers = getProjectMcpServers(config, input.projectPath) || {}
+        const projectMcpServers =
+          getProjectMcpServers(config, input.projectPath) || {}
 
         // Merge global + project (project overrides global)
         const merged = { ...globalServers, ...projectMcpServers }
 
         // Add plugin MCP servers (enabled + approved only)
-        const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
-          getEnabledPlugins(),
-          discoverPluginMcpServers(),
-          getApprovedPluginMcpServers(),
-        ])
+        const [enabledPluginSources, pluginMcpConfigs, approvedServers] =
+          await Promise.all([
+            getEnabledPlugins(),
+            discoverPluginMcpServers(),
+            getApprovedPluginMcpServers(),
+          ])
 
         for (const pluginConfig of pluginMcpConfigs) {
-          if (!enabledPluginSources.includes(pluginConfig.pluginSource)) continue
-          for (const [name, serverConfig] of Object.entries(pluginConfig.mcpServers)) {
+          if (!enabledPluginSources.includes(pluginConfig.pluginSource))
+            continue
+          for (const [name, serverConfig] of Object.entries(
+            pluginConfig.mcpServers,
+          )) {
             if (!merged[name]) {
               const identifier = `${pluginConfig.pluginSource}:${name}`
               if (approvedServers.includes(identifier)) {
@@ -2095,22 +2560,28 @@ ${prompt}
         }
 
         // Convert to array format - determine status from config (no caching)
-        const mcpServers = Object.entries(merged).map(([name, serverConfig]) => {
-          const configObj = serverConfig as Record<string, unknown>
-          const status = getServerStatusFromConfig(configObj)
-          const hasUrl = !!configObj.url
+        const mcpServers = Object.entries(merged).map(
+          ([name, serverConfig]) => {
+            const configObj = serverConfig as Record<string, unknown>
+            const status = getServerStatusFromConfig(configObj)
+            const hasUrl = !!configObj.url
 
-          return {
-            name,
-            status,
-            config: { ...configObj, _hasUrl: hasUrl },
-          }
-        })
+            return {
+              name,
+              status,
+              config: { ...configObj, _hasUrl: hasUrl },
+            }
+          },
+        )
 
         return { mcpServers, projectPath: input.projectPath }
       } catch (error) {
         console.error("[getMcpConfig] Error reading config:", error)
-        return { mcpServers: [], projectPath: input.projectPath, error: String(error) }
+        return {
+          mcpServers: [],
+          projectPath: input.projectPath,
+          error: String(error),
+        }
       }
     }),
 
@@ -2133,7 +2604,6 @@ ${prompt}
         activeSessions.delete(input.subChatId)
         clearPendingApprovals("Session cancelled.", input.subChatId)
       }
-
 
       return { cancelled: !!controller }
     }),
@@ -2172,10 +2642,12 @@ ${prompt}
    * Fetches OAuth metadata internally when needed
    */
   startMcpOAuth: publicProcedure
-    .input(z.object({
-      serverName: z.string(),
-      projectPath: z.string(),
-    }))
+    .input(
+      z.object({
+        serverName: z.string(),
+        projectPath: z.string(),
+      }),
+    )
     .mutation(async ({ input }) => {
       return startMcpOAuth(input.serverName, input.projectPath)
     }),
@@ -2184,27 +2656,37 @@ ${prompt}
    * Get MCP auth status for a server
    */
   getMcpAuthStatus: publicProcedure
-    .input(z.object({
-      serverName: z.string(),
-      projectPath: z.string(),
-    }))
+    .input(
+      z.object({
+        serverName: z.string(),
+        projectPath: z.string(),
+      }),
+    )
     .query(async ({ input }) => {
       return getMcpAuthStatus(input.serverName, input.projectPath)
     }),
 
   addMcpServer: publicProcedure
-    .input(z.object({
-      name: z.string().min(1).regex(/^[a-zA-Z0-9_-]+$/, "Name must contain only letters, numbers, underscores, and hyphens"),
-      scope: z.enum(["global", "project"]),
-      projectPath: z.string().optional(),
-      transport: z.enum(["stdio", "http"]),
-      command: z.string().optional(),
-      args: z.array(z.string()).optional(),
-      env: z.record(z.string()).optional(),
-      url: z.string().url().optional(),
-      authType: z.enum(["none", "oauth", "bearer"]).optional(),
-      bearerToken: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        name: z
+          .string()
+          .min(1)
+          .regex(
+            /^[a-zA-Z0-9_-]+$/,
+            "Name must contain only letters, numbers, underscores, and hyphens",
+          ),
+        scope: z.enum(["global", "project"]),
+        projectPath: z.string().optional(),
+        transport: z.enum(["stdio", "http"]),
+        command: z.string().optional(),
+        args: z.array(z.string()).optional(),
+        env: z.record(z.string()).optional(),
+        url: z.string().url().optional(),
+        authType: z.enum(["none", "oauth", "bearer"]).optional(),
+        bearerToken: z.string().optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       const serverName = input.name.trim()
 
@@ -2233,7 +2715,9 @@ ${prompt}
           serverConfig.authType = input.authType
         }
         if (input.bearerToken) {
-          serverConfig.headers = { Authorization: `Bearer ${input.bearerToken}` }
+          serverConfig.headers = {
+            Authorization: `Bearer ${input.bearerToken}`,
+          }
         }
       }
 
@@ -2242,7 +2726,9 @@ ${prompt}
       const projectPath = input.projectPath
       if (input.scope === "project" && projectPath) {
         if (existingConfig.projects?.[projectPath]?.mcpServers?.[serverName]) {
-          throw new Error(`Server "${serverName}" already exists in this project`)
+          throw new Error(
+            `Server "${serverName}" already exists in this project`,
+          )
         }
       } else {
         if (existingConfig.mcpServers?.[serverName]) {
@@ -2250,29 +2736,40 @@ ${prompt}
         }
       }
 
-      const config = updateMcpServerConfig(existingConfig, input.scope === "project" ? projectPath ?? null : null, serverName, serverConfig)
+      const config = updateMcpServerConfig(
+        existingConfig,
+        input.scope === "project" ? (projectPath ?? null) : null,
+        serverName,
+        serverConfig,
+      )
       await writeClaudeConfig(config)
 
       return { success: true, name: serverName }
     }),
 
   updateMcpServer: publicProcedure
-    .input(z.object({
-      name: z.string(),
-      scope: z.enum(["global", "project"]),
-      projectPath: z.string().optional(),
-      newName: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
-      command: z.string().optional(),
-      args: z.array(z.string()).optional(),
-      env: z.record(z.string()).optional(),
-      url: z.string().url().optional(),
-      authType: z.enum(["none", "oauth", "bearer"]).optional(),
-      bearerToken: z.string().optional(),
-      disabled: z.boolean().optional(),
-    }))
+    .input(
+      z.object({
+        name: z.string(),
+        scope: z.enum(["global", "project"]),
+        projectPath: z.string().optional(),
+        newName: z
+          .string()
+          .regex(/^[a-zA-Z0-9_-]+$/)
+          .optional(),
+        command: z.string().optional(),
+        args: z.array(z.string()).optional(),
+        env: z.record(z.string()).optional(),
+        url: z.string().url().optional(),
+        authType: z.enum(["none", "oauth", "bearer"]).optional(),
+        bearerToken: z.string().optional(),
+        disabled: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       const config = await readClaudeConfig()
-      const projectPath = input.scope === "project" ? input.projectPath : undefined
+      const projectPath =
+        input.scope === "project" ? input.projectPath : undefined
 
       // Check server exists
       let servers: Record<string, McpServerConfig> | undefined
@@ -2292,8 +2789,17 @@ ${prompt}
         if (servers[input.newName]) {
           throw new Error(`Server "${input.newName}" already exists`)
         }
-        const updated = removeMcpServerConfig(config, projectPath ?? null, input.name)
-        const finalConfig = updateMcpServerConfig(updated, projectPath ?? null, input.newName, existing)
+        const updated = removeMcpServerConfig(
+          config,
+          projectPath ?? null,
+          input.name,
+        )
+        const finalConfig = updateMcpServerConfig(
+          updated,
+          projectPath ?? null,
+          input.newName,
+          existing,
+        )
         await writeClaudeConfig(finalConfig)
         return { success: true, name: input.newName }
       }
@@ -2323,21 +2829,29 @@ ${prompt}
       }
 
       const merged = { ...existing, ...update }
-      const updatedConfig = updateMcpServerConfig(config, projectPath ?? null, input.name, merged)
+      const updatedConfig = updateMcpServerConfig(
+        config,
+        projectPath ?? null,
+        input.name,
+        merged,
+      )
       await writeClaudeConfig(updatedConfig)
 
       return { success: true, name: input.name }
     }),
 
   removeMcpServer: publicProcedure
-    .input(z.object({
-      name: z.string(),
-      scope: z.enum(["global", "project"]),
-      projectPath: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        name: z.string(),
+        scope: z.enum(["global", "project"]),
+        projectPath: z.string().optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       const config = await readClaudeConfig()
-      const projectPath = input.scope === "project" ? input.projectPath : undefined
+      const projectPath =
+        input.scope === "project" ? input.projectPath : undefined
 
       // Check server exists
       let servers: Record<string, McpServerConfig> | undefined
@@ -2350,22 +2864,29 @@ ${prompt}
         throw new Error(`Server "${input.name}" not found`)
       }
 
-      const updated = removeMcpServerConfig(config, projectPath ?? null, input.name)
+      const updated = removeMcpServerConfig(
+        config,
+        projectPath ?? null,
+        input.name,
+      )
       await writeClaudeConfig(updated)
 
       return { success: true }
     }),
 
   setMcpBearerToken: publicProcedure
-    .input(z.object({
-      name: z.string(),
-      scope: z.enum(["global", "project"]),
-      projectPath: z.string().optional(),
-      token: z.string(),
-    }))
+    .input(
+      z.object({
+        name: z.string(),
+        scope: z.enum(["global", "project"]),
+        projectPath: z.string().optional(),
+        token: z.string(),
+      }),
+    )
     .mutation(async ({ input }) => {
       const config = await readClaudeConfig()
-      const projectPath = input.scope === "project" ? input.projectPath : undefined
+      const projectPath =
+        input.scope === "project" ? input.projectPath : undefined
 
       // Check server exists
       let servers: Record<string, McpServerConfig> | undefined
@@ -2385,7 +2906,12 @@ ${prompt}
         headers: { Authorization: `Bearer ${input.token}` },
       }
 
-      const updatedConfig = updateMcpServerConfig(config, projectPath ?? null, input.name, updated)
+      const updatedConfig = updateMcpServerConfig(
+        config,
+        projectPath ?? null,
+        input.name,
+        updated,
+      )
       await writeClaudeConfig(updatedConfig)
 
       return { success: true }
@@ -2394,16 +2920,19 @@ ${prompt}
   getPendingPluginMcpApprovals: publicProcedure
     .input(z.object({ projectPath: z.string().optional() }))
     .query(async ({ input }) => {
-      const [enabledPluginSources, pluginMcpConfigs, approvedServers] = await Promise.all([
-        getEnabledPlugins(),
-        discoverPluginMcpServers(),
-        getApprovedPluginMcpServers(),
-      ])
+      const [enabledPluginSources, pluginMcpConfigs, approvedServers] =
+        await Promise.all([
+          getEnabledPlugins(),
+          discoverPluginMcpServers(),
+          getApprovedPluginMcpServers(),
+        ])
 
       // Read global/project servers for conflict check
       const config = await readClaudeConfig()
       const globalServers = config.mcpServers || {}
-      const projectServers = input.projectPath ? getProjectMcpServers(config, input.projectPath) || {} : {}
+      const projectServers = input.projectPath
+        ? getProjectMcpServers(config, input.projectPath) || {}
+        : {}
 
       const pending: Array<{
         pluginSource: string
@@ -2415,9 +2944,15 @@ ${prompt}
       for (const pluginConfig of pluginMcpConfigs) {
         if (!enabledPluginSources.includes(pluginConfig.pluginSource)) continue
 
-        for (const [name, serverConfig] of Object.entries(pluginConfig.mcpServers)) {
+        for (const [name, serverConfig] of Object.entries(
+          pluginConfig.mcpServers,
+        )) {
           const identifier = `${pluginConfig.pluginSource}:${name}`
-          if (!approvedServers.includes(identifier) && !globalServers[name] && !projectServers[name]) {
+          if (
+            !approvedServers.includes(identifier) &&
+            !globalServers[name] &&
+            !projectServers[name]
+          ) {
             pending.push({
               pluginSource: pluginConfig.pluginSource,
               serverName: name,

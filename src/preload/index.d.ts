@@ -18,6 +18,12 @@ export interface DesktopUser {
   username: string | null
 }
 
+export interface WorktreeSetupFailurePayload {
+  kind: "create-failed" | "setup-failed"
+  message: string
+  projectId: string
+}
+
 export interface DesktopApi {
   // Platform info
   platform: NodeJS.Platform
@@ -81,6 +87,9 @@ export interface DesktopApi {
 
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
+
+  // Worktree setup failures
+  onWorktreeSetupFailed: (callback: (payload: WorktreeSetupFailurePayload) => void) => () => void
 }
 
 declare global {

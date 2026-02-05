@@ -557,7 +557,7 @@ export const selectedCommitAtom = atom<SelectedCommit>(null)
 
 // Pending PR message to send to chat
 // Set by ChatView when "Create PR" is clicked, consumed by ChatViewInner
-export const pendingPrMessageAtom = atom<string | null>(null)
+export const pendingPrMessageAtom = atom<{ message: string; subChatId: string } | null>(null)
 
 // Pending Review message to send to chat
 // Set by ChatView when "Review" is clicked, consumed by ChatViewInner

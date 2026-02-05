@@ -64,8 +64,7 @@ export const streamingMessageIdAtom = atom<string | null>(null)
 // Chat status atom
 export const chatStatusAtom = atom<string>("ready")
 
-// Rollback handler/state (optional) to avoid prop drilling
-export const rollbackHandlerAtom = atom<((msg: any) => void) | null>(null)
+// Global rollback state - prevents multiple rollbacks across all chats
 export const isRollingBackAtom = atom<boolean>(false)
 
 // Current subChatId - used to isolate caches per chat
@@ -440,8 +439,11 @@ type TokenData = {
   reasoningTokens: number
   totalTokens: number
   messageCount: number
+  totalMessageCount: number
   // Track last message's output tokens to detect when streaming completes
   lastMsgOutputTokens: number
+  // Track last message parts signature to detect compact boundary updates
+  lastMsgPartsKey: string
 }
 const tokenDataCacheByChat = new Map<string, TokenData>()
 
@@ -454,6 +456,9 @@ export const messageTokenDataAtom = atom((get) => {
   const lastMsg = lastId ? get(messageAtomFamily(lastId)) : null
   // Note: metadata has flat structure (metadata.outputTokens), not nested (metadata.usage.outputTokens)
   const lastMsgOutputTokens = (lastMsg?.metadata as any)?.outputTokens || 0
+  const lastMsgParts = (lastMsg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+  const lastPart = lastMsgParts?.[lastMsgParts.length - 1]
+  const lastMsgPartsKey = `${lastMsgParts?.length ?? 0}:${lastPart?.type ?? ""}:${(lastPart as any)?.state ?? ""}`
 
   const cached = tokenDataCacheByChat.get(subChatId)
 
@@ -462,21 +467,37 @@ export const messageTokenDataAtom = atom((get) => {
   // 2. Last message's output tokens haven't changed (detects streaming completion)
   if (
     cached &&
-    ids.length === cached.messageCount &&
-    lastMsgOutputTokens === cached.lastMsgOutputTokens
+    ids.length === cached.totalMessageCount &&
+    lastMsgOutputTokens === cached.lastMsgOutputTokens &&
+    lastMsgPartsKey === cached.lastMsgPartsKey
   ) {
     return cached
   }
 
-  // Recalculate token data
+  // Recalculate token data (since last completed compact boundary)
+  let startIndex = 0
+  for (let i = 0; i < ids.length; i++) {
+    const msg = get(messageAtomFamily(ids[i]))
+    const parts = (msg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+    if (
+      parts?.some(
+        (part) =>
+          part.type === "tool-Compact" &&
+          (part.state === "output-available" || part.state === "result"),
+      )
+    ) {
+      // Include the compact result itself in the token window
+      startIndex = i
+    }
+  }
+
   let inputTokens = 0
   let outputTokens = 0
   let cacheReadTokens = 0
   let cacheWriteTokens = 0
   let reasoningTokens = 0
-
-  for (const id of ids) {
-    const msg = get(messageAtomFamily(id))
+  for (let i = startIndex; i < ids.length; i++) {
+    const msg = get(messageAtomFamily(ids[i]))
     const metadata = msg?.metadata as any
     // Note: metadata has flat structure from transform.ts (metadata.inputTokens, metadata.outputTokens)
     // Extended fields like cacheReadInputTokens are not currently in MessageMetadata type
@@ -489,6 +510,7 @@ export const messageTokenDataAtom = atom((get) => {
       reasoningTokens += metadata.reasoningTokens || 0
     }
   }
+  const messageCount = Math.max(0, ids.length - startIndex)
 
   const newTokenData: TokenData = {
     inputTokens,
@@ -497,8 +519,10 @@ export const messageTokenDataAtom = atom((get) => {
     cacheWriteTokens,
     reasoningTokens,
     totalTokens: inputTokens + outputTokens,
-    messageCount: ids.length,
+    messageCount,
+    totalMessageCount: ids.length,
     lastMsgOutputTokens,
+    lastMsgPartsKey,
   }
 
   tokenDataCacheByChat.set(subChatId, newTokenData)

@@ -233,7 +233,7 @@ export async function executeWorktreeSetup(
       console.log(`[worktree-setup] ✓ ${cmd}`)
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      result.errors.push(`Command failed: ${cmd}\n${errorMsg}`)
+      result.errors.push(errorMsg)
       result.output.push(`[error] ${errorMsg}`)
       console.error(`[worktree-setup] ✗ ${cmd}: ${errorMsg}`)
       // Continue with next command, don't fail entirely

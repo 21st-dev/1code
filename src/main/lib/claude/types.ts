@@ -26,6 +26,7 @@ export type UIMessageChunk =
   // Error & metadata
   | { type: "error"; errorText: string }
   | { type: "auth-error"; errorText: string }
+  | { type: "retry-notification"; message: string }
   | {
       type: "ask-user-question"
       toolUseId: string
@@ -38,12 +39,6 @@ export type UIMessageChunk =
     }
   | { type: "ask-user-question-timeout"; toolUseId: string }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
-  // System tools (rendered like regular tools)
-  | {
-      type: "system-Compact"
-      toolCallId: string
-      state: "input-streaming" | "output-available"
-    }
   // Session initialization (MCP servers, plugins, tools)
   | {
       type: "session-init"

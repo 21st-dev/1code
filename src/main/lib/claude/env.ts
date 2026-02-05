@@ -17,14 +17,21 @@ let cachedShellEnv: Record<string, string> | null = null
 const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
 
 // Keys to strip (prevent interference from unrelated providers)
-// NOTE: We intentionally keep ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL
+// NOTE: We intentionally keep ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL in production
 // so users can use their existing Claude Code CLI configuration (API proxy, etc.)
 // Based on PR #29 by @sa4hnd
-const STRIPPED_ENV_KEYS = [
+const STRIPPED_ENV_KEYS_BASE = [
   "OPENAI_API_KEY",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
 ]
+
+// In dev mode, also strip ANTHROPIC_API_KEY so OAuth token is used instead
+// This allows devs to test OAuth flow without unsetting their shell env
+// Added by Sergey Bunas for dev purposes
+const STRIPPED_ENV_KEYS = !app.isPackaged
+  ? [...STRIPPED_ENV_KEYS_BASE, "ANTHROPIC_API_KEY"]
+  : STRIPPED_ENV_KEYS_BASE
 
 // Cache the bundled binary path (only compute once)
 let cachedBinaryPath: string | null = null
@@ -45,14 +52,12 @@ export function getBundledClaudeBinaryPath(): string {
   const currentPlatform = process.platform
   const arch = process.arch
 
-  // Only log verbose info on first call
-  if (process.env.DEBUG_CLAUDE_BINARY) {
-    console.log("[claude-binary] ========== BUNDLED BINARY PATH ==========")
-    console.log("[claude-binary] isDev:", isDev)
-    console.log("[claude-binary] platform:", currentPlatform)
-    console.log("[claude-binary] arch:", arch)
-    console.log("[claude-binary] appPath:", app.getAppPath())
-  }
+  // Always log on first call to help debug
+  console.log("[claude-binary] ========== BUNDLED BINARY DEBUG ==========")
+  console.log("[claude-binary] isDev:", isDev)
+  console.log("[claude-binary] platform:", currentPlatform)
+  console.log("[claude-binary] arch:", arch)
+  console.log("[claude-binary] appPath:", app.getAppPath())
 
   // In dev: apps/desktop/resources/bin/{platform}-{arch}/claude
   // In production: {resourcesPath}/bin/claude
@@ -64,21 +69,16 @@ export function getBundledClaudeBinaryPath(): string {
       )
     : path.join(process.resourcesPath, "bin")
 
-  if (process.env.DEBUG_CLAUDE_BINARY) {
-    console.log("[claude-binary] resourcesPath:", resourcesPath)
-  }
+  console.log("[claude-binary] resourcesPath:", resourcesPath)
 
   const binaryName = currentPlatform === "win32" ? "claude.exe" : "claude"
   const binaryPath = path.join(resourcesPath, binaryName)
 
-  if (process.env.DEBUG_CLAUDE_BINARY) {
-    console.log("[claude-binary] binaryPath:", binaryPath)
-  }
+  console.log("[claude-binary] binaryPath:", binaryPath)
 
   // Check if binary exists
   const exists = fs.existsSync(binaryPath)
 
-  // Always log if binary doesn't exist (critical error)
   if (!exists) {
     console.error(
       "[claude-binary] WARNING: Binary not found at path:",
@@ -87,15 +87,15 @@ export function getBundledClaudeBinaryPath(): string {
     console.error(
       "[claude-binary] Run 'bun run claude:download' to download it"
     )
-  } else if (process.env.DEBUG_CLAUDE_BINARY) {
+  } else {
     const stats = fs.statSync(binaryPath)
     const sizeMB = (stats.size / 1024 / 1024).toFixed(1)
     const isExecutable = (stats.mode & fs.constants.X_OK) !== 0
     console.log("[claude-binary] exists:", exists)
     console.log("[claude-binary] size:", sizeMB, "MB")
     console.log("[claude-binary] isExecutable:", isExecutable)
-    console.log("[claude-binary] ===========================================")
   }
+  console.log("[claude-binary] ============================================")
 
   // Cache the result
   cachedBinaryPath = binaryPath
@@ -235,6 +235,16 @@ export function buildClaudeEnv(options?: {
   // Restore shell PATH if we had one (it contains nvm, homebrew, etc.)
   if (shellPath) {
     env.PATH = shellPath
+  }
+
+  // 2b. Strip sensitive keys again (process.env may have re-added them)
+  // This ensures ANTHROPIC_API_KEY from dev's shell doesn't override OAuth in dev mode
+  // Added by Sergey Bunas for dev purposes
+  for (const key of STRIPPED_ENV_KEYS) {
+    if (key in env) {
+      console.log(`[claude-env] Stripped ${key} from final environment`)
+      delete env[key]
+    }
   }
 
   // 3. Ensure critical vars are present using platform provider

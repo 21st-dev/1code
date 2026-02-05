@@ -1,13 +1,9 @@
 import { Button } from "../../../../components/ui/button";
-import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
 import { useState } from "react";
-import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
 import { IconSpinner } from "../../../../components/ui/icons";
-import { useQueryClient } from "@tanstack/react-query";
-import { useAtomValue } from "jotai";
-import { selectedOllamaModelAtom } from "../../../../lib/atoms";
+import { useCommitActions } from "./use-commit-actions";
 
 interface CommitInputProps {
 	worktreePath: string;
@@ -35,39 +31,17 @@ export function CommitInput({
 }: CommitInputProps) {
 	const [summary, setSummary] = useState("");
 	const [description, setDescription] = useState("");
-	const [isGenerating, setIsGenerating] = useState(false);
-	const queryClient = useQueryClient();
-	const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom);
-
-	// AI commit message generation
-	const generateCommitMutation = trpc.chats.generateCommitMessage.useMutation();
-
-	// Use atomic commit when we have selected files (safer, single operation)
-	const atomicCommitMutation = trpc.changes.atomicCommit.useMutation({
-		onSuccess: () => {
+	const { commit, isPending, isGenerating } = useCommitActions({
+		worktreePath,
+		chatId,
+		onRefresh,
+		onCommitSuccess: () => {
 			setSummary("");
 			setDescription("");
-			// Invalidate the changes.getStatus query to force a fresh fetch
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			onRefresh();
 			onCommitSuccess?.();
 		},
-		onError: (error) => toast.error(`Commit failed: ${error.message}`),
+		onMessageGenerated: (message) => setSummary(message),
 	});
-
-	// Fallback to regular commit for staged changes
-	const commitMutation = trpc.changes.commit.useMutation({
-		onSuccess: () => {
-			setSummary("");
-			setDescription("");
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			onRefresh();
-			onCommitSuccess?.();
-		},
-		onError: (error) => toast.error(`Commit failed: ${error.message}`),
-	});
-
-	const isPending = commitMutation.isPending || atomicCommitMutation.isPending || isGenerating;
 
 	// Build full commit message from summary and description
 	const getCommitMessage = () => {
@@ -85,53 +59,8 @@ export function CommitInput({
 	const handleCommit = async () => {
 		if (!canCommit) return;
 
-		try {
-			// Get commit message - generate if empty
-			let commitMessage = getCommitMessage();
-			console.log("[CommitInput] handleCommit called, commitMessage:", commitMessage, "chatId:", chatId);
-
-			if (!commitMessage && chatId) {
-				console.log("[CommitInput] No message, generating with AI for files:", selectedFilePaths);
-				setIsGenerating(true);
-				try {
-					// Pass selected file paths to generate message only for those files
-					const result = await generateCommitMutation.mutateAsync({
-						chatId,
-						filePaths: selectedFilePaths,
-						ollamaModel: selectedOllamaModel,
-					});
-					console.log("[CommitInput] AI generated message:", result.message);
-					commitMessage = result.message;
-					// Also update the input field so user can see what was generated
-					setSummary(result.message);
-				} catch (error) {
-					console.error("[CommitInput] Failed to generate message:", error);
-					toast.error("Failed to generate commit message");
-					setIsGenerating(false);
-					return;
-				}
-				setIsGenerating(false);
-			}
-
-			if (!commitMessage) {
-				toast.error("Please enter a commit message");
-				return;
-			}
-
-			// Use atomic commit when we have selected files (single operation, safer)
-			if (selectedFilePaths && selectedFilePaths.length > 0) {
-				atomicCommitMutation.mutate({
-					worktreePath,
-					filePaths: selectedFilePaths,
-					message: commitMessage,
-				});
-			} else {
-				// Fallback to regular commit for pre-staged changes
-				commitMutation.mutate({ worktreePath, message: commitMessage });
-			}
-		} catch (error) {
-			toast.error(`Failed to prepare commit: ${error instanceof Error ? error.message : "Unknown error"}`);
-		}
+		const commitMessage = getCommitMessage();
+		await commit({ message: commitMessage, filePaths: selectedFilePaths });
 	};
 
 	// Build dynamic commit label
@@ -156,7 +85,7 @@ export function CommitInput({
 			{/* Summary input - single line */}
 			<input
 				type="text"
-				placeholder="Summary (required)"
+				placeholder="Commit message"
 				value={summary}
 				onChange={(e) => setSummary(e.target.value)}
 				className={cn(

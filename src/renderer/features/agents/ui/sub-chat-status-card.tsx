@@ -1,21 +1,22 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect } from "react"
-import { useSetAtom, useAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import { ChevronDown } from "lucide-react"
-import { motion, AnimatePresence } from "motion/react"
+import { AnimatePresence, motion } from "motion/react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { Button } from "../../../components/ui/button"
-import { cn } from "../../../lib/utils"
-import { trpc } from "../../../lib/trpc"
 import { useFileChangeListener } from "../../../lib/hooks/use-file-change-listener"
-import { getFileIconByExtension } from "../mentions/agents-file-mention"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import {
-  diffSidebarOpenAtomFamily,
   agentsFocusedDiffFileAtom,
+  diffSidebarOpenAtomFamily,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
+  selectedDiffFilePathAtom,
   type SubChatFileChange,
 } from "../atoms"
+import { getFileIconByExtension } from "../mentions/agents-file-mention"
 
 // Animated dots component that cycles through ., .., ...
 function AnimatedDots() {
@@ -53,6 +54,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   onStop,
   hasQueueCardAbove = false,
 }: SubChatStatusCardProps) {
+  const isBusy = isStreaming || isCompacting
   const [isExpanded, setIsExpanded] = useState(false)
   // Use per-chat atom family instead of legacy global atom
   const diffSidebarAtom = useMemo(
@@ -63,6 +65,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   const setFilteredDiffFiles = useSetAtom(filteredDiffFilesAtom)
   const setFilteredSubChatId = useSetAtom(filteredSubChatIdAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
+  const setSelectedFilePath = useSetAtom(selectedDiffFilePathAtom)
 
   // Listen for file changes from Claude Write/Edit tools
   useFileChangeListener(worktreePath)
@@ -71,7 +74,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   const { data: gitStatus } = trpc.changes.getStatus.useQuery(
     { worktreePath: worktreePath || "", defaultBranch: "main" },
     {
-      enabled: !!worktreePath && changedFiles.length > 0 && !isStreaming,
+      enabled: !!worktreePath && changedFiles.length > 0 && !isBusy,
       // No polling - updates triggered by file-changed events from Claude tools
       staleTime: 30000,
       placeholderData: (prev) => prev,
@@ -80,17 +83,8 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
 
   // Filter changedFiles to only include files that are still uncommitted
   const uncommittedFiles = useMemo(() => {
-    console.log(`[StatusCard] Computing uncommittedFiles:`, {
-      changedFilesCount: changedFiles.length,
-      changedFiles: changedFiles.map(f => f.displayPath),
-      hasGitStatus: !!gitStatus,
-      worktreePath,
-      isStreaming,
-    })
-
-    // If no git status yet, no worktreePath, or still streaming - show all files
-    if (!gitStatus || !worktreePath || isStreaming) {
-      console.log(`[StatusCard] Returning all changedFiles (no filter)`)
+    // If no git status yet, no worktreePath, or still busy - show all files
+    if (!gitStatus || !worktreePath || isBusy) {
       return changedFiles
     }
 
@@ -113,17 +107,9 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
       }
     }
 
-    console.log(`[StatusCard] Git uncommitted paths:`, Array.from(uncommittedPaths))
-
     // Filter changedFiles to only include files that are still uncommitted
-    const filtered = changedFiles.filter((file) => {
-      const hasMatch = uncommittedPaths.has(file.displayPath)
-      console.log(`[StatusCard] Checking file "${file.displayPath}" -> hasMatch: ${hasMatch}`)
-      return hasMatch
-    })
-    console.log(`[StatusCard] Filtered result:`, filtered.map(f => f.displayPath))
-    return filtered
-  }, [changedFiles, gitStatus, worktreePath, isStreaming])
+    return changedFiles.filter((file) => uncommittedPaths.has(file.displayPath))
+  }, [changedFiles, gitStatus, worktreePath, isBusy])
 
   // Calculate totals from uncommitted files only
   const totals = useMemo(() => {
@@ -140,8 +126,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   const hasExpandableContent = uncommittedFiles.length > 0
 
   // Don't show if no changed files - only show when there are files to review
-  if (uncommittedFiles.length === 0) {
-    console.log(`[StatusCard] Returning null - no uncommitted files`)
+  if (!isBusy && uncommittedFiles.length === 0) {
     return null
   }
 
@@ -149,7 +134,6 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
     // Set filter to only show files from this sub-chat
     // Use displayPath (relative path) to match git diff paths
     const filePaths = uncommittedFiles.map((f) => f.displayPath)
-    console.log('[SubChatStatusCard] handleReview:', { subChatId, filePaths })
     setFilteredDiffFiles(filePaths.length > 0 ? filePaths : null)
     // Also set subchat ID filter for ChangesPanel - use the prop, not activeSubChatId from store
     setFilteredSubChatId(subChatId)
@@ -189,14 +173,14 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
           />
 
           {/* Streaming indicator */}
-          {isStreaming && (
+          {isBusy && (
             <span className="text-xs text-muted-foreground">
               {isCompacting ? "Compacting" : "Generating"}<AnimatedDots />
             </span>
           )}
 
           {/* File count and stats - only show when not streaming */}
-          {!isStreaming && (
+          {!isBusy && (
             <span className="text-xs text-muted-foreground">
               {totals.fileCount} {totals.fileCount === 1 ? "file" : "files"}
               {(totals.additions > 0 || totals.deletions > 0) && (
@@ -217,7 +201,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
         {/* Right side: buttons */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* Stop button */}
-          {isStreaming && onStop && (
+          {isBusy && onStop && (
             <Button
               variant="ghost"
               size="sm"
@@ -233,17 +217,19 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
           )}
 
           {/* Review button */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleReview()
-            }}
-            className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
-          >
-            Review
-          </Button>
+          {uncommittedFiles.length > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleReview()
+              }}
+              className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
+            >
+              Review
+            </Button>
+          )}
         </div>
       </div>
 
@@ -262,11 +248,10 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
                 const FileIcon = getFileIconByExtension(file.displayPath)
 
                 const handleFileClick = () => {
-                  // Set filter to only show files from this sub-chat
-                  // Use displayPath (relative path) to match git diff paths
-                  const filePaths = uncommittedFiles.map((f) => f.displayPath)
-                  setFilteredDiffFiles(filePaths.length > 0 ? filePaths : null)
-                  // Set focus on this specific file
+                  // Set selected file and filter to just this file — avoids intermediate 2→1 file flash
+                  setSelectedFilePath(file.displayPath)
+                  setFilteredDiffFiles([file.displayPath])
+                  // Set focus on this specific file (for scroll-to)
                   setFocusedDiffFile(file.displayPath)
                   // Open diff sidebar
                   setDiffSidebarOpen(true)

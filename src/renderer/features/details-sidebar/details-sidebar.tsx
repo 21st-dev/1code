@@ -39,7 +39,7 @@ import type { AgentMode } from "../agents/atoms"
 import {
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
-} from "../../lib/atoms/agents-settings-dialog"
+} from "@/lib/atoms"
 
 interface DetailsSidebarProps {
   /** Workspace/chat ID */
@@ -70,8 +70,16 @@ interface DetailsSidebarProps {
   parsedFileDiffs?: ParsedDiffFile[] | null
   /** Callback to commit selected changes */
   onCommit?: (selectedPaths: string[]) => void
+  /** Callback to commit and push selected changes */
+  onCommitAndPush?: (selectedPaths: string[]) => void
   /** Whether commit is in progress */
   isCommitting?: boolean
+  /** Git sync status for push/pull actions */
+  gitStatus?: { pushCount?: number; pullCount?: number; hasUpstream?: boolean } | null
+  /** Whether git sync status is loading */
+  isGitStatusLoading?: boolean
+  /** Current branch name for header */
+  currentBranch?: string
   /** Callbacks to expand widgets to legacy sidebars */
   onExpandTerminal?: () => void
   onExpandPlan?: () => void
@@ -105,7 +113,11 @@ export function DetailsSidebar({
   diffStats,
   parsedFileDiffs,
   onCommit,
+  onCommitAndPush,
   isCommitting,
+  gitStatus,
+  isGitStatusLoading,
+  currentBranch,
   onExpandTerminal,
   onExpandPlan,
   onExpandDiff,
@@ -408,7 +420,13 @@ export function DetailsSidebar({
                     diffStats={diffStats}
                     parsedFileDiffs={parsedFileDiffs}
                     onCommit={onCommit}
+                    onCommitAndPush={onCommitAndPush}
                     isCommitting={isCommitting}
+                    pushCount={gitStatus?.pushCount ?? 0}
+                    pullCount={gitStatus?.pullCount ?? 0}
+                    hasUpstream={gitStatus?.hasUpstream ?? true}
+                    isSyncStatusLoading={isGitStatusLoading}
+                    currentBranch={currentBranch}
                     // For remote chats on desktop, don't provide expand/file actions
                     onExpand={canOpenDiff ? onExpandDiff : undefined}
                     onFileSelect={canOpenDiff ? onFileSelect : undefined}
@@ -453,4 +471,3 @@ export function DetailsSidebar({
     </ResizableSidebar>
   )
 }
-

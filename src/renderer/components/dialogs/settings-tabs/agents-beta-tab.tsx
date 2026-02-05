@@ -367,8 +367,8 @@ export function AgentsBetaTab() {
           </p>
         </div>
 
+        {/* Early Access section hidden until beta-mac.yml is published to CDN
         <div className="bg-background rounded-lg border border-border overflow-hidden">
-          {/* Early Access Toggle */}
           <div className="flex items-center justify-between p-4">
             <div className="flex flex-col space-y-1">
               <span className="text-sm font-medium text-foreground">
@@ -387,7 +387,6 @@ export function AgentsBetaTab() {
             />
           </div>
 
-          {/* Version & Check */}
           <div className="p-4 border-t border-border">
             <div className="flex items-center justify-between">
               <div className="flex flex-col space-y-1">
@@ -414,6 +413,7 @@ export function AgentsBetaTab() {
             </div>
           </div>
         </div>
+        */}
       </div>
     </div>
   )

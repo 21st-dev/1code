@@ -141,6 +141,8 @@ export function QueueProcessor() {
         toast.error("Failed to send queued message. It will be retried.")
       } finally {
         processingRef.current.delete(subChatId)
+        // Re-kick after releasing lock to avoid lost wakeups
+        setTimeout(checkAllQueues, 0)
       }
     }
 
@@ -162,7 +164,7 @@ export function QueueProcessor() {
     }
 
     // Check all queues and schedule processing for ready sub-chats
-    const checkAllQueues = () => {
+    function checkAllQueues() {
       const queues = useMessageQueueStore.getState().queues
 
       for (const subChatId of Object.keys(queues)) {

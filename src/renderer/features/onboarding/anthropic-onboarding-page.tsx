@@ -62,12 +62,14 @@ export function AnthropicOnboardingPage() {
   const submitCodeMutation = trpc.claudeCode.submitCode.useMutation()
   const openOAuthUrlMutation = trpc.claudeCode.openOAuthUrl.useMutation()
   const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
-  const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
-  const existingToken = existingTokenQuery.data?.token ?? null
-  const hasExistingToken = !!existingToken
-  const checkedExistingToken = existingTokenQuery.isFetched
-  const shouldOfferExistingToken =
-    checkedExistingToken && hasExistingToken && !ignoredExistingToken
+  // Disabled: importing CLI token is broken — access tokens expire in ~8 hours
+  // and we don't store the refresh token. Always use sandbox OAuth flow instead.
+  // const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
+  // const existingToken = existingTokenQuery.data?.token ?? null
+  const existingToken = null
+  const hasExistingToken = false
+  const checkedExistingToken = true
+  const shouldOfferExistingToken = false
 
   // Poll for OAuth URL
   const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(

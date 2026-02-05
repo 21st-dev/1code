@@ -12,6 +12,7 @@ import {
 } from "unique-names-generator";
 import { checkGitLfsAvailable, getShellEnvironment } from "./shell-env";
 import { executeWorktreeSetup } from "./worktree-config";
+import type { WorktreeSetupResult } from "./worktree-config";
 import { generateWorktreeFolderName } from "./worktree-naming";
 
 const execFileAsync = promisify(execFile);
@@ -895,6 +896,10 @@ export interface WorktreeResult {
 	error?: string;
 }
 
+export interface CreateWorktreeForChatOptions {
+	onSetupComplete?: (result: WorktreeSetupResult) => void;
+}
+
 /**
  * Create a git worktree for a chat (wrapper for chats.ts)
  * @param projectPath - Path to the main repository
@@ -908,6 +913,7 @@ export async function createWorktreeForChat(
 	chatId: string,
 	selectedBaseBranch?: string,
 	branchType?: "local" | "remote",
+	options?: CreateWorktreeForChatOptions,
 ): Promise<WorktreeResult> {
 	try {
 		const git = simpleGit(projectPath);
@@ -937,6 +943,7 @@ export async function createWorktreeForChat(
 		// This allows the user to start chatting immediately while deps install
 		executeWorktreeSetup(worktreePath, projectPath)
 			.then((setupResult) => {
+				options?.onSetupComplete?.(setupResult);
 				if (!setupResult.success) {
 					console.warn(`[worktree] Setup completed with errors: ${setupResult.errors.join(", ")}`);
 				} else {
@@ -944,7 +951,14 @@ export async function createWorktreeForChat(
 				}
 			})
 			.catch((setupError) => {
-				console.warn(`[worktree] Setup failed: ${setupError}`);
+				const errorMsg = setupError instanceof Error ? setupError.message : String(setupError);
+				options?.onSetupComplete?.({
+					success: false,
+					commandsRun: 0,
+					output: [`[error] ${errorMsg}`],
+					errors: [errorMsg],
+				});
+				console.warn(`[worktree] Setup failed: ${errorMsg}`);
 			});
 
 		return { success: true, worktreePath, branch, baseBranch };

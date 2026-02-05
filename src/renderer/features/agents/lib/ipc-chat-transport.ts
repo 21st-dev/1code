@@ -113,9 +113,8 @@ const ERROR_TOAST_CONFIG: Record<
     description: "Your session may have expired. Try logging in again.",
   },
   USAGE_POLICY_VIOLATION: {
-    title: "Request declined",
-    // description will be set from chunk.errorText which contains the full API error message
-    description: "",
+    title: "Anthropic API hiccup",
+    description: "The request was rejected by Anthropic's servers. Please try again shortly.",
   },
   // SDK_ERROR and other unknown errors use chunk.errorText for description
 }
@@ -270,16 +269,24 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
 
               // Handle compacting status - track in atom for UI display
-              if (chunk.type === "system-Compact") {
+              if (
+                (chunk.type === "tool-input-start" && chunk.toolName === "Compact") ||
+                (chunk.type === "tool-input-available" && chunk.toolName === "Compact")
+              ) {
                 const compacting = appStore.get(compactingSubChatsAtom)
                 const newCompacting = new Set(compacting)
-                if (chunk.state === "input-streaming") {
-                  // Compacting started
-                  newCompacting.add(this.config.subChatId)
-                } else {
-                  // Compacting finished (output-available)
-                  newCompacting.delete(this.config.subChatId)
-                }
+                // Compacting started
+                newCompacting.add(this.config.subChatId)
+                appStore.set(compactingSubChatsAtom, newCompacting)
+              }
+              if (
+                (chunk.type === "tool-output-available" && chunk.toolCallId?.startsWith("compact-")) ||
+                (chunk.type === "tool-output-error" && chunk.toolCallId?.startsWith("compact-"))
+              ) {
+                const compacting = appStore.get(compactingSubChatsAtom)
+                const newCompacting = new Set(compacting)
+                // Compacting finished
+                newCompacting.delete(this.config.subChatId)
                 appStore.set(compactingSubChatsAtom, newCompacting)
               }
 
@@ -343,6 +350,15 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 console.log(`[SD] R:AUTH_ERR sub=${subId}`)
                 controller.error(new Error("Authentication required"))
                 return
+              }
+
+              // Handle retry notification - show friendly toast instead of scary error
+              if (chunk.type === "retry-notification") {
+                toast.info("Retrying request", {
+                  description: chunk.message || "Request was unsuccessful, trying again...",
+                  duration: 4000,
+                })
+                return // don't enqueue retry-notification as a stream chunk
               }
 
               // Handle errors - show toast to user FIRST before anything else

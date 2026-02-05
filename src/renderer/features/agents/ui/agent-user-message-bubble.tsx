@@ -193,12 +193,16 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
             <div className="flex flex-wrap gap-1.5">
               {(() => {
                 // Build allImages array for gallery navigation
+                const resolveImgUrl = (img: any) =>
+                  img.data?.base64Data && img.data?.mediaType
+                    ? `data:${img.data.mediaType};base64,${img.data.base64Data}`
+                    : img.data?.url || ""
                 const allImages = imageParts
-                  .filter((img) => img.data?.url)
+                  .filter((img) => img.data?.url || img.data?.base64Data)
                   .map((img, idx) => ({
                     id: `${messageId}-img-${idx}`,
                     filename: img.data?.filename || "image",
-                    url: img.data?.url || "",
+                    url: resolveImgUrl(img),
                   }))
 
                 return imageParts.map((img, idx) => (
@@ -206,7 +210,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
                     key={`${messageId}-img-${idx}`}
                     id={`${messageId}-img-${idx}`}
                     filename={img.data?.filename || "image"}
-                    url={img.data?.url || ""}
+                    url={resolveImgUrl(img)}
                     allImages={allImages}
                     imageIndex={idx}
                   />

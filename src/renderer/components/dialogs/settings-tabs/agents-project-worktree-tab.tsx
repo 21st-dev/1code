@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
-import { useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { Button, buttonVariants } from "../../ui/button"
 import { Input } from "../../ui/input"
@@ -585,6 +585,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
 // --- Main Two-Panel Component ---
 export function AgentsProjectsTab() {
+  const selectedProject = useAtomValue(selectedProjectAtom)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -644,6 +645,12 @@ export function AgentsProjectsTab() {
       setSelectedProjectId(projects[0]!.id)
     }
   }, [projects, selectedProjectId, isLoading])
+
+  // Sync selection from global selectedProject (e.g., toast action)
+  useEffect(() => {
+    if (!selectedProject?.id) return
+    setSelectedProjectId(selectedProject.id)
+  }, [selectedProject?.id])
 
   return (
     <div className="flex h-full overflow-hidden">

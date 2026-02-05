@@ -38,6 +38,7 @@ import {
   useRestoreRemoteChat,
   useRenameRemoteChat,
 } from "../../lib/hooks/use-remote-chats"
+import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
@@ -968,8 +969,9 @@ const ChatListSection = React.memo(function ChatListSection({
             : repoName || (chat.isRemote ? "Remote project" : "Local project")
 
           const isChecked = selectedChatIds.has(chat.id)
-          // For remote chats, use remoteStats; for local, use workspaceFileStats
-          const stats = chat.isRemote ? chat.remoteStats : workspaceFileStats.get(chat.id)
+          // TODO: remote stats disabled — backend no longer computes them (was causing 50s+ loads)
+          // Will re-enable once stats are precomputed at write time
+          const stats = chat.isRemote ? null : workspaceFileStats.get(chat.id)
           const hasPendingPlan = workspacePendingPlans.has(chat.id)
           const hasPendingQuestion = workspacePendingQuestions.has(chat.id)
           const isLastInFilteredChats = globalIndex === filteredChats.length - 1
@@ -1181,7 +1183,7 @@ const InboxButton = memo(function InboxButton() {
       <SidebarInboxIcon className="h-4 w-4" />
       <span className="flex-1 text-left">Inbox</span>
       {inboxUnreadCount > 0 && (
-        <span className="bg-primary text-primary-foreground text-xs font-medium px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+        <span className="bg-muted text-muted-foreground text-xs font-medium px-1.5 py-0.5 rounded-md min-w-[20px] text-center">
           {inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}
         </span>
       )}
@@ -1789,6 +1791,7 @@ export function AgentsSidebar({
 
   // Prefetch individual chat data on hover
   const prefetchRemoteChat = usePrefetchRemoteChat()
+  const prefetchLocalChat = usePrefetchLocalChat()
 
   // Merge local and remote chats into unified list
   const agentChats = useMemo(() => {
@@ -2808,11 +2811,13 @@ export function AgentsSidebar({
       // Update hovered index ref
       hoveredChatIndexRef.current = globalIndex
 
-      // Prefetch chat data on hover (for remote chats, for instant load on click)
+      // Prefetch chat data on hover for instant load on click
       const chat = agentChats?.find((c) => c.id === chatId)
       if (chat?.isRemote) {
         const originalId = chatId.replace(/^remote_/, '')
         prefetchRemoteChat(originalId)
+      } else {
+        prefetchLocalChat(chatId)
       }
 
       // Clear any existing timer
@@ -2839,7 +2844,7 @@ export function AgentsSidebar({
         tooltip.textContent = name || ""
       }, 1000)
     },
-    [agentChats, prefetchRemoteChat],
+    [agentChats, prefetchRemoteChat, prefetchLocalChat],
   )
 
   const handleAgentMouseLeave = useCallback(() => {

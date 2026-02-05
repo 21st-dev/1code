@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm"
+import { BrowserWindow } from "electron"
 import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
@@ -18,6 +19,7 @@ import {
   removeWorktree,
   sanitizeProjectName,
 } from "../../git"
+import type { WorktreeSetupResult } from "../../git/worktree-config"
 import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
@@ -25,6 +27,35 @@ import { applyRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
+
+type WorktreeSetupFailurePayload = {
+  kind: "create-failed" | "setup-failed"
+  message: string
+  projectId: string
+}
+
+function sendWorktreeSetupFailure(
+  windowId: number | null,
+  payload: WorktreeSetupFailurePayload,
+): void {
+  const targets: BrowserWindow[] = []
+
+  if (windowId !== null) {
+    const window = BrowserWindow.fromId(windowId)
+    if (window && !window.isDestroyed()) {
+      targets.push(window)
+    }
+  }
+
+  if (targets.length === 0) {
+    targets.push(...BrowserWindow.getAllWindows())
+  }
+
+  for (const window of targets) {
+    if (window.isDestroyed()) continue
+    window.webContents.send("worktree:setup-failed", payload)
+  }
+}
 
 // Fallback to truncated user message if AI generation fails
 function getFallbackName(userMessage: string): string {
@@ -58,7 +89,7 @@ async function generateChatNameWithOllama(
       return null
     }
 
-    const prompt = `Generate a very short (2-5 words) title for a coding chat that starts with this message. Only output the title, nothing else. No quotes, no explanations.
+    const prompt = `Generate a very short (2-5 words) title for a coding chat that starts with this message. The title MUST be in the same language as the user's message. Only output the title, nothing else. No quotes, no explanations.
 
 User message: "${userMessage.slice(0, 500)}"
 
@@ -280,9 +311,10 @@ export const chatsRouter = router({
         mode: z.enum(["plan", "agent"]).default("agent"),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       console.log("[chats.create] called with:", input)
       const db = getDatabase()
+      const requestingWindowId = ctx.getWindow?.()?.id ?? null
 
       // Get project path
       const project = db
@@ -355,6 +387,19 @@ export const chatsRouter = router({
           chat.id,
           input.baseBranch,
           input.branchType,
+          {
+            onSetupComplete: (setupResult: WorktreeSetupResult) => {
+              if (setupResult.success) return
+              const message =
+                setupResult.errors[0] ||
+                "Worktree setup failed. Check your setup commands."
+              sendWorktreeSetupFailure(requestingWindowId, {
+                kind: "setup-failed",
+                message,
+                projectId: project.id,
+              })
+            },
+          },
         )
         console.log("[chats.create] worktree result:", result)
 
@@ -374,6 +419,11 @@ export const chatsRouter = router({
           }
         } else {
           console.warn(`[Worktree] Failed: ${result.error}`)
+          sendWorktreeSetupFailure(requestingWindowId, {
+            kind: "create-failed",
+            message: result.error || "Worktree creation failed.",
+            projectId: project.id,
+          })
           // Fallback to project path
           db.update(chats)
             .set({ worktreePath: project.path })
@@ -1277,7 +1327,6 @@ export const chatsRouter = router({
         .set({
           prUrl: input.prUrl,
           prNumber: input.prNumber,
-          updatedAt: new Date(),
         })
         .where(eq(chats.id, input.chatId))
         .returning()

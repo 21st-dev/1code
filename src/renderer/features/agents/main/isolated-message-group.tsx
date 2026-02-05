@@ -38,6 +38,7 @@ interface IsolatedMessageGroupProps {
   stickyTopClass: string
   sandboxSetupError?: string
   onRetrySetup?: () => void
+  onRollback?: (msg: any) => void
   // Components passed from parent - must be stable references
   UserBubbleComponent: React.ComponentType<{
     messageId: string
@@ -65,13 +66,14 @@ function areGroupPropsEqual(
     prev.chatId === next.chatId &&
     prev.isMobile === next.isMobile &&
     prev.sandboxSetupStatus === next.sandboxSetupStatus &&
-  prev.stickyTopClass === next.stickyTopClass &&
-  prev.sandboxSetupError === next.sandboxSetupError &&
-  prev.onRetrySetup === next.onRetrySetup &&
-  prev.UserBubbleComponent === next.UserBubbleComponent &&
-  prev.ToolCallComponent === next.ToolCallComponent &&
-  prev.MessageGroupWrapper === next.MessageGroupWrapper &&
-  prev.toolRegistry === next.toolRegistry
+    prev.stickyTopClass === next.stickyTopClass &&
+    prev.sandboxSetupError === next.sandboxSetupError &&
+    prev.onRetrySetup === next.onRetrySetup &&
+    prev.onRollback === next.onRollback &&
+    prev.UserBubbleComponent === next.UserBubbleComponent &&
+    prev.ToolCallComponent === next.ToolCallComponent &&
+    prev.MessageGroupWrapper === next.MessageGroupWrapper &&
+    prev.toolRegistry === next.toolRegistry
   )
 }
 
@@ -84,6 +86,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
   stickyTopClass,
   sandboxSetupError,
   onRetrySetup,
+  onRollback,
   UserBubbleComponent,
   ToolCallComponent,
   MessageGroupWrapper,
@@ -135,19 +138,23 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
       {((!isImageOnlyMessage && imageParts.length > 0) || textMentions.length > 0) && (
         <div className="mb-2 pointer-events-auto flex flex-wrap items-end gap-1.5">
           {imageParts.length > 0 && !isImageOnlyMessage && (() => {
+            const resolveImgUrl = (img: any) =>
+              img.data?.base64Data && img.data?.mediaType
+                ? `data:${img.data.mediaType};base64,${img.data.base64Data}`
+                : img.data?.url || ""
             const allImages = imageParts
-              .filter((img: any) => img.data?.url)
+              .filter((img: any) => img.data?.url || img.data?.base64Data)
               .map((img: any, idx: number) => ({
                 id: `${userMsgId}-img-${idx}`,
                 filename: img.data?.filename || "image",
-                url: img.data?.url || "",
+                url: resolveImgUrl(img),
               }))
             return imageParts.map((img: any, idx: number) => (
               <AgentImageItem
                 key={`${userMsgId}-img-${idx}`}
                 id={`${userMsgId}-img-${idx}`}
                 filename={img.data?.filename || "image"}
-                url={img.data?.url || ""}
+                url={resolveImgUrl(img)}
                 allImages={allImages}
                 imageIndex={idx}
               />
@@ -237,6 +244,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
           chatId={chatId}
           isMobile={isMobile}
           sandboxSetupStatus={sandboxSetupStatus}
+          onRollback={onRollback}
         />
       )}
 

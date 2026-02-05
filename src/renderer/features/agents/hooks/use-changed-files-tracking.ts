@@ -29,6 +29,7 @@ export function useChangedFilesTracking(
   subChatId: string,
   isStreaming: boolean = false,
   chatId?: string,
+  projectPath?: string,
 ) {
   const setSubChatFiles = useSetAtom(subChatFilesAtom)
   const setSubChatToChatMap = useSetAtom(subChatToChatMapAtom)
@@ -36,6 +37,12 @@ export function useChangedFilesTracking(
   // Helper to get display path (removes sandbox prefixes and worktree paths)
   const getDisplayPath = useCallback((filePath: string): string => {
     if (!filePath) return ""
+
+    // Strip project path prefix first (most reliable for desktop)
+    if (projectPath && filePath.startsWith(projectPath)) {
+      const relative = filePath.slice(projectPath.length)
+      return relative.startsWith("/") ? relative.slice(1) : relative
+    }
 
     // Use constant from codesandbox-constants
     const prefixes = [`${REPO_ROOT_PATH}/`, "/project/sandbox/", "/project/"]
@@ -64,7 +71,7 @@ export function useChangedFilesTracking(
     }
 
     return filePath
-  }, [])
+  }, [projectPath])
 
   // Calculate diff stats from old_string and new_string
   // For Edit: old_string lines are deletions, new_string lines are additions

@@ -214,6 +214,13 @@ contextBridge.exposeInMainWorld("desktopApi", {
     return () => ipcRenderer.removeListener("git:status-changed", handler)
   },
 
+  // Worktree setup failure events
+  onWorktreeSetupFailed: (callback: (data: { kind: "create-failed" | "setup-failed"; message: string; projectId: string }) => void) => {
+    const handler = (_event: unknown, data: { kind: "create-failed" | "setup-failed"; message: string; projectId: string }) => callback(data)
+    ipcRenderer.on("worktree:setup-failed", handler)
+    return () => ipcRenderer.removeListener("worktree:setup-failed", handler)
+  },
+
   // Subscribe to git watcher for a worktree (from renderer)
   subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
   unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),

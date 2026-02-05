@@ -42,18 +42,21 @@ function getChannelPrefPath(): string {
 }
 
 function getSavedChannel(): UpdateChannel {
-  try {
-    const prefPath = getChannelPrefPath()
-    if (existsSync(prefPath)) {
-      const data = JSON.parse(readFileSync(prefPath, "utf-8"))
-      if (data.channel === "beta" || data.channel === "latest") {
-        return data.channel
-      }
-    }
-  } catch {
-    // Ignore read errors, fall back to default
-  }
+  // Beta channel disabled until beta-mac.yml is published to CDN.
+  // Always use "latest" to prevent 404 errors for users who toggled Early Access.
   return "latest"
+  // try {
+  //   const prefPath = getChannelPrefPath()
+  //   if (existsSync(prefPath)) {
+  //     const data = JSON.parse(readFileSync(prefPath, "utf-8"))
+  //     if (data.channel === "beta" || data.channel === "latest") {
+  //       return data.channel
+  //     }
+  //   }
+  // } catch {
+  //   // Ignore read errors, fall back to default
+  // }
+  // return "latest"
 }
 
 function saveChannel(channel: UpdateChannel): void {

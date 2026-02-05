@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useMemo, useState, useEffect } from "react"
+import { memo, useCallback, useMemo, useState, useEffect, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -15,6 +15,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { cn } from "@/lib/utils"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { viewedFilesAtomFamily, fileViewerOpenAtomFamily, diffSidebarOpenAtomFamily } from "@/features/agents/atoms"
+import { getSyncActionKind } from "@/features/changes/utils"
 import {
   FileListItem,
   getFileName,
@@ -31,7 +32,13 @@ interface ChangesWidgetProps {
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   parsedFileDiffs?: ParsedDiffFile[] | null
   onCommit?: (selectedPaths: string[]) => void
+  onCommitAndPush?: (selectedPaths: string[]) => void
   isCommitting?: boolean
+  pushCount?: number
+  pullCount?: number
+  hasUpstream?: boolean
+  isSyncStatusLoading?: boolean
+  currentBranch?: string
   onExpand?: () => void
   /** Called when a file is clicked - should open diff sidebar with this file selected */
   onFileSelect?: (filePath: string) => void
@@ -69,7 +76,13 @@ export const ChangesWidget = memo(function ChangesWidget({
   diffStats,
   parsedFileDiffs,
   onCommit,
+  onCommitAndPush,
   isCommitting = false,
+  pushCount = 0,
+  pullCount = 0,
+  hasUpstream = true,
+  isSyncStatusLoading = false,
+  currentBranch,
   onExpand,
   onFileSelect,
   diffDisplayMode = "side-peek",
@@ -98,6 +111,15 @@ export const ChangesWidget = memo(function ChangesWidget({
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
   const openInAppMutation = trpc.external.openInApp.useMutation()
 
+  const syncActionKind = getSyncActionKind({
+    hasUpstream,
+    pullCount,
+    pushCount,
+    isSyncStatusLoading,
+  })
+
+  const shouldCommitAndPush = !!worktreePath && !!onCommitAndPush && !isSyncStatusLoading && syncActionKind !== "pull" && syncActionKind !== "loading"
+
   // Preferred editor
   const preferredEditor = useAtomValue(preferredEditorAtom)
   const editorMeta = APP_META[preferredEditor]
@@ -118,6 +140,7 @@ export const ChangesWidget = memo(function ChangesWidget({
   // Selection state - all files selected by default
   const [selectedForCommit, setSelectedForCommit] = useState<Set<string>>(new Set())
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false)
+  const prevAllPathsRef = useRef<Set<string>>(new Set())
 
   // Helper to get display path (handles /dev/null for deleted files)
   const getDisplayPath = useCallback((file: ParsedDiffFile): string => {
@@ -130,13 +153,36 @@ export const ChangesWidget = memo(function ChangesWidget({
     return file.newPath || file.oldPath
   }, [])
 
-  // Initialize selection - select all files by default when data loads
+  // Initialize selection, then auto-select newly added paths on subsequent updates
   useEffect(() => {
+    const allPaths = new Set(displayFiles.map((f) => getDisplayPath(f)))
+
     if (!hasInitializedSelection && displayFiles.length > 0) {
-      const allPaths = new Set(displayFiles.map((f) => getDisplayPath(f)))
       setSelectedForCommit(allPaths)
       setHasInitializedSelection(true)
+      prevAllPathsRef.current = allPaths
+      return
     }
+
+    const prevPaths = prevAllPathsRef.current
+    const newPaths: string[] = []
+    for (const path of allPaths) {
+      if (!prevPaths.has(path)) {
+        newPaths.push(path)
+      }
+    }
+
+    if (newPaths.length > 0) {
+      setSelectedForCommit((prev) => {
+        const next = new Set(prev)
+        for (const path of newPaths) {
+          next.add(path)
+        }
+        return next
+      })
+    }
+
+    prevAllPathsRef.current = allPaths
   }, [displayFiles, hasInitializedSelection, getDisplayPath])
 
   // Reset selection when files change significantly
@@ -144,6 +190,7 @@ export const ChangesWidget = memo(function ChangesWidget({
     if (displayFiles.length === 0) {
       setHasInitializedSelection(false)
       setSelectedForCommit(new Set())
+      prevAllPathsRef.current = new Set()
     }
   }, [displayFiles.length])
 
@@ -179,6 +226,9 @@ export const ChangesWidget = memo(function ChangesWidget({
   ).length
   const allSelected = displayFiles.length > 0 && selectedCount === displayFiles.length
   const someSelected = selectedCount > 0 && selectedCount < displayFiles.length
+  const commitLabelSuffix = selectedCount > 0
+    ? ` ${selectedCount} file${selectedCount !== 1 ? "s" : ""}`
+    : ""
 
   // Toggle all files selection
   const handleSelectAllChange = useCallback(() => {
@@ -195,8 +245,12 @@ export const ChangesWidget = memo(function ChangesWidget({
     const selectedPaths = displayFiles
       .filter((f) => selectedForCommit.has(getDisplayPath(f)))
       .map((f) => getDisplayPath(f))
-    onCommit?.(selectedPaths)
-  }, [displayFiles, selectedForCommit, onCommit, getDisplayPath])
+    if (shouldCommitAndPush && onCommitAndPush) {
+      onCommitAndPush(selectedPaths)
+    } else {
+      onCommit?.(selectedPaths)
+    }
+  }, [displayFiles, selectedForCommit, onCommit, onCommitAndPush, getDisplayPath, shouldCommitAndPush])
 
   return (
     <div className="mx-2 mb-2">
@@ -206,8 +260,18 @@ export const ChangesWidget = memo(function ChangesWidget({
           {/* Icon */}
           <DiffIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
 
-          {/* Title */}
-          <span className="text-xs font-medium text-foreground">Changes</span>
+          {/* Title + branch */}
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-xs font-medium text-foreground">Changes</span>
+            {currentBranch && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                <span className="shrink-0">on</span>
+                <span className="truncate max-w-[120px] text-foreground">
+                  {currentBranch}
+                </span>
+              </span>
+            )}
+          </div>
 
           {/* Stats in header - total lines changed */}
           {hasChanges && displayStats && (
@@ -319,7 +383,11 @@ export const ChangesWidget = memo(function ChangesWidget({
                   onClick={handleCommit}
                   disabled={isCommitting || selectedCount === 0}
                 >
-                  {isCommitting ? "Committing..." : `Commit ${selectedCount} file${selectedCount !== 1 ? "s" : ""}`}
+                  {isCommitting
+                    ? (shouldCommitAndPush ? "Committing & pushing..." : "Committing...")
+                    : (shouldCommitAndPush
+                      ? `Commit & Push${commitLabelSuffix}`
+                      : `Commit${commitLabelSuffix}`)}
                 </Button>
               )}
 
@@ -327,7 +395,7 @@ export const ChangesWidget = memo(function ChangesWidget({
               <Button
                 variant="outline"
                 size="sm"
-                className={cn("h-7 text-xs", onCommit ? "flex-1" : "w-full")}
+                className={cn("h-7 text-xs", onCommit ? "w-24" : "w-full")}
                 onClick={() => onExpand?.()}
               >
                 View Diff

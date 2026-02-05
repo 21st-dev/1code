@@ -48,6 +48,8 @@ import { usePRStatus } from "../../../../hooks/usePRStatus";
 import { PRIcon } from "../pr-icon";
 import { toast } from "sonner";
 import type { DiffViewMode } from "@/features/agents/ui/agent-diff-view";
+import { getSyncActionKind } from "../../utils/sync-actions";
+import { usePushAction } from "../../hooks/use-push-action";
 
 interface DiffStats {
 	isLoading: boolean;
@@ -181,11 +183,10 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		},
 	});
 
-	const pushMutation = trpc.changes.push.useMutation({
-		onSuccess: () => {
-			onRefresh?.();
-		},
-		onError: (error) => toast.error(`Push failed: ${error.message}`),
+	const { push: pushBranch, isPending: isPushPending } = usePushAction({
+		worktreePath,
+		hasUpstream,
+		onSuccess: onRefresh,
 	});
 
 	const pullMutation = trpc.changes.pull.useMutation({
@@ -241,7 +242,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	};
 
 	const handlePush = () => {
-		pushMutation.mutate({ worktreePath, setUpstream: !hasUpstream });
+		pushBranch();
 	};
 
 	const handlePull = () => {
@@ -277,9 +278,14 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	}, []);
 
 	// Check pending states
-	const isPushPending = pushMutation.isPending;
 	const isPullPending = pullMutation.isPending;
 	const isFetchPending = isRefreshing || fetchMutation.isPending;
+	const syncActionKind = getSyncActionKind({
+		hasUpstream,
+		pullCount,
+		pushCount,
+		isSyncStatusLoading,
+	});
 
 	// ============ NEW BUTTON LOGIC ============
 	// Priority:
@@ -304,7 +310,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 
 	const getPrimaryAction = (): ActionButton => {
 		// 0. Loading state - show loading indicator
-		if (isSyncStatusLoading) {
+		if (syncActionKind === "loading") {
 			return {
 				label: "",
 				pendingLabel: "",
@@ -318,7 +324,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		}
 
 		// 1. Branch not published - must publish first
-		if (!hasUpstream) {
+		if (syncActionKind === "publish") {
 			return {
 				label: "Publish",
 				pendingLabel: "Publishing...",
@@ -331,7 +337,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		}
 
 		// 2. Remote has changes we need to pull first
-		if (pullCount > 0) {
+		if (syncActionKind === "pull") {
 			return {
 				label: "Pull",
 				pendingLabel: "Pulling...",
@@ -345,7 +351,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		}
 
 		// 3. We have commits to push
-		if (pushCount > 0) {
+		if (syncActionKind === "push") {
 			return {
 				label: "Push",
 				pendingLabel: "Pushing...",
