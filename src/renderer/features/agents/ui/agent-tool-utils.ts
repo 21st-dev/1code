@@ -174,15 +174,17 @@ export function areExploringGroupPropsEqual(
     if (!arePartsEqual(prevParts[i], nextParts[i])) return false
   }
 
-  // If all parts are completed, don't care about chatStatus or isStreaming
+  // isStreaming changes always matter - they drive auto-collapse via useEffect
+  if (prevProps.isStreaming !== nextProps.isStreaming) return false
+
+  // If all parts are completed, don't care about chatStatus
   const allCompleted = nextParts.every(isToolCompleted)
   if (allCompleted) {
     return true
   }
 
-  // For pending groups, these matter
+  // For pending groups, chatStatus matters
   if (prevProps.chatStatus !== nextProps.chatStatus) return false
-  if (prevProps.isStreaming !== nextProps.isStreaming) return false
 
   return true
 }

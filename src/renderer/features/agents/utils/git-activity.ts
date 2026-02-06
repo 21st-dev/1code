@@ -2,6 +2,7 @@ export interface GitCommitInfo {
   type: "commit"
   message: string
   hash?: string
+  pushed?: boolean
 }
 
 export interface GitPrInfo {
@@ -91,6 +92,7 @@ function extractPrInfo(command: string, stdout: string): GitPrInfo | null {
 export function extractGitActivity(parts: any[]): GitActivity | null {
   let lastCommit: GitCommitInfo | null = null
   let lastPr: GitPrInfo | null = null
+  let hasPush = false
 
   for (const part of parts) {
     if (part.type !== "tool-Bash") continue
@@ -104,9 +106,19 @@ export function extractGitActivity(parts: any[]): GitActivity | null {
 
     const pr = extractPrInfo(command, stdout)
     if (pr) lastPr = pr
+
+    // Detect successful git push (no stderr error, command contains git push)
+    if (/git\s+push/.test(command) && !part.output?.stderr?.includes("error")) {
+      hasPush = true
+    }
   }
 
-  // PR is more significant than commit
+  // Mark commit as pushed if a git push was found in the same message
+  if (lastCommit && hasPush) {
+    lastCommit.pushed = true
+  }
+
+  // PR is more significant than commit (PR implies push already happened)
   return lastPr || lastCommit
 }
 

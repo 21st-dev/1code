@@ -291,7 +291,6 @@ interface MessageItemWrapperProps {
   chatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
-  onRollback?: (msg: any) => void
 }
 
 // Hook that only re-renders THIS component when it becomes/stops being the last message
@@ -364,14 +363,12 @@ const NonStreamingMessageItem = memo(function NonStreamingMessageItem({
   chatId,
   isMobile,
   sandboxSetupStatus,
-  onRollback,
 }: {
   messageId: string
   subChatId: string
   chatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
-  onRollback?: (msg: any) => void
 }) {
   // Subscribe to this specific message via Jotai - only re-renders when THIS message changes
   const message = useAtomValue(messageAtomFamily(messageId))
@@ -388,7 +385,6 @@ const NonStreamingMessageItem = memo(function NonStreamingMessageItem({
       chatId={chatId}
       isMobile={isMobile}
       sandboxSetupStatus={sandboxSetupStatus}
-      onRollback={onRollback}
     />
   )
 })
@@ -401,14 +397,12 @@ const StreamingMessageItem = memo(function StreamingMessageItem({
   chatId,
   isMobile,
   sandboxSetupStatus,
-  onRollback,
 }: {
   messageId: string
   subChatId: string
   chatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
-  onRollback?: (msg: any) => void
 }) {
   // Subscribe to this specific message via Jotai - only re-renders when THIS message changes
   const message = useAtomValue(messageAtomFamily(messageId))
@@ -429,7 +423,6 @@ const StreamingMessageItem = memo(function StreamingMessageItem({
       chatId={chatId}
       isMobile={isMobile}
       sandboxSetupStatus={sandboxSetupStatus}
-      onRollback={onRollback}
     />
   )
 })
@@ -487,7 +480,6 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
   chatId,
   isMobile,
   sandboxSetupStatus,
-  onRollback,
 }: MessageItemWrapperProps) {
 
   // Only subscribe to isLast - NOT to message content!
@@ -504,7 +496,6 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
         chatId={chatId}
         isMobile={isMobile}
         sandboxSetupStatus={sandboxSetupStatus}
-        onRollback={onRollback}
       />
     )
   }
@@ -517,7 +508,6 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
       chatId={chatId}
       isMobile={isMobile}
       sandboxSetupStatus={sandboxSetupStatus}
-      onRollback={onRollback}
     />
   )
 })
@@ -537,7 +527,6 @@ interface MemoizedAssistantMessagesProps {
   chatId: string
   isMobile: boolean
   sandboxSetupStatus: "cloning" | "ready" | "error"
-  onRollback?: (msg: any) => void
 }
 
 function areMemoizedAssistantMessagesEqual(
@@ -561,7 +550,6 @@ function areMemoizedAssistantMessagesEqual(
   if (prev.chatId !== next.chatId) return false
   if (prev.isMobile !== next.isMobile) return false
   if (prev.sandboxSetupStatus !== next.sandboxSetupStatus) return false
-  if (prev.onRollback !== next.onRollback) return false
 
   return true
 }
@@ -572,7 +560,6 @@ export const MemoizedAssistantMessages = memo(function MemoizedAssistantMessages
   chatId,
   isMobile,
   sandboxSetupStatus,
-  onRollback,
 }: MemoizedAssistantMessagesProps) {
   // This component only re-renders when assistantMsgIds changes
   // During streaming, IDs stay the same, so this doesn't re-render
@@ -588,7 +575,6 @@ export const MemoizedAssistantMessages = memo(function MemoizedAssistantMessages
           chatId={chatId}
           isMobile={isMobile}
           sandboxSetupStatus={sandboxSetupStatus}
-          onRollback={onRollback}
         />
       ))}
     </>
@@ -1055,10 +1041,14 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
                   if (imageParts.length > 0) {
                     parts.push(imageParts.length === 1 ? "image" : `${imageParts.length} images`)
                   }
-                  const quoteCount = textMentions.filter(m => m.type === "quote" || m.type === "pasted").length
+                  const quoteCount = textMentions.filter(m => m.type === "quote").length
+                  const pastedCount = textMentions.filter(m => m.type === "pasted").length
                   const codeCount = textMentions.filter(m => m.type === "diff").length
                   if (quoteCount > 0) {
                     parts.push(quoteCount === 1 ? "selected text" : `${quoteCount} text selections`)
+                  }
+                  if (pastedCount > 0) {
+                    parts.push(pastedCount === 1 ? "pasted text" : `${pastedCount} pasted texts`)
                   }
                   if (codeCount > 0) {
                     parts.push(codeCount === 1 ? "code selection" : `${codeCount} code selections`)

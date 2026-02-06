@@ -131,6 +131,10 @@ contextBridge.exposeInMainWorld("desktopApi", {
   clipboardWrite: (text: string) => ipcRenderer.invoke("clipboard:write", text),
   clipboardRead: () => ipcRenderer.invoke("clipboard:read"),
 
+  // Save file with native dialog
+  saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) =>
+    ipcRenderer.invoke("dialog:save-file", options) as Promise<{ success: boolean; filePath?: string }>,
+
   // Auth methods
   getUser: () => ipcRenderer.invoke("auth:get-user"),
   isAuthenticated: () => ipcRenderer.invoke("auth:is-authenticated"),
@@ -315,6 +319,7 @@ export interface DesktopApi {
   getApiBaseUrl: () => Promise<string>
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
+  saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) => Promise<{ success: boolean; filePath?: string }>
   // Auth
   getUser: () => Promise<{
     id: string

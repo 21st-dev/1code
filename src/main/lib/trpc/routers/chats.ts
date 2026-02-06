@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm"
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
 import { BrowserWindow } from "electron"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -1453,6 +1453,7 @@ export const chatsRouter = router({
 
     if (input.chatIds && input.chatIds.length > 0) {
       // Archive mode: query all sub-chats for given chat IDs
+      // Pre-filter with LIKE to skip sub-chats without file edits (avoids loading/parsing large JSON)
       allChats = db
         .select({
           chatId: subChats.chatId,
@@ -1460,7 +1461,12 @@ export const chatsRouter = router({
           messages: subChats.messages,
         })
         .from(subChats)
-        .where(inArray(subChats.chatId, input.chatIds))
+        .where(
+          and(
+            inArray(subChats.chatId, input.chatIds),
+            sql`(${subChats.messages} LIKE '%tool-Edit%' OR ${subChats.messages} LIKE '%tool-Write%')`
+          )
+        )
         .all()
     } else {
       // Main sidebar mode: query specific sub-chats

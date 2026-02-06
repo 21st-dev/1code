@@ -6,7 +6,6 @@ import {
   IconSpinner,
   ExpandIcon,
   CollapseIcon,
-  ExternalLinkIcon,
 } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { getToolStatus } from "./agent-tool-registry"
@@ -138,17 +137,9 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
               href={result.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-start gap-2 px-2.5 py-1.5 hover:bg-muted/50 transition-colors group"
+              className="block px-2.5 py-1 text-xs text-foreground truncate hover:bg-muted/50 transition-colors"
             >
-              <ExternalLinkIcon className="w-3 h-3 mt-0.5 flex-shrink-0 text-muted-foreground group-hover:text-foreground" />
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-foreground truncate">
-                  {result.title}
-                </div>
-                <div className="text-[10px] text-muted-foreground truncate">
-                  {result.url}
-                </div>
-              </div>
+              {result.title}
             </a>
           ))}
         </div>

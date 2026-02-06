@@ -119,6 +119,12 @@ export function QueueProcessor() {
           )
         }
 
+        // Signal active-chat to scroll to bottom BEFORE sending so that
+        // shouldAutoScrollRef is true for the entire streaming duration.
+        // (sendMessage awaits the full stream, so placing this after would
+        // only scroll after the response is complete.)
+        useMessageQueueStore.getState().triggerQueueSent(subChatId)
+
         // Send message using Chat's sendMessage method
         await chat.sendMessage({ role: "user", parts })
 

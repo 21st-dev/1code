@@ -350,6 +350,14 @@ export const isLastUserMessageAtomFamily = atomFamily((userMsgId: string) =>
   })
 )
 
+// Is this user message the first one? (used to hide rollback button on first message)
+export const isFirstUserMessageAtomFamily = atomFamily((userMsgId: string) =>
+  atom((get) => {
+    const userIds = get(userMessageIdsAtom)
+    return userIds[0] === userMsgId
+  })
+)
+
 // ============================================================================
 // STREAMING STATUS
 // ============================================================================

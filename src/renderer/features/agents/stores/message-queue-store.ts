@@ -11,6 +11,10 @@ interface MessageQueueState {
   // Map: subChatId -> queue items
   queues: Record<string, AgentQueueItem[]>
 
+  // Map: subChatId -> counter incremented each time QueueProcessor auto-sends a message.
+  // Used by active-chat to trigger scroll-to-bottom when a queued message is sent.
+  queueSentTriggers: Record<string, number>
+
   // Actions
   addToQueue: (subChatId: string, item: AgentQueueItem) => void
   removeFromQueue: (subChatId: string, itemId: string) => void
@@ -21,11 +25,14 @@ interface MessageQueueState {
   popItem: (subChatId: string, itemId: string) => AgentQueueItem | null
   // Add item to front of queue (for error recovery)
   prependItem: (subChatId: string, item: AgentQueueItem) => void
+  // Signal that a queued message was auto-sent (for scroll triggering)
+  triggerQueueSent: (subChatId: string) => void
 }
 
 export const useMessageQueueStore = create<MessageQueueState>()(
   subscribeWithSelector((set, get) => ({
     queues: {},
+    queueSentTriggers: {},
 
   addToQueue: (subChatId, item) => {
     set((state) => ({
@@ -89,6 +96,15 @@ export const useMessageQueueStore = create<MessageQueueState>()(
       queues: {
         ...state.queues,
         [subChatId]: [item, ...(state.queues[subChatId] || [])],
+      },
+    }))
+  },
+
+  triggerQueueSent: (subChatId) => {
+    set((state) => ({
+      queueSentTriggers: {
+        ...state.queueSentTriggers,
+        [subChatId]: (state.queueSentTriggers[subChatId] || 0) + 1,
       },
     }))
   },

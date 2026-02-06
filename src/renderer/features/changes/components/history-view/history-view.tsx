@@ -13,6 +13,8 @@ import {
 	ContextMenuTrigger,
 } from "../../../../components/ui/context-menu";
 import { toast } from "sonner";
+import { useAtomValue } from "jotai";
+import { selectedProjectAtom } from "../../../agents/atoms";
 
 export interface CommitInfo {
 	hash: string;
@@ -171,16 +173,24 @@ const HistoryCommitItem = memo(function HistoryCommitItem({
 		[commit.date],
 	);
 
+	const selectedProject = useAtomValue(selectedProjectAtom);
+
 	const handleCopySha = useCallback(() => {
 		navigator.clipboard.writeText(commit.hash);
 		toast.success("Copied SHA to clipboard");
 	}, [commit.hash]);
 
 	const handleOpenOnRemote = useCallback(() => {
-		// TODO: Get repository URL and construct commit URL
-		// For now, just show a toast
-		toast.info("Open on remote - not implemented yet");
-	}, []);
+		const owner = selectedProject?.gitOwner;
+		const repo = selectedProject?.gitRepo;
+		if (!owner || !repo) {
+			toast.error("Could not determine remote repository");
+			return;
+		}
+		window.desktopApi.openExternal(
+			`https://github.com/${owner}/${repo}/commit/${commit.hash}`,
+		);
+	}, [commit.hash, selectedProject?.gitOwner, selectedProject?.gitRepo]);
 
 	return (
 		<ContextMenu>

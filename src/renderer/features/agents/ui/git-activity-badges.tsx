@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useMemo, useState } from "react"
 import { GitCommit, GitPullRequest } from "lucide-react"
-import { useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { AnimatePresence, motion } from "motion/react"
 import {
   ExpandIcon,
@@ -14,6 +14,7 @@ import {
   type ChangedFileInfo,
 } from "../utils/git-activity"
 import {
+  selectedProjectAtom,
   diffSidebarOpenAtomFamily,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
@@ -35,6 +36,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
   chatId,
   subChatId,
 }: GitActivityBadgesProps) {
+  const selectedProject = useAtomValue(selectedProjectAtom)
   const setDiffSidebarOpen = useSetAtom(diffSidebarOpenAtomFamily(chatId))
   const setFilteredDiffFiles = useSetAtom(filteredDiffFilesAtom)
   const setFilteredSubChatId = useSetAtom(filteredSubChatIdAtom)
@@ -58,7 +60,20 @@ export const GitActivityBadges = memo(function GitActivityBadges({
   }, [changedFiles])
 
   const handleOpenCommit = useCallback(() => {
-    if (activity?.type === "commit" && activity.hash) {
+    if (activity?.type !== "commit") return
+
+    // If pushed to remote — open on GitHub
+    const owner = selectedProject?.gitOwner
+    const repo = selectedProject?.gitRepo
+    if (activity.pushed && activity.hash && owner && repo) {
+      window.desktopApi.openExternal(
+        `https://github.com/${owner}/${repo}/commit/${activity.hash}`,
+      )
+      return
+    }
+
+    // Otherwise — open local diff sidebar with History tab
+    if (activity.hash) {
       setSelectedCommit({
         hash: activity.hash,
         shortHash: activity.hash.slice(0, 8),
@@ -69,7 +84,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
     setFilteredSubChatId(subChatId)
     setDiffActiveTab("history")
     setDiffSidebarOpen(true)
-  }, [activity, subChatId, setSelectedCommit, setFilteredDiffFiles, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
+  }, [activity, subChatId, selectedProject, setSelectedCommit, setFilteredDiffFiles, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
 
   const handleFileClick = useCallback((file: ChangedFileInfo) => {
     onOpenFile?.(file.filePath)

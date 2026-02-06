@@ -16,6 +16,7 @@ export interface UsePastedTextFilesReturn {
   removePastedText: (id: string) => void
   clearPastedTexts: () => void
   pastedTextsRef: React.RefObject<PastedTextFile[]>
+  setPastedTextsFromDraft: (texts: PastedTextFile[]) => void
 }
 
 export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn {
@@ -62,11 +63,18 @@ export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn 
     setPastedTexts([])
   }, [])
 
+  // Direct state setter for restoring from draft/rollback
+  const setPastedTextsFromDraft = useCallback((texts: PastedTextFile[]) => {
+    setPastedTexts(texts)
+    pastedTextsRef.current = texts
+  }, [])
+
   return {
     pastedTexts,
     addPastedText,
     removePastedText,
     clearPastedTexts,
     pastedTextsRef,
+    setPastedTextsFromDraft,
   }
 }

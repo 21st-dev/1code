@@ -2,13 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageOff, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, ImageOff, ChevronLeft, ChevronRight, Copy, Download } from "lucide-react"
 import { IconSpinner } from "../../../components/ui/icons"
 import {
   HoverCard,
   HoverCardTrigger,
   HoverCardContent,
 } from "../../../components/ui/hover-card"
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "../../../components/ui/context-menu"
 
 interface ImageData {
   id: string
@@ -41,6 +47,7 @@ export function AgentImageItem({
   const [hasError, setHasError] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(imageIndex)
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false)
 
   // Use allImages if provided, otherwise create single-image array
   const images = allImages || [{ id, filename, url }]
@@ -70,6 +77,76 @@ export function AgentImageItem({
     e?.stopPropagation()
     setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
   }, [images.length])
+
+  const handleCopyImage = useCallback(async () => {
+    try {
+      const imgUrl = (images[currentIndex] || images[0])?.url
+      if (!imgUrl) return
+
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = reject
+        img.src = imgUrl
+      })
+
+      const canvas = document.createElement("canvas")
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext("2d")
+      ctx?.drawImage(img, 0, 0)
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
+          "image/png",
+        )
+      })
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ])
+    } catch (err) {
+      console.error("[AgentImageItem] Failed to copy image:", err)
+    }
+  }, [images, currentIndex])
+
+  const handleSaveImage = useCallback(async () => {
+    try {
+      const image = images[currentIndex] || images[0]
+      if (!image?.url) return
+
+      // Use canvas to extract image data (avoids CSP issues with blob: URLs)
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = reject
+        img.src = image.url
+      })
+
+      const canvas = document.createElement("canvas")
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext("2d")
+      ctx?.drawImage(img, 0, 0)
+
+      const dataUrl = canvas.toDataURL("image/png")
+      const base64Data = dataUrl.split(",")[1] || ""
+      const filename = image.filename || "image.png"
+
+      await window.desktopApi?.saveFile({
+        base64Data,
+        filename,
+        filters: [
+          { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      })
+    } catch (err) {
+      console.error("[AgentImageItem] Failed to save image:", err)
+    }
+  }, [images, currentIndex])
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -160,7 +237,7 @@ export function AgentImageItem({
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
-          onClick={closeFullscreen}
+          onClick={() => { if (!isContextMenuOpen) closeFullscreen() }}
         >
           {/* Close button */}
           <button
@@ -184,13 +261,27 @@ export function AgentImageItem({
             </button>
           )}
 
-          {/* Image */}
-          <img
-            src={currentImage.url}
-            alt={currentImage.filename}
-            className="max-w-[90vw] max-h-[85vh] object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {/* Image with context menu */}
+          <ContextMenu onOpenChange={setIsContextMenuOpen}>
+            <ContextMenuTrigger asChild>
+              <img
+                src={currentImage.url}
+                alt={currentImage.filename}
+                className="max-w-[90vw] max-h-[85vh] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onClick={handleCopyImage}>
+                <Copy className="size-4 mr-2" />
+                Copy Image
+              </ContextMenuItem>
+              <ContextMenuItem onClick={handleSaveImage}>
+                <Download className="size-4 mr-2" />
+                Save Image
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
 
           {/* Next button */}
           {hasMultipleImages && (

@@ -4,10 +4,9 @@ import { useAtomValue } from "jotai"
 import { ListTree } from "lucide-react"
 import { memo, useCallback, useContext, useMemo, useState } from "react"
 
-import { CollapseIcon, ExpandIcon, IconTextUndo, PlanIcon } from "../../../components/ui/icons"
+import { CollapseIcon, ExpandIcon, PlanIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
-import { isRollingBackAtom } from "../stores/message-store"
 import { selectedProjectAtom, showMessageJsonAtom } from "../atoms"
 import { MessageJsonDisplay } from "../ui/message-json-display"
 import { AgentAskUserQuestionTool } from "../ui/agent-ask-user-question-tool"
@@ -177,7 +176,6 @@ export interface AssistantMessageItemProps {
   subChatId: string
   chatId: string
   sandboxSetupStatus?: "cloning" | "ready" | "error"
-  onRollback?: (msg: any) => void
 }
 
 // Cache for tracking previous message state per message (to detect AI SDK in-place mutations)
@@ -277,9 +275,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   subChatId,
   chatId,
   sandboxSetupStatus = "ready",
-  onRollback,
 }: AssistantMessageItemProps) {
-  const isRollingBack = useAtomValue(isRollingBackAtom)
   const showMessageJson = useAtomValue(showMessageJsonAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
@@ -724,19 +720,6 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
               text={getMessageTextContent(message)}
               isMobile={isMobile}
             />
-            {onRollback && (message.metadata as any)?.sdkMessageUuid && (
-              <button
-                onClick={() => onRollback(message)}
-                disabled={isStreaming || isRollingBack}
-                tabIndex={-1}
-                className={cn(
-                  "p-1.5 rounded-md transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
-                  (isStreaming || isRollingBack) && "opacity-50 cursor-not-allowed",
-                )}
-              >
-                <IconTextUndo className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-            )}
           </div>
           <AgentMessageUsage metadata={msgMetadata} isStreaming={isStreaming} isMobile={isMobile} />
         </div>

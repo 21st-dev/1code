@@ -10,32 +10,25 @@ import {
   agentsMobileViewModeAtom,
   inboxMobileViewModeAtom,
 } from "../agents/atoms"
-import { IconSpinner, SettingsIcon } from "../../components/ui/icons"
-import { Inbox as InboxIcon, Archive as ArchiveIcon } from "lucide-react"
+import { IconSpinner } from "../../components/ui/icons"
+import { Archive as ArchiveIcon, ListFilter, MoreHorizontal, Clock, Check, AlignJustify } from "lucide-react"
 import { Logo } from "../../components/ui/logo"
 import { cn } from "../../lib/utils"
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { formatTimeAgo } from "../agents/utils/format-time-ago"
 import { GitHubIcon } from "../../icons"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
-import { ArrowUpDown, AlignJustify } from "lucide-react"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
 import { desktopViewAtom } from "../agents/atoms"
 import { remoteTrpc } from "../../lib/remote-trpc"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../components/ui/popover"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select"
-import { Switch } from "../../components/ui/switch"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -76,6 +69,36 @@ function AutomationsIcon(props: React.SVGProps<SVGSVGElement>) {
       <circle cx="12" cy="5" r="2.5" stroke="currentColor" strokeWidth="2" />
       <circle cx="20" cy="17" r="2.5" stroke="currentColor" strokeWidth="2" />
       <circle cx="4" cy="17" r="2.5" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  )
+}
+
+function InboxIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M3 12H7.5C8.12951 12 8.72229 12.2964 9.1 12.8L9.4 13.2C9.77771 13.7036 10.3705 14 11 14H13C13.6295 14 14.2223 13.7036 14.6 13.2L14.9 12.8C15.2777 12.2964 15.8705 12 16.5 12H21M21.7365 11.5389L18.5758 6.00772C18.2198 5.38457 17.5571 5 16.8394 5H7.16065C6.44293 5 5.78024 5.38457 5.42416 6.00772L2.26351 11.5389C2.09083 11.841 2 12.1831 2 12.5311V17C2 18.1046 2.89543 19 4 19H20C21.1046 19 22 18.1046 22 17V12.5311C22 12.1831 21.9092 11.841 21.7365 11.5389Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function UnreadMailIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <g transform="scale(1.05)" transform-origin="12 12">
+        <path
+          d="M13 5H5C3.89543 5 3 5.89543 3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V13M2.99805 9C5.50528 10.8837 8.62204 12 11.9995 12C13.3849 12 14.7264 11.8122 16 11.4606M23 6C23 7.65685 21.6569 9 20 9C18.3431 9 17 7.65685 17 6C17 4.34315 18.3431 3 20 3C21.6569 3 23 4.34315 23 6Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
     </svg>
   )
 }
@@ -281,9 +304,7 @@ export function InboxView() {
   }, [setChatSourceMode])
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [ordering, setOrdering] = useState<"newest" | "oldest">("newest")
-  const [showRead, setShowRead] = useState(true)
-  const [showUnreadFirst, setShowUnreadFirst] = useState(false)
+  const [filterMode, setFilterMode] = useState<"unread_and_read" | "unread" | "archived" | "all">("unread_and_read")
 
   // Fork Locally state
   const [importDialogOpen, setImportDialogOpen] = useState(false)
@@ -306,6 +327,24 @@ export function InboxView() {
   const archiveMutation = useMutation({
     mutationFn: (chatId: string) =>
       remoteTrpc.agents.archiveChat.mutate({ chatId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["automations", "inboxChats"] })
+      queryClient.invalidateQueries({ queryKey: ["automations", "inboxUnreadCount"] })
+    },
+  })
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () =>
+      remoteTrpc.automations.markAllInboxItemsRead.mutate({ teamId: teamId! }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["automations", "inboxUnreadCount"] })
+      queryClient.invalidateQueries({ queryKey: ["automations", "inboxChats"] })
+    },
+  })
+
+  const archiveBatchMutation = useMutation({
+    mutationFn: (chatIds: string[]) =>
+      remoteTrpc.agents.archiveChatsBatch.mutate({ chatIds }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxChats"] })
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxUnreadCount"] })
@@ -378,9 +417,12 @@ export function InboxView() {
   const filteredChats = useMemo(() => {
     let chats = (data?.chats || []) as InboxChat[]
 
-    if (!showRead) {
+    if (filterMode === "unread") {
       chats = chats.filter((chat) => !chat.isRead)
+    } else if (filterMode === "unread_and_read") {
+      // show all non-archived (default)
     }
+    // "archived" and "all" modes would need backend support for archived inbox items
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
@@ -394,23 +436,23 @@ export function InboxView() {
     chats = [...chats].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime()
       const dateB = new Date(b.createdAt).getTime()
-      return ordering === "newest" ? dateB - dateA : dateA - dateB
+      return dateB - dateA
     })
 
-    if (showUnreadFirst) {
-      chats = [...chats].sort((a, b) => {
-        if (a.isRead === b.isRead) return 0
-        return a.isRead ? 1 : -1
-      })
-    }
-
     return chats
-  }, [data?.chats, searchQuery, showRead, ordering, showUnreadFirst])
+  }, [data?.chats, searchQuery, filterMode])
 
   const unreadCount = useMemo(() => {
     const chats = (data?.chats || []) as InboxChat[]
     return chats.filter((chat) => !chat.isRead).length
   }, [data?.chats])
+
+  const readCount = useMemo(() => {
+    return filteredChats.filter((c) => c.isRead).length
+  }, [filteredChats])
+
+  const hasNoUnread = unreadCount === 0
+  const hasNoRead = readCount === 0
 
   const handleChatClick = (chat: InboxChat) => {
     if (!chat.isRead) {
@@ -448,6 +490,32 @@ export function InboxView() {
     }
   }, [archiveMutation, filteredChats, selectedChatId, setSelectedChatId])
 
+  const handleMarkAllRead = useCallback(() => {
+    if (teamId) {
+      markAllReadMutation.mutate()
+    }
+  }, [teamId, markAllReadMutation])
+
+  const handleArchiveAll = useCallback(() => {
+    const chatIds = filteredChats.map((c) => c.id)
+    if (chatIds.length > 0) {
+      archiveBatchMutation.mutate(chatIds)
+      if (selectedChatId) {
+        setSelectedChatId(null)
+      }
+    }
+  }, [filteredChats, archiveBatchMutation, selectedChatId, setSelectedChatId])
+
+  const handleArchiveRead = useCallback(() => {
+    const readChatIds = filteredChats.filter((c) => c.isRead).map((c) => c.id)
+    if (readChatIds.length > 0) {
+      archiveBatchMutation.mutate(readChatIds)
+      if (selectedChatId && readChatIds.includes(selectedChatId)) {
+        setSelectedChatId(null)
+      }
+    }
+  }, [filteredChats, archiveBatchMutation, selectedChatId, setSelectedChatId])
+
   if (!teamId) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -456,35 +524,12 @@ export function InboxView() {
     )
   }
 
-  // Shared filter settings popover content
-  const filterContent = (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm">
-          <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-          <span>Ordering</span>
-        </div>
-        <Select value={ordering} onValueChange={(v) => setOrdering(v as "newest" | "oldest")}>
-          <SelectTrigger className="w-[100px] h-7 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest</SelectItem>
-            <SelectItem value="oldest">Oldest</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="h-px bg-border" />
-      <div className="flex items-center justify-between">
-        <span className="text-sm">Show read</span>
-        <Switch checked={showRead} onCheckedChange={setShowRead} />
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-sm">Show unread first</span>
-        <Switch checked={showUnreadFirst} onCheckedChange={setShowUnreadFirst} />
-      </div>
-    </div>
-  )
+  const filterOptions = [
+    { value: "unread_and_read" as const, label: "Unread & read", icon: InboxIcon },
+    { value: "unread" as const, label: "Unread", icon: UnreadMailIcon },
+    { value: "archived" as const, label: "Archived", icon: ArchiveIcon },
+    { value: "all" as const, label: "All workspace updates", icon: Clock },
+  ]
 
   // Mobile layout - fullscreen list or fullscreen chat
   if (isMobile) {
@@ -505,16 +550,46 @@ export function InboxView() {
                   </button>
                   <h1 className="text-lg font-semibold">Inbox</h1>
                 </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                      <SettingsIcon className="h-5 w-5" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-[240px] p-3">
-                    {filterContent}
-                  </PopoverContent>
-                </Popover>
+                <div className="flex items-center gap-1">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                          <ListFilter className="h-5 w-5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[220px]">
+                        <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                        {filterOptions.map(({ value, label, icon: Icon }) => (
+                          <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
+                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="flex-1">{label}</span>
+                            {filterMode === value && <Check className="h-3.5 w-3.5" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                          <MoreHorizontal className="h-5 w-5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px]">
+                        <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
+                          <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>Mark all as read</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
+                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>Archive all</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
+                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>Archive read</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
               </div>
               <div className="px-4 pb-3">
                 <input
@@ -592,25 +667,53 @@ export function InboxView() {
             <TrafficLightSpacer isFullscreen={isFullscreen} isDesktop={isDesktop} />
           )}
 
-          {/* Settings button - absolutely positioned when main sidebar is open */}
+          {/* Filter & actions buttons - absolutely positioned when main sidebar is open */}
           {sidebarOpen && (
             <div
-              className="absolute right-2 top-2 z-20"
+              className="absolute right-2 top-2 z-20 flex items-center gap-0.5"
               style={{
                 // @ts-expect-error - WebKit-specific property
                 WebkitAppRegion: "no-drag",
               }}
             >
-              <Popover>
-                <PopoverTrigger asChild>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                   <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                    <SettingsIcon className="h-4 w-4" />
+                    <ListFilter className="h-4 w-4" />
                   </button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-[240px] p-3">
-                  {filterContent}
-                </PopoverContent>
-              </Popover>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[220px]">
+                  <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                  {filterOptions.map(({ value, label, icon: Icon }) => (
+                    <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="flex-1">{label}</span>
+                      {filterMode === value && <Check className="h-3.5 w-3.5" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                  <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
+                    <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Mark all as read</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
+                    <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Archive all</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
+                    <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Archive read</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
 
@@ -635,21 +738,50 @@ export function InboxView() {
                   </button>
                   <div className="flex-1" />
                   <div
+                    className="flex items-center gap-0.5"
                     style={{
                       // @ts-expect-error - WebKit-specific property
                       WebkitAppRegion: "no-drag",
                     }}
                   >
-                    <Popover>
-                      <PopoverTrigger asChild>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                          <SettingsIcon className="h-4 w-4" />
+                          <ListFilter className="h-4 w-4" />
                         </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" className="w-[240px] p-3">
-                        {filterContent}
-                      </PopoverContent>
-                    </Popover>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[220px]">
+                        <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                        {filterOptions.map(({ value, label, icon: Icon }) => (
+                          <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
+                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="flex-1">{label}</span>
+                            {filterMode === value && <Check className="h-3.5 w-3.5" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px]">
+                        <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
+                          <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>Mark all as read</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
+                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>Archive all</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
+                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>Archive read</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               )}

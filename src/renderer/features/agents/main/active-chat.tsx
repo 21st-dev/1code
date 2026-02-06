@@ -16,7 +16,7 @@ import {
   IconCloseSidebarRight,
   IconOpenSidebarRight,
   IconSpinner,
-  IconTextUndo,
+  UnarchiveIcon,
   PauseIcon,
   VolumeIcon
 } from "../../../components/ui/icons"
@@ -153,15 +153,16 @@ import { OpenLocallyDialog } from "../components/open-locally-dialog"
 import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
 import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
-import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
+import { useAgentsFileUpload, type UploadedImage } from "../hooks/use-agents-file-upload"
 import { useAutoImport } from "../hooks/use-auto-import"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
 import { useDesktopNotifications } from "../hooks/use-desktop-notifications"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useHaptic } from "../hooks/use-haptic"
-import { usePastedTextFiles } from "../hooks/use-pasted-text-files"
+import { usePastedTextFiles, type PastedTextFile } from "../hooks/use-pasted-text-files"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
+import { type SelectedTextContext, type DiffTextContext, createTextPreview } from "../lib/queue-utils"
 import {
   clearSubChatDraft,
   getSubChatDraftFull
@@ -232,6 +233,13 @@ function utf8ToBase64(str: string): string {
   const bytes = new TextEncoder().encode(str)
   const binString = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join("")
   return btoa(binString)
+}
+
+// UTF-8 safe base64 decoding (atob doesn't support Unicode)
+function base64ToUtf8(base64: string): string {
+  const binString = atob(base64)
+  const bytes = Uint8Array.from(binString, (char) => char.codePointAt(0)!)
+  return new TextDecoder().decode(bytes)
 }
 
 /** Wait for streaming to finish by subscribing to the status store.
@@ -747,38 +755,6 @@ function PlayButton({
         </button>
       )}
     </div>
-  )
-}
-
-// Rollback button component for reverting to a previous message state
-function RollbackButton({
-  disabled = false,
-  onRollback,
-  isRollingBack = false,
-}: {
-  disabled?: boolean
-  onRollback: () => void
-  isRollingBack?: boolean
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          onClick={onRollback}
-          disabled={disabled || isRollingBack}
-          tabIndex={-1}
-          className={cn(
-            "p-1.5 rounded-md transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
-            isRollingBack && "opacity-50 cursor-not-allowed",
-          )}
-        >
-          <IconTextUndo className="w-3.5 h-3.5 text-muted-foreground" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        {isRollingBack ? "Rolling back..." : "Rollback to here"}
-      </TooltipContent>
-    </Tooltip>
   )
 }
 
@@ -2272,6 +2248,7 @@ const ChatViewInner = memo(function ChatViewInner({
     removePastedText,
     clearPastedTexts,
     pastedTextsRef,
+    setPastedTextsFromDraft,
   } = usePastedTextFiles(subChatId)
 
   // File contents cache - stores content for file mentions (keyed by mentionId)
@@ -3133,10 +3110,11 @@ const ChatViewInner = memo(function ChatViewInner({
     projectPath,
   )
 
-  // Rollback handler - truncates messages to the clicked assistant message and restores git state
-  // The SDK UUID from the last assistant message will be used for resumeSessionAt on next send
+  // Rollback handler - triggered from user message bubble
+  // Finds the last assistant message BEFORE this user message, rolls back to it,
+  // and inserts the user message text into the input for easy re-sending
   const handleRollback = useCallback(
-    async (assistantMsg: (typeof messages)[0]) => {
+    async (userMsg: (typeof messages)[0]) => {
       if (isRollingBack) {
         toast.error("Rollback already in progress")
         return
@@ -3146,11 +3124,137 @@ const ChatViewInner = memo(function ChatViewInner({
         return
       }
 
-      const sdkUuid = (assistantMsg.metadata as any)?.sdkMessageUuid
+      // Find the index of this user message
+      const userMsgIndex = messages.findIndex((m) => m.id === userMsg.id)
+      if (userMsgIndex === -1) {
+        toast.error("Cannot rollback: message not found")
+        return
+      }
+
+      // Find the last assistant message BEFORE this user message
+      let targetAssistantMsg: (typeof messages)[0] | null = null
+      for (let i = userMsgIndex - 1; i >= 0; i--) {
+        if (messages[i].role === "assistant") {
+          targetAssistantMsg = messages[i]
+          break
+        }
+      }
+
+      if (!targetAssistantMsg) {
+        toast.error("Cannot rollback: no previous assistant message found")
+        return
+      }
+
+      const sdkUuid = (targetAssistantMsg.metadata as any)?.sdkMessageUuid
       if (!sdkUuid) {
         toast.error("Cannot rollback: message has no SDK UUID")
         return
       }
+
+      // Extract raw text from user message (includes mention tokens)
+      const rawText = userMsg.parts
+        ?.filter((p: any) => p.type === "text")
+        .map((p: any) => p.text)
+        .join("\n") || ""
+
+      // Parse mention tokens from text to restore text contexts, diff contexts, and pasted texts
+      const restoredTextContexts: SelectedTextContext[] = []
+      const restoredDiffTextContexts: DiffTextContext[] = []
+      const restoredPastedTexts: PastedTextFile[] = []
+      let cleanedText = rawText
+
+      const mentionRegex = /@\[([^\]]+)\]/g
+      let match: RegExpExecArray | null
+      const mentionsToRemove: string[] = []
+
+      while ((match = mentionRegex.exec(rawText)) !== null) {
+        const id = match[1]
+
+        if (id.startsWith("quote:")) {
+          const content = id.slice("quote:".length)
+          const sepIdx = content.indexOf(":")
+          if (sepIdx !== -1) {
+            const preview = content.slice(0, sepIdx)
+            const encoded = content.slice(sepIdx + 1)
+            let fullText = preview
+            try { fullText = base64ToUtf8(encoded) } catch { /* use preview */ }
+            restoredTextContexts.push({
+              id: `tc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+              text: fullText,
+              sourceMessageId: "",
+              preview: createTextPreview(fullText),
+              createdAt: new Date(),
+            })
+          }
+          mentionsToRemove.push(match[0])
+        } else if (id.startsWith("diff:")) {
+          const content = id.slice("diff:".length)
+          const parts = content.split(":")
+          if (parts.length >= 3) {
+            const filePath = parts[0] || ""
+            const lineNumber = parseInt(parts[1] || "0", 10) || undefined
+            const preview = parts[2] || ""
+            const encoded = parts.slice(3).join(":")
+            let fullText = preview
+            try { if (encoded) fullText = base64ToUtf8(encoded) } catch { /* use preview */ }
+            restoredDiffTextContexts.push({
+              id: `dtc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+              text: fullText,
+              filePath,
+              lineNumber,
+              preview: createTextPreview(fullText),
+              createdAt: new Date(),
+            })
+          }
+          mentionsToRemove.push(match[0])
+        } else if (id.startsWith("pasted:")) {
+          const content = id.slice("pasted:".length)
+          const pipeIdx = content.lastIndexOf("|")
+          if (pipeIdx !== -1) {
+            const beforePipe = content.slice(0, pipeIdx)
+            const filePath = content.slice(pipeIdx + 1)
+            const colonIdx = beforePipe.indexOf(":")
+            if (colonIdx !== -1) {
+              const size = parseInt(beforePipe.slice(0, colonIdx) || "0", 10)
+              const preview = beforePipe.slice(colonIdx + 1)
+              restoredPastedTexts.push({
+                id: `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                filePath,
+                filename: filePath.split("/").pop() || "pasted.txt",
+                size,
+                preview,
+                createdAt: new Date(),
+              })
+            }
+          }
+          mentionsToRemove.push(match[0])
+        }
+      }
+
+      // Remove mention tokens from text to get clean user text
+      for (const mentionStr of mentionsToRemove) {
+        cleanedText = cleanedText.replace(mentionStr, "")
+      }
+      cleanedText = cleanedText
+        .split("\n")
+        .map((line: string) => line.trim())
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+
+      // Extract images from user message for restoring into input
+      const userMsgImages: UploadedImage[] = (userMsg.parts || [])
+        .filter((p: any) => p.type === "data-image" && p.data)
+        .map((p: any) => ({
+          id: crypto.randomUUID(),
+          filename: p.data.filename || "image",
+          url: p.data.url || (p.data.base64Data && p.data.mediaType
+            ? `data:${p.data.mediaType};base64,${p.data.base64Data}`
+            : ""),
+          base64Data: p.data.base64Data,
+          mediaType: p.data.mediaType,
+          isLoading: false,
+        }))
 
       setIsRollingBack(true)
 
@@ -3171,6 +3275,24 @@ const ChatViewInner = memo(function ChatViewInner({
         setMessages(result.messages)
         recomputeChangedFiles(result.messages)
         refreshDiff?.()
+
+        // Restore all user message content into input
+        if (cleanedText) {
+          editorRef.current?.setValue(cleanedText)
+        }
+        if (userMsgImages.length > 0) {
+          setImagesFromDraft(userMsgImages)
+        }
+        if (restoredTextContexts.length > 0) {
+          setTextContextsFromDraft(restoredTextContexts)
+        }
+        if (restoredDiffTextContexts.length > 0) {
+          setDiffTextContextsFromDraft(restoredDiffTextContexts)
+        }
+        if (restoredPastedTexts.length > 0) {
+          setPastedTextsFromDraft(restoredPastedTexts)
+        }
+        editorRef.current?.focus()
       } catch (error) {
         console.error("[handleRollback] Error:", error)
         toast.error("Failed to rollback")
@@ -3181,10 +3303,15 @@ const ChatViewInner = memo(function ChatViewInner({
     [
       isRollingBack,
       isStreaming,
+      messages,
       setMessages,
       subChatId,
       recomputeChangedFiles,
       refreshDiff,
+      setImagesFromDraft,
+      setTextContextsFromDraft,
+      setDiffTextContextsFromDraft,
+      setPastedTextsFromDraft,
     ],
   )
 
@@ -3411,6 +3538,22 @@ const ChatViewInner = memo(function ChatViewInner({
       }
     }
   }, [isActive, messages, status, subChatId])
+
+  // Scroll to bottom when QueueProcessor auto-sends a queued message.
+  // QueueProcessor runs globally and can't access scroll refs, so it
+  // signals via a store trigger that we subscribe to here.
+  useEffect(() => {
+    const unsub = useMessageQueueStore.subscribe(
+      (state) => state.queueSentTriggers[subChatId] || 0,
+      (trigger) => {
+        if (trigger === 0) return
+        if (!isActiveRef.current) return
+        shouldAutoScrollRef.current = true
+        scrollToBottom()
+      },
+    )
+    return unsub
+  }, [subChatId, scrollToBottom])
 
   // Auto-focus input when switching to this chat (any sub-chat change)
   // Skip on mobile to prevent keyboard from opening automatically
@@ -6763,7 +6906,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                         className="h-6 px-2 gap-1.5 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2 flex items-center"
                         aria-label="Restore workspace"
                       >
-                        <IconTextUndo className="h-4 w-4" />
+                        <UnarchiveIcon className="h-4 w-4" />
                         <span className="text-xs">Restore</span>
                       </Button>
                     </TooltipTrigger>

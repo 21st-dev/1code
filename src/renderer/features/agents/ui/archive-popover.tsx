@@ -18,7 +18,7 @@ import { Input } from "../../../components/ui/input"
 import {
   SearchIcon,
   ArchiveIcon,
-  IconTextUndo,
+  UnarchiveIcon,
   GitHubLogo,
   CloudIcon,
 } from "../../../components/ui/icons"
@@ -193,7 +193,7 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
               className="flex-shrink-0 text-muted-foreground hover:text-foreground active:text-foreground transition-[color,transform] duration-150 ease-out active:scale-[0.97]"
               aria-label="Restore chat"
             >
-              <IconTextUndo className="h-3 w-3" />
+              <UnarchiveIcon className="h-3 w-3" />
             </button>
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -246,7 +246,11 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   // Local archived chats (always fetch)
   const { data: localArchivedChats, isLoading: isLocalLoading } = trpc.chats.listArchived.useQuery(
     {},
-    { enabled: open },
+    {
+      enabled: open,
+      staleTime: 5 * 60 * 1000,
+      placeholderData: (prev) => prev,
+    },
   )
 
   // Remote archived chats (always fetch)
@@ -267,7 +271,11 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   // Fetch file stats for archived local chats
   const { data: fileStatsData } = trpc.chats.getFileStats.useQuery(
     { chatIds: archivedChatIds },
-    { enabled: open && archivedChatIds.length > 0 },
+    {
+      enabled: open && archivedChatIds.length > 0,
+      staleTime: 5 * 60 * 1000,
+      placeholderData: (prev) => prev,
+    },
   )
 
   // Create map for quick project lookup by id

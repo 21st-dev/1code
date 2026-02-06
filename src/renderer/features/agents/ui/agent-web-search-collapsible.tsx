@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo } from "react"
 import { ChevronRight } from "lucide-react"
-import { ExternalLinkIcon } from "../../../components/ui/icons"
+
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 
@@ -105,17 +105,9 @@ export const AgentWebSearchCollapsible = memo(
                   href={result.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-start gap-1.5 px-2 py-1 rounded hover:bg-muted/50 transition-colors group/link"
+                  className="block px-2 py-0.5 text-xs text-foreground truncate rounded hover:bg-muted/50 transition-colors"
                 >
-                  <ExternalLinkIcon className="w-3 h-3 mt-0.5 flex-shrink-0 text-muted-foreground group-hover/link:text-foreground transition-colors" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs text-foreground truncate">
-                      {result.title}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground truncate">
-                      {result.url}
-                    </div>
-                  </div>
+                  {result.title}
                 </a>
               ))}
             </div>

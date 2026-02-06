@@ -14,7 +14,7 @@ import {
 } from "../../details-sidebar/atoms"
 import { chatSourceModeAtom } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
-import { X, Plus, AlignJustify, Play, TerminalSquare } from "lucide-react"
+import { Plus, AlignJustify, Play, TerminalSquare } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -24,6 +24,7 @@ import {
   DiffIcon,
   ClockIcon,
   QuestionIcon,
+  UnarchiveIcon,
 } from "../../../components/ui/icons"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
@@ -826,7 +827,7 @@ export function SubChatSelector({
                                     : "Close tab"
                                 }
                               >
-                                <X className="h-3 w-3" />
+                                <UnarchiveIcon className="h-3 w-3" />
                               </span>
                             </div>
                           )}

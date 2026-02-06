@@ -47,9 +47,18 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
   const isStreaming = isPending && isActivelyStreaming
   const isInterrupted = isPending && !isActivelyStreaming && chatStatus !== undefined
 
-  // Always start collapsed — like SubAgent tools
-  const [isExpanded, setIsExpanded] = useState(false)
+  // Default: expanded while streaming, collapsed when done
+  const [isExpanded, setIsExpanded] = useState(isStreaming)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const wasStreamingRef = useRef(isStreaming)
+
+  // Auto-collapse when streaming ends (transition from true -> false)
+  useEffect(() => {
+    if (wasStreamingRef.current && !isStreaming) {
+      setIsExpanded(false)
+    }
+    wasStreamingRef.current = isStreaming
+  }, [isStreaming])
 
   // Elapsed time — ticks every second while streaming
   const startedAtRef = useRef(part.startedAt || Date.now())
@@ -126,20 +135,25 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
         </div>
       </div>
 
-      {/* Content - only when user explicitly expands */}
+      {/* Content - expanded while streaming, collapsible after */}
       {isExpanded && thinkingText && (
-        <div
-          ref={scrollRef}
-          className={cn(
-            "px-2 opacity-50",
-            isStreaming && "overflow-y-auto scrollbar-none max-h-24",
-          )}
-        >
-          {isStreaming ? (
-            <p className="text-sm text-foreground/80 whitespace-pre-wrap my-px">{thinkingText}</p>
-          ) : (
-            <ChatMarkdownRenderer content={thinkingText} size="sm" />
-          )}
+        <div className="relative mt-1">
+          {/* Top gradient fade when streaming */}
+          <div
+            className={cn(
+              "absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
+              isStreaming ? "opacity-100" : "opacity-0",
+            )}
+          />
+          <div
+            ref={scrollRef}
+            className={cn(
+              "px-2 opacity-50",
+              isStreaming && "overflow-y-auto scrollbar-none max-h-24",
+            )}
+          >
+            <ChatMarkdownRenderer content={thinkingText} size="sm" isStreaming={isStreaming} />
+          </div>
         </div>
       )}
     </div>

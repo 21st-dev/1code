@@ -695,6 +695,28 @@ export function IconAlignEnd(props: IconProps) {
   )
 }
 
+export function UnarchiveIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <g transform="scale(1.1) translate(-1.1 -1.1)">
+        <path d="M18 20C19.1046 20 20 19.1046 20 18V7H4V18C4 19.1046 4.89543 20 6 20H18Z" />
+        <path d="M20 7L15 3M4 7L9 3" />
+        <path d="M10 11H14" />
+      </g>
+    </svg>
+  )
+}
+
 // Text alignment icons (5 options)
 export function IconTextUndo(props: IconProps) {
   return (

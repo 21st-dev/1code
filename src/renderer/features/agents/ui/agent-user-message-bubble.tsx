@@ -256,11 +256,15 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
                 }
 
                 // Count text mentions by type
-                const quoteCount = textMentions.filter(m => m.type === "quote" || m.type === "pasted").length
+                const quoteCount = textMentions.filter(m => m.type === "quote").length
+                const pastedCount = textMentions.filter(m => m.type === "pasted").length
                 const codeCount = textMentions.filter(m => m.type === "diff").length
 
                 if (quoteCount > 0) {
                   parts.push(quoteCount === 1 ? "selected text" : `${quoteCount} text selections`)
+                }
+                if (pastedCount > 0) {
+                  parts.push(pastedCount === 1 ? "pasted text" : `${pastedCount} pasted texts`)
                 }
                 if (codeCount > 0) {
                   parts.push(codeCount === 1 ? "code selection" : `${codeCount} code selections`)

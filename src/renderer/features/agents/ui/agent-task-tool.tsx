@@ -46,6 +46,15 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   // Default: collapsed
   const [isExpanded, setIsExpanded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const wasPendingRef = useRef(isPending)
+
+  // Auto-collapse when task completes (transition from pending -> done)
+  useEffect(() => {
+    if (wasPendingRef.current && !isPending) {
+      setIsExpanded(false)
+    }
+    wasPendingRef.current = isPending
+  }, [isPending])
 
   // Track elapsed time for running tasks
   const [elapsedMs, setElapsedMs] = useState(0)

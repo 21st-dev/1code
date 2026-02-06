@@ -200,24 +200,25 @@
 }
 
 /* Sonner Toast Styling - Google-style layout */
+/* Use !important to override Sonner's internal [data-theme] selectors (higher specificity) */
 [data-sonner-toaster] {
-  --normal-bg: hsl(var(--popover));
-  --normal-text: hsl(var(--popover-foreground));
-  --normal-border: hsl(var(--border));
-  --border-radius: var(--radius);
+  --normal-bg: hsl(var(--popover)) !important;
+  --normal-text: hsl(var(--popover-foreground)) !important;
+  --normal-border: hsl(var(--border)) !important;
+  --border-radius: var(--radius) !important;
   /* Override rich colors - all toasts should be neutral */
-  --success-bg: hsl(var(--popover));
-  --success-border: hsl(var(--border));
-  --success-text: hsl(var(--popover-foreground));
-  --info-bg: hsl(var(--popover));
-  --info-border: hsl(var(--border));
-  --info-text: hsl(var(--popover-foreground));
-  --warning-bg: hsl(var(--popover));
-  --warning-border: hsl(var(--border));
-  --warning-text: hsl(var(--popover-foreground));
-  --error-bg: hsl(var(--popover));
-  --error-border: hsl(var(--border));
-  --error-text: hsl(var(--popover-foreground));
+  --success-bg: hsl(var(--popover)) !important;
+  --success-border: hsl(var(--border)) !important;
+  --success-text: hsl(var(--popover-foreground)) !important;
+  --info-bg: hsl(var(--popover)) !important;
+  --info-border: hsl(var(--border)) !important;
+  --info-text: hsl(var(--popover-foreground)) !important;
+  --warning-bg: hsl(var(--popover)) !important;
+  --warning-border: hsl(var(--border)) !important;
+  --warning-text: hsl(var(--popover-foreground)) !important;
+  --error-bg: hsl(var(--popover)) !important;
+  --error-border: hsl(var(--border)) !important;
+  --error-text: hsl(var(--popover-foreground)) !important;
 }
 
 [data-sonner-toast][data-styled="true"] {
@@ -226,7 +227,7 @@
   gap: 8px;
   align-items: flex-start;
   flex-wrap: wrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 /* Icon on the left */
