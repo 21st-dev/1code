@@ -1,5 +1,6 @@
 import {
   BrowserWindow,
+  Notification,
   shell,
   nativeTheme,
   ipcMain,
@@ -100,18 +101,26 @@ function registerIpcHandlers(): void {
     "app:show-notification",
     (event, options: { title: string; body: string }) => {
       try {
-        const { Notification } = require("electron")
-        const iconPath = join(__dirname, "../../../build/icon.ico")
-        const icon = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined
+        if (!Notification.isSupported()) {
+          console.warn("[Main] Notifications not supported on this system")
+          return
+        }
+
+        // On macOS, the app icon is used automatically — no custom icon needed.
+        // On Windows, use .ico; on Linux, use .png.
+        let icon: Electron.NativeImage | undefined
+        if (process.platform !== "darwin") {
+          const ext = process.platform === "win32" ? "icon.ico" : "icon.png"
+          const iconPath = join(__dirname, "../../build", ext)
+          icon = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined
+        }
 
         const notification = new Notification({
           title: options.title,
           body: options.body,
-          icon,
+          ...(icon && { icon }),
           ...(process.platform === "win32" && { silent: false }),
         })
-
-        notification.show()
 
         notification.on("click", () => {
           const win = getWindowFromEvent(event)
@@ -120,6 +129,8 @@ function registerIpcHandlers(): void {
             win.focus()
           }
         })
+
+        notification.show()
       } catch (error) {
         console.error("[Main] Failed to show notification:", error)
       }

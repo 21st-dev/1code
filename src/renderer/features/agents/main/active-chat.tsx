@@ -6102,10 +6102,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                   // Ignore audio errors
                 }
               }
-
-              // Show native notification (desktop app, when window not focused)
-              notifyAgentComplete(agentChat?.name || "Agent")
             }
+          }
+
+          // Show native notification if not manually aborted
+          // (the hook handles focus/preference checks internally)
+          if (!wasManuallyAborted) {
+            notifyAgentComplete(agentChat?.name || "Agent")
           }
 
           // Refresh diff stats after agent finishes making changes
@@ -6298,10 +6301,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                   // Ignore audio errors
                 }
               }
-
-              // Show native notification (desktop app, when window not focused)
-              notifyAgentComplete(agentChat?.name || "Agent")
             }
+          }
+
+          // Show native notification if not manually aborted
+          // (the hook handles focus/preference checks internally)
+          if (!wasManuallyAborted) {
+            notifyAgentComplete(agentChat?.name || "Agent")
           }
 
           // Refresh diff stats after agent finishes making changes

@@ -6,7 +6,7 @@
 import { useCallback, useRef, useEffect } from "react"
 import { useAtomValue } from "jotai"
 import { isDesktopApp } from "../../../lib/utils/platform"
-import { desktopNotificationsEnabledAtom } from "../../../lib/atoms"
+import { desktopNotificationsEnabledAtom, notifyWhenFocusedAtom } from "../../../lib/atoms"
 
 // throttle interval to prevent notification spam (ms)
 const NOTIFICATION_THROTTLE_MS = 3000
@@ -30,6 +30,7 @@ export interface NotificationOptions {
 
 export function useDesktopNotifications() {
   const notificationsEnabled = useAtomValue(desktopNotificationsEnabledAtom)
+  const notifyWhenFocused = useAtomValue(notifyWhenFocusedAtom)
 
   // track last notification time to throttle rapid-fire notifications
   const lastNotificationTime = useRef<number>(0)
@@ -98,15 +99,15 @@ export function useDesktopNotifications() {
   }, [notificationsEnabled])
 
   const notifyAgentComplete = useCallback((chatName: string) => {
-    // don't notify if window is focused - user is already watching
-    if (document.hasFocus()) {
+    // Skip if window is focused and user hasn't opted into focused notifications
+    if (!notifyWhenFocused && document.hasFocus()) {
       return
     }
 
     const title = "Agent Complete"
     const body = chatName ? `Finished working on "${chatName}"` : "Agent has completed its task"
     showNotification(title, body, { priority: "complete" })
-  }, [showNotification])
+  }, [showNotification, notifyWhenFocused])
 
   const notifyAgentError = useCallback((errorMessage: string) => {
     // always notify on errors, even if window is focused
@@ -116,26 +117,24 @@ export function useDesktopNotifications() {
   }, [showNotification])
 
   const notifyAgentNeedsInput = useCallback((chatName: string) => {
-    // don't notify if window is focused
-    if (document.hasFocus()) {
+    if (!notifyWhenFocused && document.hasFocus()) {
       return
     }
 
     const title = "Input Required"
     const body = chatName ? `"${chatName}" is waiting for your input` : "Agent is waiting for your input"
     showNotification(title, body, { priority: "input" })
-  }, [showNotification])
+  }, [showNotification, notifyWhenFocused])
 
   const notifyPlanReady = useCallback((chatName: string) => {
-    // don't notify if window is focused
-    if (document.hasFocus()) {
+    if (!notifyWhenFocused && document.hasFocus()) {
       return
     }
 
     const title = "Plan Ready"
     const body = chatName ? `"${chatName}" has a plan ready for approval` : "A plan is ready for your approval"
     showNotification(title, body, { priority: "plan" })
-  }, [showNotification])
+  }, [showNotification, notifyWhenFocused])
 
   const requestPermission = useCallback(async (): Promise<NotificationPermission> => {
     if (isDesktopApp()) {

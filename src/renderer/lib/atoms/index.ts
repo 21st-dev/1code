@@ -396,6 +396,16 @@ export const desktopNotificationsEnabledAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Preferences - Notify When Focused
+// When enabled, show desktop notifications even when the app window is focused
+// (e.g. when working in a different chat). When disabled, only notify when the app is in the background.
+export const notifyWhenFocusedAtom = atomWithStorage<boolean>(
+  "preferences:notify-when-focused",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
 // Preferences - Windows Window Frame Style
 // When true, uses native frame (standard Windows title bar)
 // When false, uses frameless window (dark custom title bar)

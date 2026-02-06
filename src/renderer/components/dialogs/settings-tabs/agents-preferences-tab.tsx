@@ -7,6 +7,7 @@ import {
   defaultAgentModeAtom,
   desktopNotificationsEnabledAtom,
   extendedThinkingEnabledAtom,
+  notifyWhenFocusedAtom,
   soundNotificationsEnabledAtom,
   preferredEditorAtom,
   type AgentMode,
@@ -146,6 +147,7 @@ export function AgentsPreferencesTab() {
   )
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
   const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(desktopNotificationsEnabledAtom)
+  const [notifyWhenFocused, setNotifyWhenFocused] = useAtom(notifyWhenFocusedAtom)
   const [analyticsOptOut, setAnalyticsOptOut] = useAtom(analyticsOptOutAtom)
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
   const [autoAdvanceTarget, setAutoAdvanceTarget] = useAtom(autoAdvanceTargetAtom)
@@ -272,6 +274,21 @@ export function AgentsPreferencesTab() {
             </span>
           </div>
           <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              Notify When Focused
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Show notifications even when the app window is in the foreground
+            </span>
+          </div>
+          <Switch
+            checked={notifyWhenFocused}
+            onCheckedChange={setNotifyWhenFocused}
+            disabled={!desktopNotificationsEnabled}
+          />
         </div>
       </div>
 
