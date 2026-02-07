@@ -1019,6 +1019,8 @@ export const claudeRouter = router({
                 const agentsTarget = path.join(isolatedConfigDir, "agents")
                 const settingsSource = path.join(homeClaudeDir, "settings.json")
                 const settingsTarget = path.join(isolatedConfigDir, "settings.json")
+                const pluginsSource = path.join(homeClaudeDir, "plugins")
+                const pluginsTarget = path.join(isolatedConfigDir, "plugins")
 
                 // Symlink skills directory if source exists and target doesn't
                 try {
@@ -1061,6 +1063,24 @@ export const claudeRouter = router({
                   const settingsTargetExists = await fs.lstat(settingsTarget).then(() => true).catch(() => false)
                   if (settingsSourceExists && !settingsTargetExists) {
                     await fs.symlink(settingsSource, settingsTarget, "file")
+                  }
+                } catch (symlinkErr) {
+                  // Ignore symlink errors (might already exist or permission issues)
+                }
+
+                // Symlink plugins directory so Claude binary sees user's installed plugins
+                // (e.g. CC Safety Net for blocking destructive commands)
+                try {
+                  const pluginsSourceExists = await fs
+                    .stat(pluginsSource)
+                    .then(() => true)
+                    .catch(() => false)
+                  const pluginsTargetExists = await fs
+                    .lstat(pluginsTarget)
+                    .then(() => true)
+                    .catch(() => false)
+                  if (pluginsSourceExists && !pluginsTargetExists) {
+                    await fs.symlink(pluginsSource, pluginsTarget, "dir")
                   }
                 } catch (symlinkErr) {
                   // Ignore symlink errors (might already exist or permission issues)
