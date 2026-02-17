@@ -11,6 +11,7 @@ import { AgentsLayout } from "./features/layout/agents-layout"
 import {
   AnthropicOnboardingPage,
   ApiKeyOnboardingPage,
+  BedrockOnboardingPage,
   BillingMethodPage,
   CodexOnboardingPage,
   SelectRepoPage,
@@ -19,6 +20,7 @@ import { identify, initAnalytics, shutdown } from "./lib/analytics"
 import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
+  bedrockOnboardingCompletedAtom,
   billingMethodAtom,
   codexOnboardingCompletedAtom,
 } from "./lib/atoms"
@@ -54,6 +56,7 @@ function AppContent() {
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
+  const bedrockOnboardingCompleted = useAtomValue(bedrockOnboardingCompletedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
@@ -138,6 +141,10 @@ function AppContent() {
     !apiKeyOnboardingCompleted
   ) {
     return <ApiKeyOnboardingPage />
+  }
+
+  if (billingMethod === "aws-bedrock" && !bedrockOnboardingCompleted) {
+    return <BedrockOnboardingPage />
   }
 
   if (!validatedProject && !isLoadingProjects) {

@@ -4,6 +4,7 @@ import { useSetAtom } from "jotai"
 import { Check } from "lucide-react"
 import { useMemo, useState } from "react"
 
+import { Cloud } from "lucide-react"
 import {
   ClaudeCodeIcon,
   CodexIcon,
@@ -54,6 +55,14 @@ const billingOptions: BillingOption[] = [
     title: "Custom Model",
     subtitle: "Use a custom base URL and model.",
     icon: <SettingsFilledIcon className="w-5 h-5" />,
+  },
+  {
+    id: "aws-bedrock",
+    method: "aws-bedrock",
+    group: "claude-code",
+    title: "AWS Bedrock",
+    subtitle: "Use Claude via your AWS account credentials.",
+    icon: <Cloud className="w-5 h-5" />,
   },
   {
     id: "codex-subscription",

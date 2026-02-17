@@ -183,6 +183,7 @@ export const clearSubChatSelectionAtom = atom(null, (_get, set) => {
 // Settings dialog
 export type SettingsTab =
   | "profile"
+  | "authentication"
   | "appearance"
   | "preferences"
   | "models"
@@ -742,6 +743,7 @@ export type BillingMethod =
   | "claude-subscription"
   | "api-key"
   | "custom-model"
+  | "aws-bedrock"
   | "codex-subscription"
   | "codex-api-key"
   | null
@@ -767,6 +769,15 @@ export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
 // Only relevant when billingMethod is "api-key"
 export const apiKeyOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:api-key-completed",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+// Whether user has completed AWS Bedrock configuration during onboarding
+// Only relevant when billingMethod is "aws-bedrock"
+export const bedrockOnboardingCompletedAtom = atomWithStorage<boolean>(
+  "onboarding:bedrock-completed",
   false,
   undefined,
   { getOnInit: true },

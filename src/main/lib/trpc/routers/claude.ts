@@ -29,7 +29,7 @@ import {
   type ClaudeConfig,
   type McpServerConfig,
 } from "../../claude-config"
-import { anthropicAccounts, anthropicSettings, chats, claudeCodeCredentials, getDatabase, projects as projectsTable, subChats } from "../../db"
+import { anthropicAccounts, anthropicAuthSettings, anthropicSettings, chats, claudeCodeCredentials, getDatabase, projects as projectsTable, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import {
   ensureMcpTokensFresh,
@@ -1112,14 +1112,32 @@ export const claudeRouter = router({
               prompt = createPromptWithImages()
             }
 
+            // Get authentication settings from database FIRST (before building env)
+            const authSettings = db
+              .select()
+              .from(anthropicAuthSettings)
+              .where(eq(anthropicAuthSettings.id, "singleton"))
+              .get()
+
+            const isBedrockMode = authSettings?.authMode === "bedrock"
+
+            // Build custom environment variables for Claude SDK
+            const customEnvVars: Record<string, string> = {}
+
+            // Add custom config if present (for offline/Ollama mode)
+            if (finalCustomConfig) {
+              customEnvVars.ANTHROPIC_AUTH_TOKEN = finalCustomConfig.token
+              customEnvVars.ANTHROPIC_BASE_URL = finalCustomConfig.baseUrl
+            }
+
+            // Set Bedrock flag BEFORE building env so AWS credentials aren't stripped
+            if (isBedrockMode) {
+              customEnvVars.CLAUDE_CODE_USE_BEDROCK = "true"
+            }
+
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
             const claudeEnv = buildClaudeEnv({
-              ...(finalCustomConfig && {
-                customEnv: {
-                  ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
-                  ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
-                },
-              }),
+              customEnv: customEnvVars,
               enableTasks: input.enableTasks ?? true,
             })
 
@@ -1327,20 +1345,58 @@ export const claudeRouter = router({
               )
             }
 
-            // Build final env - only add OAuth token if we have one AND no existing API config
-            // Existing CLI config takes precedence over OAuth
+            // Build final environment based on authentication mode
+            // (authSettings and isBedrockMode were already queried above before buildClaudeEnv)
             const finalEnv = {
               ...claudeEnv,
-              ...(claudeCodeToken &&
-                !hasExistingApiConfig && {
-                  CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
-                }),
-              // Re-enable CLAUDE_CONFIG_DIR now that we properly map MCP configs
               CLAUDE_CONFIG_DIR: isolatedConfigDir,
+            }
+
+            if (isBedrockMode) {
+              // Bedrock mode: Set flag and AWS config, skip OAuth token
+              console.log("[claude-auth] Using AWS Bedrock authentication")
+              // CLAUDE_CODE_USE_BEDROCK was already set in buildClaudeEnv() above
+
+              // Set AWS region if specified
+              if (authSettings?.awsRegion) {
+                finalEnv.AWS_DEFAULT_REGION = authSettings.awsRegion
+                finalEnv.AWS_REGION = authSettings.awsRegion
+              }
+
+              // Set AWS profile if specified (overrides default)
+              if (authSettings?.awsProfile) {
+                finalEnv.AWS_PROFILE = authSettings.awsProfile
+              }
+
+              // Validate AWS credentials are available
+              const hasAwsCredentials = !!(
+                finalEnv.AWS_ACCESS_KEY_ID && finalEnv.AWS_SECRET_ACCESS_KEY
+              ) || !!finalEnv.AWS_PROFILE
+
+              if (!hasAwsCredentials) {
+                console.error("[claude-auth] AWS credentials not found")
+                emitError(
+                  new Error("AWS credentials not configured. Please run 'aws configure' or set up ~/.aws/credentials"),
+                  "Bedrock Authentication Failed"
+                )
+                return
+              }
+
+              console.log("[claude-auth] AWS credentials validated")
+              console.log("[claude-auth] AWS region:", finalEnv.AWS_REGION || finalEnv.AWS_DEFAULT_REGION)
+              console.log("[claude-auth] AWS profile:", finalEnv.AWS_PROFILE || "(default)")
+            } else {
+              // OAuth mode: Use existing token logic
+              if (claudeCodeToken && !hasExistingApiConfig) {
+                finalEnv.CLAUDE_CODE_OAUTH_TOKEN = claudeCodeToken
+                console.log("[claude-auth] Using OAuth token")
+              }
             }
 
             // Log auth method being used
             console.log("[claude-auth] ========== AUTH METHOD USED ==========")
+            console.log("[claude-auth] Auth mode:", authSettings?.authMode || "oauth (default)")
+            console.log("[claude-auth] Bedrock mode:", isBedrockMode)
             console.log(
               "[claude-auth] hasExistingApiConfig:",
               hasExistingApiConfig,
@@ -1352,6 +1408,10 @@ export const claudeRouter = router({
             console.log(
               "[claude-auth] Using CLAUDE_CODE_OAUTH_TOKEN:",
               !!finalEnv.CLAUDE_CODE_OAUTH_TOKEN,
+            )
+            console.log(
+              "[claude-auth] Using CLAUDE_CODE_USE_BEDROCK:",
+              !!finalEnv.CLAUDE_CODE_USE_BEDROCK,
             )
             console.log(
               "[claude-auth] Using ANTHROPIC_API_KEY:",

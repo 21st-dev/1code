@@ -6,6 +6,7 @@ import {
 } from "../../lib/atoms"
 import { desktopViewAtom } from "../agents/atoms"
 import { AgentsAppearanceTab } from "../../components/dialogs/settings-tabs/agents-appearance-tab"
+import { AgentsAuthenticationTab } from "../../components/dialogs/settings-tabs/agents-authentication-tab"
 import { AgentsBetaTab } from "../../components/dialogs/settings-tabs/agents-beta-tab"
 import { AgentsCustomAgentsTab } from "../../components/dialogs/settings-tabs/agents-custom-agents-tab"
 import { AgentsDebugTab } from "../../components/dialogs/settings-tabs/agents-debug-tab"
@@ -43,6 +44,8 @@ export function SettingsContent() {
     switch (activeTab) {
       case "profile":
         return <AgentsProfileTab />
+      case "authentication":
+        return <AgentsAuthenticationTab />
       case "appearance":
         return <AgentsAppearanceTab />
       case "keyboard":

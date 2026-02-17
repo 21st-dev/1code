@@ -41,6 +41,7 @@ import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
+  bedrockOnboardingCompletedAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
@@ -91,6 +92,8 @@ import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
 import { McpStatusDot } from "../../../components/dialogs/settings-tabs/agents-mcp-tab"
+import { useAuthMode } from "../hooks/use-auth-mode"
+import { ProviderStatusBadge } from "../ui/provider-status-badge"
 import { handlePasteEvent } from "../utils/paste-text"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import {
@@ -465,6 +468,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
+  const bedrockOnboardingCompleted = useAtomValue(bedrockOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const codexUiModels = useMemo(
     () => {
@@ -533,6 +537,9 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+
+  // Auth mode (OAuth vs Bedrock)
+  const { isBedrockMode } = useAuthMode()
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
@@ -1467,6 +1474,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         onProviderChange?.(nextProvider)
                       }}
                       allowProviderSwitch={canSwitchProvider}
+                      isBedrockMode={isBedrockMode}
                       selectedModelLabel={selectedModelLabel}
                       claude={{
                         models: availableModels.models.filter((m) => !hiddenModels.includes(m.id)),
@@ -1485,7 +1493,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         selectedOllamaModel: currentOllamaModel,
                         recommendedOllamaModel: availableModels.recommendedModel,
                         onSelectOllamaModel: setSelectedOllamaModel,
-                        isConnected: anthropicOnboardingCompleted || apiKeyOnboardingCompleted || hasCustomClaudeConfig,
+                        isConnected: anthropicOnboardingCompleted || apiKeyOnboardingCompleted || bedrockOnboardingCompleted || hasCustomClaudeConfig,
                         thinkingEnabled,
                         onThinkingChange: setThinkingEnabled,
                       }}
@@ -1512,6 +1520,8 @@ export const ChatInputArea = memo(function ChatInputArea({
                       }}
                     />
                   </div>
+
+                  <ProviderStatusBadge />
 
                 </div>
 

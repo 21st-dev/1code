@@ -76,6 +76,46 @@ Claude asks clarifying questions, builds structured plans, and shows clean markd
 - **Project Management** - Link local folders with automatic Git remote detection
 - **Integrated Terminal** - Full terminal access within the app
 
+## Authentication Options
+
+1Code supports two authentication methods for accessing Claude API:
+
+### Anthropic OAuth (Default)
+Sign in with your Anthropic account - works seamlessly with Claude.ai Pro subscriptions.
+
+### AWS Bedrock
+
+Use Claude models through AWS Bedrock with your AWS credentials.
+
+**Prerequisites:**
+- AWS account with Bedrock access
+- AWS CLI installed and configured
+- Claude models enabled in AWS Bedrock console
+
+**Setup:**
+
+1. **Configure AWS credentials:**
+   ```bash
+   aws configure
+   # Enter your AWS Access Key ID and Secret Access Key
+   # Choose a region where Bedrock is available (e.g., us-east-1)
+   ```
+
+2. **Enable Bedrock authentication:**
+   - Open 1Code Settings (⌘,)
+   - Go to Authentication tab
+   - Select "AWS Bedrock"
+   - Verify credentials are detected (green checkmark)
+   - Set AWS region
+   - Click "Save Changes"
+
+**Supported AWS Regions:**
+- us-east-1 (N. Virginia)
+- us-west-2 (Oregon)
+- See [AWS Bedrock regions](https://docs.aws.amazon.com/bedrock/latest/userguide/bedrock-regions.html) for the latest availability
+
+**Cost:** AWS Bedrock charges per API request. See [AWS Bedrock pricing](https://aws.amazon.com/bedrock/pricing/) for details.
+
 ## Installation
 
 ### Option 1: Build from source (free)

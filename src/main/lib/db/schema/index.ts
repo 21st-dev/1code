@@ -128,6 +128,17 @@ export const anthropicSettings = sqliteTable("anthropic_settings", {
   ),
 })
 
+// Stores authentication mode (OAuth vs Bedrock) and AWS configuration
+export const anthropicAuthSettings = sqliteTable("anthropic_auth_settings", {
+  id: text("id").primaryKey().default("singleton"), // Single row
+  authMode: text("auth_mode").notNull().default("oauth"), // "oauth" | "bedrock"
+  awsRegion: text("aws_region").default("us-east-1"),
+  awsProfile: text("aws_profile"), // Optional: override default profile
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -140,3 +151,5 @@ export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
 export type AnthropicAccount = typeof anthropicAccounts.$inferSelect
 export type NewAnthropicAccount = typeof anthropicAccounts.$inferInsert
 export type AnthropicSettings = typeof anthropicSettings.$inferSelect
+export type AnthropicAuthSettings = typeof anthropicAuthSettings.$inferSelect
+export type NewAnthropicAuthSettings = typeof anthropicAuthSettings.$inferInsert

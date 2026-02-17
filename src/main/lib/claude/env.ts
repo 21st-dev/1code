@@ -20,9 +20,9 @@ const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
 // NOTE: We intentionally keep ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL in production
 // so users can use their existing Claude Code CLI configuration (API proxy, etc.)
 // Based on PR #29 by @sa4hnd
+// NOTE: CLAUDE_CODE_USE_BEDROCK is NOT stripped to allow Bedrock authentication mode
 const STRIPPED_ENV_KEYS_BASE = [
   "OPENAI_API_KEY",
-  "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
 ]
 
@@ -32,6 +32,28 @@ const STRIPPED_ENV_KEYS_BASE = [
 const STRIPPED_ENV_KEYS = !app.isPackaged
   ? [...STRIPPED_ENV_KEYS_BASE, "ANTHROPIC_API_KEY"]
   : STRIPPED_ENV_KEYS_BASE
+
+// AWS credential keys that should be preserved when using Bedrock authentication
+// These are stripped in OAuth mode for security, but preserved in Bedrock mode
+const AWS_CREDENTIAL_KEYS = [
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "AWS_PROFILE",
+  "AWS_DEFAULT_REGION",
+  "AWS_REGION",
+  "AWS_CONFIG_FILE",
+  "AWS_SHARED_CREDENTIALS_FILE",
+]
+
+/**
+ * Check if Bedrock mode is enabled in the environment
+ * @param env Environment variables object
+ * @returns true if CLAUDE_CODE_USE_BEDROCK is set to "true"
+ */
+function isBedrockModeEnabled(env: Record<string, string>): boolean {
+  return env.CLAUDE_CODE_USE_BEDROCK === "true"
+}
 
 // Cache the bundled binary path (only compute once)
 let cachedBinaryPath: string | null = null
@@ -237,13 +259,42 @@ export function buildClaudeEnv(options?: {
     env.PATH = shellPath
   }
 
-  // 2b. Strip sensitive keys again (process.env may have re-added them)
+  // 2b. Add custom environment overrides FIRST (before stripping)
+  // This is critical: we need CLAUDE_CODE_USE_BEDROCK to be present before checking Bedrock mode
+  if (options?.customEnv) {
+    for (const [key, value] of Object.entries(options.customEnv)) {
+      if (value === "") {
+        delete env[key]
+      } else {
+        env[key] = value
+      }
+    }
+  }
+
+  // 2c. Strip sensitive keys (process.env may have re-added them)
   // This ensures ANTHROPIC_API_KEY from dev's shell doesn't override OAuth in dev mode
   // Added by Sergey Bunas for dev purposes
   for (const key of STRIPPED_ENV_KEYS) {
     if (key in env) {
       console.log(`[claude-env] Stripped ${key} from final environment`)
       delete env[key]
+    }
+  }
+
+  // 2d. Conditionally strip AWS credentials based on authentication mode
+  // In Bedrock mode, preserve AWS credentials for SDK authentication
+  // In OAuth mode, remove them for security (prevent accidental AWS API access)
+  const bedrockMode = isBedrockModeEnabled(env)
+
+  if (bedrockMode) {
+    console.log("[claude-env] Bedrock mode enabled - preserving AWS credentials")
+  } else {
+    // OAuth mode: strip AWS credentials for security
+    for (const key of AWS_CREDENTIAL_KEYS) {
+      if (key in env) {
+        console.log(`[claude-env] OAuth mode - stripped AWS credential: ${key}`)
+        delete env[key]
+      }
     }
   }
 
@@ -259,19 +310,11 @@ export function buildClaudeEnv(options?: {
     env.USERPROFILE = os.homedir()
   }
 
-  // 4. Add custom overrides
+  // 4. Add GitHub token if provided
   if (options?.ghToken) {
     env.GH_TOKEN = options.ghToken
   }
-  if (options?.customEnv) {
-    for (const [key, value] of Object.entries(options.customEnv)) {
-      if (value === "") {
-        delete env[key]
-      } else {
-        env[key] = value
-      }
-    }
-  }
+  // Note: customEnv is now merged earlier (step 2b) before checking Bedrock mode
 
   // 5. Mark as SDK entry
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts"

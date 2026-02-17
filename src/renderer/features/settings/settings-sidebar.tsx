@@ -20,6 +20,7 @@ import {
   FlaskFilledIcon,
   FolderFilledIcon,
   KeyboardFilledIcon,
+  KeyFilledIcon,
   OriginalMCPIcon,
   PluginFilledIcon,
   SkillIconFilled,
@@ -43,6 +44,11 @@ const MAIN_TABS = [
     id: "profile" as SettingsTab,
     label: "Account",
     icon: ProfileIconFilled,
+  },
+  {
+    id: "authentication" as SettingsTab,
+    label: "Authentication",
+    icon: KeyFilledIcon,
   },
   {
     id: "appearance" as SettingsTab,

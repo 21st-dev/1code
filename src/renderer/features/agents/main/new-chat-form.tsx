@@ -55,6 +55,7 @@ import {
   agentsSettingsDialogActiveTabAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
+  bedrockOnboardingCompletedAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
@@ -107,6 +108,7 @@ import {
 import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
 import { AgentModelSelector } from "../components/agent-model-selector"
+import { useAuthMode } from "../hooks/use-auth-mode"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
@@ -243,7 +245,9 @@ export function NewChatForm({
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
+  const bedrockOnboardingCompleted = useAtomValue(bedrockOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
+  const { isBedrockMode } = useAuthMode()
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
@@ -1874,6 +1878,7 @@ export function NewChatForm({
                             }
                             setLastSelectedAgentId(provider)
                           }}
+                          isBedrockMode={isBedrockMode}
                           selectedModelLabel={selectedModelLabel}
                           claude={{
                             models: availableModels.models.filter((m) => !hiddenModels.includes(m.id)),
@@ -1892,7 +1897,7 @@ export function NewChatForm({
                             selectedOllamaModel: currentOllamaModel,
                             recommendedOllamaModel: availableModels.recommendedModel,
                             onSelectOllamaModel: setSelectedOllamaModel,
-                            isConnected: anthropicOnboardingCompleted || apiKeyOnboardingCompleted || hasCustomClaudeConfig,
+                            isConnected: anthropicOnboardingCompleted || apiKeyOnboardingCompleted || bedrockOnboardingCompleted || hasCustomClaudeConfig,
                             thinkingEnabled,
                             onThinkingChange: setThinkingEnabled,
                           }}

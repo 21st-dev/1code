@@ -46,6 +46,7 @@ interface AgentModelSelectorProps {
   onSelectedAgentIdChange: (provider: AgentProviderId) => void
   selectedModelLabel: string
   allowProviderSwitch?: boolean
+  isBedrockMode?: boolean
   triggerClassName?: string
   contentClassName?: string
   claude: {
@@ -79,6 +80,7 @@ export function AgentModelSelector({
   onSelectedAgentIdChange,
   selectedModelLabel,
   allowProviderSwitch = true,
+  isBedrockMode = false,
   triggerClassName,
   contentClassName,
   claude,
@@ -127,8 +129,13 @@ export function AgentModelSelector({
       >
         {showClaudeGroup && (
           <>
-            <div className="px-2.5 py-1.5 mx-1 text-xs font-medium text-muted-foreground">
+            <div className="px-2.5 py-1.5 mx-1 text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               Claude Code
+              {isBedrockMode && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  Bedrock
+                </span>
+              )}
             </div>
 
             {claude.isOffline && claude.ollamaModels.length > 0 ? (
