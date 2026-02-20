@@ -30,6 +30,9 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "openspec:list": "openspec list",
+    "openspec:list:specs": "openspec list --specs",
+    "openspec:validate": "openspec validate --all --strict --no-interactive",
     "ts:check": "tsgo --noEmit",
     "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
   },
@@ -120,6 +123,7 @@
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",
     "@electron/rebuild": "^4.0.3",
+    "@fission-ai/openspec": "^1.1.1",
     "@tailwindcss/container-queries": "^0.1.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/diff": "^8.0.0",

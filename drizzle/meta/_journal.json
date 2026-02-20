@@ -57,6 +57,20 @@
       "when": 1769810815497,
       "tag": "0007_clammy_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1771607400000,
+      "tag": "0008_automatic_continuity_caching",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1771611000000,
+      "tag": "0009_continuity_safeguards",
+      "breakpoints": true
     }
   ]
 }

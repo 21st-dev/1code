@@ -43,6 +43,8 @@ import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { discoverPluginMcpServers } from "../../plugins"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
+import { continuityService } from "../../continuity"
+import { isContinuityEnabled } from "../../config"
 import {
   getApprovedPluginMcpServers,
   getEnabledPlugins,
@@ -144,6 +146,15 @@ function parseMentions(prompt: string): {
     folderMentions,
     toolMentions,
   }
+}
+
+function extractTextFromParts(parts: any[]): string {
+  if (!Array.isArray(parts)) return ""
+  return parts
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n")
+    .trim()
 }
 
 /**
@@ -1072,9 +1083,30 @@ export const claudeRouter = router({
               finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
             }
 
+            const continuityEnabled = isContinuityEnabled()
+            const continuityPrompt = continuityEnabled
+              ? await continuityService.apply({
+                  subChatId: input.subChatId,
+                  cwd: input.cwd,
+                  projectPath: input.projectPath,
+                  prompt: finalPrompt,
+                  mode: input.mode,
+                  provider: "claude",
+                })
+              : null
+            const effectivePrompt = continuityPrompt?.prompt || finalPrompt
+            const continuityInjectedBytes =
+              continuityPrompt
+                ? Math.max(
+                    Buffer.byteLength(effectivePrompt, "utf8") -
+                      Buffer.byteLength(finalPrompt, "utf8"),
+                    0,
+                  )
+                : 0
+
             // Build prompt: if there are images, create an AsyncIterable<SDKUserMessage>
             // Otherwise use simple string prompt
-            let prompt: string | AsyncIterable<any> = finalPrompt
+            let prompt: string | AsyncIterable<any> = effectivePrompt
 
             if (input.images && input.images.length > 0) {
               // Create message content array with images first, then text
@@ -1090,10 +1122,10 @@ export const claudeRouter = router({
               ]
 
               // Add text if present
-              if (finalPrompt.trim()) {
+              if (effectivePrompt.trim()) {
                 messageContent.push({
                   type: "text" as const,
-                  text: finalPrompt,
+                  text: effectivePrompt,
                 })
               }
 
@@ -2541,6 +2573,31 @@ ${prompt}
                   }
                 }
 
+                if (continuityEnabled) {
+                  const assistantText =
+                    extractTextFromParts(parts) ||
+                    stderrOutput ||
+                    err.message
+                  void continuityService
+                    .recordRunOutcome({
+                      subChatId: input.subChatId,
+                      cwd: input.cwd,
+                      projectPath: input.projectPath,
+                      provider: "claude",
+                      mode: input.mode,
+                      prompt: finalPrompt,
+                      assistantResponse: assistantText,
+                      injectedBytes: continuityInjectedBytes,
+                      wasError: true,
+                    })
+                    .catch((continuityError) => {
+                      console.error(
+                        "[claude] continuity stream-error outcome failed:",
+                        continuityError,
+                      )
+                    })
+                }
+
                 console.log(
                   `[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`,
                 )
@@ -2568,6 +2625,26 @@ ${prompt}
                 new Error("No response received from Claude"),
                 "Empty response",
               )
+              if (continuityEnabled) {
+                void continuityService
+                  .recordRunOutcome({
+                    subChatId: input.subChatId,
+                    cwd: input.cwd,
+                    projectPath: input.projectPath,
+                    provider: "claude",
+                    mode: input.mode,
+                    prompt: finalPrompt,
+                    assistantResponse: "No response received from Claude",
+                    injectedBytes: continuityInjectedBytes,
+                    wasError: true,
+                  })
+                  .catch((continuityError) => {
+                    console.error(
+                      "[claude] continuity no-response outcome failed:",
+                      continuityError,
+                    )
+                  })
+              }
               console.log(
                 `[SD] M:END sub=${subId} reason=no_response n=${chunkCount}`,
               )
@@ -2631,6 +2708,28 @@ ${prompt}
               await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
             }
 
+            if (continuityEnabled) {
+              const assistantText = extractTextFromParts(parts)
+              void continuityService
+                .recordRunOutcome({
+                  subChatId: input.subChatId,
+                  cwd: input.cwd,
+                  projectPath: input.projectPath,
+                  provider: "claude",
+                  mode: input.mode,
+                  prompt: finalPrompt,
+                  assistantResponse: assistantText,
+                  injectedBytes: continuityInjectedBytes,
+                  wasError: false,
+                })
+                .catch((continuityError) => {
+                  console.error(
+                    "[claude] continuity success outcome failed:",
+                    continuityError,
+                  )
+                })
+            }
+
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
             console.log(
               `[SD] M:END sub=${subId} reason=ok n=${chunkCount} last=${lastChunkType} t=${duration}s`,
@@ -2647,6 +2746,27 @@ ${prompt}
             console.log(
               `[SD] M:END sub=${subId} reason=unexpected_error n=${chunkCount} t=${duration}s`,
             )
+            if (isContinuityEnabled()) {
+              void continuityService
+                .recordRunOutcome({
+                  subChatId: input.subChatId,
+                  cwd: input.cwd,
+                  projectPath: input.projectPath,
+                  provider: "claude",
+                  mode: input.mode,
+                  prompt: input.prompt,
+                  assistantResponse:
+                    error instanceof Error ? error.message : String(error),
+                  injectedBytes: 0,
+                  wasError: true,
+                })
+                .catch((continuityError) => {
+                  console.error(
+                    "[claude] continuity unexpected-error outcome failed:",
+                    continuityError,
+                  )
+                })
+            }
             emitError(error, "Unexpected error")
             safeEmit({ type: "finish" } as UIMessageChunk)
             safeComplete()

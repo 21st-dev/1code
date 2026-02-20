@@ -354,3 +354,54 @@ export function trackSubChatCreated(data: {
     sub_chat_id: data.subChatId,
   })
 }
+
+/**
+ * Track continuity pack usage and cache behavior.
+ */
+export function trackContinuityPackMetrics(data: {
+  provider: "claude" | "codex"
+  mode: "plan" | "agent"
+  cacheHit: boolean
+  packBytes: number
+  injectedBytes: number
+}) {
+  capture("continuity_pack_metrics", {
+    provider: data.provider,
+    mode: data.mode,
+    cache_hit: data.cacheHit,
+    pack_bytes: data.packBytes,
+    injected_bytes: data.injectedBytes,
+  })
+}
+
+/**
+ * Track continuity governor decisions.
+ */
+export function trackContinuityGovernorAction(data: {
+  provider: "claude" | "codex"
+  mode: "plan" | "agent"
+  action: "ok" | "snapshot" | "rehydrate"
+  reasonsCount: number
+}) {
+  capture("continuity_governor_action", {
+    provider: data.provider,
+    mode: data.mode,
+    action: data.action,
+    reasons_count: data.reasonsCount,
+  })
+}
+
+/**
+ * Track continuity safeguard policy enforcement.
+ */
+export function trackContinuitySafeguard(data: {
+  action: "auto-commit-blocked" | "auto-commit-allowed"
+  branch: string
+  memoryBranch: string
+}) {
+  capture("continuity_safeguard", {
+    action: data.action,
+    branch: data.branch,
+    memory_branch: data.memoryBranch,
+  })
+}

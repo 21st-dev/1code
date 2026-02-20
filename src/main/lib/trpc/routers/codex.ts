@@ -10,7 +10,9 @@ import { basename, dirname, join, sep } from "node:path"
 import { z } from "zod"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
+import { continuityService } from "../../continuity"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { isContinuityEnabled } from "../../config"
 import {
   fetchMcpTools,
   fetchMcpToolsStdio,
@@ -822,6 +824,18 @@ function extractPromptFromStoredMessage(message: any): string {
   return textParts.join("\n") + fileContents.join("")
 }
 
+function extractAssistantTextFromMessage(message: any): string {
+  if (!message || !Array.isArray(message.parts)) return ""
+
+  const textParts: string[] = []
+  for (const part of message.parts) {
+    if (part?.type === "text" && typeof part.text === "string") {
+      textParts.push(part.text)
+    }
+  }
+  return textParts.join("\n").trim()
+}
+
 function getLastSessionId(messages: any[]): string | undefined {
   const lastAssistant = [...messages].reverse().find((message) => message?.role === "assistant")
   const sessionId = lastAssistant?.metadata?.sessionId
@@ -1373,6 +1387,7 @@ export const codexRouter = router({
             }
 
             const existingMessages = parseStoredMessages(existingSubChat.messages)
+            const continuityEnabled = isContinuityEnabled()
             const requestedModelId =
               extractCodexModelId(input.model) || DEFAULT_CODEX_MODEL
             const selectedModelId = preprocessCodexModelName({
@@ -1424,6 +1439,26 @@ export const codexRouter = router({
                 parts: cleanedParts,
               }
             }
+
+            const continuityPrompt = continuityEnabled
+              ? await continuityService.apply({
+                  subChatId: input.subChatId,
+                  cwd: input.cwd,
+                  projectPath: input.projectPath,
+                  prompt: input.prompt,
+                  mode: input.mode,
+                  provider: "codex",
+                })
+              : null
+            const effectivePrompt = continuityPrompt?.prompt || input.prompt
+            const continuityInjectedBytes =
+              continuityPrompt
+                ? Math.max(
+                    Buffer.byteLength(effectivePrompt, "utf8") -
+                      Buffer.byteLength(input.prompt, "utf8"),
+                    0,
+                  )
+                : 0
 
             if (!isDuplicatePrompt) {
               const userMessage = {
@@ -1487,7 +1522,7 @@ export const codexRouter = router({
               messages: [
                 {
                   role: "user",
-                  content: buildModelMessageContent(input.prompt, input.images),
+                  content: buildModelMessageContent(effectivePrompt, input.images),
                 },
               ],
               tools: provider.tools,
@@ -1539,6 +1574,29 @@ export const codexRouter = router({
                   ]
 
                   persistSubChatMessages(messagesToPersist)
+
+                  if (continuityEnabled) {
+                    const assistantText =
+                      extractAssistantTextFromMessage(cleanedResponseMessage)
+                    void continuityService
+                      .recordRunOutcome({
+                        subChatId: input.subChatId,
+                        cwd: input.cwd,
+                        projectPath: input.projectPath,
+                        provider: "codex",
+                        mode: input.mode,
+                        prompt: input.prompt,
+                        assistantResponse: assistantText,
+                        injectedBytes: continuityInjectedBytes,
+                        wasError: false,
+                      })
+                      .catch((error) => {
+                        console.error(
+                          "[codex] continuity post-run failed:",
+                          error,
+                        )
+                      })
+                  }
                 } catch (error) {
                   console.error("[codex] Failed to persist messages:", error)
                 }
@@ -1574,6 +1632,26 @@ export const codexRouter = router({
               safeEmit({ type: "auth-error", errorText: normalized.message })
             } else {
               safeEmit({ type: "error", errorText: normalized.message })
+            }
+            if (isContinuityEnabled()) {
+              void continuityService
+                .recordRunOutcome({
+                  subChatId: input.subChatId,
+                  cwd: input.cwd,
+                  projectPath: input.projectPath,
+                  provider: "codex",
+                  mode: input.mode,
+                  prompt: input.prompt,
+                  assistantResponse: normalized.message,
+                  wasError: true,
+                  injectedBytes: 0,
+                })
+                .catch((continuityError) => {
+                  console.error(
+                    "[codex] continuity error outcome failed:",
+                    continuityError,
+                  )
+                })
             }
             safeEmit({ type: "finish" })
             safeComplete()

@@ -128,6 +128,90 @@ export const anthropicSettings = sqliteTable("anthropic_settings", {
   ),
 })
 
+// ============ CONTINUITY CACHES ============
+export const continuityFileCache = sqliteTable("continuity_file_cache", {
+  key: text("key").primaryKey(),
+  repoRoot: text("repo_root").notNull(),
+  filePath: text("file_path").notNull(),
+  contentHash: text("content_hash").notNull(),
+  summary: text("summary").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const continuitySearchCache = sqliteTable("continuity_search_cache", {
+  key: text("key").primaryKey(),
+  repoRoot: text("repo_root").notNull(),
+  query: text("query").notNull(),
+  commitHash: text("commit_hash").notNull(),
+  scope: text("scope").notNull(),
+  resultJson: text("result_json").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const continuityPackCache = sqliteTable("continuity_pack_cache", {
+  key: text("key").primaryKey(),
+  taskFingerprint: text("task_fingerprint").notNull(),
+  changedFilesHash: text("changed_files_hash").notNull(),
+  headCommit: text("head_commit").notNull(),
+  provider: text("provider").notNull(),
+  mode: text("mode").notNull(),
+  budgetBytes: integer("budget_bytes").notNull(),
+  pack: text("pack").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const continuityState = sqliteTable("continuity_state", {
+  subChatId: text("sub_chat_id").primaryKey(),
+  lastChangedFilesHash: text("last_changed_files_hash").notNull().default(""),
+  turnsSinceSnapshot: integer("turns_since_snapshot").notNull().default(0),
+  totalInjectedBytes: integer("total_injected_bytes").notNull().default(0),
+  lastSnapshotAt: integer("last_snapshot_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const continuityArtifact = sqliteTable("continuity_artifact", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  subChatId: text("sub_chat_id")
+    .notNull()
+    .references(() => subChats.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // "devlog" | "adr" | "rejected-approach"
+  content: text("content").notNull(),
+  status: text("status").notNull().default("draft"), // "draft" | "accepted" | "rejected"
+  provenanceJson: text("provenance_json").notNull().default("{}"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const continuitySettings = sqliteTable("continuity_settings", {
+  id: text("id").primaryKey().default("singleton"),
+  artifactPolicy: text("artifact_policy")
+    .notNull()
+    .default("auto-write-manual-commit"),
+  autoCommitToMemoryBranch: integer("auto_commit_to_memory_branch", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  memoryBranch: text("memory_branch").notNull().default("memory/continuity"),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -140,3 +224,15 @@ export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
 export type AnthropicAccount = typeof anthropicAccounts.$inferSelect
 export type NewAnthropicAccount = typeof anthropicAccounts.$inferInsert
 export type AnthropicSettings = typeof anthropicSettings.$inferSelect
+export type ContinuityFileCache = typeof continuityFileCache.$inferSelect
+export type NewContinuityFileCache = typeof continuityFileCache.$inferInsert
+export type ContinuitySearchCache = typeof continuitySearchCache.$inferSelect
+export type NewContinuitySearchCache = typeof continuitySearchCache.$inferInsert
+export type ContinuityPackCache = typeof continuityPackCache.$inferSelect
+export type NewContinuityPackCache = typeof continuityPackCache.$inferInsert
+export type ContinuityState = typeof continuityState.$inferSelect
+export type NewContinuityState = typeof continuityState.$inferInsert
+export type ContinuityArtifact = typeof continuityArtifact.$inferSelect
+export type NewContinuityArtifact = typeof continuityArtifact.$inferInsert
+export type ContinuitySettings = typeof continuitySettings.$inferSelect
+export type NewContinuitySettings = typeof continuitySettings.$inferInsert
