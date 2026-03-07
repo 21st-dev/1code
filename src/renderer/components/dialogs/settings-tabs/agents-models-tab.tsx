@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, MoreHorizontal, Plus, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ChevronDown, Edit2, MoreHorizontal, Plus, Trash2, Check, Settings } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   agentsLoginModalOpenAtom,
@@ -9,11 +9,13 @@ import {
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   hiddenModelsAtom,
+  modelProfilesAtom,
+  activeProfileIdAtom,
   normalizeCodexApiKey,
   openaiApiKeyAtom,
-  type CustomClaudeConfig,
+  type ModelProfile,
+  type CustomModelConfig,
 } from "../../../lib/atoms"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
 import { CLAUDE_MODELS, CODEX_MODELS } from "../../../features/agents/lib/models"
@@ -52,10 +54,262 @@ function useIsNarrowScreen(): boolean {
   return isNarrow
 }
 
-const EMPTY_CONFIG: CustomClaudeConfig = {
-  model: "",
-  token: "",
-  baseUrl: "",
+// Helper to generate unique IDs
+const generateProfileId = () => `custom-${crypto.randomUUID()}`
+const generateModelId = () => `model-${crypto.randomUUID()}`
+
+// Custom Model Profile Row Component - shows profile with models
+function CustomProfileRow({
+  profile,
+  onEdit,
+  onRemove,
+}: {
+  profile: ModelProfile
+  onEdit: () => void
+  onRemove: () => void
+}) {
+  const modelNames = profile.models.map(m => m.name).join(', ')
+  return (
+    <div className="flex items-center justify-between p-3 hover:bg-muted/50">
+      <div>
+        <div className="text-sm font-medium">{profile.name || 'Custom Model'}</div>
+        <div className="text-xs text-muted-foreground truncate max-w-[250px]">
+          {profile.models.length} model{profile.models.length !== 1 ? 's' : ''}: {modelNames || 'No models set'}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-7 w-7">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <Edit2 className="h-3.5 w-3.5 mr-2" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
+              onClick={onRemove}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-2" />
+              Remove
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  )
+}
+
+// Add/Edit Custom Profile Dialog with multiple models support
+function CustomProfileDialog({
+  open,
+  onOpenChange,
+  profile,
+  onSave,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  profile: ModelProfile | null // null = new profile
+  onSave: (profile: ModelProfile) => void
+}) {
+  const [name, setName] = useState('')
+  const [token, setToken] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [models, setModels] = useState<CustomModelConfig[]>([])
+
+  useEffect(() => {
+    if (profile) {
+      setName(profile.name)
+      setToken(profile.token)
+      setBaseUrl(profile.baseUrl)
+      setModels(profile.models.length > 0 ? profile.models : [])
+    } else {
+      setName('')
+      setToken('')
+      setBaseUrl('')
+      setModels([])
+    }
+  }, [profile, open])
+
+  const handleAddModel = () => {
+    setModels(prev => [...prev, {
+      id: generateModelId(),
+      name: '',
+      modelId: '',
+    }])
+  }
+
+  const handleRemoveModel = (modelId: string) => {
+    setModels(prev => prev.filter(m => m.id !== modelId))
+  }
+
+  const handleUpdateModel = (modelId: string, field: 'name' | 'modelId', value: string) => {
+    setModels(prev => prev.map(m => 
+      m.id === modelId ? { ...m, [field]: value } : m
+    ))
+  }
+
+  const handleSave = () => {
+    const trimmedName = name.trim()
+    const trimmedToken = token.trim()
+    const trimmedBaseUrl = baseUrl.trim()
+
+    if (!trimmedName) {
+      toast.error('Profile name is required')
+      return
+    }
+    if (!trimmedToken) {
+      toast.error('API token is required')
+      return
+    }
+    if (!trimmedBaseUrl) {
+      toast.error('Base URL is required')
+      return
+    }
+    if (models.length === 0) {
+      toast.error('At least one model is required')
+      return
+    }
+
+    // Validate all models have required fields
+    const validModels = models.filter(m => m.name.trim() && m.modelId.trim())
+    if (validModels.length === 0) {
+      toast.error('At least one complete model is required')
+      return
+    }
+
+    onSave({
+      id: profile?.id || generateProfileId(),
+      name: trimmedName,
+      token: trimmedToken,
+      baseUrl: trimmedBaseUrl,
+      models: validModels.map(m => ({
+        ...m,
+        name: m.name.trim(),
+        modelId: m.modelId.trim(),
+      })),
+    })
+    onOpenChange(false)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
+      style={{ display: open ? 'flex' : 'none' }}
+      onClick={() => onOpenChange(false)}
+    >
+      <div
+        className="bg-background rounded-lg border border-border shadow-lg w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 border-b border-border">
+          <h3 className="text-sm font-semibold">
+            {profile ? 'Edit Custom Model Profile' : 'Add Custom Model Profile'}
+          </h3>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Profile Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., OpenRouter, Together AI"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Base URL</Label>
+            <Input
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://openrouter.ai/api/v1"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">API Token</Label>
+            <Input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="sk-..."
+            />
+          </div>
+          
+          {/* Models Section */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Models</Label>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAddModel}
+                type="button"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Model
+              </Button>
+            </div>
+            
+            {models.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-2">
+                No models added. Click "Add Model" to add one.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {models.map((model, index) => (
+                  <div key={model.id} className="p-3 border border-border rounded-md space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Model {index + 1}</span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => handleRemoveModel(model.id)}
+                        type="button"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Display Name</Label>
+                        <Input
+                          value={model.name}
+                          onChange={(e) => handleUpdateModel(model.id, 'name', e.target.value)}
+                          placeholder="Claude 3 Opus"
+                          className="h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Model ID</Label>
+                        <Input
+                          value={model.modelId}
+                          onChange={(e) => handleUpdateModel(model.id, 'modelId', e.target.value)}
+                          placeholder="anthropic/claude-3-opus"
+                          className="h-8"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="p-4 border-t border-border flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} type="button">
+            Cancel
+          </Button>
+          <Button onClick={handleSave} type="button">
+            {profile ? 'Save' : 'Add'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Account row component
@@ -261,10 +515,6 @@ function AnthropicAccountsSection() {
 }
 
 export function AgentsModelsTab() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
-  const [model, setModel] = useState(storedConfig.model)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
-  const [token, setToken] = useState(storedConfig.token)
   const setClaudeLoginModalConfig = useSetAtom(claudeLoginModalConfigAtom)
   const setClaudeLoginModalOpen = useSetAtom(agentsLoginModalOpenAtom)
   const setCodexLoginModalOpen = useSetAtom(codexLoginModalOpenAtom)
@@ -274,6 +524,54 @@ export function AgentsModelsTab() {
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
   const { data: codexIntegration, isLoading: isCodexLoading } =
     trpc.codex.getIntegration.useQuery()
+
+  // Custom model profiles state
+  const [modelProfiles, setModelProfiles] = useAtom(modelProfilesAtom)
+  const [activeProfileId, setActiveProfileId] = useAtom(activeProfileIdAtom)
+  const [editingProfile, setEditingProfile] = useState<ModelProfile | null>(null)
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
+
+  // Filter out offline profile - only show custom profiles
+  const customProfiles = useMemo(() => 
+    modelProfiles.filter(p => !p.isOffline),
+    [modelProfiles]
+  )
+
+  // Custom profile handlers
+  const handleAddProfile = useCallback(() => {
+    setEditingProfile(null)
+    setIsProfileDialogOpen(true)
+  }, [])
+
+  const handleEditProfile = useCallback((profile: ModelProfile) => {
+    setEditingProfile(profile)
+    setIsProfileDialogOpen(true)
+  }, [])
+
+  const handleSaveProfile = useCallback((profile: ModelProfile) => {
+    setModelProfiles(prev => {
+      const existing = prev.find(p => p.id === profile.id)
+      if (existing) {
+        return prev.map(p => p.id === profile.id ? profile : p)
+      }
+      return [...prev, profile]
+    })
+    toast.success(editingProfile ? 'Profile updated' : 'Profile added')
+  }, [editingProfile, setModelProfiles])
+
+  const handleRemoveProfile = useCallback((profileId: string) => {
+    const profile = modelProfiles.find(p => p.id === profileId)
+    const confirmed = window.confirm(
+      `Are you sure you want to remove "${profile?.name || 'this profile'}"?`
+    )
+    if (confirmed) {
+      setModelProfiles(prev => prev.filter(p => p.id !== profileId))
+      if (activeProfileId === profileId) {
+        setActiveProfileId(null)
+      }
+      toast.success('Profile removed')
+    }
+  }, [modelProfiles, activeProfileId, setModelProfiles, setActiveProfileId])
 
   // OpenAI API key state
   const [storedCodexApiKey, setStoredCodexApiKey] = useAtom(codexApiKeyAtom)
@@ -288,60 +586,12 @@ export function AgentsModelsTab() {
   const trpcUtils = trpc.useUtils()
 
   useEffect(() => {
-    setModel(storedConfig.model)
-    setBaseUrl(storedConfig.baseUrl)
-    setToken(storedConfig.token)
-  }, [storedConfig.model, storedConfig.baseUrl, storedConfig.token])
-
-  useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
   }, [storedOpenAIKey])
 
   useEffect(() => {
     setCodexApiKey(storedCodexApiKey)
   }, [storedCodexApiKey])
-
-  const savedConfigRef = useRef(storedConfig)
-
-  const handleBlurSave = useCallback(() => {
-    const trimmedModel = model.trim()
-    const trimmedBaseUrl = baseUrl.trim()
-    const trimmedToken = token.trim()
-
-    // Only save if all fields are filled
-    if (trimmedModel && trimmedBaseUrl && trimmedToken) {
-      const next: CustomClaudeConfig = {
-        model: trimmedModel,
-        token: trimmedToken,
-        baseUrl: trimmedBaseUrl,
-      }
-      if (
-        next.model !== savedConfigRef.current.model ||
-        next.token !== savedConfigRef.current.token ||
-        next.baseUrl !== savedConfigRef.current.baseUrl
-      ) {
-        setStoredConfig(next)
-        savedConfigRef.current = next
-      }
-    } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
-      // All cleared — reset
-      if (savedConfigRef.current.model || savedConfigRef.current.token || savedConfigRef.current.baseUrl) {
-        setStoredConfig(EMPTY_CONFIG)
-        savedConfigRef.current = EMPTY_CONFIG
-      }
-    }
-  }, [model, baseUrl, token, setStoredConfig])
-
-  const handleReset = () => {
-    setStoredConfig(EMPTY_CONFIG)
-    savedConfigRef.current = EMPTY_CONFIG
-    setModel("")
-    setBaseUrl("")
-    setToken("")
-    toast.success("Model settings reset")
-  }
-
-  const canReset = Boolean(model.trim() || baseUrl.trim() || token.trim())
 
   const handleClaudeCodeSetup = () => {
     setClaudeLoginModalConfig({
@@ -502,6 +752,17 @@ export function AgentsModelsTab() {
     return allModels.filter((m) => m.name.toLowerCase().includes(q))
   }, [allModels, modelSearch])
 
+  // Filter custom models by search
+  const filteredCustomModels = useMemo(() => {
+    if (!modelSearch.trim()) return customProfiles
+    const q = modelSearch.toLowerCase().trim()
+    return customProfiles.filter((profile) => {
+      // Match profile name or any model name within the profile
+      if (profile.name.toLowerCase().includes(q)) return true
+      return profile.models.some(m => m.name.toLowerCase().includes(q))
+    })
+  }, [customProfiles, modelSearch])
+
   const [isApiKeysOpen, setIsApiKeysOpen] = useState(false)
 
   return (
@@ -529,7 +790,7 @@ export function AgentsModelsTab() {
             </div>
           </div>
 
-          {/* Model list */}
+          {/* Standard Model list */}
           <div className="divide-y divide-border">
             {filteredModels.map((m) => {
               const isEnabled = !hiddenModels.includes(m.id)
@@ -553,12 +814,51 @@ export function AgentsModelsTab() {
                 </div>
               )
             })}
-            {filteredModels.length === 0 && (
+            {filteredModels.length === 0 && modelSearch.trim() && (
               <div className="px-4 py-6 text-center text-sm text-muted-foreground">
                 No models found
               </div>
             )}
           </div>
+          
+          {/* Custom Models sub-section */}
+          {filteredCustomModels.length > 0 && (
+            <>
+              <div className="px-4 py-2 bg-muted/30 border-t border-border">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Custom Models
+                </span>
+              </div>
+              <div className="divide-y divide-border">
+                {filteredCustomModels.map((profile) =>
+                  profile.models.map((model) => {
+                    const customModelId = `custom-${profile.id}-${model.id}`
+                    const isEnabled = !hiddenModels.includes(customModelId)
+                    return (
+                      <div
+                        key={customModelId}
+                        className="flex items-center justify-between px-4 py-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{model.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {profile.name}
+                            </span>
+                          </div>
+                          <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={() => toggleModelVisibility(customModelId)}
+                        />
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -734,74 +1034,56 @@ export function AgentsModelsTab() {
             </div>
           </div>
 
-          {/* Override Model */}
+          {/* Custom Model Profiles */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-foreground">
-                Override Model
-              </h4>
-              {canReset && (
-                <Button variant="ghost" size="sm" onClick={handleReset} className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10">
-                  Reset
-                </Button>
-              )}
+              <div>
+                <h4 className="text-sm font-medium text-foreground">
+                  Custom Models
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Add custom API endpoints and models
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAddProfile}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add
+              </Button>
             </div>
-            <div className="bg-background rounded-lg border border-border overflow-hidden">
-              <div className="flex items-center justify-between p-4">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">Model name</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Model identifier to use for requests
-                  </p>
-                </div>
-                <div className="flex-shrink-0 w-80">
-                  <Input
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    onBlur={handleBlurSave}
-                    className="w-full"
-                    placeholder="claude-3-7-sonnet-20250219"
+            
+            {customProfiles.length > 0 ? (
+              <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
+                {customProfiles.map((profile) => (
+                  <CustomProfileRow
+                    key={profile.id}
+                    profile={profile}
+                    onEdit={() => handleEditProfile(profile)}
+                    onRemove={() => handleRemoveProfile(profile.id)}
                   />
-                </div>
+                ))}
               </div>
+            ) : (
+              <div className="bg-muted/30 rounded-lg border border-dashed border-border p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No custom models configured
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Add a custom model to use alternative API endpoints
+                </p>
+              </div>
+            )}
 
-              <div className="flex items-center justify-between p-4 border-t border-border">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">API token</Label>
-                  <p className="text-xs text-muted-foreground">
-                    ANTHROPIC_AUTH_TOKEN env
-                  </p>
-                </div>
-                <div className="flex-shrink-0 w-80">
-                  <Input
-                    type="password"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    onBlur={handleBlurSave}
-                    className="w-full"
-                    placeholder="sk-ant-..."
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 border-t border-border">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">Base URL</Label>
-                  <p className="text-xs text-muted-foreground">
-                    ANTHROPIC_BASE_URL env
-                  </p>
-                </div>
-                <div className="flex-shrink-0 w-80">
-                  <Input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    onBlur={handleBlurSave}
-                    className="w-full"
-                    placeholder="https://api.anthropic.com"
-                  />
-                </div>
-              </div>
-            </div>
+            {/* Profile Edit Dialog */}
+            <CustomProfileDialog
+              open={isProfileDialogOpen}
+              onOpenChange={setIsProfileDialogOpen}
+              profile={editingProfile}
+              onSave={handleSaveProfile}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>

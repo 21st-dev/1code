@@ -57,11 +57,13 @@ import {
   apiKeyOnboardingCompletedAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
+  activeConfigAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
+  modelProfilesAtom,
+  activeProfileIdAtom,
+  activeCustomModelIdAtom,
   normalizeCodexApiKey,
-  normalizeCustomClaudeConfig,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -236,10 +238,23 @@ export function NewChatForm({
   }, [])
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+  const customClaudeConfig = useAtomValue(activeConfigAtom)
+  const hasCustomClaudeConfig = Boolean(customClaudeConfig)
+  
+  // Custom model profiles
+  const [modelProfiles, setModelProfiles] = useAtom(modelProfilesAtom)
+  const [activeProfileId, setActiveProfileId] = useAtom(activeProfileIdAtom)
+  const [activeCustomModelId, setActiveCustomModelId] = useAtom(activeCustomModelIdAtom)
+  const customProfiles = modelProfiles.filter(p => !p.isOffline)
+  
+  // Helper to find active custom model
+  const activeCustomModel = useMemo(() => {
+    if (!activeProfileId || !activeCustomModelId) return null
+    const profile = customProfiles.find(p => p.id === activeProfileId)
+    if (!profile) return null
+    return profile.models.find(m => m.id === activeCustomModelId) || null
+  }, [activeProfileId, activeCustomModelId, customProfiles])
+  
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
@@ -422,8 +437,9 @@ export function NewChatForm({
       return currentOllamaModel || "Ollama"
     }
 
-    if (hasCustomClaudeConfig) {
-      return "Custom Model"
+    // Show custom model name with profile if selected
+    if (activeProfileId && activeCustomModel) {
+      return activeCustomModel.name
     }
 
     if (!selectedModel) {
@@ -437,7 +453,8 @@ export function NewChatForm({
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
-    hasCustomClaudeConfig,
+    activeProfileId,
+    activeCustomModel,
     selectedModel,
   ])
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
@@ -1887,6 +1904,7 @@ export function NewChatForm({
                             setSettingsActiveTab("models")
                             setSettingsDialogOpen(true)
                           }}
+                          hiddenModelIds={hiddenModels}
                           claude={{
                             models: availableModels.models.filter((m) => !hiddenModels.includes(m.id)),
                             selectedModelId: selectedModel?.id,
@@ -1897,6 +1915,8 @@ export function NewChatForm({
                               if (!model) return
                               setSelectedModel(model)
                               setLastSelectedModelId(model.id)
+                              // Clear profile selection when selecting standard model
+                              setActiveProfileId(null)
                             },
                             hasCustomModelConfig: hasCustomClaudeConfig,
                             isOffline: availableModels.isOffline && availableModels.hasOllama,
@@ -1907,6 +1927,18 @@ export function NewChatForm({
                             isConnected: isClaudeConnected,
                             thinkingEnabled,
                             onThinkingChange: setThinkingEnabled,
+                            // Custom profiles
+                            customProfiles,
+                            selectedProfileId: activeProfileId,
+                            selectedCustomModelId: activeCustomModelId,
+                            onSelectCustomModel: (profileId, modelId) => {
+                              setActiveProfileId(profileId)
+                              setActiveCustomModelId(modelId)
+                            },
+                            onClearCustomModel: () => {
+                              setActiveProfileId(null)
+                              setActiveCustomModelId(null)
+                            },
                           }}
                           codex={{
                             models: codexUiModels,

@@ -210,12 +210,21 @@ export type CustomClaudeConfig = {
   baseUrl: string
 }
 
-// Model profile system - support multiple configs
+// Custom model configuration for a single model within a profile
+export type CustomModelConfig = {
+  id: string
+  name: string      // Display name (e.g., "Claude 3 Opus")
+  modelId: string    // API model ID (e.g., "anthropic/claude-3-opus")
+}
+
+// Model profile system - support multiple models per profile
 export type ModelProfile = {
   id: string
-  name: string
-  config: CustomClaudeConfig
-  isOffline?: boolean // Mark as offline/Ollama profile
+  name: string           // Profile name (e.g., "OpenRouter")
+  baseUrl: string        // API endpoint
+  token: string          // API key
+  models: CustomModelConfig[]  // Multiple models
+  isOffline?: boolean    // Mark as offline/Ollama profile
 }
 
 // Selected Ollama model for offline mode
@@ -226,28 +235,35 @@ export const selectedOllamaModelAtom = atomWithStorage<string | null>(
   { getOnInit: true },
 )
 
+// Helper to generate unique IDs
+const generateId = () => crypto.randomUUID()
+
 // Helper to get offline profile with selected model
 export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
   id: 'offline-ollama',
   name: 'Offline (Ollama)',
+  baseUrl: 'http://localhost:11434',
+  token: 'ollama',
+  models: [{
+    id: 'ollama-default',
+    name: modelName || 'Qwen 2.5 Coder',
+    modelId: modelName || 'qwen2.5-coder:7b',
+  }],
   isOffline: true,
-  config: {
-    model: modelName || 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
-  },
 })
 
 // Predefined offline profile for Ollama (legacy, uses default model)
 export const OFFLINE_PROFILE: ModelProfile = {
   id: 'offline-ollama',
   name: 'Offline (Ollama)',
+  baseUrl: 'http://localhost:11434',
+  token: 'ollama',
+  models: [{
+    id: 'ollama-default',
+    name: 'Qwen 2.5 Coder',
+    modelId: 'qwen2.5-coder:7b',
+  }],
   isOffline: true,
-  config: {
-    model: 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
-  },
 }
 
 // Legacy single config (deprecated, kept for backwards compatibility)
@@ -270,17 +286,74 @@ export const openaiApiKeyAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-// New: Model profiles storage
+// Helper to migrate old profile structure to new structure
+function migrateProfile(profile: any): ModelProfile {
+  // If already has models array, it's the new structure
+  if (profile.models && Array.isArray(profile.models)) {
+    return profile as ModelProfile
+  }
+  
+  // If has old config structure, migrate to new structure
+  if (profile.config) {
+    return {
+      id: profile.id,
+      name: profile.name,
+      baseUrl: profile.config.baseUrl || '',
+      token: profile.config.token || '',
+      models: [{
+        id: `migrated-${profile.id}`,
+        name: profile.config.model || profile.name,
+        modelId: profile.config.model || '',
+      }],
+      isOffline: profile.isOffline,
+    }
+  }
+  
+  // Fallback for malformed profiles
+  return profile as ModelProfile
+}
+
+// New: Model profiles storage with migration
 export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
   "agents:model-profiles",
   [OFFLINE_PROFILE], // Start with offline profile
-  undefined,
+  {
+    getItem: (key, initialValue) => {
+      const storedValue = localStorage.getItem(key)
+      if (!storedValue) return initialValue
+      
+      try {
+        const parsed = JSON.parse(storedValue)
+        // Migrate old profile structures
+        if (Array.isArray(parsed)) {
+          return parsed.map(migrateProfile)
+        }
+        return initialValue
+      } catch {
+        return initialValue
+      }
+    },
+    setItem: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(value))
+    },
+    removeItem: (key) => {
+      localStorage.removeItem(key)
+    },
+  },
   { getOnInit: true },
 )
 
 // Active profile ID (null = use Claude Code default)
 export const activeProfileIdAtom = atomWithStorage<string | null>(
   "agents:active-profile-id",
+  null,
+  undefined,
+  { getOnInit: true },
+)
+
+// Active custom model ID within a profile (null = no custom model selected)
+export const activeCustomModelIdAtom = atomWithStorage<string | null>(
+  "agents:active-custom-model-id",
   null,
   undefined,
   { getOnInit: true },
@@ -328,6 +401,7 @@ export function normalizeCustomClaudeConfig(
 // Get active config (considering network status and auto-fallback)
 export const activeConfigAtom = atom((get) => {
   const activeProfileId = get(activeProfileIdAtom)
+  const activeCustomModelId = get(activeCustomModelIdAtom)
   const profiles = get(modelProfilesAtom)
   const legacyConfig = get(customClaudeConfigAtom)
   const networkOnline = get(networkOnlineAtom)
@@ -336,16 +410,34 @@ export const activeConfigAtom = atom((get) => {
   // If auto-offline enabled and no internet, use offline profile
   if (!networkOnline && autoOffline) {
     const offlineProfile = profiles.find(p => p.isOffline)
-    if (offlineProfile) {
-      return offlineProfile.config
+    if (offlineProfile && offlineProfile.models.length > 0) {
+      const model = activeCustomModelId 
+        ? offlineProfile.models.find(m => m.id === activeCustomModelId)
+        : offlineProfile.models[0]
+      if (model) {
+        return {
+          model: model.modelId,
+          token: offlineProfile.token,
+          baseUrl: offlineProfile.baseUrl,
+        }
+      }
     }
   }
 
   // If specific profile is selected, use it
   if (activeProfileId) {
     const profile = profiles.find(p => p.id === activeProfileId)
-    if (profile) {
-      return profile.config
+    if (profile && profile.models.length > 0) {
+      const model = activeCustomModelId
+        ? profile.models.find(m => m.id === activeCustomModelId)
+        : profile.models[0]
+      if (model) {
+        return {
+          model: model.modelId,
+          token: profile.token,
+          baseUrl: profile.baseUrl,
+        }
+      }
     }
   }
 
