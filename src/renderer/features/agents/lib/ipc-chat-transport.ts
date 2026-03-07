@@ -5,12 +5,10 @@ import {
   claudeLoginModalConfigAtom,
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
-  type CustomClaudeConfig,
-  customClaudeConfigAtom,
+  activeConfigAtom,
   enableTasksAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
-  normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
@@ -173,10 +171,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))
     const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
 
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
-    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+    // Use activeConfigAtom which considers both legacy config and new model profiles
+    const customConfig = appStore.get(activeConfigAtom)
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)

@@ -1,6 +1,6 @@
 "use client"
 
-import { Brain, ChevronRight, Zap } from "lucide-react"
+import { Brain, ChevronRight, Settings, Zap } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
@@ -25,6 +25,7 @@ import {
 import { cn } from "../../../lib/utils"
 import type { CodexThinkingLevel } from "../lib/models"
 import { formatCodexThinkingLabel } from "../lib/models"
+import type { ModelProfile, CustomModelConfig } from "../../../lib/atoms"
 
 const CROSS_PROVIDER_DIALOG_DISMISSED_KEY = "agent-model-selector:skip-cross-provider-dialog"
 
@@ -59,6 +60,7 @@ interface AgentModelSelectorProps {
   contentClassName?: string
   onOpenModelsSettings?: () => void
   onContinueWithProvider?: (provider: AgentProviderId) => void
+  hiddenModelIds?: string[] // IDs of hidden models to filter out
   claude: {
     models: ClaudeModelOption[]
     selectedModelId?: string
@@ -72,6 +74,12 @@ interface AgentModelSelectorProps {
     isConnected: boolean
     thinkingEnabled: boolean
     onThinkingChange: (enabled: boolean) => void
+    // Custom profiles support - multiple models per profile
+    customProfiles: ModelProfile[]
+    selectedProfileId: string | null
+    selectedCustomModelId: string | null
+    onSelectCustomModel: (profileId: string, modelId: string) => void
+    onClearCustomModel: () => void
   }
   codex: {
     models: CodexModelOption[]
@@ -87,7 +95,7 @@ type FlatModelItem =
   | { type: "claude"; model: ClaudeModelOption }
   | { type: "codex"; model: CodexModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
-  | { type: "custom" }
+  | { type: "customModel"; profile: ModelProfile; model: CustomModelConfig }
 
 function CodexThinkingSubMenu({
   thinkings,
@@ -102,7 +110,7 @@ function CodexThinkingSubMenu({
   const subMenuRef = useRef<HTMLDivElement>(null)
   const [showSub, setShowSub] = useState(false)
   const [subPos, setSubPos] = useState({ top: 0, left: 0 })
-  const closeTimeout = useRef<ReturnType<typeof setTimeout>>()
+  const closeTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const scheduleClose = useCallback(() => {
     closeTimeout.current = setTimeout(() => setShowSub(false), 150)
@@ -321,6 +329,7 @@ export function AgentModelSelector({
   contentClassName,
   onOpenModelsSettings,
   onContinueWithProvider,
+  hiddenModelIds = [],
   claude,
   codex,
 }: AgentModelSelectorProps) {
@@ -343,20 +352,35 @@ export function AgentModelSelector({
           isRecommended: m === claude.recommendedOllamaModel,
         })
       }
-    } else if (claude.hasCustomModelConfig) {
-      items.push({ type: "custom" })
     } else {
+      // Add standard Claude models (filter by hidden)
       for (const m of claude.models) {
-        items.push({ type: "claude", model: m })
+        if (!hiddenModelIds.includes(m.id)) {
+          items.push({ type: "claude", model: m })
+        }
+      }
+      // Add custom models from profiles (filter by hidden)
+      for (const profile of claude.customProfiles) {
+        if (!profile.isOffline) {
+          for (const model of profile.models) {
+            const customModelId = `custom-${profile.id}-${model.id}`
+            if (!hiddenModelIds.includes(customModelId)) {
+              items.push({ type: "customModel", profile, model })
+            }
+          }
+        }
       }
     }
 
+    // Add Codex models (filter by hidden)
     for (const m of codex.models) {
-      items.push({ type: "codex", model: m })
+      if (!hiddenModelIds.includes(m.id)) {
+        items.push({ type: "codex", model: m })
+      }
     }
 
     return items
-  }, [claude, codex])
+  }, [claude, codex, hiddenModelIds])
 
   // Filter by search
   const filteredModels = useMemo(() => {
@@ -374,8 +398,10 @@ export function AgentModelSelector({
           return item.model.name.toLowerCase().includes(q)
         case "ollama":
           return item.modelName.toLowerCase().includes(q)
-        case "custom":
-          return "custom model".includes(q)
+        case "customModel":
+          return item.profile.name.toLowerCase().includes(q) ||
+            item.model.name.toLowerCase().includes(q) ||
+            item.model.modelId.toLowerCase().includes(q)
       }
     })
   }, [allModels, search])
@@ -404,13 +430,15 @@ export function AgentModelSelector({
   const isItemSelected = (item: FlatModelItem): boolean => {
     switch (item.type) {
       case "claude":
-        return selectedAgentId === "claude-code" && claude.selectedModelId === item.model.id
+        return selectedAgentId === "claude-code" && claude.selectedModelId === item.model.id && !claude.selectedProfileId
       case "codex":
         return selectedAgentId === "codex" && codex.selectedModelId === item.model.id
       case "ollama":
         return selectedAgentId === "claude-code" && claude.selectedOllamaModel === item.modelName
-      case "custom":
-        return selectedAgentId === "claude-code"
+      case "customModel":
+        return selectedAgentId === "claude-code" && 
+          claude.selectedProfileId === item.profile.id && 
+          claude.selectedCustomModelId === item.model.id
     }
   }
 
@@ -474,6 +502,7 @@ export function AgentModelSelector({
         if (!canSelectProvider("claude-code")) return
         onSelectedAgentIdChange("claude-code")
         claude.onSelectModel(item.model.id)
+        claude.onClearCustomModel()
         break
       case "codex":
         if (!canSelectProvider("codex")) return
@@ -484,10 +513,12 @@ export function AgentModelSelector({
         if (!canSelectProvider("claude-code")) return
         onSelectedAgentIdChange("claude-code")
         claude.onSelectOllamaModel(item.modelName)
+        claude.onClearCustomModel()
         break
-      case "custom":
+      case "customModel":
         if (!canSelectProvider("claude-code")) return
         onSelectedAgentIdChange("claude-code")
+        claude.onSelectCustomModel(item.profile.id, item.model.id)
         break
     }
     handleOpenChange(false)
@@ -501,8 +532,8 @@ export function AgentModelSelector({
         return <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "ollama":
         return <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
-      case "custom":
-        return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "customModel":
+        return <Settings className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
     }
   }
 
@@ -514,9 +545,17 @@ export function AgentModelSelector({
         return item.model.name
       case "ollama":
         return item.modelName + (item.isRecommended ? " (recommended)" : "")
-      case "custom":
-        return "Custom Model"
+      case "customModel":
+        return item.model.name
     }
+  }
+
+  // Get sub-label for items that need it (custom models show profile name)
+  const getItemSubLabel = (item: FlatModelItem): string | null => {
+    if (item.type === "customModel") {
+      return item.profile.name
+    }
+    return null
   }
 
   const getItemKey = (item: FlatModelItem): string => {
@@ -527,8 +566,8 @@ export function AgentModelSelector({
         return `codex-${item.model.id}`
       case "ollama":
         return `ollama-${item.modelName}`
-      case "custom":
-        return "custom"
+      case "customModel":
+        return `custom-${item.profile.id}-${item.model.id}`
     }
   }
 
@@ -561,7 +600,7 @@ export function AgentModelSelector({
           {/* Claude thinking toggle */}
           {selectedAgentId === "claude-code" &&
             !claude.isOffline &&
-            !claude.hasCustomModelConfig && (
+            !claude.selectedProfileId && (
             <>
               <div
                 className="flex items-center justify-between min-h-[32px] py-[5px] px-1.5 mx-1"
@@ -604,6 +643,7 @@ export function AgentModelSelector({
                   const selected = isItemSelected(item)
                   const disabled = isItemDisabled(item)
                   const crossProvider = isItemCrossProvider(item)
+                  const subLabel = getItemSubLabel(item)
                   return (
                     <CommandItem
                       key={getItemKey(item)}
@@ -613,7 +653,14 @@ export function AgentModelSelector({
                       className={cn("gap-2", crossProvider && "opacity-60")}
                     >
                       {getItemIcon(item)}
-                      <span className="truncate flex-1">{getItemLabel(item)}</span>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="truncate">{getItemLabel(item)}</span>
+                        {subLabel && (
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {subLabel}
+                          </span>
+                        )}
+                      </div>
                       {crossProvider && (
                         <span className="text-[10px] text-muted-foreground shrink-0">New chat</span>
                       )}
