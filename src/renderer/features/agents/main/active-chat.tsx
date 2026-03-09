@@ -3793,15 +3793,20 @@ const ChatViewInner = memo(function ChatViewInner({
     if (!isActive) return
     if (isMobile) return // Don't autofocus on mobile
 
-    // Use requestAnimationFrame to ensure DOM is ready after render
-    requestAnimationFrame(() => {
+    // Use setTimeout to ensure focus happens after all React DOM updates
+    // and browser focus management has settled. requestAnimationFrame alone
+    // is too early when the terminal is open — the xterm textarea retains
+    // focus and the editor's focus() call doesn't stick.
+    const timeoutId = setTimeout(() => {
       // Skip if sidebar keyboard navigation is active (user is arrowing through sidebar items)
       if (appStore.get(suppressInputFocusAtom)) {
         appStore.set(suppressInputFocusAtom, false)
         return
       }
       editorRef.current?.focus()
-    })
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
   }, [isActive, subChatId, isMobile])
 
   // Refs for handleSend to avoid recreating callback on every messages change
