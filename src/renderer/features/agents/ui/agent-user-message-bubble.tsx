@@ -12,6 +12,7 @@ import {
 import { AgentImageItem } from "./agent-image-item"
 import { RenderFileMentions, extractTextMentions, TextMentionBlocks } from "../mentions/render-file-mentions"
 import { useSearchHighlight, useSearchQuery } from "../search"
+import { useAgentSubChatStore } from "../stores/sub-chat-store"
 
 interface AgentUserMessageBubbleProps {
   messageId: string
@@ -118,6 +119,14 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
 }: AgentUserMessageBubbleProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  // Close expanded dialog when user switches sub-chat tabs.
+  // The Dialog portals to document.body, so it escapes the hidden tab's
+  // opacity:0 / pointerEvents:none container and would remain visible.
+  const activeSubChatId = useAgentSubChatStore((s) => s.activeSubChatId)
+  useEffect(() => {
+    setIsExpanded(false)
+  }, [activeSubChatId])
 
   // Extract quote/diff mentions to display above the bubble
   const { textMentions, cleanedText } = useMemo(
