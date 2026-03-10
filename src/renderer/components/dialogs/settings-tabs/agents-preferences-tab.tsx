@@ -30,6 +30,7 @@ import phpstormIcon from "../../../assets/app-icons/phpstorm.svg"
 import golandIcon from "../../../assets/app-icons/goland.svg"
 import clionIcon from "../../../assets/app-icons/clion.svg"
 import riderIcon from "../../../assets/app-icons/rider.svg"
+import rubymineIcon from "../../../assets/app-icons/rubymine.svg"
 import fleetIcon from "../../../assets/app-icons/fleet.svg"
 import rustroverIcon from "../../../assets/app-icons/rustrover.svg"
 import windsurfIcon from "../../../assets/app-icons/windsurf.svg"
@@ -59,6 +60,7 @@ const EDITOR_ICONS: Partial<Record<ExternalApp, string>> = {
   goland: golandIcon,
   clion: clionIcon,
   rider: riderIcon,
+  rubymine: rubymineIcon,
   fleet: fleetIcon,
   rustrover: rustroverIcon,
 }
@@ -98,6 +100,7 @@ const JETBRAINS: EditorOption[] = [
   { id: "goland", label: "GoLand" },
   { id: "clion", label: "CLion" },
   { id: "rider", label: "Rider" },
+  { id: "rubymine", label: "RubyMine" },
   { id: "fleet", label: "Fleet" },
   { id: "rustrover", label: "RustRover" },
 ]
