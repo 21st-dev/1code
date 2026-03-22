@@ -6,6 +6,7 @@ import { cn } from "../../../lib/utils"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface ThinkingToolPart {
@@ -41,11 +42,8 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
   part,
   chatStatus,
 }: AgentThinkingToolProps) {
-  const isPending =
-    part.state !== "output-available" && part.state !== "output-error"
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isStreaming = isPending && isActivelyStreaming
-  const isInterrupted = isPending && !isActivelyStreaming && chatStatus !== undefined
+  const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
+  const isStreaming = isPending
 
   // Default: expanded while streaming, collapsed when done
   const [isExpanded, setIsExpanded] = useState(isStreaming)

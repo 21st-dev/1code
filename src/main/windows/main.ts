@@ -645,6 +645,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       partition: "persist:main", // Use persistent session for cookies
     },
   })
+  let attemptedRendererRecovery = false
 
   // Register window with manager and get stable ID for localStorage namespacing
   const stableWindowId = windowManager.register(window)
@@ -741,6 +742,22 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     return { action: "deny" }
   })
 
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[Main] Renderer process gone in window", window.id, details)
+
+    if (attemptedRendererRecovery || window.isDestroyed()) {
+      return
+    }
+
+    attemptedRendererRecovery = true
+    setTimeout(() => {
+      if (!window.isDestroyed()) {
+        console.log("[Main] Attempting one-shot renderer recovery in window", window.id)
+        window.webContents.reloadIgnoringCache()
+      }
+    }, 150)
+  })
+
   // Prevent window close if there are active streaming sessions
   window.on("close", (event) => {
     // Skip confirmation if app quit was already confirmed by the user
@@ -835,6 +852,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
 
   // Log page load - traffic light visibility is managed by the renderer
   window.webContents.on("did-finish-load", () => {
+    attemptedRendererRecovery = false
     console.log("[Main] Page finished loading in window", window.id)
   })
   window.webContents.on(

@@ -205,15 +205,15 @@ export const AgentMcpToolCall = memo(function AgentMcpToolCall({
   chatStatus,
 }: AgentMcpToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
+  const { isPending, isInterrupted, isInputStreaming } = getToolStatus(part, chatStatus)
 
   const unwrappedOutput = useMemo(() => unwrapMcpOutput(part.output), [part.output])
 
   const title = useMemo(() => {
-    if (part.state === "input-streaming") return `Preparing ${mcpInfo.displayName}`
+    if (isInputStreaming) return `Preparing ${mcpInfo.displayName}`
     if (isPending) return getActiveTitle(mcpInfo)
     return getCompletedTitle(mcpInfo)
-  }, [part.state, isPending, mcpInfo])
+  }, [isInputStreaming, isPending, mcpInfo])
 
   const resultCount = useMemo(() => {
     if (isPending) return null
@@ -221,9 +221,9 @@ export const AgentMcpToolCall = memo(function AgentMcpToolCall({
   }, [isPending, unwrappedOutput])
 
   const subtitle = useMemo(() => {
-    if (part.state === "input-streaming") return ""
+    if (isInputStreaming) return ""
     return formatMcpArgs(part.input)
-  }, [part.input, part.state])
+  }, [isInputStreaming, part.input])
 
   const displayOutput = useMemo(() => {
     if (!part.output) return null

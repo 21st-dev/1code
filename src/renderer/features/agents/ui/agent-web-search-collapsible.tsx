@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
+import { getToolStatus } from "./agent-tool-registry"
 
 interface SearchResult {
   title: string
@@ -23,12 +24,7 @@ export const AgentWebSearchCollapsible = memo(
     chatStatus,
   }: AgentWebSearchCollapsibleProps) {
     const [isExpanded, setIsExpanded] = useState(false)
-
-    const isPending =
-      part.state !== "output-available" && part.state !== "output-error"
-    // Include "submitted" status - this is when request was sent but streaming hasn't started yet
-    const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-    const isStreaming = isPending && isActivelyStreaming
+    const { isPending } = getToolStatus(part, chatStatus)
 
     const query = part.input?.query || ""
 
@@ -70,7 +66,7 @@ export const AgentWebSearchCollapsible = memo(
           <div className="flex-1 min-w-0 flex items-center gap-1">
             <div className="text-xs flex items-center gap-1.5 min-w-0">
               <span className="font-medium whitespace-nowrap flex-shrink-0 text-muted-foreground">
-                {isStreaming ? (
+                {isPending ? (
                   <TextShimmer
                     as="span"
                     duration={1.2}
@@ -87,7 +83,7 @@ export const AgentWebSearchCollapsible = memo(
                 {query.length > 40 ? query.slice(0, 37) + "..." : query}
               </span>
               {/* Result count */}
-              {!isStreaming && hasResults && (
+              {!isPending && hasResults && (
                 <span className="text-muted-foreground/60 whitespace-nowrap flex-shrink-0">
                   · {resultCount} {resultCount === 1 ? "result" : "results"}
                 </span>

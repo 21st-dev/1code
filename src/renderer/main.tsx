@@ -10,6 +10,7 @@ if (import.meta.env.PROD) {
 
 import ReactDOM from "react-dom/client"
 import { App } from "./App"
+import { RenderErrorBoundary } from "./components/ui/error-boundary"
 import "./styles/globals.css"
 import { preloadDiffHighlighter } from "./lib/themes/diff-view-highlighter"
 
@@ -45,5 +46,13 @@ window.onerror = (message, source, lineno, colno, error) => {
 const rootElement = document.getElementById("root")
 
 if (rootElement) {
-  ReactDOM.createRoot(rootElement).render(<App />)
+  ReactDOM.createRoot(rootElement).render(
+    <RenderErrorBoundary
+      title="App failed to render"
+      description="A UI error interrupted this window. Reload the window to recover without restarting the whole app."
+      compact={false}
+    >
+      <App />
+    </RenderErrorBoundary>,
+  )
 }
