@@ -103,6 +103,7 @@ import {
 import { Logo } from "../../components/ui/logo"
 import { Input } from "../../components/ui/input"
 import { Button } from "../../components/ui/button"
+import { ProjectIcon } from "../../components/ui/project-icon"
 import {
   selectedAgentChatIdAtom,
   selectedChatIsRemoteAtom,
@@ -187,8 +188,10 @@ const ChatIcon = React.memo(function ChatIcon({
   isMultiSelectMode = false,
   isChecked = false,
   onCheckboxClick,
+  project,
   gitOwner,
   gitProvider,
+  isRemote = false,
   showIcon = true,
 }: {
   isSelected: boolean
@@ -199,23 +202,24 @@ const ChatIcon = React.memo(function ChatIcon({
   isMultiSelectMode?: boolean
   isChecked?: boolean
   onCheckboxClick?: (e: React.MouseEvent) => void
+  project?: {
+    id: string
+    iconPath?: string | null
+    updatedAt?: string | Date | null
+    gitOwner?: string | null
+    gitProvider?: string | null
+  } | null
   gitOwner?: string | null
   gitProvider?: string | null
+  isRemote?: boolean
   showIcon?: boolean
 }) {
-  // Show GitHub avatar if available, otherwise blank project icon
   const renderMainIcon = () => {
-    if (gitOwner && gitProvider === "github") {
+    if (isRemote && gitOwner && gitProvider === "github") {
       return <GitHubAvatar gitOwner={gitOwner} />
     }
-    return (
-      <GitHubLogo
-        className={cn(
-          "h-4 w-4 flex-shrink-0 transition-colors",
-          isSelected ? "text-foreground" : "text-muted-foreground",
-        )}
-      />
-    )
+
+    return <ProjectIcon project={project} className="h-4 w-4" />
   }
 
   // When icon is hidden and not in multi-select mode, render nothing
@@ -323,8 +327,7 @@ const DraftItem = React.memo(function DraftItem({
   draftId,
   draftText,
   draftUpdatedAt,
-  projectGitOwner,
-  projectGitProvider,
+  project,
   projectGitRepo,
   projectName,
   isSelected,
@@ -338,8 +341,16 @@ const DraftItem = React.memo(function DraftItem({
   draftId: string
   draftText: string
   draftUpdatedAt: number
-  projectGitOwner: string | null | undefined
-  projectGitProvider: string | null | undefined
+  project:
+    | {
+        id: string
+        name: string
+        path: string
+        gitOwner?: string | null
+        gitRepo?: string | null
+        gitProvider?: string | null
+      }
+    | undefined
   projectGitRepo: string | null | undefined
   projectName: string | null | undefined
   isSelected: boolean
@@ -367,13 +378,7 @@ const DraftItem = React.memo(function DraftItem({
       <div className="flex items-start gap-2.5">
         {showIcon && (
           <div className="pt-0.5">
-            <div className="relative flex-shrink-0 w-4 h-4">
-              {projectGitOwner && projectGitProvider === "github" ? (
-                <GitHubAvatar gitOwner={projectGitOwner} />
-              ) : (
-                <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-              )}
-            </div>
+            <ProjectIcon project={project} className="h-4 w-4" />
           </div>
         )}
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
@@ -438,6 +443,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   displayText,
   gitOwner,
   gitProvider,
+  project,
   stats,
   selectedChatIdsSize,
   canShowPinOption,
@@ -486,6 +492,16 @@ const AgentChatItem = React.memo(function AgentChatItem({
   displayText: string
   gitOwner: string | null | undefined
   gitProvider: string | null | undefined
+  project:
+    | {
+        id: string
+        iconPath?: string | null
+        updatedAt?: string | Date | null
+        gitOwner?: string | null
+        gitProvider?: string | null
+      }
+    | null
+    | undefined
   stats: { fileCount: number; additions: number; deletions: number } | undefined
   selectedChatIdsSize: number
   canShowPinOption: boolean
@@ -581,8 +597,10 @@ const AgentChatItem = React.memo(function AgentChatItem({
                   isMultiSelectMode={isMultiSelectMode}
                   isChecked={isChecked}
                   onCheckboxClick={(e) => onCheckboxClick(e, chatId)}
+                  project={project}
                   gitOwner={gitOwner}
                   gitProvider={gitProvider}
+                  isRemote={isRemote}
                   showIcon={showIcon}
                 />
               </div>
@@ -1014,6 +1032,7 @@ const ChatListSection = React.memo(function ChatListSection({
               displayText={displayText}
               gitOwner={gitOwner}
               gitProvider={gitProvider}
+              project={project}
               stats={stats ?? undefined}
               selectedChatIdsSize={selectedChatIds.size}
               canShowPinOption={canShowPinOption}
@@ -3256,8 +3275,7 @@ export function AgentsSidebar({
                     draftId={draft.id}
                     draftText={draft.text}
                     draftUpdatedAt={draft.updatedAt}
-                    projectGitOwner={draft.project?.gitOwner}
-                    projectGitProvider={draft.project?.gitProvider}
+                    project={draft.project}
                     projectGitRepo={draft.project?.gitRepo}
                     projectName={draft.project?.name}
                     isSelected={selectedDraftId === draft.id && !selectedChatId}
