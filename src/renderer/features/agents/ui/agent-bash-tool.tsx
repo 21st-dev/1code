@@ -61,7 +61,7 @@ export const AgentBashTool = memo(function AgentBashTool({
   chatStatus,
 }: AgentBashToolProps) {
   const [isOutputExpanded, setIsOutputExpanded] = useState(false)
-  const { isPending } = getToolStatus(part, chatStatus)
+  const { isPending, isInputStreaming } = getToolStatus(part, chatStatus)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
 
@@ -96,12 +96,6 @@ export const AgentBashTool = memo(function AgentBashTool({
     () => extractCommandSummary(displayCommand),
     [displayCommand],
   )
-
-  // Check if command input is still being streamed
-  // Only consider streaming if chat is actively streaming (prevents hang on stop)
-  // Include "submitted" status - this is when request was sent but streaming hasn't started yet
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
 
   // If command is still being generated (input-streaming state), show loading state
   if (isInputStreaming) {

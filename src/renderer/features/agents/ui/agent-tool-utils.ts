@@ -7,6 +7,8 @@
  * and compare cached values, not object references.
  */
 
+import { getToolLifecycleState } from "./agent-tool-state"
+
 // ============================================================================
 // TOOL STATE CACHE
 // ============================================================================
@@ -90,13 +92,7 @@ function arePartsEqual(prev: any, next: any): boolean {
  * Completed tools don't need to react to chatStatus changes.
  */
 function isToolCompleted(part: any): boolean {
-  // Has output = completed
-  if (part.output !== undefined && part.output !== null) return true
-  // Error state = completed
-  if (part.state === "error") return true
-  // Result state = completed (for some tools)
-  if (part.state === "result") return true
-  return false
+  return getToolLifecycleState(part).isTerminal
 }
 
 /**

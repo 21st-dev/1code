@@ -47,7 +47,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
 }: AgentPlanFileToolProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
-  const { isPending } = getToolStatus(part, chatStatus)
+  const { isPending, isInputStreaming } = getToolStatus(part, chatStatus)
   const isWrite = part.type === "tool-Write"
   // Get mode from per-subChat atomFamily
   const subChatModeAtom = useMemo(() => subChatModeAtomFamily(subChatId), [subChatId])
@@ -70,10 +70,6 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   )
   const [, setIsPlanSidebarOpen] = useAtom(planSidebarOpenAtom)
   const [, setCurrentPlanPath] = useAtom(currentPlanPathAtom)
-
-  // Only consider streaming if chat is actively streaming
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
 
   // Get plan content - for Write mode it's in input.content, for Edit it's in new_string
   const planContent = isWrite ? (part.input?.content || "") : (part.input?.new_string || "")

@@ -4,6 +4,7 @@ import {
   stripEmojis
 } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
+import { RenderErrorBoundary } from "../../../components/ui/error-boundary"
 import {
   AgentIcon,
   AttachIcon,
@@ -7681,31 +7682,37 @@ Make sure to preserve all functionality from both branches when resolving confli
                             }
                           }}
                         >
-                          <ChatViewInner
-                            chat={chat}
-                            subChatId={paneId}
-                            parentChatId={chatId}
-                            provider={inferProviderFromMessages(paneId)}
-                            isFirstSubChat={isFirstSubChat}
-                            onAutoRename={handleAutoRename}
-                            onCreateNewSubChat={handleCreateNewSubChat}
-                            onProviderChange={handleProviderChange}
-                            teamId={selectedTeamId || undefined}
-                            repository={repository}
-                            streamId={agentChatStore.getStreamId(paneId)}
-                            isMobile={isMobileFullscreen}
-                            isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
-                            sandboxId={sandboxId || undefined}
-                            projectPath={worktreePath || undefined}
-                            isArchived={isArchived}
-                            onRestoreWorkspace={handleRestoreWorkspace}
-                            existingPrUrl={agentChat?.prUrl}
-                            isActive={paneId === activeSubChatId}
-                            isSplitPane={true}
-                            workspaceName={agentChat?.name ?? null}
-                            workspaceBranch={agentChat?.branch ?? null}
-                            workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
-                          />
+                          <RenderErrorBoundary
+                            title="Chat pane failed to render"
+                            description="A workspace UI error interrupted this pane. Reload the window to recover."
+                            resetKey={paneId}
+                          >
+                            <ChatViewInner
+                              chat={chat}
+                              subChatId={paneId}
+                              parentChatId={chatId}
+                              provider={inferProviderFromMessages(paneId)}
+                              isFirstSubChat={isFirstSubChat}
+                              onAutoRename={handleAutoRename}
+                              onCreateNewSubChat={handleCreateNewSubChat}
+                              onProviderChange={handleProviderChange}
+                              teamId={selectedTeamId || undefined}
+                              repository={repository}
+                              streamId={agentChatStore.getStreamId(paneId)}
+                              isMobile={isMobileFullscreen}
+                              isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
+                              sandboxId={sandboxId || undefined}
+                              projectPath={worktreePath || undefined}
+                              isArchived={isArchived}
+                              onRestoreWorkspace={handleRestoreWorkspace}
+                              existingPrUrl={agentChat?.prUrl}
+                              isActive={paneId === activeSubChatId}
+                              isSplitPane={true}
+                              workspaceName={agentChat?.name ?? null}
+                              workspaceBranch={agentChat?.branch ?? null}
+                              workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                            />
+                          </RenderErrorBoundary>
                         </div>
                       )
                     }]
@@ -7731,31 +7738,37 @@ Make sure to preserve all functionality from both branches when resolving confli
                               }}
                               aria-hidden
                             >
-                              <ChatViewInner
-                                chat={chat}
-                                subChatId={subChatId}
-                                parentChatId={chatId}
-                                provider={inferProviderFromMessages(subChatId)}
-                                isFirstSubChat={isFirstSubChat}
-                                onAutoRename={handleAutoRename}
-                                onCreateNewSubChat={handleCreateNewSubChat}
-                                onProviderChange={handleProviderChange}
-                                teamId={selectedTeamId || undefined}
-                                repository={repository}
-                                streamId={agentChatStore.getStreamId(subChatId)}
-                                isMobile={isMobileFullscreen}
-                                isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
-                                sandboxId={sandboxId || undefined}
-                                projectPath={worktreePath || undefined}
-                                isArchived={isArchived}
-                                onRestoreWorkspace={handleRestoreWorkspace}
-                                existingPrUrl={agentChat?.prUrl}
-                                isActive={false}
-                                isSplitPane={false}
-                                workspaceName={agentChat?.name ?? null}
-                                workspaceBranch={agentChat?.branch ?? null}
-                                workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
-                              />
+                              <RenderErrorBoundary
+                                title="Chat pane failed to render"
+                                description="A workspace UI error interrupted this pane. Reload the window to recover."
+                                resetKey={subChatId}
+                              >
+                                <ChatViewInner
+                                  chat={chat}
+                                  subChatId={subChatId}
+                                  parentChatId={chatId}
+                                  provider={inferProviderFromMessages(subChatId)}
+                                  isFirstSubChat={isFirstSubChat}
+                                  onAutoRename={handleAutoRename}
+                                  onCreateNewSubChat={handleCreateNewSubChat}
+                                  onProviderChange={handleProviderChange}
+                                  teamId={selectedTeamId || undefined}
+                                  repository={repository}
+                                  streamId={agentChatStore.getStreamId(subChatId)}
+                                  isMobile={isMobileFullscreen}
+                                  isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
+                                  sandboxId={sandboxId || undefined}
+                                  projectPath={worktreePath || undefined}
+                                  isArchived={isArchived}
+                                  onRestoreWorkspace={handleRestoreWorkspace}
+                                  existingPrUrl={agentChat?.prUrl}
+                                  isActive={false}
+                                  isSplitPane={false}
+                                  workspaceName={agentChat?.name ?? null}
+                                  workspaceBranch={agentChat?.branch ?? null}
+                                  workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                                />
+                              </RenderErrorBoundary>
                             </div>
                           )
                         })}
@@ -7794,31 +7807,37 @@ Make sure to preserve all functionality from both branches when resolving confli
                     }}
                     aria-hidden={!isActive}
                   >
-                    <ChatViewInner
-                      chat={chat}
-                      subChatId={subChatId}
-                      parentChatId={chatId}
-                      provider={inferProviderFromMessages(subChatId)}
-                      isFirstSubChat={isFirstSubChat}
-                      onAutoRename={handleAutoRename}
-                      onCreateNewSubChat={handleCreateNewSubChat}
-                      onProviderChange={handleProviderChange}
-                      teamId={selectedTeamId || undefined}
-                      repository={repository}
-                      streamId={agentChatStore.getStreamId(subChatId)}
-                      isMobile={isMobileFullscreen}
-                      isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
-                      sandboxId={sandboxId || undefined}
-                      projectPath={worktreePath || undefined}
-                      isArchived={isArchived}
-                      onRestoreWorkspace={handleRestoreWorkspace}
-                      existingPrUrl={agentChat?.prUrl}
-                      isActive={isActive}
-                      isSplitPane={false}
-                      workspaceName={agentChat?.name ?? null}
-                      workspaceBranch={agentChat?.branch ?? null}
-                      workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
-                    />
+                    <RenderErrorBoundary
+                      title="Chat pane failed to render"
+                      description="A workspace UI error interrupted this pane. Reload the window to recover."
+                      resetKey={subChatId}
+                    >
+                      <ChatViewInner
+                        chat={chat}
+                        subChatId={subChatId}
+                        parentChatId={chatId}
+                        provider={inferProviderFromMessages(subChatId)}
+                        isFirstSubChat={isFirstSubChat}
+                        onAutoRename={handleAutoRename}
+                        onCreateNewSubChat={handleCreateNewSubChat}
+                        onProviderChange={handleProviderChange}
+                        teamId={selectedTeamId || undefined}
+                        repository={repository}
+                        streamId={agentChatStore.getStreamId(subChatId)}
+                        isMobile={isMobileFullscreen}
+                        isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
+                        sandboxId={sandboxId || undefined}
+                        projectPath={worktreePath || undefined}
+                        isArchived={isArchived}
+                        onRestoreWorkspace={handleRestoreWorkspace}
+                        existingPrUrl={agentChat?.prUrl}
+                        isActive={isActive}
+                        isSplitPane={false}
+                        workspaceName={agentChat?.name ?? null}
+                        workspaceBranch={agentChat?.branch ?? null}
+                        workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                      />
+                    </RenderErrorBoundary>
                   </div>
                 )
               })

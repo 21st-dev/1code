@@ -220,7 +220,7 @@ export const AgentEditTool = memo(function AgentEditTool({
   chatStatus,
 }: AgentEditToolProps) {
   const [isOutputExpanded, setIsOutputExpanded] = useState(false)
-  const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
+  const { isPending, isInterrupted, isInputStreaming } = getToolStatus(part, chatStatus)
   const codeTheme = useCodeTheme()
 
   // Atoms for opening diff sidebar and focusing on file
@@ -233,11 +233,6 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Determine tool type
   const isWriteMode = part.type === "tool-Write"
   const toolPrefix = isWriteMode ? "tool-Write" : "tool-Edit"
-
-  // Only consider streaming if chat is actively streaming (prevents spinner hang on stop)
-  // Include "submitted" status - this is when request was sent but streaming hasn't started yet
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
 
   const filePath = part.input?.file_path || ""
   const oldString = part.input?.old_string || ""
