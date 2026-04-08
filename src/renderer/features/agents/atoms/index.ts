@@ -191,6 +191,8 @@ export type SelectedProject = {
   id: string
   name: string
   path: string
+  iconPath?: string | null
+  updatedAt?: string | Date | null
   gitRemoteUrl?: string | null
   gitProvider?: "github" | "gitlab" | "bitbucket" | null
   gitOwner?: string | null

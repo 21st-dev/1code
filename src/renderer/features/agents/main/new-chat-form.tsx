@@ -116,8 +116,11 @@ import {
   generateDraftId,
   deleteNewChatDraft,
   markDraftVisible,
-  type DraftProject,
 } from "../lib/drafts"
+import {
+  getFreshSelectedProject,
+  toSelectedProject,
+} from "../lib/selected-project"
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
@@ -205,13 +208,7 @@ export function NewChatForm({
   // Validate selected project exists in DB
   // While loading, trust the stored value to prevent flicker
   const validatedProject = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value to prevent flicker
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
-    if (!projectsList) return null
-    const exists = projectsList.some((p) => p.id === selectedProject.id)
-    return exists ? selectedProject : null
+    return getFreshSelectedProject(selectedProject, projectsList, isLoadingProjects)
   }, [selectedProject, projectsList, isLoadingProjects])
 
   // Clear invalid project from storage
@@ -1075,19 +1072,7 @@ export function NewChatForm({
           return [project, ...oldData]
         })
 
-        setSelectedProject({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-          gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
-          gitOwner: project.gitOwner,
-          gitRepo: project.gitRepo,
-        })
+        setSelectedProject(toSelectedProject(project))
       }
     },
   })
@@ -1296,6 +1281,8 @@ export function NewChatForm({
             id: validatedProject.id,
             name: validatedProject.name,
             path: validatedProject.path,
+            iconPath: validatedProject.iconPath,
+            updatedAt: validatedProject.updatedAt,
             gitOwner: validatedProject.gitOwner,
             gitRepo: validatedProject.gitRepo,
             gitProvider: validatedProject.gitProvider,

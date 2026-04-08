@@ -9,6 +9,7 @@ import { Logo } from "../../components/ui/logo"
 import { Input } from "../../components/ui/input"
 import { trpc } from "../../lib/trpc"
 import { selectedProjectAtom } from "../agents/atoms"
+import { toSelectedProject } from "../agents/lib/selected-project"
 
 export function SelectRepoPage() {
   const [, setSelectedProject] = useAtom(selectedProjectAtom)
@@ -34,19 +35,7 @@ export function SelectRepoPage() {
           return [project, ...oldData]
         })
 
-        setSelectedProject({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-          gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
-          gitOwner: project.gitOwner,
-          gitRepo: project.gitRepo,
-        })
+        setSelectedProject(toSelectedProject(project))
       }
     },
   })
@@ -66,19 +55,7 @@ export function SelectRepoPage() {
           return [project, ...oldData]
         })
 
-        setSelectedProject({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-          gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
-          gitOwner: project.gitOwner,
-          gitRepo: project.gitRepo,
-        })
+        setSelectedProject(toSelectedProject(project))
         setShowClonePage(false)
         setGithubUrl("")
       }

@@ -1,50 +1,10 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { cn } from "../../../lib/utils"
-import {
-  GitHubLogo,
-  IconSpinner,
-  PlanIcon,
-  AgentIcon,
-} from "../../../components/ui/canvas-icons"
 import { useAtomValue } from "jotai"
+import { cn } from "../../../lib/utils"
+import { IconSpinner, PlanIcon, AgentIcon } from "../../../components/ui/canvas-icons"
+import { ProjectIcon } from "../../../components/ui/project-icon"
 import { agentsUnseenChangesAtom, lastChatModesAtom } from "../atoms"
-
-// GitHub avatar with loading placeholder
-function GitHubAvatar({
-  gitOwner,
-  className = "h-4 w-4",
-}: {
-  gitOwner: string
-  className?: string
-}) {
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [hasError, setHasError] = useState(false)
-
-  const handleLoad = useCallback(() => setIsLoaded(true), [])
-  const handleError = useCallback(() => setHasError(true), [])
-
-  if (hasError) {
-    return <GitHubLogo className={cn(className, "text-muted-foreground flex-shrink-0")} />
-  }
-
-  return (
-    <div className={cn(className, "relative flex-shrink-0")}>
-      {/* Placeholder background while loading */}
-      {!isLoaded && (
-        <div className="absolute inset-0 rounded-sm bg-muted" />
-      )}
-      <img
-        src={`https://github.com/${gitOwner}.png?size=64`}
-        alt={gitOwner}
-        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
-        onLoad={handleLoad}
-        onError={handleError}
-      />
-    </div>
-  )
-}
 
 interface AgentChatCardProps {
   chat: {
@@ -59,9 +19,15 @@ interface AgentChatCardProps {
   onClick?: () => void
   onMouseEnter?: () => void
   variant?: "sidebar" | "quick-switch"
-  // Git info from project (passed from parent)
-  gitOwner?: string | null
-  gitProvider?: string | null
+  project?:
+    | {
+        id?: string | null
+        name?: string | null
+        gitRepo?: string | null
+        iconPath?: string | null
+        updatedAt?: string | Date | null
+      }
+    | null
   repoName?: string | null
 }
 
@@ -71,31 +37,25 @@ function ChatIconWithBadge({
   hasUnseenChanges,
   lastMode,
   isSelected = false,
-  gitOwner,
-  gitProvider,
+  project,
 }: {
   isLoading: boolean
   hasUnseenChanges: boolean
   lastMode: "plan" | "agent"
   isSelected?: boolean
-  gitOwner?: string | null
-  gitProvider?: string | null
+  project?:
+    | {
+        id?: string | null
+        name?: string | null
+        gitRepo?: string | null
+        iconPath?: string | null
+        updatedAt?: string | Date | null
+      }
+    | null
 }) {
-  // Show GitHub avatar if available, otherwise blank project icon
-  const renderMainIcon = () => {
-    if (gitOwner && gitProvider === "github") {
-      return <GitHubAvatar gitOwner={gitOwner} />
-    }
-
-    return (
-      <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-    )
-  }
-
   return (
     <div className="relative flex-shrink-0 h-4 w-4">
-      {renderMainIcon()}
-      {/* Badge in bottom-right corner */}
+      <ProjectIcon project={project} className="h-4 w-4" />
       <div
         className={cn(
           "absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center",
@@ -138,23 +98,19 @@ export function AgentChatCard({
   onClick,
   onMouseEnter,
   variant = "sidebar",
-  gitOwner,
-  gitProvider,
+  project,
   repoName,
 }: AgentChatCardProps) {
-  // Get status atoms
   const unseenChanges = useAtomValue(agentsUnseenChangesAtom)
   const lastChatModes = useAtomValue(lastChatModesAtom)
 
   const hasUnseenChanges = unseenChanges.has(chat.id)
   const lastMode = lastChatModes.get(chat.id) || "agent"
-  // isLoading is already derived from loadingSubChatsAtom (local tracking)
   const actualIsLoading = isLoading
 
   if (variant === "quick-switch") {
-    // Desktop: use branch from chat and repo name from project
     const branch = chat.branch
-    const displayRepoName = repoName || "Local project"
+    const displayRepoName = repoName || project?.gitRepo || project?.name || "Local project"
     const displayText = branch
       ? `${displayRepoName} • ${branch}`
       : displayRepoName
@@ -175,12 +131,10 @@ export function AgentChatCard({
               hasUnseenChanges={hasUnseenChanges}
               lastMode={lastMode}
               isSelected={isSelected}
-              gitOwner={gitOwner}
-              gitProvider={gitProvider}
+              project={project}
             />
           </div>
           <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-            {/* Chat name */}
             <span
               className={cn(
                 "truncate block text-sm leading-tight",
@@ -189,7 +143,6 @@ export function AgentChatCard({
             >
               {chat.name || "Untitled Chat"}
             </span>
-            {/* Branch/Repository info */}
             <span
               className={cn(
                 "text-[11px] truncate",
@@ -206,7 +159,6 @@ export function AgentChatCard({
     )
   }
 
-  // Sidebar variant (default)
   return (
     <div
       onClick={onClick}
@@ -225,8 +177,7 @@ export function AgentChatCard({
             hasUnseenChanges={hasUnseenChanges}
             lastMode={lastMode}
             isSelected={isSelected}
-            gitOwner={gitOwner}
-            gitProvider={gitProvider}
+            project={project}
           />
         </div>
         <div className="flex-1 min-w-0">

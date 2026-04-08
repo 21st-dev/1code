@@ -20,6 +20,7 @@ import {
   betaKanbanEnabledAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom, desktopViewAtom, fileSearchDialogOpenAtom } from "../agents/atoms"
+import { getFreshSelectedProject, toSelectedProject } from "../agents/lib/selected-project"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -118,13 +119,7 @@ export function AgentsLayout() {
   // Validated project - only valid if exists in DB
   // While loading, trust localStorage value to prevent clearing on app restart
   const validatedProject = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value to prevent flicker and clearing
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
-    if (!projects) return null
-    const exists = projects.some((p) => p.id === selectedProject.id)
-    return exists ? selectedProject : null
+    return getFreshSelectedProject(selectedProject, projects, isLoadingProjects)
   }, [selectedProject, projects, isLoadingProjects])
 
   // Clear invalid project from storage (only after loading completes)
@@ -227,7 +222,7 @@ export function AgentsLayout() {
           onClick: () => {
             const projectMatch = projects?.find((project) => project.id === payload.projectId)
             if (projectMatch) {
-              setSelectedProject(projectMatch as any)
+              setSelectedProject(toSelectedProject(projectMatch))
             }
             setSettingsActiveTab("projects")
             setSettingsDialogOpen(true)

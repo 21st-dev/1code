@@ -19,50 +19,15 @@ import {
   SearchIcon,
   ArchiveIcon,
   UnarchiveIcon,
-  GitHubLogo,
   CloudIcon,
 } from "../../../components/ui/icons"
+import { ProjectIcon } from "../../../components/ui/project-icon"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
-
-// GitHub avatar with loading placeholder
-function GitHubAvatar({
-  gitOwner,
-  className = "h-4 w-4",
-}: {
-  gitOwner: string
-  className?: string
-}) {
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [hasError, setHasError] = useState(false)
-
-  const handleLoad = useCallback(() => setIsLoaded(true), [])
-  const handleError = useCallback(() => setHasError(true), [])
-
-  if (hasError) {
-    return <GitHubLogo className={cn(className, "text-muted-foreground flex-shrink-0")} />
-  }
-
-  return (
-    <div className={cn(className, "relative flex-shrink-0")}>
-      {/* Placeholder background while loading */}
-      {!isLoaded && (
-        <div className="absolute inset-0 rounded-sm bg-muted" />
-      )}
-      <img
-        src={`https://github.com/${gitOwner}.png?size=64`}
-        alt={gitOwner}
-        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
-        onLoad={handleLoad}
-        onError={handleError}
-      />
-    </div>
-  )
-}
 
 // Format relative time - moved outside component to avoid recreation
 const formatTime = (dateInput: Date | string) => {
@@ -103,7 +68,18 @@ interface ArchiveChatItemProps {
   isSelected: boolean
   isCurrentChat: boolean
   showIcon: boolean
-  projectsMap: Map<string, { gitOwner: string | null; gitRepo: string | null; gitProvider: string | null; name: string }>
+  projectsMap: Map<
+    string,
+    {
+      id?: string
+      gitOwner: string | null
+      gitRepo: string | null
+      gitProvider: string | null
+      name: string
+      iconPath?: string | null
+      updatedAt?: string | Date | null
+    }
+  >
   stats?: { additions: number; deletions: number }
   onSelect: (id: string) => void
   onRestore: (id: string) => void
@@ -125,10 +101,7 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
   const branch = chat.branch
   // For local chats, use projectsMap; for remote chats, use chat properties directly
   const project = chat.projectId ? projectsMap.get(chat.projectId) : null
-  const gitOwner = chat.gitOwner || project?.gitOwner
   const gitRepo = chat.repository || project?.gitRepo
-  const gitProvider = chat.gitProvider || project?.gitProvider
-  const isGitHubRepo = gitProvider === "github" && !!gitOwner
 
   const repoName = gitRepo || project?.name
   const displayText = branch
@@ -165,18 +138,24 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
       <div className="flex items-start gap-2.5">
         {showIcon && (
           <div className="pt-0.5">
-            {isGitHubRepo && gitOwner ? (
-              <GitHubAvatar gitOwner={gitOwner} />
-            ) : (
-              <GitHubLogo
-                className={cn(
-                  "h-4 w-4 flex-shrink-0 transition-colors duration-75",
-                  isSelected
-                    ? "text-foreground"
-                    : "text-muted-foreground",
-                )}
-              />
-            )}
+            <ProjectIcon
+              project={
+                project
+                  ? {
+                      id: project.id ?? chat.projectId ?? chat.id,
+                      name: project.name,
+                      gitRepo: project.gitRepo,
+                      iconPath: project.iconPath,
+                      updatedAt: project.updatedAt,
+                    }
+                  : {
+                      id: chat.id,
+                      name: repoName || chat.name || "Local project",
+                      gitRepo,
+                    }
+              }
+              className="h-4 w-4"
+            />
           </div>
         )}
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">

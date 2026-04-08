@@ -51,6 +51,8 @@ export interface DraftProject {
   id: string
   name: string
   path: string
+  iconPath?: string | null
+  updatedAt?: string | Date | null
   gitOwner?: string | null
   gitRepo?: string | null
   gitProvider?: string | null
@@ -631,4 +633,3 @@ export async function saveSubChatDraftWithAttachments(
     return { success: false, error: "save_failed" }
   }
 }
-

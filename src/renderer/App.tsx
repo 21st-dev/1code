@@ -6,6 +6,7 @@ import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
 import { WindowProvider, getInitialWindowParams } from "./contexts/WindowContext"
 import { selectedProjectAtom, selectedAgentChatIdAtom } from "./features/agents/atoms"
+import { getFreshSelectedProject } from "./features/agents/lib/selected-project"
 import { useAgentSubChatStore } from "./features/agents/stores/sub-chat-store"
 import { AgentsLayout } from "./features/layout/agents-layout"
 import {
@@ -119,13 +120,7 @@ function AppContent() {
 
   // Validated project - only valid if exists in DB
   const validatedProject = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value to prevent flicker
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
-    if (!projects) return null
-    const exists = projects.some((p) => p.id === selectedProject.id)
-    return exists ? selectedProject : null
+    return getFreshSelectedProject(selectedProject, projects, isLoadingProjects)
   }, [selectedProject, projects, isLoadingProjects])
 
   // Determine which page to show:
