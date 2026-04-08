@@ -25,6 +25,7 @@ import { IconChevronDown, CheckIcon, FolderPlusIcon, GitHubIcon } from "../../..
 import { ProjectIcon } from "../../../components/ui/project-icon"
 import { trpc } from "../../../lib/trpc"
 import { selectedProjectAtom } from "../atoms"
+import { getFreshSelectedProject, toSelectedProject } from "../lib/selected-project"
 
 export function ProjectSelector() {
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
@@ -67,19 +68,7 @@ export function ProjectSelector() {
           return [project, ...oldData]
         })
 
-        setSelectedProject({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-          gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
-          gitOwner: project.gitOwner,
-          gitRepo: project.gitRepo,
-        })
+        setSelectedProject(toSelectedProject(project))
       }
     },
   })
@@ -99,19 +88,7 @@ export function ProjectSelector() {
           return [project, ...oldData]
         })
 
-        setSelectedProject({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-          gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
-          gitOwner: project.gitOwner,
-          gitRepo: project.gitRepo,
-        })
+        setSelectedProject(toSelectedProject(project))
         setGithubDialogOpen(false)
         setGithubUrl("")
       }
@@ -131,19 +108,7 @@ export function ProjectSelector() {
   const handleSelectProject = (projectId: string) => {
     const project = projects?.find((p) => p.id === projectId)
     if (project) {
-      setSelectedProject({
-        id: project.id,
-        name: project.name,
-        path: project.path,
-        gitRemoteUrl: project.gitRemoteUrl,
-        gitProvider: project.gitProvider as
-          | "github"
-          | "gitlab"
-          | "bitbucket"
-          | null,
-        gitOwner: project.gitOwner,
-        gitRepo: project.gitRepo,
-      })
+      setSelectedProject(toSelectedProject(project))
       setOpen(false)
     }
   }
@@ -151,17 +116,7 @@ export function ProjectSelector() {
   // Validate selected project still exists and use latest DB data (e.g. renamed project)
   // While loading, trust localStorage value to prevent showing "Select repo" on app restart
   const validSelection = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB and use fresh data
-    if (!projects) return null
-    const dbProject = projects.find((p) => p.id === selectedProject.id)
-    if (!dbProject) return null
-    return {
-      ...selectedProject,
-      name: dbProject.name,
-    }
+    return getFreshSelectedProject(selectedProject, projects, isLoadingProjects)
   }, [selectedProject, projects, isLoadingProjects])
 
   // If no projects exist and none selected - show direct "Add repository" button

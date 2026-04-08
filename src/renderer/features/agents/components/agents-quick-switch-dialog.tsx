@@ -18,7 +18,16 @@ interface AgentsQuickSwitchDialogProps {
     projectId: string
   }>
   selectedIndex: number
-  projectsMap: Map<string, { gitOwner?: string | null; gitProvider?: string | null; gitRepo?: string | null; name: string }>
+  projectsMap: Map<
+    string,
+    {
+      id?: string
+      gitRepo?: string | null
+      name: string
+      iconPath?: string | null
+      updatedAt?: string | Date | null
+    }
+  >
   onHover?: (index: number) => void
 }
 
@@ -76,8 +85,7 @@ export function AgentsQuickSwitchDialog({
                           isSelected={isSelected}
                           isLoading={isLoading}
                           variant="quick-switch"
-                          gitOwner={project?.gitOwner}
-                          gitProvider={project?.gitProvider}
+                          project={project}
                           repoName={project?.gitRepo || project?.name}
                           onMouseEnter={() => onHover?.(index)}
                         />

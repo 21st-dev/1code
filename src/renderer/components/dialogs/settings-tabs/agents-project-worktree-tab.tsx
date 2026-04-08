@@ -4,9 +4,9 @@ import { useAtomValue, useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { Button, buttonVariants } from "../../ui/button"
 import { Input } from "../../ui/input"
-import { Plus, Trash2, FolderOpen } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { AIPenIcon, ExternalLinkIcon, FolderFilledIcon, ImageIcon } from "../../ui/icons"
-import { invalidateProjectIcon, useProjectIcon } from "../../../lib/hooks/use-project-icon"
+import { invalidateProjectIcon } from "../../../lib/hooks/use-project-icon"
 import { ProjectIcon } from "../../ui/project-icon"
 import finderIcon from "../../../assets/app-icons/finder.png"
 import {
@@ -36,11 +36,13 @@ import {
 import { cn } from "../../../lib/utils"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms"
+import { toSelectedProject } from "../../../features/agents/lib/selected-project"
 
 // --- Detail Panel ---
 function ProjectDetail({ projectId }: { projectId: string }) {
+  const utils = trpc.useUtils()
   // Get config for selected project
-  const { data: configData, refetch: refetchConfig } =
+  const { data: configData } =
     trpc.worktreeConfig.get.useQuery(
       { projectId },
       { enabled: !!projectId },
@@ -65,18 +67,32 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   })
 
   // Get project info
-  const { data: project, refetch: refetchProject } = trpc.projects.get.useQuery(
+  const { data: project } = trpc.projects.get.useQuery(
     { id: projectId },
     { enabled: !!projectId },
   )
 
-  // Cached project icon
-  const { src: iconSrc } = useProjectIcon(project)
+  const syncProjectState = useCallback((updatedProject: NonNullable<typeof project>) => {
+    utils.projects.get.setData({ id: projectId }, updatedProject)
+    utils.projects.list.setData(undefined, (oldProjects) => {
+      if (!oldProjects) return [updatedProject]
+      const exists = oldProjects.some((candidate) => candidate.id === updatedProject.id)
+      if (!exists) return [updatedProject, ...oldProjects]
+      return oldProjects.map((candidate) =>
+        candidate.id === updatedProject.id ? updatedProject : candidate,
+      )
+    })
+    setSelectedProject((current) =>
+      current?.id === updatedProject.id ? toSelectedProject(updatedProject) : current,
+    )
+  }, [projectId, setSelectedProject, utils.projects.get, utils.projects.list])
 
   // Rename mutation
   const renameMutation = trpc.projects.rename.useMutation({
-    onSuccess: () => {
-      refetchProject()
+    onSuccess: (updatedProject) => {
+      if (updatedProject) {
+        syncProjectState(updatedProject)
+      }
       toast.success("Project renamed")
     },
     onError: (err) => {
@@ -86,7 +102,13 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
   // Delete project mutation
   const deleteMutation = trpc.projects.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: (deletedProject) => {
+      if (deletedProject) {
+        utils.projects.get.setData({ id: projectId }, undefined)
+        utils.projects.list.setData(undefined, (oldProjects) =>
+          oldProjects?.filter((candidate) => candidate.id !== deletedProject.id) ?? [],
+        )
+      }
       toast.success("Project removed from list")
       setSelectedProject((current) => {
         if (current?.id === projectId) {
@@ -105,7 +127,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     onSuccess: (data) => {
       if (!data) return // User cancelled file picker
       invalidateProjectIcon(projectId)
-      refetchProject()
+      syncProjectState(data)
       toast.success("Icon updated")
     },
     onError: (err) => {
@@ -114,9 +136,11 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   })
 
   const removeIconMutation = trpc.projects.removeIcon.useMutation({
-    onSuccess: () => {
+    onSuccess: (updatedProject) => {
       invalidateProjectIcon(projectId)
-      refetchProject()
+      if (updatedProject) {
+        syncProjectState(updatedProject)
+      }
       toast.success("Icon removed")
     },
   })
@@ -336,15 +360,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   onClick={() => uploadIconMutation.mutate({ id: projectId })}
                   title="Click to change icon"
                 >
-                  {iconSrc ? (
-                    <img
-                      src={iconSrc}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <FolderOpen className="h-5 w-5 text-muted-foreground" />
-                  )}
+                  <ProjectIcon project={project} className="h-full w-full" />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover/icon:opacity-100 transition-opacity duration-150">
                     <ImageIcon className="h-4 w-4 text-white" />
                   </div>

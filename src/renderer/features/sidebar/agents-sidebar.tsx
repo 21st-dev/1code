@@ -90,7 +90,6 @@ import {
   ProfileIcon,
   PublisherStudioIcon,
   SearchIcon,
-  GitHubLogo,
   LoadingDot,
   ArchiveIcon,
   TrashIcon,
@@ -103,6 +102,7 @@ import {
 import { Logo } from "../../components/ui/logo"
 import { Input } from "../../components/ui/input"
 import { Button } from "../../components/ui/button"
+import { ProjectIcon } from "../../components/ui/project-icon"
 import {
   selectedAgentChatIdAtom,
   selectedChatIsRemoteAtom,
@@ -142,41 +142,6 @@ import { exportChat, copyChat, type ExportFormat } from "../agents/lib/export-ch
 const FEEDBACK_URL =
   import.meta.env.VITE_FEEDBACK_URL || "https://discord.gg/8ektTZGnj4"
 
-// GitHub avatar with loading placeholder
-const GitHubAvatar = React.memo(function GitHubAvatar({
-  gitOwner,
-  className = "h-4 w-4",
-}: {
-  gitOwner: string
-  className?: string
-}) {
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [hasError, setHasError] = useState(false)
-
-  const handleLoad = useCallback(() => setIsLoaded(true), [])
-  const handleError = useCallback(() => setHasError(true), [])
-
-  if (hasError) {
-    return <GitHubLogo className={cn(className, "text-muted-foreground flex-shrink-0")} />
-  }
-
-  return (
-    <div className={cn(className, "relative flex-shrink-0")}>
-      {/* Placeholder background while loading */}
-      {!isLoaded && (
-        <div className="absolute inset-0 rounded-sm bg-muted" />
-      )}
-      <img
-        src={`https://github.com/${gitOwner}.png?size=64`}
-        alt={gitOwner}
-        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
-        onLoad={handleLoad}
-        onError={handleError}
-      />
-    </div>
-  )
-})
-
 // Component to render chat icon with loading status
 const ChatIcon = React.memo(function ChatIcon({
   isSelected,
@@ -187,8 +152,7 @@ const ChatIcon = React.memo(function ChatIcon({
   isMultiSelectMode = false,
   isChecked = false,
   onCheckboxClick,
-  gitOwner,
-  gitProvider,
+  projectIcon,
   showIcon = true,
 }: {
   isSelected: boolean
@@ -199,25 +163,17 @@ const ChatIcon = React.memo(function ChatIcon({
   isMultiSelectMode?: boolean
   isChecked?: boolean
   onCheckboxClick?: (e: React.MouseEvent) => void
-  gitOwner?: string | null
-  gitProvider?: string | null
+  projectIcon?:
+    | {
+        id?: string | null
+        name?: string | null
+        gitRepo?: string | null
+        iconPath?: string | null
+        updatedAt?: string | Date | null
+      }
+    | null
   showIcon?: boolean
 }) {
-  // Show GitHub avatar if available, otherwise blank project icon
-  const renderMainIcon = () => {
-    if (gitOwner && gitProvider === "github") {
-      return <GitHubAvatar gitOwner={gitOwner} />
-    }
-    return (
-      <GitHubLogo
-        className={cn(
-          "h-4 w-4 flex-shrink-0 transition-colors",
-          isSelected ? "text-foreground" : "text-muted-foreground",
-        )}
-      />
-    )
-  }
-
   // When icon is hidden and not in multi-select mode, render nothing
   // The loader/status will be rendered inline by the parent component
   if (!showIcon && !isMultiSelectMode) {
@@ -225,7 +181,7 @@ const ChatIcon = React.memo(function ChatIcon({
   }
 
   return (
-    <div className="relative flex-shrink-0 w-4 h-4">
+    <div className="relative flex-shrink-0 w-5 h-5">
       {/* Checkbox slides in from left, icon slides out */}
       <div
         className={cn(
@@ -251,7 +207,7 @@ const ChatIcon = React.memo(function ChatIcon({
             : "opacity-100 scale-100",
         )}
       >
-        {renderMainIcon()}
+        <ProjectIcon project={projectIcon} className="h-5 w-5" />
       </div>
       {/* Badge in bottom-right corner: question > loader > amber dot > blue dot - hidden during multi-select or when icon is hidden */}
       <AnimatePresence mode="wait">
@@ -323,8 +279,9 @@ const DraftItem = React.memo(function DraftItem({
   draftId,
   draftText,
   draftUpdatedAt,
-  projectGitOwner,
-  projectGitProvider,
+  projectId,
+  projectIconPath,
+  projectUpdatedAt,
   projectGitRepo,
   projectName,
   isSelected,
@@ -338,8 +295,9 @@ const DraftItem = React.memo(function DraftItem({
   draftId: string
   draftText: string
   draftUpdatedAt: number
-  projectGitOwner: string | null | undefined
-  projectGitProvider: string | null | undefined
+  projectId: string | null | undefined
+  projectIconPath: string | null | undefined
+  projectUpdatedAt: string | Date | null | undefined
   projectGitRepo: string | null | undefined
   projectName: string | null | undefined
   isSelected: boolean
@@ -367,13 +325,16 @@ const DraftItem = React.memo(function DraftItem({
       <div className="flex items-start gap-2.5">
         {showIcon && (
           <div className="pt-0.5">
-            <div className="relative flex-shrink-0 w-4 h-4">
-              {projectGitOwner && projectGitProvider === "github" ? (
-                <GitHubAvatar gitOwner={projectGitOwner} />
-              ) : (
-                <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-              )}
-            </div>
+            <ProjectIcon
+              project={{
+                id: projectId ?? draftId,
+                name: projectName,
+                gitRepo: projectGitRepo,
+                iconPath: projectIconPath,
+                updatedAt: projectUpdatedAt,
+              }}
+              className="h-5 w-5"
+            />
           </div>
         )}
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
@@ -436,8 +397,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   isDesktop,
   isPinned,
   displayText,
-  gitOwner,
-  gitProvider,
+  projectIcon,
   stats,
   selectedChatIdsSize,
   canShowPinOption,
@@ -484,8 +444,15 @@ const AgentChatItem = React.memo(function AgentChatItem({
   isDesktop: boolean
   isPinned: boolean
   displayText: string
-  gitOwner: string | null | undefined
-  gitProvider: string | null | undefined
+  projectIcon?:
+    | {
+        id?: string | null
+        name?: string | null
+        gitRepo?: string | null
+        iconPath?: string | null
+        updatedAt?: string | Date | null
+      }
+    | null
   stats: { fileCount: number; additions: number; deletions: number } | undefined
   selectedChatIdsSize: number
   canShowPinOption: boolean
@@ -581,8 +548,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
                   isMultiSelectMode={isMultiSelectMode}
                   isChecked={isChecked}
                   onCheckboxClick={(e) => onCheckboxClick(e, chatId)}
-                  gitOwner={gitOwner}
-                  gitProvider={gitProvider}
+                  projectIcon={projectIcon}
                   showIcon={showIcon}
                 />
               </div>
@@ -864,7 +830,18 @@ interface ChatListSectionProps {
   isMobileFullscreen: boolean
   isDesktop: boolean
   pinnedChatIds: Set<string>
-  projectsMap: Map<string, { gitOwner?: string | null; gitProvider?: string | null; gitRepo?: string | null; name?: string | null }>
+  projectsMap: Map<
+    string,
+    {
+      id?: string
+      gitOwner?: string | null
+      gitProvider?: string | null
+      gitRepo?: string | null
+      name?: string | null
+      iconPath?: string | null
+      updatedAt?: string | Date | null
+    }
+  >
   workspaceFileStats: Map<string, { fileCount: number; additions: number; deletions: number }>
   filteredChats: Array<{ id: string }>
   canShowPinOption: boolean
@@ -985,11 +962,7 @@ const ChatListSection = React.memo(function ChatListSection({
           const isLastInFilteredChats = globalIndex === filteredChats.length - 1
           const isJustCreated = justCreatedIds.has(chat.id)
 
-          // For remote chats, extract gitOwner from meta.repository (e.g. "owner/repo" -> "owner")
-          const gitOwner = chat.isRemote
-            ? chat.meta?.repository?.split('/')[0]
-            : project?.gitOwner
-          const gitProvider = chat.isRemote ? 'github' : project?.gitProvider
+          const remoteRepoName = chat.meta?.repository?.split("/")[1] || chat.meta?.repository
 
           return (
             <AgentChatItem
@@ -1012,8 +985,26 @@ const ChatListSection = React.memo(function ChatListSection({
               isDesktop={isDesktop}
               isPinned={isPinned}
               displayText={displayText}
-              gitOwner={gitOwner}
-              gitProvider={gitProvider}
+              projectIcon={
+                chat.isRemote
+                  ? {
+                      id: chat.id,
+                      name: repoName || chat.name || "Remote project",
+                      gitRepo: remoteRepoName,
+                    }
+                  : project
+                    ? {
+                        id: project.id,
+                        name: project.name,
+                        gitRepo: project.gitRepo,
+                        iconPath: project.iconPath,
+                        updatedAt: project.updatedAt,
+                      }
+                    : {
+                        id: chat.id,
+                        name: repoName || chat.name || "Local project",
+                      }
+              }
               stats={stats ?? undefined}
               selectedChatIdsSize={selectedChatIds.size}
               canShowPinOption={canShowPinOption}
@@ -3256,8 +3247,9 @@ export function AgentsSidebar({
                     draftId={draft.id}
                     draftText={draft.text}
                     draftUpdatedAt={draft.updatedAt}
-                    projectGitOwner={draft.project?.gitOwner}
-                    projectGitProvider={draft.project?.gitProvider}
+                    projectId={draft.project?.id}
+                    projectIconPath={draft.project?.iconPath}
+                    projectUpdatedAt={draft.project?.updatedAt}
                     projectGitRepo={draft.project?.gitRepo}
                     projectName={draft.project?.name}
                     isSelected={selectedDraftId === draft.id && !selectedChatId}
