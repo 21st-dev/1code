@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, memo, useMemo } from "react"
+import { useAtomValue } from "jotai"
 import { cn } from "../../../lib/utils"
 import { useOverflowDetection } from "../../../hooks/use-overflow-detection"
 import {
@@ -12,6 +13,7 @@ import {
 import { AgentImageItem } from "./agent-image-item"
 import { RenderFileMentions, extractTextMentions, TextMentionBlocks } from "../mentions/render-file-mentions"
 import { useSearchHighlight, useSearchQuery } from "../search"
+import { chatFontSizeAtom } from "../atoms"
 
 interface AgentUserMessageBubbleProps {
   messageId: string
@@ -20,6 +22,8 @@ interface AgentUserMessageBubbleProps {
     data?: {
       filename?: string
       url?: string
+      base64Data?: string
+      mediaType?: string
     }
   }>
   /** If true, renders only images and text - no TextMentionBlocks (they're rendered by parent) */
@@ -128,6 +132,9 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
   // VS Code style overflow detection using ResizeObserver (no layout thrashing)
   const showGradient = useOverflowDetection(contentRef, [textContent])
 
+  // Chat font size preference — applied to text bubble and expanded dialog
+  const chatFontSize = useAtomValue(chatFontSizeAtom)
+
   // Search highlight support
   const highlights = useSearchHighlight(messageId, 0, "text")
   const searchQuery = useSearchQuery()
@@ -228,12 +235,13 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
               ref={contentRef}
               onClick={() => showGradient && !hasCurrentSearchHighlight && setIsExpanded(true)}
               className={cn(
-                "relative bg-input-background border px-3 py-2 rounded-xl whitespace-pre-wrap text-sm transition-all duration-200 max-h-[100px]",
+                "relative bg-input-background border px-3 py-2 rounded-xl whitespace-pre-wrap transition-all duration-200 max-h-[100px]",
                 // When searching in this message, allow scroll; otherwise hide overflow
                 hasCurrentSearchHighlight ? "overflow-y-auto" : "overflow-hidden",
                 // Cursor and hover only when can expand (not during search)
                 showGradient && !hasCurrentSearchHighlight && "cursor-pointer hover:brightness-110",
               )}
+              style={{ fontSize: `${chatFontSize}px` }}
               data-message-id={messageId}
               data-part-index={0}
               data-part-type="text"
@@ -289,7 +297,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
             {textMentions.length > 0 && (
               <TextMentionBlocks mentions={textMentions} />
             )}
-            <div className="whitespace-pre-wrap text-sm">
+            <div className="whitespace-pre-wrap" style={{ fontSize: `${chatFontSize}px` }}>
               <RenderFileMentions text={cleanedText} />
             </div>
           </div>

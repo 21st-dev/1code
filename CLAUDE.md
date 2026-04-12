@@ -79,7 +79,7 @@ src/
         ├── atoms/           # Global Jotai atoms
         ├── stores/          # Global Zustand stores
         ├── trpc.ts          # Real tRPC client
-        └── mock-api.ts      # DEPRECATED - being replaced with real tRPC
+        └── api-bridge.ts    # Wraps tRPC calls + stubs for web-only features
 ```
 
 ## Database (Drizzle ORM)
@@ -243,7 +243,6 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 - tRPC routers structure
 
 **In Progress:**
-- Replacing `mock-api.ts` with real tRPC calls in renderer
 - ProjectSelector component (local folder picker)
 
 **Planned:**

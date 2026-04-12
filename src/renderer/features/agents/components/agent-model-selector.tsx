@@ -102,7 +102,7 @@ function CodexThinkingSubMenu({
   const subMenuRef = useRef<HTMLDivElement>(null)
   const [showSub, setShowSub] = useState(false)
   const [subPos, setSubPos] = useState({ top: 0, left: 0 })
-  const closeTimeout = useRef<ReturnType<typeof setTimeout>>()
+  const closeTimeout = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const scheduleClose = useCallback(() => {
     closeTimeout.current = setTimeout(() => setShowSub(false), 150)

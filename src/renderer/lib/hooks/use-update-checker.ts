@@ -45,7 +45,6 @@ export function useUpdateChecker() {
     // Checking for updates
     unsubs.push(
       api.onUpdateChecking?.(() => {
-        console.log("[Update] Checking for updates...")
         setState({ status: "checking" })
       }),
     )
@@ -53,11 +52,8 @@ export function useUpdateChecker() {
     // Update available
     unsubs.push(
       api.onUpdateAvailable?.((info) => {
-        console.log(`[Update] Update available: v${info.version}`)
-
         // Check if user dismissed this version
         if (isDismissed(info.version)) {
-          console.log(`[Update] Version ${info.version} was dismissed, ignoring`)
           setState({ status: "idle" })
           return
         }
@@ -72,7 +68,6 @@ export function useUpdateChecker() {
     // No update available
     unsubs.push(
       api.onUpdateNotAvailable?.(() => {
-        console.log("[Update] App is up to date")
         setState({ status: "idle" })
       }),
     )
@@ -80,7 +75,6 @@ export function useUpdateChecker() {
     // Download progress
     unsubs.push(
       api.onUpdateProgress?.((progress) => {
-        console.log(`[Update] Download progress: ${progress.percent.toFixed(1)}%`)
         setState({
           status: "downloading",
           version: versionRef.current,
@@ -95,7 +89,6 @@ export function useUpdateChecker() {
     // Update downloaded and ready
     unsubs.push(
       api.onUpdateDownloaded?.((info) => {
-        console.log(`[Update] Update downloaded: v${info.version}`)
         setState({
           status: "ready",
           version: info.version,
@@ -117,7 +110,6 @@ export function useUpdateChecker() {
     // Manual check from menu - clear dismiss state
     unsubs.push(
       api.onUpdateManualCheck?.(() => {
-        console.log("[Update] Manual check triggered - clearing dismiss state")
         localStorage.removeItem(DISMISSED_KEY)
       }),
     )

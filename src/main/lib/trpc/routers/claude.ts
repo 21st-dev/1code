@@ -1034,7 +1034,6 @@ export const claudeRouter = router({
             }
 
             const transform = createTransformer({
-              emitSdkMessageUuid: historyEnabled,
               isUsingOllama,
             })
 
@@ -1399,7 +1398,9 @@ export const claudeRouter = router({
 
             // Build final env - only add OAuth token if we have one AND no existing API config
             // Existing CLI config takes precedence over OAuth
-            const finalEnv = {
+            // Typed as Record<string, string> to preserve access to dynamic env vars
+            // like ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
               ...(claudeCodeToken &&
                 !hasExistingApiConfig && {
@@ -1864,19 +1865,19 @@ ${prompt}
                           : ""
                       if (!/\.md$/i.test(filePath)) {
                         return {
-                          behavior: "deny",
+                          behavior: "deny" as const,
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
                       }
                     } else if (toolName == "ExitPlanMode") {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
@@ -1931,13 +1932,15 @@ ${prompt}
                         askToolPart.state = "result"
                       }
                       // Emit result to frontend so it updates in real-time
+                      // Cast through unknown because ask-user-question-result is a custom
+                      // extension not in the UIMessageChunk union type
                       safeEmit({
                         type: "ask-user-question-result",
                         toolUseId: toolUseID,
                         result: errorMessage,
-                      } as UIMessageChunk)
+                      } as unknown as UIMessageChunk)
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: errorMessage,
                       }
                     }
@@ -1950,18 +1953,20 @@ ${prompt}
                       askToolPart.state = "result"
                     }
                     // Emit result to frontend so it updates in real-time
+                    // Cast through unknown because ask-user-question-result is a custom
+                    // extension not in the UIMessageChunk union type
                     safeEmit({
                       type: "ask-user-question-result",
                       toolUseId: toolUseID,
                       result: answerResult,
-                    } as UIMessageChunk)
+                    } as unknown as UIMessageChunk)
                     return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      behavior: "allow" as const,
+                      updatedInput: response.updatedInput as Record<string, unknown>,
                     }
                   }
                   return {
-                    behavior: "allow",
+                    behavior: "allow" as const,
                     updatedInput: toolInput,
                   }
                 },

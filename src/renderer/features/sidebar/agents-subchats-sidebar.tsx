@@ -4,6 +4,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect, memo } from "
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { motion, AnimatePresence } from "motion/react"
+import { DURATION_FAST, EASE_OUT } from "../../lib/motion"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { cn } from "../../lib/utils"
@@ -21,7 +22,6 @@ import {
   type UndoItem,
 } from "../agents/atoms"
 import {
-  selectedTeamIdAtom,
   selectedSubChatIdsAtom,
   isSubChatMultiSelectModeAtom,
   toggleSubChatSelectionAtom,
@@ -30,7 +30,6 @@ import {
   selectedSubChatsCountAtom,
   isDesktopAtom,
   isFullscreenAtom,
-  chatSourceModeAtom,
   defaultAgentModeAtom,
 } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
@@ -80,7 +79,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog"
-import { api } from "../../lib/mock-api"
+import { api } from "../../lib/api-bridge"
 import { trpcClient } from "../../lib/trpc"
 import { toast } from "sonner"
 import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
@@ -233,15 +232,8 @@ export function AgentsSubChatsSidebar({
   )
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const subChatFiles = useAtomValue(subChatFilesAtom)
-  const selectedTeamId = useAtomValue(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
-
-  // Fetch agent chats for navigation after archive
-  const { data: agentChats } = api.agents.getAgentChats.useQuery(
-    { teamId: selectedTeamId! },
-    { enabled: !!selectedTeamId },
-  )
 
   const utils = trpc.useUtils()
 
@@ -266,16 +258,9 @@ export function AgentsSubChatsSidebar({
       utils.chats.list.invalidate()
       utils.chats.listArchived.invalidate()
 
-      // Navigate to previous chat or new workspace
+      // Navigate away if the archived chat was selected
       if (selectedChatId === variables.id) {
-        const isPreviousAvailable = previousChatId &&
-          agentChats?.some((c) => c.id === previousChatId)
-
-        if (isPreviousAvailable) {
-          setSelectedChatId(previousChatId)
-        } else {
-          setSelectedChatId(null)
-        }
+        setSelectedChatId(previousChatId ?? null)
       }
     },
   })
@@ -336,9 +321,6 @@ export function AgentsSubChatsSidebar({
   // Global desktop/fullscreen state from atoms (initialized in AgentsLayout)
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
-
-  // Chat source mode: "local" or "sandbox"
-  const chatSourceMode = useAtomValue(chatSourceModeAtom)
 
   // Map open IDs to metadata and sort by updated_at (most recent first)
   const allSubChatsById = useMemo(() => {
@@ -719,21 +701,13 @@ export function AgentsSubChatsSidebar({
 
     const store = useAgentSubChatStore.getState()
 
-    let newId: string
-
-    if (chatSourceMode === "sandbox") {
-      // Sandbox mode: lazy creation (web app pattern)
-      // Sub-chat will be persisted on first message via RemoteChatTransport UPSERT
-      newId = crypto.randomUUID()
-    } else {
-      // Local mode: create sub-chat in DB first to get the real ID
-      const newSubChat = await trpcClient.chats.createSubChat.mutate({
-        chatId: parentChatId,
-        name: "New Chat",
-        mode: defaultAgentMode,
-      })
-      newId = newSubChat.id
-    }
+    // Create sub-chat in DB first to get the real ID
+    const newSubChat = await trpcClient.chats.createSubChat.mutate({
+      chatId: parentChatId,
+      name: "New Chat",
+      mode: defaultAgentMode,
+    })
+    const newId = newSubChat.id
 
     // Track this subchat as just created for typewriter effect
     setJustCreatedIds((prev) => new Set([...prev, newId]))
@@ -1876,10 +1850,10 @@ export function AgentsSubChatsSidebar({
         {isMultiSelectMode && (
           <motion.div
             key="multiselect-footer"
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: DURATION_FAST, ease: EASE_OUT }}
             className="flex-shrink-0 p-2 bg-background space-y-2 relative z-10"
             style={{
               // @ts-expect-error - WebKit-specific property

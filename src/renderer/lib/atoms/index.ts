@@ -509,7 +509,6 @@ if (typeof window !== "undefined") {
     const wasInPlanMode = oldValue === "true"
     localStorage.setItem(newKey, JSON.stringify(wasInPlanMode ? "plan" : "agent"))
     localStorage.removeItem(oldKey)
-    console.log("[atoms] Migrated isPlanMode to defaultAgentMode:", wasInPlanMode ? "plan" : "agent")
   }
 }
 

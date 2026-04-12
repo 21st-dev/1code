@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal, flushSync } from "react-dom"
 import { Kbd } from "./kbd"
+import { EASE_OUT_EXPO } from "../../lib/motion"
 
 interface ResizableSidebarProps {
   isOpen: boolean
@@ -349,26 +350,14 @@ export function ResizableSidebar({
             ref={sidebarRef}
             initial={
               !shouldAnimate
-                ? {
-                    width: currentWidth,
-                    opacity: 1,
-                  }
-                : {
-                    width: initialWidth,
-                    opacity: 0,
-                  }
+                ? { width: currentWidth }
+                : { width: initialWidth }
             }
-            animate={{
-              width: currentWidth,
-              opacity: 1,
-            }}
-            exit={{
-              width: exitWidth,
-              opacity: 0,
-            }}
+            animate={{ width: currentWidth }}
+            exit={{ width: exitWidth }}
             transition={{
               duration: isResizing ? 0 : animationDuration,
-              ease: [0.4, 0, 0.2, 1],
+              ease: EASE_OUT_EXPO,
             }}
             className={`bg-transparent flex flex-col text-xs h-full relative ${className}`}
             style={{ minWidth: minWidth, overflow: "hidden", ...style }}

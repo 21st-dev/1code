@@ -181,7 +181,6 @@ export function useAgentsHotkeys(
     if (!window.desktopApi?.onShortcutNewAgent) return
 
     const cleanup = window.desktopApi.onShortcutNewAgent(() => {
-      console.log("[Hotkey] Cmd+N received via IPC, executing create-new-agent")
       handleHotkeyAction("create-new-agent")
     })
 
@@ -194,7 +193,6 @@ export function useAgentsHotkeys(
     if (!window.desktopApi?.onShortcutOpenSettings) return
 
     const cleanup = window.desktopApi.onShortcutOpenSettings(() => {
-      console.log("[Hotkey] Cmd+, received via IPC, executing open-settings")
       handleHotkeyAction("open-settings")
     })
 

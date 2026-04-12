@@ -16,7 +16,7 @@ interface PluginComponent {
   description?: string
 }
 
-interface PluginWithComponents {
+export interface PluginWithComponents {
   name: string
   version: string
   description?: string

@@ -40,32 +40,14 @@ export function useAutoImport() {
 
   const getMatchingProjects = useCallback(
     (projects: Project[], remoteChat: RemoteChat): Project[] => {
-      console.log(`[OPEN-LOCALLY-MATCH] ========== MATCHING DEBUG ==========`)
-      console.log(`[OPEN-LOCALLY-MATCH] Remote chat:`, {
-        id: remoteChat.id,
-        name: remoteChat.name,
-        meta: remoteChat.meta,
-      })
-
       const repoString = remoteChat.meta?.repository || remoteChat.meta?.github_repo
       if (!repoString) {
-        console.log(`[OPEN-LOCALLY-MATCH] No repository in meta, returning []`)
         return []
       }
 
       const [owner, repo] = repoString.split("/")
-      console.log(`[OPEN-LOCALLY-MATCH] Looking for: owner="${owner}", repo="${repo}"`)
-
-      console.log(`[OPEN-LOCALLY-MATCH] All projects (${projects.length}):`)
-      projects.forEach((p, i) => {
-        console.log(`[OPEN-LOCALLY-MATCH]   ${i + 1}. "${p.name}" at ${p.path}`)
-        console.log(`[OPEN-LOCALLY-MATCH]      gitOwner="${p.gitOwner}", gitRepo="${p.gitRepo}"`)
-        console.log(`[OPEN-LOCALLY-MATCH]      matches: ${p.gitOwner === owner && p.gitRepo === repo}`)
-      })
 
       const matches = projects.filter((p) => p.gitOwner === owner && p.gitRepo === repo)
-      console.log(`[OPEN-LOCALLY-MATCH] Found ${matches.length} matching project(s)`)
-      console.log(`[OPEN-LOCALLY-MATCH] ========== END MATCHING DEBUG ==========`)
 
       return matches
     },

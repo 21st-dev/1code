@@ -56,10 +56,8 @@ export function useCommitActions({
 			}
 
 			let commitMessage = message?.trim() ?? "";
-			console.log("[CommitActions] commit called, commitMessage:", commitMessage, "chatId:", chatId);
 
 			if (!commitMessage && chatId) {
-				console.log("[CommitActions] No message, generating with AI for files:", filePaths);
 				setIsGenerating(true);
 				try {
 					const result = await generateCommitMutation.mutateAsync({
@@ -67,7 +65,6 @@ export function useCommitActions({
 						filePaths,
 						ollamaModel: selectedOllamaModel,
 					});
-					console.log("[CommitActions] AI generated message:", result.message);
 					commitMessage = result.message;
 					onMessageGenerated?.(result.message);
 				} catch (error) {

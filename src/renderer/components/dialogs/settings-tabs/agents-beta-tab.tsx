@@ -80,7 +80,6 @@ export function AgentsBetaTab() {
     const isPackaged = await window.desktopApi?.isPackaged?.()
     if (!isPackaged) {
       setUpdateStatus("error")
-      console.log("Update check skipped in dev mode")
       return
     }
 

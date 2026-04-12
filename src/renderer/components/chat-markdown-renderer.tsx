@@ -29,8 +29,9 @@ function escapeHtml(text: string): string {
 }
 
 // Code block text sizes matching paragraph text sizes
+// sm uses text-[1em] so it inherits from parent fontSize (for chat font size scaling)
 const codeBlockTextSize = {
-  sm: "text-sm",
+  sm: "text-[1em]",
   md: "text-sm",
   lg: "text-sm",
 }
@@ -148,6 +149,8 @@ interface ChatMarkdownRendererProps {
   syntaxHighlight?: boolean
   /** Whether content is being streamed */
   isStreaming?: boolean
+  /** Base font size in pixels — overrides prose-sm's rem-based size so em-based styles inherit correctly */
+  baseFontSize?: number
 }
 
 // Size-based styles inspired by Notion's spacing
@@ -175,28 +178,30 @@ const sizeStyles: Record<
     td: string
   }
 > = {
+  // sm variant uses text-[1em] (parent-relative) instead of text-sm (root-relative)
+  // so body text inherits from the parent's fontSize — enabling chat font size scaling
   sm: {
-    h1: "text-base font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
-    h2: "text-base font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
-    h3: "text-sm font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    h4: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    h5: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    h6: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    p: "text-sm text-foreground/80 my-px leading-normal py-[3px]",
-    ul: "list-disc list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    ol: "list-decimal list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    li: "text-sm text-foreground/80 py-[3px]",
+    h1: "text-[1.15em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
+    h2: "text-[1.15em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
+    h3: "text-[1em] font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    h4: "text-[1em] font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    h5: "text-[1em] font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    h6: "text-[1em] font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    p: "text-[1em] text-foreground/80 my-px leading-normal py-[3px]",
+    ul: "list-disc list-inside text-[1em] text-foreground/80 leading-normal mb-px marker:text-foreground/60",
+    ol: "list-decimal list-inside text-[1em] text-foreground/80 leading-normal mb-px marker:text-foreground/60",
+    li: "text-[1em] text-foreground/80 leading-normal py-[3px]",
     inlineCode:
       "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
     blockquote:
-      "border-l-2 border-foreground/20 pl-3 text-foreground/70 mb-px text-sm",
+      "border-l-2 border-foreground/20 pl-3 text-foreground/70 leading-normal mb-px text-[1em]",
     hr: "mt-8 mb-4 border-t border-border",
-    table: "w-full text-sm",
+    table: "w-full text-[1em]",
     thead: "border-b border-border",
     tbody: "",
     tr: "[&:not(:last-child)]:border-b [&:not(:last-child)]:border-border",
-    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted/50 border-r border-border last:border-r-0",
-    td: "text-sm text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
+    th: "text-left text-[1em] font-medium text-foreground px-3 py-2 bg-muted/50 border-r border-border last:border-r-0",
+    td: "text-[1em] text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
   },
   md: {
     h1: "text-[1.5em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
@@ -286,6 +291,7 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   size = "md",
   className,
   isStreaming = false,
+  baseFontSize,
 }: ChatMarkdownRendererProps) {
   const codeTheme = useCodeTheme()
   const styles = sizeStyles[size]
@@ -441,6 +447,8 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
         "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
         className,
       )}
+      // Override prose-sm's rem-based font-size so em-based child styles inherit correctly
+      style={baseFontSize ? { fontSize: `${baseFontSize}px` } : undefined}
     >
       <Streamdown
         mode="streaming"
@@ -547,11 +555,13 @@ const MemoizedMarkdownBlock = memo(
     size,
     className,
     codeTheme,
+    baseFontSize,
   }: {
     content: string
     size: MarkdownSize
     className?: string
     codeTheme: string
+    baseFontSize?: number
   }) {
     // Don't render empty blocks
     if (!content.trim()) return null
@@ -697,7 +707,8 @@ const MemoizedMarkdownBlock = memo(
       prevProps.content === nextProps.content &&
       prevProps.size === nextProps.size &&
       prevProps.className === nextProps.className &&
-      prevProps.codeTheme === nextProps.codeTheme
+      prevProps.codeTheme === nextProps.codeTheme &&
+      prevProps.baseFontSize === nextProps.baseFontSize
     )
   },
 )
@@ -711,11 +722,14 @@ export const MemoizedMarkdown = memo(
     id,
     size = "sm",
     className,
+    baseFontSize,
   }: {
     content: string
     id: string
     size?: MarkdownSize
     className?: string
+    /** Base font size in pixels — overrides prose-sm's rem-based size so em-based styles inherit correctly */
+    baseFontSize?: number
   }) {
     const codeTheme = useCodeTheme()
 
@@ -745,6 +759,8 @@ export const MemoizedMarkdown = memo(
           "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
           className,
         )}
+        // Override prose-sm's rem-based font-size so em-based child styles inherit correctly
+        style={baseFontSize ? { fontSize: `${baseFontSize}px` } : undefined}
       >
         {blocks.map((block) => (
           <MemoizedMarkdownBlock
@@ -753,6 +769,7 @@ export const MemoizedMarkdown = memo(
             size={size}
             className={className}
             codeTheme={codeTheme}
+            baseFontSize={baseFontSize}
           />
         ))}
       </div>

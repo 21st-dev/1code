@@ -47,7 +47,6 @@ import {
 import { defaultAgentModeAtom } from "../../../lib/atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
-// import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
 import {
@@ -98,7 +97,6 @@ import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
-// import { CreateBranchDialog } from "@/app/(alpha)/agents/{components}/create-branch-dialog"
 import {
   PromptInput,
   PromptInputActions,
@@ -123,7 +121,6 @@ import {
   CODEX_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
-// import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
@@ -573,7 +570,6 @@ export function NewChatForm({
     try {
       const blob = await stopRecording()
       if (blob.size < 1000) {
-        console.log("[NewChatForm] Recording too short, ignoring")
         return
       }
       setIsTranscribing(true)
@@ -712,7 +708,13 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  const reposData = { repositories: [] as Array<{
+    id: string
+    name: string
+    full_name: string
+    sandbox_status?: "not_setup" | "in_progress" | "ready" | "error"
+    pushed_at?: string | null
+  }> }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
@@ -1210,7 +1212,7 @@ export function NewChatForm({
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
       projectId: selectedProject.id,
-      name: message.trim().slice(0, 50), // Use first 50 chars as chat name
+      name: selectedProject.name || message.trim().slice(0, 50), // Use project name as workspace name
       model: selectedChatModel,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:

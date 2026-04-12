@@ -21,7 +21,7 @@ interface FileAgent {
   tools?: string[]
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 
@@ -381,7 +381,7 @@ export function AgentsCustomAgentsTab() {
         model: data.model,
         tools: agent.tools,
         disallowedTools: agent.disallowedTools,
-        source: agent.source,
+        source: agent.source as "user" | "project",
         cwd: selectedProject?.path,
       })
       toast.success("Agent saved", { description: agent.name })

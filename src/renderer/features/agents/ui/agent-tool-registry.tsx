@@ -343,7 +343,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       // Normalize line continuations, shorten absolute paths, and truncate
       let normalized = command.replace(/\\\s*\n\s*/g, " ").trim()
       // Replace absolute paths that look like project paths with relative versions
-      normalized = normalized.replace(/\/(?:Users|home|root)\/[^\s"']+/g, (match) => {
+      normalized = normalized.replace(/\/(?:Users|home|root)\/[^\s"']+/g, (match: string) => {
         return getDisplayPath(match)
       })
       return normalized.length > 50 ? normalized.slice(0, 47) + "..." : normalized

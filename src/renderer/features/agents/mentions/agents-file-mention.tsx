@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "../../../lib/utils"
-import { api } from "../../../lib/mock-api"
+import { api } from "../../../lib/api-bridge"
 import { trpc } from "../../../lib/trpc"
 import { keepPreviousData } from "@tanstack/react-query"
 import {

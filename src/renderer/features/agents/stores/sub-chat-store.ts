@@ -90,7 +90,6 @@ const findNumericWindowIdValue = (legacyKey: string, targetKey: string): string 
     if (match && match[2] === legacyKey) {
       const value = localStorage.getItem(storageKey)
       if (value !== null) {
-        console.log(`[SubChatStore] Migrated from numeric ID: ${storageKey} to ${targetKey}`)
         return value
       }
     }
@@ -122,7 +121,6 @@ const loadFromLS = <T>(chatId: string, type: "open" | "active" | "pinned" | "spl
         // Migrate to window-scoped key
         localStorage.setItem(key, legacyStored)
         stored = legacyStored
-        console.log(`[SubChatStore] Migrated ${legacyKey} to ${key}`)
       }
     }
 

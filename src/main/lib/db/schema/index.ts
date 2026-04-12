@@ -22,6 +22,8 @@ export const projects = sqliteTable("projects", {
   gitRepo: text("git_repo"),
   // Custom project icon (absolute path to local image file)
   iconPath: text("icon_path"),
+  // Custom accent color for visual differentiation (hex string e.g. "#ef4444")
+  accentColor: text("accent_color"),
 })
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -51,6 +53,8 @@ export const chats = sqliteTable("chats", {
   // PR tracking fields
   prUrl: text("pr_url"),
   prNumber: integer("pr_number"),
+  // Custom accent color for visual differentiation (hex string e.g. "#ef4444")
+  accentColor: text("accent_color"),
 }, (table) => [
   index("chats_worktree_path_idx").on(table.worktreePath),
 ])

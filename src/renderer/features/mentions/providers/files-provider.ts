@@ -80,7 +80,7 @@ export const filesProvider = createMentionProvider<FileData>({
       })
 
       // Map to MentionItem format
-      const items: MentionItem<FileData>[] = results.map((result) => ({
+      const items: MentionItem<FileData>[] = results.map((result: any) => ({
         id: result.id,
         label: result.label,
         description: result.path,

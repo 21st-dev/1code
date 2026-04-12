@@ -15,6 +15,14 @@ import {
   type VSCodeFullTheme,
 } from "../../../lib/atoms"
 import {
+  terminalFontSizeAtom,
+  type TerminalFontSize,
+} from "../../../features/terminal/atoms"
+import {
+  chatFontSizeAtom,
+  type ChatFontSize,
+} from "../../../features/agents/atoms"
+import {
   BUILTIN_THEMES,
   getBuiltinThemeById,
   BUILTIN_THEME_NAMES,
@@ -148,6 +156,12 @@ export function AgentsAppearanceTab() {
 
   // To-do list preference
   const [alwaysExpandTodoList, setAlwaysExpandTodoList] = useAtom(alwaysExpandTodoListAtom)
+
+  // Terminal font size
+  const [terminalFontSize, setTerminalFontSize] = useAtom(terminalFontSizeAtom)
+
+  // Chat font size
+  const [chatFontSize, setChatFontSize] = useAtom(chatFontSizeAtom)
 
   // VS Code themes state
   const [isScanning, setIsScanning] = useState(false)
@@ -618,6 +632,65 @@ export function AgentsAppearanceTab() {
             checked={alwaysExpandTodoList}
             onCheckedChange={setAlwaysExpandTodoList}
           />
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              Chat font size
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Font size for messages and responses
+            </span>
+          </div>
+          <Select
+            value={String(chatFontSize)}
+            onValueChange={(value) =>
+              setChatFontSize(Number(value) as ChatFontSize)
+            }
+          >
+            <SelectTrigger className="w-auto px-2">
+              <span className="text-xs">{chatFontSize}px</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="12">12px</SelectItem>
+              <SelectItem value="13">13px</SelectItem>
+              <SelectItem value="14">14px</SelectItem>
+              <SelectItem value="15">15px</SelectItem>
+              <SelectItem value="16">16px</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              Terminal font size
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Font size for the integrated terminal
+            </span>
+          </div>
+          <Select
+            value={String(terminalFontSize)}
+            onValueChange={(value) =>
+              setTerminalFontSize(Number(value) as TerminalFontSize)
+            }
+          >
+            <SelectTrigger className="w-auto px-2">
+              <span className="text-xs">{terminalFontSize}px</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10px</SelectItem>
+              <SelectItem value="11">11px</SelectItem>
+              <SelectItem value="12">12px</SelectItem>
+              <SelectItem value="13">13px</SelectItem>
+              <SelectItem value="14">14px</SelectItem>
+              <SelectItem value="15">15px</SelectItem>
+              <SelectItem value="16">16px</SelectItem>
+              <SelectItem value="18">18px</SelectItem>
+              <SelectItem value="20">20px</SelectItem>
+              <SelectItem value="24">24px</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>

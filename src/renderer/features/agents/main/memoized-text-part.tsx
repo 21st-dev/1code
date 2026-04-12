@@ -1,9 +1,11 @@
 "use client"
 
 import { memo, useEffect, useRef } from "react"
+import { useAtomValue } from "jotai"
 import { cn } from "../../../lib/utils"
 import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
 import { useSearchQuery, useSearchHighlight } from "../search"
+import { chatFontSizeAtom } from "../atoms"
 
 interface MemoizedTextPartProps {
   text: string
@@ -101,7 +103,8 @@ const MemoizedTextPartInner = memo(function MemoizedTextPartInner({
   partIndex,
   isFinalText,
   visibleStepsCount,
-}: Omit<MemoizedTextPartProps, "isStreaming">) {
+  baseFontSize,
+}: Omit<MemoizedTextPartProps, "isStreaming"> & { baseFontSize?: number }) {
   if (!text?.trim()) return null
 
   return (
@@ -119,7 +122,7 @@ const MemoizedTextPartInner = memo(function MemoizedTextPartInner({
           Response
         </div>
       )}
-      <MemoizedMarkdown content={text} id={`${messageId}-${partIndex}`} size="sm" />
+      <MemoizedMarkdown content={text} id={`${messageId}-${partIndex}`} size="sm" baseFontSize={baseFontSize} />
     </div>
   )
 }, (prev, next) => {
@@ -128,7 +131,8 @@ const MemoizedTextPartInner = memo(function MemoizedTextPartInner({
     prev.messageId === next.messageId &&
     prev.partIndex === next.partIndex &&
     prev.isFinalText === next.isFinalText &&
-    prev.visibleStepsCount === next.visibleStepsCount
+    prev.visibleStepsCount === next.visibleStepsCount &&
+    prev.baseFontSize === next.baseFontSize
   )
 })
 
@@ -144,6 +148,9 @@ export const MemoizedTextPart = memo(function MemoizedTextPart({
   isStreaming = false,
 }: MemoizedTextPartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Chat font size preference — passed to MemoizedMarkdown to scale text via em-based styles
+  const chatFontSize = useAtomValue(chatFontSizeAtom)
 
   // Search hooks - when search is closed, these return empty/null values
   // and don't cause re-renders (SearchHighlightProvider returns static context)
@@ -183,6 +190,7 @@ export const MemoizedTextPart = memo(function MemoizedTextPart({
         partIndex={partIndex}
         isFinalText={isFinalText}
         visibleStepsCount={visibleStepsCount}
+        baseFontSize={chatFontSize}
       />
     </div>
   )

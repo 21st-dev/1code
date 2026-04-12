@@ -53,7 +53,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         tools: prev?.tools || [],
         mcpServers: mcpConfig.mcpServers.map((s) => ({
           name: s.name,
-          status: s.status,
+          status: s.status as MCPServerStatus,
         })),
         plugins: prev?.plugins || [],
         skills: prev?.skills || [],

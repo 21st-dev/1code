@@ -71,12 +71,10 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu"
-// e2b API routes are used instead of useSandboxManager for agents
-// import { useIsHydrated } from "@/hooks/use-is-hydrated"
-const useIsHydrated = () => true // Desktop is always hydrated
+const useIsHydrated = () => true
 import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
-import { api } from "../../../lib/mock-api"
+import { api } from "../../../lib/api-bridge"
 import { trpcClient } from "../../../lib/trpc"
 import { remoteApi } from "../../../lib/remote-api"
 export type DiffViewMode = "unified" | "split"
@@ -1614,8 +1612,8 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
 
             const newContents: Record<string, string> = {}
             for (const [key, result] of Object.entries(results)) {
-              if (result.ok) {
-                newContents[key] = result.content
+              if ((result as any).ok) {
+                newContents[key] = (result as any).content
               }
             }
             setFileContents(newContents)

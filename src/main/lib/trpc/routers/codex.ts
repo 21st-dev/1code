@@ -80,6 +80,8 @@ type CodexMcpServerForSettings = {
   tools: McpToolInfo[]
   needsAuth: boolean
   config: Record<string, unknown>
+  serverInfo?: { name: string; version: string; icons?: Array<{ src: string }> }
+  error?: string
 }
 
 type CodexMcpSnapshot = {

@@ -483,6 +483,26 @@ export const chatsRouter = router({
     }),
 
   /**
+   * Update accent color for a workspace (hex string or null to clear)
+   */
+  updateColor: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        accentColor: z.string().nullable(),
+      }),
+    )
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(chats)
+        .set({ accentColor: input.accentColor, updatedAt: new Date() })
+        .where(eq(chats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
    * Archive a chat (also kills any terminal processes in the workspace)
    * Optionally deletes the worktree to free disk space
    */

@@ -1,8 +1,7 @@
 import { useSetAtom } from "jotai"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { subChatFilesAtom, subChatToChatMapAtom, type SubChatFileChange } from "../atoms"
-// import { REPO_ROOT_PATH } from "@/lib/codesandbox-constants"
-const REPO_ROOT_PATH = "/workspace" // Desktop mock
+const REPO_ROOT_PATH = "/workspace"
 
 interface MessagePart {
   type: string

@@ -83,12 +83,14 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       }
 
       // Emit complete tool call with accumulated input
+      // Cast needed: providerMetadata is used by the renderer for timing
+      // but isn't part of the base UIMessageChunk type
       yield {
         type: "tool-input-available",
         toolCallId: currentToolCallId,
         toolName: currentToolName || "unknown",
         input: parsedInput,
-        providerMetadata: { custom: { startedAt: Date.now() } },
+        ...({ providerMetadata: { custom: { startedAt: Date.now() } } } as any),
       }
       currentToolCallId = null
       currentToolName = null
@@ -171,7 +173,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
         yield {
           type: "tool-input-start",
           toolCallId: currentToolCallId,
-          toolName: currentToolName,
+          toolName: currentToolName ?? "unknown",
         }
       }
 
@@ -315,12 +317,14 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
           // Store mapping for tool-result lookup
           toolIdMapping.set(block.id, compositeId)
 
+          // Cast needed: providerMetadata is used by the renderer for timing
+          // but isn't part of the base UIMessageChunk type
           yield {
             type: "tool-input-available",
             toolCallId: compositeId,
             toolName: block.name,
             input: block.input,
-            providerMetadata: { custom: { startedAt: Date.now() } },
+            ...({ providerMetadata: { custom: { startedAt: Date.now() } } } as any),
           }
         }
       }

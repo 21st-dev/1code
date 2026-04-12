@@ -132,11 +132,23 @@ export function getTerminalThemeFromVSCode(
   return extractTerminalTheme(themeColors)
 }
 
+/**
+ * Returns appropriate line height for a given font size.
+ * Smaller fonts need tighter line height to avoid feeling overly spaced out;
+ * larger fonts can breathe more. Values tuned for terminal readability.
+ */
+export function getTerminalLineHeight(fontSize: number): number {
+  if (fontSize <= 11) return 1.3
+  if (fontSize <= 13) return 1.35
+  if (fontSize <= 16) return 1.4
+  return 1.45
+}
+
 export const TERMINAL_OPTIONS: ITerminalOptions = {
   cursorBlink: true,
   // Font size matches app's compact UI (text-xs = 12px, text-sm = 14px)
   fontSize: 13,
-  lineHeight: 1.4,
+  lineHeight: getTerminalLineHeight(13),
   fontFamily: TERMINAL_FONT_FAMILY,
   theme: TERMINAL_THEME_DARK, // Default, will be overridden dynamically
   allowProposedApi: true,

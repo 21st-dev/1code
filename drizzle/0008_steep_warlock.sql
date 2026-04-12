@@ -1,0 +1,1 @@
+ALTER TABLE `chats` ADD `accent_color` text;

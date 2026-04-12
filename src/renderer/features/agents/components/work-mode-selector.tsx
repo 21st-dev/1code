@@ -73,7 +73,7 @@ export function WorkModeSelector({
               key={option.id}
               onClick={() => {
                 if (isDisabled) return
-                onChange(option.id)
+                onChange(option.id as WorkMode)
                 setOpen(false)
               }}
               disabled={isDisabled}

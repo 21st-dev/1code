@@ -5,7 +5,7 @@ import { CanvasAddon } from "@xterm/addon-canvas"
 import { SerializeAddon } from "@xterm/addon-serialize"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import type { ITheme } from "xterm"
-import { TERMINAL_OPTIONS, TERMINAL_THEME_DARK, TERMINAL_THEME_LIGHT, getTerminalTheme, RESIZE_DEBOUNCE_MS } from "./config"
+import { TERMINAL_OPTIONS, TERMINAL_THEME_DARK, TERMINAL_THEME_LIGHT, getTerminalTheme, getTerminalLineHeight, RESIZE_DEBOUNCE_MS } from "./config"
 import { FilePathLinkProvider } from "./link-providers"
 import { isMac, isModifierPressed, showLinkPopup, removeLinkPopup } from "./link-providers/link-popup"
 import { suppressQueryResponses } from "./suppressQueryResponses"
@@ -69,6 +69,7 @@ export interface CreateTerminalOptions {
   cwd?: string
   initialTheme?: ITheme | null
   isDark?: boolean
+  fontSize?: number
   onFileLinkClick?: (path: string, line?: number, column?: number) => void
   onUrlClick?: (url: string) => void
 }
@@ -89,7 +90,7 @@ export function createTerminalInstance(
   container: HTMLDivElement,
   options: CreateTerminalOptions = {}
 ): TerminalInstance {
-  const { initialTheme, isDark = true, onFileLinkClick, onUrlClick } = options
+  const { initialTheme, isDark = true, fontSize, onFileLinkClick, onUrlClick } = options
 
   // Debug: Check container dimensions
   const rect = container.getBoundingClientRect()
@@ -101,7 +102,13 @@ export function createTerminalInstance(
 
   // Use provided theme, or get theme based on isDark
   const theme = initialTheme ?? getTerminalTheme(isDark)
-  const terminalOptions = { ...TERMINAL_OPTIONS, theme }
+  // Merge options — fontSize override takes precedence over the default in TERMINAL_OPTIONS
+  // Line height scales with font size so smaller sizes don't feel too spaced out
+  const terminalOptions = {
+    ...TERMINAL_OPTIONS,
+    theme,
+    ...(fontSize != null && { fontSize, lineHeight: getTerminalLineHeight(fontSize) }),
+  }
 
   // 1. Create xterm instance
   console.log("[Terminal:create] Step 1: Creating XTerm instance")

@@ -37,6 +37,14 @@ import { cn } from "../../../lib/utils"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms"
 
+// 16-color swatch palette for project accent color
+const ACCENT_COLORS = [
+  "#ef4444", "#f97316", "#f59e0b", "#eab308",
+  "#84cc16", "#22c55e", "#10b981", "#14b8a6",
+  "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1",
+  "#8b5cf6", "#a855f7", "#d946ef", "#ec4899",
+] as const
+
 // --- Detail Panel ---
 function ProjectDetail({ projectId }: { projectId: string }) {
   // Get config for selected project
@@ -118,6 +126,16 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       invalidateProjectIcon(projectId)
       refetchProject()
       toast.success("Icon removed")
+    },
+  })
+
+  // Accent color mutation
+  const updateColorMutation = trpc.projects.updateColor.useMutation({
+    onSuccess: () => {
+      refetchProject()
+    },
+    onError: (err) => {
+      toast.error(`Failed to update color: ${err.message}`)
     },
   })
 
@@ -407,6 +425,48 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* ── Appearance ── */}
+        <div>
+          <h4 className="text-sm font-medium text-foreground mb-2">Appearance</h4>
+          <div className="bg-background rounded-lg border border-border overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <span className="text-sm font-medium text-foreground">Accent Color</span>
+                  <p className="text-sm text-muted-foreground">Tint workspaces in the sidebar</p>
+                </div>
+                {project?.accentColor && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => updateColorMutation.mutate({ id: projectId, accentColor: null })}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {ACCENT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => updateColorMutation.mutate({ id: projectId, accentColor: color })}
+                    className={cn(
+                      "w-7 h-7 rounded-md transition-all duration-150 cursor-pointer border-2",
+                      project?.accentColor === color
+                        ? "border-foreground scale-110"
+                        : "border-transparent hover:scale-110",
+                    )}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 

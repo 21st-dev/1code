@@ -499,7 +499,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   // Note: no useMemo — AI SDK mutates parts in-place, so the array reference
   // doesn't change and useMemo would return stale results.
   const messageParts = normalizeAcpParts(
-    (message?.parts || []).map((part) => normalizeCodexToolPart(part) as any),
+    (message?.parts || []).map((part: any) => normalizeCodexToolPart(part) as any),
   )
 
   const contentParts = useMemo(() =>

@@ -514,6 +514,14 @@ export const agentsSubChatsSidebarModeAtom = atomWithWindowStorage<
   "tabs" | "sidebar"
 >("agents-subchats-mode", "tabs", { getOnInit: true })
 
+// Track which workspaces are expanded in the unified sidebar tree
+// Persisted per-window so each Electron window has its own expansion state
+export const expandedWorkspaceIdsAtom = atomWithWindowStorage<string[]>(
+  "agents:expandedWorkspaceIds",
+  [],
+  { getOnInit: true },
+)
+
 // Sub-chats sidebar width (left side of chat area)
 export const agentsSubChatsSidebarWidthAtom = atomWithStorage<number>(
   "agents-subchats-sidebar-width",
@@ -841,7 +849,7 @@ export const askUserQuestionResultsAtom = atom<Map<string, unknown>>(new Map())
 // Unified undo stack for workspace and sub-chat archivation
 // Supports Cmd+Z to restore the last archived item (workspace or sub-chat)
 export type UndoItem =
-  | { type: "workspace"; chatId: string; timeoutId: ReturnType<typeof setTimeout>; isRemote?: boolean }
+  | { type: "workspace"; chatId: string; timeoutId: ReturnType<typeof setTimeout> }
   | { type: "subchat"; subChatId: string; chatId: string; timeoutId: ReturnType<typeof setTimeout> }
 
 export const undoStackAtom = atom<UndoItem[]>([])
@@ -1003,6 +1011,16 @@ export const workspaceDiffCacheAtomFamily = atomFamily((chatId: string) =>
       })
     },
   ),
+)
+
+// Chat font size preference (persisted to localStorage)
+// Controls body text size in assistant responses and user message bubbles
+export type ChatFontSize = 12 | 13 | 14 | 15 | 16
+export const chatFontSizeAtom = atomWithStorage<ChatFontSize>(
+  "preferences:chat-font-size",
+  14, // Default matches previous hardcoded text-sm (14px)
+  undefined,
+  { getOnInit: true },
 )
 
 // Show raw JSON for each message in chat (dev only)

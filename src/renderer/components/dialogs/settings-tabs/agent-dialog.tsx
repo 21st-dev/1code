@@ -13,7 +13,7 @@ interface FileAgent {
   tools?: string[]
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 
@@ -35,7 +35,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
   const [description, setDescription] = useState("")
   const [prompt, setPrompt] = useState("")
   const [model, setModel] = useState<"sonnet" | "opus" | "haiku" | "inherit">("inherit")
-  const [source, setSource] = useState<"user" | "project">("user")
+  const [source, setSource] = useState<"user" | "project" | "plugin">("user")
   const [toolMode, setToolMode] = useState<ToolMode>("all")
   const [selectedTools, setSelectedTools] = useState<string[]>([])
 
@@ -128,7 +128,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
         tools,
         disallowedTools,
         model,
-        source: agent.source,
+        source: agent.source as "user" | "project",
       })
     } else {
       createMutation.mutate({
@@ -138,7 +138,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
         tools,
         disallowedTools,
         model,
-        source,
+        source: source as "user" | "project",
       })
     }
   }

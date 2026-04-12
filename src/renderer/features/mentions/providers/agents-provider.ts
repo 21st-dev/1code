@@ -30,7 +30,7 @@ export interface AgentData {
   tools?: string[]
   disallowedTools?: string[]
   model?: AgentModel
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 
@@ -66,7 +66,7 @@ export const agentsProvider = createMentionProvider<AgentData>({
       })
 
       // Map to MentionItem format
-      let items: MentionItem<AgentData>[] = agents.map((agent) => ({
+      let items: MentionItem<AgentData>[] = agents.map((agent: any) => ({
         id: `${MENTION_PREFIXES.AGENT}${agent.name}`,
         label: agent.name,
         description: agent.description || "",

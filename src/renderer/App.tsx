@@ -62,7 +62,6 @@ function AppContent() {
   useEffect(() => {
     const params = getInitialWindowParams()
     if (params.chatId) {
-      console.log("[App] Opening chat from window params:", params.chatId, params.subChatId)
       setSelectedChatId(params.chatId)
       setChatId(params.chatId)
       if (params.subChatId) {
@@ -107,7 +106,6 @@ function AppContent() {
   // This allows users with ANTHROPIC_API_KEY to use the app without OAuth
   useEffect(() => {
     if (cliConfig?.hasConfig && !billingMethod) {
-      console.log("[App] Detected existing CLI config, auto-completing onboarding")
       setBillingMethod("api-key")
       setApiKeyOnboardingCompleted(true)
     }

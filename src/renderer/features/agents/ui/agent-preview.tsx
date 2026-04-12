@@ -23,8 +23,7 @@ import { DevicePresetsBar } from "./device-presets-bar"
 import { ResizeHandle } from "./resize-handle"
 import { MobileCopyLinkButton } from "./mobile-copy-link-button"
 import { DEVICE_PRESETS, AGENTS_PREVIEW_CONSTANTS } from "../constants"
-// import { getSandboxPreviewUrl } from "@/app/(alpha)/canvas/{components}/settings-tabs/repositories/preview-url"
-const getSandboxPreviewUrl = (sandboxId: string, port: number, _type: string) => `https://${sandboxId}-${port}.csb.app` // Desktop mock
+const getSandboxPreviewUrl = (sandboxId: string, port: number, _type: string) => `https://${sandboxId}-${port}.csb.app`
 interface AgentPreviewProps {
   chatId: string
   sandboxId: string

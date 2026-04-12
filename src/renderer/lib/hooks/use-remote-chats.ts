@@ -38,13 +38,11 @@ export function useUserTeams(enabled: boolean = true) {
       // Validate cached teamId exists in current user's teams
       const teamExists = query.data.some((t) => t.id === teamId)
       if (!teamExists) {
-        console.log("[useUserTeams] Cached teamId not found, resetting to first team")
         setTeamId(query.data[0].id)
       }
     } else {
       // User has no teams - clear stale teamId
       if (teamId) {
-        console.log("[useUserTeams] User has no teams, clearing teamId")
         setTeamId(null)
       }
     }

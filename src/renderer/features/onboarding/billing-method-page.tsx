@@ -185,7 +185,7 @@ export function BillingMethodPage() {
                     option.id === "claude-subscription"
                       ? "bg-[#D97757] text-white"
                       : option.id === "codex-subscription"
-                        ? "bg-white text-black"
+                        ? "bg-background text-foreground shadow-[0_0_0_0.5px_rgba(0,0,0,0.15)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.1)]"
                       : selectedOptionId === option.id
                         ? "bg-foreground text-background"
                         : "bg-muted text-muted-foreground"

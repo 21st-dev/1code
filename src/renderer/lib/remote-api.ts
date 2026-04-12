@@ -58,7 +58,7 @@ export const remoteApi = {
    */
   async getTeams(): Promise<Team[]> {
     const teams = await remoteTrpc.teams.getUserTeams.query()
-    return teams.map((t) => ({ id: t.id, name: t.name }))
+    return teams.map((t: any) => ({ id: t.id, name: t.name }))
   },
 
   /**

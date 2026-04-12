@@ -77,7 +77,6 @@ const createNewAgentAction: AgentActionDefinition = {
   category: "general",
   hotkey: "cmd+n",
   handler: async (context) => {
-    console.log("[Action] create-new-agent handler called")
     // Clear selected chat
     context.setSelectedChatId?.(null)
     // Clear selected draft so form starts empty

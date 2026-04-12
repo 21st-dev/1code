@@ -49,9 +49,9 @@ function GitHubAvatar({
 interface AgentChatCardProps {
   chat: {
     id: string
-    name: string
-    meta: any
-    sandbox_id: string | null
+    name: string | null
+    meta?: any
+    sandbox_id?: string | null
     branch?: string | null
   }
   isSelected: boolean

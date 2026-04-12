@@ -2,14 +2,12 @@
 
 import { useState } from "react"
 import { useTheme } from "next-themes"
-// import Image from "next/image" // Desktop doesn't use next/image
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "../../../components/ui/hover-card"
 import { useSetAtom, atom } from "jotai"
-// import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "@/lib/atoms/agents-settings-dialog"
 const agentsSettingsDialogOpenAtom = atom(false)
 const agentsSettingsDialogActiveTabAtom = atom<string | null>(null)
 import { GitHubIcon } from "../../../icons"

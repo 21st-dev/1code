@@ -61,6 +61,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/electron": "^7.5.0",
+    "@tabler/icons-react": "^3.41.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.90.10",
     "@tanstack/react-virtual": "^3.13.18",
@@ -104,6 +105,7 @@
     "react-zoom-pan-pinch": "^3.7.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
+    "sharp": "^0.34.5",
     "shiki": "^1.24.4",
     "simple-git": "^3.28.0",
     "sonner": "^1.7.1",
@@ -135,6 +137,7 @@
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",
     "postcss": "^8.5.1",
+    "react-grab": "^0.1.30",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.4.5",
     "vite": "^6.3.4"

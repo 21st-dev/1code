@@ -588,13 +588,6 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Determine current Ollama model (selected or recommended)
   const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
 
-  // Debug: log selected Ollama model
-  useEffect(() => {
-    if (availableModels.isOffline) {
-      console.log(`[Ollama UI] selectedOllamaModel atom value: ${selectedOllamaModel || "(null)"}, currentOllamaModel: ${currentOllamaModel}`)
-    }
-  }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
-
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
 
@@ -780,7 +773,6 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Don't transcribe very short recordings (likely accidental clicks)
       if (blob.size < 1000) {
-        console.log("[VoiceInput] Recording too short, ignoring")
         if (voiceMountedRef.current) setIsTranscribing(false)
         return
       }
@@ -1155,8 +1147,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        // @ts-expect-error - Electron's webUtils API
-        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+        const filePath: string | undefined = (window as any).webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
 
         let mentionId: string
         let mentionPath: string

@@ -527,6 +527,26 @@ export const projectsRouter = router({
     }),
 
   /**
+   * Update accent color for a project (hex string or null to clear)
+   */
+  updateColor: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        accentColor: z.string().nullable(),
+      }),
+    )
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(projects)
+        .set({ accentColor: input.accentColor, updatedAt: new Date() })
+        .where(eq(projects.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
    * Remove custom icon for a project
    */
   removeIcon: publicProcedure
