@@ -4178,7 +4178,7 @@ const ChatViewInner = memo(function ChatViewInner({
     removeFromQueue(subChatId, itemId)
   }, [subChatId, removeFromQueue])
 
-  // Force send - stop stream and send immediately, bypassing queue (Opt+Enter)
+  // Force send - stop stream and send immediately, bypassing queue (Opt+Shift+Enter)
   const handleForceSend = useCallback(async () => {
     // Block sending while sandbox is still being set up
     if (sandboxSetupStatus !== "ready") {

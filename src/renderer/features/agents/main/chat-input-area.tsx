@@ -151,7 +151,7 @@ export interface ChatInputAreaProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>
   // Core callbacks
   onSend: () => void
-  onForceSend: () => void // Opt+Enter: stop stream and send immediately, bypassing queue
+  onForceSend: () => void // Opt+Shift+Enter: stop stream and send immediately, bypassing queue
   onStop: () => Promise<void>
   onCompact: () => void
   onCreateNewSubChat?: () => void
@@ -1075,7 +1075,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       }
 
       // For all other commands (builtin prompts and custom):
-      // insert the command and let user add arguments or press Enter to send
+      // insert the command and let user add arguments or press Shift+Enter to send
       editorRef.current?.setValue(`/${command.name} `)
     },
     [subChatMode, updateMode, onCreateNewSubChat, onCompact, editorRef],

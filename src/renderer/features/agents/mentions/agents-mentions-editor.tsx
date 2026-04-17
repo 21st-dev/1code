@@ -75,7 +75,7 @@ type AgentsMentionsEditorProps = {
   placeholder?: string
   className?: string
   onSubmit?: () => void
-  onForceSubmit?: () => void // Opt+Enter: bypass queue, stop stream and send immediately
+  onForceSubmit?: () => void // Opt+Shift+Enter: bypass queue, stop stream and send immediately
   disabled?: boolean
   onPaste?: (e: React.ClipboardEvent) => void
   onShiftTab?: () => void // callback for Shift+Tab (e.g., mode switching)
@@ -1042,13 +1042,13 @@ export const AgentsMentionsEditor = memo(
           }
 
           // Prevent submission during IME composition (e.g., Chinese/Japanese/Korean input)
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (e.key === "Enter" && e.shiftKey && !e.nativeEvent.isComposing) {
             if (triggerActive.current || slashTriggerActive.current) {
               // Let dropdown handle Enter
               return
             }
             e.preventDefault()
-            // Opt+Enter = force submit (bypass queue, stop stream and send immediately)
+            // Opt+Shift+Enter = force submit (bypass queue, stop stream and send immediately)
             if (e.altKey && onForceSubmit) {
               onForceSubmit()
             } else {

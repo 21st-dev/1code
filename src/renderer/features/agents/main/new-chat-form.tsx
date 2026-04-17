@@ -1386,7 +1386,7 @@ export function NewChatForm({
       }
 
       // For all other commands (builtin prompts and custom):
-      // insert the command and let user add arguments or press Enter to send
+      // insert the command and let user add arguments or press Shift+Enter to send
       editorRef.current?.setValue(`/${command.name} `)
     },
     [agentMode],
