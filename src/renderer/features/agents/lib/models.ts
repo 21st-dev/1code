@@ -1,5 +1,6 @@
 export const CLAUDE_MODELS = [
-  { id: "opus", name: "Opus", version: "4.6" },
+  { id: "opus", name: "Opus", version: "4.7" },
+  { id: "opus[1m]", name: "Opus", version: "4.7 1M" },
   { id: "sonnet", name: "Sonnet", version: "4.6" },
   { id: "haiku", name: "Haiku", version: "4.5" },
 ]
