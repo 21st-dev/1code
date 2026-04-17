@@ -31,6 +31,7 @@ import {
   agentsDebugModeAtom,
   justCreatedIdsAtom,
   lastSelectedAgentIdAtom,
+  lastSelectedClaudeThinkingAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedBranchesAtom,
@@ -58,7 +59,6 @@ import {
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
-  extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
@@ -121,6 +121,7 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  type ClaudeThinkingLevel,
   type CodexThinkingLevel,
 } from "../lib/models"
 // import type { PlanType } from "@/lib/config/subscription-plans"
@@ -327,8 +328,8 @@ export function NewChatForm({
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(
-    extendedThinkingEnabledAtom,
+  const [lastSelectedClaudeThinking, setLastSelectedClaudeThinking] = useAtom(
+    lastSelectedClaudeThinkingAtom,
   )
 
   const [selectedModel, setSelectedModel] = useState(
@@ -395,6 +396,34 @@ export function NewChatForm({
     lastSelectedCodexThinking,
     selectedCodexThinking,
     setLastSelectedCodexThinking,
+  ])
+
+  // Clamp Claude thinking to levels the selected model supports.
+  const selectedClaudeThinking = useMemo<ClaudeThinkingLevel>(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.includes(lastSelectedClaudeThinking as ClaudeThinkingLevel)
+    ) {
+      return lastSelectedClaudeThinking as ClaudeThinkingLevel
+    }
+    if (supported.includes("high")) return "high"
+    return supported[0] ?? "off"
+  }, [selectedModel, lastSelectedClaudeThinking])
+
+  useEffect(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.length === 0 ||
+      supported.includes(lastSelectedClaudeThinking as ClaudeThinkingLevel)
+    ) {
+      return
+    }
+    setLastSelectedClaudeThinking(selectedClaudeThinking)
+  }, [
+    selectedModel,
+    lastSelectedClaudeThinking,
+    selectedClaudeThinking,
+    setLastSelectedClaudeThinking,
   ])
 
   const selectedChatModel = useMemo(() => {
@@ -1905,8 +1934,8 @@ export function NewChatForm({
                             recommendedOllamaModel: availableModels.recommendedModel,
                             onSelectOllamaModel: setSelectedOllamaModel,
                             isConnected: isClaudeConnected,
-                            thinkingEnabled,
-                            onThinkingChange: setThinkingEnabled,
+                            selectedThinking: selectedClaudeThinking,
+                            onSelectThinking: setLastSelectedClaudeThinking,
                           }}
                           codex={{
                             models: codexUiModels,

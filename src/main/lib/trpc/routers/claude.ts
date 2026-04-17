@@ -810,7 +810,9 @@ export const claudeRouter = router({
             baseUrl: z.string().min(1),
           })
           .optional(),
-        maxThinkingTokens: z.number().optional(), // Enable extended thinking
+        effort: z
+          .enum(["low", "medium", "high", "xhigh", "max"])
+          .optional(), // Thinking/reasoning effort level
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
         historyEnabled: z.boolean().optional(),
         offlineModeEnabled: z.boolean().optional(), // Whether offline mode (Ollama) is enabled in settings
@@ -1994,9 +1996,7 @@ ${prompt}
                 ...(!resumeSessionId && { continue: true }),
                 ...(resolvedModel && { model: resolvedModel }),
                 // fallbackModel: "claude-opus-4-5-20251101",
-                ...(input.maxThinkingTokens && {
-                  maxThinkingTokens: input.maxThinkingTokens,
-                }),
+                ...(input.effort && { effort: input.effort }),
               },
             }
 

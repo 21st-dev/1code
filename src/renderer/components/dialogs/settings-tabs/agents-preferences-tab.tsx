@@ -6,7 +6,6 @@ import {
   ctrlTabTargetAtom,
   defaultAgentModeAtom,
   desktopNotificationsEnabledAtom,
-  extendedThinkingEnabledAtom,
   notifyWhenFocusedAtom,
   soundNotificationsEnabledAtom,
   preferredEditorAtom,
@@ -14,6 +13,11 @@ import {
   type AutoAdvanceTarget,
   type CtrlTabTarget,
 } from "../../../lib/atoms"
+import { lastSelectedClaudeThinkingAtom } from "../../../features/agents/atoms"
+import {
+  formatClaudeThinkingLabel,
+  type ClaudeThinkingLevel,
+} from "../../../features/agents/lib/models"
 import { APP_META, type ExternalApp } from "../../../../shared/external-apps"
 
 // Editor icon imports
@@ -142,8 +146,8 @@ function useIsNarrowScreen(): boolean {
 }
 
 export function AgentsPreferencesTab() {
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(
-    extendedThinkingEnabledAtom,
+  const [claudeThinking, setClaudeThinking] = useAtom(
+    lastSelectedClaudeThinkingAtom,
   )
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
   const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(desktopNotificationsEnabledAtom)
@@ -197,18 +201,34 @@ export function AgentsPreferencesTab() {
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Extended Thinking
+              Thinking Effort
             </span>
             <span className="text-xs text-muted-foreground">
-              Enable deeper reasoning with more thinking tokens (uses more
-              credits).{" "}
-              <span className="text-foreground/70">Disables response streaming.</span>
+              Default effort level for Claude's reasoning. Higher levels think
+              longer and use more credits.
             </span>
           </div>
-          <Switch
-            checked={thinkingEnabled}
-            onCheckedChange={setThinkingEnabled}
-          />
+          <Select
+            value={claudeThinking}
+            onValueChange={(value: ClaudeThinkingLevel) =>
+              setClaudeThinking(value)
+            }
+          >
+            <SelectTrigger className="w-auto px-2">
+              <span className="text-xs">
+                {formatClaudeThinkingLabel(claudeThinking)}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              {(
+                ["off", "low", "medium", "high", "xhigh", "max"] as const
+              ).map((level) => (
+                <SelectItem key={level} value={level}>
+                  {formatClaudeThinkingLabel(level)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">

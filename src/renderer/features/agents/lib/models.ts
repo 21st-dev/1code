@@ -1,8 +1,38 @@
+export type ClaudeThinkingLevel =
+  | "off"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max"
+
 export const CLAUDE_MODELS = [
-  { id: "opus", name: "Opus", version: "4.6" },
-  { id: "sonnet", name: "Sonnet", version: "4.6" },
-  { id: "haiku", name: "Haiku", version: "4.5" },
+  {
+    id: "opus",
+    name: "Opus",
+    version: "4.6",
+    thinkings: ["off", "low", "medium", "high", "xhigh", "max"] as ClaudeThinkingLevel[],
+  },
+  {
+    id: "sonnet",
+    name: "Sonnet",
+    version: "4.6",
+    thinkings: ["off", "low", "medium", "high"] as ClaudeThinkingLevel[],
+  },
+  {
+    id: "haiku",
+    name: "Haiku",
+    version: "4.5",
+    thinkings: ["off", "low", "medium", "high"] as ClaudeThinkingLevel[],
+  },
 ]
+
+export function formatClaudeThinkingLabel(thinking: ClaudeThinkingLevel): string {
+  if (thinking === "off") return "Off"
+  if (thinking === "xhigh") return "Extra High"
+  if (thinking === "max") return "Max"
+  return thinking.charAt(0).toUpperCase() + thinking.slice(1)
+}
 
 export type CodexThinkingLevel = "low" | "medium" | "high" | "xhigh"
 

@@ -8,7 +8,6 @@ import {
   type CustomClaudeConfig,
   customClaudeConfigAtom,
   enableTasksAtom,
-  extendedThinkingEnabledAtom,
   historyEnabledAtom,
   normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
@@ -24,6 +23,7 @@ import {
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
   pendingUserQuestionsAtom,
+  subChatClaudeThinkingAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
@@ -160,12 +160,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const metadata = lastAssistant?.metadata as AgentMessageMetadata | undefined
     const sessionId = metadata?.sessionId
 
-    // Read extended thinking setting dynamically (so toggle applies to existing chats)
-    const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
-    // Max thinking tokens for extended thinking mode
-    // SDK adds +1 internally, so 64000 becomes 64001 which exceeds Opus 4.5 limit
-    // Using 32000 to stay safely under the 64000 max output tokens limit
-    const maxThinkingTokens = thinkingEnabled ? 32_000 : undefined
+    // Read thinking effort per-subChat (mirrors the model selection)
+    const claudeThinkingLevel = appStore.get(
+      subChatClaudeThinkingAtomFamily(this.config.subChatId),
+    )
+    const effort =
+      claudeThinkingLevel === "off" ? undefined : claudeThinkingLevel
     const historyEnabled = appStore.get(historyEnabledAtom)
     const enableTasks = appStore.get(enableTasksAtom)
 
@@ -208,7 +208,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
             sessionId,
-            ...(maxThinkingTokens && { maxThinkingTokens }),
+            ...(effort && { effort }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
             ...(selectedOllamaModel && { selectedOllamaModel }),

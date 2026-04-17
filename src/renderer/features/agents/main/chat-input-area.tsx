@@ -45,7 +45,6 @@ import {
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
-  extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
@@ -55,9 +54,11 @@ import {
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import {
+  lastSelectedClaudeThinkingAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedModelIdAtom,
+  subChatClaudeThinkingAtomFamily,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
   subChatModelIdAtomFamily,
@@ -78,6 +79,7 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  type ClaudeThinkingLevel,
   type CodexThinkingLevel,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
@@ -472,6 +474,15 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] = useAtom(
     subChatCodexThinkingAtom,
   )
+  const subChatClaudeThinkingAtom = useMemo(
+    () => subChatClaudeThinkingAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatClaudeThinking, setSelectedSubChatClaudeThinking] =
+    useAtom(subChatClaudeThinkingAtom)
+  const setLastSelectedClaudeThinking = useSetAtom(
+    lastSelectedClaudeThinkingAtom,
+  )
   const setLastSelectedModelId = useSetAtom(lastSelectedModelIdAtom)
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
@@ -595,8 +606,37 @@ export const ChatInputArea = memo(function ChatInputArea({
     }
   }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
 
-  // Extended thinking (reasoning) toggle
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+  // Clamp Claude thinking to levels the selected model supports (e.g., Haiku lacks "max").
+  const selectedClaudeThinking = useMemo<ClaudeThinkingLevel>(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.includes(
+        selectedSubChatClaudeThinking as ClaudeThinkingLevel,
+      )
+    ) {
+      return selectedSubChatClaudeThinking as ClaudeThinkingLevel
+    }
+    if (supported.includes("high")) return "high"
+    return supported[0] ?? "off"
+  }, [selectedModel, selectedSubChatClaudeThinking])
+
+  useEffect(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.length === 0 ||
+      supported.includes(
+        selectedSubChatClaudeThinking as ClaudeThinkingLevel,
+      )
+    ) {
+      return
+    }
+    setSelectedSubChatClaudeThinking(selectedClaudeThinking)
+  }, [
+    selectedModel,
+    selectedSubChatClaudeThinking,
+    selectedClaudeThinking,
+    setSelectedSubChatClaudeThinking,
+  ])
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
@@ -1579,8 +1619,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                         recommendedOllamaModel: availableModels.recommendedModel,
                         onSelectOllamaModel: setSelectedOllamaModel,
                         isConnected: isClaudeConnected,
-                        thinkingEnabled,
-                        onThinkingChange: setThinkingEnabled,
+                        selectedThinking: selectedClaudeThinking,
+                        onSelectThinking: (thinking) => {
+                          setSelectedSubChatClaudeThinking(thinking)
+                          setLastSelectedClaudeThinking(thinking)
+                        },
                       }}
                       codex={{
                         models: codexUiModels,

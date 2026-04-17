@@ -234,6 +234,34 @@ export const lastSelectedCodexThinkingAtom = atomWithStorage<CodexThinkingPrefer
   { getOnInit: true },
 )
 
+export type ClaudeThinkingPreference =
+  | "off"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max"
+
+// One-time migration from the legacy boolean toggle: true → "high", false → "off".
+// Only consulted the first time the new key is read (atomWithStorage keeps the user's
+// choice thereafter).
+function readInitialClaudeThinking(): ClaudeThinkingPreference {
+  try {
+    const raw = localStorage.getItem("preferences:extended-thinking-enabled")
+    if (raw === null) return "high"
+    return JSON.parse(raw) === false ? "off" : "high"
+  } catch {
+    return "high"
+  }
+}
+
+export const lastSelectedClaudeThinkingAtom = atomWithStorage<ClaudeThinkingPreference>(
+  "agents:lastSelectedClaudeThinking",
+  readInitialClaudeThinking(),
+  undefined,
+  { getOnInit: true },
+)
+
 // Storage for per-subChat Claude model selection.
 // Falls back to lastSelectedModelIdAtom when sub-chat has no explicit selection yet.
 const subChatModelIdsStorageAtom = atomWithStorage<Record<string, string>>(
@@ -319,6 +347,38 @@ export const subChatCodexThinkingAtomFamily = atomFamily((subChatId: string) =>
       const current = get(subChatCodexThinkingStorageAtom)
       if (current[subChatId] === newThinking) return
       set(subChatCodexThinkingStorageAtom, { ...current, [subChatId]: newThinking })
+    },
+  ),
+)
+
+// Storage for per-subChat Claude thinking level.
+// Falls back to lastSelectedClaudeThinkingAtom when sub-chat has no explicit selection yet.
+const subChatClaudeThinkingStorageAtom = atomWithStorage<
+  Record<string, ClaudeThinkingPreference>
+>(
+  "agents:subChatClaudeThinking",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatClaudeThinkingAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedClaudeThinkingAtom)
+      return (
+        get(subChatClaudeThinkingStorageAtom)[subChatId] ??
+        get(lastSelectedClaudeThinkingAtom)
+      )
+    },
+    (get, set, newThinking: ClaudeThinkingPreference) => {
+      if (!subChatId) {
+        set(lastSelectedClaudeThinkingAtom, newThinking)
+        return
+      }
+      const current = get(subChatClaudeThinkingStorageAtom)
+      if (current[subChatId] === newThinking) return
+      set(subChatClaudeThinkingStorageAtom, { ...current, [subChatId]: newThinking })
     },
   ),
 )
