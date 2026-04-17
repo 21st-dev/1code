@@ -4,6 +4,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator"
 import { app } from "electron"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
+import { resolveOpenCodexDataPaths } from "../opencodex/preflight"
 import * as schema from "./schema"
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
@@ -14,14 +15,14 @@ let sqlite: Database.Database | null = null
  */
 function getDatabasePath(): string {
   const userDataPath = app.getPath("userData")
-  const dataDir = join(userDataPath, "data")
+  const paths = resolveOpenCodexDataPaths(userDataPath)
 
-  // Ensure data directory exists
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true })
+  // Keep database ownership under the OpenCodex state layout.
+  if (!existsSync(paths.stateDir)) {
+    mkdirSync(paths.stateDir, { recursive: true })
   }
 
-  return join(dataDir, "agents.db")
+  return paths.desktopStateDbPath
 }
 
 /**

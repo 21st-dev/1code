@@ -4,7 +4,6 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { getAuthManager } from "../../../index"
 import {
   trackPRCreated,
   trackWorkspaceArchived,
@@ -1271,51 +1270,9 @@ export const chatsRouter = router({
         console.log("[generateCommitMessage] Ollama failed, using heuristic fallback")
         // Fall through to heuristic fallback below
       } else {
-        // Online - call web API to generate commit message
-        let apiError: string | null = null
-        try {
-          const authManager = getAuthManager()
-          const token = await authManager.getValidToken()
-          // Use localhost in dev, production otherwise
-          const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://21st.dev"
-
-          if (!token) {
-            apiError = "No auth token available"
-          } else {
-            const response = await fetch(
-              `${apiUrl}/api/agents/generate-commit-message`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Desktop-Token": token,
-                },
-                body: JSON.stringify({
-                  diff: filteredDiff.slice(0, 10000), // Limit diff size, use filtered diff
-                  fileCount: files.length,
-                  additions,
-                  deletions,
-                }),
-              },
-            )
-
-            if (response.ok) {
-              const data = await response.json()
-              if (data.message) {
-                return { message: data.message }
-              }
-              apiError = "API returned ok but no message in response"
-            } else {
-              apiError = `API returned ${response.status}`
-            }
-          }
-        } catch (error) {
-          apiError = `API call failed: ${error instanceof Error ? error.message : String(error)}`
-        }
-
-        if (apiError) {
-          console.log("[generateCommitMessage] API error:", apiError)
-        }
+        console.log(
+          "[generateCommitMessage] Online cloud helper removed - using local heuristic fallback",
+        )
       }
 
       // Fallback: Generate commit message with conventional commits style
@@ -1399,43 +1356,10 @@ export const chatsRouter = router({
           return { name: getFallbackName(input.userMessage) }
         }
 
-        // Online - use web API
-        const authManager = getAuthManager()
-        const token = await authManager.getValidToken()
-        const apiUrl = "https://21st.dev"
-
         console.log(
-          "[generateSubChatName] Online - calling API with token:",
-          token ? "present" : "missing",
+          "[generateSubChatName] Online cloud helper removed - using deterministic local fallback",
         )
-
-        const response = await fetch(
-          `${apiUrl}/api/agents/sub-chat/generate-name`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token && { "X-Desktop-Token": token }),
-            },
-            body: JSON.stringify({ userMessage: input.userMessage }),
-          },
-        )
-
-        console.log("[generateSubChatName] Response status:", response.status)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error(
-            "[generateSubChatName] API error:",
-            response.status,
-            errorText,
-          )
-          return { name: getFallbackName(input.userMessage) }
-        }
-
-        const data = await response.json()
-        console.log("[generateSubChatName] Generated name:", data.name)
-        return { name: data.name || getFallbackName(input.userMessage) }
+        return { name: getFallbackName(input.userMessage) }
       } catch (error) {
         console.error("[generateSubChatName] Error:", error)
         return { name: getFallbackName(input.userMessage) }

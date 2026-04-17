@@ -25,7 +25,7 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
   { id: "plan", label: "Plan", icon: FileText, canExpand: true, defaultVisible: true },
   { id: "terminal", label: "Terminal", icon: Terminal, canExpand: true, defaultVisible: false },
   { id: "diff", label: "Changes", icon: FileDiff, canExpand: true, defaultVisible: true },
-  { id: "mcp", label: "MCP Servers", icon: OriginalMCPIcon as unknown as LucideIcon, canExpand: false, defaultVisible: true },
+  { id: "mcp", label: "MCP", icon: OriginalMCPIcon as unknown as LucideIcon, canExpand: false, defaultVisible: true },
 ]
 
 // Helper to get default visible widgets

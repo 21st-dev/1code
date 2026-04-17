@@ -273,8 +273,8 @@ function CreateItemForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="skill">Skill (referenced via @mention)</SelectItem>
-              <SelectItem value="command">Command (triggered via /slash)</SelectItem>
+              <SelectItem value="skill">Skill (referenced inside OpenCodex)</SelectItem>
+              <SelectItem value="command">Command (triggered with /slash)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -308,10 +308,10 @@ function CreateItemForm({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="user">
-                  {kind === "skill" ? "User (~/.claude/skills/)" : "User (~/.claude/commands/)"}
+                  {kind === "skill" ? "Available on this device" : "Available on this device"}
                 </SelectItem>
                 <SelectItem value="project">
-                  {projectName ? `Project: ${projectName}` : "Project"} ({kind === "skill" ? ".claude/skills/" : ".claude/commands/"})
+                  {projectName ? `Current project: ${projectName}` : "Current project"} ({kind === "skill" ? "current project skill library" : "current project command library"})
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -732,7 +732,7 @@ export function AgentsSkillsTab() {
                 onClick={() => setShowAddForm(true)}
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Create your first skill or command
+                Create your first local skill or command
               </Button>
             )}
           </div>

@@ -1624,7 +1624,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
             const results = await Promise.allSettled(
               filesToFetch.map(async ({ key, filePath }) => {
                 if (isDesktopApp()) {
-                  // Desktop: use signedFetch via remoteApi
+// Desktop: legacy remote diff bridge kept behind remoteApi compatibility helpers
                   const data = await remoteApi.getSandboxFile(sandboxId, filePath)
                   return { key, content: data.content }
                 } else {

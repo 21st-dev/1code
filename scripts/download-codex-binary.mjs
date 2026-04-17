@@ -21,7 +21,7 @@ const BIN_DIR = path.join(ROOT_DIR, "resources", "bin")
 
 const RELEASE_REPO = "openai/codex"
 const RELEASE_TAG_PREFIX = "rust-v"
-const USER_AGENT = "21st-desktop-codex-downloader"
+const USER_AGENT = "opencodex-desktop-codex-downloader"
 
 const PLATFORMS = {
   "darwin-arm64": {

@@ -185,9 +185,9 @@ export function AgentsPreferencesTab() {
       {/* Header - hidden on narrow screens since it's in the navigation bar */}
       {!isNarrowScreen && (
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">
-          <h3 className="text-sm font-semibold text-foreground">Preferences</h3>
+          <h3 className="text-sm font-semibold text-foreground">Behavior</h3>
           <p className="text-xs text-muted-foreground">
-            Configure Claude's behavior and features
+            Configure OpenCodex agent behavior and local defaults
           </p>
         </div>
       )}
@@ -237,10 +237,10 @@ export function AgentsPreferencesTab() {
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Include Co-Authored-By
+              Include Co-Authored-By Footer
             </span>
             <span className="text-xs text-muted-foreground">
-              Add "Co-authored-by: Claude" to git commits made by Claude
+              Add a co-authored-by footer to AI-authored git commits
             </span>
           </div>
           <Switch

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
-    <title>21st - Login</title>
+    <title>OpenCodex - Local Backend</title>
     <style>
       * {
         margin: 0;
@@ -55,24 +55,25 @@
       .logo .text-path {
         fill: var(--text-logo);
       }
-      .login-btn {
+      .status-chip {
         height: 32px;
         padding: 0 12px;
-        background: hsl(228 100% 50%);
-        color: #fafafa;
-        border: none;
+        background: rgba(0, 51, 255, 0.12);
+        color: var(--text);
+        border: 1px solid rgba(0, 51, 255, 0.24);
         border-radius: 8px;
-        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         font-size: 14px;
         font-weight: 500;
-        transition: background-color 0.15s ease, transform 0.15s ease;
-        box-shadow: var(--btn-shadow);
       }
-      .login-btn:hover {
-        background: hsl(228 100% 45%);
-      }
-      .login-btn:active {
-        transform: scale(0.97);
+      .body-copy {
+        max-width: 320px;
+        text-align: center;
+        color: color-mix(in srgb, var(--text) 72%, transparent);
+        font-size: 14px;
+        line-height: 1.5;
       }
     </style>
   </head>
@@ -91,33 +92,10 @@
         <!-- Icon -->
         <path fill-rule="evenodd" clip-rule="evenodd" d="M26.3333 12C27.2538 12 28 12.7462 28 13.6667V23.8333C28 23.9254 27.9254 24 27.8333 24H22.8333C22.7413 24 22.6667 24.0746 22.6667 24.1667V27.8333C22.6667 27.9254 22.592 28 22.5 28H13.6667C12.7462 28 12 27.2538 12 26.3333V24.1888C12 24.0717 12.0617 23.9632 12.1621 23.903L18.1504 20.3099C18.2864 20.2283 18.2408 20.0272 18.0951 20.0026L18.0651 20H12.1667C12.0746 20 12 19.9254 12 19.8333V16.1667C12 16.0746 12.0746 16 12.1667 16H18.5C18.592 16 18.6667 15.9254 18.6667 15.8333V12.1667C18.6667 12.0746 18.7413 12 18.8333 12H26.3333ZM18.8333 16C18.7413 16 18.6667 16.0746 18.6667 16.1667V23.8333C18.6667 23.9254 18.7413 24 18.8333 24H22.5C22.592 24 22.6667 23.9254 22.6667 23.8333V16.1667C22.6667 16.0746 22.592 16 22.5 16H18.8333Z" fill="#0033FF"/>
       </svg>
-      <button class="login-btn" id="loginBtn">Sign in</button>
+      <div class="status-chip">OpenCodex local backend</div>
+      <p class="body-copy">
+        This desktop shell no longer uses cloud sign-in. Start or repair the local OpenHarness backend from the main OpenCodex onboarding flow.
+      </p>
     </div>
-    <script>
-      console.log('Login page loaded');
-      console.log('window.desktopApi:', window.desktopApi);
-
-      // Listen for auth success from main process (via deep link)
-      // This ensures UI updates even if deep link arrives before click handler completes
-      if (window.desktopApi && window.desktopApi.onAuthSuccess) {
-        window.desktopApi.onAuthSuccess(function(user) {
-          console.log('[Login] Auth success received:', user?.email);
-          // Window will be reloaded by main process, no UI change needed
-        });
-      }
-
-      document.getElementById('loginBtn').addEventListener('click', function() {
-        console.log('Sign in clicked');
-        console.log('desktopApi available:', !!window.desktopApi);
-
-        if (window.desktopApi && window.desktopApi.startAuthFlow) {
-          console.log('Calling startAuthFlow...');
-          window.desktopApi.startAuthFlow();
-        } else {
-          console.error('Desktop API not available');
-          alert('Desktop API not available. Please restart the app.');
-        }
-      });
-    </script>
   </body>
 </html>

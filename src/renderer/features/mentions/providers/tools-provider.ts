@@ -124,7 +124,7 @@ export const toolsProvider = createMentionProvider<ToolData>({
       return {
         items: [],
         hasMore: false,
-        warning: "Failed to load MCP servers",
+        warning: "Failed to load MCP connections",
         timing: performance.now() - startTime,
       }
     }
@@ -167,7 +167,7 @@ export const toolsProvider = createMentionProvider<ToolData>({
       return {
         id: token,
         label: value,
-        description: "MCP Server",
+        description: "MCP connection",
         icon: "tool",
         data: { serverName: value, toolCount: 0 },
         metadata: { type: "tool" },

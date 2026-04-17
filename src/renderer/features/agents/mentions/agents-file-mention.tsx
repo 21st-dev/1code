@@ -1228,7 +1228,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
                       {(showingFilesList || hasOnlyFiles) ? "Files & Folders" :
                        showingSkillsList ? "Skills" :
                        showingAgentsList ? "Agents" :
-                       showingToolsList ? "MCP Servers" :
+                       showingToolsList ? "MCP Connections" :
                        "Results"}
                     </span>
                     {isFetching && !isLoading && (

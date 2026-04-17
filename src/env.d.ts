@@ -11,6 +11,11 @@ declare global {
     // Renderer process (VITE_ prefix)
     readonly VITE_POSTHOG_KEY?: string
     readonly VITE_POSTHOG_HOST?: string
+    readonly VITE_FEEDBACK_URL?: string
+    readonly VITE_OPENCODEX_COMMUNITY_URL?: string
+    readonly VITE_OPENCODEX_CHANGELOG_URL?: string
+    readonly VITE_OPENCODEX_AGENTS_CHANGELOG_URL?: string
+    readonly VITE_OPENCODEX_CHANGELOG_FEED_URL?: string
   }
 }
 

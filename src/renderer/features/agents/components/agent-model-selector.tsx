@@ -13,7 +13,12 @@ import {
   CommandList,
   CommandSeparator,
 } from "../../../components/ui/command"
-import { CheckIcon, ClaudeCodeIcon, IconChevronDown, ThinkingIcon } from "../../../components/ui/icons"
+import {
+  AgentIcon,
+  CheckIcon,
+  IconChevronDown,
+  ThinkingIcon,
+} from "../../../components/ui/icons"
 import { Switch } from "../../../components/ui/switch"
 import { Checkbox } from "../../../components/ui/checkbox"
 import { Button } from "../../../components/ui/button"
@@ -25,6 +30,7 @@ import {
 import { cn } from "../../../lib/utils"
 import type { CodexThinkingLevel } from "../lib/models"
 import { formatCodexThinkingLabel } from "../lib/models"
+import { getOpenCodexProviderPromptLabel } from "../lib/opencodex-runtime"
 
 const CROSS_PROVIDER_DIALOG_DISMISSED_KEY = "agent-model-selector:skip-cross-provider-dialog"
 
@@ -398,7 +404,7 @@ export function AgentModelSelector({
     ) : selectedAgentId === "codex" ? (
       <CodexIcon className="h-3.5 w-3.5" />
     ) : (
-      <ClaudeCodeIcon className="h-3.5 w-3.5" />
+      <AgentIcon className="h-3.5 w-3.5" />
     )
 
   const isItemSelected = (item: FlatModelItem): boolean => {
@@ -496,13 +502,13 @@ export function AgentModelSelector({
   const getItemIcon = (item: FlatModelItem) => {
     switch (item.type) {
       case "claude":
-        return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        return <AgentIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "codex":
-        return <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        return <AgentIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "ollama":
         return <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
       case "custom":
-        return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        return <AgentIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
     }
   }
 
@@ -515,7 +521,7 @@ export function AgentModelSelector({
       case "ollama":
         return item.modelName + (item.isRecommended ? " (recommended)" : "")
       case "custom":
-        return "Custom Model"
+        return "Backend Override"
     }
   }
 
@@ -648,10 +654,15 @@ export function AgentModelSelector({
 
       <CrossProviderConfirmDialog
         isOpen={confirmDialogOpen}
-        providerName={pendingProvider === "codex" ? "Codex" : "Claude Code"}
+        providerName={
+          pendingProvider
+            ? getOpenCodexProviderPromptLabel(pendingProvider)
+            : getOpenCodexProviderPromptLabel("claude-code")
+        }
         onConfirm={handleConfirmCrossProvider}
         onClose={handleCloseConfirmDialog}
       />
     </Popover>
   )
 }
+

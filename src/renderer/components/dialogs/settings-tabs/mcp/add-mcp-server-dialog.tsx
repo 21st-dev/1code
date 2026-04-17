@@ -23,7 +23,7 @@ export function AddMcpServerDialog({
   onServerAdded,
 }: AddMcpServerDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const addServerMutation = trpc.claude.addMcpServer.useMutation()
+  const addServerMutation = trpc.opencodex.addMcpServer.useMutation()
 
   const handleSubmit = async (data: McpServerFormData) => {
     setIsSubmitting(true)
@@ -37,13 +37,13 @@ export function AddMcpServerDialog({
         url: data.url,
         projectPath: data.scope === "project" ? data.projectPath : undefined,
       })
-      toast.success("Server added", { description: data.name })
+      toast.success("Connection added", { description: data.name })
       onOpenChange(false)
       onServerAdded?.()
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to add server"
-      toast.error("Failed to add server", { description: message })
+        error instanceof Error ? error.message : "Failed to add connection"
+      toast.error("Failed to add connection", { description: message })
     } finally {
       setIsSubmitting(false)
     }
@@ -53,16 +53,16 @@ export function AddMcpServerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add MCP Server</DialogTitle>
+          <DialogTitle>Add MCP Connection</DialogTitle>
           <DialogDescription>
-            Configure a new MCP server connection.
+            Configure a new MCP connection.
           </DialogDescription>
         </DialogHeader>
         <McpServerForm
           onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
           isSubmitting={isSubmitting}
-          submitLabel="Add Server"
+          submitLabel="Add Connection"
         />
       </DialogContent>
     </Dialog>

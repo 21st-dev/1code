@@ -2,7 +2,8 @@ import { BrowserWindow, ipcMain, app } from "electron"
 import log from "electron-log"
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater"
 import { readFileSync, writeFileSync, existsSync } from "fs"
-import { join } from "path"
+import { resolveOpenCodexDataPaths } from "./opencodex/preflight"
+import { getOpenCodexUpdateFeedBaseUrl } from "./opencodex/update-feed"
 
 /**
  * IMPORTANT: Do NOT use lazy/dynamic imports for electron-updater!
@@ -25,20 +26,17 @@ function initAutoUpdaterConfig() {
   autoUpdater.autoRunAppAfterInstall = true // Restart app after install
 }
 
-// CDN base URL for updates
-const CDN_BASE = "https://cdn.21st.dev/releases/desktop"
+// Release feed base URL for updates
+const CDN_BASE = getOpenCodexUpdateFeedBaseUrl()
 
 // Minimum interval between update checks (prevent spam on rapid focus/blur)
 const MIN_CHECK_INTERVAL = 60 * 1000 // 1 minute
 let lastCheckTime = 0
 
-// Update channel preference file
-const CHANNEL_PREF_FILE = "update-channel.json"
-
 type UpdateChannel = "latest" | "beta"
 
 function getChannelPrefPath(): string {
-  return join(app.getPath("userData"), CHANNEL_PREF_FILE)
+  return resolveOpenCodexDataPaths(app.getPath("userData")).updateChannelPrefPath
 }
 
 function getSavedChannel(): UpdateChannel {

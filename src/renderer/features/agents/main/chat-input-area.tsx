@@ -49,6 +49,8 @@ import {
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  normalizeOpenCodexBackendConfig,
+  openCodexBackendConfigAtom,
   selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
@@ -507,8 +509,11 @@ export const ChatInputArea = memo(function ChatInputArea({
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
+  const backendConfig = useAtomValue(openCodexBackendConfigAtom)
+  const normalizedBackendConfig = useMemo(
+    () => normalizeOpenCodexBackendConfig(backendConfig),
+    [backendConfig],
+  )
   const codexUiModels = useMemo(
     () => {
       let models = hasAppCodexApiKey
@@ -580,7 +585,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     normalizeCustomClaudeConfig(customClaudeConfig)
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
   const isClaudeConnected =
-    Boolean(claudeCodeIntegration?.isConnected) ||
+    Boolean(normalizedBackendConfig) ||
     anthropicOnboardingCompleted ||
     apiKeyOnboardingCompleted ||
     hasCustomClaudeConfig
@@ -636,7 +641,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     data: allMcpConfig,
     isLoading: isMcpLoading,
     refetch: refetchMcp,
-  } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
+  } = trpc.opencodex.getAllMcpConfig.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
 

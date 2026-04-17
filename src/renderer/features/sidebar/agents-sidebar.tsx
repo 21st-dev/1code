@@ -27,7 +27,6 @@ import {
   type ChatSourceMode,
   showWorkspaceIconAtom,
   betaKanbanEnabledAtom,
-  betaAutomationsEnabledAtom,
 } from "../../lib/atoms"
 import {
   useRemoteChats,
@@ -40,14 +39,9 @@ import {
 } from "../../lib/hooks/use-remote-chats"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Columns3, ServerCog } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { remoteTrpc } from "../../lib/remote-trpc"
-// import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
-// import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
-const useCombinedAuth = () => ({ userId: null })
-// import { AuthDialog } from "@/components/auth/auth-dialog"
-const AuthDialog = () => null
 // Desktop: archive is handled inline, not via hook
 // import { DiscordIcon } from "@/components/icons"
 import { DiscordIcon } from "../../icons"
@@ -1050,9 +1044,8 @@ const ChatListSection = React.memo(function ChatListSection({
 }, chatListSectionPropsAreEqual)
 
 interface AgentsSidebarProps {
-  userId?: string | null | undefined
   clerkUser?: any
-  desktopUser?: { id: string; email: string; name?: string } | null
+  desktopUser?: { displayName: string; identityLabel: string } | null
   onSignOut?: () => void
   onToggleSidebar?: () => void
   isMobileFullscreen?: boolean
@@ -1091,7 +1084,7 @@ const KanbanButton = memo(function KanbanButton() {
     setSelectedChatId(null)
     setSelectedDraftId(null)
     setShowNewChatForm(false)
-    setDesktopView(null) // Clear automations/inbox view
+    setDesktopView(null) // Clear auxiliary control view
   }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
 
   // Hide button if feature is disabled
@@ -1117,65 +1110,22 @@ const KanbanButton = memo(function KanbanButton() {
 })
 
 // Custom SVG icons matching web's icons.tsx
-function SidebarInboxIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <path
-        d="M3 12H7.5C8.12951 12 8.72229 12.2964 9.1 12.8L9.4 13.2C9.77771 13.7036 10.3705 14 11 14H13C13.6295 14 14.2223 13.7036 14.6 13.2L14.9 12.8C15.2777 12.2964 15.8705 12 16.5 12H21M21.7365 11.5389L18.5758 6.00772C18.2198 5.38457 17.5571 5 16.8394 5H7.16065C6.44293 5 5.78024 5.38457 5.42416 6.00772L2.26351 11.5389C2.09083 11.841 2 12.1831 2 12.5311V17C2 18.1046 2.89543 19 4 19H20C21.1046 19 22 18.1046 22 17V12.5311C22 12.1831 21.9092 11.841 21.7365 11.5389Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function SidebarAutomationsIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <path
-        d="M9.50006 5.39844C7.09268 6.1897 5.1897 8.09268 4.39844 10.5001M19.8597 14.5001C19.9518 14.0142 20.0001 13.5128 20.0001 13.0001C20.0001 10.9895 19.2584 9.1522 18.0337 7.74679M6.70841 19.0001C8.11868 20.2448 9.97117 21.0001 12.0001 21.0001C12.5127 21.0001 13.0141 20.9518 13.5 20.8597"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="5" r="2.5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="20" cy="17" r="2.5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="4" cy="17" r="2.5" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  )
-}
-
-// Isolated Inbox Button - full-width navigation link matching web layout
-const InboxButton = memo(function InboxButton() {
-  const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
+// Isolated Backend Button - full-width local-native navigation link
+const BackendButton = memo(function BackendButton() {
   const desktopView = useAtomValue(desktopViewAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
-  const teamId = useAtomValue(selectedTeamIdAtom)
-
-  const { data: unreadData } = useQuery({
-    queryKey: ["automations", "inboxUnreadCount", teamId],
-    queryFn: () => remoteTrpc.automations.getInboxUnreadCount.query({ teamId: teamId! }),
-    enabled: !!teamId && automationsEnabled,
-    refetchInterval: 30_000,
-  })
-  const inboxUnreadCount = unreadData?.count ?? 0
 
   const handleClick = useCallback(() => {
     setSelectedChatId(null)
     setSelectedDraftId(null)
     setShowNewChatForm(false)
-    setDesktopView("inbox")
+    setDesktopView("backend-control")
   }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
 
-  if (!automationsEnabled) return null
-
-  const isActive = desktopView === "inbox"
+  const isActive = desktopView === "backend-control"
 
   return (
     <button
@@ -1188,39 +1138,8 @@ const InboxButton = memo(function InboxButton() {
           : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
     >
-      <SidebarInboxIcon className="h-4 w-4" />
-      <span className="flex-1 text-left">Inbox</span>
-      {inboxUnreadCount > 0 && (
-        <span className="bg-muted text-muted-foreground text-xs font-medium px-1.5 py-0.5 rounded-md min-w-[20px] text-center">
-          {inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}
-        </span>
-      )}
-    </button>
-  )
-})
-
-// Isolated Automations Button - full-width navigation link matching web layout
-const AutomationsButton = memo(function AutomationsButton() {
-  const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
-
-  const handleClick = useCallback(() => {
-    window.desktopApi.openExternal("https://21st.dev/agents/app/automations")
-  }, [])
-
-  if (!automationsEnabled) return null
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className={cn(
-        "group flex items-center gap-2.5 w-full pl-2 pr-2 py-1.5 rounded-md text-sm transition-colors duration-150",
-        "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-      )}
-    >
-      <SidebarAutomationsIcon className="h-4 w-4" />
-      <span className="flex-1 text-left">Automations</span>
-      <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+      <ServerCog className="h-4 w-4" />
+      <span className="flex-1 text-left">OpenCodex Backend</span>
     </button>
   )
 })
@@ -1274,13 +1193,11 @@ interface SidebarHeaderProps {
   isDesktop: boolean
   isFullscreen: boolean | null
   isMobileFullscreen: boolean
-  userId: string | null | undefined
-  desktopUser: { id: string; email: string; name?: string } | null
+  desktopUser: { displayName: string; identityLabel: string } | null
   onSignOut: () => void
   onToggleSidebar?: () => void
   setSettingsDialogOpen: (open: boolean) => void
   setSettingsActiveTab: (tab: string) => void
-  setShowAuthDialog: (open: boolean) => void
   handleSidebarMouseEnter: () => void
   handleSidebarMouseLeave: () => void
   closeButtonRef: React.RefObject<HTMLDivElement>
@@ -1290,13 +1207,11 @@ const SidebarHeader = memo(function SidebarHeader({
   isDesktop,
   isFullscreen,
   isMobileFullscreen,
-  userId,
   desktopUser,
   onSignOut,
   onToggleSidebar,
   setSettingsDialogOpen,
   setSettingsActiveTab,
-  setShowAuthDialog,
   handleSidebarMouseEnter,
   handleSidebarMouseLeave,
   closeButtonRef,
@@ -1388,7 +1303,7 @@ const SidebarHeader = memo(function SidebarHeader({
                     </div>
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="text-sm font-medium text-foreground truncate">
-                        1Code
+                        OpenCodex
                       </div>
                     </div>
                     {showOfflineFeatures && (
@@ -1412,183 +1327,122 @@ const SidebarHeader = memo(function SidebarHeader({
                 className="w-52 pt-0"
                 sideOffset={8}
               >
-                {userId ? (
-                  <>
-                    {/* Project section at the top */}
-                    <div className="relative rounded-t-xl border-b overflow-hidden">
-                      <div className="absolute inset-0 bg-popover brightness-110" />
-                      <div className="relative pl-2 pt-1.5 pb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-8 h-8 rounded flex items-center justify-center bg-background flex-shrink-0 overflow-hidden">
-                            <Logo className="w-4 h-4" />
+                <>
+                  {/* Project section at the top */}
+                  <div className="relative rounded-t-xl border-b overflow-hidden">
+                    <div className="absolute inset-0 bg-popover brightness-110" />
+                    <div className="relative pl-2 pt-1.5 pb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded flex items-center justify-center bg-background flex-shrink-0 overflow-hidden">
+                          <Logo className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="font-medium text-sm text-foreground truncate">
+                            {desktopUser?.displayName || "OpenCodex User"}
                           </div>
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <div className="font-medium text-sm text-foreground truncate">
-                              {desktopUser?.name || "User"}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {desktopUser?.email}
-                            </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {desktopUser?.identityLabel || "Local device profile"}
                           </div>
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Settings */}
+                  {/* Settings */}
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onSelect={() => {
+                      setIsDropdownOpen(false)
+                      setSettingsActiveTab("preferences")
+                      setSettingsDialogOpen(true)
+                    }}
+                  >
+                    <SettingsIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                    Settings
+                  </DropdownMenuItem>
+
+                  {/* Help Submenu */}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="gap-2">
+                      <QuestionCircleIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="flex-1">Help</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent
+                      className="w-36"
+                      sideOffset={6}
+                      alignOffset={-4}
+                    >
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          window.open(
+                            "https://discord.gg/8ektTZGnj4",
+                            "_blank",
+                          )
+                          setIsDropdownOpen(false)
+                        }}
+                        className="gap-2"
+                      >
+                        <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="flex-1">Discord</span>
+                      </DropdownMenuItem>
+                      {!isMobileFullscreen && (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setIsDropdownOpen(false)
+                            setSettingsActiveTab("keyboard")
+                            setSettingsDialogOpen(true)
+                          }}
+                          className="gap-2"
+                        >
+                          <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="flex-1">Shortcuts</span>
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+
+                  <DropdownMenuSeparator />
+
+                  <div className="">
                     <DropdownMenuItem
                       className="gap-2"
-                      onSelect={() => {
-                        setIsDropdownOpen(false)
-                        setSettingsActiveTab("preferences")
-                        setSettingsDialogOpen(true)
-                      }}
+                      onSelect={() => onSignOut()}
                     >
-                      <SettingsIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                      Settings
+                      <svg
+                        className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <polyline
+                          points="16,17 21,12 16,7"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <line
+                          x1="21"
+                          y1="12"
+                          x2="9"
+                          y2="12"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      Reset local workspace
                     </DropdownMenuItem>
-
-                    {/* Help Submenu */}
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="gap-2">
-                        <QuestionCircleIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <span className="flex-1">Help</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent
-                        className="w-36"
-                        sideOffset={6}
-                        alignOffset={-4}
-                      >
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            window.open(
-                              "https://discord.gg/8ektTZGnj4",
-                              "_blank",
-                            )
-                            setIsDropdownOpen(false)
-                          }}
-                          className="gap-2"
-                        >
-                          <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">Discord</span>
-                        </DropdownMenuItem>
-                        {!isMobileFullscreen && (
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setIsDropdownOpen(false)
-                              setSettingsActiveTab("keyboard")
-                              setSettingsDialogOpen(true)
-                            }}
-                            className="gap-2"
-                          >
-                            <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1">Shortcuts</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-
-                    <DropdownMenuSeparator />
-
-                    {/* Log out */}
-                    <div className="">
-                      <DropdownMenuItem
-                        className="gap-2"
-                        onSelect={() => onSignOut()}
-                      >
-                        <svg
-                          className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <polyline
-                            points="16,17 21,12 16,7"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <line
-                            x1="21"
-                            y1="12"
-                            x2="9"
-                            y2="12"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        Log out
-                      </DropdownMenuItem>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Login for unauthenticated users */}
-                    <div className="">
-                      <DropdownMenuItem
-                        className="gap-2"
-                        onSelect={() => {
-                          setIsDropdownOpen(false)
-                          setShowAuthDialog(true)
-                        }}
-                      >
-                        <ProfileIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        Login
-                      </DropdownMenuItem>
-                    </div>
-
-                    <DropdownMenuSeparator />
-
-                    {/* Help Submenu */}
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="gap-2">
-                        <QuestionCircleIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <span className="flex-1">Help</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent
-                        className="w-36"
-                        sideOffset={6}
-                        alignOffset={-4}
-                      >
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            window.open(
-                              "https://discord.gg/8ektTZGnj4",
-                              "_blank",
-                            )
-                            setIsDropdownOpen(false)
-                          }}
-                          className="gap-2"
-                        >
-                          <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">Discord</span>
-                        </DropdownMenuItem>
-                        {!isMobileFullscreen && (
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setIsDropdownOpen(false)
-                              setSettingsActiveTab("keyboard")
-                              setSettingsDialogOpen(true)
-                            }}
-                            className="gap-2"
-                          >
-                            <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1">Shortcuts</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                  </>
-                )}
+                  </div>
+                </>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -1651,12 +1505,10 @@ const HelpSection = memo(function HelpSection({ isMobile }: HelpSectionProps) {
 })
 
 export function AgentsSidebar({
-  userId = "demo-user-id",
   clerkUser = null,
   desktopUser = {
-    id: "demo-user-id",
-    email: "demo@example.com",
-    name: "Demo User",
+    displayName: "OpenCodex User",
+    identityLabel: "Local device profile",
   },
   onSignOut = () => {},
   onToggleSidebar,
@@ -1758,8 +1610,6 @@ export function AgentsSidebar({
       setDesktopViewForSettings(null)
     }
   }, [setDesktopViewForSettings, setSidebarOpenForSettings])
-  const { isLoaded: isAuthLoaded } = useCombinedAuth()
-  const [showAuthDialog, setShowAuthDialog] = useState(false)
   const setCreateTeamDialogOpen = useSetAtom(createTeamDialogOpenAtom)
 
   // Debug mode for testing first-time user experience
@@ -1771,7 +1621,7 @@ export function AgentsSidebar({
   // Desktop: use selectedProject instead of teams
   const [selectedProject] = useAtom(selectedProjectAtom)
 
-  // Keep chatSourceModeAtom for backwards compatibility (used in other places)
+  // Keep chatSourceModeAtom synchronized to local-only mode.
   const [chatSourceMode, setChatSourceMode] = useAtom(chatSourceModeAtom)
   const teamId = useAtomValue(selectedTeamIdAtom)
 
@@ -1782,7 +1632,7 @@ export function AgentsSidebar({
     if (hasRunStartupSync.current) return
     hasRunStartupSync.current = true
 
-    const correctMode = selectedChatIsRemote ? "sandbox" : "local"
+  const correctMode = "local"
     if (chatSourceMode !== correctMode) {
       setChatSourceMode(correctMode)
     }
@@ -2560,7 +2410,7 @@ export function AgentsSidebar({
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
     setShowNewChatForm(true) // Explicitly show new chat form
-    setDesktopView(null) // Clear automations/inbox view
+    setDesktopView(null) // Clear auxiliary control view
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2655,7 +2505,7 @@ export function AgentsSidebar({
     // Sync chatSourceMode for ChatView to load data from correct source
     setChatSourceMode(isRemote ? "sandbox" : "local")
     setShowNewChatForm(false) // Clear new chat form state when selecting a workspace
-    setDesktopView(null) // Clear automations/inbox view when selecting a chat
+        setDesktopView(null) // Clear auxiliary control view when selecting a chat
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -3120,13 +2970,11 @@ export function AgentsSidebar({
         isDesktop={isDesktop}
         isFullscreen={isFullscreen}
         isMobileFullscreen={isMobileFullscreen}
-        userId={userId}
         desktopUser={desktopUser}
         onSignOut={onSignOut}
         onToggleSidebar={onToggleSidebar}
         setSettingsDialogOpen={setSettingsDialogOpen}
         setSettingsActiveTab={setSettingsActiveTab}
-        setShowAuthDialog={setShowAuthDialog}
         handleSidebarMouseEnter={handleSidebarMouseEnter}
         handleSidebarMouseLeave={handleSidebarMouseLeave}
         closeButtonRef={closeButtonRef}
@@ -3220,10 +3068,9 @@ export function AgentsSidebar({
         </div>
       </div>
 
-      {/* Navigation Links - Inbox & Automations */}
+      {/* Navigation Links - local-native backend controls */}
       <div className="px-2 pb-3 flex-shrink-0 space-y-0.5 -mx-1">
-        <InboxButton />
-        <AutomationsButton />
+        <BackendButton />
       </div>
 
       {/* Scrollable Agents List */}
@@ -3501,10 +3348,6 @@ export function AgentsSidebar({
           />,
           document.body,
         )}
-
-      {/* Auth Dialog */}
-      <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
-
       {/* Rename Dialog */}
       <AgentsRenameSubChatDialog
         isOpen={renameDialogOpen}

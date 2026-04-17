@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT_DIR = path.join(__dirname, "..")
 const BIN_DIR = path.join(ROOT_DIR, "resources", "bin")
+const USER_AGENT = "opencodex-desktop-claude-downloader"
 
 // Claude Code distribution base URL
 const DIST_BASE =
@@ -36,10 +37,16 @@ const PLATFORMS = {
 /**
  * Fetch JSON from URL
  */
+function getRequestHeaders() {
+  return {
+    "User-Agent": USER_AGENT,
+  }
+}
+
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     https
-      .get(url, (res) => {
+      .get(url, { headers: getRequestHeaders() }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           return fetchJson(res.headers.location).then(resolve).catch(reject)
         }
@@ -64,7 +71,7 @@ function downloadFile(url, destPath) {
 
     const request = (url) => {
       https
-        .get(url, (res) => {
+        .get(url, { headers: getRequestHeaders() }, (res) => {
           if (res.statusCode === 301 || res.statusCode === 302) {
             file.close()
             fs.unlinkSync(destPath)
@@ -136,7 +143,9 @@ async function getLatestVersion() {
 
   try {
     // Fetch from the same endpoint that install.sh uses
-    const response = await fetch("https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest")
+    const response = await fetch("https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest", {
+      headers: getRequestHeaders(),
+    })
     if (response.ok) {
       const version = await response.text()
       return version.trim()

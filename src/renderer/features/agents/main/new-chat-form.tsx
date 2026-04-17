@@ -43,13 +43,13 @@ import {
   selectedProjectAtom,
   getNextMode,
   type AgentMode,
+  type SavedRepo,
 } from "../atoms"
 import { defaultAgentModeAtom } from "../../../lib/atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
-const selectedTeamIdAtom = atom<string | null>(null)
 import {
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
@@ -62,6 +62,8 @@ import {
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  normalizeOpenCodexBackendConfig,
+  openCodexBackendConfigAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -70,6 +72,7 @@ import {
 // Desktop uses real tRPC
 import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
+
 import {
   AgentsSlashCommand,
   COMMAND_PROMPTS,
@@ -123,6 +126,13 @@ import {
   CODEX_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
+import { getOpenCodexProviderLabel } from "../lib/opencodex-runtime"
+
+type DesktopRepo = NonNullable<SavedRepo> & {
+  pushed_at?: string | null
+}
+
+const selectedTeamIdAtom = atom<string | null>(null)
 // import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
 
@@ -166,9 +176,13 @@ function useAvailableModels() {
 
 // Agent providers
 const agents = [
-  { id: "claude-code", name: "Claude Code", hasModels: true },
+  {
+    id: "claude-code",
+    name: getOpenCodexProviderLabel("claude-code"),
+    hasModels: true,
+  },
   { id: "cursor", name: "Cursor CLI", disabled: true },
-  { id: "codex", name: "OpenAI Codex" },
+  { id: "codex", name: getOpenCodexProviderLabel("codex") },
 ]
 
 interface NewChatFormProps {
@@ -244,13 +258,22 @@ export function NewChatForm({
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
+  const backendConfig = useAtomValue(openCodexBackendConfigAtom)
+  const normalizedBackendConfig = useMemo(
+    () => normalizeOpenCodexBackendConfig(backendConfig),
+    [backendConfig],
+  )
   const isClaudeConnected =
-    Boolean(claudeCodeIntegration?.isConnected) ||
+    normalizedBackendConfig?.kind === "claude-subscription" ||
+    normalizedBackendConfig?.kind === "anthropic-compatible-api" ||
+    normalizedBackendConfig?.kind === "custom-endpoint" ||
     anthropicOnboardingCompleted ||
     apiKeyOnboardingCompleted ||
     hasCustomClaudeConfig
+  const isCodexConnected =
+    normalizedBackendConfig?.kind === "codex-subscription" ||
+    normalizedBackendConfig?.kind === "openai-compatible-api" ||
+    codexOnboardingCompleted
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
@@ -423,7 +446,7 @@ export function NewChatForm({
     }
 
     if (hasCustomClaudeConfig) {
-      return "Custom Model"
+      return "Backend Override"
     }
 
     if (!selectedModel) {
@@ -712,7 +735,7 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  const reposData: { repositories: DesktopRepo[] } = { repositories: [] }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
@@ -1927,7 +1950,7 @@ export function NewChatForm({
                             },
                             selectedThinking: selectedCodexThinking,
                             onSelectThinking: setLastSelectedCodexThinking,
-                            isConnected: codexOnboardingCompleted,
+                            isConnected: isCodexConnected,
                           }}
                         />
                       </div>
@@ -2239,3 +2262,4 @@ export function NewChatForm({
     </div>
   )
 }
+

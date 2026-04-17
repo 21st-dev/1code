@@ -229,7 +229,7 @@ export type CodexThinkingPreference = "low" | "medium" | "high" | "xhigh"
 
 export const lastSelectedCodexThinkingAtom = atomWithStorage<CodexThinkingPreference>(
   "agents:lastSelectedCodexThinking",
-  "high",
+  "medium",
   undefined,
   { getOnInit: true },
 )
@@ -1014,40 +1014,13 @@ export const showMessageJsonAtom = atomWithStorage<boolean>(
 )
 
 // ============================================================================
-// DESKTOP VIEW NAVIGATION (Automations / Inbox)
+// DESKTOP VIEW NAVIGATION (local-native control surfaces)
 // ============================================================================
 
 // Desktop view mode - takes priority over chat-based rendering
 // null = default behavior (chat/new-chat/kanban)
-export type DesktopView = "automations" | "automations-detail" | "inbox" | "settings" | null
+export type DesktopView = "backend-control" | "settings" | null
 export const desktopViewAtom = atom<DesktopView>(null)
-
-// Which automation is being viewed/edited (ID or "new" for creation)
-export const automationDetailIdAtom = atom<string | null>(null)
-
-// Template params passed when navigating from "Use Template" to create
-export type AutomationTemplateParams = {
-  name: string
-  platform: string
-  trigger: string
-  instructions: string
-} | null
-export const automationTemplateParamsAtom = atom<AutomationTemplateParams>(null)
-
-// Selected chat within inbox (separate from main selectedAgentChatIdAtom)
-export const inboxSelectedChatIdAtom = atom<string | null>(null)
-
-// Inbox sidebar width
-export const agentsInboxSidebarWidthAtom = atomWithStorage<number>(
-  "agents-inbox-sidebar-width",
-  240,
-  undefined,
-  { getOnInit: true },
-)
-
-// Inbox mobile view mode
-export type InboxMobileViewMode = "list" | "chat"
-export const inboxMobileViewModeAtom = atom<InboxMobileViewMode>("list")
 
 // Settings inner sidebar widths (for MCP, Skills, Agents two-panel layouts)
 // Non-persisted — resets to default on re-render

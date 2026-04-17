@@ -127,13 +127,13 @@ export function McpServerForm({
 
   return (
     <div className="space-y-4">
-      {/* Server Name */}
+      {/* Connection Name */}
       <div className="space-y-1.5">
-        <Label>Server Name</Label>
+        <Label>Connection Name</Label>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="my-server"
+          placeholder="local-mcp"
           disabled={isEditing}
           autoFocus={!isEditing}
           className="font-mono"
@@ -159,7 +159,7 @@ export function McpServerForm({
                 : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/20",
             )}
           >
-            Global
+            This Device
           </button>
           <button
             type="button"
@@ -171,7 +171,7 @@ export function McpServerForm({
                 : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/20",
             )}
           >
-            Project
+            Current Project
           </button>
         </div>
       </div>
@@ -179,10 +179,10 @@ export function McpServerForm({
       {/* Project Selector */}
       {scope === "project" && (
         <div className="space-y-1.5">
-          <Label>Project</Label>
+          <Label>Current Project</Label>
           <Select value={projectPath} onValueChange={setProjectPath}>
             <SelectTrigger>
-              <SelectValue placeholder="Select a project..." />
+              <SelectValue placeholder="Select the current project..." />
             </SelectTrigger>
             <SelectContent>
               {projectsList?.map((project) => (

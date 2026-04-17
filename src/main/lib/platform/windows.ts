@@ -63,8 +63,8 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
     const home = this.getHome()
 
     return {
-      installPath: path.join(home, ".local", "bin", "1code.cmd"),
-      scriptName: "1code.cmd",
+      installPath: path.join(home, ".local", "bin", "opencodex.cmd"),
+      scriptName: "opencodex.cmd",
       requiresAdmin: false, // Install to user directory, no admin needed
     }
   }
@@ -136,7 +136,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
       // For terminal usage, users can manually add to PATH:
       // $env:Path += ";${installDir}"
 
-      console.log("[CLI] Installed 1code command to", installPath)
+      console.log("[CLI] Installed opencodex command to", installPath)
       console.log(
         "[CLI] To use from terminal, add to PATH:",
         `$env:Path += ";${installDir}"`
@@ -144,7 +144,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
 
       return {
         success: true,
-        pathHint: `To use 1code from terminal, add to your PATH: ${installDir}`,
+        pathHint: `To use opencodex from terminal, add to your PATH: ${installDir}`,
       }
     } catch (error: unknown) {
       const errorMessage =
@@ -173,7 +173,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
         // Directory not empty or other error, that's okay
       }
 
-      console.log("[CLI] Uninstalled 1code command")
+      console.log("[CLI] Uninstalled opencodex command")
       return { success: true }
     } catch (error: unknown) {
       const errorMessage =

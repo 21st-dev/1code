@@ -168,20 +168,21 @@ import { useHaptic } from "../hooks/use-haptic"
 import { usePastedTextFiles, type PastedTextFile } from "../hooks/use-pasted-text-files"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
-import { ACPChatTransport } from "../lib/acp-chat-transport"
 import { formatHistoryForContext } from "../lib/export-chat"
 import {
   clearSubChatDraft,
   getSubChatDraftFull
 } from "../lib/drafts"
-import { IPCChatTransport } from "../lib/ipc-chat-transport"
+import {
+  createOpenCodexChatTransport,
+  type OpenCodexChatTransport,
+} from "../lib/open-codex-chat-transport"
 import {
   createQueueItem, createTextPreview, generateQueueId,
   toQueuedFile,
   toQueuedImage,
   toQueuedTextContext, toQueuedDiffTextContext, toQueuedPastedText, type DiffTextContext, type SelectedTextContext
 } from "../lib/queue-utils"
-import { RemoteChatTransport } from "../lib/remote-chat-transport"
 import {
   FileOpenProvider,
   MENTION_PREFIXES,
@@ -376,20 +377,20 @@ const claudeModels = [
 
 // Agent providers
 const agents = [
-  { id: "claude-code", name: "Claude Code", hasModels: true },
+  { id: "claude-code", name: "OpenCodex Backend", hasModels: true },
   { id: "cursor", name: "Cursor CLI", disabled: true },
-  { id: "codex", name: "OpenAI Codex", disabled: true },
+  { id: "codex", name: "OpenCodex API Override", disabled: true },
 ]
 
 // Helper function to get agent icon
 const getAgentIcon = (agentId: string, className?: string) => {
   switch (agentId) {
     case "claude-code":
-      return <ClaudeCodeIcon className={className} />
+      return <AgentIcon className={className} />
     case "cursor":
       return <CursorIcon className={className} />
     case "codex":
-      return <CodexIcon className={className} />
+      return <AgentIcon className={className} />
     default:
       return null
   }
@@ -2944,7 +2945,7 @@ const ChatViewInner = memo(function ChatViewInner({
         await sendUserMessage(formatAnswersAsText(answers))
       } else {
         // Question is still live - use tool approval path
-        await trpcClient.claude.respondToolApproval.mutate({
+        await trpcClient.opencodex.respondToolApproval.mutate({
           toolUseId: displayQuestions.toolUseId,
           approved: true,
           updatedInput: { questions: displayQuestions.questions, answers },
@@ -2973,7 +2974,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     // Try to notify backend (may fail if already aborted - that's ok)
     try {
-      await trpcClient.claude.respondToolApproval.mutate({
+      await trpcClient.opencodex.respondToolApproval.mutate({
         toolUseId,
         approved: false,
         message: QUESTIONS_SKIPPED_MESSAGE,
@@ -3026,7 +3027,7 @@ const ChatViewInner = memo(function ChatViewInner({
           await sendUserMessage(customText)
         } else {
           // Live: use existing tool approval flow
-          await trpcClient.claude.respondToolApproval.mutate({
+          await trpcClient.opencodex.respondToolApproval.mutate({
             toolUseId: displayQuestions.toolUseId,
             approved: true,
             updatedInput: {
@@ -3123,7 +3124,7 @@ const ChatViewInner = memo(function ChatViewInner({
       if (!toolUseId) return
       setPlanApprovalPending((prev) => ({ ...prev, [toolUseId]: true }))
       try {
-        await trpcClient.claude.respondToolApproval.mutate({
+        await trpcClient.opencodex.respondToolApproval.mutate({
           toolUseId,
           approved,
         })
@@ -6422,7 +6423,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     [activeSubChatId, inferProviderFromMessages],
   )
 
-  const { data: codexMcpConfig } = trpc.codex.getAllMcpConfig.useQuery(undefined, {
+  const { data: codexMcpConfig } = trpc.opencodex.getAllMcpConfig.useQuery(undefined, {
     enabled: activeSubChatProvider === "codex",
     staleTime: 5 * 60 * 1000,
   })
@@ -6632,7 +6633,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         worktreePath: worktreePath ? "exists" : "none",
       })
 
-      let transport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | null = null
+      let transport: OpenCodexChatTransport | null = null
 
       if (isRemoteChat && chatSandboxUrl) {
         // Remote sandbox chat: use HTTP SSE transport
@@ -6643,35 +6644,29 @@ Make sure to preserve all functionality from both branches when resolving confli
           sandboxUrl: chatSandboxUrl,
           model: modelString,
         })
-        transport = new RemoteChatTransport({
+        transport = createOpenCodexChatTransport({
           chatId,
           subChatId,
           subChatName,
           sandboxUrl: chatSandboxUrl,
           mode: subChatMode,
-          model: modelString,
+          remoteModel: modelString,
+          provider: chatProvider,
+          isRemoteChat,
+          worktreePath,
+          projectPath,
         })
       } else if (worktreePath) {
-        if (chatProvider === "codex") {
-          console.log("[getOrCreateChat] Using ACPChatTransport", { provider: chatProvider })
-          transport = new ACPChatTransport({
-            chatId,
-            subChatId,
-            cwd: worktreePath,
-            projectPath,
-            mode: subChatMode,
-            provider: "codex",
-          })
-        } else {
-          // Local worktree chat: use IPC transport
-          transport = new IPCChatTransport({
-            chatId,
-            subChatId,
-            cwd: worktreePath,
-            projectPath,
-            mode: subChatMode,
-          })
-        }
+        transport = createOpenCodexChatTransport({
+          chatId,
+          subChatId,
+          subChatName: subChat?.name || "Chat",
+          mode: subChatMode,
+          provider: chatProvider,
+          isRemoteChat,
+          worktreePath,
+          projectPath,
+        })
       }
 
       if (!transport) {
@@ -6917,42 +6912,36 @@ Make sure to preserve all functionality from both branches when resolving confli
     })
 
     const chatProvider = newSubChatProvider
-    let newSubChatTransport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | null = null
+    let newSubChatTransport: OpenCodexChatTransport | null = null
 
     if (isNewSubChatRemote && newSubChatSandboxUrl) {
       // Remote sandbox chat: use HTTP SSE transport
       const selectedModelId = appStore.get(subChatModelIdAtomFamily(newId))
       const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
       console.log("[createNewSubChat] Using RemoteChatTransport", { model: modelString })
-      newSubChatTransport = new RemoteChatTransport({
+      newSubChatTransport = createOpenCodexChatTransport({
         chatId,
         subChatId: newId,
         subChatName: "New Chat",
         sandboxUrl: newSubChatSandboxUrl,
         mode: subChatMode,
-        model: modelString,
+        remoteModel: modelString,
+        provider: chatProvider,
+        isRemoteChat: isNewSubChatRemote,
+        worktreePath,
+        projectPath,
       })
     } else if (worktreePath) {
-      if (chatProvider === "codex") {
-        console.log("[createNewSubChat] Using ACPChatTransport", { provider: chatProvider })
-        newSubChatTransport = new ACPChatTransport({
-          chatId,
-          subChatId: newId,
-          cwd: worktreePath,
-          projectPath,
-          mode: newSubChatMode,
-          provider: "codex",
-        })
-      } else {
-        // Local worktree chat: use IPC transport
-        newSubChatTransport = new IPCChatTransport({
-          chatId,
-          subChatId: newId,
-          cwd: worktreePath,
-          projectPath,
-          mode: newSubChatMode,
-        })
-      }
+      newSubChatTransport = createOpenCodexChatTransport({
+        chatId,
+        subChatId: newId,
+        subChatName: "New Chat",
+        mode: newSubChatMode,
+        provider: chatProvider,
+        isRemoteChat: isNewSubChatRemote,
+        worktreePath,
+        projectPath,
+      })
     }
 
     if (newSubChatTransport) {
@@ -7860,12 +7849,12 @@ Make sure to preserve all functionality from both branches when resolving confli
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
                             <span>
                               {hasCustomClaudeConfig ? (
-                                "Custom Model"
+                                "Backend Override"
                               ) : (
                                 <>
-                                  Sonnet{" "}
+                                  OpenCodex{" "}
                                   <span className="text-muted-foreground">
-                                    4.5
+                                    Backend
                                   </span>
                                 </>
                               )}
@@ -8199,3 +8188,4 @@ Make sure to preserve all functionality from both branches when resolving confli
     </FileOpenProvider>
   )
 }
+

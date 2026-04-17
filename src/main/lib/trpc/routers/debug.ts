@@ -1,13 +1,13 @@
+import { getOpenCodexProtocol } from "../../opencodex/app-identity"
 import { router, publicProcedure } from "../index"
 import { getDatabase, projects, chats, subChats } from "../../db"
 import { app, shell } from "electron"
-import { getAuthManager } from "../../../index"
 import { z } from "zod"
 import { clearNetworkCache } from "../../ollama/network-detector"
 
 // Protocol constant (must match main/index.ts)
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+const PROTOCOL = getOpenCodexProtocol(IS_DEV)
 
 // Global flag for simulating offline mode (for testing)
 let simulateOfflineMode = false
@@ -94,9 +94,7 @@ export const debugRouter = router({
    * Logout (clear auth only)
    */
   logout: publicProcedure.mutation(() => {
-    const authManager = getAuthManager()
-    authManager.logout()
-    console.log("[Debug] User logged out")
+    console.log("[Debug] Legacy cloud logout removed in OpenCodex local-native mode")
     return { success: true }
   }),
 

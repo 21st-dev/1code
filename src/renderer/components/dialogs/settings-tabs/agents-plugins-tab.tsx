@@ -208,7 +208,7 @@ function PluginDetail({
 
         {plugin.components.mcpServers.length > 0 && (
           <div className="space-y-1.5">
-            <Label>MCP Servers ({plugin.components.mcpServers.length})</Label>
+            <Label>MCP Connections ({plugin.components.mcpServers.length})</Label>
             <div className="space-y-1">
               {plugin.components.mcpServers.map((serverName) => {
                 const serverStatus = mcpServerStatuses[serverName]
@@ -311,7 +311,7 @@ export function AgentsPluginsTab() {
   })
 
   // MCP server statuses for showing auth state in plugin detail
-  const { data: allMcpConfig, refetch: refetchMcp } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
+  const { data: allMcpConfig, refetch: refetchMcp } = trpc.opencodex.getAllMcpConfig.useQuery(undefined, {
     staleTime: 10 * 60 * 1000,
   })
   const mcpServerStatuses = useMemo(() => {
@@ -325,7 +325,7 @@ export function AgentsPluginsTab() {
     return map
   }, [allMcpConfig])
 
-  const startOAuthMutation = trpc.claude.startMcpOAuth.useMutation()
+  const startOAuthMutation = trpc.opencodex.startMcpOAuth.useMutation()
   const handleMcpAuth = useCallback(async (serverName: string) => {
     try {
       const result = await startOAuthMutation.mutateAsync({
@@ -473,9 +473,9 @@ export function AgentsPluginsTab() {
             ) : plugins.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <PluginFilledIcon className="h-8 w-8 text-border mb-3" />
-                <p className="text-sm text-muted-foreground mb-1">No plugins</p>
+                <p className="text-sm text-muted-foreground mb-1">No local plugins</p>
                 <p className="text-[11px] text-muted-foreground/70">
-                  Install plugins to ~/.claude/plugins/
+                  Install or enable plugins from the local OpenCodex plugin directories
                 </p>
               </div>
             ) : filteredPlugins.length === 0 ? (
@@ -545,11 +545,11 @@ export function AgentsPluginsTab() {
             <p className="text-sm text-muted-foreground">
               {plugins.length > 0
                 ? "Select a plugin to view details"
-                : "No plugins installed"}
+                : "No local plugins installed"}
             </p>
             {plugins.length === 0 && (
               <p className="text-xs text-muted-foreground/70 mt-2">
-                Install plugins to ~/.claude/plugins/marketplaces/
+                Install or enable plugins from the local OpenCodex plugin directories
               </p>
             )}
           </div>

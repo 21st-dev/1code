@@ -265,8 +265,8 @@ function CreateAgentForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">User (~/.claude/agents/)</SelectItem>
-                <SelectItem value="project">Project (.claude/agents/)</SelectItem>
+                <SelectItem value="user">Available on this device</SelectItem>
+                <SelectItem value="project">Current project only</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from "react"
 import { useAtom } from "jotai"
 import { justUpdatedAtom, justUpdatedVersionAtom } from "../atoms"
+import { getOpenCodexChangelogUrl } from "../updates/changelog-url"
 
 const LAST_VERSION_KEY = "app:last-version"
 
@@ -21,16 +22,22 @@ export function useJustUpdated() {
       if (!api) return
 
       try {
-        const currentVersion = await api.getVersion()
+        const releaseMetadata = await api.getReleaseMetadata?.()
+        const currentVersion = releaseMetadata?.currentVersion ?? await api.getVersion()
         const lastVersion = localStorage.getItem(LAST_VERSION_KEY)
 
-        // If this is first launch or version changed, show "What's New"
-        if (lastVersion && lastVersion !== currentVersion) {
+        if (
+          releaseMetadata?.previousVersion &&
+          releaseMetadata.previousVersion !== currentVersion &&
+          lastVersion !== currentVersion
+        ) {
+          setJustUpdated(true)
+          setJustUpdatedVersion(currentVersion)
+        } else if (lastVersion && lastVersion !== currentVersion) {
           setJustUpdated(true)
           setJustUpdatedVersion(currentVersion)
         }
 
-        // Always update stored version
         localStorage.setItem(LAST_VERSION_KEY, currentVersion)
       } catch (error) {
         console.error("[JustUpdated] Error checking version:", error)
@@ -47,12 +54,11 @@ export function useJustUpdated() {
   }, [setJustUpdated, setJustUpdatedVersion])
 
   // Open changelog in browser
-  const openChangelog = useCallback(() => {
+  const openChangelog = useCallback(async () => {
     const api = window.desktopApi
     if (api) {
-      // Link to changelog with anchor to current version
-      const version = justUpdatedVersion ? `#v${justUpdatedVersion}` : ""
-      api.openExternal(`https://1code.dev/changelog${version}`)
+      const baseUrl = await api.getApiBaseUrl()
+      await api.openExternal(getOpenCodexChangelogUrl(baseUrl, justUpdatedVersion))
     }
     dismissJustUpdated()
   }, [justUpdatedVersion, dismissJustUpdated])

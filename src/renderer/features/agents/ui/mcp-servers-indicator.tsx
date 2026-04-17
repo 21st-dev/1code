@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
-import { sessionInfoAtom, type MCPServerStatus } from "../../../lib/atoms"
+import { sessionInfoAtom, type MCPServer, type MCPServerStatus } from "../../../lib/atoms"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 
@@ -24,13 +24,13 @@ interface McpServersIndicatorProps {
 }
 
 /**
- * MCP Servers Indicator
+ * MCP Connections Indicator
  *
- * Shows a badge with the count of connected MCP servers.
+ * Shows a badge with the count of connected MCP connections.
  * Clicking it opens a popover with:
- * - List of MCP servers with status (connected/failed/pending)
- * - Expandable servers showing their tools
- * - Link to configure in ~/.claude.json
+ * - List of MCP connections with status (connected/failed/pending)
+ * - Expandable connections showing their tools
+ * - Local config hint for MCP sources
  */
 export const McpServersIndicator = memo(function McpServersIndicator({
   projectPath,
@@ -38,7 +38,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
   const [sessionInfo, setSessionInfo] = useAtom(sessionInfoAtom)
 
   // Fetch MCP config on mount if we have projectPath and no session info yet
-  const { data: mcpConfig } = trpc.claude.getMcpConfig.useQuery(
+  const { data: mcpConfig } = trpc.opencodex.getMcpConfig.useQuery(
     { projectPath: projectPath! },
     {
       enabled: !!projectPath && !sessionInfo?.mcpServers?.length,
@@ -49,12 +49,14 @@ export const McpServersIndicator = memo(function McpServersIndicator({
   // Update sessionInfo with MCP config if we don't have it yet
   useEffect(() => {
     if (mcpConfig?.mcpServers?.length && !sessionInfo?.mcpServers?.length) {
+      const mcpServers: MCPServer[] = mcpConfig.mcpServers.map((s) => ({
+        name: s.name,
+        status: s.status as MCPServerStatus,
+      }))
+
       setSessionInfo((prev) => ({
         tools: prev?.tools || [],
-        mcpServers: mcpConfig.mcpServers.map((s) => ({
-          name: s.name,
-          status: s.status,
-        })),
+        mcpServers,
         plugins: prev?.plugins || [],
         skills: prev?.skills || [],
       }))
@@ -217,7 +219,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
               variant="ghost"
               size="sm"
               className="h-6 px-2 gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-md"
-              aria-label="MCP Servers"
+              aria-label="MCP connections"
               aria-haspopup="dialog"
               aria-expanded={isOpen}
             >
@@ -227,7 +229,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent>
-          {connectedCount} MCP server{connectedCount !== 1 ? "s" : ""} connected
+          {connectedCount} MCP connection{connectedCount !== 1 ? "s" : ""} connected
         </TooltipContent>
       </Tooltip>
 
@@ -237,14 +239,14 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         onOpenAutoFocus={(e) => e.preventDefault()}
         onKeyDown={handleKeyDown}
         role="dialog"
-        aria-label="MCP Servers"
+        aria-label="MCP connections"
       >
         <div className="px-3 py-2 border-b">
           <h4 className="font-medium text-sm" id="mcp-servers-title">
-            MCP Servers
+            MCP Connections
           </h4>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Model Context Protocol servers
+            Model Context Protocol connections
           </p>
         </div>
 
@@ -260,7 +262,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
 
             return (
               <div key={server.name} role="listitem">
-                {/* Server row */}
+                {/* Connection row */}
                 <button
                   ref={(el) => {
                     serverButtonsRef.current[index] = el
@@ -292,7 +294,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
                   {/* Status indicator */}
                   {getStatusIcon(server.status)}
 
-                  {/* Server name and version */}
+                  {/* Connection name and version */}
                   <div className="flex-1 min-w-0">
                     <span className="truncate block">{server.name}</span>
                     {server.serverInfo?.version && (
@@ -370,9 +372,9 @@ export const McpServersIndicator = memo(function McpServersIndicator({
 
         {/* Footer with config hint */}
         <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-          Configure in{" "}
-          <code className="bg-muted px-1 py-0.5 rounded">~/.claude.json</code>{" "}
-          or <code className="bg-muted px-1 py-0.5 rounded">.mcp.json</code>
+          Managed through the active OpenCodex backend route and local MCP config sources like{" "}
+          <code className="bg-muted px-1 py-0.5 rounded">.mcp.json</code>{" "}
+          and device-level backend config
         </div>
       </PopoverContent>
     </Popover>

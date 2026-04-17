@@ -1,34 +1,33 @@
-import { Provider as JotaiProvider, useAtomValue, useSetAtom } from "jotai"
+import { Provider as JotaiProvider, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
-import { useEffect, useMemo } from "react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { Toaster } from "sonner"
+import { getAppSurface } from "./app-surface"
+import { OpenCodexStartupBlocker } from "./components/opencodex-startup-blocker"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
 import { WindowProvider, getInitialWindowParams } from "./contexts/WindowContext"
 import { selectedProjectAtom, selectedAgentChatIdAtom } from "./features/agents/atoms"
 import { useAgentSubChatStore } from "./features/agents/stores/sub-chat-store"
 import { AgentsLayout } from "./features/layout/agents-layout"
+import { BillingMethodPage, SelectRepoPage } from "./features/onboarding"
+import { initAnalytics, shutdown } from "./lib/analytics"
 import {
-  AnthropicOnboardingPage,
-  ApiKeyOnboardingPage,
-  BillingMethodPage,
-  CodexOnboardingPage,
-  SelectRepoPage,
-} from "./features/onboarding"
-import { identify, initAnalytics, shutdown } from "./lib/analytics"
-import {
-  anthropicOnboardingCompletedAtom,
-  apiKeyOnboardingCompletedAtom,
-  billingMethodAtom,
-  codexOnboardingCompletedAtom,
+  normalizeOpenCodexBackendConfig,
+  openCodexBackendConfigAtom,
 } from "./lib/atoms"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
 import { trpc } from "./lib/trpc"
 
-/**
- * Custom Toaster that adapts to theme
- */
+type OpenCodexStartupState =
+  | { status: "ready" }
+  | {
+      status: "blocked"
+      reason: "packaging-preflight"
+      message: string
+    }
+
 function ThemedToaster() {
   const { resolvedTheme } = useTheme()
 
@@ -41,24 +40,12 @@ function ThemedToaster() {
   )
 }
 
-/**
- * Main content router - decides which page to show based on onboarding state
- */
 function AppContent() {
-  const billingMethod = useAtomValue(billingMethodAtom)
-  const setBillingMethod = useSetAtom(billingMethodAtom)
-  const anthropicOnboardingCompleted = useAtomValue(
-    anthropicOnboardingCompletedAtom
-  )
-  const setAnthropicOnboardingCompleted = useSetAtom(anthropicOnboardingCompletedAtom)
-  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
-  const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
-  const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
+  const [backendConfig, setBackendConfig] = useAtom(openCodexBackendConfigAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
 
-  // Apply initial window params (chatId/subChatId) when opening via "Open in new window"
   useEffect(() => {
     const params = getInitialWindowParams()
     if (params.chatId) {
@@ -72,105 +59,88 @@ function AppContent() {
     }
   }, [setSelectedChatId, setChatId, addToOpenSubChats, setActiveSubChat])
 
-  // Claim the initially selected chat to prevent duplicate windows.
-  // For new windows opened via "Open in new window", the chat is pre-claimed by main process.
-  // For restored windows (persisted localStorage), we need to claim here.
-  // Read atom directly from store to avoid stale closure with empty deps.
   useEffect(() => {
     if (!window.desktopApi?.claimChat) return
     const currentChatId = appStore.get(selectedAgentChatIdAtom)
     if (!currentChatId) return
     window.desktopApi.claimChat(currentChatId).then((result) => {
       if (!result.ok) {
-        // Another window already has this chat — clear our selection
         setSelectedChatId(null)
       }
     })
-    // Only run on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [setSelectedChatId])
 
-  // Check if user has existing CLI config (API key or proxy)
-  // Based on PR #29 by @sa4hnd
-  const { data: cliConfig, isLoading: isLoadingCliConfig } =
-    trpc.claudeCode.hasExistingCliConfig.useQuery()
-
-  // Migration: If user already completed Anthropic onboarding but has no billing method set,
-  // automatically set it to "claude-subscription" (legacy users before billing method was added)
   useEffect(() => {
-    if (!billingMethod && anthropicOnboardingCompleted) {
-      setBillingMethod("claude-subscription")
-    }
-  }, [billingMethod, anthropicOnboardingCompleted, setBillingMethod])
+    if (!window.desktopApi?.getOpenCodexBackendConfig) return
+    let cancelled = false
 
-  // Auto-skip onboarding if user has existing CLI config (API key or proxy)
-  // This allows users with ANTHROPIC_API_KEY to use the app without OAuth
-  useEffect(() => {
-    if (cliConfig?.hasConfig && !billingMethod) {
-      console.log("[App] Detected existing CLI config, auto-completing onboarding")
-      setBillingMethod("api-key")
-      setApiKeyOnboardingCompleted(true)
-    }
-  }, [cliConfig?.hasConfig, billingMethod, setBillingMethod, setApiKeyOnboardingCompleted])
+    void window.desktopApi.getOpenCodexBackendConfig().then((savedConfig) => {
+      if (cancelled || !savedConfig) return
+      const savedKey = JSON.stringify(savedConfig)
+      const localKey = JSON.stringify(backendConfig)
+      if (savedKey !== localKey) {
+        setBackendConfig(savedConfig)
+      }
+    })
 
-  // Fetch projects to validate selectedProject exists
+    return () => {
+      cancelled = true
+    }
+  }, [backendConfig, setBackendConfig])
+
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
 
-  // Validated project - only valid if exists in DB
   const validatedProject = useMemo(() => {
     if (!selectedProject) return null
-    // While loading, trust localStorage value to prevent flicker
     if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
     if (!projects) return null
     const exists = projects.some((p) => p.id === selectedProject.id)
     return exists ? selectedProject : null
   }, [selectedProject, projects, isLoadingProjects])
 
-  // Determine which page to show:
-  // 1. No billing method selected -> BillingMethodPage
-  // 2. Claude subscription selected but not completed -> AnthropicOnboardingPage
-  // 3. Codex selected but not completed -> CodexOnboardingPage
-  // 4. API key or custom model selected but not completed -> ApiKeyOnboardingPage
-  // 5. No valid project selected -> SelectRepoPage
-  // 6. Otherwise -> AgentsLayout
-  if (!billingMethod) {
-    return <BillingMethodPage />
-  }
+  const appSurface = useMemo(
+    () =>
+      getAppSurface({
+        hasBackendConfiguration: Boolean(
+          normalizeOpenCodexBackendConfig(backendConfig),
+        ),
+        hasValidatedProject: Boolean(validatedProject),
+        isProjectsLoading: isLoadingProjects,
+      }),
+    [backendConfig, validatedProject, isLoadingProjects],
+  )
 
-  if (billingMethod === "claude-subscription" && !anthropicOnboardingCompleted) {
-    return <AnthropicOnboardingPage />
+  switch (appSurface) {
+    case "backend-setup":
+      return <BillingMethodPage />
+    case "select-repo":
+      return <SelectRepoPage />
+    default:
+      return <AgentsLayout />
   }
+}
 
-  if (
-    (billingMethod === "codex-subscription" ||
-      billingMethod === "codex-api-key") &&
-    !codexOnboardingCompleted
-  ) {
-    return <CodexOnboardingPage />
-  }
-
-  if (
-    (billingMethod === "api-key" || billingMethod === "custom-model") &&
-    !apiKeyOnboardingCompleted
-  ) {
-    return <ApiKeyOnboardingPage />
-  }
-
-  if (!validatedProject && !isLoadingProjects) {
-    return <SelectRepoPage />
-  }
-
-  return <AgentsLayout />
+function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <WindowProvider>
+      <JotaiProvider store={appStore}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <VSCodeThemeProvider>
+            <TooltipProvider delayDuration={100}>{children}</TooltipProvider>
+          </VSCodeThemeProvider>
+        </ThemeProvider>
+      </JotaiProvider>
+    </WindowProvider>
+  )
 }
 
 export function App() {
-  // Initialize analytics on mount
+  const [startupState, setStartupState] = useState<OpenCodexStartupState | null>(null)
+
   useEffect(() => {
     initAnalytics()
 
-    // Sync analytics opt-out status to main process
     const syncOptOutStatus = async () => {
       try {
         const optOut =
@@ -182,44 +152,59 @@ export function App() {
     }
     syncOptOutStatus()
 
-    // Identify user if already authenticated
-    const identifyUser = async () => {
-      try {
-        const user = await window.desktopApi?.getUser()
-        if (user?.id) {
-          identify(user.id, { email: user.email, name: user.name })
-        }
-      } catch (error) {
-        console.warn("[Analytics] Failed to identify user:", error)
+    const loadStartupState = async () => {
+      if (!window.desktopApi?.getStartupState) {
+        setStartupState({ status: "ready" })
+        return
       }
+      const state = await window.desktopApi.getStartupState()
+      setStartupState(state)
     }
-    identifyUser()
+    loadStartupState()
 
-    // Cleanup on unmount
     return () => {
       shutdown()
     }
   }, [])
 
+  const retryStartupPreflight = async () => {
+    if (!window.desktopApi?.retryStartupPreflight) return
+    const state = await window.desktopApi.retryStartupPreflight()
+    setStartupState(state)
+  }
+
+  if (startupState === null) {
+    return (
+      <AppShell>
+        <div className="flex h-screen w-screen items-center justify-center bg-background text-sm text-muted-foreground">
+          Checking OpenCodex startup state...
+        </div>
+      </AppShell>
+    )
+  }
+
+  if (startupState.status === "blocked") {
+    return (
+      <AppShell>
+        <OpenCodexStartupBlocker
+          startupState={startupState}
+          onRetry={retryStartupPreflight}
+        />
+      </AppShell>
+    )
+  }
+
   return (
-    <WindowProvider>
-      <JotaiProvider store={appStore}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <VSCodeThemeProvider>
-            <TooltipProvider delayDuration={100}>
-              <TRPCProvider>
-                <div
-                  data-agents-page
-                  className="h-screen w-screen bg-background text-foreground overflow-hidden"
-                >
-                  <AppContent />
-                </div>
-                <ThemedToaster />
-              </TRPCProvider>
-            </TooltipProvider>
-          </VSCodeThemeProvider>
-        </ThemeProvider>
-      </JotaiProvider>
-    </WindowProvider>
+    <AppShell>
+      <TRPCProvider>
+        <div
+          data-agents-page
+          className="h-screen w-screen overflow-hidden bg-background text-foreground"
+        >
+          <AppContent />
+        </div>
+        <ThemedToaster />
+      </TRPCProvider>
+    </AppShell>
   )
 }

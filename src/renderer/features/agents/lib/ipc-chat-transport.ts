@@ -2,8 +2,6 @@ import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
-  claudeLoginModalConfigAtom,
-  agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
   type CustomClaudeConfig,
   customClaudeConfigAtom,
@@ -40,7 +38,7 @@ const ERROR_TOAST_CONFIG: Record<
 > = {
   AUTH_FAILED_SDK: {
     title: "Not logged in",
-    description: "Run 'claude login' in your terminal to authenticate",
+    description: "Run the local Anthropic-compatible login flow to authenticate",
     action: {
       label: "Copy command",
       onClick: () => navigator.clipboard.writeText("claude login"),
@@ -49,16 +47,16 @@ const ERROR_TOAST_CONFIG: Record<
   INVALID_API_KEY_SDK: {
     title: "Invalid API key",
     description:
-      "Your Claude API key is invalid. Check your CLI configuration.",
+      "Your Anthropic-compatible API key is invalid. Check your runtime configuration.",
   },
   INVALID_API_KEY: {
     title: "Invalid API key",
     description:
-      "Your Claude API key is invalid. Check your CLI configuration.",
+      "Your Anthropic-compatible API key is invalid. Check your runtime configuration.",
   },
   RATE_LIMIT_SDK: {
     title: "Session limit reached",
-    description: "You've hit the Claude Code usage limit.",
+    description: "You've hit the Anthropic runtime usage limit.",
     action: {
       label: "View usage",
       onClick: () =>
@@ -69,7 +67,7 @@ const ERROR_TOAST_CONFIG: Record<
   },
   RATE_LIMIT: {
     title: "Session limit reached",
-    description: "You've hit the Claude Code usage limit.",
+    description: "You've hit the Anthropic runtime usage limit.",
     action: {
       label: "View usage",
       onClick: () =>
@@ -79,14 +77,14 @@ const ERROR_TOAST_CONFIG: Record<
     },
   },
   OVERLOADED_SDK: {
-    title: "Claude is busy",
+    title: "Anthropic runtime is busy",
     description:
       "The service is overloaded. Please try again in a few moments.",
   },
   PROCESS_CRASH: {
-    title: "Claude crashed",
+    title: "Anthropic runtime crashed",
     description:
-      "The Claude process exited unexpectedly. Try sending your message again or rollback.",
+      "The Anthropic-compatible runtime exited unexpectedly. Try sending your message again or rollback.",
   },
   SESSION_EXPIRED: {
     title: "Session expired",
@@ -94,9 +92,9 @@ const ERROR_TOAST_CONFIG: Record<
       "Your previous chat session expired. Send your message again to start fresh.",
   },
   EXECUTABLE_NOT_FOUND: {
-    title: "Claude CLI not found",
+    title: "Anthropic CLI not found",
     description:
-      "Install Claude Code CLI: npm install -g @anthropic-ai/claude-code",
+      "Install the Anthropic-compatible CLI: npm install -g @anthropic-ai/claude-code",
     action: {
       label: "Copy command",
       onClick: () =>
@@ -114,7 +112,7 @@ const ERROR_TOAST_CONFIG: Record<
     description: "Your session may have expired. Try logging in again.",
   },
   USAGE_POLICY_VIOLATION: {
-    title: "Anthropic API hiccup",
+    title: "Anthropic runtime hiccup",
     description: "The request was rejected by Anthropic's servers. Please try again shortly.",
   },
   // SDK_ERROR and other unknown errors use chunk.errorText for description
@@ -199,7 +197,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     return new ReadableStream({
       start: (controller) => {
-        const sub = trpcClient.claude.chat.subscribe(
+        const sub = trpcClient.opencodex.chat.subscribe(
           {
             subChatId: this.config.subChatId,
             chatId: this.config.chatId,
@@ -333,10 +331,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 // dismisses, or sends a new message.
               }
 
-              // Handle authentication errors - show Claude login modal
+              // Handle authentication errors - local-native mode requires backend reconfiguration.
               if (chunk.type === "auth-error") {
-                // Store the failed message for retry after successful auth
-                // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
                 appStore.set(pendingAuthRetryMessageAtom, {
                   subChatId: this.config.subChatId,
                   provider: "claude-code",
@@ -344,12 +340,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   ...(images.length > 0 && { images }),
                   readyToRetry: false,
                 })
-                appStore.set(claudeLoginModalConfigAtom, {
-                  hideCustomModelSettingsLink: false,
-                  autoStartAuth: false,
+                toast.error("OpenCodex backend authentication failed", {
+                  description:
+                    "Update the local OpenCodex backend credentials in onboarding or Backend & Models, then retry.",
                 })
-                // Show the Claude Code login modal
-                appStore.set(agentsLoginModalOpenAtom, true)
                 // Use controller.error() instead of controller.close() so that
                 // the SDK Chat properly resets status from "streaming" to "ready"
                 // This allows user to retry sending messages after failed auth
@@ -387,7 +381,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
                 // Track error in Sentry
                 Sentry.captureException(
-                  new Error(chunk.errorText || "Claude transport error"),
+                  new Error(chunk.errorText || "Anthropic transport error"),
                   {
                     tags: {
                       errorCategory: category,
@@ -416,7 +410,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
                 // Show toast based on error category
                 const config = ERROR_TOAST_CONFIG[category]
-                const title = config?.title || "Claude error"
+                const title = config?.title || "Runtime error"
                 // For auth/API key failures, prefer original backend error to aid debugging
                 const preferOriginalError =
                   category === "AUTH_FAILURE" ||
@@ -496,7 +490,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
         options.abortSignal?.addEventListener("abort", () => {
           console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
           sub.unsubscribe()
-          // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
+              // trpcClient.opencodex.cancel.mutate({ subChatId: this.config.subChatId })
           try {
             controller.close()
           } catch {

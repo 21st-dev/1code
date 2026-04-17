@@ -1,3 +1,4 @@
+import { getOpenCodexWebBaseUrl } from "./opencodex/app-identity"
 /**
  * Shared configuration for the desktop app
  */
@@ -11,10 +12,10 @@ const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
  * In dev mode, allow override via MAIN_VITE_API_URL env variable
  */
 export function getApiUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
+  return getOpenCodexWebBaseUrl({
+    OPENCODEX_WEB_URL: process.env.OPENCODEX_WEB_URL,
+    MAIN_VITE_API_URL: import.meta.env.MAIN_VITE_API_URL,
+  })
 }
 
 /**

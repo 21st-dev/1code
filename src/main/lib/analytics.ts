@@ -1,5 +1,5 @@
 /**
- * PostHog analytics for 1Code Desktop - Main Process
+ * PostHog analytics for OpenCodex desktop - main process
  * Uses PostHog Node.js SDK for server-side tracking
  */
 

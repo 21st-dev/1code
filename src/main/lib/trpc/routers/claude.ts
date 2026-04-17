@@ -2189,7 +2189,7 @@ ${prompt}
                       } else {
                         errorCategory = "AUTH_FAILED_SDK"
                         errorContext =
-                          "Authentication failed - not logged into Claude Code CLI"
+                          "Authentication failed - open Backend & Models to reconnect the Anthropic route"
                       }
                     } else if (
                       String(sdkError).includes("invalid_token") ||
@@ -2512,7 +2512,7 @@ ${prompt}
                   errorContext = "Previous session expired. Please try again."
                   errorCategory = "SESSION_EXPIRED"
                 } else if (err.message?.includes("exited with code")) {
-                  errorContext = "Claude Code process crashed"
+                  errorContext = "Anthropic route process stopped unexpectedly"
                   errorCategory = "PROCESS_CRASH"
                 } else if (err.message?.includes("ENOENT")) {
                   errorContext = "Required executable not found in PATH"

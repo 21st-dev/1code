@@ -2,9 +2,7 @@ import { router } from "../index"
 import { projectsRouter } from "./projects"
 import { chatsRouter } from "./chats"
 import { claudeRouter } from "./claude"
-import { claudeCodeRouter } from "./claude-code"
 import { claudeSettingsRouter } from "./claude-settings"
-import { anthropicAccountsRouter } from "./anthropic-accounts"
 import { ollamaRouter } from "./ollama"
 import { codexRouter } from "./codex"
 import { terminalRouter } from "./terminal"
@@ -20,6 +18,7 @@ import { voiceRouter } from "./voice"
 import { pluginsRouter } from "./plugins"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
+import { openCodexRouter } from "./opencodex"
 
 /**
  * Create the main app router
@@ -30,9 +29,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     projects: projectsRouter,
     chats: chatsRouter,
     claude: claudeRouter,
-    claudeCode: claudeCodeRouter,
     claudeSettings: claudeSettingsRouter,
-    anthropicAccounts: anthropicAccountsRouter,
     ollama: ollamaRouter,
     codex: codexRouter,
     terminal: terminalRouter,
@@ -46,6 +43,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     commands: commandsRouter,
     voice: voiceRouter,
     plugins: pluginsRouter,
+    opencodex: openCodexRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

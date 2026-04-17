@@ -28,10 +28,10 @@ export function DeleteServerConfirm({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete MCP Server</AlertDialogTitle>
+          <AlertDialogTitle>Delete MCP Connection</AlertDialogTitle>
           <AlertDialogDescription>
             Are you sure you want to delete <strong>{serverName}</strong>? This
-            will remove the server configuration and cannot be undone.
+            will remove the connection configuration and cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

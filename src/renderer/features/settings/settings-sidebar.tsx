@@ -36,12 +36,12 @@ const DEVTOOLS_UNLOCK_CLICKS = 5
 const MAIN_TABS = [
   {
     id: "preferences" as SettingsTab,
-    label: "Preferences",
+    label: "Behavior",
     icon: SlidersFilledIcon,
   },
   {
     id: "profile" as SettingsTab,
-    label: "Account",
+    label: "Workspace",
     icon: ProfileIconFilled,
   },
   {
@@ -70,7 +70,7 @@ const ADVANCED_TABS_BASE = [
   },
   {
     id: "models" as SettingsTab,
-    label: "Models",
+    label: "Backend & Models",
     icon: BrainFilledIcon,
   },
   {
@@ -85,7 +85,7 @@ const ADVANCED_TABS_BASE = [
   },
   {
     id: "mcp" as SettingsTab,
-    label: "MCP Servers",
+    label: "MCP",
     icon: OriginalMCPIcon,
   },
   {

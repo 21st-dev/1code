@@ -43,10 +43,9 @@ export function EditMcpServerDialog({
   const [isSavingToken, setIsSavingToken] = useState(false)
   const [isStartingOAuth, setIsStartingOAuth] = useState(false)
 
-  const updateServerMutation = trpc.claude.updateMcpServer.useMutation()
-  const removeServerMutation = trpc.claude.removeMcpServer.useMutation()
-  const setBearerTokenMutation = trpc.claude.setMcpBearerToken.useMutation()
-  const startOAuthMutation = trpc.claude.startMcpOAuth.useMutation()
+  const updateServerMutation = trpc.opencodex.updateMcpServer.useMutation()
+  const removeServerMutation = trpc.opencodex.removeMcpServer.useMutation()
+  const startOAuthMutation = trpc.opencodex.startMcpOAuth.useMutation()
 
   const isDisabled = useMemo(() => {
     if (!server?.config) return false
@@ -66,34 +65,12 @@ export function EditMcpServerDialog({
         projectPath,
         disabled: !enabled,
       })
-      toast.success(enabled ? "Server enabled" : "Server disabled")
+      toast.success(enabled ? "Connection enabled" : "Connection disabled")
       onServerUpdated?.()
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to update server"
+        error instanceof Error ? error.message : "Failed to update connection"
       toast.error(message)
-    }
-  }
-
-  const handleSetBearerToken = async () => {
-    if (!bearerToken.trim()) return
-    setIsSavingToken(true)
-    try {
-      await setBearerTokenMutation.mutateAsync({
-        name: server.name,
-        scope,
-        projectPath,
-        token: bearerToken.trim(),
-      })
-      toast.success("Bearer token saved")
-      setBearerToken("")
-      onServerUpdated?.()
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to save token"
-      toast.error(message)
-    } finally {
-      setIsSavingToken(false)
     }
   }
 
@@ -119,6 +96,28 @@ export function EditMcpServerDialog({
     }
   }
 
+  const handleSetBearerToken = async () => {
+    if (!bearerToken.trim()) return
+    setIsSavingToken(true)
+    try {
+      await updateServerMutation.mutateAsync({
+        name: server.name,
+        scope,
+        projectPath,
+        bearerToken: bearerToken.trim(),
+      })
+      toast.success("Bearer token saved")
+      setBearerToken("")
+      onServerUpdated?.()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save token"
+      toast.error(message)
+    } finally {
+      setIsSavingToken(false)
+    }
+  }
+
   const handleDelete = async () => {
     try {
       await removeServerMutation.mutateAsync({
@@ -126,12 +125,12 @@ export function EditMcpServerDialog({
         scope,
         projectPath,
       })
-      toast.success("Server removed", { description: server.name })
+      toast.success("Connection removed", { description: server.name })
       onOpenChange(false)
       onServerDeleted?.()
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to remove server"
+        error instanceof Error ? error.message : "Failed to remove connection"
       toast.error(message)
     }
   }
@@ -157,7 +156,7 @@ export function EditMcpServerDialog({
               <div>
                 <Label>Enabled</Label>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Disable to prevent this server from connecting
+                  Disable to prevent this connection from becoming active
                 </p>
               </div>
               <Switch
@@ -255,7 +254,7 @@ export function EditMcpServerDialog({
                 onClick={() => setShowDeleteConfirm(true)}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                Delete Server
+                Delete Connection
               </Button>
             </div>
           </div>

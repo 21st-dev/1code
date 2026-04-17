@@ -39,7 +39,7 @@ export function McpApprovalDialog() {
       await approveMutation.mutateAsync({
         identifier: currentApproval.identifier,
       })
-      toast.success("MCP server approved", {
+      toast.success("MCP connection approved", {
         description: currentApproval.serverName,
       })
     } catch (error) {
@@ -64,8 +64,8 @@ export function McpApprovalDialog() {
         pluginSource: currentApproval.pluginSource,
         serverNames: samePlugin.map((a) => a.serverName),
       })
-      toast.success("All MCP servers approved", {
-        description: `${samePlugin.length} server(s) from ${currentApproval.pluginSource}`,
+      toast.success("All MCP connections approved", {
+        description: `${samePlugin.length} connection(s) from ${currentApproval.pluginSource}`,
       })
     } catch (error) {
       const message =
@@ -111,9 +111,9 @@ export function McpApprovalDialog() {
               <Shield className="h-5 w-5 text-yellow-500" />
             </div>
             <div>
-              <AlertDialogTitle>MCP Server Approval</AlertDialogTitle>
+              <AlertDialogTitle>MCP Connection Approval</AlertDialogTitle>
               <AlertDialogDescription>
-                A plugin wants to connect to an MCP server
+                A plugin wants to enable an MCP connection
               </AlertDialogDescription>
             </div>
           </div>
@@ -132,7 +132,7 @@ export function McpApprovalDialog() {
               </div>
               <div className="flex gap-2">
                 <span className="text-xs text-muted-foreground w-14 shrink-0">
-                  Server
+                  Connection
                 </span>
                 <span className="text-xs text-foreground font-mono">
                   {currentApproval.serverName}

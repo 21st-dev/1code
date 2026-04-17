@@ -1,4 +1,5 @@
 import os from "node:os"
+import { OPENCODEX_PRODUCT_NAME } from "../opencodex/app-identity"
 import {
   platform,
   getDefaultShell as platformGetDefaultShell,
@@ -358,7 +359,7 @@ export function buildTerminalEnv(params: {
     ...baseEnv,
     SHELL: shell,
     TERM: "xterm-256color",
-    TERM_PROGRAM: "1Code",
+    TERM_PROGRAM: OPENCODEX_PRODUCT_NAME,
     TERM_PROGRAM_VERSION: process.env.npm_package_version || "1.0.0",
     COLORTERM: "truecolor",
     LANG: locale,

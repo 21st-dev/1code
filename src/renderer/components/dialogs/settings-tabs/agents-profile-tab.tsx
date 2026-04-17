@@ -21,45 +21,41 @@ function useIsNarrowScreen(): boolean {
   return isNarrow
 }
 
-interface DesktopUser {
-  id: string
-  email: string
-  name: string | null
-  imageUrl: string | null
-  username: string | null
+interface OpenCodexLocalProfile {
+  displayName: string
+  identityLabel: string
 }
 
 export function AgentsProfileTab() {
-  const [user, setUser] = useState<DesktopUser | null>(null)
+  const [profile, setProfile] = useState<OpenCodexLocalProfile | null>(null)
   const [fullName, setFullName] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const isNarrowScreen = useIsNarrowScreen()
   const savedNameRef = useRef("")
 
-  // Fetch real user data from desktop API
   useEffect(() => {
-    async function fetchUser() {
-      if (window.desktopApi?.getUser) {
-        const userData = await window.desktopApi.getUser()
-        setUser(userData)
-        setFullName(userData?.name || "")
-        savedNameRef.current = userData?.name || ""
+    async function fetchProfile() {
+      if (window.desktopApi?.getLocalProfile) {
+        const profileData = await window.desktopApi.getLocalProfile()
+        setProfile(profileData)
+        setFullName(profileData.displayName || "")
+        savedNameRef.current = profileData.displayName || ""
       }
       setIsLoading(false)
     }
-    fetchUser()
+    void fetchProfile()
   }, [])
 
   const handleBlurSave = useCallback(async () => {
     const trimmed = fullName.trim()
     if (trimmed === savedNameRef.current) return
     try {
-      if (window.desktopApi?.updateUser) {
-        const updatedUser = await window.desktopApi.updateUser({ name: trimmed })
-        if (updatedUser) {
-          setUser(updatedUser)
-          savedNameRef.current = updatedUser.name || ""
-          setFullName(updatedUser.name || "")
+      if (window.desktopApi?.updateLocalProfile) {
+        const updatedProfile = await window.desktopApi.updateLocalProfile({ displayName: trimmed })
+        if (updatedProfile) {
+          setProfile(updatedProfile)
+          savedNameRef.current = updatedProfile.displayName || ""
+          setFullName(updatedProfile.displayName || "")
         }
       }
     } catch (error) {
@@ -85,7 +81,7 @@ export function AgentsProfileTab() {
         {/* Header - hidden on narrow screens since it's in the navigation bar */}
         {!isNarrowScreen && (
           <div className="flex items-center justify-between pb-3 mb-4">
-            <h3 className="text-sm font-medium text-foreground">Account</h3>
+            <h3 className="text-sm font-medium text-foreground">Workspace</h3>
           </div>
         )}
         <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -94,7 +90,7 @@ export function AgentsProfileTab() {
             <div className="flex-1">
               <Label className="text-sm font-medium">Full Name</Label>
               <p className="text-sm text-muted-foreground">
-                This is your display name
+                This is the local display name shown across OpenCodex
               </p>
             </div>
             <div className="flex-shrink-0 w-80">
@@ -108,17 +104,17 @@ export function AgentsProfileTab() {
             </div>
           </div>
 
-          {/* Email Field (read-only) */}
+          {/* Identity Mode Field (read-only) */}
           <div className="flex items-center justify-between p-4 border-t border-border">
             <div className="flex-1">
-              <Label className="text-sm font-medium">Email</Label>
+              <Label className="text-sm font-medium">Identity Mode</Label>
               <p className="text-sm text-muted-foreground">
-                Your account email
+                OpenCodex runs in local-native mode on this device
               </p>
             </div>
             <div className="flex-shrink-0 w-80">
               <Input
-                value={user?.email || ""}
+                value={profile?.identityLabel || "Local device profile"}
                 disabled
                 className="w-full opacity-60"
               />

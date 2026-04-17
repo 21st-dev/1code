@@ -447,13 +447,13 @@ export function AgentsDebugTab() {
             variant="outline"
             size="sm"
             onClick={() => {
-              if (confirm("Logout? You will need to sign in again.")) {
+              if (confirm("Disconnect the current backend route? You can reconnect it from Backend & Models.")) {
                 logoutMutation.mutate()
               }
             }}
             disabled={logoutMutation.isPending}
           >
-            {logoutMutation.isPending ? "..." : "Logout"}
+            {logoutMutation.isPending ? "..." : "Disconnect Route"}
           </Button>
           <Button
             variant="destructive"
@@ -461,7 +461,7 @@ export function AgentsDebugTab() {
             onClick={() => {
               if (
                 confirm(
-                  "Reset everything? This will clear all data and log you out.",
+                  "Reset everything? This will clear all data and disconnect the current backend route.",
                 )
               ) {
                 clearAllDataMutation.mutate()

@@ -3,7 +3,6 @@ import { toast } from "sonner"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import {
   codexApiKeyAtom,
-  codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
   normalizeCodexApiKey,
@@ -66,8 +65,10 @@ async function resolveCodexCredentialsForAuthError(): Promise<{
 
   let hasSubscription = false
   try {
-    const integration = await trpcClient.codex.getIntegration.query()
-    hasSubscription = integration.state === "connected_chatgpt"
+    const surface = await trpcClient.opencodex.getBackendSurface.query()
+    hasSubscription =
+      surface.runtime?.routeKind === "codex" &&
+      surface.integration?.state === "connected_chatgpt"
   } catch {
     hasSubscription = false
   }
@@ -158,7 +159,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
           sub?.unsubscribe()
         }
 
-        sub = trpcClient.codex.chat.subscribe(
+        sub = trpcClient.opencodex.chat.subscribe(
           {
             subChatId: this.config.subChatId,
             chatId: this.config.chatId,
@@ -208,24 +209,27 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                   })
 
                   if (!credentials.hasAny) {
-                    appStore.set(codexLoginModalOpenAtom, true)
+                    toast.error("OpenCodex backend authentication failed", {
+                      description:
+                        "Configure valid local backend credentials in onboarding or Backend & Models, then retry.",
+                    })
                   } else if (!shouldAutoRetryOnce) {
-                    toast.error("Codex authentication failed", {
+                    toast.error("Codex route authentication failed", {
                       description: credentials.hasApiKey
-                        ? "Saved Codex API key was rejected. Update it in Settings."
-                        : "Saved Codex subscription auth failed. Reconnect subscription in Settings.",
+                        ? "Saved Codex API key was rejected. Update it in Backend & Models."
+                        : "Saved browser route auth for Codex failed. Reconnect it in Backend & Models.",
                     })
                   }
                 })()
 
-                void trpcClient.codex.cleanup
+                void trpcClient.opencodex.cleanup
                   .mutate({ subChatId: this.config.subChatId })
                   .catch(() => {
                     // No-op
                   })
 
                 // Force stream status reset so retry can start once auth succeeds.
-                controller.error(new Error("Codex authentication required"))
+                controller.error(new Error("Codex route authentication required"))
                 return
               }
 
@@ -271,7 +275,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
         options.abortSignal?.addEventListener("abort", () => {
           // Start server-side cancellation first so the router still has
           // active run ownership when processing cancel(runId).
-          const cancelPromise = trpcClient.codex.cancel
+          const cancelPromise = trpcClient.opencodex.cancel
             .mutate({ subChatId: this.config.subChatId, runId })
             .catch(() => {
               // No-op
@@ -306,7 +310,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   }
 
   cleanup(): void {
-    void trpcClient.codex.cleanup
+    void trpcClient.opencodex.cleanup
       .mutate({ subChatId: this.config.subChatId })
       .catch(() => {
         // No-op

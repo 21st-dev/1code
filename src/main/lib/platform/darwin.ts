@@ -64,8 +64,8 @@ export class DarwinPlatformProvider extends BasePlatformProvider {
 
   getCliConfig(): CliConfig {
     return {
-      installPath: "/usr/local/bin/1code",
-      scriptName: "1code",
+      installPath: "/usr/local/bin/opencodex",
+      scriptName: "opencodex",
       requiresAdmin: true, // /usr/local/bin requires admin on macOS
     }
   }
@@ -159,7 +159,7 @@ export class DarwinPlatformProvider extends BasePlatformProvider {
         `osascript -e 'do shell script "ln -s \\"${sourcePath}\\" ${installPath}" with administrator privileges'`
       )
 
-      console.log("[CLI] Installed 1code command to", installPath)
+      console.log("[CLI] Installed opencodex command to", installPath)
       return { success: true }
     } catch (error: unknown) {
       const errorMessage =
@@ -183,7 +183,7 @@ export class DarwinPlatformProvider extends BasePlatformProvider {
         `osascript -e 'do shell script "rm -f ${installPath}" with administrator privileges'`
       )
 
-      console.log("[CLI] Uninstalled 1code command")
+      console.log("[CLI] Uninstalled opencodex command")
       return { success: true }
     } catch (error: unknown) {
       const errorMessage =

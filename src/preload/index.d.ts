@@ -1,3 +1,19 @@
+import type { OpenCodexBackendRoute } from "../shared/opencodex-backend-route"
+export type OpenCodexStartupState =
+  | { status: "ready" }
+  | {
+      status: "blocked"
+      reason: "packaging-preflight"
+      message: string
+    }
+
+export interface OpenCodexReleaseMetadata {
+  currentVersion: string
+  firstRunVersion: string
+  previousVersion: string | null
+  lastStartedAt: string
+}
+
 export interface UpdateInfo {
   version: string
   releaseDate?: string
@@ -10,12 +26,19 @@ export interface UpdateProgress {
   total: number
 }
 
-export interface DesktopUser {
-  id: string
-  email: string
-  name: string | null
-  imageUrl: string | null
-  username: string | null
+export interface OpenCodexLocalProfile {
+  displayName: string
+  identityLabel: string
+}
+
+export type OpenCodexBackendConfigInput = OpenCodexBackendRoute
+
+export interface OpenCodexBackendHostState {
+  status: "stopped" | "starting" | "ready" | "error"
+  pid: number | null
+  startedAt: string | null
+  lastError: string | null
+  lastEventType: string | null
 }
 
 export interface WorktreeSetupFailurePayload {
@@ -25,12 +48,13 @@ export interface WorktreeSetupFailurePayload {
 }
 
 export interface DesktopApi {
-  // Platform info
   platform: NodeJS.Platform
   arch: string
   getVersion: () => Promise<string>
+  getStartupState: () => Promise<OpenCodexStartupState>
+  getReleaseMetadata: () => Promise<OpenCodexReleaseMetadata | null>
+  retryStartupPreflight: () => Promise<OpenCodexStartupState>
 
-  // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
   installUpdate: () => void
@@ -42,7 +66,6 @@ export interface DesktopApi {
   onUpdateError: (callback: (error: string) => void) => () => void
   onUpdateManualCheck: (callback: () => void) => () => void
 
-  // Window controls
   windowMinimize: () => Promise<void>
   windowMaximize: () => Promise<void>
   windowClose: () => Promise<void>
@@ -53,50 +76,35 @@ export interface DesktopApi {
   onFullscreenChange: (callback: (isFullscreen: boolean) => void) => () => void
   onFocusChange: (callback: (isFocused: boolean) => void) => () => void
 
-  // Zoom
   zoomIn: () => Promise<void>
   zoomOut: () => Promise<void>
   zoomReset: () => Promise<void>
   getZoom: () => Promise<number>
 
-  // DevTools
   toggleDevTools: () => Promise<void>
-
-  // Analytics
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
-
-  // Native features
   setBadge: (count: number | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
   getApiBaseUrl: () => Promise<string>
 
-  // Clipboard
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
 
-  // Auth
-  getUser: () => Promise<DesktopUser | null>
-  isAuthenticated: () => Promise<boolean>
-  logout: () => Promise<void>
-  startAuthFlow: () => Promise<void>
-  submitAuthCode: (code: string) => Promise<void>
-  updateUser: (updates: { name?: string }) => Promise<DesktopUser | null>
-  onAuthSuccess: (callback: (user: any) => void) => () => void
-  onAuthError: (callback: (error: string) => void) => () => void
+  getLocalProfile: () => Promise<OpenCodexLocalProfile>
+  updateLocalProfile: (updates: { displayName?: string }) => Promise<OpenCodexLocalProfile>
+  resetLocalWorkspace: () => Promise<void>
+  getOpenCodexBackendConfig: () => Promise<OpenCodexBackendConfigInput | null>
+  saveOpenCodexBackendConfig: (config: OpenCodexBackendConfigInput) => Promise<OpenCodexBackendConfigInput>
+  getBackendHostState: () => Promise<OpenCodexBackendHostState>
+  restartBackendHost: () => Promise<OpenCodexBackendHostState>
 
-  // Multi-window
   newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<{ blocked: boolean } | void>
-
-  // Chat ownership — prevent same chat open in multiple windows
   claimChat: (chatId: string) => Promise<{ ok: true } | { ok: false; ownerStableId: string }>
   releaseChat: (chatId: string) => Promise<void>
   focusChatOwner: (chatId: string) => Promise<boolean>
 
-  // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
-
-  // Worktree setup failures
   onWorktreeSetupFailed: (callback: (payload: WorktreeSetupFailurePayload) => void) => () => void
 }
 

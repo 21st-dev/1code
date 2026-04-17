@@ -90,7 +90,7 @@ export const McpWidget = memo(function McpWidget() {
     return (
       <div className="px-2 py-2">
         <div className="text-xs text-muted-foreground">
-          No MCP servers configured
+          No MCP connections configured
         </div>
       </div>
     )
@@ -126,7 +126,7 @@ export const McpWidget = memo(function McpWidget() {
 
         return (
           <div key={server.name}>
-            {/* Server row */}
+            {/* Connection row */}
             <button
               onClick={() => hasTools && toggleServer(server.name)}
               className={cn(

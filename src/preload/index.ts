@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
+import type { OpenCodexBackendRoute } from "../shared/opencodex-backend-route"
 import { exposeElectronTRPC } from "trpc-electron/main"
 
 // Only initialize Sentry in production to avoid IPC errors in dev mode
@@ -28,6 +29,11 @@ contextBridge.exposeInMainWorld("desktopApi", {
   arch: process.arch,
   getVersion: () => ipcRenderer.invoke("app:version"),
   isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
+  getStartupState: () => ipcRenderer.invoke("app:get-startup-state") as Promise<OpenCodexStartupState>,
+  getReleaseMetadata: () =>
+    ipcRenderer.invoke("app:get-release-metadata") as Promise<OpenCodexReleaseMetadata | null>,
+  retryStartupPreflight: () =>
+    ipcRenderer.invoke("app:retry-startup-preflight") as Promise<OpenCodexStartupState>,
 
   // Auto-update methods
   checkForUpdates: (force?: boolean) => ipcRenderer.invoke("update:check", force),
@@ -143,38 +149,21 @@ contextBridge.exposeInMainWorld("desktopApi", {
   saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) =>
     ipcRenderer.invoke("dialog:save-file", options) as Promise<{ success: boolean; filePath?: string }>,
 
-  // Auth methods
-  getUser: () => ipcRenderer.invoke("auth:get-user"),
-  isAuthenticated: () => ipcRenderer.invoke("auth:is-authenticated"),
-  logout: () => ipcRenderer.invoke("auth:logout"),
-  startAuthFlow: () => ipcRenderer.invoke("auth:start-flow"),
-  submitAuthCode: (code: string) => ipcRenderer.invoke("auth:submit-code", code),
-  updateUser: (updates: { name?: string }) => ipcRenderer.invoke("auth:update-user", updates),
-  getAuthToken: () => ipcRenderer.invoke("auth:get-token"),
-
-  // Signed fetch - proxies through main process (no CORS issues)
-  signedFetch: (
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) =>
-    ipcRenderer.invoke("api:signed-fetch", url, options) as Promise<{
-      ok: boolean
-      status: number
-      data: unknown
-      error: string | null
-    }>,
-
-  // Streaming fetch - for SSE responses (chat streaming)
-  streamFetch: (
-    streamId: string,
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) =>
-    ipcRenderer.invoke("api:stream-fetch", streamId, url, options) as Promise<{
-      ok: boolean
-      status: number
-      error?: string
-    }>,
+  // OpenCodex local-native shell state
+  getLocalProfile: () =>
+    ipcRenderer.invoke("opencodex:get-local-profile") as Promise<OpenCodexLocalProfile>,
+  updateLocalProfile: (updates: { displayName?: string }) =>
+    ipcRenderer.invoke("opencodex:update-local-profile", updates) as Promise<OpenCodexLocalProfile>,
+  resetLocalWorkspace: () =>
+    ipcRenderer.invoke("opencodex:reset-local-workspace") as Promise<void>,
+  getOpenCodexBackendConfig: () =>
+    ipcRenderer.invoke("opencodex:get-backend-config") as Promise<OpenCodexBackendConfigInput | null>,
+  saveOpenCodexBackendConfig: (config: OpenCodexBackendConfigInput) =>
+    ipcRenderer.invoke("opencodex:save-backend-config", config) as Promise<OpenCodexBackendConfigInput>,
+  getBackendHostState: () =>
+    ipcRenderer.invoke("opencodex:get-backend-host-state") as Promise<OpenCodexBackendHostState>,
+  restartBackendHost: () =>
+    ipcRenderer.invoke("opencodex:restart-backend-host") as Promise<OpenCodexBackendHostState>,
 
   // Stream event listeners
   onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => {
@@ -191,18 +180,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
     const handler = (_event: unknown, error: string) => callback(error)
     ipcRenderer.on(`stream:${streamId}:error`, handler)
     return () => ipcRenderer.removeListener(`stream:${streamId}:error`, handler)
-  },
-
-  // Auth events
-  onAuthSuccess: (callback: (user: any) => void) => {
-    const handler = (_event: unknown, user: any) => callback(user)
-    ipcRenderer.on("auth:success", handler)
-    return () => ipcRenderer.removeListener("auth:success", handler)
-  },
-  onAuthError: (callback: (error: string) => void) => {
-    const handler = (_event: unknown, error: string) => callback(error)
-    ipcRenderer.on("auth:error", handler)
-    return () => ipcRenderer.removeListener("auth:error", handler)
   },
 
   // Shortcut events (from main process menu accelerators)
@@ -248,6 +225,35 @@ contextBridge.exposeInMainWorld("desktopApi", {
 })
 
 // Type definitions
+export type OpenCodexStartupState =
+  | { status: "ready" }
+  | {
+      status: "blocked"
+      reason: "packaging-preflight"
+      message: string
+    }
+
+export interface OpenCodexReleaseMetadata {
+  currentVersion: string
+  firstRunVersion: string
+  previousVersion: string | null
+  lastStartedAt: string
+}
+
+export interface OpenCodexLocalProfile {
+  displayName: string
+  identityLabel: string
+}
+
+export type OpenCodexBackendConfigInput = OpenCodexBackendRoute
+
+export interface OpenCodexBackendHostState {
+  status: "stopped" | "starting" | "ready" | "error"
+  pid: number | null
+  startedAt: string | null
+  lastError: string | null
+  lastEventType: string | null
+}
 export interface UpdateInfo {
   version: string
   releaseDate?: string
@@ -289,6 +295,9 @@ export interface DesktopApi {
   arch: string
   getVersion: () => Promise<string>
   isPackaged: () => Promise<boolean>
+  getStartupState: () => Promise<OpenCodexStartupState>
+  getReleaseMetadata: () => Promise<OpenCodexReleaseMetadata | null>
+  retryStartupPreflight: () => Promise<OpenCodexStartupState>
   // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
@@ -337,41 +346,17 @@ export interface DesktopApi {
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
   saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) => Promise<{ success: boolean; filePath?: string }>
-  // Auth
-  getUser: () => Promise<{
-    id: string
-    email: string
-    name: string | null
-    imageUrl: string | null
-    username: string | null
-  } | null>
-  isAuthenticated: () => Promise<boolean>
-  logout: () => Promise<void>
-  startAuthFlow: () => Promise<void>
-  submitAuthCode: (code: string) => Promise<void>
-  updateUser: (updates: { name?: string }) => Promise<{
-    id: string
-    email: string
-    name: string | null
-    imageUrl: string | null
-    username: string | null
-  } | null>
-  getAuthToken: () => Promise<string | null>
-  signedFetch: (
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) => Promise<{ ok: boolean; status: number; data: unknown; error: string | null }>
-  // Streaming fetch
-  streamFetch: (
-    streamId: string,
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) => Promise<{ ok: boolean; status: number; error?: string }>
+  // OpenCodex local-native shell state
+  getLocalProfile: () => Promise<OpenCodexLocalProfile>
+  updateLocalProfile: (updates: { displayName?: string }) => Promise<OpenCodexLocalProfile>
+  resetLocalWorkspace: () => Promise<void>
+  getOpenCodexBackendConfig: () => Promise<OpenCodexBackendConfigInput | null>
+  saveOpenCodexBackendConfig: (config: OpenCodexBackendConfigInput) => Promise<OpenCodexBackendConfigInput>
+  getBackendHostState: () => Promise<OpenCodexBackendHostState>
+  restartBackendHost: () => Promise<OpenCodexBackendHostState>
   onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => () => void
   onStreamDone: (streamId: string, callback: () => void) => () => void
   onStreamError: (streamId: string, callback: (error: string) => void) => () => void
-  onAuthSuccess: (callback: (user: any) => void) => () => void
-  onAuthError: (callback: (error: string) => void) => () => void
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   onShortcutOpenSettings: (callback: () => void) => () => void

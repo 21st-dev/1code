@@ -217,7 +217,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                     className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Tells Claude when to use this agent
+                    Tells OpenCodex when to use this agent
                   </p>
                 </div>
 
@@ -314,7 +314,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                             : "border-border bg-background text-muted-foreground hover:border-foreground/20"
                         )}
                       >
-                        User (~/.claude/agents/)
+                        Available on this device
                       </button>
                       <button
                         type="button"
@@ -326,11 +326,11 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                             : "border-border bg-background text-muted-foreground hover:border-foreground/20"
                         )}
                       >
-                        Project (.claude/agents/)
+                        Current project only
                       </button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      User agents are available globally, project agents only in the current project
+                      Device agents are available across OpenCodex, while project agents stay with the current project
                     </p>
                   </div>
                 )}

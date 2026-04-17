@@ -9,9 +9,7 @@
  * Usage:
  *   node scripts/generate-update-manifest.mjs
  *
- * The script expects ZIP files to exist in the release/ directory:
- *   - Agents-{version}-arm64-mac.zip
- *   - Agents-{version}-mac.zip
+ * The script expects ZIP files to exist in the release/ directory using the packaged product name.
  *
  * Run this after `npm run dist` to generate the manifest files.
  */
@@ -20,6 +18,7 @@ import { createHash } from "crypto"
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "fs"
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
+import { getMacArtifactNames, getManifestNextStepLines } from "./release-config.mjs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -40,6 +39,8 @@ const packageJson = JSON.parse(
   readFileSync(join(__dirname, "../package.json"), "utf-8")
 )
 const version = process.env.VERSION || packageJson.version
+const productName = packageJson.build?.productName || packageJson.name
+const macArtifactNames = getMacArtifactNames({ productName, version })
 
 const releaseDir = join(__dirname, "../release")
 
@@ -76,9 +77,7 @@ function findReleaseFile(pattern, ext = ".zip") {
  * Generate manifest for a specific architecture
  */
 function generateManifest(arch) {
-  // electron-builder names files differently:
-  // arm64: Agents-{version}-arm64-mac.zip
-  // x64: Agents-{version}-mac.zip
+  // electron-builder names files differently by architecture, but always prefixes them with the packaged product name.
   const pattern = arch === "arm64" ? `${version}-arm64-mac` : `${version}-mac`
   const zipPath = findReleaseFile(pattern, ".zip")
 
@@ -243,18 +242,14 @@ if (!arm64Manifest && !x64Manifest && !linuxManifest) {
 console.log("=".repeat(50))
 console.log("Manifest generation complete!")
 console.log()
-const prefix = channel === "beta" ? "beta" : "latest"
 console.log("Next steps:")
-console.log("1. Upload the following files to cdn.21st.dev/releases/desktop/:")
-if (arm64Manifest) {
-  console.log(`   - ${prefix}-mac.yml`)
-  console.log(`   - Agents-${version}-arm64-mac.zip`)
-  console.log(`   - Agents-${version}-arm64.dmg (for manual download)`)
+for (const line of getManifestNextStepLines({
+  env: process.env,
+  channel,
+  macArtifactNames,
+  hasArm64Manifest: !!arm64Manifest,
+  hasX64Manifest: !!x64Manifest,
+})) {
+  console.log(line)
 }
-if (x64Manifest) {
-  console.log(`   - ${prefix}-mac-x64.yml`)
-  console.log(`   - Agents-${version}-mac.zip`)
-  console.log(`   - Agents-${version}.dmg (for manual download)`)
-}
-console.log("2. Create a release entry in the admin dashboard")
 console.log("=".repeat(50))

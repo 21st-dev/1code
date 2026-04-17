@@ -1,0 +1,19 @@
+#!/bin/bash
+# OpenCodex CLI launcher
+# Opens OpenCodex with the specified directory
+
+# Resolve the directory argument (default to current directory)
+DIR="${1:-.}"
+
+# Convert to absolute path
+if [[ "$DIR" != /* ]]; then
+  DIR="$(cd "$DIR" 2>/dev/null && pwd)"
+fi
+
+if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then
+  echo "Error: Invalid directory"
+  exit 1
+fi
+
+# Open OpenCodex with the directory argument
+open -a "OpenCodex" --args "$DIR"

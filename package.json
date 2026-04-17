@@ -1,12 +1,12 @@
 {
-  "name": "21st-desktop",
+  "name": "opencodex-desktop",
   "version": "0.0.72",
   "private": true,
-  "description": "1Code - UI for parallel work with AI agents",
-  "homepage": "https://21st.dev",
+  "description": "OpenCodex - local-native desktop coding workstation",
+  "homepage": "",
   "author": {
-    "name": "21st.dev",
-    "email": "support@21st.dev"
+    "name": "OpenCodex",
+    "email": "support@opencodex.local"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -18,14 +18,15 @@
     "package:win": "electron-builder --win",
     "package:linux": "electron-builder --linux",
     "dist": "electron-builder",
+    "dist:doctor": "node scripts/check-packaging-readiness.mjs",
     "dist:manifest": "node scripts/generate-update-manifest.mjs",
     "dist:upload": "node scripts/upload-release.mjs",
     "claude:download": "node scripts/download-claude-binary.mjs --version=2.1.45",
     "claude:download:all": "node scripts/download-claude-binary.mjs --version=2.1.45 --all",
     "codex:download": "node scripts/download-codex-binary.mjs --version=0.98.0",
     "codex:download:all": "node scripts/download-codex-binary.mjs --version=0.98.0 --all",
-    "release": "rm -rf release && bun i && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && bun run dist:manifest && ./scripts/upload-release-wrangler.sh",
-    "release:dev": "rm -rf release && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && rm -rf node_modules && bun i",
+    "release": "node scripts/clean-paths.mjs release && bun i && bun run dist:doctor && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && bun run dist:manifest && bun run dist:upload",
+    "release:dev": "node scripts/clean-paths.mjs release node_modules && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && bun i",
     "sync:public": "./scripts/sync-to-public.sh",
     "icon:generate": "node scripts/generate-icon.mjs",
     "db:generate": "drizzle-kit generate",
@@ -140,14 +141,14 @@
     "vite": "^6.3.4"
   },
   "build": {
-    "appId": "dev.21st.agents",
-    "productName": "1Code",
+    "appId": "dev.opencodex.desktop",
+    "productName": "OpenCodex",
     "npmRebuild": true,
     "protocols": [
       {
-        "name": "1Code",
+        "name": "OpenCodex",
         "schemes": [
-          "twentyfirst-agents"
+          "opencodex"
         ]
       }
     ],
@@ -173,6 +174,14 @@
       {
         "from": "resources/bin/VERSION",
         "to": "bin/VERSION"
+      },
+      {
+        "from": "resources/cli/opencodex",
+        "to": "cli/opencodex"
+      },
+      {
+        "from": "resources/cli/opencodex.cmd",
+        "to": "cli/opencodex.cmd"
       }
     ],
     "asar": true,
@@ -207,7 +216,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "1Code needs microphone access for voice dictation"
+        "NSMicrophoneUsageDescription": "OpenCodex needs microphone access for voice dictation"
       }
     },
     "dmg": {
@@ -253,7 +262,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://cdn.21st.dev/releases/desktop"
+      "url": "${env.OPENCODEX_UPDATE_BASE_URL}"
     }
   },
   "pnpm": {

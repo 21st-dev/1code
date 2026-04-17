@@ -6,7 +6,6 @@ import {
   ipcMain,
   app,
   clipboard,
-  session,
   nativeImage,
   dialog,
 } from "electron"
@@ -14,11 +13,28 @@ import { join } from "path"
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
-import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
+import { getBaseUrl } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/routers/claude"
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
+import { readOpenCodexReleaseMetadata } from "../lib/opencodex/preflight"
+import { getOpenCodexStartupState, refreshOpenCodexStartupState } from "../lib/opencodex/startup-state"
+import { formatOpenCodexWindowTitle, getOpenCodexTrustedHosts } from "../lib/opencodex/app-identity"
+import {
+  getOpenCodexBackendHostState,
+  restartOpenCodexBackendHost,
+} from "../lib/opencodex/backend-host"
+import {
+  readOpenCodexBackendConfig,
+  resetOpenCodexBackendConfig,
+  saveOpenCodexBackendConfig,
+} from "../lib/opencodex/backend-config"
+import {
+  readOpenCodexLocalProfile,
+  resetOpenCodexLocalProfile,
+  updateOpenCodexLocalProfile,
+} from "../lib/opencodex/local-profile"
 import { windowManager } from "./window-manager"
 
 // Flag to bypass close confirmation when app.quit() has already been confirmed
@@ -47,6 +63,27 @@ function registerIpcHandlers(): void {
   // App info
   ipcMain.handle("app:version", () => app.getVersion())
   ipcMain.handle("app:isPackaged", () => app.isPackaged)
+  ipcMain.handle("app:get-startup-state", () => getOpenCodexStartupState())
+  ipcMain.handle("app:get-release-metadata", () =>
+    readOpenCodexReleaseMetadata({ userDataPath: app.getPath("userData") }),
+  )
+  ipcMain.handle("app:retry-startup-preflight", async () => {
+    const state = refreshOpenCodexStartupState({
+      userDataPath: app.getPath("userData"),
+      appVersion: app.getVersion(),
+    })
+
+    if (state.status === "ready") {
+      const { initializeOpenCodexReadyServices } = await import("../index")
+      await initializeOpenCodexReadyServices()
+    }
+
+    for (const win of windowManager.getAll()) {
+      void loadWindowContent(win)
+    }
+
+    return state
+  })
 
   // Windows: Frame preference persistence
   ipcMain.handle("window:set-frame-preference", (_event, useNativeFrame: boolean) => {
@@ -85,9 +122,9 @@ function registerIpcHandlers(): void {
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
       if (count !== null && count > 0) {
-        win.setTitle(`1Code (${count})`)
+        win.setTitle(formatOpenCodexWindowTitle({ badgeCount: count }))
       } else {
-        win.setTitle("1Code")
+        win.setTitle(formatOpenCodexWindowTitle())
         win.setOverlayIcon(null, "")
       }
     }
@@ -254,7 +291,7 @@ function registerIpcHandlers(): void {
     const win = getWindowFromEvent(event)
     if (win) {
       // Show just the title, or default app name if empty
-      win.setTitle(title || "1Code")
+      win.setTitle(formatOpenCodexWindowTitle({ title }))
     }
   })
 
@@ -332,207 +369,81 @@ function registerIpcHandlers(): void {
     },
   )
 
-  // Auth IPC handlers
   const validateSender = (event: Electron.IpcMainInvokeEvent): boolean => {
     const senderUrl = event.sender.getURL()
     try {
       const parsed = new URL(senderUrl)
       if (parsed.protocol === "file:") return true
       const hostname = parsed.hostname.toLowerCase()
-      const trusted = ["21st.dev", "localhost", "127.0.0.1"]
+      const trusted = getOpenCodexTrustedHosts(getBaseUrl())
       return trusted.some((h) => hostname === h || hostname.endsWith(`.${h}`))
     } catch {
       return false
     }
   }
 
-  ipcMain.handle("auth:get-user", (event) => {
-    if (!validateSender(event)) return null
-    return getAuthManager().getUser()
-  })
-
-  ipcMain.handle("auth:is-authenticated", (event) => {
-    if (!validateSender(event)) return false
-    return getAuthManager().isAuthenticated()
-  })
-
-  ipcMain.handle("auth:logout", async (event) => {
-    if (!validateSender(event)) return
-    getAuthManager().logout()
-    // Clear cookie from persist:main partition
-    const ses = session.fromPartition("persist:main")
-    try {
-      await ses.cookies.remove(getBaseUrl(), "x-desktop-token")
-      console.log("[Auth] Cookie cleared on logout")
-    } catch (err) {
-      console.error("[Auth] Failed to clear cookie:", err)
+  ipcMain.handle("opencodex:get-local-profile", (event) => {
+    if (!validateSender(event)) {
+      return readOpenCodexLocalProfile({ userDataPath: app.getPath("userData") })
     }
-    // Show login page in all windows
+    return readOpenCodexLocalProfile({ userDataPath: app.getPath("userData") })
+  })
+
+  ipcMain.handle("opencodex:update-local-profile", (event, updates: { displayName?: string }) => {
+    if (!validateSender(event)) {
+      throw new Error("Unauthorized sender")
+    }
+    return updateOpenCodexLocalProfile({
+      userDataPath: app.getPath("userData"),
+      updates,
+    })
+  })
+
+  ipcMain.handle("opencodex:reset-local-workspace", async (event) => {
+    if (!validateSender(event)) {
+      throw new Error("Unauthorized sender")
+    }
+    resetOpenCodexBackendConfig({ userDataPath: app.getPath("userData") })
+    resetOpenCodexLocalProfile({ userDataPath: app.getPath("userData") })
     for (const win of windowManager.getAll()) {
-      showLoginPageInWindow(win)
+      void loadWindowContent(win)
     }
   })
 
-  ipcMain.handle("auth:start-flow", (event) => {
-    if (!validateSender(event)) return
-    const win = getWindowFromEvent(event)
-    getAuthManager().startAuthFlow(win)
-  })
-
-  ipcMain.handle("auth:submit-code", async (event, code: string) => {
-    if (!validateSender(event)) return
-    if (!code || typeof code !== "string") {
-      getWindowFromEvent(event)?.webContents.send(
-        "auth:error",
-        "Invalid authorization code",
-      )
-      return
+  ipcMain.handle("opencodex:get-backend-config", (event) => {
+    if (!validateSender(event)) {
+      return null
     }
-    await handleAuthCode(code)
+    return readOpenCodexBackendConfig({ userDataPath: app.getPath("userData") })
   })
 
-  ipcMain.handle("auth:update-user", async (event, updates: { name?: string }) => {
-    if (!validateSender(event)) return null
-    try {
-      return await getAuthManager().updateUser(updates)
-    } catch (error) {
-      console.error("[Auth] Failed to update user:", error)
-      throw error
+  ipcMain.handle("opencodex:save-backend-config", async (event, config) => {
+    if (!validateSender(event)) {
+      throw new Error("Unauthorized sender")
     }
+    return saveOpenCodexBackendConfig({
+      userDataPath: app.getPath("userData"),
+      config,
+    })
   })
 
-  ipcMain.handle("auth:get-token", async (event) => {
-    if (!validateSender(event)) return null
-    return getAuthManager().getValidToken()
+  ipcMain.handle("opencodex:get-backend-host-state", (event) => {
+    if (!validateSender(event)) {
+      return getOpenCodexBackendHostState()
+    }
+    return getOpenCodexBackendHostState()
   })
 
-  // Signed fetch - proxies requests through main process (no CORS)
-  ipcMain.handle(
-    "api:signed-fetch",
-    async (
-      event,
-      url: string,
-      options?: { method?: string; body?: string; headers?: Record<string, string> },
-    ) => {
-      console.log("[SignedFetch] IPC handler called with URL:", url)
-      if (!validateSender(event)) {
-        console.log("[SignedFetch] Unauthorized sender")
-        return { ok: false, status: 403, data: null, error: "Unauthorized sender" }
-      }
-      console.log("[SignedFetch] Sender validated OK")
-
-      const token = await getAuthManager().getValidToken()
-      console.log("[SignedFetch] Token:", token ? "present" : "missing", "URL:", url)
-      if (!token) {
-        return { ok: false, status: 401, data: null, error: "Not authenticated" }
-      }
-
-      try {
-        const response = await fetch(url, {
-          method: options?.method || "GET",
-          body: options?.body,
-          headers: {
-            ...options?.headers,
-            "X-Desktop-Token": token,
-            "Content-Type": "application/json",
-          },
-        })
-
-        const data = await response.json().catch(() => null)
-        console.log("[SignedFetch] Response:", response.status, response.ok ? "OK" : "FAILED")
-
-        return {
-          ok: response.ok,
-          status: response.status,
-          data,
-          error: response.ok ? null : `Request failed: ${response.status}`,
-        }
-      } catch (error) {
-        console.log("[SignedFetch] Error:", error)
-        return {
-          ok: false,
-          status: 0,
-          data: null,
-          error: error instanceof Error ? error.message : "Network error",
-        }
-      }
-    },
-  )
-
-  // Streaming fetch - for SSE responses (chat streaming)
-  // Uses a unique stream ID to match chunks with the right request
-  ipcMain.handle(
-    "api:stream-fetch",
-    async (
-      event,
-      streamId: string,
-      url: string,
-      options?: { method?: string; body?: string; headers?: Record<string, string> },
-    ) => {
-      console.log("[StreamFetch] Starting stream:", streamId, url)
-      if (!validateSender(event)) {
-        console.log("[StreamFetch] Unauthorized sender")
-        return { ok: false, status: 403, error: "Unauthorized sender" }
-      }
-
-      const token = await getAuthManager().getValidToken()
-      if (!token) {
-        return { ok: false, status: 401, error: "Not authenticated" }
-      }
-
-      try {
-        const response = await fetch(url, {
-          method: options?.method || "POST",
-          body: options?.body,
-          headers: {
-            ...options?.headers,
-            "X-Desktop-Token": token,
-            "Content-Type": "application/json",
-          },
-        })
-
-        console.log("[StreamFetch] Response:", response.status, response.ok)
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "Unknown error")
-          return { ok: false, status: response.status, error: errorText }
-        }
-
-        // Stream the response body back to renderer
-        const reader = response.body?.getReader()
-        if (!reader) {
-          return { ok: false, status: 500, error: "No response body" }
-        }
-
-        // Send chunks asynchronously
-        ;(async () => {
-          try {
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) {
-                event.sender.send(`stream:${streamId}:done`)
-                break
-              }
-              // Send chunk to renderer
-              event.sender.send(`stream:${streamId}:chunk`, value)
-            }
-          } catch (err) {
-            console.error("[StreamFetch] Stream error:", err)
-            event.sender.send(`stream:${streamId}:error`, err instanceof Error ? err.message : "Stream error")
-          }
-        })()
-
-        return { ok: true, status: response.status }
-      } catch (error) {
-        console.error("[StreamFetch] Fetch error:", error)
-        return {
-          ok: false,
-          status: 0,
-          error: error instanceof Error ? error.message : "Network error",
-        }
-      }
-    },
-  )
+  ipcMain.handle("opencodex:restart-backend-host", async (event) => {
+    if (!validateSender(event)) {
+      throw new Error("Unauthorized sender")
+    }
+    return await restartOpenCodexBackendHost({
+      appRoot: app.getAppPath(),
+      userDataPath: app.getPath("userData"),
+      workspacePath: app.getAppPath(),
+    })
+  })
 
   // Register git watcher IPC handlers
   registerGitWatcherIPC()
@@ -541,31 +452,48 @@ function registerIpcHandlers(): void {
   registerThemeScannerIPC()
 }
 
-/**
- * Show login page in a specific window
- */
-function showLoginPageInWindow(window: BrowserWindow): void {
-  console.log("[Main] Showing login page in window", window.id)
+function loadAppInWindow(window: BrowserWindow, options?: { chatId?: string; subChatId?: string }): void {
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL
+  const windowId = windowManager.getStableId(window)
 
-  // In dev mode, login.html is in src/renderer, not out/renderer
-  if (process.env.ELECTRON_RENDERER_URL) {
-    // Dev mode: load from source directory
-    const loginPath = join(app.getAppPath(), "src/renderer/login.html")
-    console.log("[Main] Loading login from:", loginPath)
-    window.loadFile(loginPath)
-  } else {
-    // Production: load from built output
-    window.loadFile(join(__dirname, "../renderer/login.html"))
+  const buildParams = (params: URLSearchParams) => {
+    params.set("windowId", windowId)
+    if (options?.chatId) params.set("chatId", options.chatId)
+    if (options?.subChatId) params.set("subChatId", options.subChatId)
   }
+
+  if (devServerUrl) {
+    const url = new URL(devServerUrl)
+    buildParams(url.searchParams)
+    void window.loadURL(url.toString())
+    if (!app.isPackaged && windowId === "main") {
+      window.webContents.openDevTools()
+    }
+    return
+  }
+
+  const hashParams = new URLSearchParams()
+  buildParams(hashParams)
+  void window.loadFile(join(__dirname, "../renderer/index.html"), {
+    hash: hashParams.toString(),
+  })
 }
 
-/**
- * Show login page in the focused window (or first window)
- */
+function loadWindowContent(window: BrowserWindow, options?: { chatId?: string; subChatId?: string }): void {
+  const startupState = getOpenCodexStartupState()
+  if (startupState.status === "blocked") {
+    console.log("[Main] OpenCodex startup blocked, loading blocker UI")
+    loadAppInWindow(window, options)
+    return
+  }
+
+  loadAppInWindow(window, options)
+}
+
 export function showLoginPage(): void {
   const win = windowManager.getFocused() || windowManager.getAll()[0]
   if (!win) return
-  showLoginPageInWindow(win)
+  loadWindowContent(win)
 }
 
 // Singleton IPC handler (prevents duplicate handlers on macOS window recreation)
@@ -624,7 +552,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     minWidth: 500, // Allow narrow mobile-like mode
     minHeight: 600,
     show: false,
-    title: "1Code",
+    title: formatOpenCodexWindowTitle(),
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#09090b" : "#ffffff",
     // hiddenInset shows native traffic lights inset in the window
     // hiddenInset hides the native title bar but keeps traffic lights visible
@@ -780,58 +708,8 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     // windowManager handles cleanup via 'closed' event listener
   })
 
-  // Load the renderer - check auth first
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL
-  const authManager = getAuthManager()
-
-  console.log("[Main] ========== AUTH CHECK ==========")
-  console.log("[Main] AuthManager exists:", !!authManager)
-  const isAuth = authManager.isAuthenticated()
-  console.log("[Main] isAuthenticated():", isAuth)
-  const user = authManager.getUser()
-  console.log("[Main] getUser():", user ? user.email : "null")
-  console.log("[Main] ================================")
-
-  if (isAuth) {
-    console.log("[Main] ✓ User authenticated, loading app")
-    // Get stable window ID from manager (assigned during register)
-    // "main" for first window, "window-2", "window-3", etc. for additional windows
-    const windowId = windowManager.getStableId(window)
-
-    // Build URL params including optional chatId/subChatId
-    const buildParams = (params: URLSearchParams) => {
-      params.set("windowId", windowId)
-      if (options?.chatId) params.set("chatId", options.chatId)
-      if (options?.subChatId) params.set("subChatId", options.subChatId)
-    }
-
-    if (devServerUrl) {
-      // Pass params via query for dev mode
-      const url = new URL(devServerUrl)
-      buildParams(url.searchParams)
-      window.loadURL(url.toString())
-      // Only open devtools for first window in development
-      if (!app.isPackaged && windowId === "main") {
-        window.webContents.openDevTools()
-      }
-    } else {
-      // Pass params via hash for production (file:// URLs)
-      const hashParams = new URLSearchParams()
-      buildParams(hashParams)
-      window.loadFile(join(__dirname, "../renderer/index.html"), {
-        hash: hashParams.toString(),
-      })
-    }
-  } else {
-    console.log("[Main] ✗ Not authenticated, showing login page")
-    // In dev mode, login.html is in src/renderer
-    if (devServerUrl) {
-      const loginPath = join(app.getAppPath(), "src/renderer/login.html")
-      window.loadFile(loginPath)
-    } else {
-      window.loadFile(join(__dirname, "../renderer/login.html"))
-    }
-  }
+  // Load the renderer content based on startup state and auth
+  loadWindowContent(window, options)
 
   // Log page load - traffic light visibility is managed by the renderer
   window.webContents.on("did-finish-load", () => {

@@ -1317,7 +1317,7 @@ export const codexRouter = router({
       state === "connected_chatgpt" || state === "connected_api_key"
 
     if (isConnected) {
-      throw new Error("Failed to log out from Codex. Please try again.")
+      throw new Error("Failed to disconnect the Codex route. Please try again.")
     }
 
     const logoutOutput = [logoutResult.stdout, logoutResult.stderr]

@@ -500,7 +500,7 @@ export function DetailsSidebar({
                   <WidgetCard
                     key="mcp"
                     widgetId="mcp"
-                    title="MCP Servers"
+                    title="MCP"
                     badge={
                       <Tooltip>
                         <TooltipTrigger asChild>

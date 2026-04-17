@@ -1,12 +1,26 @@
-#!/bin/bash
+﻿#!/bin/bash
 set -e
 
-# Sync desktop app to public 1code repository
+# Sync desktop app to the public OpenCodex repository mirror
 # Usage: ./scripts/sync-to-public.sh
+#
+# Required env:
+#   OPENCODEX_PUBLIC_REPO_GIT   git remote URL for the public mirror
+#   OPENCODEX_PUBLIC_REPO_HTTPS GitHub HTTPS repo URL for gh release operations
+#   OPENCODEX_PRIVATE_REPO      source repo slug for release-note lookup
 #
 # This script:
 # 1. Syncs code from private repo to public repo
 # 2. Creates a GitHub release in public repo with same notes as private repo
+
+require_env() {
+    local name="$1"
+    local value="${!name}"
+    if [ -z "$value" ]; then
+        echo "Missing required env: $name" >&2
+        exit 1
+    fi
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(dirname "$SCRIPT_DIR")"
@@ -14,14 +28,19 @@ ROOT_DIR="$(cd "$DESKTOP_DIR/../.." && pwd)"
 VERSION=$(node -p "require('$DESKTOP_DIR/package.json').version")
 TAG="v$VERSION"
 
-PUBLIC_REPO="git@github.com:21st-dev/1code.git"
-PUBLIC_REPO_HTTPS="https://github.com/21st-dev/1code"
-PRIVATE_REPO="21st-dev/21st"
-TEMP_DIR="/tmp/1code-sync-$$"
+require_env OPENCODEX_PUBLIC_REPO_GIT
+require_env OPENCODEX_PUBLIC_REPO_HTTPS
+require_env OPENCODEX_PRIVATE_REPO
+
+PUBLIC_REPO="$OPENCODEX_PUBLIC_REPO_GIT"
+PUBLIC_REPO_HTTPS="$OPENCODEX_PUBLIC_REPO_HTTPS"
+PRIVATE_REPO="$OPENCODEX_PRIVATE_REPO"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/opencodex-sync-XXXXXX")
 
 echo "🔄 Syncing desktop app to public repository..."
 echo "   Version: $VERSION"
 echo "   Tag: $TAG"
+echo "   Public repo: $PUBLIC_REPO_HTTPS"
 echo ""
 
 # Get release notes from private repo
@@ -31,7 +50,7 @@ RELEASE_NOTES=$(gh release view "$TAG" --repo "$PRIVATE_REPO" --json body -q '.b
 if [ -z "$RELEASE_NOTES" ]; then
     echo "⚠️  No release found for $TAG in private repo"
     echo "   Please create a release in the private repo first:"
-    echo "   gh release create $TAG --title \"1Code $TAG\" --notes \"...\""
+    echo "   gh release create $TAG --repo \"$PRIVATE_REPO\" --title \"OpenCodex $TAG\" --notes \"...\""
     echo ""
     read -p "Continue without release notes? (y/N) " -n 1 -r
     echo
@@ -77,7 +96,7 @@ test-electron.js
 
 # Exclude internal release docs (contains credentials, CDN URLs)
 RELEASE.md
-scripts/upload-release-wrangler.sh
+scripts/upload-release.mjs
 
 # Exclude wrangler local state (large R2 blobs)
 .wrangler
@@ -109,7 +128,7 @@ if gh release view "$TAG" --repo "$PUBLIC_REPO_HTTPS" &>/dev/null; then
     echo "   Release $TAG already exists, updating..."
     gh release edit "$TAG" \
         --repo "$PUBLIC_REPO_HTTPS" \
-        --title "1Code $TAG" \
+        --title "OpenCodex $TAG" \
         --notes "$RELEASE_NOTES"
 else
     echo "   Creating new release $TAG..."
@@ -119,7 +138,7 @@ else
 
     gh release create "$TAG" \
         --repo "$PUBLIC_REPO_HTTPS" \
-        --title "1Code $TAG" \
+        --title "OpenCodex $TAG" \
         --notes "$RELEASE_NOTES"
 fi
 

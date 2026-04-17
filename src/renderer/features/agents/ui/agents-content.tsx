@@ -35,12 +35,10 @@ import {
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
   betaKanbanEnabledAtom,
-  betaAutomationsEnabledAtom,
   chatSourceModeAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { KanbanView } from "../../kanban"
-import { AutomationsView, AutomationsDetailView, InboxView } from "../../automations"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
@@ -67,8 +65,8 @@ import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { isDesktopApp } from "../../../lib/utils/platform"
-import { remoteTrpc } from "../../../lib/remote-trpc"
 import { SettingsContent } from "../../settings/settings-content"
+import { BackendControlView } from "../../opencodex/backend-control-view"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -82,7 +80,6 @@ export function AgentsContent() {
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
-  const [betaAutomationsEnabled, setBetaAutomationsEnabled] = useAtom(betaAutomationsEnabledAtom)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
@@ -184,24 +181,6 @@ export function AgentsContent() {
     enabled: !!selectedTeamId,
   })
   const selectedTeam = teams?.find((t: any) => t.id === selectedTeamId) as any
-
-  // Auto-activate automations & inbox if user has any automations configured
-  // One-shot check on app startup — no refetches, no polling
-  const { data: automationsData } = useQuery({
-    queryKey: ["automations", "autoActivateCheck", selectedTeamId],
-    queryFn: () => remoteTrpc.automations.listAutomations.query({ teamId: selectedTeamId! }),
-    enabled: !!selectedTeamId && !betaAutomationsEnabled,
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: 1,
-  })
-
-  useEffect(() => {
-    if (!betaAutomationsEnabled && automationsData && automationsData.length > 0) {
-      setBetaAutomationsEnabled(true)
-    }
-  }, [betaAutomationsEnabled, automationsData, setBetaAutomationsEnabled])
 
   // Fetch agent chats for keyboard navigation and mobile view
   const { data: agentChats } = api.agents.getAgentChats.useQuery(
@@ -773,13 +752,13 @@ export function AgentsContent() {
     setCodexOnboardingCompleted(false)
 
     // Check if running in Electron desktop app
-    if (typeof window !== "undefined" && window.desktopApi) {
-      // Use desktop logout which clears the token and shows login page
-      await window.desktopApi.logout()
-    } else {
-      // Web: use Clerk sign out
-      await signOut({ redirectUrl: window.location.pathname })
+    if (typeof window !== "undefined" && window.desktopApi?.resetLocalWorkspace) {
+      await window.desktopApi.resetLocalWorkspace()
+      return
     }
+
+    // Web fallback keeps existing behavior outside the desktop shell.
+    await signOut({ redirectUrl: window.location.pathname })
   }
 
   // Check if sub-chats data is loaded (use separate selectors to avoid object creation)
@@ -860,15 +839,11 @@ export function AgentsContent() {
         data-agents-page
         data-mobile-view
       >
-        {/* Mobile: Settings/Automations/Inbox fullscreen views */}
+        {/* Mobile: fullscreen control surfaces */}
         {desktopView === "settings" ? (
           <SettingsContent />
-        ) : betaAutomationsEnabled && desktopView === "automations" ? (
-          <AutomationsView />
-        ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
-          <AutomationsDetailView />
-        ) : betaAutomationsEnabled && desktopView === "inbox" ? (
-          <InboxView />
+        ) : desktopView === "backend-control" ? (
+          <BackendControlView />
         ) : mobileViewMode === "chats" ? (
           // Chats List Mode (default) - uses AgentsSidebar in fullscreen
           <AgentsSidebar
@@ -1002,12 +977,8 @@ export function AgentsContent() {
         >
           {desktopView === "settings" ? (
             <SettingsContent />
-          ) : betaAutomationsEnabled && desktopView === "automations" ? (
-            <AutomationsView />
-          ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
-            <AutomationsDetailView />
-          ) : betaAutomationsEnabled && desktopView === "inbox" ? (
-            <InboxView />
+          ) : desktopView === "backend-control" ? (
+            <BackendControlView />
           ) : selectedChatId ? (
             <div className="h-full flex flex-col relative overflow-hidden">
               <ChatView
