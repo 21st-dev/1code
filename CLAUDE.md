@@ -120,7 +120,7 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 - **React Query**: Server state via tRPC (auto-caching, refetch)
 
 ### Claude Integration
-- Dynamic import of `@anthropic-ai/claude-code` SDK
+- Dynamic import of `@anthropic-ai/claude-agent-sdk` SDK
 - Two modes: "plan" (read-only) and "agent" (full permissions)
 - Session resume via `sessionId` stored in SubChat
 - Message streaming via tRPC subscription (`claude.onMessage`)

@@ -14,6 +14,7 @@ import {
   useRemoteArchivedChats,
   useRestoreRemoteChat,
 } from "../../../lib/hooks/use-remote-chats"
+import { Trash2 } from "lucide-react"
 import { Input } from "../../../components/ui/input"
 import {
   SearchIcon,
@@ -27,6 +28,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../../components/ui/popover"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "../../../components/ui/tooltip"
+import { ConfirmDeleteDialog } from "../../../components/confirm-delete-dialog"
 import { cn } from "../../../lib/utils"
 
 // GitHub avatar with loading placeholder
@@ -253,14 +260,17 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
     },
   )
 
-  // Remote archived chats (always fetch)
-  const { data: remoteArchivedChats, isLoading: isRemoteLoading } = useRemoteArchivedChats()
+  // Remote archived chats (lazy — only when popover is open)
+  const { data: remoteArchivedChats, isLoading: isRemoteLoading } = useRemoteArchivedChats(open)
 
   // Loading if either is loading
   const isLoading = isLocalLoading || isRemoteLoading
 
-  // Fetch all projects for git info (for local chats)
-  const { data: projects } = trpc.projects.list.useQuery(undefined)
+  // Fetch all projects for git info (for local chats) — lazy on open
+  const { data: projects } = trpc.projects.list.useQuery(undefined, {
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  })
 
   // Collect chat IDs for file stats query (only local chats)
   const archivedChatIds = useMemo(() => {
@@ -310,6 +320,29 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
 
   // Remote restore mutation
   const remoteRestoreMutation = useRestoreRemoteChat()
+
+  // Confirm-delete-all state + mutation (local archived only)
+  const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false)
+  const deleteAllArchivedMutation = trpc.chats.deleteAllArchived.useMutation({
+    onSuccess: (deleted) => {
+      utils.chats.listArchived.invalidate()
+      utils.chats.list.invalidate()
+      if (
+        !selectedChatIsRemote &&
+        selectedChatId &&
+        deleted.some((c) => c.id === selectedChatId)
+      ) {
+        setSelectedChatId(null)
+      }
+      setConfirmDeleteAllOpen(false)
+    },
+  })
+
+  const handleConfirmDeleteAll = useCallback(() => {
+    deleteAllArchivedMutation.mutate({})
+  }, [deleteAllArchivedMutation])
+
+  const localArchivedCount = localArchivedChats?.length ?? 0
 
   // Normalize and merge archived chats from both sources
   const normalizedChats = useMemo((): NormalizedArchivedChat[] => {
@@ -501,6 +534,7 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   }, [setSearchQuery])
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
@@ -508,7 +542,6 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
         side="right"
         align="end"
         sideOffset={8}
-        forceDark={false}
         className="w-[250px] h-[400px] p-0 flex flex-col overflow-hidden"
         onKeyDown={handleKeyDown}
         tabIndex={-1}
@@ -524,6 +557,24 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
               onChange={handleSearchChange}
               className="h-auto p-0 border-0 bg-transparent text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
             />
+            {localArchivedCount > 0 && (
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteAllOpen(true)}
+                    disabled={deleteAllArchivedMutation.isPending}
+                    aria-label="Delete all archived workspaces"
+                    className="flex-shrink-0 text-muted-foreground hover:text-red-600 dark:hover:text-red-500 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Delete all archived
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </div>
 
@@ -564,5 +615,21 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
         </div>
       </PopoverContent>
     </Popover>
+    <ConfirmDeleteDialog
+      open={confirmDeleteAllOpen}
+      onOpenChange={setConfirmDeleteAllOpen}
+      title="Delete All Archived"
+      description={
+        <>
+          Delete all {localArchivedCount} archived workspace
+          {localArchivedCount === 1 ? "" : "s"}? This removes them and their
+          worktrees permanently and cannot be undone.
+        </>
+      }
+      confirmLabel="Delete all"
+      onConfirm={handleConfirmDeleteAll}
+      isDeleting={deleteAllArchivedMutation.isPending}
+    />
+    </>
   )
 })

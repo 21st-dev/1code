@@ -48,11 +48,18 @@ ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName
 
 const ContextMenuSubContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
-  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent> & {
+    forceDark?: boolean
+  }
+>(({ className, forceDark = false, ...props }, ref) => (
   <ContextMenuPrimitive.SubContent
     ref={ref}
-    className={cn(overlayContent, "min-w-[200px] py-1 dark", className)}
+    className={cn(
+      overlayContent,
+      "min-w-[200px] py-1",
+      forceDark && "dark",
+      className,
+    )}
     {...props}
   />
 ))
@@ -60,14 +67,17 @@ ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName
 
 const ContextMenuContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content> & {
+    forceDark?: boolean
+  }
+>(({ className, forceDark = false, ...props }, ref) => (
   <ContextMenuPrimitive.Portal>
     <ContextMenuPrimitive.Content
       ref={ref}
       className={cn(
         overlayContent,
-        "min-w-[200px] py-1 dark",
+        "min-w-[200px] py-1",
+        forceDark && "dark",
         className,
       )}
       {...props}

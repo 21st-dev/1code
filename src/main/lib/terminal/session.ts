@@ -130,6 +130,11 @@ export async function createSession(
 	} = params
 
 	const shell = useFallbackShell ? FALLBACK_SHELL : getDefaultShell()
+	if (!cwd) {
+		console.warn(
+			`[Terminal] No cwd provided for paneId=${paneId} — falling back to ${os.homedir()}. This usually means the workspace path wasn't ready when the terminal was created.`,
+		)
+	}
 	const workingDir = validateAndResolveCwd(cwd || os.homedir())
 	const terminalCols = cols || DEFAULT_COLS
 	const terminalRows = rows || DEFAULT_ROWS

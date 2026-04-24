@@ -6,8 +6,31 @@ import { getWindowId } from "../../../contexts/WindowContext"
 import { clearTaskSnapshotCache } from "../ui/agent-task-tools"
 import { clearSubChatRuntimeCaches } from "./sub-chat-runtime-cleanup"
 import { getDefaultRatios, addPaneRatio, removePaneRatio } from "../atoms"
+import { trpcClient } from "../../../lib/trpc"
 
-const MAX_SPLIT_PANES = 4
+export const MAX_SPLIT_PANES = 4
+
+/**
+ * Whether a sub-chat can be added to split via drag-and-drop.
+ * Mirrors the guards in `addToSplit`; used by droppables to skip the
+ * "drop would silently do nothing" case so no hover highlight shows.
+ */
+export function canAddToSplit(
+  state: Pick<
+    AgentSubChatStore,
+    "activeSubChatId" | "splitPaneIds"
+  >,
+  subChatId: string,
+): boolean {
+  if (state.splitPaneIds.includes(subChatId)) return false
+  if (state.splitPaneIds.length >= MAX_SPLIT_PANES) return false
+  if (state.splitPaneIds.length === 0) {
+    // Need an active tab to pair with the dragged one.
+    if (!state.activeSubChatId) return false
+    if (subChatId === state.activeSubChatId) return false
+  }
+  return true
+}
 
 export interface SubChatMeta {
   id: string
@@ -41,7 +64,7 @@ interface AgentSubChatStore {
   updateSubChatName: (subChatId: string, name: string) => void
   updateSubChatMode: (subChatId: string, mode: "plan" | "agent") => void
   updateSubChatTimestamp: (subChatId: string) => void
-  addToSplit: (subChatId: string) => void
+  addToSplit: (subChatId: string, explicitFirstPane?: string) => void
   removeFromSplit: (subChatId: string) => void
   closeSplit: () => void
   setSplitRatios: (ratios: number[]) => void
@@ -242,10 +265,22 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
     // Cleanup queue, streaming status, Chat instance, and task snapshot cache
     // to prevent memory leaks and race conditions (QueueProcessor sending to closed subChat)
     useMessageQueueStore.getState().clearQueue(subChatId)
+    const isStreaming = useStreamingStatusStore.getState().isStreaming(subChatId)
     useStreamingStatusStore.getState().clearStatus(subChatId)
     clearSubChatRuntimeCaches(subChatId)
     agentChatStore.delete(subChatId)
     clearTaskSnapshotCache(subChatId)
+
+    // Auto-delete the DB row if the sub-chat was never used (no messages).
+    // Skip if a stream is in flight — the final write would land on a deleted row.
+    if (!isStreaming) {
+      trpcClient.chats.deleteSubChatIfEmpty
+        .mutate({ id: subChatId })
+        .catch(() => {
+          // Ignore — non-fatal. The row may have been streamed-into between the
+          // gate and the request, or the sub-chat may not yet be persisted (sandbox).
+        })
+    }
   },
 
   togglePinSubChat: (subChatId) => {
@@ -305,17 +340,20 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
     })
   },
 
-  addToSplit: (subChatId) => {
+  addToSplit: (subChatId, explicitFirstPane) => {
     const { chatId, activeSubChatId, splitPaneIds, splitRatios, openSubChatIds } = get()
-    if (subChatId === activeSubChatId) return
+    // Pane 1 source: explicit override (for "create new in split" flows where active
+    // has already been flipped to the new id) or the current active tab.
+    const firstPane = explicitFirstPane ?? activeSubChatId
+    if (subChatId === firstPane) return
     if (splitPaneIds.includes(subChatId)) return
 
     let newPaneIds: string[]
     let newRatios: number[]
     if (splitPaneIds.length === 0) {
-      // Start new split group: [active, new]
-      if (!activeSubChatId) return
-      newPaneIds = [activeSubChatId, subChatId]
+      // Start new split group: [firstPane, new]
+      if (!firstPane) return
+      newPaneIds = [firstPane, subChatId]
       newRatios = getDefaultRatios(2)
     } else if (splitPaneIds.length < MAX_SPLIT_PANES) {
       newPaneIds = [...splitPaneIds, subChatId]
@@ -339,7 +377,7 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
   },
 
   removeFromSplit: (subChatId) => {
-    const { chatId, splitPaneIds, splitRatios } = get()
+    const { chatId, splitPaneIds, splitRatios, activeSubChatId } = get()
     if (!splitPaneIds.includes(subChatId)) return
 
     const removeIdx = splitPaneIds.indexOf(subChatId)
@@ -347,10 +385,28 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
     let newRatios = removePaneRatio(splitRatios, removeIdx)
     if (newPaneIds.length < 2) { newPaneIds = []; newRatios = [] }
 
-    set({ splitPaneIds: newPaneIds, splitRatios: newRatios })
+    // If the removed pane was active, shift active to an adjacent remaining
+    // pane. Without this, clicking X on the active pane collapses the split
+    // but leaves `activeSubChatId` pointing at the just-removed pane — the
+    // user sees the closed chat stay visible and the other one "disappear".
+    let newActiveSubChatId = activeSubChatId
+    if (activeSubChatId === subChatId) {
+      const remaining = splitPaneIds.filter((id) => id !== subChatId)
+      newActiveSubChatId =
+        remaining[removeIdx] ?? remaining[removeIdx - 1] ?? remaining[0] ?? activeSubChatId
+    }
+
+    set({
+      splitPaneIds: newPaneIds,
+      splitRatios: newRatios,
+      activeSubChatId: newActiveSubChatId,
+    })
     if (chatId) {
       saveToLS(chatId, "splitPanes", newPaneIds)
       saveToLS(chatId, "splitRatios", newRatios)
+      if (newActiveSubChatId !== activeSubChatId) {
+        saveToLS(chatId, "active", newActiveSubChatId)
+      }
     }
   },
 

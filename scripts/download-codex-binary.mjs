@@ -5,7 +5,7 @@
  * Usage:
  *   node scripts/download-codex-binary.mjs              # Download for current platform
  *   node scripts/download-codex-binary.mjs --all        # Download all platforms
- *   node scripts/download-codex-binary.mjs --version=0.98.0
+ *   node scripts/download-codex-binary.mjs --version=0.124.0
  */
 
 import fs from "node:fs"

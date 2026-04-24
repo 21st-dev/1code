@@ -540,7 +540,13 @@ export function InboxView() {
             {/* Mobile Header */}
             <div className="flex-shrink-0 border-b bg-background">
               <div className="h-14 flex items-center justify-between px-4">
-                <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2"
+                  style={{
+                    // @ts-expect-error - WebKit-specific property
+                    WebkitAppRegion: "no-drag",
+                  }}
+                >
                   <button
                     onClick={handleMobileBackToChats}
                     className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
@@ -550,7 +556,13 @@ export function InboxView() {
                   </button>
                   <h1 className="text-lg font-semibold">Inbox</h1>
                 </div>
-                <div className="flex items-center gap-1">
+                <div
+                  className="flex items-center gap-1"
+                  style={{
+                    // @ts-expect-error - WebKit-specific property
+                    WebkitAppRegion: "no-drag",
+                  }}
+                >
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">

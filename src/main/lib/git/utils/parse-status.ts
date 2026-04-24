@@ -15,13 +15,20 @@ function mapGitStatus(gitIndex: string, gitWorking: string): FileStatus {
 	return "modified";
 }
 
+// Normalize to POSIX separators so the renderer can safely split on "/"
+// regardless of platform. Git itself stores paths with "/" on every OS, and
+// Node fs / path.join accept "/" on Windows, so functionality is preserved.
+function toPosix(p: string): string {
+	return p.replace(/\\/g, "/");
+}
+
 function toChangedFile(
 	path: string,
 	gitIndex: string,
 	gitWorking: string,
 ): ChangedFile {
 	return {
-		path,
+		path: toPosix(path),
 		status: mapGitStatus(gitIndex, gitWorking),
 		additions: 0,
 		deletions: 0,
@@ -47,8 +54,9 @@ export function parseGitStatus(
 
 		if (index && index !== " " && index !== "?") {
 			staged.push({
-				path,
-				oldPath: file.path !== file.from ? file.from : undefined,
+				path: toPosix(path),
+				oldPath:
+					file.path !== file.from && file.from ? toPosix(file.from) : undefined,
 				status: mapGitStatus(index, " "),
 				additions: 0,
 				deletions: 0,
@@ -57,7 +65,7 @@ export function parseGitStatus(
 
 		if (working && working !== " " && working !== "?") {
 			unstaged.push({
-				path,
+				path: toPosix(path),
 				status: mapGitStatus(" ", working),
 				additions: 0,
 				deletions: 0,
@@ -139,12 +147,12 @@ export function parseDiffNumstat(
 
 		const renameMatch = rawPath.match(/^(.+) => (.+)$/);
 		if (renameMatch) {
-			const oldPath = renameMatch[1];
-			const newPath = renameMatch[2];
+			const oldPath = toPosix(renameMatch[1]);
+			const newPath = toPosix(renameMatch[2]);
 			stats.set(newPath, statEntry);
 			stats.set(oldPath, statEntry);
 		} else {
-			stats.set(rawPath, statEntry);
+			stats.set(toPosix(rawPath), statEntry);
 		}
 	}
 
@@ -188,8 +196,8 @@ export function parseNameStatus(nameStatusOutput: string): ChangedFile[] {
 		}
 
 		files.push({
-			path,
-			oldPath,
+			path: toPosix(path),
+			oldPath: oldPath ? toPosix(oldPath) : undefined,
 			status,
 			additions: 0,
 			deletions: 0,

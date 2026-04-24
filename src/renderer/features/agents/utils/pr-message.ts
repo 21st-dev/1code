@@ -3,6 +3,14 @@ export interface PrContext {
   baseBranch: string
   uncommittedCount: number
   hasUpstream: boolean
+  /** Git host provider for this workspace. Null/undefined → treat as GitHub. */
+  provider?: "github" | "azure" | null
+  /** Populated when provider === "azure" so the agent can target the right org/project/repo. */
+  azure?: {
+    organization: string
+    project: string
+    repository: string
+  }
 }
 
 /**
@@ -38,9 +46,20 @@ export function generatePrMessage(context: PrContext): string {
   }
 
   steps.push(`Use git diff origin/${baseBranch}... to review the PR diff`)
-  steps.push(
-    `Use gh pr create --base ${baseBranch} to create a PR. Keep the title under 80 characters and description under five sentences.`
-  )
+  if (context.provider === "azure" && context.azure) {
+    const { organization, project, repository } = context.azure
+    steps.push(
+      `Use az repos pr create --source-branch ${branch} --target-branch ${baseBranch} ` +
+        `--repository ${repository} --project "${project}" ` +
+        `--organization https://dev.azure.com/${organization} ` +
+        `--title "<title>" --description "<summary>" --output json ` +
+        `to create a PR. Keep the title under 80 characters and description under five sentences.`,
+    )
+  } else {
+    steps.push(
+      `Use gh pr create --base ${baseBranch} to create a PR. Keep the title under 80 characters and description under five sentences.`,
+    )
+  }
   steps.push("If any of these steps fail, ask the user for help.")
 
   // Add numbered steps

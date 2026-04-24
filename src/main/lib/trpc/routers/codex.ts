@@ -17,6 +17,7 @@ import {
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { computeFileStatsFromMessages } from "../../file-stats"
 import {
   fetchMcpTools,
   fetchMcpToolsStdio,
@@ -136,7 +137,7 @@ const AUTH_HINTS = [
   "401",
   "403",
 ]
-const DEFAULT_CODEX_MODEL = "gpt-5.3-codex/high"
+const DEFAULT_CODEX_MODEL = "gpt-5.4/high"
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_USAGE_POLL_ATTEMPTS = 3
 const CODEX_USAGE_POLL_INTERVAL_MS = 200
@@ -1653,9 +1654,11 @@ export const codexRouter = router({
                 return false
               }
 
+              const json = JSON.stringify(messages)
               db.update(subChats)
                 .set({
-                  messages: JSON.stringify(messages),
+                  messages: json,
+                  ...computeFileStatsFromMessages(json),
                   updatedAt: new Date(),
                 })
                 .where(eq(subChats.id, input.subChatId))
@@ -1695,13 +1698,17 @@ export const codexRouter = router({
 
               messagesForStream = [...existingMessages, userMessage]
 
-              db.update(subChats)
-                .set({
-                  messages: JSON.stringify(messagesForStream),
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
+              {
+                const messagesForStreamJson = JSON.stringify(messagesForStream)
+                db.update(subChats)
+                  .set({
+                    messages: messagesForStreamJson,
+                    ...computeFileStatsFromMessages(messagesForStreamJson),
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+              }
             }
 
             if (input.forceNewSession) {

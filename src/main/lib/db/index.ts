@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3"
 import { migrate } from "drizzle-orm/better-sqlite3/migrator"
 import { app } from "electron"
 import { join } from "path"
-import { existsSync, mkdirSync } from "fs"
+import { existsSync, mkdirSync, renameSync } from "fs"
 import * as schema from "./schema"
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
@@ -37,8 +37,22 @@ function getMigrationsPath(): string {
   return join(__dirname, "../../drizzle")
 }
 
+function openConnection(dbPath: string) {
+  const conn = new Database(dbPath)
+  conn.pragma("journal_mode = WAL")
+  // synchronous=NORMAL is safe under WAL and materially reduces fsync load
+  // during high-frequency writes (e.g., streaming message persistence).
+  conn.pragma("synchronous = NORMAL")
+  conn.pragma("foreign_keys = ON")
+  return conn
+}
+
 /**
- * Initialize the database with Drizzle ORM
+ * Initialize the database with Drizzle ORM.
+ *
+ * If migrations fail (e.g., corrupted DB, downgrade), the broken file is
+ * renamed to `agents.db.broken-<timestamp>` and a fresh DB is created so the
+ * app remains launchable. The broken file is kept for user/support triage.
  */
 export function initDatabase() {
   if (db) {
@@ -48,15 +62,9 @@ export function initDatabase() {
   const dbPath = getDatabasePath()
   console.log(`[DB] Initializing database at: ${dbPath}`)
 
-  // Create SQLite connection
-  sqlite = new Database(dbPath)
-  sqlite.pragma("journal_mode = WAL")
-  sqlite.pragma("foreign_keys = ON")
-
-  // Create Drizzle instance
+  sqlite = openConnection(dbPath)
   db = drizzle(sqlite, { schema })
 
-  // Run migrations
   const migrationsPath = getMigrationsPath()
   console.log(`[DB] Running migrations from: ${migrationsPath}`)
 
@@ -65,7 +73,27 @@ export function initDatabase() {
     console.log("[DB] Migrations completed")
   } catch (error) {
     console.error("[DB] Migration error:", error)
-    throw error
+
+    // Recovery: close the connection, quarantine the file, start fresh.
+    try {
+      sqlite?.close()
+    } catch {}
+    sqlite = null
+    db = null
+
+    const brokenPath = `${dbPath}.broken-${Date.now()}`
+    try {
+      renameSync(dbPath, brokenPath)
+      console.warn(`[DB] Quarantined broken DB to: ${brokenPath}`)
+    } catch (renameErr) {
+      console.error("[DB] Could not rename broken DB:", renameErr)
+      throw error
+    }
+
+    sqlite = openConnection(dbPath)
+    db = drizzle(sqlite, { schema })
+    migrate(db, { migrationsFolder: migrationsPath })
+    console.log("[DB] Recovery complete: fresh DB initialized")
   }
 
   return db

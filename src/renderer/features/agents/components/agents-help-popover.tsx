@@ -68,6 +68,8 @@ export function AgentsHelpPopover({
   const open = controlledOpen ?? internalOpen
   const setOpen = controlledOnOpenChange ?? setInternalOpen
 
+  // UPDATES-DISABLED: re-enable to restore changelog fetch + handlers
+  /*
   useEffect(() => {
     let cancelled = false
     window.desktopApi
@@ -92,11 +94,14 @@ export function AgentsHelpPopover({
       cancelled = true
     }
   }, [])
+  */
 
   const handleCommunityClick = () => {
     window.desktopApi.openExternal("https://discord.gg/8ektTZGnj4")
   }
 
+  // UPDATES-DISABLED: re-enable to restore changelog link handlers
+  /*
   const handleChangelogClick = () => {
     window.desktopApi.openExternal("https://1code.dev/agents/changelog")
   }
@@ -106,6 +111,7 @@ export function AgentsHelpPopover({
       `https://1code.dev/agents/changelog#${version}`,
     )
   }
+  */
 
   const handleKeyboardShortcutsClick = () => {
     setOpen(false)
@@ -132,6 +138,8 @@ export function AgentsHelpPopover({
           </DropdownMenuItem>
         )}
 
+        {/* UPDATES-DISABLED: re-enable to restore "What's new" changelog section */}
+        {/*
         {highlights.length > 0 && (
           <>
             <DropdownMenuSeparator />
@@ -165,6 +173,7 @@ export function AgentsHelpPopover({
             </DropdownMenuItem>
           </>
         )}
+        */}
       </DropdownMenuContent>
     </DropdownMenu>
   )

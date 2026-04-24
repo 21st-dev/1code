@@ -268,35 +268,39 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
           },
         )
 
-        options.abortSignal?.addEventListener("abort", () => {
-          // Start server-side cancellation first so the router still has
-          // active run ownership when processing cancel(runId).
-          const cancelPromise = trpcClient.codex.cancel
-            .mutate({ subChatId: this.config.subChatId, runId })
-            .catch(() => {
-              // No-op
-            })
+        options.abortSignal?.addEventListener(
+          "abort",
+          () => {
+            // Start server-side cancellation first so the router still has
+            // active run ownership when processing cancel(runId).
+            const cancelPromise = trpcClient.codex.cancel
+              .mutate({ subChatId: this.config.subChatId, runId })
+              .catch(() => {
+                // No-op
+              })
 
-          // Keep stop UX immediate in the client.
-          try {
-            controller.close()
-          } catch {
-            // Stream already closed
-          }
-
-          // Keep subscription alive briefly so server-side onFinish can persist
-          // interrupted response state before cleanup unsubscribe runs.
-          void (async () => {
+            // Keep stop UX immediate in the client.
             try {
-              await cancelPromise
-            } finally {
-              clearForcedUnsubscribeTimer()
-              forcedUnsubscribeTimer = setTimeout(() => {
-                safeUnsubscribe()
-              }, 10000)
+              controller.close()
+            } catch {
+              // Stream already closed
             }
-          })()
-        })
+
+            // Keep subscription alive briefly so server-side onFinish can persist
+            // interrupted response state before cleanup unsubscribe runs.
+            void (async () => {
+              try {
+                await cancelPromise
+              } finally {
+                clearForcedUnsubscribeTimer()
+                forcedUnsubscribeTimer = setTimeout(() => {
+                  safeUnsubscribe()
+                }, 10000)
+              }
+            })()
+          },
+          { once: true },
+        )
       },
     })
   }

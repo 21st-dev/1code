@@ -45,7 +45,6 @@ import {
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
-  extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
@@ -55,9 +54,11 @@ import {
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import {
+  lastSelectedClaudeThinkingAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedModelIdAtom,
+  subChatClaudeThinkingAtomFamily,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
   subChatModelIdAtomFamily,
@@ -67,7 +68,7 @@ import {
   type SubChatFileChange,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
-import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
+import { AgentsSlashCommand, BUILTIN_SLASH_COMMANDS, type SlashCommandOption } from "../commands"
 import { AgentModelSelector } from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
@@ -78,8 +79,10 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  type ClaudeThinkingLevel,
   type CodexThinkingLevel,
 } from "../lib/models"
+import { applyModeDefaultModel } from "../lib/model-switching"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
 import {
   AgentsFileMention,
@@ -116,10 +119,10 @@ function useAvailableModels() {
 
   const baseModels = CLAUDE_MODELS
 
-  const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
-  const ollamaModels = ollamaStatus?.ollama.models || []
-  const recommendedModel = ollamaStatus?.ollama.recommendedModel
+  const isOffline = ollamaStatus ? !(ollamaStatus.internet?.online ?? true) : false
+  const hasOllama = ollamaStatus?.ollama?.available && (ollamaStatus.ollama?.models?.length ?? 0) > 0
+  const ollamaModels = ollamaStatus?.ollama?.models || []
+  const recommendedModel = ollamaStatus?.ollama?.recommendedModel
 
   // Only show offline models if:
   // 1. Debug flag is enabled (showOfflineFeatures)
@@ -151,7 +154,7 @@ export interface ChatInputAreaProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>
   // Core callbacks
   onSend: () => void
-  onForceSend: () => void // Opt+Enter: stop stream and send immediately, bypassing queue
+  onForceSend: () => void // Opt+Shift+Enter: stop stream and send immediately, bypassing queue
   onStop: () => Promise<void>
   onCompact: () => void
   onCreateNewSubChat?: () => void
@@ -472,6 +475,15 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] = useAtom(
     subChatCodexThinkingAtom,
   )
+  const subChatClaudeThinkingAtom = useMemo(
+    () => subChatClaudeThinkingAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatClaudeThinking, setSelectedSubChatClaudeThinking] =
+    useAtom(subChatClaudeThinkingAtom)
+  const setLastSelectedClaudeThinking = useSetAtom(
+    lastSelectedClaudeThinkingAtom,
+  )
   const setLastSelectedModelId = useSetAtom(lastSelectedModelIdAtom)
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
@@ -595,8 +607,37 @@ export const ChatInputArea = memo(function ChatInputArea({
     }
   }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
 
-  // Extended thinking (reasoning) toggle
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+  // Clamp Claude thinking to levels the selected model supports (e.g., Haiku lacks "max").
+  const selectedClaudeThinking = useMemo<ClaudeThinkingLevel>(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.includes(
+        selectedSubChatClaudeThinking as ClaudeThinkingLevel,
+      )
+    ) {
+      return selectedSubChatClaudeThinking as ClaudeThinkingLevel
+    }
+    if (supported.includes("high")) return "high"
+    return supported[0] ?? "off"
+  }, [selectedModel, selectedSubChatClaudeThinking])
+
+  useEffect(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.length === 0 ||
+      supported.includes(
+        selectedSubChatClaudeThinking as ClaudeThinkingLevel,
+      )
+    ) {
+      return
+    }
+    setSelectedSubChatClaudeThinking(selectedClaudeThinking)
+  }, [
+    selectedModel,
+    selectedSubChatClaudeThinking,
+    selectedClaudeThinking,
+    setSelectedSubChatClaudeThinking,
+  ])
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
@@ -689,13 +730,16 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [subChatMode, setSubChatMode] = useAtom(subChatModeAtom)
 
   // Helper to update mode (atomFamily + Zustand store sync)
+  // Also applies the mode's default model so the chat input selector reflects
+  // the switch immediately (Plan → Opus 4.7 1M, Agent → Sonnet 4.6, etc.)
   const updateMode = useCallback((newMode: AgentMode) => {
     if (onModeChange) {
       onModeChange(newMode)
-      return
+    } else {
+      setSubChatMode(newMode)
+      useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
     }
-    setSubChatMode(newMode)
-    useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
+    applyModeDefaultModel(subChatId, newMode)
   }, [onModeChange, setSubChatMode, subChatId])
 
   // Toggle mode helper
@@ -1071,11 +1115,21 @@ export const ChatInputArea = memo(function ChatInputArea({
             // Trigger context compaction
             onCompact()
             return
+          case "help": {
+            const lines = BUILTIN_SLASH_COMMANDS.map(
+              (c) => `${c.command} — ${c.description}`,
+            ).join("\n")
+            toast.message("Available slash commands", {
+              description: lines,
+              duration: 8000,
+            })
+            return
+          }
         }
       }
 
       // For all other commands (builtin prompts and custom):
-      // insert the command and let user add arguments or press Enter to send
+      // insert the command and let user add arguments or press Shift+Enter to send
       editorRef.current?.setValue(`/${command.name} `)
     },
     [subChatMode, updateMode, onCreateNewSubChat, onCompact, editorRef],
@@ -1247,7 +1301,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       }}
       className="px-2 pb-2 shadow-sm shadow-background relative z-10"
     >
-      <div className="w-full max-w-2xl mx-auto">
+      <div className="w-full max-w-5xl mx-auto">
         <div
           className="relative w-full"
           onDragOver={handleDragOver}
@@ -1579,8 +1633,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                         recommendedOllamaModel: availableModels.recommendedModel,
                         onSelectOllamaModel: setSelectedOllamaModel,
                         isConnected: isClaudeConnected,
-                        thinkingEnabled,
-                        onThinkingChange: setThinkingEnabled,
+                        selectedThinking: selectedClaudeThinking,
+                        onSelectThinking: (thinking) => {
+                          setSelectedSubChatClaudeThinking(thinking)
+                          setLastSelectedClaudeThinking(thinking)
+                        },
                       }}
                       codex={{
                         models: codexUiModels,

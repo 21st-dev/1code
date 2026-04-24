@@ -1,19 +1,12 @@
 import { Button } from "../../../../components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "../../../../components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
-import { HiArrowPath, HiChevronDown } from "react-icons/hi2";
-import { LuGitBranch, LuGitPullRequest } from "react-icons/lu";
+import { HiArrowPath } from "react-icons/hi2";
 import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
 import { usePRStatus } from "../../../../hooks/usePRStatus";
 import { PRIcon } from "../pr-icon";
+import { BranchSwitcherPopover } from "../branch-switcher/branch-switcher-popover";
 
 type LayoutMode = "compact" | "standard" | "wide" | "full";
 
@@ -44,7 +37,9 @@ export function ChangesPanelHeader({
 	const [displayTime, setDisplayTime] = useState<string>("");
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-	const { data: branchData, refetch: refetchBranches } = trpc.changes.getBranches.useQuery(
+	const utils = trpc.useUtils();
+
+	const { refetch: refetchBranches } = trpc.changes.getBranches.useQuery(
 		{ worktreePath },
 		{ enabled: !!worktreePath },
 	);
@@ -53,12 +48,7 @@ export function ChangesPanelHeader({
 		onSuccess: () => {
 			setLastFetchTime(new Date());
 			refetchBranches();
-		},
-	});
-
-	const checkoutMutation = trpc.changes.checkout.useMutation({
-		onSuccess: () => {
-			refetchBranches();
+			utils.changes.getStatus.invalidate({ worktreePath });
 		},
 	});
 
@@ -93,18 +83,12 @@ export function ChangesPanelHeader({
 		);
 	};
 
-	const handleBranchSelect = (branch: string) => {
-		if (branch === currentBranch) return;
-		checkoutMutation.mutate({ worktreePath, branch });
-	};
-
 	useEffect(() => {
 		return () => {
 			if (timeoutRef.current) clearTimeout(timeoutRef.current);
 		};
 	}, []);
 
-	const branches = branchData?.local ?? [];
 	const isCompact = layoutMode === "compact";
 
 	return (
@@ -115,59 +99,11 @@ export function ChangesPanelHeader({
 			)}
 		>
 			{/* Branch selector */}
-			<DropdownMenu>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<DropdownMenuTrigger asChild>
-							<Button
-								variant="ghost"
-								size="sm"
-								className={cn(
-									"h-6 px-2 gap-1.5 text-xs font-medium min-w-0",
-									isCompact && "h-5 px-1.5 gap-1 text-[10px]",
-								)}
-							>
-								<LuGitBranch className={cn("size-3.5 shrink-0", isCompact && "size-3")} />
-								<span className="truncate max-w-[120px]">
-									{currentBranch || "No branch"}
-								</span>
-								<HiChevronDown className={cn("size-3 shrink-0 opacity-50", isCompact && "size-2.5")} />
-							</Button>
-						</DropdownMenuTrigger>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">Switch branch</TooltipContent>
-				</Tooltip>
-				<DropdownMenuContent align="start" className="w-48">
-					{branches.map((branchInfo) => (
-						<DropdownMenuItem
-							key={branchInfo.branch}
-							onClick={() => handleBranchSelect(branchInfo.branch)}
-							className={cn(
-								"text-xs",
-								branchInfo.branch === currentBranch && "bg-accent",
-							)}
-						>
-							<LuGitBranch className="mr-2 size-3.5" />
-							<span className="truncate">{branchInfo.branch}</span>
-							{branchInfo.branch === branchData?.defaultBranch && (
-								<span className="ml-auto text-[10px] text-muted-foreground">
-									default
-								</span>
-							)}
-						</DropdownMenuItem>
-					))}
-					{branches.length > 0 && <DropdownMenuSeparator />}
-					<DropdownMenuItem
-						onClick={() => {
-							// TODO: Implement create branch dialog
-						}}
-						className="text-xs"
-					>
-						<LuGitBranch className="mr-2 size-3.5" />
-						Create new branch...
-					</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu>
+			<BranchSwitcherPopover
+				worktreePath={worktreePath}
+				currentBranch={currentBranch}
+				compact={isCompact}
+			/>
 
 			{/* Right side: PR status + Fetch */}
 			<div className="flex items-center gap-1">

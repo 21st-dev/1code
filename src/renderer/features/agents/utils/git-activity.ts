@@ -10,6 +10,7 @@ export interface GitPrInfo {
   title: string
   url: string
   number?: number
+  branch?: string
 }
 
 export type GitActivity = GitCommitInfo | GitPrInfo
@@ -62,12 +63,20 @@ function extractCommitInfo(
 }
 
 /**
- * Extract PR info from a gh pr create command and its output.
+ * Extract PR info from a `gh pr create` or `az repos pr create` command
+ * and its output.
  */
 function extractPrInfo(command: string, stdout: string): GitPrInfo | null {
-  if (!/gh\s+pr\s+create/.test(command)) return null
+  if (/gh\s+pr\s+create/.test(command)) {
+    return extractGithubPrInfo(command, stdout)
+  }
+  if (/az\s+repos\s+pr\s+create/.test(command)) {
+    return extractAzurePrInfo(command, stdout)
+  }
+  return null
+}
 
-  // Extract URL from stdout
+function extractGithubPrInfo(command: string, stdout: string): GitPrInfo | null {
   const urlMatch = stdout.match(
     /(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/,
   )
@@ -77,11 +86,45 @@ function extractPrInfo(command: string, stdout: string): GitPrInfo | null {
   const numberMatch = url.match(/\/pull\/(\d+)/)
   const number = numberMatch ? parseInt(numberMatch[1]!, 10) : undefined
 
-  // Extract title from --title flag in command
   const titleMatch = command.match(/--title\s+["']([^"']+)["']/)
   const title = titleMatch?.[1] || `PR #${number || ""}`
 
-  return { type: "pr", title, url, number }
+  const headFlagMatch = command.match(/--head\s+["']?([^\s"']+)["']?/)
+  const preambleMatch = stdout.match(
+    /Creating (?:draft )?pull request for ([^\s]+) into /,
+  )
+  const branch = headFlagMatch?.[1] || preambleMatch?.[1] || undefined
+
+  return { type: "pr", title, url, number, branch }
+}
+
+function extractAzurePrInfo(command: string, stdout: string): GitPrInfo | null {
+  // `az repos pr create --output json` prints a single JSON object.
+  // If the user ran without --output json (human-readable form), bail —
+  // the activity badge just won't appear for that turn.
+  try {
+    const parsed = JSON.parse(stdout)
+    const prId =
+      typeof parsed?.pullRequestId === "number"
+        ? parsed.pullRequestId
+        : null
+    const webUrl =
+      typeof parsed?.repository?.webUrl === "string"
+        ? parsed.repository.webUrl
+        : null
+    if (prId == null || !webUrl) return null
+
+    const url = `${webUrl}/pullrequest/${prId}`
+    const titleFromCmd = command.match(/--title\s+["']([^"']+)["']/)?.[1]
+    const title =
+      titleFromCmd ||
+      (typeof parsed?.title === "string" ? parsed.title : `PR #${prId}`)
+    const branch = command.match(/--source-branch\s+["']?([^\s"']+)["']?/)?.[1]
+
+    return { type: "pr", title, url, number: prId, branch }
+  } catch {
+    return null
+  }
 }
 
 /**

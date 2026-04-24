@@ -31,6 +31,7 @@ import {
   agentsDebugModeAtom,
   justCreatedIdsAtom,
   lastSelectedAgentIdAtom,
+  lastSelectedClaudeThinkingAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedBranchesAtom,
@@ -44,6 +45,11 @@ import {
   getNextMode,
   type AgentMode,
 } from "../atoms"
+import {
+  getDefaultModelForMode,
+  getDefaultThinkingForMode,
+  getProviderForModelId,
+} from "../lib/model-switching"
 import { defaultAgentModeAtom } from "../../../lib/atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
@@ -58,7 +64,6 @@ import {
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
-  extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
@@ -121,6 +126,7 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  type ClaudeThinkingLevel,
   type CodexThinkingLevel,
 } from "../lib/models"
 // import type { PlanType } from "@/lib/config/subscription-plans"
@@ -136,10 +142,10 @@ function useAvailableModels() {
 
   const baseModels = CLAUDE_MODELS
 
-  const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
-  const ollamaModels = ollamaStatus?.ollama.models || []
-  const recommendedModel = ollamaStatus?.ollama.recommendedModel
+  const isOffline = ollamaStatus ? !(ollamaStatus.internet?.online ?? true) : false
+  const hasOllama = ollamaStatus?.ollama?.available && (ollamaStatus.ollama?.models?.length ?? 0) > 0
+  const ollamaModels = ollamaStatus?.ollama?.models || []
+  const recommendedModel = ollamaStatus?.ollama?.recommendedModel
 
   // Only show offline models if:
   // 1. Debug flag is enabled (showOfflineFeatures)
@@ -327,14 +333,20 @@ export function NewChatForm({
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(
-    extendedThinkingEnabledAtom,
+  const [lastSelectedClaudeThinking, setLastSelectedClaudeThinking] = useAtom(
+    lastSelectedClaudeThinkingAtom,
   )
 
-  const [selectedModel, setSelectedModel] = useState(
-    () =>
-      availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[0],
-  )
+  const [selectedModel, setSelectedModel] = useState(() => {
+    // Initial model comes from the mode's default (Plan or Agent preference in Settings).
+    // Falls back to the legacy lastSelectedModelId, then to the first available model.
+    const modeDefaultId = getDefaultModelForMode(agentMode)
+    return (
+      availableModels.models.find((m) => m.id === modeDefaultId) ||
+      availableModels.models.find((m) => m.id === lastSelectedModelId) ||
+      availableModels.models[0]
+    )
+  })
 
   // Sync selectedModel when atom value changes (e.g., after localStorage hydration)
   useEffect(() => {
@@ -343,6 +355,42 @@ export function NewChatForm({
       setSelectedModel(model)
     }
   }, [lastSelectedModelId])
+
+  // When the mode changes (e.g. user toggles Plan ↔ Agent in the form, or the
+  // Settings default changes before first render), switch the selected model
+  // and thinking effort to that mode's defaults. Works for both Claude and
+  // Codex defaults — the active agent is swapped accordingly so the right
+  // transport is used.
+  useEffect(() => {
+    const modeDefaultId = getDefaultModelForMode(agentMode)
+    const provider = getProviderForModelId(modeDefaultId)
+    if (provider === "codex") {
+      const codexAgent =
+        enabledAgents.find((agent) => agent.id === "codex") || fallbackAgent
+      if (codexAgent.id !== selectedAgent.id) {
+        setSelectedAgent(codexAgent)
+      }
+      if (lastSelectedCodexModelId !== modeDefaultId) {
+        setLastSelectedCodexModelId(modeDefaultId)
+      }
+      return
+    }
+    // Claude default
+    if (selectedAgent.id !== "claude-code") {
+      const next =
+        enabledAgents.find((agent) => agent.id === "claude-code") ||
+        fallbackAgent
+      setSelectedAgent(next)
+    }
+    const model = availableModels.models.find((m) => m.id === modeDefaultId)
+    if (model && model.id !== selectedModel.id) {
+      setSelectedModel(model)
+    }
+    setLastSelectedClaudeThinking(getDefaultThinkingForMode(agentMode))
+    // Only fire on mode change — manual picks via setSelectedModel should not
+    // be overridden by this effect re-running.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentMode])
 
   const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
   const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
@@ -395,6 +443,34 @@ export function NewChatForm({
     lastSelectedCodexThinking,
     selectedCodexThinking,
     setLastSelectedCodexThinking,
+  ])
+
+  // Clamp Claude thinking to levels the selected model supports.
+  const selectedClaudeThinking = useMemo<ClaudeThinkingLevel>(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.includes(lastSelectedClaudeThinking as ClaudeThinkingLevel)
+    ) {
+      return lastSelectedClaudeThinking as ClaudeThinkingLevel
+    }
+    if (supported.includes("high")) return "high"
+    return supported[0] ?? "off"
+  }, [selectedModel, lastSelectedClaudeThinking])
+
+  useEffect(() => {
+    const supported = selectedModel?.thinkings ?? []
+    if (
+      supported.length === 0 ||
+      supported.includes(lastSelectedClaudeThinking as ClaudeThinkingLevel)
+    ) {
+      return
+    }
+    setLastSelectedClaudeThinking(selectedClaudeThinking)
+  }, [
+    selectedModel,
+    lastSelectedClaudeThinking,
+    selectedClaudeThinking,
+    setLastSelectedClaudeThinking,
   ])
 
   const selectedChatModel = useMemo(() => {
@@ -1115,6 +1191,7 @@ export function NewChatForm({
     // Check if message is a slash command with arguments (e.g. "/hello world")
     // Note: 's' flag makes '.' match newlines, so multi-line arguments are captured
     const slashMatch = message.match(/^\/(\S+)\s*(.*)$/s)
+    let reviewModelOverride: string | null = null
     if (slashMatch) {
       const [, commandName, args] = slashMatch
 
@@ -1122,6 +1199,11 @@ export function NewChatForm({
       const builtinNames = new Set(
         BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
       )
+      // Review-type commands should create the new chat on the Review-mode
+      // default model instead of the agent/plan default.
+      if (commandName === "review" || commandName === "security-review") {
+        reviewModelOverride = getDefaultModelForMode("review")
+      }
       if (!builtinNames.has(commandName)) {
         // This is a custom command - load content and replace $ARGUMENTS
         try {
@@ -1211,7 +1293,7 @@ export function NewChatForm({
     createChatMutation.mutate({
       projectId: selectedProject.id,
       name: message.trim().slice(0, 50), // Use first 50 chars as chat name
-      model: selectedChatModel,
+      model: reviewModelOverride ?? selectedChatModel,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         workMode === "worktree" ? selectedBranch || undefined : undefined,
@@ -1382,11 +1464,21 @@ export function NewChatForm({
               setAgentMode("agent")
             }
             return
+          case "help": {
+            const lines = BUILTIN_SLASH_COMMANDS.map(
+              (c) => `${c.command} — ${c.description}`,
+            ).join("\n")
+            toast.message("Available slash commands", {
+              description: lines,
+              duration: 8000,
+            })
+            return
+          }
         }
       }
 
       // For all other commands (builtin prompts and custom):
-      // insert the command and let user add arguments or press Enter to send
+      // insert the command and let user add arguments or press Shift+Enter to send
       editorRef.current?.setValue(`/${command.name} `)
     },
     [agentMode],
@@ -1620,6 +1712,10 @@ export function NewChatForm({
               onClick={onBackToChats}
               className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
               aria-label="All projects"
+              style={{
+                // @ts-expect-error - WebKit-specific property
+                WebkitAppRegion: "no-drag",
+              }}
             >
               <AlignJustify className="h-4 w-4" />
             </Button>
@@ -1634,7 +1730,7 @@ export function NewChatForm({
       </div>
 
       <div className="flex flex-1 items-center justify-center overflow-y-auto relative">
-        <div className="w-full max-w-2xl space-y-4 md:space-y-6 relative z-10 px-4">
+        <div className="w-full max-w-5xl space-y-4 md:space-y-6 relative z-10 px-4">
           {/* Title - only show when project is selected */}
           {validatedProject && (
             <div className="text-center">
@@ -1905,8 +2001,8 @@ export function NewChatForm({
                             recommendedOllamaModel: availableModels.recommendedModel,
                             onSelectOllamaModel: setSelectedOllamaModel,
                             isConnected: isClaudeConnected,
-                            thinkingEnabled,
-                            onThinkingChange: setThinkingEnabled,
+                            selectedThinking: selectedClaudeThinking,
+                            onSelectThinking: setLastSelectedClaudeThinking,
                           }}
                           codex={{
                             models: codexUiModels,

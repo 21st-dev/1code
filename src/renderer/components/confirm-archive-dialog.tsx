@@ -2,15 +2,12 @@ import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useState, useRef, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { Button } from "./ui/button"
-import { Checkbox } from "./ui/checkbox"
 
 interface ConfirmArchiveDialogProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (deleteWorktree: boolean) => void
+  onConfirm: () => void
   activeProcessCount: number
-  hasWorktree: boolean
-  uncommittedCount: number
 }
 
 const EASING_CURVE = [0.55, 0.055, 0.675, 0.19] as const
@@ -21,16 +18,10 @@ export function ConfirmArchiveDialog({
   onClose,
   onConfirm,
   activeProcessCount,
-  hasWorktree,
-  uncommittedCount,
 }: ConfirmArchiveDialogProps) {
   const [mounted, setMounted] = useState(false)
-  const [deleteWorktree, setDeleteWorktree] = useState(false)
   const openAtRef = useRef<number>(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
-  // Use ref to avoid re-registering keydown listener when checkbox changes
-  const deleteWorktreeRef = useRef(deleteWorktree)
-  deleteWorktreeRef.current = deleteWorktree
 
   useEffect(() => {
     setMounted(true)
@@ -39,8 +30,6 @@ export function ConfirmArchiveDialog({
   useEffect(() => {
     if (isOpen) {
       openAtRef.current = performance.now()
-      // Reset checkbox when dialog opens
-      setDeleteWorktree(false)
     }
   }, [isOpen])
 
@@ -59,7 +48,7 @@ export function ConfirmArchiveDialog({
   const handleConfirm = useCallback(() => {
     const canInteract = performance.now() - openAtRef.current > INTERACTION_DELAY_MS
     if (!canInteract) return
-    onConfirm(deleteWorktreeRef.current)
+    onConfirm()
     onClose()
   }, [onConfirm, onClose])
 
@@ -87,7 +76,6 @@ export function ConfirmArchiveDialog({
   if (!portalTarget) return null
 
   const hasProcesses = activeProcessCount > 0
-  const showWarning = deleteWorktree && uncommittedCount > 0
 
   return createPortal(
     <AnimatePresence mode="wait" initial={false}>
@@ -128,34 +116,10 @@ export function ConfirmArchiveDialog({
                     Archive Workspace
                   </h2>
 
-                  {/* Active processes warning */}
                   {hasProcesses && (
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <p className="text-sm text-muted-foreground">
                       {activeProcessCount} running {activeProcessCount === 1 ? "process" : "processes"} will be stopped.
                     </p>
-                  )}
-
-                  {/* Worktree checkbox */}
-                  {hasWorktree && (
-                    <div className="space-y-2">
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <Checkbox
-                          checked={deleteWorktree}
-                          onCheckedChange={(checked) => setDeleteWorktree(checked === true)}
-                          className="mt-0.5"
-                        />
-                        <span className="text-sm select-none">
-                          Delete worktree to free disk space
-                        </span>
-                      </label>
-
-                      {/* Uncommitted changes warning */}
-                      {showWarning && (
-                        <p className="text-sm text-amber-600 dark:text-amber-500 ml-7">
-                          {uncommittedCount} uncommitted {uncommittedCount === 1 ? "change" : "changes"} will be lost
-                        </p>
-                      )}
-                    </div>
                   )}
                 </div>
 

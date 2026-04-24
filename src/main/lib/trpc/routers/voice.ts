@@ -6,8 +6,24 @@
  * For open-source users: requires OPENAI_API_KEY in environment
  */
 
-import { execSync } from "node:child_process"
+import { execFileSync } from "node:child_process"
 import os from "node:os"
+
+// Allowed shell path prefixes — prevents SHELL= command-injection via interpolation.
+const SAFE_SHELL_PREFIXES = [
+  "/bin/",
+  "/usr/bin/",
+  "/usr/local/bin/",
+  "/opt/homebrew/bin/",
+]
+
+function resolveSafeShell(): string {
+  const candidate = process.env.SHELL
+  if (candidate && SAFE_SHELL_PREFIXES.some((p) => candidate.startsWith(p))) {
+    return candidate
+  }
+  return "/bin/zsh"
+}
 import { z } from "zod"
 import { publicProcedure, router } from "../index"
 import { getApiUrl } from "../../config"
@@ -151,8 +167,8 @@ function getOpenAIApiKey(): string | null {
 
   // Try to get from shell environment (for production builds)
   try {
-    const shell = process.env.SHELL || "/bin/zsh"
-    const result = execSync(`${shell} -ilc 'echo $OPENAI_API_KEY'`, {
+    const shell = resolveSafeShell()
+    const result = execFileSync(shell, ["-ilc", "echo $OPENAI_API_KEY"], {
       encoding: "utf8",
       timeout: 5000,
       env: {

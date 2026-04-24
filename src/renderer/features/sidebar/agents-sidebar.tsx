@@ -40,7 +40,7 @@ import {
 } from "../../lib/hooks/use-remote-chats"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight, BarChart3 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { remoteTrpc } from "../../lib/remote-trpc"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
@@ -99,6 +99,7 @@ import {
   KeyboardIcon,
   TicketIcon,
   CloudIcon,
+  GitPullRequestFilledIcon,
 } from "../../components/ui/icons"
 import { Logo } from "../../components/ui/logo"
 import { Input } from "../../components/ui/input"
@@ -439,6 +440,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   gitOwner,
   gitProvider,
   stats,
+  prNumber,
   selectedChatIdsSize,
   canShowPinOption,
   areAllSelectedPinned,
@@ -487,6 +489,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   gitOwner: string | null | undefined
   gitProvider: string | null | undefined
   stats: { fileCount: number; additions: number; deletions: number } | undefined
+  prNumber: number | null
   selectedChatIdsSize: number
   canShowPinOption: boolean
   areAllSelectedPinned: boolean
@@ -673,6 +676,12 @@ const AgentChatItem = React.memo(function AgentChatItem({
                 )}
                 <span className="truncate flex-1 min-w-0">{displayText}</span>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {prNumber != null && (
+                    <span className="inline-flex items-center gap-0.5 font-mono text-[10px] text-muted-foreground/80">
+                      <GitPullRequestFilledIcon className="h-2.5 w-2.5" />
+                      {prNumber}
+                    </span>
+                  )}
                   {stats && (stats.additions > 0 || stats.deletions > 0) && (
                     <>
                       <span className="text-green-600 dark:text-green-400">
@@ -1015,6 +1024,7 @@ const ChatListSection = React.memo(function ChatListSection({
               gitOwner={gitOwner}
               gitProvider={gitProvider}
               stats={stats ?? undefined}
+              prNumber={chat.prNumber}
               selectedChatIdsSize={selectedChatIds.size}
               canShowPinOption={canShowPinOption}
               areAllSelectedPinned={areAllSelectedPinned}
@@ -1112,6 +1122,36 @@ const KanbanButton = memo(function KanbanButton() {
         Kanban View
         {openKanbanHotkey && <Kbd>{openKanbanHotkey}</Kbd>}
       </TooltipContent>
+    </Tooltip>
+  )
+})
+
+// Isolated Usage Button - navigates to the Usage statistics page
+const UsageButton = memo(function UsageButton() {
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
+  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
+  const setDesktopView = useSetAtom(desktopViewAtom)
+
+  const handleClick = useCallback(() => {
+    setSelectedChatId(null)
+    setSelectedDraftId(null)
+    setShowNewChatForm(false)
+    setDesktopView("usage")
+  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
+
+  return (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleClick}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+        >
+          <BarChart3 className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>Usage</TooltipContent>
     </Tooltip>
   )
 })
@@ -1725,8 +1765,6 @@ export function AgentsSidebar({
   const [confirmArchiveDialogOpen, setConfirmArchiveDialogOpen] = useState(false)
   const [archivingChatId, setArchivingChatId] = useState<string | null>(null)
   const [activeProcessCount, setActiveProcessCount] = useState(0)
-  const [hasWorktree, setHasWorktree] = useState(false)
-  const [uncommittedCount, setUncommittedCount] = useState(0)
 
   // Import sandbox dialog state
   const [importDialogOpen, setImportDialogOpen] = useState(false)
@@ -2733,27 +2771,19 @@ export function AgentsSidebar({
       return
     }
 
-    // Fetch both session count and worktree status in parallel
+    // Only worktree-mode workspaces may have running terminals — skip count for local mode
     const isLocalMode = !chat?.branch
-    const [sessionCount, worktreeStatus] = await Promise.all([
-      // Local mode: terminals are shared and won't be killed on archive, so skip count
-      isLocalMode
-        ? Promise.resolve(0)
-        : utils.terminal.getActiveSessionCount.fetch({ workspaceId: chatId }),
-      utils.chats.getWorktreeStatus.fetch({ chatId }),
-    ])
+    const sessionCount = isLocalMode
+      ? 0
+      : await utils.terminal.getActiveSessionCount.fetch({ workspaceId: chatId })
 
-    const needsConfirmation = sessionCount > 0 || worktreeStatus.hasWorktree
-
-    if (needsConfirmation) {
-      // Show confirmation dialog
+    if (sessionCount > 0) {
+      // Show confirmation dialog so user is warned about running processes
       setArchivingChatId(chatId)
       setActiveProcessCount(sessionCount)
-      setHasWorktree(worktreeStatus.hasWorktree)
-      setUncommittedCount(worktreeStatus.uncommittedCount)
       setConfirmArchiveDialogOpen(true)
     } else {
-      // No active processes and no worktree, archive directly
+      // No active processes, archive directly
       archiveChatMutation.mutate({ id: chatId })
     }
   }, [
@@ -2761,7 +2791,6 @@ export function AgentsSidebar({
     archiveRemoteChatMutation,
     archiveChatMutation,
     utils.terminal.getActiveSessionCount,
-    utils.chats.getWorktreeStatus,
     selectedChatId,
     autoAdvanceTarget,
     previousChatId,
@@ -2771,9 +2800,9 @@ export function AgentsSidebar({
   ])
 
   // Confirm archive after user accepts dialog (optimistic - closes immediately)
-  const handleConfirmArchive = useCallback((deleteWorktree: boolean) => {
+  const handleConfirmArchive = useCallback(() => {
     if (archivingChatId) {
-      archiveChatMutation.mutate({ id: archivingChatId, deleteWorktree })
+      archiveChatMutation.mutate({ id: archivingChatId })
       setArchivingChatId(null)
     }
   }, [archiveChatMutation, archivingChatId])
@@ -3461,12 +3490,16 @@ export function AgentsSidebar({
 
                 {/* Archive Button - isolated component to prevent sidebar re-renders */}
                 <ArchiveSection archivedChatsCount={archivedChatsCount} />
+
+                {/* Usage Button - opens the Usage statistics page */}
+                <UsageButton />
               </div>
 
               <div className="flex-1" />
             </div>
 
-            {/* Feedback Button */}
+            {/* UPDATES-DISABLED: re-enable to restore Feedback button */}
+            {/*
             <ButtonCustom
               onClick={() => window.open(FEEDBACK_URL, "_blank")}
               variant="outline"
@@ -3478,6 +3511,7 @@ export function AgentsSidebar({
             >
               <span className="text-sm font-medium">Feedback</span>
             </ButtonCustom>
+            */}
           </motion.div>
         )}
       </AnimatePresence>
@@ -3523,8 +3557,6 @@ export function AgentsSidebar({
         onClose={handleCloseArchiveDialog}
         onConfirm={handleConfirmArchive}
         activeProcessCount={activeProcessCount}
-        hasWorktree={hasWorktree}
-        uncommittedCount={uncommittedCount}
       />
 
       {/* Open Locally Dialog */}

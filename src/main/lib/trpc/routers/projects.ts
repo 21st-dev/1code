@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, projects } from "../../db"
-import { eq, desc } from "drizzle-orm"
+import { chats, getDatabase, projects, subChats } from "../../db"
+import { eq, desc, inArray } from "drizzle-orm"
 import { dialog, BrowserWindow, app } from "electron"
 import { basename, join } from "path"
 import { exec } from "node:child_process"
@@ -10,8 +10,10 @@ import { existsSync } from "node:fs"
 import { mkdir, copyFile, unlink } from "node:fs/promises"
 import { extname } from "node:path"
 import { getGitRemoteInfo } from "../../git"
+import { terminalManager } from "../../terminal/manager"
 import { trackProjectOpened } from "../../analytics"
 import { getLaunchDirectory } from "../../cli"
+import { abortClaudeSessionsForSubChats } from "./claude"
 
 const execAsync = promisify(exec)
 
@@ -96,6 +98,7 @@ export const projectsRouter = router({
           gitProvider: gitInfo.provider,
           gitOwner: gitInfo.owner,
           gitRepo: gitInfo.repo,
+          gitProject: gitInfo.project,
         })
         .where(eq(projects.id, existing.id))
         .returning()
@@ -120,6 +123,7 @@ export const projectsRouter = router({
         gitProvider: gitInfo.provider,
         gitOwner: gitInfo.owner,
         gitRepo: gitInfo.repo,
+        gitProject: gitInfo.project,
       })
       .returning()
       .get()
@@ -165,6 +169,7 @@ export const projectsRouter = router({
           gitProvider: gitInfo.provider,
           gitOwner: gitInfo.owner,
           gitRepo: gitInfo.repo,
+          gitProject: gitInfo.project,
         })
         .returning()
         .get()
@@ -186,12 +191,44 @@ export const projectsRouter = router({
     }),
 
   /**
-   * Delete a project and all its chats
+   * Remove a project from the list. Worktree directories on disk are preserved —
+   * the "Remove" dialog explicitly promises "Your files will not be deleted."
+   * The only path that may delete a worktree is archiving a workspace with the
+   * "Delete worktree" checkbox explicitly checked.
    */
   delete: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ input }) => {
       const db = getDatabase()
+      const project = db.select().from(projects).where(eq(projects.id, input.id)).get()
+      if (!project) {
+        return null
+      }
+
+      const childChatIds = db
+        .select({ id: chats.id })
+        .from(chats)
+        .where(eq(chats.projectId, input.id))
+        .all()
+        .map((row) => row.id)
+
+      if (childChatIds.length > 0) {
+        const subChatIds = db
+          .select({ id: subChats.id })
+          .from(subChats)
+          .where(inArray(subChats.chatId, childChatIds))
+          .all()
+          .map((row) => row.id)
+
+        if (subChatIds.length > 0) {
+          abortClaudeSessionsForSubChats(subChatIds)
+        }
+
+        for (const chatId of childChatIds) {
+          terminalManager.killByWorkspaceId(chatId).catch(() => {})
+        }
+      }
+
       return db
         .delete(projects)
         .where(eq(projects.id, input.id))
@@ -230,6 +267,7 @@ export const projectsRouter = router({
           gitProvider: gitInfo.provider,
           gitOwner: gitInfo.owner,
           gitRepo: gitInfo.repo,
+          gitProject: gitInfo.project,
         })
         .where(eq(projects.id, input.id))
         .returning()
@@ -309,6 +347,7 @@ export const projectsRouter = router({
             gitProvider: gitInfo.provider,
             gitOwner: gitInfo.owner,
             gitRepo: gitInfo.repo,
+            gitProject: gitInfo.project,
           })
           .returning()
           .get()
@@ -340,6 +379,7 @@ export const projectsRouter = router({
           gitProvider: gitInfo.provider,
           gitOwner: gitInfo.owner,
           gitRepo: gitInfo.repo,
+          gitProject: gitInfo.project,
         })
         .returning()
         .get()
@@ -422,6 +462,7 @@ export const projectsRouter = router({
             gitProvider: gitInfo.provider,
             gitOwner: gitInfo.owner,
             gitRepo: gitInfo.repo,
+            gitProject: gitInfo.project,
           })
           .where(eq(projects.id, existing.id))
           .returning()
@@ -439,6 +480,7 @@ export const projectsRouter = router({
           gitProvider: gitInfo.provider,
           gitOwner: gitInfo.owner,
           gitRepo: gitInfo.repo,
+          gitProject: gitInfo.project,
         })
         .returning()
         .get()

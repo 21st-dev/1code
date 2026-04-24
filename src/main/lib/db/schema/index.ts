@@ -17,9 +17,10 @@ export const projects = sqliteTable("projects", {
   ),
   // Git remote info (extracted from local .git)
   gitRemoteUrl: text("git_remote_url"),
-  gitProvider: text("git_provider"), // "github" | "gitlab" | "bitbucket" | null
+  gitProvider: text("git_provider"), // "github" | "gitlab" | "bitbucket" | "azure" | null
   gitOwner: text("git_owner"),
   gitRepo: text("git_repo"),
+  gitProject: text("git_project"), // Azure DevOps project (null for other providers)
   // Custom project icon (absolute path to local image file)
   iconPath: text("icon_path"),
 })
@@ -53,6 +54,7 @@ export const chats = sqliteTable("chats", {
   prNumber: integer("pr_number"),
 }, (table) => [
   index("chats_worktree_path_idx").on(table.worktreePath),
+  index("chats_project_id_idx").on(table.projectId),
 ])
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({
@@ -76,13 +78,20 @@ export const subChats = sqliteTable("sub_chats", {
   streamId: text("stream_id"), // Track in-progress streams
   mode: text("mode").notNull().default("agent"), // "plan" | "agent"
   messages: text("messages").notNull().default("[]"), // JSON array
+  // Cached file stats — kept in sync by writers, read by getFileStats to avoid JSON parse on every query
+  fileStatsAdditions: integer("file_stats_additions").notNull().default(0),
+  fileStatsDeletions: integer("file_stats_deletions").notNull().default(0),
+  fileStatsFileCount: integer("file_stats_file_count").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
-})
+}, (table) => [
+  index("sub_chats_chat_id_idx").on(table.chatId),
+  index("sub_chats_stream_id_idx").on(table.streamId),
+])
 
 export const subChatsRelations = relations(subChats, ({ one }) => ({
   chat: one(chats, {

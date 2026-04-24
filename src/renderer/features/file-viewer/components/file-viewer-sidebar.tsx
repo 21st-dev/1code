@@ -149,7 +149,13 @@ function UnsupportedViewer({
 
   return (
     <div className="flex flex-col h-full bg-background">
-      <div className="flex items-center justify-between px-2 h-10 border-b border-border/50 bg-background flex-shrink-0">
+      <div
+        className="flex items-center justify-between px-2 h-10 border-b border-border/50 bg-background flex-shrink-0"
+        style={{
+          // @ts-expect-error - WebKit-specific property
+          WebkitAppRegion: "no-drag",
+        }}
+      >
         <div className="flex items-center gap-1 min-w-0 flex-1">
           {/* Close + mode switcher on the left */}
           <Button
@@ -214,7 +220,13 @@ function CodeViewerHeader({
   }, [filePath, preferredEditor, openInAppMutation])
 
   return (
-    <div className="@container flex items-center justify-between px-2 h-10 border-b border-border/50 bg-background flex-shrink-0">
+    <div
+      className="@container flex items-center justify-between px-2 h-10 border-b border-border/50 bg-background flex-shrink-0"
+      style={{
+        // @ts-expect-error - WebKit-specific property
+        WebkitAppRegion: "no-drag",
+      }}
+    >
       {/* Left side: Close button + mode switcher + file info */}
       <div className="flex items-center gap-1 min-w-0 flex-1">
         <Button

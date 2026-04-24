@@ -137,6 +137,15 @@ export function Terminal({
     const container = containerRef.current
     if (!container) return
 
+    // Defer terminal creation until a valid cwd is available. Without this, a
+    // transient mount with empty cwd creates a session that silently falls back
+    // to $HOME on the main side, and the session is then cached forever.
+    const startupCwd = initialCwd || cwd
+    if (!startupCwd) {
+      console.warn("[Terminal:useEffect] Skipping mount — no cwd yet")
+      return
+    }
+
     console.log("[Terminal:useEffect] MOUNT - paneId:", paneId)
     console.log(
       "[Terminal:useEffect] Container rect:",
@@ -250,7 +259,7 @@ export function Terminal({
         scopeKey,
         cols: xterm.cols,
         rows: xterm.rows,
-        cwd: initialCwd || cwd,
+        cwd: startupCwd,
         initialCommands,
       },
       {

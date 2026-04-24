@@ -5,6 +5,7 @@ import matter from "gray-matter"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { resolveDirentType } from "../../fs/dirent"
 import { getEnabledPlugins } from "./claude-settings"
+import { BUILTIN_SUBAGENTS } from "./builtin-agents"
 
 // Valid model values for agents
 export const VALID_AGENT_MODELS = ["sonnet", "opus", "haiku", "inherit"] as const
@@ -277,15 +278,32 @@ export async function buildAgentsOption(
 ): Promise<
   Record<
     string,
-    { description: string; prompt: string; tools?: string[]; model?: AgentModel }
+    {
+      description: string
+      prompt: string
+      tools?: string[]
+      disallowedTools?: string[]
+      model?: AgentModel
+    }
   >
 > {
-  if (agentNames.length === 0) return {}
-
+  // Seed with CLI-parity built-ins (Explore, Plan, general-purpose, etc.) so
+  // Claude inside the app has the same subagent toolkit as CLI users. The SDK
+  // ships zero built-in subagents, so without this step `@mention`-less queries
+  // would have no agents at all.
+  //
+  // User/project/plugin-defined agents loaded below overwrite same-named
+  // entries here — matches the CLI override behavior.
   const agents: Record<
     string,
-    { description: string; prompt: string; tools?: string[]; model?: AgentModel }
-  > = {}
+    {
+      description: string
+      prompt: string
+      tools?: string[]
+      disallowedTools?: string[]
+      model?: AgentModel
+    }
+  > = { ...BUILTIN_SUBAGENTS }
 
   for (const name of agentNames) {
     // Create cache key including cwd to handle project-specific agents
@@ -307,6 +325,7 @@ export async function buildAgentsOption(
         description: agent.description,
         prompt: agent.prompt,
         ...(agent.tools && { tools: agent.tools }),
+        ...(agent.disallowedTools && { disallowedTools: agent.disallowedTools }),
         ...(agent.model && { model: agent.model }),
       }
     }

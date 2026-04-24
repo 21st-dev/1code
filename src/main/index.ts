@@ -192,10 +192,19 @@ function handleDeepLink(url: string): void {
   try {
     const parsed = new URL(url)
 
-    // Handle auth callback: twentyfirst-agents://auth?code=xxx
+    // Handle auth callback: twentyfirst-agents://auth?code=xxx&state=yyy
     if (parsed.pathname === "/auth" || parsed.host === "auth") {
       const code = parsed.searchParams.get("code")
+      const state = parsed.searchParams.get("state")
       if (code) {
+        const verified =
+          authManager.verifyAndConsumeAuthState(state)
+        if (!verified) {
+          console.warn(
+            "[DeepLink] Rejected /auth code: no in-flight auth flow or state mismatch",
+          )
+          return
+        }
         handleAuthCode(code)
         return
       }
@@ -621,8 +630,7 @@ if (gotTheLock) {
 
     // Function to build and set application menu
     const buildMenu = () => {
-      // Show devtools menu item only in dev mode or when unlocked
-      const showDevTools = !app.isPackaged || devToolsUnlocked
+      const showDevTools = true
       const template: Electron.MenuItemConstructorOptions[] = [
         {
           label: app.name,
@@ -631,6 +639,8 @@ if (gotTheLock) {
               label: "About 1Code",
               click: () => app.showAboutPanel(),
             },
+            // UPDATES-DISABLED: re-enable to restore "Check for Updates..." menu item
+            /*
             {
               label: updateAvailable
                 ? `Update to v${availableVersion}...`
@@ -649,6 +659,7 @@ if (gotTheLock) {
                 }
               },
             },
+            */
             { type: "separator" },
             {
               label: "Settings...",
@@ -868,9 +879,14 @@ if (gotTheLock) {
 
     // Set update state and rebuild menu
     const setUpdateAvailable = (available: boolean, version?: string) => {
+      // UPDATES-DISABLED: re-enable to restore update menu state updates
+      void available
+      void version
+      /*
       updateAvailable = available
       availableVersion = version || null
       buildMenu()
+      */
     }
 
     // Unlock devtools and rebuild menu (called from renderer via IPC)
@@ -882,8 +898,10 @@ if (gotTheLock) {
       }
     }
 
+    // UPDATES-DISABLED: re-enable to restore update state exposure
     // Expose setUpdateAvailable globally for auto-updater
-    ;(global as any).__setUpdateAvailable = setUpdateAvailable
+    // ;(global as any).__setUpdateAvailable = setUpdateAvailable
+    void setUpdateAvailable
     // Expose unlockDevTools globally for IPC handler
     ;(global as any).__unlockDevTools = unlockDevTools
 
@@ -939,9 +957,16 @@ if (gotTheLock) {
       console.error("[App] Failed to initialize database:", error)
     }
 
+    // Worktree orphan cleanup is intentionally NOT auto-run. Any automatic
+    // deletion risks destroying uncommitted source code if the DB is empty,
+    // stale, or transiently errors. Worktrees are only deleted via explicit
+    // user opt-in (archive dialog → "Delete worktree" checkbox).
+
     // Create main window
     createMainWindow()
 
+    // UPDATES-DISABLED: re-enable to restore auto-updater startup
+    /*
     // Initialize auto-updater (production only)
     if (app.isPackaged) {
       await initAutoUpdater(getAllWindows)
@@ -952,6 +977,11 @@ if (gotTheLock) {
         checkForUpdates(true)
       }, 5000)
     }
+    */
+    void initAutoUpdater
+    void setupFocusUpdateCheck
+    void checkForUpdates
+    void downloadUpdate
 
     // Warm up MCP cache 3 seconds after startup (background, non-blocking)
     // This populates the cache so all future sessions can use filtered MCP servers
@@ -1003,8 +1033,47 @@ if (gotTheLock) {
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
     cancelAllPendingOAuth()
-    await cleanupGitWatchers()
+
+    // Bound the watcher cleanup so a hung chokidar instance can't block quit.
+    // 1500ms is enough for well-behaved close handlers; OS will reclaim handles
+    // if we have to move on without them.
+    const WATCHER_CLEANUP_TIMEOUT_MS = 1500
+    try {
+      await Promise.race([
+        cleanupGitWatchers(),
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            console.warn(
+              "[App] cleanupGitWatchers() exceeded timeout; continuing shutdown",
+            )
+            resolve()
+          }, WATCHER_CLEANUP_TIMEOUT_MS),
+        ),
+      ])
+    } catch (err) {
+      console.warn("[App] cleanupGitWatchers() threw during shutdown:", err)
+    }
+
     await shutdownAnalytics()
+
+    // Auto-delete sub-chats that were never named and never used (messages = "[]").
+    // Conservative: keeps anything the user invested effort in (named or messaged).
+    try {
+      const { getDatabase, subChats } = await import("./lib/db")
+      const { and, eq, isNull } = await import("drizzle-orm")
+      const db = getDatabase()
+      const result = db
+        .delete(subChats)
+        .where(and(eq(subChats.messages, "[]"), isNull(subChats.name)))
+        .returning()
+        .all()
+      if (result.length > 0) {
+        console.log(`[App] Cleaned up ${result.length} empty unnamed sub-chats`)
+      }
+    } catch (error) {
+      console.warn("[App] Empty sub-chat cleanup failed:", error)
+    }
+
     await closeDatabase()
   })
 

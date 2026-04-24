@@ -1,9 +1,8 @@
 import { memo, useMemo, useCallback, useEffect } from "react";
 import { trpc } from "../../../../lib/trpc";
 import { formatRelativeDate } from "../../utils/date";
-import { FileText, ArrowUp } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { cn } from "../../../../lib/utils";
-import { getStatusIndicator } from "../../utils/status";
 import { Button } from "../../../../components/ui/button";
 import type { ChangedFile } from "../../../../../shared/changes-types";
 import {
@@ -15,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { useAtomValue } from "jotai";
 import { selectedProjectAtom } from "../../../agents/atoms";
+import { CommitDiffSplit } from "./commit-diff-split";
 
 export interface CommitInfo {
 	hash: string;
@@ -135,7 +135,7 @@ export const HistoryView = memo(function HistoryView({
 	}
 
 	return (
-		<div className="flex-1 overflow-y-auto">
+		<div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 			{/* Worktree not registered warning */}
 			{isWorktreeRegistered === false && worktreePath && (
 				<div className="p-4 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 text-xs">
@@ -143,16 +143,42 @@ export const HistoryView = memo(function HistoryView({
 				</div>
 			)}
 
-			{/* Commits list - only commits, files are shown in right panel */}
-			{commits.map((commit, index) => (
-				<HistoryCommitItem
-					key={commit.hash}
-					commit={commit}
-					isSelected={selectedCommitHash === commit.hash}
-					isUnpushed={index < (pushCount || 0)}
-					onClick={() => handleCommitClick(commit)}
-				/>
-			))}
+			{/* Commits list — fixed ~40% of the pane so the diff split has room. */}
+			<div
+				className="overflow-y-auto border-b border-border/50 flex-shrink-0"
+				style={{ maxHeight: "40%" }}
+			>
+				{commits.map((commit, index) => (
+					<HistoryCommitItem
+						key={commit.hash}
+						commit={commit}
+						isSelected={selectedCommitHash === commit.hash}
+						isUnpushed={index < (pushCount || 0)}
+						onClick={() => handleCommitClick(commit)}
+					/>
+				))}
+			</div>
+
+			{/* Two-column file list + diff for the selected commit */}
+			{selectedCommitHash && (
+				isLoadingFiles && !commitFiles ? (
+					<div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
+						Loading files…
+					</div>
+				) : filesError ? (
+					<div className="flex-1 flex items-center justify-center text-xs text-red-500">
+						Failed to load files: {filesError.message}
+					</div>
+				) : (
+					<CommitDiffSplit
+						worktreePath={worktreePath}
+						commitHash={selectedCommitHash}
+						files={commitFiles ?? []}
+						selectedFilePath={selectedFilePath}
+						onFileSelect={(file) => handleFileClick(file)}
+					/>
+				)
+			)}
 		</div>
 	);
 });
@@ -245,41 +271,3 @@ const HistoryCommitItem = memo(function HistoryCommitItem({
 	);
 });
 
-const CommitFileItem = memo(function CommitFileItem({
-	file,
-	isSelected,
-	onClick,
-}: {
-	file: ChangedFile;
-	isSelected: boolean;
-	onClick: () => void;
-}) {
-	const fileName = file.path.split("/").pop() || file.path;
-	const dirPath = file.path.includes("/")
-		? file.path.substring(0, file.path.lastIndexOf("/"))
-		: "";
-
-	return (
-		<div
-			className={cn(
-				"flex items-center gap-2 px-2 py-1 cursor-pointer transition-colors",
-				"hover:bg-muted/80",
-				isSelected && "bg-muted",
-			)}
-			onClick={onClick}
-		>
-			<FileText className="size-3.5 text-muted-foreground shrink-0 ml-5" />
-			<div className="flex-1 min-w-0 flex items-center overflow-hidden">
-				{dirPath && (
-					<span className="text-xs text-muted-foreground truncate flex-shrink min-w-0">
-						{dirPath}/
-					</span>
-				)}
-				<span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">
-					{fileName}
-				</span>
-			</div>
-			<div className="shrink-0">{getStatusIndicator(file.status)}</div>
-		</div>
-	);
-});

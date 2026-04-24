@@ -25,6 +25,7 @@ import { trpc } from "@/lib/trpc"
 import { preferredEditorAtom } from "@/lib/atoms"
 import { APP_META } from "../../../../shared/external-apps"
 import type { ParsedDiffFile } from "../types"
+import { BranchSwitcherPopover } from "@/features/changes/components/branch-switcher/branch-switcher-popover"
 
 interface ChangesWidgetProps {
   chatId: string
@@ -263,14 +264,23 @@ export const ChangesWidget = memo(function ChangesWidget({
           {/* Title + branch */}
           <div className="flex items-center gap-1 min-w-0">
             <span className="text-xs font-medium text-foreground">Changes</span>
-            {currentBranch && (
+            {currentBranch && worktreePath ? (
+              <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                <span className="shrink-0">on</span>
+                <BranchSwitcherPopover
+                  worktreePath={worktreePath}
+                  currentBranch={currentBranch}
+                  compact
+                />
+              </span>
+            ) : currentBranch ? (
               <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
                 <span className="shrink-0">on</span>
                 <span className="truncate max-w-[120px] text-foreground">
                   {currentBranch}
                 </span>
               </span>
-            )}
+            ) : null}
           </div>
 
           {/* Stats in header - total lines changed */}

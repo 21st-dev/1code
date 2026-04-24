@@ -1,8 +1,22 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect } from "react"
-import { ChevronDown, ArrowUp, X } from "lucide-react"
+import { memo, useState, useCallback, useEffect, useMemo } from "react"
+import { ChevronDown, ArrowUp, X, GripVertical } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import {
   Tooltip,
   TooltipContent,
@@ -21,11 +35,27 @@ const QueueItemRow = memo(function QueueItemRow({
   item,
   onRemove,
   onSendNow,
+  isReorderable = false,
 }: {
   item: AgentQueueItem
   onRemove?: (itemId: string) => void
   onSendNow?: (itemId: string) => void
+  isReorderable?: boolean
 }) {
+  // Items currently being processed must not be draggable — the queue processor
+  // and the user would fight over ordering, and the row would disappear mid-drag.
+  const isDraggable = isReorderable && item.status !== "processing"
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id, disabled: !isDraggable })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: "relative",
+  }
+
   const handleRemove = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -67,7 +97,25 @@ const QueueItemRow = memo(function QueueItemRow({
   }
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors cursor-default">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group/queue-row flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors",
+        isDraggable ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default",
+      )}
+      {...(isDraggable ? attributes : {})}
+      {...(isDraggable ? listeners : {})}
+    >
+      {isDraggable && (
+        <GripVertical
+          className={cn(
+            "flex-shrink-0 w-3 h-3 text-muted-foreground/50 transition-opacity duration-100 pointer-events-none",
+            isDragging ? "opacity-100" : "opacity-0 group-hover/queue-row:opacity-60",
+          )}
+          aria-hidden="true"
+        />
+      )}
       {item.message ? (
         <span className="truncate flex-1 text-foreground">
           <RenderFileMentions text={item.message} />
@@ -118,6 +166,7 @@ interface AgentQueueIndicatorProps {
   queue: AgentQueueItem[]
   onRemoveItem?: (itemId: string) => void
   onSendNow?: (itemId: string) => void
+  onReorder?: (fromIndex: number, toIndex: number) => void
   isStreaming?: boolean
   /** Whether there's a status card below this one - affects border radius */
   hasStatusCardBelow?: boolean
@@ -127,9 +176,29 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
   queue,
   onRemoveItem,
   onSendNow,
+  onReorder,
   isStreaming = false,
   hasStatusCardBelow = false,
 }: AgentQueueIndicatorProps) {
+  // 4px activation distance mirrors sidebar/tab DnD so clicks on Send/Remove
+  // still pass through as clicks, not as drags.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  )
+
+  const sortableIds = useMemo(() => queue.map((q) => q.id), [queue])
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id || !onReorder) return
+      const fromIndex = queue.findIndex((q) => q.id === active.id)
+      const toIndex = queue.findIndex((q) => q.id === over.id)
+      if (fromIndex < 0 || toIndex < 0) return
+      onReorder(fromIndex, toIndex)
+    },
+    [queue, onReorder],
+  )
   // Load expanded state from localStorage (window-scoped)
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined") return true
@@ -195,14 +264,26 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
             className="overflow-hidden"
           >
             <div className="border-t border-border max-h-[200px] overflow-y-auto">
-              {queue.map((item) => (
-                <QueueItemRow
-                  key={item.id}
-                  item={item}
-                  onRemove={onRemoveItem}
-                  onSendNow={onSendNow}
-                />
-              ))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sortableIds}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {queue.map((item) => (
+                    <QueueItemRow
+                      key={item.id}
+                      item={item}
+                      onRemove={onRemoveItem}
+                      onSendNow={onSendNow}
+                      isReorderable={!!onReorder}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </div>
           </motion.div>
         )}

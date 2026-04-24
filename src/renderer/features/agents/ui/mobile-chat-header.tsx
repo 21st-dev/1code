@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { useAtomValue } from "jotai"
 import { loadingSubChatsAtom } from "../atoms"
-import { Plus, ChevronDown, Play, AlignJustify, FolderDown } from "lucide-react"
+import { Plus, ChevronDown, Play, AlignJustify, FolderDown, Trash2 } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -43,6 +43,7 @@ interface MobileChatHeaderProps {
   isTerminalOpen?: boolean
   isArchived?: boolean
   onRestore?: () => void
+  onDelete?: () => void
   onOpenLocally?: () => void
   showOpenLocally?: boolean
 }
@@ -60,6 +61,7 @@ export function MobileChatHeader({
   isTerminalOpen = false,
   isArchived = false,
   onRestore,
+  onDelete,
   onOpenLocally,
   showOpenLocally = false,
 }: MobileChatHeaderProps) {
@@ -294,6 +296,19 @@ export function MobileChatHeader({
           >
             <IconTextUndo className="h-4 w-4" />
             <span className="text-xs">Restore</span>
+          </Button>
+        )}
+
+        {/* Delete button - only when viewing archived workspace */}
+        {isArchived && onDelete && (
+          <Button
+            variant="ghost"
+            onClick={onDelete}
+            aria-label="Delete workspace"
+            className="h-7 px-2 gap-1.5 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md flex items-center"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span className="text-xs">Delete</span>
           </Button>
         )}
       </div>
