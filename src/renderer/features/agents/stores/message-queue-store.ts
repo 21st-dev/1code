@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { subscribeWithSelector } from "zustand/middleware"
+import { arrayMove } from "@dnd-kit/sortable"
 import type { AgentQueueItem } from "../lib/queue-utils"
 import { removeQueueItem } from "../lib/queue-utils"
 
@@ -27,6 +28,8 @@ interface MessageQueueState {
   prependItem: (subChatId: string, item: AgentQueueItem) => void
   // Signal that a queued message was auto-sent (for scroll triggering)
   triggerQueueSent: (subChatId: string) => void
+  // Reorder queue via drag-and-drop (user-driven reprioritization).
+  reorderQueue: (subChatId: string, fromIndex: number, toIndex: number) => void
 }
 
 export const useMessageQueueStore = create<MessageQueueState>()(
@@ -107,5 +110,26 @@ export const useMessageQueueStore = create<MessageQueueState>()(
         [subChatId]: (state.queueSentTriggers[subChatId] || 0) + 1,
       },
     }))
+  },
+
+  reorderQueue: (subChatId, fromIndex, toIndex) => {
+    set((state) => {
+      const current = state.queues[subChatId] || []
+      if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= current.length ||
+        toIndex >= current.length
+      ) {
+        return state
+      }
+      return {
+        queues: {
+          ...state.queues,
+          [subChatId]: arrayMove(current, fromIndex, toIndex),
+        },
+      }
+    })
   },
 })))

@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, access } from "node:fs/promises"
 import { join, dirname, isAbsolute } from "node:path"
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
+import { getShellEnvironment } from "./shell-env"
 
 const execAsync = promisify(exec)
 
@@ -206,6 +207,11 @@ export async function executeWorktreeSetup(
 
   console.log(`[worktree-setup] Running ${commandList.length} setup commands in ${worktreePath}`)
 
+  // Resolve the user's login-shell PATH so commands like `bun`, `pnpm`, homebrew
+  // binaries etc. are found when the app is launched from Finder/Dock (Electron
+  // GUI processes inherit a stripped PATH).
+  const shellEnv = await getShellEnvironment()
+
   // Execute each command
   for (const cmd of commandList) {
     if (!cmd.trim()) continue
@@ -217,6 +223,8 @@ export async function executeWorktreeSetup(
         cwd: worktreePath,
         env: {
           ...process.env,
+          ...shellEnv,
+          PATH: shellEnv.PATH ?? process.env.PATH,
           ROOT_WORKTREE_PATH: mainRepoPath,
         },
         timeout: 300_000, // 5 minutes per command

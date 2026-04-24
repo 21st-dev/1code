@@ -62,7 +62,7 @@ import { isDesktopApp, getShortcutKey } from "../../lib/utils/platform"
 import { useResolvedHotkeyDisplay } from "../../lib/hotkeys"
 import { TrafficLightSpacer } from "../agents/components/traffic-light-spacer"
 import { PopoverTrigger } from "../../components/ui/popover"
-import { AlignJustify } from "lucide-react"
+import { AlignJustify, GripVertical } from "lucide-react"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -92,6 +92,12 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { useSubChatDraftsCache, getSubChatDraftKey } from "../agents/lib/drafts"
 import { Checkbox } from "../../components/ui/checkbox"
 import { TypewriterText } from "../../components/ui/typewriter-text"
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 // Isolated Search History Popover for sidebar - prevents parent re-renders when popover opens/closes
 interface SidebarSearchHistoryPopoverProps {
@@ -197,6 +203,63 @@ interface AgentsSubChatsSidebarProps {
   agentName?: string
 }
 
+/**
+ * Wrapper that makes a sub-chat row draggable via @dnd-kit.
+ * Drag is disabled for split-pair tabs so the auto-adjacency logic in `openSubChats`
+ * doesn't fight the user-defined order.
+ *
+ * Sets `data-dnd-active` while dragging so consumers can skip hover effects, and
+ * uses an `activationConstraint` of 4px so single clicks still pass through.
+ */
+function SortableSubChatRow({
+  id,
+  disabled,
+  children,
+}: {
+  id: string
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id, disabled })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    // Hide the original while the DragOverlay (rendered at document root by
+    // agents-content.tsx) shows the preview; the row still occupies space so
+    // siblings don't collapse and dnd-kit's drop indicators still animate.
+    opacity: isDragging ? 0 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: "relative",
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-dnd-active={isDragging || undefined}
+      className={cn(
+        "group/sortable",
+        !disabled && (isDragging ? "cursor-grabbing" : "cursor-grab"),
+      )}
+      {...attributes}
+      {...listeners}
+    >
+      {!disabled && (
+        <GripVertical
+          className={cn(
+            "absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground/50 transition-opacity duration-100 pointer-events-none z-10",
+            isDragging ? "opacity-100" : "opacity-0 group-hover/sortable:opacity-60",
+          )}
+          aria-hidden="true"
+        />
+      )}
+      {children}
+    </div>
+  )
+}
+
 export function AgentsSubChatsSidebar({
   onClose,
   isMobile = false,
@@ -231,6 +294,11 @@ export function AgentsSubChatsSidebar({
       closeSplit: state.closeSplit,
     }))
   )
+
+  // DnD is managed at a shared parent (agents-content.tsx) so that sub-chats
+  // can be dragged out of the sidebar and into the split-view drop zone.
+  // The SortableContext blocks below remain to provide in-sidebar reordering.
+
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const subChatFiles = useAtomValue(subChatFilesAtom)
   const selectedTeamId = useAtomValue(selectedTeamIdAtom)
@@ -349,16 +417,12 @@ export function AgentsSubChatsSidebar({
     return map
   }, [allSubChats])
 
-  // Map open IDs to metadata and sort by updated_at (most recent first)
+  // Map open IDs to metadata. Order follows openSubChatIds (user-controlled via DnD)
+  // rather than auto-sorting by updated_at — manual reorder must stick.
   const openSubChats = useMemo(() => {
     const chats = openSubChatIds
       .map((id) => allSubChatsById.get(id))
       .filter((sc): sc is SubChatMeta => !!sc)
-      .sort((a, b) => {
-        const aT = new Date(a.updated_at || a.created_at || "0").getTime()
-        const bT = new Date(b.updated_at || b.created_at || "0").getTime()
-        return bT - aT // Most recent first
-      })
 
     if (splitPaneIds.length < 2) return chats
 
@@ -714,26 +778,12 @@ export function AgentsSubChatsSidebar({
     [renamingSubChat, renameMutation, setJustCreatedIds],
   )
 
-  const handleCreateNew = async () => {
+  const handleCreateNew = () => {
     if (!parentChatId) return
 
     const store = useAgentSubChatStore.getState()
-
-    let newId: string
-
-    if (chatSourceMode === "sandbox") {
-      // Sandbox mode: lazy creation (web app pattern)
-      // Sub-chat will be persisted on first message via RemoteChatTransport UPSERT
-      newId = crypto.randomUUID()
-    } else {
-      // Local mode: create sub-chat in DB first to get the real ID
-      const newSubChat = await trpcClient.chats.createSubChat.mutate({
-        chatId: parentChatId,
-        name: "New Chat",
-        mode: defaultAgentMode,
-      })
-      newId = newSubChat.id
-    }
+    const newId = crypto.randomUUID()
+    const capturedParentChatId = parentChatId
 
     // Track this subchat as just created for typewriter effect
     setJustCreatedIds((prev) => new Set([...prev, newId]))
@@ -741,7 +791,7 @@ export function AgentsSubChatsSidebar({
     // Initialize atomFamily mode for the new sub-chat
     appStore.set(subChatModeAtomFamily(newId), defaultAgentMode)
 
-    // Add to allSubChats with placeholder name
+    // Add to allSubChats with placeholder name (optimistic — UI updates instantly)
     store.addToAllSubChats({
       id: newId,
       name: "New Chat",
@@ -752,6 +802,24 @@ export function AgentsSubChatsSidebar({
     // Add to open tabs and set as active
     store.addToOpenSubChats(newId)
     store.setActiveSubChat(newId)
+
+    if (chatSourceMode !== "sandbox") {
+      // Local mode: persist to DB in background. On failure, roll back the optimistic insert.
+      // Sandbox mode persists lazily on first message via RemoteChatTransport UPSERT.
+      // Do NOT pass `name` — leave it NULL in DB so the app-quit cleanup can
+      // recognize never-named, never-used sub-chats. UI displays "New Chat" via fallback.
+      trpcClient.chats.createSubChat
+        .mutate({
+          id: newId,
+          chatId: capturedParentChatId,
+          mode: defaultAgentMode,
+        })
+        .catch((error) => {
+          console.error("[handleCreateNew] Failed to create sub-chat:", error)
+          useAgentSubChatStore.getState().removeFromOpenSubChats(newId)
+          toast.error("Failed to create chat")
+        })
+    }
   }
 
   const handleSelectFromHistory = useCallback((subChat: SubChatMeta) => {
@@ -1262,6 +1330,10 @@ export function AgentsSubChatsSidebar({
                         </h3>
                       </div>
                       <div className="list-none p-0 m-0 mb-3">
+                        <SortableContext
+                          items={pinnedChats.map((c) => c.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
                         {pinnedChats.map((subChat) => {
                           const isSubChatLoading = loadingChatIds.has(
                             subChat.id,
@@ -1305,7 +1377,12 @@ export function AgentsSubChatsSidebar({
                               : null
 
                           return (
-                            <ContextMenu key={subChat.id}>
+                            <SortableSubChatRow
+                              key={subChat.id}
+                              id={subChat.id}
+                              disabled={isSplitTab}
+                            >
+                            <ContextMenu>
                               <ContextMenuTrigger asChild>
                                 <div
                                   data-subchat-index={globalIndex}
@@ -1352,7 +1429,8 @@ export function AgentsSubChatsSidebar({
                                     handleSubChatMouseLeave()
                                   }}
                                   className={cn(
-                                    "w-full text-left py-1.5 transition-colors duration-75 cursor-pointer group relative",
+                                    "w-full text-left py-1.5 transition-colors duration-75 group relative",
+                                    isSplitTab ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
                                     "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                                     isMultiSelectMode ? "px-3" : "pl-2 pr-2",
                                     isMultiSelectMode ? "" : "rounded-md",
@@ -1546,8 +1624,10 @@ export function AgentsSubChatsSidebar({
                                 />
                               )}
                             </ContextMenu>
+                            </SortableSubChatRow>
                           )
                         })}
+                        </SortableContext>
                       </div>
                     </>
                   )}
@@ -1566,6 +1646,10 @@ export function AgentsSubChatsSidebar({
                         </h3>
                       </div>
                       <div className="list-none p-0 m-0">
+                        <SortableContext
+                          items={unpinnedChats.map((c) => c.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
                         {unpinnedChats.map((subChat) => {
                           const isSubChatLoading = loadingChatIds.has(
                             subChat.id,
@@ -1609,7 +1693,12 @@ export function AgentsSubChatsSidebar({
                               : null
 
                           return (
-                            <ContextMenu key={subChat.id}>
+                            <SortableSubChatRow
+                              key={subChat.id}
+                              id={subChat.id}
+                              disabled={isSplitTab}
+                            >
+                            <ContextMenu>
                               <ContextMenuTrigger asChild>
                                 <div
                                   data-subchat-index={globalIndex}
@@ -1656,7 +1745,8 @@ export function AgentsSubChatsSidebar({
                                     handleSubChatMouseLeave()
                                   }}
                                   className={cn(
-                                    "w-full text-left py-1.5 transition-colors duration-75 cursor-pointer group relative",
+                                    "w-full text-left py-1.5 transition-colors duration-75 group relative",
+                                    isSplitTab ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
                                     "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                                     isMultiSelectMode ? "px-3" : "pl-2 pr-2",
                                     isMultiSelectMode ? "" : "rounded-md",
@@ -1850,8 +1940,10 @@ export function AgentsSubChatsSidebar({
                                 />
                               )}
                             </ContextMenu>
+                            </SortableSubChatRow>
                           )
                         })}
+                        </SortableContext>
                       </div>
                     </>
                   )}

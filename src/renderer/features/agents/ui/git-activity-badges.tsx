@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useCallback, useMemo, useState } from "react"
-import { GitCommit, GitPullRequest } from "lucide-react"
+import { GitBranch, GitCommit, GitPullRequest } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { AnimatePresence, motion } from "motion/react"
 import {
@@ -220,6 +220,12 @@ export const GitActivityBadges = memo(function GitActivityBadges({
         >
           <GitPullRequest className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
           <span className="truncate">{activity.title}</span>
+          {activity.branch && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/70 bg-background/60 text-[10px] font-mono text-muted-foreground max-w-[160px] flex-shrink-0">
+              <GitBranch className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{activity.branch}</span>
+            </span>
+          )}
         </button>
       )}
     </div>

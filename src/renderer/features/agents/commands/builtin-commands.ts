@@ -8,14 +8,16 @@ export const COMMAND_PROMPTS: Partial<
 > = {
   review:
     "Please review the code in the current context and provide feedback on code quality, potential bugs, and improvements.",
-  "pr-comments":
-    "Generate detailed PR review comments for the changes in the current context.",
   "release-notes":
     "Generate release notes summarizing the changes in this codebase.",
   "security-review":
     "Perform a security audit of the code in the current context. Identify vulnerabilities, security risks, and suggest fixes.",
   commit:
     "Закоммить это аккуратно, не трогая больше ничего. Сделай коммит только для staged изменений, не добавляй никакие другие файлы и не вноси дополнительных изменений.",
+  init:
+    "Initialize this project by creating a CLAUDE.md file that documents the codebase architecture, key commands, and conventions for AI assistants. Analyze the repo structure and existing config files first.",
+  simplify:
+    "Review the code in the current context for reuse, quality, and efficiency. Look for duplicated logic, unnecessary abstractions, dead code, and premature complexity. Propose concrete simplifications and apply them.",
   "worktree-setup": `Create a worktree setup script for this project.
 
 Your task:
@@ -48,7 +50,7 @@ Now analyze this project and create .1code/worktree.json with the appropriate se
  */
 export function isPromptCommand(
   type: BuiltinCommandAction["type"],
-): type is "review" | "pr-comments" | "release-notes" | "security-review" | "commit" | "worktree-setup" {
+): type is "review" | "release-notes" | "security-review" | "commit" | "worktree-setup" | "init" | "simplify" {
   return type in COMMAND_PROMPTS
 }
 
@@ -84,19 +86,19 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandOption[] = [
     description: "Compact conversation context to reduce token usage",
     category: "builtin",
   },
+  {
+    id: "builtin:help",
+    name: "help",
+    command: "/help",
+    description: "List all available slash commands",
+    category: "builtin",
+  },
   // Prompt-based commands
   {
     id: "builtin:review",
     name: "review",
     command: "/review",
     description: "Ask agent to review your code",
-    category: "builtin",
-  },
-  {
-    id: "builtin:pr-comments",
-    name: "pr-comments",
-    command: "/pr-comments",
-    description: "Ask agent to generate PR review comments",
     category: "builtin",
   },
   {
@@ -125,6 +127,20 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandOption[] = [
     name: "worktree-setup",
     command: "/worktree-setup",
     description: "Generate worktree setup config with AI",
+    category: "builtin",
+  },
+  {
+    id: "builtin:init",
+    name: "init",
+    command: "/init",
+    description: "Initialize a CLAUDE.md project guide",
+    category: "builtin",
+  },
+  {
+    id: "builtin:simplify",
+    name: "simplify",
+    command: "/simplify",
+    description: "Review code for reuse, quality, and efficiency",
     category: "builtin",
   },
 ]

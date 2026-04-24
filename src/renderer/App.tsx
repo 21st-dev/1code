@@ -2,6 +2,7 @@ import { Provider as JotaiProvider, useAtomValue, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
 import { useEffect, useMemo } from "react"
 import { Toaster } from "sonner"
+import { AppErrorBoundary } from "./components/ui/error-boundary"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
 import { WindowProvider, getInitialWindowParams } from "./contexts/WindowContext"
@@ -24,7 +25,7 @@ import {
 } from "./lib/atoms"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
-import { trpc } from "./lib/trpc"
+import { trpc, trpcClient } from "./lib/trpc"
 
 /**
  * Custom Toaster that adapts to theme
@@ -195,31 +196,49 @@ export function App() {
     }
     identifyUser()
 
+    // On window unload, sweep open sub-chats — any empty ones (no messages)
+    // are auto-deleted. This complements the on-tab-close cleanup so closing a
+    // window with empty tabs still cleans them up.
+    const handleBeforeUnload = () => {
+      try {
+        const openIds = useAgentSubChatStore.getState().openSubChatIds
+        if (openIds.length === 0) return
+        // Fire-and-forget; main process IPC will queue the request.
+        trpcClient.chats.deleteEmptySubChatsByIds.mutate({ ids: openIds }).catch(() => {})
+      } catch {
+        // Swallow — this is best-effort cleanup.
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
     // Cleanup on unmount
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
       shutdown()
     }
   }, [])
 
   return (
-    <WindowProvider>
-      <JotaiProvider store={appStore}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <VSCodeThemeProvider>
-            <TooltipProvider delayDuration={100}>
-              <TRPCProvider>
-                <div
-                  data-agents-page
-                  className="h-screen w-screen bg-background text-foreground overflow-hidden"
-                >
-                  <AppContent />
-                </div>
-                <ThemedToaster />
-              </TRPCProvider>
-            </TooltipProvider>
-          </VSCodeThemeProvider>
-        </ThemeProvider>
-      </JotaiProvider>
-    </WindowProvider>
+    <AppErrorBoundary>
+      <WindowProvider>
+        <JotaiProvider store={appStore}>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <VSCodeThemeProvider>
+              <TooltipProvider delayDuration={100}>
+                <TRPCProvider>
+                  <div
+                    data-agents-page
+                    className="h-screen w-screen bg-background text-foreground overflow-hidden"
+                  >
+                    <AppContent />
+                  </div>
+                  <ThemedToaster />
+                </TRPCProvider>
+              </TooltipProvider>
+            </VSCodeThemeProvider>
+          </ThemeProvider>
+        </JotaiProvider>
+      </WindowProvider>
+    </AppErrorBoundary>
   )
 }

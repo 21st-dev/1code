@@ -47,6 +47,45 @@ export const GHRepoResponseSchema = z.object({
 	url: z.string(),
 });
 
+/** Issue comment on a PR (from GET /repos/{owner}/{repo}/issues/{n}/comments) */
+export const GHIssueCommentSchema = z.object({
+	id: z.number(),
+	body: z.string().nullable(),
+	created_at: z.string(),
+	updated_at: z.string().nullable().optional(),
+	html_url: z.string().nullable().optional(),
+	user: z
+		.object({
+			login: z.string(),
+			avatar_url: z.string().nullable().optional(),
+		})
+		.nullable()
+		.optional(),
+});
+
+/** Review comment on a PR (from GET /repos/{owner}/{repo}/pulls/{n}/comments) */
+export const GHReviewCommentSchema = GHIssueCommentSchema.extend({
+	path: z.string().nullable().optional(),
+	line: z.number().nullable().optional(),
+	original_line: z.number().nullable().optional(),
+	diff_hunk: z.string().nullable().optional(),
+	position: z.number().nullable().optional(),
+});
+
+/** Unified comment type returned from the backend to the renderer */
+export interface PRComment {
+	id: number;
+	kind: "issue" | "review";
+	author: string;
+	avatarUrl?: string | null;
+	createdAt: string;
+	body: string;
+	htmlUrl?: string | null;
+	path?: string | null;
+	line?: number | null;
+	diffHunk?: string | null;
+}
+
 export type GHPRResponse = z.infer<typeof GHPRResponseSchema>;
 
 /** Single CI/CD check item */

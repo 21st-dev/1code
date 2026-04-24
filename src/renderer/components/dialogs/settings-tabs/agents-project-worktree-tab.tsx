@@ -386,7 +386,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 <div className="flex-1">
                   <span className="text-sm font-medium text-foreground">Repository</span>
                   <p className="text-sm text-muted-foreground">
-                    {project.gitOwner}/{project.gitRepo}
+                    {project.gitProvider === "azure"
+                      ? `${project.gitOwner}/${project.gitProject}/${project.gitRepo}`
+                      : `${project.gitOwner}/${project.gitRepo}`}
                   </p>
                 </div>
                 {project.gitProvider === "github" && (
@@ -403,6 +405,20 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   >
                     <ExternalLinkIcon className="h-3.5 w-3.5" />
                     GitHub
+                  </Button>
+                )}
+                {project.gitProvider === "azure" && project.gitRemoteUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 flex-shrink-0 pl-2"
+                    onClick={() => {
+                      const url = project.gitRemoteUrl!.replace(/\.git$/, "")
+                      window.open(url, "_blank")
+                    }}
+                  >
+                    <ExternalLinkIcon className="h-3.5 w-3.5" />
+                    Azure DevOps
                   </Button>
                 )}
               </div>

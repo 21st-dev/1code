@@ -10,6 +10,12 @@ import { IconSpinner } from "../icons"
 const MOCK_STATE: "none" | "available" | "downloading" | "just-updated" = "none"
 
 export function UpdateBanner() {
+  // UPDATES-DISABLED: re-enable to restore update banner UI
+  return null
+}
+
+/* UPDATES-DISABLED: original implementation preserved below for reactivation
+function _UpdateBanner_original() {
   const {
     state: realState,
     downloadUpdate,
@@ -245,3 +251,4 @@ export function UpdateBanner() {
     </div>
   )
 }
+*/

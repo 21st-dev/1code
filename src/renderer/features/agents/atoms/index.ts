@@ -218,9 +218,45 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
+// Available Claude model IDs (kept in sync with CLAUDE_MODELS in lib/models.ts)
+const AVAILABLE_CLAUDE_MODEL_IDS = [
+  "opus",
+  "opus[1m]",
+  "sonnet",
+  "sonnet[1m]",
+  "haiku",
+] as const
+
+function sanitizeModelId(candidate: string, fallback: string): string {
+  return (AVAILABLE_CLAUDE_MODEL_IDS as readonly string[]).includes(candidate)
+    ? candidate
+    : fallback
+}
+
+export const defaultPlanModeModelAtom = atomWithStorage<string>(
+  "preferences:default-plan-mode-model",
+  sanitizeModelId("opus[1m]", "opus"),
+  undefined,
+  { getOnInit: true },
+)
+
+export const defaultAgentModeModelAtom = atomWithStorage<string>(
+  "preferences:default-agent-mode-model",
+  sanitizeModelId("sonnet", "opus"),
+  undefined,
+  { getOnInit: true },
+)
+
+export const defaultReviewModeModelAtom = atomWithStorage<string>(
+  "preferences:default-review-mode-model",
+  sanitizeModelId("opus", "opus"),
+  undefined,
+  { getOnInit: true },
+)
+
 export const lastSelectedCodexModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedCodexModelId",
-  "gpt-5.3-codex",
+  "gpt-5.4",
   undefined,
   { getOnInit: true },
 )
@@ -229,6 +265,55 @@ export type CodexThinkingPreference = "low" | "medium" | "high" | "xhigh"
 
 export const lastSelectedCodexThinkingAtom = atomWithStorage<CodexThinkingPreference>(
   "agents:lastSelectedCodexThinking",
+  "high",
+  undefined,
+  { getOnInit: true },
+)
+
+export type ClaudeThinkingPreference =
+  | "off"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max"
+
+// One-time migration from the legacy boolean toggle: true → "high", false → "off".
+// Only consulted the first time the new key is read (atomWithStorage keeps the user's
+// choice thereafter).
+function readInitialClaudeThinking(): ClaudeThinkingPreference {
+  try {
+    const raw = localStorage.getItem("preferences:extended-thinking-enabled")
+    if (raw === null) return "high"
+    return JSON.parse(raw) === false ? "off" : "high"
+  } catch {
+    return "high"
+  }
+}
+
+export const lastSelectedClaudeThinkingAtom = atomWithStorage<ClaudeThinkingPreference>(
+  "agents:lastSelectedClaudeThinking",
+  readInitialClaudeThinking(),
+  undefined,
+  { getOnInit: true },
+)
+
+export const defaultPlanModeThinkingAtom = atomWithStorage<ClaudeThinkingPreference>(
+  "preferences:default-plan-mode-thinking",
+  "high",
+  undefined,
+  { getOnInit: true },
+)
+
+export const defaultAgentModeThinkingAtom = atomWithStorage<ClaudeThinkingPreference>(
+  "preferences:default-agent-mode-thinking",
+  "high",
+  undefined,
+  { getOnInit: true },
+)
+
+export const defaultReviewModeThinkingAtom = atomWithStorage<ClaudeThinkingPreference>(
+  "preferences:default-review-mode-thinking",
   "high",
   undefined,
   { getOnInit: true },
@@ -323,6 +408,38 @@ export const subChatCodexThinkingAtomFamily = atomFamily((subChatId: string) =>
   ),
 )
 
+// Storage for per-subChat Claude thinking level.
+// Falls back to lastSelectedClaudeThinkingAtom when sub-chat has no explicit selection yet.
+const subChatClaudeThinkingStorageAtom = atomWithStorage<
+  Record<string, ClaudeThinkingPreference>
+>(
+  "agents:subChatClaudeThinking",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatClaudeThinkingAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedClaudeThinkingAtom)
+      return (
+        get(subChatClaudeThinkingStorageAtom)[subChatId] ??
+        get(lastSelectedClaudeThinkingAtom)
+      )
+    },
+    (get, set, newThinking: ClaudeThinkingPreference) => {
+      if (!subChatId) {
+        set(lastSelectedClaudeThinkingAtom, newThinking)
+        return
+      }
+      const current = get(subChatClaudeThinkingStorageAtom)
+      if (current[subChatId] === newThinking) return
+      set(subChatClaudeThinkingStorageAtom, { ...current, [subChatId]: newThinking })
+    },
+  ),
+)
+
 // Storage for all sub-chat modes (persisted per subChatId)
 const subChatModesStorageAtom = atomWithStorage<Record<string, AgentMode>>(
   "agents:subChatModes",
@@ -345,9 +462,42 @@ export const subChatModeAtomFamily = atomFamily((subChatId: string) =>
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
   opus: "opus",
+  "opus[1m]": "opus[1m]",
   sonnet: "sonnet",
+  "sonnet[1m]": "sonnet[1m]",
   haiku: "haiku",
 }
+
+// Per-subChat provider override (Claude vs Codex). Runtime-only (not
+// persisted); cleared when the active chat changes. Replaces the previous
+// local React state so the model-switching helper can write to it from
+// non-React contexts (e.g. autoswitch on plan approval or /review).
+export const subChatProviderOverridesAtom = atom<
+  Record<string, "claude-code" | "codex">
+>({})
+
+export const subChatProviderOverrideAtomFamily = atomFamily(
+  (subChatId: string) =>
+    atom(
+      (get) =>
+        get(subChatProviderOverridesAtom)[subChatId] as
+          | "claude-code"
+          | "codex"
+          | undefined,
+      (get, set, next: "claude-code" | "codex" | null) => {
+        const current = get(subChatProviderOverridesAtom)
+        const prev = current[subChatId] ?? null
+        if (prev === next) return
+        const updated = { ...current }
+        if (next === null) {
+          delete updated[subChatId]
+        } else {
+          updated[subChatId] = next
+        }
+        set(subChatProviderOverridesAtom, updated)
+      },
+    ),
+)
 
 // Sidebar state - window-scoped so each window has independent sidebar visibility
 export const agentsSidebarOpenAtom = atomWithWindowStorage<boolean>(
@@ -1019,8 +1169,14 @@ export const showMessageJsonAtom = atomWithStorage<boolean>(
 
 // Desktop view mode - takes priority over chat-based rendering
 // null = default behavior (chat/new-chat/kanban)
-export type DesktopView = "automations" | "automations-detail" | "inbox" | "settings" | null
+export type DesktopView = "automations" | "automations-detail" | "inbox" | "settings" | "usage" | null
 export const desktopViewAtom = atom<DesktopView>(null)
+
+// Usage page — persisted user preferences
+export type UsagePeriod = "7d" | "30d" | "90d" | "all"
+export type UsageSourceFilter = "claude" | "codex" | "all"
+export const usagePeriodAtom = atomWithStorage<UsagePeriod>("usage-period", "30d")
+export const usageSourceAtom = atomWithStorage<UsageSourceFilter>("usage-source", "all")
 
 // Which automation is being viewed/edited (ID or "new" for creation)
 export const automationDetailIdAtom = atom<string | null>(null)

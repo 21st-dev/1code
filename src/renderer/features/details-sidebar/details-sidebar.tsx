@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ArrowUpRight, TerminalSquare, Box, ListTodo } from "lucide-react"
+import { ArrowUpRight, TerminalSquare, Box, ListTodo, GitPullRequest, Activity } from "lucide-react"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,10 +35,12 @@ import {
 import { WidgetSettingsPopup } from "./widget-settings-popup"
 import { InfoSection } from "./sections/info-section"
 import { TodoWidget } from "./sections/todo-widget"
+import { TasksWidget } from "./sections/tasks-widget"
 import { PlanWidget } from "./sections/plan-widget"
 import { TerminalWidget } from "./sections/terminal-widget"
 import { ChangesWidget } from "./sections/changes-widget"
 import { McpWidget } from "./sections/mcp-widget"
+import { PrWidget } from "./sections/pr-widget"
 import { FilesTab, type FilesTabHandle } from "./sections/files-tab"
 import type { ParsedDiffFile } from "./types"
 import { fileViewerOpenAtomFamily, type AgentMode } from "../agents/atoms"
@@ -55,6 +57,8 @@ function getWidgetIcon(widgetId: WidgetId) {
   switch (widgetId) {
     case "info":
       return Box
+    case "tasks":
+      return Activity
     case "todo":
       return ListTodo
     case "plan":
@@ -65,6 +69,8 @@ function getWidgetIcon(widgetId: WidgetId) {
       return DiffIcon
     case "mcp":
       return OriginalMCPIcon
+    case "pr":
+      return GitPullRequest
     default:
       return Box
   }
@@ -322,7 +328,13 @@ export function DetailsSidebar({
     >
       <div className="flex flex-col h-full min-w-0 overflow-hidden">
         {/* Header with pill tabs */}
-        <div className="flex items-center justify-between px-2 h-10 bg-tl-background flex-shrink-0 border-b border-border/50">
+        <div
+          className="flex items-center justify-between px-2 h-10 bg-tl-background flex-shrink-0 border-b border-border/50"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        >
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -433,6 +445,11 @@ export function DetailsSidebar({
                   </WidgetCard>
                 )
 
+              case "tasks":
+                return (
+                  <TasksWidget key="tasks" subChatId={activeSubChatId || null} />
+                )
+
               case "todo":
                 return (
                   <TodoWidget key="todo" subChatId={activeSubChatId || null} />
@@ -493,6 +510,15 @@ export function DetailsSidebar({
                     onFileSelect={canOpenDiff ? onFileSelect : undefined}
                     diffDisplayMode={diffDisplayMode}
                   />
+                )
+
+              case "pr":
+                // Only show for local chats with a worktree
+                if (!worktreePath) return null
+                return (
+                  <WidgetCard key="pr" widgetId="pr" title="Pull Request">
+                    <PrWidget chatId={chatId} />
+                  </WidgetCard>
                 )
 
               case "mcp":

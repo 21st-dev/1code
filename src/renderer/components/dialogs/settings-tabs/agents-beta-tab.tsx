@@ -51,7 +51,8 @@ export function AgentsBetaTab() {
   const [autoOffline, setAutoOffline] = useAtom(autoOfflineModeAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
   const [automationsEnabled, setAutomationsEnabled] = useAtom(betaAutomationsEnabledAtom)
-  const [betaUpdatesEnabled, setBetaUpdatesEnabled] = useAtom(betaUpdatesEnabledAtom)
+  // UPDATES-DISABLED: re-enable to restore beta updates toggle
+  // const [betaUpdatesEnabled, setBetaUpdatesEnabled] = useAtom(betaUpdatesEnabledAtom)
 
   // Check subscription to gate automations behind paid plan
   const { data: subscription } = useQuery({
@@ -62,6 +63,8 @@ export function AgentsBetaTab() {
   const isDev = process.env.NODE_ENV === "development"
   const canEnableAutomations = isPaidPlan || isDev
   const [copied, setCopied] = useState(false)
+  // UPDATES-DISABLED: re-enable to restore update check state + handlers
+  /*
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "not-available" | "error">("idle")
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
@@ -99,6 +102,7 @@ export function AgentsBetaTab() {
       setUpdateStatus("error")
     }
   }
+  */
 
   // Get Ollama status
   const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
@@ -323,7 +327,8 @@ export function AgentsBetaTab() {
         </div>
       )}
 
-      {/* Updates Section */}
+      {/* UPDATES-DISABLED: re-enable to restore Updates settings section */}
+      {/*
       <div className="space-y-2">
         <div className="pb-2">
           <h4 className="text-sm font-medium text-foreground">Updates</h4>
@@ -378,6 +383,7 @@ export function AgentsBetaTab() {
           </div>
         </div>
       </div>
+      */}
     </div>
   )
 }

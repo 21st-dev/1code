@@ -2,9 +2,13 @@ import { shell } from "electron";
 import simpleGit from "simple-git";
 import { z } from "zod";
 import { publicProcedure, router } from "../trpc";
-import { isUpstreamMissingError } from "./git-utils";
+import {
+	isUpstreamMissingError,
+	isNonFastForwardPushError,
+	REMOTE_AHEAD_ERROR_PREFIX,
+} from "./git-utils";
 import { assertRegisteredWorktree } from "./security";
-import { fetchGitHubPRStatus } from "./github";
+import { buildCreatePRWebUrl, fetchPRStatus, resolveProvider } from "./providers";
 import { gitCache } from "./cache";
 import {
 	createGit,
@@ -67,27 +71,79 @@ export const createGitOperationsRouter = () => {
 				z.object({
 					worktreePath: z.string(),
 					branch: z.string(),
+					/** "auto-stash" stashes uncommitted changes and pops them on the
+					 * new branch; "carry" attempts a plain checkout which git will
+					 * allow only if there's no conflict; default aborts if dirty. */
+					uncommittedStrategy: z
+						.enum(["abort", "carry", "stash"])
+						.optional()
+						.default("abort"),
 				}),
 			)
-			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				assertRegisteredWorktree(input.worktreePath);
+			.mutation(
+				async ({
+					input,
+				}): Promise<{ success: boolean; stashPopFailed?: boolean }> => {
+					assertRegisteredWorktree(input.worktreePath);
 
-				return withGitLock(input.worktreePath, async () => {
-					// Check for uncommitted changes before checkout
-					if (await hasUncommittedChanges(input.worktreePath)) {
-						throw new Error(
-							"Cannot switch branches: you have uncommitted changes. Please commit or stash your changes first."
-						);
-					}
+					return withGitLock(input.worktreePath, async () => {
+						const dirty = await hasUncommittedChanges(input.worktreePath);
 
-					const git = createGit(input.worktreePath);
-					await withLockRetry(input.worktreePath, () =>
-						git.checkout(input.branch)
-					);
-					invalidateGitStateCaches(input.worktreePath);
-					return { success: true };
-				});
-			}),
+						if (dirty && input.uncommittedStrategy === "abort") {
+							throw new Error(
+								"Cannot switch branches: you have uncommitted changes. Please commit or stash your changes first."
+							);
+						}
+
+						const git = createGit(input.worktreePath);
+
+						if (dirty && input.uncommittedStrategy === "stash") {
+							await withLockRetry(input.worktreePath, () =>
+								git.stash([
+									"push",
+									"-u",
+									"-m",
+									`Auto-stash before switching to ${input.branch}`,
+								]),
+							);
+						}
+
+						try {
+							await withLockRetry(input.worktreePath, () =>
+								git.checkout(input.branch)
+							);
+						} catch (checkoutError) {
+							// If we stashed, try to pop back so the user doesn't lose work
+							if (dirty && input.uncommittedStrategy === "stash") {
+								try {
+									await git.stash(["pop"]);
+								} catch {
+									const msg =
+										checkoutError instanceof Error
+											? checkoutError.message
+											: "Checkout failed";
+									throw new Error(
+										`${msg}. Your uncommitted changes are saved in git stash — run 'git stash pop' manually to restore them.`,
+									);
+								}
+							}
+							throw checkoutError;
+						}
+
+						let stashPopFailed = false;
+						if (dirty && input.uncommittedStrategy === "stash") {
+							try {
+								await git.stash(["pop"]);
+							} catch {
+								stashPopFailed = true;
+							}
+						}
+
+						invalidateGitStateCaches(input.worktreePath);
+						return { success: true, stashPopFailed };
+					});
+				},
+			),
 
 		getHistory: publicProcedure
 			.input(
@@ -247,13 +303,24 @@ export const createGitOperationsRouter = () => {
 					const git = createGitForNetwork(input.worktreePath);
 					const hasUpstream = await hasUpstreamBranch(git);
 
-					if (input.setUpstream && !hasUpstream) {
-						const branch = await git.revparse(["--abbrev-ref", "HEAD"]);
-						await withLockRetry(input.worktreePath, () =>
-							git.push(["--set-upstream", "origin", branch.trim()])
-						);
-					} else {
-						await withLockRetry(input.worktreePath, () => git.push());
+					try {
+						if (input.setUpstream && !hasUpstream) {
+							const branch = await git.revparse(["--abbrev-ref", "HEAD"]);
+							await withLockRetry(input.worktreePath, () =>
+								git.push(["--set-upstream", "origin", branch.trim()])
+							);
+						} else {
+							await withLockRetry(input.worktreePath, () => git.push());
+						}
+					} catch (error) {
+						const message =
+							error instanceof Error ? error.message : String(error);
+						if (isNonFastForwardPushError(message)) {
+							throw new Error(
+								`${REMOTE_AHEAD_ERROR_PREFIX} Remote has new commits. Pull with rebase and retry.`
+							);
+						}
+						throw error;
 					}
 					await git.fetch();
 					invalidateGitStateCaches(input.worktreePath);
@@ -577,6 +644,7 @@ export const createGitOperationsRouter = () => {
 			.input(
 				z.object({
 					worktreePath: z.string(),
+					baseBranch: z.string().optional(),
 				}),
 			)
 			.mutation(
@@ -598,18 +666,20 @@ export const createGitOperationsRouter = () => {
 							await withLockRetry(input.worktreePath, () => git.push());
 						}
 
-						// Get the remote URL to construct the GitHub compare URL
 						const remoteUrl = (await git.remote(["get-url", "origin"])) || "";
-						const repoMatch = remoteUrl
-							.trim()
-							.match(/github\.com[:/](.+?)(?:\.git)?$/);
-
-						if (!repoMatch) {
-							throw new Error("Could not determine GitHub repository URL");
+						const provider = await resolveProvider(input.worktreePath);
+						if (!provider) {
+							throw new Error(
+								"Could not determine repository provider from remote URL",
+							);
 						}
 
-						const repo = repoMatch[1].replace(/\.git$/, "");
-						const url = `https://github.com/${repo}/compare/${branch}?expand=1`;
+						const url = buildCreatePRWebUrl({
+							provider,
+							remoteUrl: remoteUrl.trim(),
+							branch,
+							baseBranch: input.baseBranch ?? "main",
+						});
 
 						await shell.openExternal(url);
 						await git.fetch();
@@ -620,6 +690,9 @@ export const createGitOperationsRouter = () => {
 				},
 			),
 
+		// Procedure name preserved for back-compat with the renderer (usePRStatus
+		// hook calls `trpc.changes.getGitHubStatus.useQuery`). Under the hood it
+		// now dispatches by provider — GitHub stays byte-identical, Azure uses az.
 		getGitHubStatus: publicProcedure
 			.input(
 				z.object({
@@ -628,7 +701,7 @@ export const createGitOperationsRouter = () => {
 			)
 			.query(async ({ input }) => {
 				assertRegisteredWorktree(input.worktreePath);
-				return await fetchGitHubPRStatus(input.worktreePath);
+				return await fetchPRStatus(input.worktreePath);
 			}),
 	});
 };

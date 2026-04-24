@@ -1,10 +1,19 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
+import { useDndContext, useDroppable } from "@dnd-kit/core"
+import { cn } from "../../../lib/utils"
 import { getDefaultRatios } from "../atoms"
-import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import { canAddToSplit, useAgentSubChatStore } from "../stores/sub-chat-store"
 
 const MIN_PANE_WIDTH = 350
+
+// Shared between `SplitViewContainer` and `SplitDropZone`, and read by the
+// unified drag-end handler in `agents-content.tsx` to route drops as splits.
+export const SPLIT_DROP_DATA = { type: "split" } as const
+
+const DROP_OVERLAY_CLASS =
+  "after:absolute after:inset-0 after:pointer-events-none after:border-2 after:border-dashed after:border-primary/60 after:rounded-md after:z-20"
 
 interface SplitViewContainerProps {
   panes: Array<{ id: string; content: React.ReactNode }>
@@ -22,6 +31,28 @@ export function SplitViewContainer({
   const ratiosRef = useRef(splitRatios)
   ratiosRef.current = splitRatios
 
+  // Disabled when the drop would silently no-op (already a pane, max reached),
+  // so no hover highlight appears and the user can tell the drop won't land.
+  const { active } = useDndContext()
+  const activeSubChatId = useAgentSubChatStore((s) => s.activeSubChatId)
+  const splitPaneIds = useAgentSubChatStore((s) => s.splitPaneIds)
+  const dropDisabled =
+    !active ||
+    !canAddToSplit({ activeSubChatId, splitPaneIds }, String(active.id))
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: "split-view-drop-zone",
+    data: SPLIT_DROP_DATA,
+    disabled: dropDisabled,
+  })
+
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node
+      setDroppableRef(node)
+    },
+    [setDroppableRef],
+  )
+
   // Use local ratios during drag, else persisted. Auto-fix if length mismatch.
   const currentRatios = (() => {
     if (localRatios && localRatios.length === panes.length) return localRatios
@@ -37,10 +68,13 @@ export function SplitViewContainer({
   }, [panes.length, splitRatios.length, setSplitRatios])
 
   return (
-    <div ref={containerRef} className="flex h-full w-full relative">
+    <div
+      ref={setRefs}
+      className={cn("flex h-full w-full relative", isOver && DROP_OVERLAY_CLASS)}
+    >
       {panes.map((pane, i) => (
         <Fragment key={pane.id}>
-          {/* Pane */}
+          {/* Pane — close button is rendered inline by each pane's ChatViewInner */}
           <div
             style={{ width: `${currentRatios[i] * 100}%` }}
             className="h-full overflow-hidden relative flex flex-col"
@@ -63,6 +97,30 @@ export function SplitViewContainer({
 
       {/* Hidden keep-alive tabs */}
       {hiddenTabs}
+    </div>
+  )
+}
+
+// Drop zone wrapping the solo chat view so dragging a sub-chat onto it
+// creates a 2-pane split (same routing as SplitViewContainer's own droppable).
+export function SplitDropZone({ children }: { children: React.ReactNode }) {
+  const { active } = useDndContext()
+  const activeSubChatId = useAgentSubChatStore((s) => s.activeSubChatId)
+  const splitPaneIds = useAgentSubChatStore((s) => s.splitPaneIds)
+  const dropDisabled =
+    !active ||
+    !canAddToSplit({ activeSubChatId, splitPaneIds }, String(active.id))
+  const { setNodeRef, isOver } = useDroppable({
+    id: "solo-chat-drop-zone",
+    data: SPLIT_DROP_DATA,
+    disabled: dropDisabled,
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn("relative h-full w-full", isOver && DROP_OVERLAY_CLASS)}
+    >
+      {children}
     </div>
   )
 }

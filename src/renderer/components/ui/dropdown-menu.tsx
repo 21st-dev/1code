@@ -47,11 +47,18 @@ DropdownMenuSubTrigger.displayName =
 
 const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> & {
+    forceDark?: boolean
+  }
+>(({ className, forceDark = false, ...props }, ref) => (
   <DropdownMenuPrimitive.SubContent
     ref={ref}
-    className={cn(overlayContent, "min-w-[8rem] py-1 dark", className)}
+    className={cn(
+      overlayContent,
+      "min-w-[8rem] py-1",
+      forceDark && "dark",
+      className,
+    )}
     {...props}
   />
 ))
@@ -60,13 +67,20 @@ DropdownMenuSubContent.displayName =
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
+    forceDark?: boolean
+  }
+>(({ className, sideOffset = 4, forceDark = false, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
-      className={cn(overlayContent, "min-w-[8rem] py-1 dark", className)}
+      className={cn(
+        overlayContent,
+        "min-w-[8rem] py-1",
+        forceDark && "dark",
+        className,
+      )}
       data-dropdown="true"
       {...props}
     />

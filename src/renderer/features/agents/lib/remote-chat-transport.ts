@@ -213,11 +213,15 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
 
     // Handle abort
     if (abortSignal) {
-      abortSignal.addEventListener("abort", () => {
-        console.log(`[RemoteTransport] ABORT sub=${subId} chunks=${chunkCount}`)
-        streamDone = true
-        cleanup()
-      })
+      abortSignal.addEventListener(
+        "abort",
+        () => {
+          console.log(`[RemoteTransport] ABORT sub=${subId} chunks=${chunkCount}`)
+          streamDone = true
+          cleanup()
+        },
+        { once: true },
+      )
     }
 
     const cleanup = () => {

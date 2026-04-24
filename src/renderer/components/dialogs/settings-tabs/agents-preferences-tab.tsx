@@ -1,12 +1,12 @@
-import { useAtom } from "jotai"
-import { useEffect, useState } from "react"
+import { useAtom, useAtomValue } from "jotai"
+import { useEffect, useMemo, useState } from "react"
 import {
   analyticsOptOutAtom,
   autoAdvanceTargetAtom,
   ctrlTabTargetAtom,
   defaultAgentModeAtom,
   desktopNotificationsEnabledAtom,
-  extendedThinkingEnabledAtom,
+  hiddenModelsAtom,
   notifyWhenFocusedAtom,
   soundNotificationsEnabledAtom,
   preferredEditorAtom,
@@ -14,6 +14,20 @@ import {
   type AutoAdvanceTarget,
   type CtrlTabTarget,
 } from "../../../lib/atoms"
+import {
+  defaultAgentModeModelAtom,
+  defaultAgentModeThinkingAtom,
+  defaultPlanModeModelAtom,
+  defaultPlanModeThinkingAtom,
+  defaultReviewModeModelAtom,
+  defaultReviewModeThinkingAtom,
+} from "../../../features/agents/atoms"
+import {
+  CLAUDE_MODELS,
+  CODEX_MODELS,
+  formatClaudeThinkingLabel,
+  type ClaudeThinkingLevel,
+} from "../../../features/agents/lib/models"
 import { APP_META, type ExternalApp } from "../../../../shared/external-apps"
 
 // Editor icon imports
@@ -141,10 +155,32 @@ function useIsNarrowScreen(): boolean {
   return isNarrow
 }
 
+type ModelOption = {
+  id: string
+  label: string
+  provider: "claude-code" | "codex"
+}
+
+function buildModelOptions(hiddenModels: string[]): ModelOption[] {
+  const hidden = new Set(hiddenModels)
+  const claude = CLAUDE_MODELS.filter((m) => !hidden.has(m.id)).map((m) => ({
+    id: m.id,
+    label: `${m.name} ${m.version}`,
+    provider: "claude-code" as const,
+  }))
+  const codex = CODEX_MODELS.filter((m) => !hidden.has(m.id)).map((m) => ({
+    id: m.id,
+    label: m.name,
+    provider: "codex" as const,
+  }))
+  return [...claude, ...codex]
+}
+
+function formatModelLabel(modelId: string, options: ModelOption[]): string {
+  return options.find((m) => m.id === modelId)?.label ?? modelId
+}
+
 export function AgentsPreferencesTab() {
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(
-    extendedThinkingEnabledAtom,
-  )
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
   const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(desktopNotificationsEnabledAtom)
   const [notifyWhenFocused, setNotifyWhenFocused] = useAtom(notifyWhenFocusedAtom)
@@ -152,6 +188,27 @@ export function AgentsPreferencesTab() {
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
   const [autoAdvanceTarget, setAutoAdvanceTarget] = useAtom(autoAdvanceTargetAtom)
   const [defaultAgentMode, setDefaultAgentMode] = useAtom(defaultAgentModeAtom)
+  const [defaultPlanModel, setDefaultPlanModel] = useAtom(defaultPlanModeModelAtom)
+  const [defaultAgentModel, setDefaultAgentModel] = useAtom(
+    defaultAgentModeModelAtom,
+  )
+  const [defaultReviewModel, setDefaultReviewModel] = useAtom(
+    defaultReviewModeModelAtom,
+  )
+  const [defaultPlanThinking, setDefaultPlanThinking] = useAtom(
+    defaultPlanModeThinkingAtom,
+  )
+  const [defaultAgentThinking, setDefaultAgentThinking] = useAtom(
+    defaultAgentModeThinkingAtom,
+  )
+  const [defaultReviewThinking, setDefaultReviewThinking] = useAtom(
+    defaultReviewModeThinkingAtom,
+  )
+  const hiddenModels = useAtomValue(hiddenModelsAtom)
+  const modelOptions = useMemo(
+    () => buildModelOptions(hiddenModels),
+    [hiddenModels],
+  )
   const [preferredEditor, setPreferredEditor] = useAtom(preferredEditorAtom)
   const isNarrowScreen = useIsNarrowScreen()
 
@@ -197,22 +254,6 @@ export function AgentsPreferencesTab() {
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Extended Thinking
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Enable deeper reasoning with more thinking tokens (uses more
-              credits).{" "}
-              <span className="text-foreground/70">Disables response streaming.</span>
-            </span>
-          </div>
-          <Switch
-            checked={thinkingEnabled}
-            onCheckedChange={setThinkingEnabled}
-          />
-        </div>
-        <div className="flex items-center justify-between p-4 border-t border-border">
-          <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
               Default Mode
             </span>
             <span className="text-xs text-muted-foreground">
@@ -233,6 +274,159 @@ export function AgentsPreferencesTab() {
               <SelectItem value="plan">Plan</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border gap-4">
+          <div className="flex flex-col space-y-1 min-w-0">
+            <span className="text-sm font-medium text-foreground">
+              Default Plan
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Model and thinking effort applied when a chat starts or switches
+              to Plan mode
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Select
+              value={defaultPlanModel}
+              onValueChange={(value: string) => setDefaultPlanModel(value)}
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {formatModelLabel(defaultPlanModel, modelOptions)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={defaultPlanThinking}
+              onValueChange={(value: ClaudeThinkingLevel) =>
+                setDefaultPlanThinking(value)
+              }
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {formatClaudeThinkingLabel(defaultPlanThinking)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {(
+                  ["off", "low", "medium", "high", "xhigh", "max"] as const
+                ).map((level) => (
+                  <SelectItem key={level} value={level}>
+                    {formatClaudeThinkingLabel(level)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border gap-4">
+          <div className="flex flex-col space-y-1 min-w-0">
+            <span className="text-sm font-medium text-foreground">
+              Default Agent
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Model and thinking effort applied when a chat starts or switches
+              to Agent mode (e.g. after approving a plan)
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Select
+              value={defaultAgentModel}
+              onValueChange={(value: string) => setDefaultAgentModel(value)}
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {formatModelLabel(defaultAgentModel, modelOptions)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={defaultAgentThinking}
+              onValueChange={(value: ClaudeThinkingLevel) =>
+                setDefaultAgentThinking(value)
+              }
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {formatClaudeThinkingLabel(defaultAgentThinking)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {(
+                  ["off", "low", "medium", "high", "xhigh", "max"] as const
+                ).map((level) => (
+                  <SelectItem key={level} value={level}>
+                    {formatClaudeThinkingLabel(level)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border gap-4">
+          <div className="flex flex-col space-y-1 min-w-0">
+            <span className="text-sm font-medium text-foreground">
+              Default Review
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Model and thinking effort applied when running /review or
+              /security-review
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Select
+              value={defaultReviewModel}
+              onValueChange={(value: string) => setDefaultReviewModel(value)}
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {formatModelLabel(defaultReviewModel, modelOptions)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={defaultReviewThinking}
+              onValueChange={(value: ClaudeThinkingLevel) =>
+                setDefaultReviewThinking(value)
+              }
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {formatClaudeThinkingLabel(defaultReviewThinking)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {(
+                  ["off", "low", "medium", "high", "xhigh", "max"] as const
+                ).map((level) => (
+                  <SelectItem key={level} value={level}>
+                    {formatClaudeThinkingLabel(level)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">

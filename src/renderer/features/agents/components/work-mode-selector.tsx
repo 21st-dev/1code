@@ -28,13 +28,14 @@ const workModeOptions = [
     label: "Worktree",
     icon: GitBranch,
   },
-  {
-    id: "sandbox" as const,
-    label: "Background",
-    icon: CloudIcon,
-    disabled: true,
-    soon: true,
-  },
+  // Hidden until ready — uncomment to re-enable the Background/sandbox mode.
+  // {
+  //   id: "sandbox" as const,
+  //   label: "Background",
+  //   icon: CloudIcon,
+  //   disabled: true,
+  //   soon: true,
+  // },
 ]
 
 export function WorkModeSelector({

@@ -251,6 +251,7 @@ export function SubChatSelector({
   const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
   const archiveAgentHotkey = useResolvedHotkeyDisplay("archive-agent")
   const newAgentHotkey = useResolvedHotkeyDisplay("new-agent")
+  const newAgentSplitHotkey = useResolvedHotkeyDisplay("new-agent-split")
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
@@ -275,6 +276,59 @@ export function SubChatSelector({
   const rightGradientRef = useRef<HTMLDivElement>(null)
   const truncatedTabsRef = useRef<Set<string>>(new Set())
   const searchHistoryPopoverRef = useRef<SearchHistoryPopoverRef>(null)
+  // Native HTML5 DnD state — track which tab is being dragged and which is hovered
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null)
+  const [dragOverTabId, setDragOverTabId] = useState<string | null>(null)
+  const [dragOverSide, setDragOverSide] = useState<"left" | "right" | null>(null)
+
+  const handleTabDragStart = useCallback((e: React.DragEvent, subChatId: string) => {
+    e.dataTransfer.setData("application/x-subchat-tab-id", subChatId)
+    e.dataTransfer.effectAllowed = "move"
+    setDraggedTabId(subChatId)
+  }, [])
+
+  const handleTabDragEnd = useCallback(() => {
+    setDraggedTabId(null)
+    setDragOverTabId(null)
+    setDragOverSide(null)
+  }, [])
+
+  const handleTabDragOver = useCallback((e: React.DragEvent, subChatId: string) => {
+    if (!draggedTabId || draggedTabId === subChatId) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const side: "left" | "right" = e.clientX - rect.left < rect.width / 2 ? "left" : "right"
+    setDragOverTabId(subChatId)
+    setDragOverSide(side)
+  }, [draggedTabId])
+
+  const handleTabDrop = useCallback(
+    (e: React.DragEvent, targetId: string) => {
+      e.preventDefault()
+      const sourceId = e.dataTransfer.getData("application/x-subchat-tab-id")
+      if (!sourceId || sourceId === targetId) {
+        setDraggedTabId(null)
+        setDragOverTabId(null)
+        setDragOverSide(null)
+        return
+      }
+      const store = useAgentSubChatStore.getState()
+      const ids = store.openSubChatIds
+      const fromIdx = ids.indexOf(sourceId)
+      const toIdxBase = ids.indexOf(targetId)
+      if (fromIdx < 0 || toIdxBase < 0) return
+      const without = ids.filter((id) => id !== sourceId)
+      const targetIdxAfterRemove = without.indexOf(targetId)
+      const insertAt = dragOverSide === "right" ? targetIdxAfterRemove + 1 : targetIdxAfterRemove
+      const next = [...without.slice(0, insertAt), sourceId, ...without.slice(insertAt)]
+      store.setOpenSubChats(next)
+      setDraggedTabId(null)
+      setDragOverTabId(null)
+      setDragOverSide(null)
+    },
+    [dragOverSide],
+  )
 
   const allSubChatsById = useMemo(() => {
     const map = new Map<string, SubChatMeta>()
@@ -500,7 +554,6 @@ export function SubChatSelector({
       window.removeEventListener("keydown", handleHistoryHotkey, true)
   }, [subChatsSidebarMode])
 
-  // Keyboard shortcut: Cmd+Shift+T / Ctrl+Shift+T for new sub-chat
   // Scroll to active tab when it changes
   useEffect(() => {
     if (!activeSubChatId || !tabsContainerRef.current) return
@@ -679,10 +732,6 @@ export function SubChatSelector({
 
       <div
         className="relative flex-1 min-w-0 flex items-center"
-        style={{
-          // @ts-expect-error - WebKit-specific property
-          WebkitAppRegion: "no-drag",
-        }}
       >
         {/* Left gradient - visibility controlled via ref */}
         <div
@@ -719,6 +768,11 @@ export function SubChatSelector({
                 // Check if this chat has a pending plan approval
                 const hasPendingPlan = pendingPlanApprovals.has(subChat.id)
 
+                const isDragOverHere = dragOverTabId === subChat.id && draggedTabId !== subChat.id
+                const isBeingDragged = draggedTabId === subChat.id
+                // Disable native DnD for split-pair tabs so auto-adjacency logic stays intact
+                const tabIsDraggable = !isInSplitPair && editingSubChatId !== subChat.id
+
                 return (
                   <ContextMenu key={subChat.id}>
                     <ContextMenuTrigger asChild>
@@ -730,6 +784,23 @@ export function SubChatSelector({
                             tabRefs.current.delete(subChat.id)
                           }
                         }}
+                        draggable={tabIsDraggable}
+                        onDragStart={(e) => {
+                          if (!tabIsDraggable) {
+                            e.preventDefault()
+                            return
+                          }
+                          handleTabDragStart(e, subChat.id)
+                        }}
+                        onDragEnd={handleTabDragEnd}
+                        onDragOver={(e) => handleTabDragOver(e, subChat.id)}
+                        onDragLeave={() => {
+                          if (dragOverTabId === subChat.id) {
+                            setDragOverTabId(null)
+                            setDragOverSide(null)
+                          }
+                        }}
+                        onDrop={(e) => handleTabDrop(e, subChat.id)}
                         onClick={(e) => {
                           e.stopPropagation()
                           e.preventDefault()
@@ -760,7 +831,10 @@ export function SubChatSelector({
                           }
                         }}
                         className={cn(
-                          "group relative flex items-center text-sm rounded-md transition-colors duration-75 cursor-pointer h-6 flex-shrink-0",
+                          "group relative flex items-center text-sm rounded-md transition-colors duration-75 h-6 flex-shrink-0",
+                          tabIsDraggable
+                            ? (isBeingDragged ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing")
+                            : "cursor-pointer",
                           "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                           editingSubChatId === subChat.id
                             ? "overflow-visible px-0"
@@ -772,7 +846,15 @@ export function SubChatSelector({
                           isInSplitPair && !isActive && "bg-muted/40 hover:bg-muted/60",
                           isInSplitPair && hasSplitPrev && "-ml-1 rounded-l-none",
                           isInSplitPair && hasSplitNext && "rounded-r-none",
+                          isBeingDragged && "opacity-40",
+                          // Insertion marker (left/right edge of hovered tab)
+                          isDragOverHere && dragOverSide === "left" && "shadow-[inset_2px_0_0_0_hsl(var(--primary))]",
+                          isDragOverHere && dragOverSide === "right" && "shadow-[inset_-2px_0_0_0_hsl(var(--primary))]",
                         )}
+                        style={{
+                          // @ts-expect-error - WebKit-specific property
+                          WebkitAppRegion: "no-drag",
+                        }}
                       >
                         {/* Icon: question icon (priority) OR loading spinner OR mode icon with badge (hide when editing) */}
                         {editingSubChatId !== subChat.id && (
@@ -914,7 +996,13 @@ export function SubChatSelector({
 
         {/* Plus button - absolute positioned on right with gradient cover */}
         {(isMobile || (!isMobile && subChatsSidebarMode === "tabs")) && (
-          <div className="absolute right-0 top-0 bottom-0 flex items-center z-20">
+          <div
+            className="absolute right-0 top-0 bottom-0 flex items-center z-20"
+            style={{
+              // @ts-expect-error - WebKit-specific property
+              WebkitAppRegion: "no-drag",
+            }}
+          >
             {/* Gradient to cover content peeking from the left */}
             <div className="w-6 h-full bg-gradient-to-r from-transparent to-background" />
             <div className="h-full flex items-center bg-background pr-1">
@@ -929,9 +1017,17 @@ export function SubChatSelector({
                     <Plus className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  New chat
-                  {newAgentHotkey && <Kbd>{newAgentHotkey}</Kbd>}
+                <TooltipContent side="bottom" className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <span>New chat</span>
+                    {newAgentHotkey && <Kbd>{newAgentHotkey}</Kbd>}
+                  </div>
+                  {newAgentSplitHotkey && (
+                    <div className="flex items-center gap-1.5">
+                      <span>New in split</span>
+                      <Kbd>{newAgentSplitHotkey}</Kbd>
+                    </div>
+                  )}
                 </TooltipContent>
               </Tooltip>
             </div>

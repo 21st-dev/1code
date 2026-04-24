@@ -760,7 +760,7 @@ export function AgentsModelsTab() {
                     onChange={(e) => setModel(e.target.value)}
                     onBlur={handleBlurSave}
                     className="w-full"
-                    placeholder="claude-3-7-sonnet-20250219"
+                    placeholder="claude-sonnet-4-6"
                   />
                 </div>
               </div>

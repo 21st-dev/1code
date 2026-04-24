@@ -36,13 +36,15 @@ export type BuiltinCommandAction =
   | { type: "plan" }
   | { type: "agent" }
   | { type: "compact" }
+  | { type: "help" }
   // Prompt-based commands (send to agent)
   | { type: "review" }
-  | { type: "pr-comments" }
   | { type: "release-notes" }
   | { type: "security-review" }
   | { type: "commit" }
   | { type: "worktree-setup" }
+  | { type: "init" }
+  | { type: "simplify" }
 
 // Result of selecting a slash command
 export type SlashCommandSelection =

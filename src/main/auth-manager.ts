@@ -1,6 +1,10 @@
 import { AuthStore, AuthData, AuthUser } from "./auth-store"
 import { app, BrowserWindow } from "electron"
 import { AUTH_SERVER_PORT } from "./constants"
+import { randomBytes, timingSafeEqual } from "node:crypto"
+
+// How long a `state` nonce is accepted after startAuthFlow() is called.
+const AUTH_STATE_TTL_MS = 10 * 60 * 1000
 
 // Get API URL - in packaged app always use production, in dev allow override
 function getApiBaseUrl(): string {
@@ -15,6 +19,9 @@ export class AuthManager {
   private refreshTimer?: NodeJS.Timeout
   private isDev: boolean
   private onTokenRefresh?: (authData: AuthData) => void
+  // Tracks the in-flight OAuth `state` nonce from the most recent
+  // startAuthFlow() call. Used to reject unsolicited deep-link codes.
+  private pendingAuthState: { state: string; issuedAt: number } | null = null
 
   constructor(isDev: boolean = false) {
     this.store = new AuthStore(app.getPath("userData"))
@@ -24,6 +31,41 @@ export class AuthManager {
     if (this.store.isAuthenticated()) {
       this.scheduleRefresh()
     }
+  }
+
+  /**
+   * Verify that an incoming OAuth callback was solicited by this app.
+   *
+   * - If the callback carries a `state` parameter, it must match the stored
+   *   nonce (constant-time compare).
+   * - If no `state` is present (backend doesn't echo it), fall back to
+   *   requiring that startAuthFlow() was called within the TTL window.
+   *
+   * Either path consumes the nonce — codes can't be replayed.
+   */
+  verifyAndConsumeAuthState(incomingState: string | null): boolean {
+    const pending = this.pendingAuthState
+    this.pendingAuthState = null
+
+    if (!pending) return false
+    if (Date.now() - pending.issuedAt > AUTH_STATE_TTL_MS) return false
+
+    if (incomingState) {
+      const expected = Buffer.from(pending.state, "utf8")
+      const actual = Buffer.from(incomingState, "utf8")
+      if (expected.length !== actual.length) return false
+      try {
+        return timingSafeEqual(expected, actual)
+      } catch {
+        return false
+      }
+    }
+
+    // No state echoed by server — accept only because a recent flow is
+    // in-flight. This is weaker than state matching but still prevents the
+    // passive-CSRF drive-by (attacker can't land a code on a user who didn't
+    // just click Sign In).
+    return true
   }
 
   /**
@@ -209,7 +251,13 @@ export class AuthManager {
   startAuthFlow(mainWindow: BrowserWindow | null): void {
     const { shell } = require("electron")
 
-    let authUrl = `${this.getApiUrl()}/auth/desktop?auto=true`
+    // Generate a fresh anti-CSRF nonce. If the backend echoes `state` back in
+    // the callback, we strict-match it. If not, the presence of a recent
+    // in-flight flow alone gates code acceptance (see verifyAndConsumeAuthState).
+    const state = randomBytes(32).toString("hex")
+    this.pendingAuthState = { state, issuedAt: Date.now() }
+
+    let authUrl = `${this.getApiUrl()}/auth/desktop?auto=true&state=${state}`
 
     // In dev mode, use localhost callback (we run HTTP server on AUTH_SERVER_PORT)
     // Also pass the protocol so web knows which deep link to use as fallback

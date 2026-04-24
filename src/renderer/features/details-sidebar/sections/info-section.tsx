@@ -2,12 +2,14 @@
 
 import { memo, useState, useCallback, useEffect } from "react"
 import { useAtomValue } from "jotai"
+import { Pencil } from "lucide-react"
 import {
   GitBranchFilledIcon,
   FolderFilledIcon,
   GitPullRequestFilledIcon,
   ExternalLinkIcon,
 } from "@/components/ui/icons"
+import { RenamePrTitleDialog } from "./rename-pr-title-dialog"
 import { Kbd } from "@/components/ui/kbd"
 import {
   Tooltip,
@@ -19,6 +21,7 @@ import { preferredEditorAtom } from "@/lib/atoms"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { APP_META } from "../../../../shared/external-apps"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
+import { toast } from "sonner"
 
 interface InfoSectionProps {
   chatId: string
@@ -41,6 +44,7 @@ function PropertyRow({
   onClick,
   copyable,
   tooltip,
+  badge,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
@@ -50,6 +54,8 @@ function PropertyRow({
   copyable?: boolean
   /** Tooltip to show on hover (for clickable items) */
   tooltip?: string
+  /** Optional trailing element rendered next to the value (e.g. branch pill on PR row) */
+  badge?: React.ReactNode
 }) {
   const [showCopied, setShowCopied] = useState(false)
 
@@ -80,6 +86,28 @@ function PropertyRow({
     </span>
   )
 
+  const wrappedValue = copyable ? (
+    <Tooltip open={showCopied ? true : undefined}>
+      <TooltipTrigger asChild>
+        {valueEl}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {showCopied ? "Copied" : "Click to copy"}
+      </TooltipContent>
+    </Tooltip>
+  ) : tooltip ? (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        {valueEl}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    valueEl
+  )
+
   return (
     <div className="flex items-center min-h-[28px]">
       {/* Label column - fixed width */}
@@ -88,28 +116,9 @@ function PropertyRow({
         <span className="text-xs text-muted-foreground truncate">{label}</span>
       </div>
       {/* Value column - flexible */}
-      <div className="flex-1 min-w-0 pl-2 truncate">
-        {copyable ? (
-          <Tooltip open={showCopied ? true : undefined}>
-            <TooltipTrigger asChild>
-              {valueEl}
-            </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">
-              {showCopied ? "Copied" : "Click to copy"}
-            </TooltipContent>
-          </Tooltip>
-        ) : tooltip ? (
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              {valueEl}
-            </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">
-              {tooltip}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          valueEl
-        )}
+      <div className="flex-1 min-w-0 pl-2 flex items-center gap-1.5 min-h-0">
+        <div className="min-w-0 truncate">{wrappedValue}</div>
+        {badge}
       </div>
     </div>
   )
@@ -129,13 +138,22 @@ export const InfoSection = memo(function InfoSection({
   // Extract folder name from path
   const folderName = worktreePath?.split("/").pop() || "Unknown"
 
+  const [isRenamePrOpen, setIsRenamePrOpen] = useState(false)
+
   // Preferred editor from settings
   const preferredEditor = useAtomValue(preferredEditorAtom)
   const editorMeta = APP_META[preferredEditor]
 
   // Mutations
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
-  const openInAppMutation = trpc.external.openInApp.useMutation()
+  const openInAppMutation = trpc.external.openInApp.useMutation({
+    onError: (error, vars) => {
+      const appLabel = APP_META[vars.app]?.label ?? vars.app
+      toast.error(`Couldn't open ${appLabel}`, {
+        description: error.message || "Make sure the app is installed and its CLI is on your PATH.",
+      })
+    },
+  })
 
   // Check if this is a remote sandbox chat (no local worktree)
   const isRemoteChat = !worktreePath && !!remoteInfo
@@ -171,7 +189,10 @@ export const InfoSection = memo(function InfoSection({
     }
   }
 
-  const isWorktree = !!worktreePath && worktreePath.includes(".21st/worktrees")
+  // Show the "Open in editor" row for any local chat with a repo path,
+  // whether that path is a worktree (~/.21st/worktrees/...) or the project
+  // folder itself (project-mode chats).
+  const canOpenInEditor = !!worktreePath
   const openInEditorHotkey = useResolvedHotkeyDisplay("open-in-editor")
 
   const handleOpenInEditor = useCallback(() => {
@@ -182,11 +203,11 @@ export const InfoSection = memo(function InfoSection({
 
   // Listen for ⌘O hotkey event
   useEffect(() => {
-    if (!isWorktree) return
+    if (!canOpenInEditor) return
     const handler = () => handleOpenInEditor()
     window.addEventListener("open-in-editor", handler)
     return () => window.removeEventListener("open-in-editor", handler)
-  }, [isWorktree, handleOpenInEditor])
+  }, [canOpenInEditor, handleOpenInEditor])
 
   const handleOpenPr = () => {
     if (pr?.url) {
@@ -274,6 +295,49 @@ export const InfoSection = memo(function InfoSection({
           title={pr.title}
           onClick={handleOpenPr}
           tooltip="Open in GitHub"
+          badge={
+            <div className="flex items-center gap-1 min-w-0">
+              {branchName && (
+                <Tooltip delayDuration={500}>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/70 bg-muted/50 text-[10px] font-mono text-muted-foreground max-w-[140px] truncate">
+                      <GitBranchFilledIcon className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate">{branchName}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    PR branch: {branchName}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsRenamePrOpen(true)
+                    }}
+                    className="h-5 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors flex-shrink-0"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Rename PR title
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          }
+        />
+      )}
+      {pr && (
+        <RenamePrTitleDialog
+          chatId={chatId}
+          open={isRenamePrOpen}
+          initialTitle={pr.title}
+          prNumber={pr.number}
+          onOpenChange={setIsRenamePrOpen}
         />
       )}
       {/* Path - only for local chats */}
@@ -287,8 +351,8 @@ export const InfoSection = memo(function InfoSection({
           tooltip="Open in Finder"
         />
       )}
-      {/* Open in Editor - only for actual git worktrees (under ~/.21st/worktrees/) */}
-      {isWorktree && (
+      {/* Open in Editor — any local chat with a repo path (project or worktree) */}
+      {canOpenInEditor && (
         <div className="flex items-center min-h-[28px]">
           <div className="flex items-center gap-1.5 w-[100px] flex-shrink-0">
             <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />

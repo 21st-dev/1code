@@ -254,24 +254,33 @@ function getExtendedPath(): string {
 }
 
 /**
+ * Resolve the absolute path to the `claude` CLI using an extended PATH.
+ * Returns null if the binary cannot be found.
+ */
+function resolveClaudeCliPath(): string | null {
+  try {
+    const fullPath = getExtendedPath();
+    const result = execSync(
+      isWindows() ? 'where claude' : 'which claude',
+      {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PATH: fullPath },
+      }
+    );
+    const firstLine = result.split(/\r?\n/).find((line) => line.trim().length > 0);
+    return firstLine?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Check if Claude CLI is installed (cross-platform)
  * Uses extended PATH to find claude even when running from Finder/Dock
  */
 export function isClaudeCliInstalled(): boolean {
-  try {
-    // Use 'where' on Windows, 'which' on Unix-like systems
-    const command = isWindows() ? 'where claude' : 'which claude';
-    const fullPath = getExtendedPath();
-
-    execSync(command, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, PATH: fullPath }
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return resolveClaudeCliPath() !== null;
 }
 
 /**
@@ -288,12 +297,22 @@ export function runClaudeSetupToken(
     onStatus('Starting Claude setup-token...');
 
     const fullPath = getExtendedPath();
+    const claudePath = resolveClaudeCliPath();
 
-    const child = spawn('claude', ['setup-token'], {
+    if (!claudePath) {
+      resolve({
+        success: false,
+        error: 'Claude CLI not found on PATH. Install it and retry.',
+      });
+      return;
+    }
+
+    // Spawn the resolved absolute binary directly — no `shell: true`, so
+    // metacharacters/spaces in PATH or env are treated as literal args.
+    const child = spawn(claudePath, ['setup-token'], {
       // Don't use 'inherit' - it causes hang in non-TTY environments
       // Use 'ignore' for stdin and 'pipe' for stdout/stderr
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true,
       env: { ...process.env, PATH: fullPath },
     });
 

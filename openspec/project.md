@@ -11,7 +11,7 @@
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC, Drizzle ORM, better-sqlite3 |
-| AI | @anthropic-ai/claude-code |
+| AI | @anthropic-ai/claude-agent-sdk |
 | Package Manager | bun |
 
 ## Project Conventions
@@ -30,7 +30,7 @@
   - Zustand: Sub-chat tabs and pinned state (persisted to localStorage)
   - React Query: Server state via tRPC (auto-caching, refetch)
 - **Database**: Drizzle ORM with SQLite, auto-migration on app startup
-- **Claude Integration**: Dynamic import of `@anthropic-ai/claude-code` SDK with two modes: "plan" (read-only) and "agent" (full permissions)
+- **Claude Integration**: Dynamic import of `@anthropic-ai/claude-agent-sdk` SDK with two modes: "plan" (read-only) and "agent" (full permissions)
 
 ### Testing Strategy
 [Testing approach not yet established - to be defined]
@@ -53,6 +53,6 @@
 - Dev vs Production use separate userData paths and protocols
 
 ## External Dependencies
-- **Claude Code SDK**: `@anthropic-ai/claude-code` for AI interactions
+- **Claude Code SDK**: `@anthropic-ai/claude-agent-sdk` for AI interactions
 - **21st.dev CDN**: Auto-update manifests and releases at `cdn.21st.dev`
 - **OAuth Provider**: Authentication flow

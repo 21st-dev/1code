@@ -83,7 +83,7 @@ export function SettingsContent() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {renderTabContent()}
       </div>
     </div>

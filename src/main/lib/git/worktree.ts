@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import { devNull, homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import simpleGit from "simple-git";
 import {
@@ -10,6 +10,7 @@ import {
 	animals,
 	uniqueNamesGenerator,
 } from "unique-names-generator";
+import { createGitForNetwork, withGitLock } from "./git-factory";
 import { checkGitLfsAvailable, getShellEnvironment } from "./shell-env";
 import { executeWorktreeSetup } from "./worktree-config";
 import type { WorktreeSetupResult } from "./worktree-config";
@@ -223,10 +224,30 @@ export async function createWorktree(
 	}
 }
 
+/**
+ * Path-prefix guard for worktree directory removal.
+ * Refuses to operate on paths outside the standard worktree root,
+ * even if a caller passed a corrupted or attacker-influenced path.
+ *
+ * Note: Node's fs.rm does NOT traverse symlinks (it unlinks the symlink entry
+ * itself), so symlinks inside the worktree cannot escape this guard to delete
+ * external files.
+ */
+export function isPathInsideWorktreeRoot(workspacePath: string): boolean {
+	const root = resolve(join(homedir(), ".21st", "worktrees")) + sep;
+	return resolve(workspacePath).startsWith(root);
+}
+
 export async function removeWorktree(
 	mainRepoPath: string,
 	worktreePath: string,
 ): Promise<{ success: boolean; error?: string }> {
+	// Forensic log: every worktree deletion is recorded so unexpected losses can be traced.
+	// Includes a short stack snippet to identify the calling code path.
+	const callerStack = new Error().stack?.split("\n").slice(2, 6).join(" | ") ?? "unknown";
+	console.log(`[Worktree] removeWorktree called: path=${worktreePath} mainRepo=${mainRepoPath} caller=${callerStack}`);
+
+	let gitError: string | undefined;
 	try {
 		const env = await getGitEnv();
 
@@ -235,13 +256,36 @@ export async function removeWorktree(
 			["-C", mainRepoPath, "worktree", "remove", worktreePath, "--force"],
 			{ env, timeout: 60_000 },
 		);
-
-		return { success: true };
 	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error(`Failed to remove worktree: ${errorMessage}`);
-		return { success: false, error: errorMessage };
+		gitError = error instanceof Error ? error.message : String(error);
+		console.warn(`[Worktree] git worktree remove failed (will still attempt rmdir): ${gitError}`);
 	}
+
+	// Always attempt directory removal — handles cases where git removes the
+	// worktree record but leaves the directory (e.g., uncommitted changes).
+	if (isPathInsideWorktreeRoot(worktreePath)) {
+		try {
+			await rm(worktreePath, { recursive: true, force: true, maxRetries: 2 });
+		} catch (error) {
+			const rmError = error instanceof Error ? error.message : String(error);
+			console.warn(`[Worktree] rmdir failed for ${worktreePath}: ${rmError}`);
+			if (gitError) {
+				return { success: false, error: `${gitError}; rmdir: ${rmError}` };
+			}
+			return { success: false, error: rmError };
+		}
+	} else {
+		console.warn(
+			`[Worktree] Refusing to rmdir path outside ~/.21st/worktrees: ${worktreePath}`,
+		);
+	}
+
+	if (gitError) {
+		// Git failed but rm succeeded — partial success. Treat as success since the
+		// directory is gone; the next `git worktree prune` will clean stale metadata.
+		return { success: true };
+	}
+	return { success: true };
 }
 
 export async function getGitRoot(path: string): Promise<string> {
@@ -925,6 +969,25 @@ export async function createWorktreeForChat(
 
 		// Use provided base branch or auto-detect
 		const baseBranch = selectedBaseBranch || await getDefaultBranch(projectPath);
+
+		// Best-effort: refresh origin/<baseBranch> so the worktree is based on the
+		// latest remote state. Skipped only when there is no origin remote. Never
+		// blocks creation — failures (including local-only branches with no matching
+		// remote ref) are logged and swallowed.
+		if (await hasOriginRemote(projectPath)) {
+			try {
+				await withGitLock(projectPath, async () => {
+					const netGit = createGitForNetwork(projectPath);
+					await netGit.fetch("origin", baseBranch);
+				});
+			} catch (fetchError) {
+				const msg =
+					fetchError instanceof Error ? fetchError.message : String(fetchError);
+				console.warn(
+					`[worktree] Pre-create fetch of origin/${baseBranch} failed: ${msg}`,
+				);
+			}
+		}
 
 		const branch = generateBranchName();
 		const worktreesDir = join(homedir(), ".21st", "worktrees");

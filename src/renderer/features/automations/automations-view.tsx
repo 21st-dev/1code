@@ -136,6 +136,10 @@ export function AutomationsView() {
                   onClick={handleSidebarToggle}
                   className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
                   aria-label={isMobile ? "Back to chats" : "Open sidebar"}
+                  style={{
+                    // @ts-expect-error - WebKit-specific property
+                    WebkitAppRegion: "no-drag",
+                  }}
                 >
                   <AlignJustify className="h-4 w-4" />
                 </button>
@@ -150,6 +154,10 @@ export function AutomationsView() {
             <button
               onClick={handleNewAutomation}
               className="h-8 px-3 rounded-lg text-sm font-medium border border-border hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex items-center gap-1.5 flex-shrink-0"
+              style={{
+                // @ts-expect-error - WebKit-specific property
+                WebkitAppRegion: "no-drag",
+              }}
             >
               <Plus className="h-4 w-4" />
               <span className="text-sm font-medium hidden min-420:inline">New</span>

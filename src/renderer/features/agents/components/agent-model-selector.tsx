@@ -13,8 +13,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "../../../components/ui/command"
-import { CheckIcon, ClaudeCodeIcon, IconChevronDown, ThinkingIcon } from "../../../components/ui/icons"
-import { Switch } from "../../../components/ui/switch"
+import { CheckIcon, ClaudeCodeIcon, IconChevronDown } from "../../../components/ui/icons"
 import { Checkbox } from "../../../components/ui/checkbox"
 import { Button } from "../../../components/ui/button"
 import {
@@ -23,8 +22,11 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
-import type { CodexThinkingLevel } from "../lib/models"
-import { formatCodexThinkingLabel } from "../lib/models"
+import type { ClaudeThinkingLevel, CodexThinkingLevel } from "../lib/models"
+import {
+  formatClaudeThinkingLabel,
+  formatCodexThinkingLabel,
+} from "../lib/models"
 
 const CROSS_PROVIDER_DIALOG_DISMISSED_KEY = "agent-model-selector:skip-cross-provider-dialog"
 
@@ -40,6 +42,7 @@ type ClaudeModelOption = {
   id: string
   name: string
   version: string
+  thinkings: ClaudeThinkingLevel[]
 }
 
 type CodexModelOption = {
@@ -70,8 +73,8 @@ interface AgentModelSelectorProps {
     recommendedOllamaModel?: string
     onSelectOllamaModel: (modelId: string) => void
     isConnected: boolean
-    thinkingEnabled: boolean
-    onThinkingChange: (enabled: boolean) => void
+    selectedThinking: ClaudeThinkingLevel
+    onSelectThinking: (thinking: ClaudeThinkingLevel) => void
   }
   codex: {
     models: CodexModelOption[]
@@ -89,14 +92,16 @@ type FlatModelItem =
   | { type: "ollama"; modelName: string; isRecommended: boolean }
   | { type: "custom" }
 
-function CodexThinkingSubMenu({
-  thinkings,
-  selectedThinking,
-  onSelectThinking,
+function ThinkingSubMenu<T extends string>({
+  levels,
+  selected,
+  onSelect,
+  formatLabel,
 }: {
-  thinkings: CodexThinkingLevel[]
-  selectedThinking: CodexThinkingLevel
-  onSelectThinking: (thinking: CodexThinkingLevel) => void
+  levels: T[]
+  selected: T
+  onSelect: (level: T) => void
+  formatLabel: (level: T) => string
 }) {
   const triggerRef = useRef<HTMLDivElement>(null)
   const subMenuRef = useRef<HTMLDivElement>(null)
@@ -167,9 +172,7 @@ function CodexThinkingSubMenu({
           <span>Thinking</span>
         </div>
         <div className="flex items-center gap-1 text-muted-foreground">
-          <span className="text-xs">
-            {formatCodexThinkingLabel(selectedThinking)}
-          </span>
+          <span className="text-xs">{formatLabel(selected)}</span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
         </div>
       </div>
@@ -183,15 +186,15 @@ function CodexThinkingSubMenu({
             className="fixed z-50 min-w-[180px] overflow-auto rounded-[10px] border border-border bg-popover text-sm text-popover-foreground shadow-lg py-1 animate-in fade-in-0 zoom-in-95 slide-in-from-left-2"
             style={{ top: subPos.top, left: subPos.left }}
           >
-            {thinkings.map((thinking) => {
-              const isSelected = selectedThinking === thinking
+            {levels.map((level) => {
+              const isSelected = selected === level
               return (
                 <button
-                  key={thinking}
-                  onClick={() => onSelectThinking(thinking)}
+                  key={level}
+                  onClick={() => onSelect(level)}
                   className="flex items-center justify-between gap-4 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
                 >
-                  <span>{formatCodexThinkingLabel(thinking)}</span>
+                  <span>{formatLabel(level)}</span>
                   {isSelected && (
                     <CheckIcon className="h-3.5 w-3.5 shrink-0" />
                   )}
@@ -558,28 +561,27 @@ export function AgentModelSelector({
             onValueChange={setSearch}
           />
 
-          {/* Claude thinking toggle */}
+          {/* Claude thinking effort selector with hover sub-menu */}
           {selectedAgentId === "claude-code" &&
             !claude.isOffline &&
-            !claude.hasCustomModelConfig && (
-            <>
-              <div
-                className="flex items-center justify-between min-h-[32px] py-[5px] px-1.5 mx-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-1.5">
-                  <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-sm">Thinking</span>
-                </div>
-                <Switch
-                  checked={claude.thinkingEnabled}
-                  onCheckedChange={claude.onThinkingChange}
-                  className="scale-75"
-                />
-              </div>
-              <CommandSeparator />
-            </>
-          )}
+            !claude.hasCustomModelConfig &&
+            (() => {
+              const selectedClaudeModel =
+                claude.models.find((m) => m.id === claude.selectedModelId) ||
+                claude.models[0]
+              if (!selectedClaudeModel) return null
+              return (
+                <>
+                  <ThinkingSubMenu<ClaudeThinkingLevel>
+                    levels={selectedClaudeModel.thinkings}
+                    selected={claude.selectedThinking}
+                    onSelect={claude.onSelectThinking}
+                    formatLabel={formatClaudeThinkingLabel}
+                  />
+                  <CommandSeparator />
+                </>
+              )
+            })()}
 
           {/* Codex thinking level selector with hover sub-menu */}
           {selectedAgentId === "codex" && (() => {
@@ -587,10 +589,11 @@ export function AgentModelSelector({
             if (!selectedCodexModel) return null
             return (
               <>
-                <CodexThinkingSubMenu
-                  thinkings={selectedCodexModel.thinkings}
-                  selectedThinking={codex.selectedThinking}
-                  onSelectThinking={codex.onSelectThinking}
+                <ThinkingSubMenu<CodexThinkingLevel>
+                  levels={selectedCodexModel.thinkings}
+                  selected={codex.selectedThinking}
+                  onSelect={codex.onSelectThinking}
+                  formatLabel={formatCodexThinkingLabel}
                 />
                 <CommandSeparator />
               </>
@@ -604,6 +607,8 @@ export function AgentModelSelector({
                   const selected = isItemSelected(item)
                   const disabled = isItemDisabled(item)
                   const crossProvider = isItemCrossProvider(item)
+                  const is1M =
+                    item.type === "claude" && item.model.id.endsWith("[1m]")
                   return (
                     <CommandItem
                       key={getItemKey(item)}
@@ -614,6 +619,14 @@ export function AgentModelSelector({
                     >
                       {getItemIcon(item)}
                       <span className="truncate flex-1">{getItemLabel(item)}</span>
+                      {is1M && (
+                        <span
+                          title="1M context window — significantly higher token cost"
+                          className="text-[10px] font-medium text-amber-600 dark:text-amber-500 shrink-0"
+                        >
+                          1M · higher cost
+                        </span>
+                      )}
                       {crossProvider && (
                         <span className="text-[10px] text-muted-foreground shrink-0">New chat</span>
                       )}

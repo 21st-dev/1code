@@ -62,7 +62,13 @@ export function AgentPlanSidebar({
   return (
     <div className="flex flex-col h-full bg-tl-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-2 h-10 bg-tl-background flex-shrink-0 border-b border-border/50">
+      <div
+        className="flex items-center justify-between px-2 h-10 bg-tl-background flex-shrink-0 border-b border-border/50"
+        style={{
+          // @ts-expect-error - WebKit-specific property
+          WebkitAppRegion: "no-drag",
+        }}
+      >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <Button
             variant="ghost"

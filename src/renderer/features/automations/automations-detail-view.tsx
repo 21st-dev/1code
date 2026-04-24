@@ -411,11 +411,21 @@ export function AutomationsDetailView() {
         <button
           onClick={handleBack}
           className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md text-muted-foreground hover:text-foreground"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
-        <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-2"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        >
           {!isCreateMode && (
             <>
               <DropdownMenu>

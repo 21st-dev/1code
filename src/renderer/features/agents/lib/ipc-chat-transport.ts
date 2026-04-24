@@ -8,7 +8,6 @@ import {
   type CustomClaudeConfig,
   customClaudeConfigAtom,
   enableTasksAtom,
-  extendedThinkingEnabledAtom,
   historyEnabledAtom,
   normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
@@ -24,8 +23,10 @@ import {
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
   pendingUserQuestionsAtom,
+  subChatClaudeThinkingAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
+import { setSubChatModel } from "./model-switching"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
 
@@ -94,16 +95,9 @@ const ERROR_TOAST_CONFIG: Record<
       "Your previous chat session expired. Send your message again to start fresh.",
   },
   EXECUTABLE_NOT_FOUND: {
-    title: "Claude CLI not found",
+    title: "Claude binary missing",
     description:
-      "Install Claude Code CLI: npm install -g @anthropic-ai/claude-code",
-    action: {
-      label: "Copy command",
-      onClick: () =>
-        navigator.clipboard.writeText(
-          "npm install -g @anthropic-ai/claude-code",
-        ),
-    },
+      "The bundled Claude binary could not be found. Reinstalling 1Code should restore it.",
   },
   NETWORK_ERROR: {
     title: "Network error",
@@ -160,12 +154,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const metadata = lastAssistant?.metadata as AgentMessageMetadata | undefined
     const sessionId = metadata?.sessionId
 
-    // Read extended thinking setting dynamically (so toggle applies to existing chats)
-    const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
-    // Max thinking tokens for extended thinking mode
-    // SDK adds +1 internally, so 64000 becomes 64001 which exceeds Opus 4.5 limit
-    // Using 32000 to stay safely under the 64000 max output tokens limit
-    const maxThinkingTokens = thinkingEnabled ? 32_000 : undefined
+    // Read thinking effort per-subChat (mirrors the model selection)
+    const claudeThinkingLevel = appStore.get(
+      subChatClaudeThinkingAtomFamily(this.config.subChatId),
+    )
+    const effort =
+      claudeThinkingLevel === "off" ? undefined : claudeThinkingLevel
     const historyEnabled = appStore.get(historyEnabledAtom)
     const enableTasks = appStore.get(enableTasksAtom)
 
@@ -208,7 +202,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
             sessionId,
-            ...(maxThinkingTokens && { maxThinkingTokens }),
+            ...(effort && { effort }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
             ...(selectedOllamaModel && { selectedOllamaModel }),
@@ -431,16 +425,43 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   ? rawDescription.slice(0, 300) + "..."
                   : rawDescription
 
+                // Surface a clearer fallback action when a 1M-context model
+                // hits a rate-limit / context error. Lets the user recover
+                // with one click instead of digging through model settings.
+                const erroredModel: string | undefined = chunk.debugInfo?.model
+                const is1MModel =
+                  typeof erroredModel === "string" && erroredModel.endsWith("[1m]")
+                const isRateOrContextError =
+                  category === "RATE_LIMIT" || category === "RATE_LIMIT_SDK"
+                const subChatId = this.config.subChatId
+                const offerFallback =
+                  is1MModel && isRateOrContextError && Boolean(subChatId)
+                const fallbackModelId = erroredModel?.replace(/\[1m\]$/, "")
+
+                const action = offerFallback && fallbackModelId
+                  ? {
+                      label: `Switch to ${fallbackModelId}`,
+                      onClick: () => {
+                        setSubChatModel(subChatId, fallbackModelId)
+                        toast.success(`Switched to ${fallbackModelId}`)
+                      },
+                    }
+                  : {
+                      label: "Copy Error",
+                      onClick: () => {
+                        navigator.clipboard.writeText(errorDetails)
+                        toast.success("Error details copied to clipboard")
+                      },
+                    }
+
+                const finalDescription = offerFallback
+                  ? `${description} 1M-context models share a tighter quota — try the standard 200K model.`
+                  : description
+
                 toast.error(title, {
-                  description,
+                  description: finalDescription,
                   duration: 12000,
-                  action: {
-                    label: "Copy Error",
-                    onClick: () => {
-                      navigator.clipboard.writeText(errorDetails)
-                      toast.success("Error details copied to clipboard")
-                    },
-                  },
+                  action,
                 })
               }
 
@@ -493,16 +514,20 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
         )
 
         // Handle abort
-        options.abortSignal?.addEventListener("abort", () => {
-          console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
-          sub.unsubscribe()
-          // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
-          try {
-            controller.close()
-          } catch {
-            // Already closed
-          }
-        })
+        options.abortSignal?.addEventListener(
+          "abort",
+          () => {
+            console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+            sub.unsubscribe()
+            // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
+            try {
+              controller.close()
+            } catch {
+              // Already closed
+            }
+          },
+          { once: true },
+        )
       },
     })
   }

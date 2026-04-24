@@ -41,7 +41,9 @@ import {
   ChevronDown,
   GitFork,
   ListTree,
-  TerminalSquare
+  TerminalSquare,
+  Trash2,
+  X as XIcon,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import {
@@ -147,6 +149,7 @@ import {
   subChatCodexThinkingAtomFamily,
   subChatModelIdAtomFamily,
   subChatModeAtomFamily,
+  subChatProviderOverridesAtom,
   suppressInputFocusAtom,
   undoStackAtom,
   workspaceDiffCacheAtomFamily,
@@ -154,6 +157,7 @@ import {
   type SelectedCommit
 } from "../atoms"
 import { BUILTIN_SLASH_COMMANDS } from "../commands"
+import { ConfirmDeleteDialog } from "../../../components/confirm-delete-dialog"
 import { AgentSendButton } from "../components/agent-send-button"
 import { OpenLocallyDialog } from "../components/open-locally-dialog"
 import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
@@ -175,6 +179,7 @@ import {
   getSubChatDraftFull
 } from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
+import { applyModeDefaultModel } from "../lib/model-switching"
 import {
   createQueueItem, createTextPreview, generateQueueId,
   toQueuedFile,
@@ -227,10 +232,11 @@ import { MobileChatHeader } from "../ui/mobile-chat-header"
 import { QuickCommentInput } from "../ui/quick-comment-input"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
-import { SplitViewContainer } from "../ui/split-view-container"
+import { SplitViewContainer, SplitDropZone } from "../ui/split-view-container"
 import { TextSelectionPopover } from "../ui/text-selection-popover"
 import { autoRenameAgentChat } from "../utils/auto-rename"
 import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
+import { extractGitActivity } from "../utils/git-activity"
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
 const clearSubChatSelectionAtom = atom(null, () => {})
@@ -772,6 +778,37 @@ function PlayButton({
     </div>
   )
 }
+
+// Persistent (not hover-to-reveal) — hiding the button on hover caused it to
+// vanish as the pointer approached it.
+const SplitPaneInlineClose = memo(function SplitPaneInlineClose({
+  subChatId,
+}: {
+  subChatId: string
+}) {
+  const removeFromSplit = useAgentSubChatStore((s) => s.removeFromSplit)
+  const splitPaneCount = useAgentSubChatStore((s) => s.splitPaneIds.length)
+  const isLastPair = splitPaneCount === 2
+  const label = isLastPair ? "Close split view" : "Remove from split"
+  return (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            removeFromSplit(subChatId)
+          }}
+          aria-label={label}
+          className="flex-shrink-0 mr-4 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <XIcon className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  )
+})
 
 // Isolated scroll-to-bottom button - uses own scroll listener to avoid re-renders of parent
 const ScrollToBottomButton = memo(function ScrollToBottomButton({
@@ -2151,6 +2188,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // tRPC utils for cache invalidation
   const utils = api.useUtils()
+  const trpcUtils = trpc.useUtils()
 
   // Get sub-chat name from store
   const subChatName = useAgentSubChatStore(
@@ -2822,6 +2860,30 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }, [isStreaming, subChatId, pendingQuestions, setPendingQuestionsMap])
 
+  // PR status auto-refresh on stream end. `messages` is tracked via a ref so
+  // the effect doesn't re-run on every streamed chunk — only on the transition.
+  const prAutoRefreshWasStreamingRef = useRef(false)
+  const prAutoRefreshMessagesRef = useRef(messages)
+  prAutoRefreshMessagesRef.current = messages
+  useEffect(() => {
+    const wasStreaming = prAutoRefreshWasStreamingRef.current
+    prAutoRefreshWasStreamingRef.current = isStreaming
+    if (!(wasStreaming && !isStreaming)) return
+
+    const allParts = prAutoRefreshMessagesRef.current.flatMap(
+      (m: any) => m.parts || [],
+    )
+    const activity = extractGitActivity(allParts)
+    if (!activity) return
+
+    trpcUtils.chats.getPrStatus.invalidate({ chatId: parentChatId })
+    if (projectPath) {
+      trpcUtils.changes.getGitHubStatus.invalidate({
+        worktreePath: projectPath,
+      })
+    }
+  }, [isStreaming, parentChatId, projectPath, trpcUtils])
+
   // Sync pending questions with messages state
   // This handles: 1) restoring on chat switch, 2) clearing when question is answered/timed out
   useEffect(() => {
@@ -3153,6 +3215,9 @@ const ChatViewInner = memo(function ChatViewInner({
 
     // Update atomFamily state (for UI) - this also syncs to store via effect
     setSubChatMode("agent")
+
+    // Autoswitch to the Agent-mode default model before sending
+    applyModeDefaultModel(subChatId, "agent")
 
     // Enable auto-scroll and immediately scroll to bottom
     shouldAutoScrollRef.current = true
@@ -3897,6 +3962,13 @@ const ChatViewInner = memo(function ChatViewInner({
       const builtinNames = new Set(
         BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
       )
+      // Autoswitch to the Review-mode default model for review-type commands.
+      // Done transiently: we set the model before the transport reads it; we
+      // don't restore, so the chat input selector remains visibly on the
+      // review model until the next mode change or manual pick.
+      if (commandName === "review" || commandName === "security-review") {
+        applyModeDefaultModel(subChatId, "review")
+      }
       if (!builtinNames.has(commandName)) {
         try {
           const commands = await trpcClient.commands.list.query({
@@ -4178,7 +4250,7 @@ const ChatViewInner = memo(function ChatViewInner({
     removeFromQueue(subChatId, itemId)
   }, [subChatId, removeFromQueue])
 
-  // Force send - stop stream and send immediately, bypassing queue (Opt+Enter)
+  // Force send - stop stream and send immediately, bypassing queue (Opt+Shift+Enter)
   const handleForceSend = useCallback(async () => {
     // Block sending while sandbox is still being set up
     if (sandboxSetupStatus !== "ready") {
@@ -4218,6 +4290,10 @@ const ChatViewInner = memo(function ChatViewInner({
       const builtinNames = new Set(
         BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
       )
+      // Autoswitch to the Review-mode default model for review-type commands.
+      if (commandName === "review" || commandName === "security-review") {
+        applyModeDefaultModel(subChatId, "review")
+      }
       if (!builtinNames.has(commandName)) {
         try {
           const commands = await trpcClient.commands.list.query({
@@ -4637,17 +4713,25 @@ const ChatViewInner = memo(function ChatViewInner({
             isSubChatsSidebarOpen ? "pt-[52px]" : "pt-2",
           )}
         >
-          <ChatTitleEditor
-            name={subChatName}
-            placeholder="New Chat"
-            onSave={handleRenameSubChat}
-            isMobile={false}
-            chatId={subChatId}
-            hasMessages={true} /* Always show "New Chat" placeholder when name is empty */
-          />
+          {/* Title row: ChatTitleEditor on the left, per-pane close X on the
+              right for split panes. Flex layout ensures the X sits on the same
+              visual row as the title rather than floating in a corner. */}
+          <div className="flex items-center">
+            <div className="flex-1 min-w-0">
+              <ChatTitleEditor
+                name={subChatName}
+                placeholder="New Chat"
+                onSave={handleRenameSubChat}
+                isMobile={false}
+                chatId={subChatId}
+                hasMessages={true} /* Always show "New Chat" placeholder when name is empty */
+              />
+            </div>
+            {isSplitPane && <SplitPaneInlineClose subChatId={subChatId} />}
+          </div>
           {/* Workspace subtitle: repo • branch */}
           {(workspaceRepoName || workspaceBranch) && (
-            <div className="max-w-2xl mx-auto px-4">
+            <div className="max-w-5xl mx-auto px-4">
               <span className="text-xs text-muted-foreground/50 truncate block">
                 {[workspaceRepoName, workspaceBranch].filter(Boolean).join(" • ")}
               </span>
@@ -4692,7 +4776,7 @@ const ChatViewInner = memo(function ChatViewInner({
       >
         <div
           ref={contentWrapperRef}
-          className="px-2 max-w-2xl mx-auto -mb-4 space-y-4"
+          className="px-2 max-w-5xl mx-auto -mb-4 space-y-4"
           style={{
             paddingBottom: "32px",
           }}
@@ -4724,7 +4808,7 @@ const ChatViewInner = memo(function ChatViewInner({
       {/* User questions panel - shows for both live (pending) and expired (timed out) questions */}
       {displayQuestions && (
         <div className="px-4 relative z-20">
-          <div className="w-full px-2 max-w-2xl mx-auto">
+          <div className="w-full px-2 max-w-5xl mx-auto">
             <AgentUserQuestion
               ref={questionRef}
               pendingQuestions={displayQuestions}
@@ -4739,13 +4823,16 @@ const ChatViewInner = memo(function ChatViewInner({
       {/* Stacked cards container - queue + status */}
       {shouldShowStackedCards && (
           <div className="px-2 -mb-6 relative z-10">
-            <div className="w-full max-w-2xl mx-auto px-2">
+            <div className="w-full max-w-5xl mx-auto px-2">
               {/* Queue indicator card - top card */}
               {queue.length > 0 && (
                 <AgentQueueIndicator
                   queue={queue}
                   onRemoveItem={handleRemoveFromQueue}
                   onSendNow={handleSendFromQueue}
+                  onReorder={(from, to) =>
+                    useMessageQueueStore.getState().reorderQueue(subChatId, from, to)
+                  }
                   isStreaming={isStreaming}
                   hasStatusCardBelow={shouldShowStatusCard}
                 />
@@ -4882,6 +4969,7 @@ export function ChatView({
   const setSubChatUnseenChanges = useSetAtom(agentsSubChatUnseenChangesAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setUndoStack = useSetAtom(undoStackAtom)
   const setSelectedFilePath = useSetAtom(selectedDiffFilePathAtom)
   const setFilteredDiffFiles = useSetAtom(filteredDiffFilesAtom)
@@ -5301,14 +5389,13 @@ export function ChatView({
       splitPaneIds: state.splitPaneIds,
     }))
   )
-  const [
-    subChatProviderOverrides,
-    setSubChatProviderOverrides,
-  ] = useState<Record<string, "claude-code" | "codex">>({})
+  const [subChatProviderOverrides, setSubChatProviderOverrides] = useAtom(
+    subChatProviderOverridesAtom,
+  )
 
   useEffect(() => {
     setSubChatProviderOverrides({})
-  }, [chatId])
+  }, [chatId, setSubChatProviderOverrides])
 
   // Clear sub-chat "unseen changes" indicator when sub-chat becomes active
   useEffect(() => {
@@ -5641,6 +5728,25 @@ export function ChatView({
   const handleRestoreWorkspace = useCallback(() => {
     restoreWorkspaceMutation.mutate({ id: chatId })
   }, [chatId, restoreWorkspaceMutation])
+
+  // Delete archived workspace mutation
+  const [confirmDeleteWorkspaceOpen, setConfirmDeleteWorkspaceOpen] = useState(false)
+  const deleteWorkspaceMutation = trpc.chats.delete.useMutation({
+    onSuccess: () => {
+      trpcUtils.chats.list.invalidate()
+      trpcUtils.chats.listArchived.invalidate()
+      setSelectedChatId(null)
+    },
+  })
+
+  const handleDeleteWorkspace = useCallback(() => {
+    setConfirmDeleteWorkspaceOpen(true)
+  }, [])
+
+  const handleConfirmDeleteWorkspace = useCallback(() => {
+    deleteWorkspaceMutation.mutate({ id: chatId, deleteWorktree: true })
+    setConfirmDeleteWorkspaceOpen(false)
+  }, [chatId, deleteWorkspaceMutation])
 
   // Check if this workspace is archived
   const isArchived = !!agentChat?.archivedAt
@@ -6113,6 +6219,12 @@ export function ChatView({
         setFilteredSubChatId(activeSubChatId)
       }
 
+      // Switch the sub-chat to the configured Review-mode model + thinking
+      // before sending, mirroring the /review slash-command path.
+      if (activeSubChatId) {
+        applyModeDefaultModel(activeSubChatId, "review")
+      }
+
       // Generate review message and set it for ChatViewInner to send
       const message = generateReviewMessage(context)
       if (activeSubChatId) {
@@ -6172,7 +6284,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     onRefresh: handleCommitChangesRefresh,
   })
 
-  const { push: pushBranch, isPending: isPushing } = usePushAction({
+  const { push: pushBranch, isPending: isPushing, dialog: pushDialog } = usePushAction({
     worktreePath,
     hasUpstream: gitStatus?.hasUpstream ?? true,
     onSuccess: handleCommitChangesRefresh,
@@ -6819,7 +6931,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   )
 
   // Handle creating a new sub-chat
-  const handleCreateNewSubChat = useCallback(async () => {
+  const handleCreateNewSubChat = useCallback(() => {
     const store = useAgentSubChatStore.getState()
     const sourceSubChatId = activeSubChatId || ""
     // New sub-chats use the user's default mode preference
@@ -6829,25 +6941,12 @@ Make sure to preserve all functionality from both branches when resolving confli
     // Check if this is a remote sandbox chat
     const isRemoteChat = !!(agentChat as any)?.isRemote
 
-    let newId: string
+    // Generate ID locally for instant UI update; persist to DB in background for local mode.
+    const newId = crypto.randomUUID()
 
-    if (isRemoteChat) {
-      // Sandbox mode: lazy creation (web app pattern)
-      // Sub-chat will be persisted on first message via RemoteChatTransport UPSERT
-      newId = crypto.randomUUID()
-    } else {
-      // Local mode: create sub-chat in DB first to get the real ID
-      const newSubChat = await trpcClient.chats.createSubChat.mutate({
-        chatId,
-        name: "New Chat",
-        mode: newSubChatMode,
-      })
-      newId = newSubChat.id
-      utils.agents.getAgentChat.invalidate({ chatId })
-
-      // Optimistic update: add new sub-chat to React Query cache immediately
-      // This is CRITICAL for workspace isolation - without this, the new sub-chat
-      // won't be in validSubChatIds and will be filtered out by tabsToRender
+    if (!isRemoteChat) {
+      // Local mode: optimistically add to React Query cache so workspace isolation
+      // (validSubChatIds / tabsToRender) immediately recognizes the new sub-chat.
       utils.agents.getAgentChat.setData({ chatId }, (old) => {
         if (!old) return old
         return {
@@ -6866,7 +6965,30 @@ Make sure to preserve all functionality from both branches when resolving confli
           ],
         }
       })
+
+      // Fire-and-forget the DB insert. On failure, roll back the optimistic update.
+      // Do NOT pass `name` — leave it NULL in DB so the app-quit cleanup can
+      // recognize never-named, never-used sub-chats. UI displays "New Chat" via fallback.
+      trpcClient.chats.createSubChat
+        .mutate({
+          id: newId,
+          chatId,
+          mode: newSubChatMode,
+        })
+        .catch((error) => {
+          console.error("[handleCreateNewSubChat] Failed to create sub-chat:", error)
+          utils.agents.getAgentChat.setData({ chatId }, (old) => {
+            if (!old) return old
+            return {
+              ...old,
+              subChats: (old.subChats || []).filter((sc: any) => sc.id !== newId),
+            }
+          })
+          useAgentSubChatStore.getState().removeFromOpenSubChats(newId)
+          toast.error("Failed to create chat")
+        })
     }
+    // Sandbox mode (isRemoteChat === true): lazy creation via RemoteChatTransport UPSERT on first message
 
     // Track this subchat as just created for typewriter effect
     setJustCreatedIds((prev) => new Set([...prev, newId]))
@@ -7038,6 +7160,8 @@ Make sure to preserve all functionality from both branches when resolving confli
       agentChatStore.setStreamId(newId, null) // New chat has no active stream
       forceUpdate({}) // Trigger re-render
     }
+
+    return newId
   }, [
     worktreePath,
     chatId,
@@ -7055,22 +7179,48 @@ Make sure to preserve all functionality from both branches when resolving confli
     agentChat?.name,
   ])
 
+  // Create a new sub-chat AND place it in split view with the previously active tab.
+  // Used by Cmd+Shift+T. Passes the pre-creation active tab as the explicit first pane
+  // because handleCreateNewSubChat flips activeSubChatId to the new id.
+  const handleCreateNewSubChatInSplit = useCallback(() => {
+    const prevActive = useAgentSubChatStore.getState().activeSubChatId
+    const newId = handleCreateNewSubChat()
+    if (!newId || !prevActive) return
+    useAgentSubChatStore.getState().addToSplit(newId, prevActive)
+  }, [handleCreateNewSubChat])
+
   // Keyboard shortcut: New sub-chat
   // Web: Opt+Cmd+T (browser uses Cmd+T for new tab)
   // Desktop: Cmd+T
+  // Cmd+Shift+T (desktop) / Opt+Cmd+Shift+T (web) opens the new sub-chat in split view.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isDesktop = isDesktopApp()
 
-      // Desktop: Cmd+T (without Alt)
-      if (isDesktop && e.metaKey && e.code === "KeyT" && !e.altKey) {
+      // Desktop: Cmd+Shift+T — new sub-chat in split view.
+      // Must be checked BEFORE the plain Cmd+T branch (which doesn't require Shift).
+      if (isDesktop && e.metaKey && e.shiftKey && e.code === "KeyT" && !e.altKey) {
+        e.preventDefault()
+        handleCreateNewSubChatInSplit()
+        return
+      }
+
+      // Web: Opt+Cmd+Shift+T — new sub-chat in split view.
+      if (e.altKey && e.metaKey && e.shiftKey && e.code === "KeyT") {
+        e.preventDefault()
+        handleCreateNewSubChatInSplit()
+        return
+      }
+
+      // Desktop: Cmd+T (without Alt, without Shift)
+      if (isDesktop && e.metaKey && e.code === "KeyT" && !e.altKey && !e.shiftKey) {
         e.preventDefault()
         handleCreateNewSubChat()
         return
       }
 
-      // Web: Opt+Cmd+T (with Alt)
-      if (e.altKey && e.metaKey && e.code === "KeyT") {
+      // Web: Opt+Cmd+T (with Alt, without Shift)
+      if (e.altKey && e.metaKey && e.code === "KeyT" && !e.shiftKey) {
         e.preventDefault()
         handleCreateNewSubChat()
       }
@@ -7078,7 +7228,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleCreateNewSubChat])
+  }, [handleCreateNewSubChat, handleCreateNewSubChatInSplit])
 
   // NOTE: Desktop notifications for pending questions are now triggered directly
   // in ipc-chat-transport.ts when the ask-user-question chunk arrives.
@@ -7435,6 +7585,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   return (
     <FileOpenProvider onOpenFile={setFileViewerPath}>
     <TextSelectionProvider>
+    {pushDialog}
     {/* File Search Dialog (Cmd+P) */}
     {worktreePath && (
       <FileSearchDialog
@@ -7484,6 +7635,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       isTerminalOpen={isTerminalSidebarOpen}
                       isArchived={isArchived}
                       onRestore={handleRestoreWorkspace}
+                      onDelete={handleDeleteWorkspace}
                       onOpenLocally={handleOpenLocally}
                       showOpenLocally={showOpenLocally}
                     />
@@ -7523,6 +7675,10 @@ Make sure to preserve all functionality from both branches when resolving confli
                               onClick={handleOpenLocally}
                               disabled={isImporting}
                               className="h-6 px-2 gap-1.5 text-xs font-medium ml-2"
+                              style={{
+                                // @ts-expect-error - WebKit-specific property
+                                WebkitAppRegion: "no-drag",
+                              }}
                             >
                               {isImporting ? (
                                 <IconSpinner className="h-3 w-3 animate-spin" />
@@ -7554,6 +7710,10 @@ Make sure to preserve all functionality from both branches when resolving confli
                           onClick={() => setIsPreviewSidebarOpen(true)}
                           className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
                           aria-label="Open preview"
+                          style={{
+                            // @ts-expect-error - WebKit-specific property
+                            WebkitAppRegion: "no-drag",
+                          }}
                         >
                           <IconOpenSidebarRight className="h-4 w-4" />
                         </Button>
@@ -7562,7 +7722,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                     </Tooltip>
                   ) : (
                     <PreviewSetupHoverCard>
-                      <span className="inline-flex ml-2">
+                      <span
+                        className="inline-flex ml-2"
+                        style={{
+                          // @ts-expect-error - WebKit-specific property
+                          WebkitAppRegion: "no-drag",
+                        }}
+                      >
                         <Button
                           variant="ghost"
                           size="icon"
@@ -7589,6 +7755,10 @@ Make sure to preserve all functionality from both branches when resolving confli
                               onClick={() => setIsDetailsSidebarOpen(true)}
                               className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
                               aria-label="View details"
+                              style={{
+                                // @ts-expect-error - WebKit-specific property
+                                WebkitAppRegion: "no-drag",
+                              }}
                             >
                               <IconOpenSidebarRight className="h-4 w-4" />
                             </Button>
@@ -7610,6 +7780,10 @@ Make sure to preserve all functionality from both branches when resolving confli
                               onClick={() => setIsTerminalSidebarOpen(true)}
                               className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
                               aria-label="Open terminal"
+                              style={{
+                                // @ts-expect-error - WebKit-specific property
+                                WebkitAppRegion: "no-drag",
+                              }}
                             >
                               <TerminalSquare className="h-4 w-4" />
                             </Button>
@@ -7629,9 +7803,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                       <Button
                         variant="ghost"
                         onClick={handleRestoreWorkspace}
-                        disabled={restoreWorkspaceMutation.isPending}
+                        disabled={restoreWorkspaceMutation.isPending || deleteWorkspaceMutation.isPending}
                         className="h-6 px-2 gap-1.5 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2 flex items-center"
                         aria-label="Restore workspace"
+                        style={{
+                          // @ts-expect-error - WebKit-specific property
+                          WebkitAppRegion: "no-drag",
+                        }}
                       >
                         <UnarchiveIcon className="h-4 w-4" />
                         <span className="text-xs">Restore</span>
@@ -7640,6 +7818,30 @@ Make sure to preserve all functionality from both branches when resolving confli
                     <TooltipContent side="bottom">
                       Restore workspace
                       <Kbd>⇧⌘E</Kbd>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {/* Delete Button - shows when viewing archived workspace (desktop only) */}
+                {!isMobileFullscreen && isArchived && (
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        onClick={handleDeleteWorkspace}
+                        disabled={restoreWorkspaceMutation.isPending || deleteWorkspaceMutation.isPending}
+                        className="h-6 px-2 gap-1.5 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 transition-colors text-foreground flex-shrink-0 rounded-md ml-1 flex items-center"
+                        aria-label="Delete workspace"
+                        style={{
+                          // @ts-expect-error - WebKit-specific property
+                          WebkitAppRegion: "no-drag",
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="text-xs">Delete</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Delete workspace permanently
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -7763,7 +7965,8 @@ Make sure to preserve all functionality from both branches when resolving confli
                   }
                 />
               ) : (
-                tabsToRender.map(subChatId => {
+                <SplitDropZone>
+                {tabsToRender.map(subChatId => {
                 const chat = getOrCreateChat(subChatId)
                 const isActive = subChatId === activeSubChatId
                 const isFirstSubChat = getFirstSubChatId(agentSubChats) === subChatId
@@ -7821,7 +8024,8 @@ Make sure to preserve all functionality from both branches when resolving confli
                     />
                   </div>
                 )
-              })
+              })}
+                </SplitDropZone>
               )}
             </div>
           ) : (
@@ -7831,7 +8035,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
               {/* Disabled input while loading */}
               <div className="px-2 pb-2">
-                <div className="w-full max-w-2xl mx-auto">
+                <div className="w-full max-w-5xl mx-auto">
                   <div className="relative w-full">
                     <PromptInput
                       className="border bg-input-background relative z-10 p-2 rounded-xl opacity-50 pointer-events-none"
@@ -8127,6 +8331,16 @@ Make sure to preserve all functionality from both branches when resolving confli
           matchingProjects={openLocallyMatchingProjects}
           allProjects={projects ?? []}
           remoteSubChatId={activeSubChatId}
+        />
+
+        {/* Delete Workspace Confirmation Dialog */}
+        <ConfirmDeleteDialog
+          open={confirmDeleteWorkspaceOpen}
+          onOpenChange={setConfirmDeleteWorkspaceOpen}
+          title="Delete Workspace"
+          description="Delete this archived workspace? This removes the workspace and its worktree permanently and cannot be undone."
+          onConfirm={handleConfirmDeleteWorkspace}
+          isDeleting={deleteWorkspaceMutation.isPending}
         />
 
         {/* Unified Details Sidebar - combines all right sidebars into one (rightmost) */}

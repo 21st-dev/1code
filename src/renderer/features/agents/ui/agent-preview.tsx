@@ -379,7 +379,13 @@ export function AgentPreview({
 
       {/* Desktop Header */}
       {!isMobile && !hideHeader && (
-        <div className="flex items-center justify-between px-3 h-10 bg-tl-background flex-shrink-0">
+        <div
+          className="flex items-center justify-between px-3 h-10 bg-tl-background flex-shrink-0"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
+        >
           {/* Left: Refresh + Viewport Toggle + Scale */}
           <div className="flex items-center gap-1 flex-1">
             <Button

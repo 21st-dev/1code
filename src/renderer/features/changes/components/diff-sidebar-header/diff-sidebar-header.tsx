@@ -183,7 +183,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		},
 	});
 
-	const { push: pushBranch, isPending: isPushPending } = usePushAction({
+	const { push: pushBranch, isPending: isPushPending, dialog: pushDialog } = usePushAction({
 		worktreePath,
 		hasUpstream,
 		onSuccess: onRefresh,
@@ -430,6 +430,8 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		: primaryAction;
 
 	return (
+		<>
+		{pushDialog}
 		<div className="relative flex items-center justify-between h-10 px-2 border-b border-border/50 bg-background flex-shrink-0">
 			{/* Drag region for window dragging */}
 			{isDesktop && !isFullscreen && (
@@ -961,5 +963,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 				</DropdownMenu>
 			</div>
 		</div>
+		</>
 	);
 })

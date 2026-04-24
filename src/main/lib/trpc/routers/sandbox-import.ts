@@ -482,6 +482,7 @@ export const sandboxImportRouter = router({
 			let finalRepo = gitInfo.repo;
 			let finalRemoteUrl = gitInfo.remoteUrl;
 			let finalProvider = gitInfo.provider;
+			const finalProject = gitInfo.project;
 
 			if (!finalOwner || !finalRepo) {
 				const repoFromMeta = remoteChatData.meta?.repository;
@@ -544,6 +545,7 @@ export const sandboxImportRouter = router({
 							gitProvider: finalProvider,
 							gitOwner: finalOwner,
 							gitRepo: finalRepo,
+							gitProject: finalProject,
 						})
 						.where(eq(projects.id, existingProject.id))
 						.returning()
@@ -557,6 +559,7 @@ export const sandboxImportRouter = router({
 							gitProvider: finalProvider,
 							gitOwner: finalOwner,
 							gitRepo: finalRepo,
+							gitProject: finalProject,
 						})
 						.returning()
 						.get();

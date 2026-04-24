@@ -1,8 +1,12 @@
 "use client"
 
 import {
+  Activity,
+  Bell,
+  Clock,
   Eye,
   FileCode2,
+  FileText,
   FolderSearch,
   GitBranch,
   List,
@@ -11,8 +15,10 @@ import {
   Minimize2,
   Plus,
   RefreshCw,
+  Square,
   Terminal,
   XCircle,
+  Zap,
 } from "lucide-react"
 import {
   CustomTerminalIcon,
@@ -606,6 +612,198 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       return text.length > 50 ? text.slice(0, 47) + "..." : text
     },
     variant: "collapsible",
+  },
+
+  "tool-Skill": {
+    icon: SparklesIcon,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      const name = part.input?.skill || part.input?.name || "skill"
+      return isPending ? `Running ${name}` : `Ran ${name}`
+    },
+    subtitle: (part) => {
+      const args = part.input?.args
+      if (!args) return ""
+      const text = typeof args === "string" ? args : JSON.stringify(args)
+      return text.length > 50 ? text.slice(0, 47) + "..." : text
+    },
+    variant: "simple",
+  },
+
+  "tool-ScheduleWakeup": {
+    icon: Clock,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Scheduling wake-up" : "Scheduled wake-up"
+    },
+    subtitle: (part) => {
+      const seconds = part.input?.delaySeconds
+      if (typeof seconds !== "number") return ""
+      if (seconds < 60) return `${seconds}s`
+      if (seconds < 3600) return `${Math.round(seconds / 60)}m`
+      return `${Math.round(seconds / 360) / 10}h`
+    },
+    variant: "simple",
+  },
+
+  "tool-EnterPlanMode": {
+    icon: PlanningIcon,
+    title: (part) => {
+      const { isPending } = getToolStatus(part)
+      return isPending ? "Entering plan mode" : "Planning"
+    },
+    subtitle: () => "",
+    variant: "simple",
+  },
+
+  "tool-CronCreate": {
+    icon: Clock,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Creating schedule" : "Created schedule"
+    },
+    subtitle: (part) => {
+      const cron = part.input?.cron || part.input?.schedule || ""
+      return cron.length > 40 ? cron.slice(0, 37) + "..." : cron
+    },
+    variant: "simple",
+  },
+
+  "tool-CronDelete": {
+    icon: Clock,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Deleting schedule" : "Deleted schedule"
+    },
+    subtitle: (part) => {
+      const id = part.input?.id
+      return id ? `#${id}` : ""
+    },
+    variant: "simple",
+  },
+
+  "tool-CronList": {
+    icon: Clock,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Listing schedules" : "Listed schedules"
+    },
+    subtitle: () => "",
+    variant: "simple",
+  },
+
+  "tool-Monitor": {
+    icon: Activity,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Monitoring" : "Monitored"
+    },
+    subtitle: (part) => {
+      const cmd = part.input?.command || ""
+      return cmd.length > 40 ? cmd.slice(0, 37) + "..." : cmd
+    },
+    variant: "simple",
+  },
+
+  "tool-PushNotification": {
+    icon: Bell,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Sending notification" : "Sent notification"
+    },
+    subtitle: (part) => {
+      const title = part.input?.title || part.input?.message || ""
+      return title.length > 40 ? title.slice(0, 37) + "..." : title
+    },
+    variant: "simple",
+  },
+
+  "tool-TaskOutput": {
+    icon: FileText,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Getting task output" : "Got task output"
+    },
+    subtitle: (part) => {
+      const id = part.input?.taskId || part.input?.id
+      return id ? `#${id}` : ""
+    },
+    variant: "simple",
+  },
+
+  "tool-TaskStop": {
+    icon: Square,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Stopping task" : "Stopped task"
+    },
+    subtitle: (part) => {
+      const id = part.input?.taskId || part.input?.id
+      return id ? `#${id}` : ""
+    },
+    variant: "simple",
+  },
+
+  "tool-EnterWorktree": {
+    icon: GitBranch,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Entering worktree" : "Entered worktree"
+    },
+    subtitle: (part) => {
+      const branch = part.input?.branch || part.input?.path || ""
+      return branch.length > 40 ? branch.slice(0, 37) + "..." : branch
+    },
+    variant: "simple",
+  },
+
+  "tool-ExitWorktree": {
+    icon: GitBranch,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Leaving worktree" : "Left worktree"
+    },
+    subtitle: () => "",
+    variant: "simple",
+  },
+
+  "tool-RemoteTrigger": {
+    icon: Zap,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Triggering remote" : "Triggered remote"
+    },
+    subtitle: (part) => {
+      const name = part.input?.name || part.input?.trigger || ""
+      return name.length > 40 ? name.slice(0, 37) + "..." : name
+    },
+    variant: "simple",
+  },
+
+  "tool-ToolSearch": {
+    icon: SearchIcon,
+    title: (part) => {
+      const isPending =
+        part.state !== "output-available" && part.state !== "output-error"
+      return isPending ? "Finding tools" : "Found tools"
+    },
+    subtitle: (part) => {
+      const query = part.input?.query || ""
+      return query.length > 40 ? query.slice(0, 37) + "..." : query
+    },
+    variant: "simple",
   },
 }
 

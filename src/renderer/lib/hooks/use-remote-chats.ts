@@ -106,13 +106,13 @@ export function usePrefetchRemoteChat() {
 /**
  * Fetch archived remote chats for the selected team
  */
-export function useRemoteArchivedChats() {
+export function useRemoteArchivedChats(enabled: boolean = true) {
   const teamId = useAtomValue(selectedTeamIdAtom)
 
   return useQuery({
     queryKey: ["remote-archived-chats", teamId],
     queryFn: () => remoteApi.getArchivedChats(teamId!),
-    enabled: !!teamId,
+    enabled: enabled && !!teamId,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   })

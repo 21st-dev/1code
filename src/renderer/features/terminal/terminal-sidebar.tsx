@@ -113,6 +113,10 @@ function TerminalModeSwitcher({
           variant="ghost"
           size="sm"
           className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "no-drag",
+          }}
         >
           <CurrentIcon className="size-4 text-muted-foreground" />
         </Button>
@@ -546,6 +550,10 @@ export function TerminalSidebar({
                   onClick={closeSidebar}
                   className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
                   aria-label="Close terminal"
+                  style={{
+                    // @ts-expect-error - WebKit-specific property
+                    WebkitAppRegion: "no-drag",
+                  }}
                 >
                   <IconDoubleChevronRight className="h-4 w-4" />
                 </Button>

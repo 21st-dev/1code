@@ -64,8 +64,6 @@ export function KanbanView() {
   const [confirmArchiveDialogOpen, setConfirmArchiveDialogOpen] = useState(false)
   const [archivingChatId, setArchivingChatId] = useState<string | null>(null)
   const [activeProcessCount, setActiveProcessCount] = useState(0)
-  const [hasWorktree, setHasWorktree] = useState(false)
-  const [uncommittedCount, setUncommittedCount] = useState(0)
 
   // tRPC utils
   const utils = trpc.useUtils()
@@ -365,24 +363,16 @@ export function KanbanView() {
 
   // Archive handler with confirmation for active processes
   const handleArchive = useCallback(async (chatId: string) => {
-    // Check for active processes and worktree
     const chat = chats?.find((c) => c.id === chatId)
     const isLocalMode = !chat?.branch
-    const [sessionCount, worktreeStatus] = await Promise.all([
-      // Local mode: terminals are shared and won't be killed on archive, so skip count
-      isLocalMode
-        ? Promise.resolve(0)
-        : utils.terminal.getActiveSessionCount.fetch({ workspaceId: chatId }),
-      utils.chats.getWorktreeStatus.fetch({ chatId }),
-    ])
+    // Local mode: terminals are shared and won't be killed on archive, so skip count
+    const sessionCount = isLocalMode
+      ? 0
+      : await utils.terminal.getActiveSessionCount.fetch({ workspaceId: chatId })
 
-    const needsConfirmation = sessionCount > 0 || worktreeStatus.hasWorktree
-
-    if (needsConfirmation) {
+    if (sessionCount > 0) {
       setArchivingChatId(chatId)
       setActiveProcessCount(sessionCount)
-      setHasWorktree(worktreeStatus.hasWorktree)
-      setUncommittedCount(worktreeStatus.uncommittedCount)
       setConfirmArchiveDialogOpen(true)
     } else {
       await archiveChatMutation.mutateAsync({ id: chatId })
@@ -459,8 +449,6 @@ export function KanbanView() {
         onClose={handleCancelArchive}
         onConfirm={handleConfirmArchive}
         activeProcessCount={activeProcessCount}
-        hasWorktree={hasWorktree}
-        uncommittedCount={uncommittedCount}
       />
     </div>
   )

@@ -87,6 +87,10 @@ function sendToAllRenderers(channel: string, data?: unknown) {
  * Initialize the auto-updater with event handlers and IPC
  */
 export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
+  // UPDATES-DISABLED: re-enable to restore update functionality
+  void getWindows
+  return
+  /*
   getAllWindows = getWindows
 
   // Initialize config
@@ -181,12 +185,16 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
   registerIpcHandlers()
 
   log.info("[AutoUpdater] Initialized with feed URL:", CDN_BASE)
+  */
 }
 
 /**
  * Register IPC handlers for update operations
  */
 function registerIpcHandlers() {
+  // UPDATES-DISABLED: re-enable to restore update IPC handlers
+  return
+  /*
   // Check for updates
   ipcMain.handle("update:check", async (_event, force?: boolean) => {
     if (!app.isPackaged) {
@@ -272,6 +280,7 @@ function registerIpcHandlers() {
   ipcMain.handle("update:get-channel", () => {
     return getSavedChannel()
   })
+  */
 }
 
 /**
@@ -279,6 +288,10 @@ function registerIpcHandlers() {
  * @param force - Skip the minimum interval check
  */
 export async function checkForUpdates(force = false) {
+  // UPDATES-DISABLED: re-enable to restore update check
+  void force
+  return Promise.resolve(null)
+  /*
   if (!app.isPackaged) {
     log.info("[AutoUpdater] Skipping update check in dev mode")
     return Promise.resolve(null)
@@ -295,12 +308,16 @@ export async function checkForUpdates(force = false) {
 
   lastCheckTime = now
   return autoUpdater.checkForUpdates()
+  */
 }
 
 /**
  * Start downloading the update
  */
 export async function downloadUpdate() {
+  // UPDATES-DISABLED: re-enable to restore update download
+  return false
+  /*
   if (!app.isPackaged) {
     log.info("[AutoUpdater] Skipping download in dev mode")
     return false
@@ -314,6 +331,7 @@ export async function downloadUpdate() {
     log.error("[AutoUpdater] Download failed:", error)
     return false
   }
+  */
 }
 
 /**
@@ -321,11 +339,15 @@ export async function downloadUpdate() {
  * This is more natural than checking on an interval
  */
 export function setupFocusUpdateCheck(_getWindows: () => BrowserWindow[]) {
+  // UPDATES-DISABLED: re-enable to restore focus-based update check
+  return
+  /*
   // Listen for window focus events
   app.on("browser-window-focus", () => {
     log.info("[AutoUpdater] Window focused - checking for updates")
     checkForUpdates()
   })
+  */
 }
 
 /**

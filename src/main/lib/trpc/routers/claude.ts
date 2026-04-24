@@ -2,6 +2,7 @@ import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
 import * as fs from "fs/promises"
+import { existsSync } from "node:fs"
 import * as os from "os"
 import path from "path"
 import { z } from "zod"
@@ -30,6 +31,7 @@ import {
   type McpServerConfig,
 } from "../../claude-config"
 import { anthropicAccounts, anthropicSettings, chats, claudeCodeCredentials, getDatabase, projects as projectsTable, subChats } from "../../db"
+import { computeFileStatsFromMessages } from "../../file-stats"
 import { createRollbackStash } from "../../git/stash"
 import {
   ensureMcpTokensFresh,
@@ -274,6 +276,18 @@ export function abortAllClaudeSessions(): void {
     controller.abort()
   }
   activeSessions.clear()
+}
+
+/** Abort Claude sessions for a specific set of sub-chat ids */
+export function abortClaudeSessionsForSubChats(subChatIds: string[]): void {
+  for (const subChatId of subChatIds) {
+    const controller = activeSessions.get(subChatId)
+    if (controller) {
+      console.log(`[claude] Aborting session ${subChatId} (workspace removed)`)
+      controller.abort()
+      activeSessions.delete(subChatId)
+    }
+  }
 }
 
 // In-memory cache of working MCP server names (resets on app restart)
@@ -810,7 +824,9 @@ export const claudeRouter = router({
             baseUrl: z.string().min(1),
           })
           .optional(),
-        maxThinkingTokens: z.number().optional(), // Enable extended thinking
+        effort: z
+          .enum(["low", "medium", "high", "xhigh", "max"])
+          .optional(), // Thinking/reasoning effort level
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
         historyEnabled: z.boolean().optional(),
         offlineModeEnabled: z.boolean().optional(), // Whether offline mode (Ollama) is enabled in settings
@@ -844,8 +860,17 @@ export const claudeRouter = router({
         // Track if observable is still active (not unsubscribed)
         let isObservableActive = true
 
-        // Helper to safely emit (no-op if already unsubscribed)
-        const safeEmit = (chunk: UIMessageChunk) => {
+        // text-delta coalescing: the Claude SDK emits many small delta chunks
+        // per second during streaming. Sending each one through tRPC+IPC churns
+        // the renderer. We buffer consecutive same-id deltas and flush on a
+        // short interval or when a non-delta chunk arrives.
+        const TEXT_DELTA_FLUSH_MS = 24
+        let pendingTextDelta: { type: "text-delta"; id: string; delta: string } | null = null
+        let pendingTextDeltaTimer: ReturnType<typeof setTimeout> | null = null
+
+        // Raw emit that bypasses the text-delta buffer (used by the buffer itself
+        // and by error paths). Returns false if the observer is closed.
+        const rawEmit = (chunk: UIMessageChunk): boolean => {
           if (!isObservableActive) return false
           try {
             emit.next(chunk)
@@ -856,8 +881,49 @@ export const claudeRouter = router({
           }
         }
 
+        const flushPendingTextDelta = (): boolean => {
+          if (pendingTextDeltaTimer !== null) {
+            clearTimeout(pendingTextDeltaTimer)
+            pendingTextDeltaTimer = null
+          }
+          if (pendingTextDelta === null) return true
+          const chunk = pendingTextDelta
+          pendingTextDelta = null
+          return rawEmit(chunk as UIMessageChunk)
+        }
+
+        // Helper to safely emit (no-op if already unsubscribed).
+        // Coalesces text-delta chunks; flushes any pending delta before
+        // emitting chunks of other types so ordering stays correct.
+        const safeEmit = (chunk: UIMessageChunk) => {
+          if (!isObservableActive) return false
+
+          if (chunk.type === "text-delta") {
+            const { id, delta } = chunk as { id: string; delta: string }
+            if (pendingTextDelta && pendingTextDelta.id === id) {
+              pendingTextDelta.delta += delta
+            } else {
+              // Different id → flush the previous buffer first.
+              if (!flushPendingTextDelta()) return false
+              pendingTextDelta = { type: "text-delta", id, delta }
+            }
+            if (pendingTextDeltaTimer === null) {
+              pendingTextDeltaTimer = setTimeout(
+                flushPendingTextDelta,
+                TEXT_DELTA_FLUSH_MS,
+              )
+            }
+            return isObservableActive
+          }
+
+          // Any non-text-delta chunk → flush the buffer first so ordering is preserved.
+          if (!flushPendingTextDelta()) return false
+          return rawEmit(chunk)
+        }
+
         // Helper to safely complete (no-op if already closed)
         const safeComplete = () => {
+          flushPendingTextDelta()
           try {
             emit.complete()
           } catch {
@@ -895,11 +961,34 @@ export const claudeRouter = router({
             const db = getDatabase()
 
             // 1. Get existing messages from DB
-            const existing = db
+            let existing = db
               .select()
               .from(subChats)
               .where(eq(subChats.id, input.subChatId))
               .get()
+
+            // Safety net: if the sub-chat row doesn't exist yet (renderer sent
+            // `send` before `createSubChat` round-tripped), backfill it instead
+            // of silently no-op'ing the UPDATE below.
+            if (!existing) {
+              console.warn(
+                `[claude] sub-chat ${input.subChatId} missing on send — auto-creating`,
+              )
+              db.insert(subChats)
+                .values({
+                  id: input.subChatId,
+                  chatId: input.chatId,
+                  mode: input.mode,
+                  messages: "[]",
+                })
+                .run()
+              existing = db
+                .select()
+                .from(subChats)
+                .where(eq(subChats.id, input.subChatId))
+                .get()
+            }
+
             const existingMessages = JSON.parse(existing?.messages || "[]")
             const existingSessionId = existing?.sessionId || null
 
@@ -925,10 +1014,13 @@ export const claudeRouter = router({
                   delete m.metadata.shouldForkResume
                 }
               }
-              db.update(subChats)
-                .set({ messages: JSON.stringify(existingMessages) })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
+              {
+                const existingJson = JSON.stringify(existingMessages)
+                db.update(subChats)
+                  .set({ messages: existingJson, ...computeFileStatsFromMessages(existingJson) })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+              }
             }
 
             // Check if last message is already this user message (avoid duplicate)
@@ -967,14 +1059,18 @@ export const claudeRouter = router({
               }
               messagesToSave = [...existingMessages, userMessage]
 
-              db.update(subChats)
-                .set({
-                  messages: JSON.stringify(messagesToSave),
-                  streamId,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
+              {
+                const messagesToSaveJson = JSON.stringify(messagesToSave)
+                db.update(subChats)
+                  .set({
+                    messages: messagesToSaveJson,
+                    ...computeFileStatsFromMessages(messagesToSaveJson),
+                    streamId,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+              }
             }
 
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
@@ -1492,7 +1588,38 @@ export const claudeRouter = router({
               }
             }
 
-            const resolvedModel = finalCustomConfig?.model || input.model
+            const rawResolvedModel = finalCustomConfig?.model || input.model
+            // 1M context: the UI exposes `opus[1m]` and `sonnet[1m]` as
+            // distinct models, but the Claude CLI only understands the base
+            // shortcuts (`opus`, `sonnet`). Strip the `[1m]` suffix for the
+            // model field and enable the shared beta via ANTHROPIC_BETAS on
+            // the child env.
+            const has1MSuffix =
+              typeof rawResolvedModel === "string" &&
+              rawResolvedModel.endsWith("[1m]")
+            const resolvedModel = has1MSuffix
+              ? rawResolvedModel!.slice(0, -4)
+              : rawResolvedModel
+            if (has1MSuffix) {
+              const envAsRecord = finalEnv as Record<string, string>
+              const existingBetas = envAsRecord.ANTHROPIC_BETAS
+              const betaSlug = "context-1m-2025-08-07"
+              const merged = existingBetas
+                ? Array.from(
+                    new Set([
+                      ...existingBetas
+                        .split(",")
+                        .map((s: string) => s.trim())
+                        .filter(Boolean),
+                      betaSlug,
+                    ]),
+                  ).join(",")
+                : betaSlug
+              envAsRecord.ANTHROPIC_BETAS = merged
+              console.log(
+                `[claude] 1M context enabled for ${resolvedModel} — ANTHROPIC_BETAS=${merged}`,
+              )
+            }
 
             // DEBUG: If using Ollama, test if it's actually responding
             if (isUsingOllama && finalCustomConfig) {
@@ -1770,7 +1897,7 @@ ${prompt}
                 includePartialMessages: true,
                 // Load skills from project and user directories (skip for Ollama - not supported)
                 ...(!isUsingOllama && {
-                  settingSources: ["project" as const, "user" as const],
+                  settingSources: ["project" as const, "local" as const, "user" as const],
                 }),
                 canUseTool: async (
                   toolName: string,
@@ -1977,26 +2104,21 @@ ${prompt}
                 pathToClaudeCodeExecutable: claudeBinaryPath,
                 // Session handling: For Ollama, use resume with session ID to maintain history
                 // For Claude API, use resume with rollback/fork support
-                ...(resumeSessionId && {
-                  resume: resumeSessionId,
-                  // Fork support - resume at specific point and create new session
-                  ...(shouldForkResume && forkResumeAtUuid && !isUsingOllama
-                    ? {
-                        resumeSessionAt: forkResumeAtUuid,
-                        forkSession: true,
-                      }
-                    : // Rollback support - resume at specific message UUID (from DB)
-                      resumeAtUuid && !isUsingOllama
-                      ? { resumeSessionAt: resumeAtUuid }
-                      : { continue: true }),
-                }),
-                // For first message in chat (no session ID yet), use continue mode
-                ...(!resumeSessionId && { continue: true }),
+                // resume is mutually exclusive with continue (SDK contract)
+                ...(resumeSessionId
+                  ? {
+                      resume: resumeSessionId,
+                      // Fork support - resume at specific point and create new session
+                      ...(shouldForkResume && forkResumeAtUuid && !isUsingOllama
+                        ? { resumeSessionAt: forkResumeAtUuid, forkSession: true }
+                        : // Rollback support - resume at specific message UUID (from DB)
+                          resumeAtUuid && !isUsingOllama
+                          ? { resumeSessionAt: resumeAtUuid }
+                          : {}),
+                    }
+                  : { continue: true }),
                 ...(resolvedModel && { model: resolvedModel }),
-                // fallbackModel: "claude-opus-4-5-20251101",
-                ...(input.maxThinkingTokens && {
-                  maxThinkingTokens: input.maxThinkingTokens,
-                }),
+                ...(input.effort && { effort: input.effort }),
               },
             }
 
@@ -2040,6 +2162,21 @@ ${prompt}
 
               // Plan mode: track ExitPlanMode to stop after plan is complete
               let exitPlanModeToolCallId: string | null = null
+
+              // Stream wedge recovery: abort if no first chunk arrives within 90s.
+              // SDK hangs have been observed with no crash/no error — detect them
+              // instead of letting the UI sit on a pending stream forever.
+              let streamWedged = false
+              const WEDGE_TIMEOUT_MS = 90_000
+              const wedgeTimer = setTimeout(() => {
+                if (!firstMessageReceived) {
+                  streamWedged = true
+                  console.error(
+                    `[claude] Stream wedged — no data in ${WEDGE_TIMEOUT_MS / 1000}s, aborting`,
+                  )
+                  abortController.abort()
+                }
+              }, WEDGE_TIMEOUT_MS)
 
               if (isUsingOllama) {
                 console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
@@ -2097,6 +2234,7 @@ ${prompt}
                   // Warn if SDK initialization is slow (MCP delay)
                   if (!firstMessageReceived) {
                     firstMessageReceived = true
+                    clearTimeout(wedgeTimer)
                     const timeToFirstMessage = Date.now() - streamIterationStart
                     if (isUsingOllama) {
                       console.log(
@@ -2252,6 +2390,7 @@ ${prompt}
                           rawErrorCode,
                           sessionId: msgAny.session_id,
                           messageId: msgAny.message?.id,
+                          model: rawResolvedModel,
                         },
                       } as UIMessageChunk)
                     }
@@ -2426,6 +2565,8 @@ ${prompt}
                   }
                 }
 
+                clearTimeout(wedgeTimer)
+
                 // Warn if stream yielded no messages (offline mode issue)
                 const streamDuration = Date.now() - streamIterationStart
                 if (isUsingOllama) {
@@ -2472,6 +2613,7 @@ ${prompt}
                 }
               } catch (streamError) {
                 // This catches errors during streaming (like process exit)
+                clearTimeout(wedgeTimer)
                 const err = streamError as Error
                 const stderrOutput = stderrLines.join("\n")
 
@@ -2499,7 +2641,10 @@ ${prompt}
                   "No conversation found with session ID",
                 )
 
-                if (isSessionNotFound) {
+                if (streamWedged) {
+                  errorContext = `Claude stream wedged — no data received in ${WEDGE_TIMEOUT_MS / 1000}s. Try again.`
+                  errorCategory = "STREAM_WEDGE"
+                } else if (isSessionNotFound) {
                   // Clear the invalid session ID from database so next attempt starts fresh
                   console.log(
                     `[claude] Session not found - clearing invalid sessionId from database`,
@@ -2515,8 +2660,15 @@ ${prompt}
                   errorContext = "Claude Code process crashed"
                   errorCategory = "PROCESS_CRASH"
                 } else if (err.message?.includes("ENOENT")) {
-                  errorContext = "Required executable not found in PATH"
-                  errorCategory = "EXECUTABLE_NOT_FOUND"
+                  // If the bundled Claude binary is missing, surface a clear
+                  // recovery path instead of a generic PATH error.
+                  if (!existsSync(claudeBinaryPath)) {
+                    errorContext = `Claude binary not found at ${claudeBinaryPath}. Run \`bun run claude:download\` and restart the app.`
+                    errorCategory = "CLAUDE_BINARY_MISSING"
+                  } else {
+                    errorContext = "Required executable not found in PATH"
+                    errorCategory = "EXECUTABLE_NOT_FOUND"
+                  }
                 } else if (
                   err.message?.includes("authentication") ||
                   err.message?.includes("401")
@@ -2567,8 +2719,9 @@ ${prompt}
                   }
                 }
 
-                // Send error with stderr output to frontend (only if not aborted by user)
-                if (!abortController.signal.aborted) {
+                // Send error with stderr output to frontend (only if not aborted by user).
+                // Wedge-triggered aborts are NOT user aborts — surface them.
+                if (!abortController.signal.aborted || streamWedged) {
                   safeEmit({
                     type: "error",
                     errorText: stderrOutput
@@ -2580,6 +2733,7 @@ ${prompt}
                       cwd: input.cwd,
                       mode: input.mode,
                       stderr: stderrOutput || "(no stderr captured)",
+                      model: rawResolvedModel,
                     },
                   } as UIMessageChunk)
                 }
@@ -2599,15 +2753,19 @@ ${prompt}
                     metadata,
                   }
                   const finalMessages = [...messagesToSave, assistantMessage]
-                  db.update(subChats)
-                    .set({
-                      messages: JSON.stringify(finalMessages),
-                      sessionId: metadata.sessionId,
-                      streamId: null,
-                      updatedAt: new Date(),
-                    })
-                    .where(eq(subChats.id, input.subChatId))
-                    .run()
+                  {
+                    const finalJson = JSON.stringify(finalMessages)
+                    db.update(subChats)
+                      .set({
+                        messages: finalJson,
+                        ...computeFileStatsFromMessages(finalJson),
+                        sessionId: metadata.sessionId,
+                        streamId: null,
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(subChats.id, input.subChatId))
+                      .run()
+                  }
                   db.update(chats)
                     .set({ updatedAt: new Date() })
                     .where(eq(chats.id, input.chatId))
@@ -2680,15 +2838,19 @@ ${prompt}
 
               const finalMessages = [...messagesToSave, assistantMessage]
 
-              db.update(subChats)
-                .set({
-                  messages: JSON.stringify(finalMessages),
-                  sessionId: savedSessionId,
-                  streamId: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
+              {
+                const finalJson = JSON.stringify(finalMessages)
+                db.update(subChats)
+                  .set({
+                    messages: finalJson,
+                    ...computeFileStatsFromMessages(finalJson),
+                    sessionId: savedSessionId,
+                    streamId: null,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+              }
             } else {
               // No assistant response - just clear streamId
               db.update(subChats)
@@ -2742,6 +2904,11 @@ ${prompt}
             `[SD] M:CLEANUP sub=${subId} sessionId=${currentSessionId || "none"}`,
           )
           isObservableActive = false // Prevent emit after unsubscribe
+          if (pendingTextDeltaTimer !== null) {
+            clearTimeout(pendingTextDeltaTimer)
+            pendingTextDeltaTimer = null
+          }
+          pendingTextDelta = null
           abortController.abort()
           activeSessions.delete(input.subChatId)
           clearPendingApprovals("Session ended.", input.subChatId)

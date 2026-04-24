@@ -40,13 +40,15 @@ export const createGitRouter = () => {
 
 // ============ GIT REMOTE INFO ============
 
-export type GitProvider = "github" | "gitlab" | "bitbucket" | null;
+export type GitProvider = "github" | "gitlab" | "bitbucket" | "azure" | null;
 
 export interface GitRemoteInfo {
 	remoteUrl: string | null;
 	provider: GitProvider;
 	owner: string | null;
 	repo: string | null;
+	/** Only populated for Azure DevOps (org / project / repo). Null otherwise. */
+	project: string | null;
 }
 
 /**
@@ -81,6 +83,62 @@ function parseGitRemoteUrl(url: string): Omit<GitRemoteInfo, "remoteUrl"> {
 	let owner: string | null = null;
 	let repo: string | null = null;
 
+	// Azure HTTPS: https://[org@]dev.azure.com/{org}/{project}/_git/{repo}
+	const azureHttpsMatch = normalized.match(
+		/https?:\/\/(?:[^@/]+@)?dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)/,
+	);
+	if (azureHttpsMatch) {
+		const [, orgPart, projectPart, repoPart] = azureHttpsMatch;
+		return {
+			provider: "azure",
+			owner: orgPart || null,
+			project: projectPart || null,
+			repo: repoPart || null,
+		};
+	}
+
+	// Legacy Azure HTTPS: https://{org}.visualstudio.com/[DefaultCollection/]{project}/_git/{repo}
+	const legacyAzureHttpsMatch = normalized.match(
+		/https?:\/\/([^.]+)\.visualstudio\.com\/(?:DefaultCollection\/)?([^/]+)\/_git\/([^/]+)/,
+	);
+	if (legacyAzureHttpsMatch) {
+		const [, orgPart, projectPart, repoPart] = legacyAzureHttpsMatch;
+		return {
+			provider: "azure",
+			owner: orgPart || null,
+			project: projectPart || null,
+			repo: repoPart || null,
+		};
+	}
+
+	// Azure SSH: git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
+	const azureSshMatch = normalized.match(
+		/git@ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/(.+)/,
+	);
+	if (azureSshMatch) {
+		const [, orgPart, projectPart, repoPart] = azureSshMatch;
+		return {
+			provider: "azure",
+			owner: orgPart || null,
+			project: projectPart || null,
+			repo: repoPart || null,
+		};
+	}
+
+	// Legacy Azure SSH: {org}@vs-ssh.visualstudio.com:v3/{org}/{project}/{repo}
+	const legacyVsSshMatch = normalized.match(
+		/[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/(.+)/,
+	);
+	if (legacyVsSshMatch) {
+		const [, orgPart, projectPart, repoPart] = legacyVsSshMatch;
+		return {
+			provider: "azure",
+			owner: orgPart || null,
+			project: projectPart || null,
+			repo: repoPart || null,
+		};
+	}
+
 	// Match HTTPS format: https://github.com/owner/repo
 	const httpsMatch = normalized.match(
 		/https?:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/([^/]+)\/([^/]+)/,
@@ -97,7 +155,7 @@ function parseGitRemoteUrl(url: string): Omit<GitRemoteInfo, "remoteUrl"> {
 						: null;
 		owner = ownerPart || null;
 		repo = repoPart || null;
-		return { provider, owner, repo };
+		return { provider, owner, repo, project: null };
 	}
 
 	// Match SSH format: git@github.com:owner/repo
@@ -116,10 +174,10 @@ function parseGitRemoteUrl(url: string): Omit<GitRemoteInfo, "remoteUrl"> {
 						: null;
 		owner = ownerPart || null;
 		repo = repoPart || null;
-		return { provider, owner, repo };
+		return { provider, owner, repo, project: null };
 	}
 
-	return { provider: null, owner: null, repo: null };
+	return { provider: null, owner: null, repo: null, project: null };
 }
 
 /**
@@ -134,6 +192,7 @@ export async function getGitRemoteInfo(
 		provider: null,
 		owner: null,
 		repo: null,
+		project: null,
 	};
 
 	// Check if it's a git repo

@@ -22,7 +22,7 @@ const PopoverContent = React.forwardRef<
   }
 >(
   (
-    { className, align = "center", sideOffset = 4, forceDark = true, ...props },
+    { className, align = "center", sideOffset = 4, forceDark = false, ...props },
     ref,
   ) => (
     <PopoverPrimitive.Portal>
