@@ -2004,6 +2004,9 @@ ${prompt}
             const MAX_POLICY_RETRIES = 2
             let policyRetryCount = 0
             let policyRetryNeeded = false
+            // Silent retry once if Claude Code reports the conversation session id is unfindable
+            // (e.g. JSONL was cleaned up, sanitized cwd changed). Drops `resume` and starts fresh.
+            let sessionRetryAttempted = false
             let messageCount = 0
             let pendingFinishChunk: UIMessageChunk | null = null
 
@@ -2508,6 +2511,33 @@ ${prompt}
                     .set({ sessionId: null })
                     .where(eq(subChats.id, input.subChatId))
                     .run()
+
+                  // Silent retry once: drop resume options and re-run the same query as a
+                  // fresh conversation. The renderer never sees an error, so the chat doesn't
+                  // flash empty and auto-rename doesn't trigger.
+                  if (
+                    !sessionRetryAttempted &&
+                    !abortController.signal.aborted
+                  ) {
+                    sessionRetryAttempted = true
+                    console.log(
+                      `[claude] Session expired - silent retry as new conversation (sub=${subId})`,
+                    )
+
+                    const opts = queryOptions.options as Record<string, unknown>
+                    delete opts.resume
+                    delete opts.resumeSessionAt
+                    delete opts.forkSession
+                    opts.continue = true
+
+                    // Reset accumulation state so next iteration starts clean
+                    parts.length = 0
+                    currentText = ""
+                    metadata = {}
+                    stderrLines.length = 0
+
+                    continue
+                  }
 
                   errorContext = "Previous session expired. Please try again."
                   errorCategory = "SESSION_EXPIRED"
