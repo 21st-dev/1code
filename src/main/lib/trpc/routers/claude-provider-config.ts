@@ -5,6 +5,8 @@ import { claudeProviderConfig, getDatabase } from "../../db"
 import { publicProcedure, router } from "../index"
 
 const CONFIG_ID = "default"
+const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
+const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
 
 export const claudeProviderAuthModeSchema = z.enum(["api_key", "auth_token"])
 export type ClaudeProviderAuthMode = z.infer<typeof claudeProviderAuthModeSchema>
@@ -48,6 +50,22 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, "")
 }
 
+function normalizeProviderToken(token: string): string {
+  const normalized = token
+    .trim()
+    .replace(ZERO_WIDTH_TOKEN_CHARS_REGEX, "")
+
+  if (!normalized) {
+    throw new Error("Token is required")
+  }
+
+  if (!HEADER_SAFE_TOKEN_REGEX.test(normalized)) {
+    throw new Error("Token contains whitespace or unsupported characters")
+  }
+
+  return normalized
+}
+
 function rowToMetadata(
   row: typeof claudeProviderConfig.$inferSelect,
 ): ClaudeProviderMetadata {
@@ -83,7 +101,7 @@ export function getActiveClaudeProviderConfig():
     model: row.model,
     baseUrl: row.baseUrl,
     authMode: claudeProviderAuthModeSchema.catch("auth_token").parse(row.authMode),
-    token: decryptToken(row.encryptedToken),
+    token: normalizeProviderToken(decryptToken(row.encryptedToken)),
   }
 }
 
@@ -125,7 +143,7 @@ export const claudeProviderConfigRouter = router({
   save: publicProcedure.input(saveInputSchema).mutation(({ input }) => {
     const model = input.model.trim()
     const baseUrl = normalizeBaseUrl(input.baseUrl)
-    const token = input.token?.trim()
+    const token = input.token ? normalizeProviderToken(input.token) : undefined
     const existing = getStoredProviderRow()
 
     if (!model || !baseUrl) {
@@ -195,7 +213,7 @@ export const claudeProviderConfigRouter = router({
             model: input.model.trim(),
             baseUrl: normalizeBaseUrl(input.baseUrl),
             authMode: input.authMode,
-            encryptedToken: encryptToken(input.token.trim()),
+            encryptedToken: encryptToken(normalizeProviderToken(input.token)),
             createdAt: new Date(),
             updatedAt: new Date(),
           })

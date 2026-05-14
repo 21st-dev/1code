@@ -22,6 +22,6 @@
 ## 5. Verification
 - [x] 5.1 Run `bun run build`.
 - [x] 5.2 Run `bun run ts:check`; fix touched-path errors and report any unrelated remaining debt.
-- [ ] 5.3 Smoke test logged-out launch: open app without login, select/open a local repo, configure Claude or Codex, send a simple read-only task, confirm the agent can read the project and respond.
-- [ ] 5.4 Smoke test third-party Anthropic-compatible provider with a provided base URL/token/model and confirm the runtime uses the selected auth env var without logging the secret.
+- [x] 5.3 Smoke test logged-out launch: open app without login, select/open a local repo, configure Claude or Codex, send a simple read-only task, confirm the agent can read the project and respond.
+- [x] 5.4 Smoke test third-party Anthropic-compatible provider with a provided base URL/token/model and confirm the runtime uses the selected auth env var without logging the secret.
 - [x] 5.5 Update PR notes with exact validation results and any credential-dependent test limitations.
