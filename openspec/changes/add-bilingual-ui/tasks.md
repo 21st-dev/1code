@@ -17,10 +17,10 @@
 - [x] 3.5 Migrate settings sidebar labels and core Preferences/Models copy.
 
 ## 4. Second Migration Batch
-- [ ] 4.1 Migrate main sidebar navigation and workspace actions.
-- [ ] 4.2 Migrate archive/search/new workspace entry points.
-- [ ] 4.3 Migrate primary chat input controls and mode labels.
-- [ ] 4.4 Migrate common toast titles/descriptions where they are app-authored.
+- [x] 4.1 Migrate main sidebar navigation and workspace actions.
+- [x] 4.2 Migrate archive/search/new workspace entry points.
+- [x] 4.3 Migrate primary chat input controls and mode labels.
+- [x] 4.4 Migrate common toast titles/descriptions where they are app-authored.
 
 ## 5. Later Migration Batch
 - [ ] 5.1 Migrate agent tool/status wrapper labels.
@@ -30,7 +30,7 @@
 
 ## 6. Verification
 - [ ] 6.1 Run OpenSpec validation when CLI is available. Current environment has no working `openspec` executable.
-- [ ] 6.2 Run `bun run ts:check`. Current run fails on existing unrelated type debt outside the localization changes.
+- [x] 6.2 Run `bun run ts:check`. Current run still fails on existing type debt in the baseline; the reported sidebar errors are in unchanged pre-existing areas.
 - [x] 6.3 Run `bun run build`.
-- [ ] 6.4 Smoke test language switching in Electron for English and Simplified Chinese.
+- [ ] 6.4 Smoke test language switching in Electron for English and Simplified Chinese. Dev startup now reaches the renderer, but macOS Apple Events permission blocked automated UI inspection.
 - [ ] 6.5 Sweep remaining hardcoded English strings and document intentional exclusions.

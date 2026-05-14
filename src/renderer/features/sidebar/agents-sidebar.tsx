@@ -6,6 +6,7 @@ import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "motion/react"
 import { Button as ButtonCustom } from "../../components/ui/button"
 import { cn } from "../../lib/utils"
+import { useI18n } from "../../lib/i18n"
 import { useSetAtom, useAtom, useAtomValue } from "jotai"
 import {
   autoAdvanceTargetAtom,
@@ -126,7 +127,6 @@ import { getWindowId } from "../../contexts/WindowContext"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
 import { useResolvedHotkeyDisplay, useResolvedHotkeyDisplayWithAlt } from "../../lib/hotkeys"
-import { pluralize } from "../agents/utils/pluralize"
 import { useNewChatDrafts, deleteNewChatDraft, type NewChatDraft } from "../agents/lib/drafts"
 import {
   TrafficLightSpacer,
@@ -350,6 +350,8 @@ const DraftItem = React.memo(function DraftItem({
   onDelete: (draftId: string) => void
   formatTime: (dateStr: string) => string
 }) {
+  const { t } = useI18n()
+
   return (
     <div
       onClick={() => onSelect(draftId)}
@@ -391,7 +393,7 @@ const DraftItem = React.memo(function DraftItem({
                 }}
                 tabIndex={-1}
                 className="flex-shrink-0 text-muted-foreground hover:text-foreground active:text-foreground transition-[opacity,transform,color] duration-150 ease-out opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto active:scale-[0.97]"
-                aria-label="Delete draft"
+                aria-label={t("sidebar.deleteDraft")}
               >
                 <TrashIcon className="h-3.5 w-3.5" />
               </button>
@@ -399,7 +401,7 @@ const DraftItem = React.memo(function DraftItem({
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] text-muted-foreground/60 truncate">
-              <span className="text-blue-500">Draft</span>
+              <span className="text-blue-500">{t("sidebar.draft")}</span>
               {projectGitRepo
                 ? ` • ${projectGitRepo}`
                 : projectName
@@ -516,6 +518,11 @@ const AgentChatItem = React.memo(function AgentChatItem({
 }) {
   // Resolved hotkey for context menu
   const archiveWorkspaceHotkey = useResolvedHotkeyDisplay("archive-workspace")
+  const { t } = useI18n()
+  const workspaceNoun =
+    selectedChatIdsSize === 1
+      ? t("sidebar.workspaceSingular")
+      : t("sidebar.workspacePlural")
 
   return (
     <ContextMenu>
@@ -595,7 +602,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
                 >
                   <TypewriterText
                     text={chatName || ""}
-                    placeholder="New workspace"
+                    placeholder={t("sidebar.workspacePlaceholder")}
                     id={chatId}
                     isJustCreated={isJustCreated}
                     showPlaceholder={true}
@@ -659,7 +666,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
                       }}
                       tabIndex={-1}
                       className="absolute inset-0 flex items-center justify-center text-muted-foreground hover:text-foreground active:text-foreground transition-[opacity,transform,color] duration-150 ease-out opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto active:scale-[0.97]"
-                      aria-label="Archive workspace"
+                      aria-label={t("sidebar.archiveWorkspace")}
                     >
                       <ArchiveIcon className="h-3.5 w-3.5" />
                     </button>
@@ -702,16 +709,25 @@ const AgentChatItem = React.memo(function AgentChatItem({
               <>
                 <ContextMenuItem onClick={areAllSelectedPinned ? onBulkUnpin : onBulkPin}>
                   {areAllSelectedPinned
-                    ? `Unpin ${selectedChatIdsSize} ${pluralize(selectedChatIdsSize, "workspace")}`
-                    : `Pin ${selectedChatIdsSize} ${pluralize(selectedChatIdsSize, "workspace")}`}
+                    ? t("sidebar.unpinSelected", {
+                        count: selectedChatIdsSize,
+                        workspaceNoun,
+                      })
+                    : t("sidebar.pinSelected", {
+                        count: selectedChatIdsSize,
+                        workspaceNoun,
+                      })}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
               </>
             )}
             <ContextMenuItem onClick={onBulkArchive} disabled={archiveBatchPending}>
               {archiveBatchPending
-                ? "Archiving..."
-                : `Archive ${selectedChatIdsSize} ${pluralize(selectedChatIdsSize, "workspace")}`}
+                ? t("sidebar.archiving")
+                : t("sidebar.archiveSelected", {
+                    count: selectedChatIdsSize,
+                    workspaceNoun,
+                  })}
             </ContextMenuItem>
           </>
         ) : (
@@ -719,43 +735,43 @@ const AgentChatItem = React.memo(function AgentChatItem({
             {isRemote && (
               <>
                 <ContextMenuItem onClick={() => onOpenLocally(chatId)}>
-                  Fork Locally
+                  {t("sidebar.forkLocally")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
               </>
             )}
             <ContextMenuItem onClick={() => onTogglePin(chatId)}>
-              {isPinned ? "Unpin workspace" : "Pin workspace"}
+              {isPinned ? t("sidebar.unpinWorkspace") : t("sidebar.pinWorkspace")}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => onRenameClick({ id: chatId, name: chatName, isRemote })}>
-              Rename workspace
+              {t("sidebar.renameWorkspace")}
             </ContextMenuItem>
             {chatBranch && (
               <ContextMenuItem onClick={() => onCopyBranch(chatBranch)}>
-                Copy branch name
+                {t("sidebar.copyBranchName")}
               </ContextMenuItem>
             )}
             <ContextMenuSub>
-              <ContextMenuSubTrigger>Export workspace</ContextMenuSubTrigger>
+              <ContextMenuSubTrigger>{t("sidebar.exportWorkspace")}</ContextMenuSubTrigger>
               <ContextMenuSubContent sideOffset={6} alignOffset={-4}>
                 <ContextMenuItem onClick={() => exportChat({ chatId: isRemote ? chatId.replace(/^remote_/, '') : chatId, format: "markdown", isRemote })}>
-                  Download as Markdown
+                  {t("sidebar.downloadAsMarkdown")}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => exportChat({ chatId: isRemote ? chatId.replace(/^remote_/, '') : chatId, format: "json", isRemote })}>
-                  Download as JSON
+                  {t("sidebar.downloadAsJson")}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => exportChat({ chatId: isRemote ? chatId.replace(/^remote_/, '') : chatId, format: "text", isRemote })}>
-                  Download as Text
+                  {t("sidebar.downloadAsText")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => copyChat({ chatId: isRemote ? chatId.replace(/^remote_/, '') : chatId, format: "markdown", isRemote })}>
-                  Copy as Markdown
+                  {t("sidebar.copyAsMarkdown")}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => copyChat({ chatId: isRemote ? chatId.replace(/^remote_/, '') : chatId, format: "json", isRemote })}>
-                  Copy as JSON
+                  {t("sidebar.copyAsJson")}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => copyChat({ chatId: isRemote ? chatId.replace(/^remote_/, '') : chatId, format: "text", isRemote })}>
-                  Copy as Text
+                  {t("sidebar.copyAsText")}
                 </ContextMenuItem>
               </ContextMenuSubContent>
             </ContextMenuSub>
@@ -763,31 +779,31 @@ const AgentChatItem = React.memo(function AgentChatItem({
               <ContextMenuItem onClick={async () => {
                 const result = await window.desktopApi?.newWindow({ chatId })
                 if (result?.blocked) {
-                  toast.info("This workspace is already open in another window", {
-                    description: "Switching to the existing window.",
+                  toast.info(t("sidebar.workspaceAlreadyOpen"), {
+                    description: t("sidebar.switchingToExistingWindow"),
                     duration: 3000,
                   })
                 }
               }}>
-                Open in new window
+                {t("sidebar.openInNewWindow")}
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => onArchive(chatId)} className="justify-between">
-              Archive workspace
+              {t("sidebar.archiveWorkspace")}
               {archiveWorkspaceHotkey && <Kbd>{archiveWorkspaceHotkey}</Kbd>}
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => onArchiveAllBelow(chatId)}
               disabled={isLastInFilteredChats}
             >
-              Archive all below
+              {t("sidebar.archiveAllBelow")}
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => onArchiveOthers(chatId)}
               disabled={filteredChatsLength === 1}
             >
-              Archive others
+              {t("sidebar.archiveOthers")}
             </ContextMenuItem>
           </>
         )}
@@ -933,6 +949,8 @@ const ChatListSection = React.memo(function ChatListSection({
   formatTime,
   justCreatedIds,
 }: ChatListSectionProps) {
+  const { t } = useI18n()
+
   if (chats.length === 0) return null
 
   // Pre-compute global indices map to avoid O(n²) findIndex in map()
@@ -974,7 +992,10 @@ const ChatListSection = React.memo(function ChatListSection({
             ? repoName
               ? `${repoName} • ${chat.branch}`
               : chat.branch
-            : repoName || (chat.isRemote ? "Remote project" : "Local project")
+            : repoName ||
+              (chat.isRemote
+                ? t("sidebar.remoteProject")
+                : t("sidebar.localProject"))
 
           const isChecked = selectedChatIds.has(chat.id)
           // TODO: remote stats disabled — backend no longer computes them (was causing 50s+ loads)
@@ -1082,6 +1103,7 @@ const KanbanButton = memo(function KanbanButton() {
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
+  const { t } = useI18n()
 
   // Resolved hotkey for tooltip (respects custom bindings)
   const openKanbanHotkey = useResolvedHotkeyDisplay("open-kanban")
@@ -1103,13 +1125,14 @@ const KanbanButton = memo(function KanbanButton() {
         <button
           type="button"
           onClick={handleClick}
+          aria-label={t("sidebar.kanbanView")}
           className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
         >
           <Columns3 className="h-4 w-4" />
         </button>
       </TooltipTrigger>
       <TooltipContent>
-        Kanban View
+        {t("sidebar.kanbanView")}
         {openKanbanHotkey && <Kbd>{openKanbanHotkey}</Kbd>}
       </TooltipContent>
     </Tooltip>
@@ -1157,6 +1180,7 @@ const InboxButton = memo(function InboxButton() {
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const teamId = useAtomValue(selectedTeamIdAtom)
+  const { t } = useI18n()
 
   const { data: unreadData } = useQuery({
     queryKey: ["automations", "inboxUnreadCount", teamId],
@@ -1189,7 +1213,7 @@ const InboxButton = memo(function InboxButton() {
       )}
     >
       <SidebarInboxIcon className="h-4 w-4" />
-      <span className="flex-1 text-left">Inbox</span>
+      <span className="flex-1 text-left">{t("sidebar.inbox")}</span>
       {inboxUnreadCount > 0 && (
         <span className="bg-muted text-muted-foreground text-xs font-medium px-1.5 py-0.5 rounded-md min-w-[20px] text-center">
           {inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}
@@ -1202,6 +1226,7 @@ const InboxButton = memo(function InboxButton() {
 // Isolated Automations Button - full-width navigation link matching web layout
 const AutomationsButton = memo(function AutomationsButton() {
   const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
+  const { t } = useI18n()
 
   const handleClick = useCallback(() => {
     window.desktopApi.openExternal("https://21st.dev/agents/app/automations")
@@ -1219,7 +1244,7 @@ const AutomationsButton = memo(function AutomationsButton() {
       )}
     >
       <SidebarAutomationsIcon className="h-4 w-4" />
-      <span className="flex-1 text-left">Automations</span>
+      <span className="flex-1 text-left">{t("sidebar.automations")}</span>
       <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
     </button>
   )
@@ -1236,6 +1261,7 @@ const ArchiveSection = memo(function ArchiveSection({ archivedChatsCount }: Arch
   const [blockArchiveTooltip, setBlockArchiveTooltip] = useState(false)
   const prevArchivePopoverOpen = useRef(false)
   const archiveButtonRef = useRef<HTMLButtonElement>(null)
+  const { t } = useI18n()
 
   // Handle tooltip blocking when popover closes
   useEffect(() => {
@@ -1259,11 +1285,16 @@ const ArchiveSection = memo(function ArchiveSection({ archivedChatsCount }: Arch
       <TooltipTrigger asChild>
         <div>
           <ArchivePopover
-            trigger={<ArchiveButton ref={archiveButtonRef} />}
+            trigger={
+              <ArchiveButton
+                ref={archiveButtonRef}
+                aria-label={t("sidebar.archive")}
+              />
+            }
           />
         </div>
       </TooltipTrigger>
-      <TooltipContent>Archive</TooltipContent>
+      <TooltipContent>{t("sidebar.archive")}</TooltipContent>
     </Tooltip>
   )
 })
@@ -1304,6 +1335,7 @@ const SidebarHeader = memo(function SidebarHeader({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
   const toggleSidebarHotkey = useResolvedHotkeyDisplay("toggle-sidebar")
+  const { t } = useI18n()
 
   return (
     <div
@@ -1352,13 +1384,13 @@ const SidebarHeader = memo(function SidebarHeader({
                 onClick={onToggleSidebar}
                 tabIndex={-1}
                 className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                aria-label="Close sidebar"
+                aria-label={t("sidebar.close")}
               >
                 <IconDoubleChevronLeft className="h-4 w-4" />
               </ButtonCustom>
             </TooltipTrigger>
             <TooltipContent>
-              Close sidebar
+              {t("sidebar.close")}
               {toggleSidebarHotkey && <Kbd>{toggleSidebarHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
@@ -1424,7 +1456,7 @@ const SidebarHeader = memo(function SidebarHeader({
                           </div>
                           <div className="flex-1 min-w-0 overflow-hidden">
                             <div className="font-medium text-sm text-foreground truncate">
-                              {desktopUser?.name || "User"}
+                              {desktopUser?.name || t("sidebar.userFallback")}
                             </div>
                             <div className="text-xs text-muted-foreground truncate">
                               {desktopUser?.email}
@@ -1444,14 +1476,14 @@ const SidebarHeader = memo(function SidebarHeader({
                       }}
                     >
                       <SettingsIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                      Settings
+                      {t("common.settings")}
                     </DropdownMenuItem>
 
                     {/* Help Submenu */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="gap-2">
                         <QuestionCircleIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <span className="flex-1">Help</span>
+                        <span className="flex-1">{t("sidebar.help")}</span>
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent
                         className="w-36"
@@ -1469,7 +1501,7 @@ const SidebarHeader = memo(function SidebarHeader({
                           className="gap-2"
                         >
                           <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">Discord</span>
+                          <span className="flex-1">{t("sidebar.discord")}</span>
                         </DropdownMenuItem>
                         {!isMobileFullscreen && (
                           <DropdownMenuItem
@@ -1481,7 +1513,7 @@ const SidebarHeader = memo(function SidebarHeader({
                             className="gap-2"
                           >
                             <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1">Shortcuts</span>
+                            <span className="flex-1">{t("sidebar.shortcuts")}</span>
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuSubContent>
@@ -1526,7 +1558,7 @@ const SidebarHeader = memo(function SidebarHeader({
                             strokeLinejoin="round"
                           />
                         </svg>
-                        Log out
+                        {t("sidebar.logout")}
                       </DropdownMenuItem>
                     </div>
                   </>
@@ -1542,7 +1574,7 @@ const SidebarHeader = memo(function SidebarHeader({
                         }}
                       >
                         <ProfileIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        Login
+                        {t("sidebar.login")}
                       </DropdownMenuItem>
                     </div>
 
@@ -1552,7 +1584,7 @@ const SidebarHeader = memo(function SidebarHeader({
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="gap-2">
                         <QuestionCircleIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <span className="flex-1">Help</span>
+                        <span className="flex-1">{t("sidebar.help")}</span>
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent
                         className="w-36"
@@ -1570,7 +1602,7 @@ const SidebarHeader = memo(function SidebarHeader({
                           className="gap-2"
                         >
                           <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">Discord</span>
+                          <span className="flex-1">{t("sidebar.discord")}</span>
                         </DropdownMenuItem>
                         {!isMobileFullscreen && (
                           <DropdownMenuItem
@@ -1582,7 +1614,7 @@ const SidebarHeader = memo(function SidebarHeader({
                             className="gap-2"
                           >
                             <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1">Shortcuts</span>
+                            <span className="flex-1">{t("sidebar.shortcuts")}</span>
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuSubContent>
@@ -1609,6 +1641,7 @@ const HelpSection = memo(function HelpSection({ isMobile }: HelpSectionProps) {
   const [blockHelpTooltip, setBlockHelpTooltip] = useState(false)
   const prevHelpPopoverOpen = useRef(false)
   const helpButtonRef = useRef<HTMLButtonElement>(null)
+  const { t } = useI18n()
 
   // Handle tooltip blocking when popover closes
   useEffect(() => {
@@ -1645,7 +1678,7 @@ const HelpSection = memo(function HelpSection({ isMobile }: HelpSectionProps) {
           </AgentsHelpPopover>
         </div>
       </TooltipTrigger>
-      <TooltipContent>Help</TooltipContent>
+      <TooltipContent>{t("sidebar.help")}</TooltipContent>
     </Tooltip>
   )
 })
@@ -1663,6 +1696,7 @@ export function AgentsSidebar({
   isMobileFullscreen = false,
   onChatSelect,
 }: AgentsSidebarProps) {
+  const { t } = useI18n()
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedChatIsRemote, setSelectedChatIsRemote] = useAtom(selectedChatIsRemoteAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
@@ -2065,7 +2099,7 @@ export function AgentsSidebar({
               },
               onError: (error) => {
                 console.error('[handleUndo] Failed to restore remote workspace:', error)
-                toast.error("Failed to restore workspace")
+                toast.error(t("sidebar.toast.failedRestoreWorkspace"))
               },
             })
           } else {
@@ -2082,7 +2116,7 @@ export function AgentsSidebar({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [undoStack, setUndoStack, restoreChatMutation, restoreRemoteChatMutation, setSelectedChatId])
+  }, [undoStack, setUndoStack, restoreChatMutation, restoreRemoteChatMutation, setSelectedChatId, t])
 
   // Batch archive mutation
   const archiveChatsBatchMutation = trpc.chats.archiveBatch.useMutation({
@@ -2168,7 +2202,7 @@ export function AgentsSidebar({
       utils.chats.list.invalidate()
     },
     onError: () => {
-      toast.error("Failed to rename agent")
+      toast.error(t("sidebar.toast.failedRenameAgent"))
     },
   })
 
@@ -2223,13 +2257,17 @@ export function AgentsSidebar({
             if (!old) return old
             return old.map((c) => (c.id === chatId ? { ...c, name: oldName } : c))
           })
-          throw new Error("Failed to rename local workspace")
+          throw new Error(t("sidebar.toast.failedRenameLocalWorkspace"))
         }
       }
       setRenameDialogOpen(false)
     } catch (error) {
       console.error('[handleRenameSave] Rename failed:', error)
-      toast.error(isRemote ? "Failed to rename remote workspace" : "Failed to rename workspace")
+      toast.error(
+        isRemote
+          ? t("sidebar.toast.failedRenameRemoteWorkspace")
+          : t("sidebar.toast.failedRenameWorkspace")
+      )
     } finally {
       setRenameLoading(false)
       setRenamingChat(null)
@@ -2637,8 +2675,8 @@ export function AgentsSidebar({
     if (window.desktopApi?.claimChat) {
       const result = await window.desktopApi.claimChat(originalId)
       if (!result.ok) {
-        toast.info("This workspace is already open in another window", {
-          description: "Switching to the existing window.",
+        toast.info(t("sidebar.workspaceAlreadyOpen"), {
+          description: t("sidebar.switchingToExistingWindow"),
           duration: 3000,
         })
         await window.desktopApi.focusChatOwner(originalId)
@@ -2660,7 +2698,7 @@ export function AgentsSidebar({
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
-  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode, setShowNewChatForm, setDesktopView, isMobileFullscreen, onChatSelect])
+  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode, setShowNewChatForm, setDesktopView, isMobileFullscreen, onChatSelect, t])
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()
@@ -2675,14 +2713,14 @@ export function AgentsSidebar({
     const diffHours = Math.floor(diffMs / 3_600_000)
     const diffDays = Math.floor(diffMs / 86_400_000)
 
-    if (diffMins < 1) return "now"
+    if (diffMins < 1) return t("sidebar.now")
     if (diffMins < 60) return `${diffMins}m`
     if (diffHours < 24) return `${diffHours}h`
     if (diffDays < 7) return `${diffDays}d`
     if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`
     if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo`
     return `${Math.floor(diffDays / 365)}y`
-  }, [])
+  }, [t])
 
   // Archive single chat - wrapped for memoized component
   // Checks for active terminal processes and worktree, shows confirmation dialog if needed
@@ -2727,7 +2765,7 @@ export function AgentsSidebar({
         },
         onError: (error) => {
           console.error('[handleArchiveSingle] Failed to archive remote workspace:', error)
-          toast.error("Failed to archive workspace")
+          toast.error(t("sidebar.toast.failedArchiveWorkspace"))
         },
       })
       return
@@ -2768,6 +2806,7 @@ export function AgentsSidebar({
     setSelectedChatId,
     removeWorkspaceFromStack,
     setUndoStack,
+    t,
   ])
 
   // Confirm archive after user accepts dialog (optimistic - closes immediately)
@@ -2825,8 +2864,8 @@ export function AgentsSidebar({
   // Copy branch name to clipboard
   const handleCopyBranch = useCallback((branch: string) => {
     navigator.clipboard.writeText(branch)
-    toast.success("Branch name copied", { description: branch })
-  }, [])
+    toast.success(t("sidebar.toast.branchNameCopied"), { description: branch })
+  }, [t])
 
   // Ref callback for name elements
   const nameRefCallback = useCallback((chatId: string, el: HTMLSpanElement | null) => {
@@ -3139,7 +3178,7 @@ export function AgentsSidebar({
           <div className="relative">
             <Input
               ref={searchInputRef}
-              placeholder="Search workspaces..."
+              placeholder={t("sidebar.searchWorkspaces")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -3204,11 +3243,11 @@ export function AgentsSidebar({
                   isMobileFullscreen ? "h-10" : "h-7",
                 )}
               >
-                <span className="text-sm font-medium">New Workspace</span>
+                <span className="text-sm font-medium">{t("sidebar.newWorkspace")}</span>
               </ButtonCustom>
             </TooltipTrigger>
             <TooltipContent side="right" className="flex flex-col items-start gap-1">
-              <span>Start a new workspace</span>
+              <span>{t("sidebar.startNewWorkspace")}</span>
               {newWorkspaceHotkey && (
                 <span className="flex items-center gap-1.5">
                   <Kbd>{newWorkspaceHotkey}</Kbd>
@@ -3246,7 +3285,7 @@ export function AgentsSidebar({
                 )}
               >
                 <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                  Drafts
+                  {t("sidebar.drafts")}
                 </h3>
               </div>
               <div className="list-none p-0 m-0">
@@ -3278,7 +3317,7 @@ export function AgentsSidebar({
             <div className={cn("mb-4", isMultiSelectMode ? "px-0" : "-mx-1")}>
               {/* Pinned section */}
               <ChatListSection
-                title="Pinned workspaces"
+                title={t("sidebar.pinnedWorkspaces")}
                 chats={pinnedAgents}
                 selectedChatId={selectedChatId}
                 selectedChatIsRemote={selectedChatIsRemote}
@@ -3321,7 +3360,7 @@ export function AgentsSidebar({
 
               {/* Unpinned section */}
               <ChatListSection
-                title={pinnedAgents.length > 0 ? "Recent workspaces" : "Workspaces"}
+                title={pinnedAgents.length > 0 ? t("sidebar.recentWorkspaces") : t("sidebar.workspaces")}
                 chats={unpinnedAgents}
                 selectedChatId={selectedChatId}
                 selectedChatIsRemote={selectedChatIsRemote}
@@ -3396,13 +3435,13 @@ export function AgentsSidebar({
             {/* Selection info */}
             <div className="flex items-center justify-between px-1">
               <span className="text-xs text-muted-foreground">
-                {selectedChatsCount} selected
+                {t("sidebar.selected", { count: selectedChatsCount })}
               </span>
               <button
                 onClick={clearChatSelection}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
 
@@ -3417,8 +3456,8 @@ export function AgentsSidebar({
               >
                 <ArchiveIcon className="h-3.5 w-3.5" />
                 {archiveChatsBatchMutation.isPending
-                  ? "Archiving..."
-                  : "Archive"}
+                  ? t("sidebar.archiving")
+                  : t("sidebar.archive")}
               </Button>
             </div>
           </motion.div>
@@ -3450,7 +3489,7 @@ export function AgentsSidebar({
                       <SettingsIcon className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>Settings{settingsHotkey && <> <Kbd>{settingsHotkey}</Kbd></>}</TooltipContent>
+                  <TooltipContent>{t("common.settings")}{settingsHotkey && <> <Kbd>{settingsHotkey}</Kbd></>}</TooltipContent>
                 </Tooltip>
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
@@ -3476,7 +3515,7 @@ export function AgentsSidebar({
                 isMobileFullscreen ? "h-10" : "h-7",
               )}
             >
-              <span className="text-sm font-medium">Feedback</span>
+              <span className="text-sm font-medium">{t("sidebar.feedback")}</span>
             </ButtonCustom>
           </motion.div>
         )}

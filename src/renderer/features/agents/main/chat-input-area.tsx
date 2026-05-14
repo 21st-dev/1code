@@ -52,6 +52,7 @@ import {
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import {
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
@@ -410,6 +411,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   onContinueWithProvider,
   isActive = true,
 }: ChatInputAreaProps) {
+  const { t } = useI18n()
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
@@ -1360,7 +1362,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onSubmit={onSubmitWithQuestionAnswer || handleEditorSubmit}
                   onForceSubmit={onForceSend}
                   onShiftTab={toggleMode}
-                  placeholder={isStreaming ? "Add to the queue" : "Plan, @ for context, / for commands"}
+                  placeholder={isStreaming ? t("chat.placeholder.queue") : t("chat.placeholder.default")}
                   className={cn(
                     "bg-transparent max-h-[200px] overflow-y-auto p-1",
                     isMobile && "min-h-[56px]",
@@ -1394,7 +1396,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span className="truncate">{subChatMode === "plan" ? "Plan" : "Agent"}</span>
+                        <span className="truncate">{subChatMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
@@ -1453,7 +1455,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       >
                         <div className="flex items-center gap-2">
                           <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Agent</span>
+                          <span>{t("chat.mode.agent")}</span>
                         </div>
                         {subChatMode !== "plan" && (
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
@@ -1508,7 +1510,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       >
                         <div className="flex items-center gap-2">
                           <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Plan</span>
+                          <span>{t("chat.mode.plan")}</span>
                         </div>
                         {subChatMode === "plan" && (
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
@@ -1531,8 +1533,8 @@ export const ChatInputArea = memo(function ChatInputArea({
                           >
                             <span>
                               {modeTooltip.mode === "agent"
-                                ? "Apply changes directly without a plan"
-                                : "Create a plan before making changes"}
+                                ? t("chat.mode.agentTooltip")
+                                : t("chat.mode.planTooltip")}
                             </span>
                           </div>
                         </div>,
