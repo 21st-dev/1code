@@ -91,6 +91,7 @@ export async function fetchMcpToolsStdio(config: {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  cwd?: string;
 }): Promise<McpToolInfo[]> {
   let transport: StdioClientTransport | null = null;
 
@@ -117,6 +118,7 @@ export async function fetchMcpToolsStdio(config: {
       command: config.command,
       args: config.args,
       env: { ...safeEnv, ...config.env },
+      cwd: config.cwd,
     });
 
     await client.connect(transport);
