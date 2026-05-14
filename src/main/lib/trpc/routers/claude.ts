@@ -1,4 +1,5 @@
 import { observable } from "@trpc/server/observable"
+import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
 import * as fs from "fs/promises"
@@ -1794,7 +1795,7 @@ ${prompt}
                   toolName: string,
                   toolInput: Record<string, unknown>,
                   options: { toolUseID: string },
-                ) => {
+                ): Promise<PermissionResult> => {
                   // Fix common parameter mistakes from Ollama models
                   // Local models often use slightly wrong parameter names
                   if (isUsingOllama) {
@@ -1975,7 +1976,7 @@ ${prompt}
                     } as UIMessageChunk)
                     return {
                       behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      updatedInput: response.updatedInput as Record<string, unknown>,
                     }
                   }
                   return {

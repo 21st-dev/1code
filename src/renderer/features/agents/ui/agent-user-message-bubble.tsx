@@ -16,12 +16,14 @@ import { useSearchHighlight, useSearchQuery } from "../search"
 interface AgentUserMessageBubbleProps {
   messageId: string
   textContent: string
-  imageParts?: Array<{
-    data?: {
-      filename?: string
-      url?: string
-    }
-  }>
+	imageParts?: Array<{
+	  data?: {
+	    filename?: string
+	    url?: string
+	    mediaType?: string
+	    base64Data?: string
+	  }
+	}>
   /** If true, renders only images and text - no TextMentionBlocks (they're rendered by parent) */
   skipTextMentionBlocks?: boolean
 }

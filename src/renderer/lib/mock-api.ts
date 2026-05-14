@@ -12,20 +12,33 @@ type AnyFn = (...args: any[]) => any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = Record<string, any>
 
+function toDesktopAgentChat(chat: AnyObj): AnyObj {
+  return {
+    ...chat,
+    sandbox_id: chat.sandbox_id ?? null,
+    meta: chat.meta ?? null,
+    created_at: chat.created_at ?? chat.createdAt,
+    updated_at: chat.updated_at ?? chat.updatedAt,
+    archived_at: chat.archived_at ?? chat.archivedAt,
+    prUrl: chat.prUrl ?? undefined,
+    prNumber: chat.prNumber ?? undefined,
+  }
+}
+
 export const api = {
   agents: {
     getAgentChats: {
-      useQuery: (_args?: AnyObj, _opts?: AnyObj) => {
+      useQuery: (_args?: AnyObj, _opts?: AnyObj): { data: AnyObj[]; isLoading: boolean } => {
         // Use real tRPC
         const result = trpc.chats.list.useQuery({})
         return {
-          data: result.data ?? [],
+          data: (result.data ?? []).map((chat: AnyObj) => toDesktopAgentChat(chat)),
           isLoading: result.isLoading,
         }
       },
     },
     getAgentChat: {
-      useQuery: (args?: { chatId: string }, opts?: AnyObj) => {
+      useQuery: (args?: { chatId: string }, opts?: AnyObj): { data: AnyObj | null; isLoading: boolean } => {
         const chatId = args?.chatId
         const result = trpc.chats.get.useQuery(
           { id: chatId! },
@@ -41,7 +54,7 @@ export const api = {
         const transformedData = useMemo(() => {
           if (!result.data) return null
           return {
-            ...result.data,
+            ...toDesktopAgentChat(result.data as AnyObj),
             // Desktop uses worktrees, not sandboxes
             sandbox_id: null,
             meta: null,
@@ -197,10 +210,10 @@ export const api = {
       },
     },
     getArchivedChats: {
-      useQuery: (_args?: AnyObj, _opts?: AnyObj) => {
+      useQuery: (_args?: AnyObj, _opts?: AnyObj): { data: AnyObj[]; isLoading: boolean } => {
         const result = trpc.chats.listArchived.useQuery({})
         return {
-          data: result.data ?? [],
+          data: (result.data ?? []).map((chat: AnyObj) => toDesktopAgentChat(chat)),
           isLoading: result.isLoading,
         }
       },
@@ -455,7 +468,7 @@ export const api = {
   },
   // Stubs for features not needed in desktop
   teams: {
-    getUserTeams: { useQuery: () => ({ data: [], isLoading: false }) },
+    getUserTeams: { useQuery: (_args?: unknown, _opts?: unknown) => ({ data: [], isLoading: false }) },
     getTeam: { useQuery: () => ({ data: null, isLoading: false }) },
     updateTeam: {
       useMutation: () => ({

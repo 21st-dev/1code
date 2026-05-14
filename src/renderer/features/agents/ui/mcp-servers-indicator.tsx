@@ -23,6 +23,15 @@ interface McpServersIndicatorProps {
   projectPath?: string
 }
 
+function normalizeMcpServerStatus(status: string): MCPServerStatus {
+  return status === "connected" ||
+    status === "failed" ||
+    status === "pending" ||
+    status === "needs-auth"
+    ? status
+    : "pending"
+}
+
 /**
  * MCP Servers Indicator
  *
@@ -53,7 +62,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         tools: prev?.tools || [],
         mcpServers: mcpConfig.mcpServers.map((s) => ({
           name: s.name,
-          status: s.status,
+          status: normalizeMcpServerStatus(s.status),
         })),
         plugins: prev?.plugins || [],
         skills: prev?.skills || [],

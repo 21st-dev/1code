@@ -9,14 +9,7 @@ import { AgentChatCard } from "./agent-chat-card"
 
 interface AgentsQuickSwitchDialogProps {
   isOpen: boolean
-  chats: Array<{
-    id: string
-    name: string
-    meta: any
-    sandbox_id: string | null
-    updated_at: Date
-    projectId: string
-  }>
+  chats: Array<Record<string, any>>
   selectedIndex: number
   projectsMap: Map<string, { gitOwner?: string | null; gitProvider?: string | null; gitRepo?: string | null; name: string }>
   onHover?: (index: number) => void
@@ -68,11 +61,18 @@ export function AgentsQuickSwitchDialog({
                       const isSelected = index === selectedIndex
                       const isLoading = loadingChatIds.has(chat.id)
                       const project = projectsMap.get(chat.projectId)
+                      const cardChat = {
+                        id: String(chat.id),
+                        name: chat.name ?? "Untitled",
+                        meta: chat.meta ?? null,
+                        sandbox_id: chat.sandbox_id ?? null,
+                        branch: chat.branch ?? null,
+                      }
 
                       return (
                         <AgentChatCard
                           key={chat.id}
-                          chat={chat}
+                          chat={cardChat}
                           isSelected={isSelected}
                           isLoading={isLoading}
                           variant="quick-switch"

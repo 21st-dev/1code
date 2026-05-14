@@ -20,6 +20,9 @@ export type UIMessageChunk =
       toolCallId: string
       toolName: string
       input: unknown
+      providerMetadata?: {
+        custom?: Record<string, unknown>
+      }
     }
   | { type: "tool-output-available"; toolCallId: string; output: unknown }
   | { type: "tool-output-error"; toolCallId: string; errorText: string }
@@ -38,6 +41,7 @@ export type UIMessageChunk =
       }>
     }
   | { type: "ask-user-question-timeout"; toolUseId: string }
+  | { type: "ask-user-question-result"; toolUseId: string; result: unknown }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
   // Session initialization (MCP servers, plugins, tools)
   | {

@@ -496,6 +496,7 @@ export function fromDraftFile(draft: DraftFile): UploadedFile | null {
       url,
       size: draft.size,
       type: draft.type,
+      mediaType: draft.type,
       isLoading: false,
     }
   } catch (err) {
@@ -631,4 +632,3 @@ export async function saveSubChatDraftWithAttachments(
     return { success: false, error: "save_failed" }
   }
 }
-

@@ -5,11 +5,14 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useQuery } from "@tanstack/react-query"
 // import { useSearchParams, useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: mock Next.js navigation hooks
-const useSearchParams = () => ({ get: () => null })
-const useRouter = () => ({ push: () => {}, replace: () => {} })
+const useSearchParams = () => ({ get: (_key: string) => null as string | null })
+const useRouter = () => ({
+  push: (_href: string, _opts?: unknown) => {},
+  replace: (_href: string, _opts?: unknown) => {},
+})
 // Desktop: mock Clerk hooks
 const useUser = () => ({ user: null })
-const useClerk = () => ({ signOut: () => {} })
+const useClerk = () => ({ signOut: async (_opts?: unknown) => {} })
 import {
   selectedAgentChatIdAtom,
   selectedChatIsRemoteAtom,

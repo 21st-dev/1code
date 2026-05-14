@@ -29,7 +29,7 @@ export interface FileMentionOption {
   description?: string // skill/agent/tool description
   tools?: string[] // agent allowed tools
   model?: string // agent model
-  source?: "user" | "project" // skill/agent source
+  source?: "user" | "project" | "plugin" // skill/agent source
   mcpServer?: string // MCP server name for tools
 }
 

@@ -21,7 +21,7 @@ interface FileAgent {
   tools?: string[]
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 
@@ -371,9 +371,13 @@ export function AgentsCustomAgentsTab() {
   const handleSave = useCallback(async (
     agent: FileAgent,
     data: { description: string; prompt: string; model?: FileAgent["model"] },
-  ) => {
-    try {
-      await updateMutation.mutateAsync({
+	  ) => {
+	    try {
+	      if (agent.source === "plugin") {
+	        toast.error("Plugin agents are read-only", { description: agent.name })
+	        return
+	      }
+	      await updateMutation.mutateAsync({
         originalName: agent.name,
         name: agent.name,
         description: data.description,
@@ -381,7 +385,7 @@ export function AgentsCustomAgentsTab() {
         model: data.model,
         tools: agent.tools,
         disallowedTools: agent.disallowedTools,
-        source: agent.source,
+	        source: agent.source,
         cwd: selectedProject?.path,
       })
       toast.success("Agent saved", { description: agent.name })

@@ -732,8 +732,8 @@ export interface PendingChatHistory {
 }
 export const pendingChatHistoryAtom = atom<PendingChatHistory | null>(null)
 
-// Work mode preference (local = work in project dir, worktree = create isolated worktree)
-export type WorkMode = "local" | "worktree"
+// Work mode preference (local = work in project dir, worktree = create isolated worktree, sandbox = remote sandbox)
+export type WorkMode = "local" | "worktree" | "sandbox"
 export const lastSelectedWorkModeAtom = atomWithStorage<WorkMode>(
   "agents:lastSelectedWorkMode",
   "worktree", // default to worktree for current behavior

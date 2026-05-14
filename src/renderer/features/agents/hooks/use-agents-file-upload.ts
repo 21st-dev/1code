@@ -17,6 +17,7 @@ export interface UploadedFile {
   isLoading: boolean
   size?: number
   type?: string
+  mediaType?: string
 }
 
 /**
@@ -100,6 +101,7 @@ export function useAgentsFileUpload() {
       isLoading: false,
       size: file.size,
       type: file.type,
+      mediaType: file.type,
     }))
 
     setImages((prev) => [...prev, ...newImages])

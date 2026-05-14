@@ -1,6 +1,6 @@
 import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types";
 
-export function createTransformer(options?: { isUsingOllama?: boolean }) {
+export function createTransformer(options?: { isUsingOllama?: boolean; emitSdkMessageUuid?: boolean }) {
   const isUsingOllama = options?.isUsingOllama === true
   let textId: string | null = null
   let textStarted = false
@@ -169,10 +169,10 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
 
         // Emit tool-input-start for progressive UI
         yield {
-          type: "tool-input-start",
-          toolCallId: currentToolCallId,
-          toolName: currentToolName,
-        }
+	        type: "tool-input-start",
+	        toolCallId: currentToolCallId,
+	        toolName: currentToolName ?? "unknown",
+	      }
       }
 
       // Tool input delta

@@ -51,6 +51,13 @@ import { WorkModeSelector } from "../components/work-mode-selector"
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
+type RemoteRepository = {
+  id: string
+  name: string
+  full_name: string
+  sandbox_status?: "ready" | "not_setup" | "in_progress" | "error"
+  pushed_at?: string | null
+}
 import {
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
@@ -711,7 +718,7 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  const reposData: { repositories: RemoteRepository[] } = { repositories: [] }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
