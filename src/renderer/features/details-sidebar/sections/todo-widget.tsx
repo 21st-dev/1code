@@ -5,6 +5,7 @@ import { useAtomValue } from "jotai"
 import { cn } from "@/lib/utils"
 import { PlanIcon, CheckIcon, IconArrowRight, ExpandIcon, CollapseIcon } from "@/components/ui/icons"
 import { currentTodosAtomFamily, currentTaskToolsAtomFamily } from "@/features/agents/atoms"
+import { useI18n } from "@/lib/i18n"
 
 interface TodoItem {
   content: string
@@ -160,6 +161,7 @@ const TodoListItem = ({
  * Memoized to prevent re-renders when parent updates.
  */
 export const TodoWidget = memo(function TodoWidget({ subChatId }: TodoWidgetProps) {
+  const { t } = useI18n()
   // Get todos from the legacy TodoWrite tool
   const todosAtom = useMemo(
     () => currentTodosAtomFamily(subChatId || "default"),
@@ -232,15 +234,17 @@ export const TodoWidget = memo(function TodoWidget({ subChatId }: TodoWidgetProp
         onClick={handleToggleExpand}
         role="button"
         aria-expanded={isExpanded}
-        aria-label={`To-do list with ${totalTodos} items. Click to ${isExpanded ? "collapse" : "expand"}`}
+        aria-label={t("details.todo")}
         tabIndex={0}
         onKeyDown={handleKeyDown}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <PlanIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-          <span className="text-xs font-medium text-foreground">To-dos</span>
+          <span className="text-xs font-medium text-foreground">
+            {t("details.todo")}
+          </span>
           <span className="text-xs text-muted-foreground truncate flex-1">
-            {todos[0]?.content || "To-do list"}
+            {todos[0]?.content || t("details.todoList")}
           </span>
           {/* Expand/Collapse icon */}
           <div className="relative w-3.5 h-3.5 flex-shrink-0">

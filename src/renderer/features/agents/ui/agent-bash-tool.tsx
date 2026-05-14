@@ -14,6 +14,7 @@ import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom } from "../atoms"
+import { useI18n } from "@/lib/i18n"
 
 interface AgentBashToolProps {
   part: any
@@ -60,6 +61,7 @@ export const AgentBashTool = memo(function AgentBashTool({
   partIndex,
   chatStatus,
 }: AgentBashToolProps) {
+  const { t } = useI18n()
   const [isOutputExpanded, setIsOutputExpanded] = useState(false)
   const { isPending } = getToolStatus(part, chatStatus)
   const selectedProject = useAtomValue(selectedProjectAtom)
@@ -115,7 +117,7 @@ export const AgentBashTool = memo(function AgentBashTool({
                 duration={1.2}
                 className="inline-flex items-center text-xs leading-none h-4 m-0"
               >
-                Generating command
+                {t("agent.tool.generatingCommand")}
               </TextShimmer>
             </span>
           </div>
@@ -126,7 +128,7 @@ export const AgentBashTool = memo(function AgentBashTool({
 
   // If no command and not streaming, tool was interrupted
   if (!command) {
-    return <AgentToolInterrupted toolName="Command" />
+    return <AgentToolInterrupted toolName={t("agent.tool.command")} />
   }
 
   return (
@@ -145,7 +147,9 @@ export const AgentBashTool = memo(function AgentBashTool({
         )}
       >
         <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
-          {isPending ? "Running command: " : "Ran command: "}
+          {isPending
+            ? t("agent.tool.runningCommandWithColon")
+            : t("agent.tool.ranCommandWithColon")}
           {commandSummary}
         </span>
 
@@ -157,12 +161,12 @@ export const AgentBashTool = memo(function AgentBashTool({
               {isSuccess ? (
                 <>
                   <Check className="w-3 h-3" />
-                  <span>Success</span>
+                  <span>{t("agent.tool.success")}</span>
                 </>
               ) : isError ? (
                 <>
                   <X className="w-3 h-3" />
-                  <span>Failed</span>
+                  <span>{t("agent.tool.failed")}</span>
                 </>
               ) : null}
             </div>

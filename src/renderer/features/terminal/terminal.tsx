@@ -25,6 +25,7 @@ import { sanitizeForTitle } from "./commandBuffer"
 import { shellEscapePaths } from "./utils"
 import { TerminalSearch } from "./TerminalSearch"
 import type { TerminalProps, TerminalStreamEvent } from "./types"
+import { useI18n } from "@/lib/i18n"
 import "xterm/css/xterm.css"
 
 export function Terminal({
@@ -36,6 +37,7 @@ export function Terminal({
   initialCommands,
   initialCwd,
 }: TerminalProps) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -43,12 +45,17 @@ export function Terminal({
   const serializeAddonRef = useRef<SerializeAddon | null>(null)
   const isExitedRef = useRef(false)
   const commandBufferRef = useRef("")
+  const tRef = useRef(t)
 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [terminalCwd, setTerminalCwd] = useState<string | null>(
     initialCwd || cwd,
   )
   const setGlobalCwds = useSetAtom(terminalCwdAtom)
+
+  useEffect(() => {
+    tRef.current = t
+  }, [t])
 
   // Theme detection
   const { resolvedTheme } = useTheme()
@@ -311,16 +318,16 @@ export function Terminal({
 
     const cleanupContextMenu = setupContextMenuHandler(xterm, {
       onCopy: () => {
-        toast.success("Copied to clipboard")
+        toast.success(tRef.current("terminal.copied"))
       },
       onPaste: (text) => {
         commandBufferRef.current += text
       },
       onCopyError: () => {
-        toast.error("Failed to copy to clipboard")
+        toast.error(tRef.current("terminal.failedCopy"))
       },
       onPasteError: () => {
-        toast.error("Failed to paste from clipboard")
+        toast.error(tRef.current("terminal.failedPaste"))
       },
     })
 

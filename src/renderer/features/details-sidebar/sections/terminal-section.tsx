@@ -18,6 +18,7 @@ import {
 } from "@/features/terminal/atoms"
 import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "@/features/terminal/types"
+import { useI18n } from "@/lib/i18n"
 
 interface TerminalSectionProps {
   chatId: string
@@ -59,6 +60,7 @@ export function TerminalSection({
   renderHeader,
   onTerminalBgChange,
 }: TerminalSectionProps) {
+  const { t } = useI18n()
   // Terminal state - reuse existing atoms
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
@@ -309,7 +311,7 @@ export function TerminalSection({
           </motion.div>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            {!canRenderTerminal ? "" : "No terminal open"}
+            {!canRenderTerminal ? "" : t("terminal.noTerminalOpen")}
           </div>
         )}
       </div>
@@ -349,7 +351,7 @@ export function TerminalSection({
           </motion.div>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            {!canRenderTerminal ? "" : "No terminal open"}
+            {!canRenderTerminal ? "" : t("terminal.noTerminalOpen")}
           </div>
         )}
       </div>

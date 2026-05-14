@@ -17,6 +17,7 @@ import {
   type SubChatFileChange,
 } from "../atoms"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
+import { useI18n } from "@/lib/i18n"
 
 // Animated dots component that cycles through ., .., ...
 function AnimatedDots() {
@@ -54,6 +55,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   onStop,
   hasQueueCardAbove = false,
 }: SubChatStatusCardProps) {
+  const { t } = useI18n()
   const isBusy = isStreaming || isCompacting
   const [isExpanded, setIsExpanded] = useState(false)
   // Use per-chat atom family instead of legacy global atom
@@ -160,7 +162,9 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
           }
         }}
         aria-expanded={hasExpandableContent ? isExpanded : undefined}
-        aria-label={`${isExpanded ? "Collapse" : "Expand"} status details`}
+        aria-label={isExpanded
+          ? t("agent.status.collapseDetails")
+          : t("agent.status.expandDetails")}
         className={cn(
           "flex items-center justify-between pr-1 pl-3 h-8 transition-colors duration-150 focus:outline-none rounded-sm",
           hasExpandableContent ? "cursor-pointer hover:bg-muted/50" : "cursor-default"
@@ -180,14 +184,20 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
           {/* Streaming indicator */}
           {isBusy && (
             <span className="text-xs text-muted-foreground">
-              {isCompacting ? "Compacting" : "Generating"}<AnimatedDots />
+              {isCompacting
+                ? t("agent.status.compacting")
+                : t("agent.status.generating")}
+              <AnimatedDots />
             </span>
           )}
 
           {/* File count and stats - only show when not streaming */}
           {!isBusy && (
             <span className="text-xs text-muted-foreground">
-              {totals.fileCount} {totals.fileCount === 1 ? "file" : "files"}
+              {totals.fileCount}{" "}
+              {totals.fileCount === 1
+                ? t("agent.status.file")
+                : t("agent.status.files")}
               {(totals.additions > 0 || totals.deletions > 0) && (
                 <>
                   {" "}
@@ -216,7 +226,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
               }}
               className="h-6 px-2 text-xs font-normal rounded-md transition-transform duration-150 active:scale-[0.97]"
             >
-              Stop
+              {t("agent.status.stop")}
               <span className="text-muted-foreground/60 ml-1">⌃C</span>
             </Button>
           )}
@@ -232,7 +242,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
               }}
               className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
             >
-              Review
+              {t("agent.status.review")}
             </Button>
           )}
         </div>
@@ -276,7 +286,9 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
                     tabIndex={0}
                     onClick={handleFileClick}
                     onKeyDown={handleKeyDown}
-                    aria-label={`View diff for ${file.displayPath}`}
+                    aria-label={t("agent.status.viewDiffFor", {
+                      path: file.displayPath,
+                    })}
                     className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors cursor-pointer focus:outline-none rounded-sm"
                   >
                     {FileIcon && (

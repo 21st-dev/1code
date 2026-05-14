@@ -11,6 +11,7 @@ import {
 	TooltipTrigger,
 } from "../../../../components/ui/tooltip";
 import { AgentIcon, CircleFilterIcon } from "../../../../components/ui/icons";
+import { useI18n } from "../../../../lib/i18n";
 
 export interface SubChatFilterItem {
 	id: string;
@@ -35,13 +36,15 @@ interface ChangesFileFilterProps {
 export function ChangesFileFilter({
 	value,
 	onChange,
-	placeholder = "Filter files...",
+	placeholder,
 	className,
 	subChats = [],
 	selectedSubChatId,
 	onSubChatFilterChange,
 }: ChangesFileFilterProps) {
+	const { t } = useI18n();
 	const [isSubChatFilterOpen, setIsSubChatFilterOpen] = useState(false);
+	const effectivePlaceholder = placeholder ?? t("changes.filter.filesPlaceholder");
 
 	const selectedSubChat = useMemo(() => {
 		if (!selectedSubChatId) return null;
@@ -66,18 +69,22 @@ export function ChangesFileFilter({
 	}, [onSubChatFilterChange]);
 
 	const renderSubChatItem = useCallback((subChat: SubChatFilterItem) => {
+		const fallbackName = t("changes.filter.newChat");
 		return (
 			<div className="flex items-center gap-2 flex-1 min-w-0">
 				<AgentIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 				<span className="text-sm truncate flex-1">
-					{subChat.name || "New Chat"}
+					{subChat.name || fallbackName}
 				</span>
 				<span className="text-xs text-muted-foreground whitespace-nowrap">
-					{subChat.fileCount} file{subChat.fileCount !== 1 ? "s" : ""}
+					{subChat.fileCount}{" "}
+					{subChat.fileCount === 1
+						? t("changes.filter.file")
+						: t("changes.filter.files")}
 				</span>
 			</div>
 		);
-	}, []);
+	}, [t]);
 
 	const hasSubChats = subChats.length > 0;
 
@@ -92,7 +99,7 @@ export function ChangesFileFilter({
 						type="search"
 						value={value}
 						onChange={(e) => onChange(e.target.value)}
-						placeholder={placeholder}
+						placeholder={effectivePlaceholder}
 						className="h-7 pl-7 pr-7 text-xs bg-muted/50"
 					/>
 					{value && (
@@ -113,9 +120,9 @@ export function ChangesFileFilter({
 						onOpenChange={setIsSubChatFilterOpen}
 						items={subChats}
 						onSelect={handleSubChatSelect}
-						placeholder="Search chats..."
-						emptyMessage="No chats with changes"
-						getItemValue={(subChat) => `${subChat.name || "New Chat"} ${subChat.id}`}
+						placeholder={t("changes.filter.searchChats")}
+						emptyMessage={t("changes.filter.noChatsWithChanges")}
+						getItemValue={(subChat) => `${subChat.name || t("changes.filter.newChat")} ${subChat.id}`}
 						renderItem={renderSubChatItem}
 						side="bottom"
 						align="end"
@@ -142,8 +149,10 @@ export function ChangesFileFilter({
 								</TooltipTrigger>
 								<TooltipContent side="bottom">
 									{selectedSubChat
-										? `Filtering: ${selectedSubChat.name || "New Chat"}`
-										: "Filter by chat"}
+										? t("changes.filter.filtering", {
+											name: selectedSubChat.name || t("changes.filter.newChat"),
+										})
+										: t("changes.filter.filterByChat")}
 								</TooltipContent>
 							</Tooltip>
 						}
@@ -156,11 +165,11 @@ export function ChangesFileFilter({
 				<div className="flex items-center justify-between gap-2 h-7 px-2 rounded-md bg-muted/80 border border-border/50">
 					<div className="flex items-center gap-1.5 min-w-0">
 						<span className="text-[10px] text-muted-foreground flex-shrink-0 uppercase tracking-wide">
-							Filtered
+							{t("changes.filter.filtered")}
 						</span>
 						<span className="text-muted-foreground/30 flex-shrink-0">•</span>
 						<span className="text-xs text-foreground/80 truncate">
-							{selectedSubChat.name || "New Chat"}
+							{selectedSubChat.name || t("changes.filter.newChat")}
 						</span>
 						<span className="text-[10px] text-muted-foreground flex-shrink-0">
 							({selectedSubChat.fileCount})

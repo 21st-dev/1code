@@ -15,6 +15,7 @@ import {
 } from "../../../components/ui/tooltip"
 import { useResolvedHotkeyDisplayWithAlt, useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import type { AgentMode } from "../atoms"
 
 interface AgentSendButtonProps {
@@ -70,6 +71,7 @@ export function AgentSendButton({
   onVoiceMouseUp,
   onVoiceMouseLeave,
 }: AgentSendButtonProps) {
+  const { t } = useI18n()
   // Resolved hotkeys for stop-generation tooltip
   const stopHotkey = useResolvedHotkeyDisplayWithAlt("stop-generation")
   // Resolved hotkey for voice input
@@ -130,11 +132,11 @@ export function AgentSendButton({
   const getTooltipContent = () => {
     // Voice input mode
     if (isVoiceMode) {
-      if (isTranscribing) return "Transcribing..."
-      if (isRecording) return "Click to stop"
+      if (isTranscribing) return t("agent.send.transcribing")
+      if (isRecording) return t("agent.send.clickToStop")
       return (
         <div className="flex flex-col items-start gap-0.5">
-          <span>Voice input</span>
+          <span>{t("agent.send.voiceInput")}</span>
           {voiceHotkey && (
             <span className="text-muted-foreground">{voiceHotkey}</span>
           )}
@@ -144,11 +146,11 @@ export function AgentSendButton({
     if (isStreaming && !hasContent)
       return (
         <div className="flex flex-col items-start gap-1">
-          <span>Stop</span>
+          <span>{t("agent.send.stop")}</span>
           {stopHotkey.primary && (
             <span className="flex items-center gap-1.5">
               <Kbd>{stopHotkey.primary}</Kbd>
-              {stopHotkey.alt && <><span className="text-[10px] opacity-50">or</span><Kbd>{stopHotkey.alt}</Kbd></>}
+              {stopHotkey.alt && <><span className="text-[10px] opacity-50">{t("agent.send.or")}</span><Kbd>{stopHotkey.alt}</Kbd></>}
             </span>
           )}
         </div>
@@ -156,23 +158,23 @@ export function AgentSendButton({
     if (isStreaming && hasContent)
       return (
         <span className="flex items-center gap-1">
-          Add to queue
+          {t("agent.send.addToQueue")}
           <Kbd className="ms-0.5">
             <EnterIcon className="size-2.5 inline" />
           </Kbd>
-          <span className="text-muted-foreground/60">or</span>
-          Send now
+          <span className="text-muted-foreground/60">{t("agent.send.or")}</span>
+          {t("agent.send.sendNow")}
           <Kbd className="ms-0.5">Alt</Kbd>
           <Kbd className="-me-1">
             <EnterIcon className="size-2.5 inline" />
           </Kbd>
         </span>
       )
-    if (isSubmitting) return "Generating..."
+    if (isSubmitting) return t("agent.send.generating")
     return (
       <div className="flex flex-col items-start gap-0.5">
         <div className="flex items-center gap-1">
-          <span>Send</span>
+          <span>{t("agent.send.sendMessage")}</span>
           <span className="text-muted-foreground inline-flex items-center gap-1">
             <Kbd>
               <EnterIcon className="size-2.5 inline" />
@@ -180,7 +182,7 @@ export function AgentSendButton({
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <span>Send now</span>
+          <span>{t("agent.send.sendNow")}</span>
           <span className="text-muted-foreground inline-flex items-center gap-1">
             <Kbd>Alt</Kbd>
             <Kbd>
@@ -196,14 +198,14 @@ export function AgentSendButton({
   const getAriaLabel = () => {
     if (ariaLabel) return ariaLabel
     if (isVoiceMode) {
-      if (isTranscribing) return "Transcribing..."
-      if (isRecording) return "Stop recording"
-      return "Voice input"
+      if (isTranscribing) return t("agent.send.transcribing")
+      if (isRecording) return t("agent.send.stopRecording")
+      return t("agent.send.voiceInput")
     }
-    if (isStreaming && !hasContent) return "Stop generation"
-    if (isStreaming && hasContent) return "Add to queue"
-    if (isSubmitting) return "Generating..."
-    return "Send message"
+    if (isStreaming && !hasContent) return t("agent.send.stopGeneration")
+    if (isStreaming && hasContent) return t("agent.send.addToQueue")
+    if (isSubmitting) return t("agent.send.generating")
+    return t("agent.send.sendMessage")
   }
 
   // Apply glow effect when button is active and ready to send/queue
@@ -277,4 +279,3 @@ export function AgentSendButton({
     </Tooltip>
   )
 }
-

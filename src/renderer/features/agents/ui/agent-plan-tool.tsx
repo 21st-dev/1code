@@ -12,6 +12,7 @@ import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 import { Circle, SkipForward, FileCode2 } from "lucide-react"
+import { useI18n } from "@/lib/i18n"
 
 interface PlanStep {
   id: string
@@ -112,6 +113,7 @@ export const AgentPlanTool = memo(function AgentPlanTool({
   part,
   chatStatus,
 }: AgentPlanToolProps) {
+  const { t } = useI18n()
   const [isExpanded, setIsExpanded] = useState(false) // Collapsed by default
   const { isPending } = getToolStatus(part, chatStatus)
 
@@ -130,15 +132,15 @@ export const AgentPlanTool = memo(function AgentPlanTool({
   // Determine header title based on action and status
   const getHeaderTitle = () => {
     if (isPending) {
-      if (action === "create") return "Creating plan..."
-      if (action === "approve") return "Approving plan..."
-      if (action === "complete") return "Completing plan..."
-      return "Updating plan..."
+      if (action === "create") return t("agent.tool.creatingPlan")
+      if (action === "approve") return t("agent.tool.approvingPlan")
+      if (action === "complete") return t("agent.tool.completingPlan")
+      return t("agent.tool.updatingPlan")
     }
     
-    if (plan.status === "awaiting_approval") return "Plan ready for review"
-    if (plan.status === "completed") return "Plan completed"
-    if (plan.status === "approved") return "Plan approved"
+    if (plan.status === "awaiting_approval") return t("agent.tool.planReadyForReview")
+    if (plan.status === "completed") return t("agent.tool.planCompleted")
+    if (plan.status === "approved") return t("agent.tool.planApproved")
     return plan.title
   }
 
@@ -146,12 +148,22 @@ export const AgentPlanTool = memo(function AgentPlanTool({
   const getProgressText = () => {
     if (totalSteps === 0) return null
     if (completedCount === totalSteps) {
-      return `${completedCount} of ${totalSteps} Completed`
+      return t("agent.tool.completedProgress", {
+        completed: completedCount,
+        total: totalSteps,
+      })
     }
     if (inProgressCount > 0) {
-      return `${completedCount} of ${totalSteps} Completed, ${inProgressCount} in progress`
+      return t("agent.tool.completedInProgress", {
+        completed: completedCount,
+        total: totalSteps,
+        inProgress: inProgressCount,
+      })
     }
-    return `${completedCount} of ${totalSteps} Completed`
+    return t("agent.tool.completedProgress", {
+      completed: completedCount,
+      total: totalSteps,
+    })
   }
 
   return (
@@ -294,7 +306,7 @@ export const AgentPlanTool = memo(function AgentPlanTool({
           {plan.status === "awaiting_approval" && (
             <div className="px-2.5 py-2 border-t border-border bg-muted/50">
               <span className="text-xs text-muted-foreground">
-                Awaiting your approval to proceed
+                {t("agent.tool.awaitingApproval")}
               </span>
             </div>
           )}
@@ -302,7 +314,7 @@ export const AgentPlanTool = memo(function AgentPlanTool({
           {plan.status === "completed" && (
             <div className="px-2.5 py-2 border-t border-border bg-muted/50">
               <span className="text-xs text-muted-foreground">
-                Plan completed successfully
+                {t("agent.tool.planCompletedSuccessfully")}
               </span>
             </div>
           )}

@@ -57,6 +57,7 @@ import { defaultEditorOptions, getMonacoTheme, registerMonacoTheme } from "./mon
 import { useVSCodeTheme } from "@/lib/themes"
 import { ImageViewer } from "./image-viewer"
 import { MarkdownViewer } from "./markdown-viewer"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 interface FileViewerSidebarProps {
   filePath: string
@@ -70,9 +71,9 @@ function FileIcon({ filePath }: { filePath: string }) {
 }
 
 const FILE_VIEWER_MODES = [
-  { value: "side-peek" as const, label: "Sidebar", Icon: IconSidePeek },
-  { value: "center-peek" as const, label: "Dialog", Icon: IconCenterPeek },
-  { value: "full-page" as const, label: "Fullscreen", Icon: IconFullPage },
+  { value: "side-peek" as const, labelKey: "changes.diff.sidebar" as TranslationKey, Icon: IconSidePeek },
+  { value: "center-peek" as const, labelKey: "changes.diff.dialog" as TranslationKey, Icon: IconCenterPeek },
+  { value: "full-page" as const, labelKey: "changes.diff.fullscreen" as TranslationKey, Icon: IconFullPage },
 ]
 
 function FileViewerModeSwitcher({
@@ -82,6 +83,7 @@ function FileViewerModeSwitcher({
   mode: FileViewerDisplayMode
   onModeChange: (mode: FileViewerDisplayMode) => void
 }) {
+  const { t } = useI18n()
   const currentMode = FILE_VIEWER_MODES.find((m) => m.value === mode) ?? FILE_VIEWER_MODES[0]
   const CurrentIcon = currentMode.Icon
 
@@ -97,14 +99,14 @@ function FileViewerModeSwitcher({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[140px]">
-        {FILE_VIEWER_MODES.map(({ value, label, Icon }) => (
+        {FILE_VIEWER_MODES.map(({ value, labelKey, Icon }) => (
           <DropdownMenuItem
             key={value}
             onClick={() => onModeChange(value)}
             className="flex items-center gap-2"
           >
             <Icon className="size-4 text-muted-foreground" />
-            <span className="flex-1">{label}</span>
+            <span className="flex-1">{t(labelKey)}</span>
             {mode === value && (
               <Check className="size-4 text-muted-foreground ml-auto" />
             )}
@@ -116,11 +118,12 @@ function FileViewerModeSwitcher({
 }
 
 function LoadingSpinner() {
+  const { t } = useI18n()
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="text-sm">Loading file...</span>
+        <span className="text-sm">{t("fileViewer.loadingFile")}</span>
       </div>
     </div>
   )
@@ -144,6 +147,7 @@ function UnsupportedViewer({
   filePath: string
   onClose: () => void
 }) {
+  const { t } = useI18n()
   const fileName = getFileName(filePath)
   const [displayMode, setDisplayMode] = useAtom(fileViewerDisplayModeAtom)
 
@@ -179,7 +183,9 @@ function UnsupportedViewer({
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3 text-center max-w-[300px]">
           <FileWarning className="h-10 w-10 text-muted-foreground" />
-          <p className="font-medium text-foreground">Cannot view this file</p>
+          <p className="font-medium text-foreground">
+            {t("fileViewer.cannotView")}
+          </p>
         </div>
       </div>
     </div>
@@ -197,6 +203,7 @@ function CodeViewerHeader({
   onClose: () => void
   content?: string | null
 }) {
+  const { t } = useI18n()
   const [wordWrap, setWordWrap] = useAtom(fileViewerWordWrapAtom)
   const [minimap, setMinimap] = useAtom(fileViewerMinimapAtom)
   const [lineNumbers, setLineNumbers] = useAtom(fileViewerLineNumbersAtom)
@@ -250,7 +257,7 @@ function CodeViewerHeader({
               onClick={handleOpenInEditor}
               className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer rounded-md px-1.5 py-1 hover:bg-accent hover:text-accent-foreground transition-colors"
             >
-              <span className="hidden @[400px]:inline">Open in</span>
+              <span className="hidden @[400px]:inline">{t("details.openIn")}</span>
               {EDITOR_ICONS[preferredEditor] && (
                 <img
                   src={EDITOR_ICONS[preferredEditor]}
@@ -261,7 +268,7 @@ function CodeViewerHeader({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" showArrow={false}>
-            Open in {editorMeta.label}
+            {t("changes.openInEditor", { editor: editorMeta.label })}
             {openInEditorHotkey && <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>}
           </TooltipContent>
         </Tooltip>
@@ -275,7 +282,7 @@ function CodeViewerHeader({
               </div>
             </TooltipTrigger>
             <TooltipContent side="bottom" showArrow={false}>
-              Copy file content
+              {t("fileViewer.copyContent")}
             </TooltipContent>
           </Tooltip>
         )}
@@ -297,21 +304,21 @@ function CodeViewerHeader({
               onCheckedChange={() => setWordWrap(!wordWrap)}
             >
               <WrapText className="mr-2 h-3.5 w-3.5" />
-              Word Wrap
+              {t("fileViewer.wordWrap")}
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem
               checked={minimap}
               onCheckedChange={() => setMinimap(!minimap)}
             >
               <Map className="mr-2 h-3.5 w-3.5" />
-              Minimap
+              {t("fileViewer.minimap")}
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem
               checked={lineNumbers}
               onCheckedChange={() => setLineNumbers(!lineNumbers)}
             >
               <IconLineNumbers className="mr-2 h-3.5 w-3.5" />
-              Line Numbers
+              {t("fileViewer.lineNumbers")}
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>

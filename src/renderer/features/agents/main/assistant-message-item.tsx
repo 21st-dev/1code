@@ -49,6 +49,7 @@ import { useFileOpen } from "../mentions"
 import { GitActivityBadges } from "../ui/git-activity-badges"
 import { ForkContext } from "./isolated-message-group"
 import { MemoizedTextPart } from "./memoized-text-part"
+import { useI18n } from "@/lib/i18n"
 
 // Map first word of an ACP tool title to a canonical Claude Code tool type.
 // Codex tool calls arrive with type = "tool-Read README.md", "tool-Run echo ---",
@@ -489,6 +490,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   chatId,
   sandboxSetupStatus = "ready",
 }: AssistantMessageItemProps) {
+  const { t } = useI18n()
   const showMessageJson = useAtomValue(showMessageJsonAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
@@ -499,7 +501,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   // Note: no useMemo — AI SDK mutates parts in-place, so the array reference
   // doesn't change and useMemo would return stale results.
   const messageParts = normalizeAcpParts(
-    (message?.parts || []).map((part) => normalizeCodexToolPart(part) as any),
+    (message?.parts || []).map((part: any) => normalizeCodexToolPart(part) as any),
   )
 
   const contentParts = useMemo(() =>
@@ -814,8 +816,8 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         <AgentToolCall
           key={idx}
           icon={meta.icon}
-          title={meta.title(part)}
-          subtitle={meta.subtitle?.(part)}
+          title={meta.title(part, t)}
+          subtitle={meta.subtitle?.(part, t)}
           tooltipContent={meta.tooltipContent?.(part, projectPath)}
           isPending={isPending}
           isError={isError}
@@ -846,7 +848,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     }
 
     return null
-  }, [nestedToolsMap, nestedToolIds, orphanToolCallIds, orphanFirstToolCallIds, orphanTaskGroups, collapseBeforeIndex, visibleStepsCount, status, isLastMessage, isStreaming, subChatId, message.id, planOpsSummary, shouldCollapse, lastCollapsedPlanOp])
+  }, [nestedToolsMap, nestedToolIds, orphanToolCallIds, orphanFirstToolCallIds, orphanTaskGroups, collapseBeforeIndex, visibleStepsCount, status, isLastMessage, isStreaming, subChatId, message.id, planOpsSummary, shouldCollapse, lastCollapsedPlanOp, t])
 
   if (!message) return null
 
@@ -941,7 +943,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         {shouldShowPlanning && (
           <AgentToolCall
             icon={AgentToolRegistry["tool-planning"].icon}
-            title={AgentToolRegistry["tool-planning"].title({})}
+            title={AgentToolRegistry["tool-planning"].title({}, t)}
             isPending={true}
             isError={false}
           />

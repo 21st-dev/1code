@@ -3,6 +3,7 @@ import { ClaudeCodeIcon } from "../../../components/ui/icons"
 import { PlatformIcon } from "./platform-icon"
 import { getAutomationDescription } from "./utils"
 import type { Platform } from "./types"
+import { useI18n } from "@/lib/i18n"
 
 interface AutomationCardProps {
   automation: {
@@ -15,6 +16,7 @@ interface AutomationCardProps {
 }
 
 export function AutomationCard({ automation, onClick }: AutomationCardProps) {
+  const { t } = useI18n()
   const triggers = automation.triggers || []
   const platforms = [...new Set(triggers.map((t) => (t.platform || "github") as Platform))]
 
@@ -44,12 +46,12 @@ export function AutomationCard({ automation, onClick }: AutomationCardProps) {
           </span>
           {!automation.is_enabled && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-              Paused
+              {t("automations.paused")}
             </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-          {getAutomationDescription(triggers)}
+          {getAutomationDescription(triggers, t)}
         </p>
       </div>
     </div>

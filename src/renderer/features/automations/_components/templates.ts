@@ -4,6 +4,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: "enrich-github-issue",
     name: "Enrich Github Issue",
+    nameKey: "automations.template.enrichGithubIssue",
     platform: "github",
     triggerType: "issue_opened",
     description: "Automatically analyze and enrich new GitHub issues with relevant context.",
@@ -12,6 +13,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: "pr-reviews",
     name: "PR Reviews",
+    nameKey: "automations.template.prReviews",
     platform: "github",
     triggerType: "pr_opened",
     description: "Automatically review pull requests for code quality and best practices.",
@@ -20,6 +22,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: "auto-pr-description",
     name: "Auto PR Description",
+    nameKey: "automations.template.autoPrDescription",
     platform: "github",
     triggerType: "pr_opened",
     description: "Automatically generate PR descriptions based on the changes made.",
@@ -28,6 +31,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: "auto-fix-ci",
     name: "Auto Fix CI",
+    nameKey: "automations.template.autoFixCi",
     platform: "github",
     triggerType: "workflow_failed",
     description: "Automatically diagnose and fix CI failures.",
@@ -36,6 +40,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: "linear-issue-implementation",
     name: "Implement Linear Issue",
+    nameKey: "automations.template.linearIssueImplementation",
     platform: "linear",
     triggerType: "linear_issue_created",
     description: "Automatically start implementing new Linear issues.",

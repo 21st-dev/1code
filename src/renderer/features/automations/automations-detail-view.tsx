@@ -53,15 +53,20 @@ import {
   GITHUB_TRIGGER_OPTIONS,
   LINEAR_TRIGGER_OPTIONS,
   CLAUDE_MODELS,
-  getTriggerLabel,
   PlatformIcon,
   type Platform,
   type TriggerType,
 } from "./_components"
+import { useI18n, type TranslationKey } from "../../lib/i18n"
+
+type Translate = (
+  key: TranslationKey,
+  values?: Record<string, string | number>
+) => string
 
 /** Shorten external_id for display: "owner/repo#123" → "repo#123", "owner/repo:push" → "repo:push" */
-function formatExternalId(externalId: string | null | undefined): string {
-  if (!externalId) return "Triggered run"
+function formatExternalId(externalId: string | null | undefined, t: Translate): string {
+  if (!externalId) return t("automations.detail.triggeredRun")
   const slashIdx = externalId.indexOf("/")
   if (slashIdx !== -1) {
     return externalId.slice(slashIdx + 1)
@@ -84,22 +89,64 @@ function getStatusColor(status: string) {
   }
 }
 
-function formatDistanceToNow(date: Date): string {
+function formatDistanceToNow(date: Date, t: Translate): string {
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffSec = Math.floor(diffMs / 1000)
   const diffMin = Math.floor(diffSec / 60)
   const diffHr = Math.floor(diffMin / 60)
   const diffDay = Math.floor(diffHr / 24)
-  if (diffSec < 60) return "less than a minute ago"
-  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`
-  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`
-  if (diffDay < 30) return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`
+  if (diffSec < 60) return t("automations.detail.lessThanMinute")
+  if (diffMin < 60) {
+    return t(
+      diffMin === 1
+        ? "automations.detail.minuteAgo"
+        : "automations.detail.minutesAgo",
+      { count: diffMin }
+    )
+  }
+  if (diffHr < 24) {
+    return t(
+      diffHr === 1
+        ? "automations.detail.hourAgo"
+        : "automations.detail.hoursAgo",
+      { count: diffHr }
+    )
+  }
+  if (diffDay < 30) {
+    return t(
+      diffDay === 1
+        ? "automations.detail.dayAgo"
+        : "automations.detail.daysAgo",
+      { count: diffDay }
+    )
+  }
   const diffMonth = Math.floor(diffDay / 30)
-  return `${diffMonth} month${diffMonth === 1 ? "" : "s"} ago`
+  return t(
+    diffMonth === 1
+      ? "automations.detail.monthAgo"
+      : "automations.detail.monthsAgo",
+    { count: diffMonth }
+  )
+}
+
+function getExecutionStatusLabel(status: string, t: Translate) {
+  switch (status) {
+    case "success":
+      return t("automations.detail.status.success")
+    case "failed":
+      return t("automations.detail.status.failed")
+    case "pending":
+      return t("automations.detail.status.pending")
+    case "skipped":
+      return t("automations.detail.status.skipped")
+    default:
+      return status
+  }
 }
 
 export function AutomationsDetailView() {
+  const { t } = useI18n()
   const teamId = useAtomValue(selectedTeamIdAtom)
   const automationId = useAtomValue(automationDetailIdAtom)
   const templateParams = useAtomValue(automationTemplateParamsAtom)
@@ -308,7 +355,7 @@ export function AutomationsDetailView() {
     if (isCreateMode) {
       createMutation.mutate({
         teamId: teamId!,
-        name: name || "Untitled Automation",
+        name: name || t("automations.detail.untitledAutomation"),
         agentPrompt: instructions,
         addToInbox,
         respondToTrigger,
@@ -339,7 +386,7 @@ export function AutomationsDetailView() {
   }, [
     isCreateMode, teamId, name, instructions, addToInbox, respondToTrigger, isEnabled,
     localTriggers, targetRepository, automationId,
-    createMutation, updateMutation,
+    createMutation, updateMutation, t,
   ])
 
   const handleAddTrigger = useCallback((platform: Platform) => {
@@ -378,12 +425,14 @@ export function AutomationsDetailView() {
       (t) => t.platform === "github" && !githubCommentTriggers.includes(t.trigger_type)
     )
 
-    if (hasGithubCommentable && hasLinear) return "Post comments on GitHub issues/PRs and Linear issues"
-    if (hasGithubCommentable) return "Post comments on GitHub issues/PRs"
-    if (hasLinear) return "Post comments on Linear issues"
-    if (hasGithubNonCommentable) return "No commentable triggers configured (push, branch, workflow triggers don't support comments)"
-    return "Post comments on the source issue/PR with progress and results"
-  }, [localTriggers])
+    if (hasGithubCommentable && hasLinear) {
+      return t("automations.detail.commentTargets.githubLinear")
+    }
+    if (hasGithubCommentable) return t("automations.detail.commentTargets.github")
+    if (hasLinear) return t("automations.detail.commentTargets.linear")
+    if (hasGithubNonCommentable) return t("automations.detail.commentTargets.none")
+    return t("automations.detail.commentTargets.default")
+  }, [localTriggers, t])
 
   // ============================================================================
   // Render
@@ -429,7 +478,7 @@ export function AutomationsDetailView() {
                     onClick={() => setShowDeleteDialog(true)}
                     className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400 focus:bg-red-500/15 focus:text-red-400"
                   >
-                    Delete
+                    {t("automations.detail.delete")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -443,7 +492,9 @@ export function AutomationsDetailView() {
                     }
                   }}
                 />
-                <span className="text-xs text-muted-foreground">Active</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("common.active")}
+                </span>
               </div>
               <button
                 onClick={handleSave}
@@ -451,7 +502,7 @@ export function AutomationsDetailView() {
                 className="h-7 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
                 {isSaving ? <IconSpinner className="h-3 w-3 mr-1" /> : null}
-                Save
+                {t("automations.detail.save")}
               </button>
             </>
           )}
@@ -463,7 +514,7 @@ export function AutomationsDetailView() {
               className="h-7 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
               {isSaving ? <IconSpinner className="h-3 w-3 mr-1" /> : null}
-              Enable
+              {t("automations.detail.enable")}
             </button>
           )}
         </div>
@@ -476,7 +527,7 @@ export function AutomationsDetailView() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Untitled automation"
+            placeholder={t("automations.detail.untitledPlaceholder")}
             className="text-lg font-medium bg-transparent border-0 outline-none placeholder:text-muted-foreground/50 mb-6"
           />
 
@@ -484,7 +535,9 @@ export function AutomationsDetailView() {
           <div className="flex-1 flex flex-col items-center">
             {/* When section */}
             <section className="w-full">
-              <div className="text-xs font-medium text-muted-foreground mb-2">When</div>
+              <div className="text-xs font-medium text-muted-foreground mb-2">
+                {t("automations.detail.when")}
+              </div>
 
               {/* Existing triggers */}
               <div className="space-y-2">
@@ -507,7 +560,7 @@ export function AutomationsDetailView() {
                           : LINEAR_TRIGGER_OPTIONS
                         ).map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
+                            {t(opt.labelKey)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -526,7 +579,9 @@ export function AutomationsDetailView() {
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 h-[46px] px-3 w-full border border-border rounded-xl text-muted-foreground hover:bg-muted/30 transition-colors">
                       <Plus className="h-5 w-5" />
-                      <span className="text-sm">Add trigger</span>
+                      <span className="text-sm">
+                        {t("automations.detail.addTrigger")}
+                      </span>
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-[260px]" sideOffset={8}>
@@ -544,7 +599,7 @@ export function AutomationsDetailView() {
                     )}
                     {!githubStatus?.isConnected && !linearStatus?.isConnected && (
                       <div className="px-2 py-3 text-xs text-muted-foreground text-center">
-                        Connect GitHub or Linear in Settings to add triggers
+                        {t("automations.detail.connectToAddTriggers")}
                       </div>
                     )}
                   </DropdownMenuContent>
@@ -557,7 +612,9 @@ export function AutomationsDetailView() {
 
             {/* Do section */}
             <section className="w-full flex flex-col gap-1">
-              <div className="text-xs font-medium text-muted-foreground h-6 flex items-center">Do</div>
+              <div className="text-xs font-medium text-muted-foreground h-6 flex items-center">
+                {t("automations.detail.do")}
+              </div>
 
               {/* Action card */}
               <div className="rounded-xl bg-background border border-border overflow-hidden">
@@ -570,7 +627,7 @@ export function AutomationsDetailView() {
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1 text-sm leading-5">
-                      <span>Run</span>
+                      <span>{t("automations.detail.run")}</span>
                       <Select value={selectedModel} onValueChange={setSelectedModel}>
                         <SelectTrigger className="inline-flex items-center gap-0.5 px-1.5 h-5 rounded bg-accent/50 hover:bg-accent text-sm border-0 w-auto">
                           <SelectValue />
@@ -583,11 +640,11 @@ export function AutomationsDetailView() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <span>in</span>
+                      <span>{t("automations.detail.in")}</span>
                       <span className="inline-flex items-center gap-0.5 px-1 h-5 rounded bg-accent/50 text-sm opacity-70">
                         Agent
                       </span>
-                      <span>mode</span>
+                      <span>{t("automations.detail.mode")}</span>
                     </div>
                   </div>
 
@@ -597,23 +654,23 @@ export function AutomationsDetailView() {
                   {/* Target repository */}
                   <div className="mt-6">
                     <label className="text-sm text-muted-foreground mb-1.5 block">
-                      Target repository
+                      {t("automations.detail.targetRepository")}
                     </label>
                     <input
                       value={targetRepository}
                       onChange={(e) => setTargetRepository(e.target.value)}
-                      placeholder="owner/repo (optional)"
+                      placeholder={t("automations.detail.repositoryPlaceholder")}
                       className="w-full h-9 rounded-md text-sm bg-muted/50 border border-border px-3 placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      Repository where Claude Code will make changes
+                      {t("automations.detail.repositoryHint")}
                     </p>
                   </div>
 
                   {/* Instructions */}
                   <div className="mt-4">
                     <label className="text-sm text-muted-foreground mb-1.5 block">
-                      Instructions
+                      {t("automations.detail.instructions")}
                     </label>
                     <textarea
                       value={instructions}
@@ -621,7 +678,7 @@ export function AutomationsDetailView() {
                         setInstructions(e.target.value)
                         if (!isCreateMode) setInstructionsDirty(true)
                       }}
-                      placeholder="Add instructions for the agent..."
+                      placeholder={t("automations.detail.instructionsPlaceholder")}
                       rows={6}
                       className="w-full min-h-[100px] rounded-md text-sm bg-muted/50 border border-border p-3 placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
                     />
@@ -630,8 +687,12 @@ export function AutomationsDetailView() {
                   {/* Add to inbox toggle */}
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm text-foreground">Add to inbox</span>
-                      <span className="text-xs text-muted-foreground">Show results in your inbox for review</span>
+                      <span className="text-sm text-foreground">
+                        {t("automations.detail.addToInbox")}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {t("automations.detail.addToInboxHint")}
+                      </span>
                     </div>
                     <Switch checked={addToInbox} onCheckedChange={setAddToInbox} />
                   </div>
@@ -639,7 +700,9 @@ export function AutomationsDetailView() {
                   {/* Respond to trigger toggle */}
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm text-foreground">Post comments</span>
+                      <span className="text-sm text-foreground">
+                        {t("automations.detail.postComments")}
+                      </span>
                       <span className="text-xs text-muted-foreground">{commentTargetDescription}</span>
                     </div>
                     <Switch checked={respondToTrigger} onCheckedChange={setRespondToTrigger} />
@@ -653,8 +716,10 @@ export function AutomationsDetailView() {
                 className="flex items-center gap-2 p-3 w-full border border-border rounded-[10px] text-muted-foreground/50 cursor-not-allowed"
               >
                 <Plus className="h-5 w-5" />
-                <span className="text-sm">Add action</span>
-                <span className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded">Soon</span>
+                <span className="text-sm">{t("automations.detail.addAction")}</span>
+                <span className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded">
+                  {t("automations.detail.soon")}
+                </span>
               </button>
             </section>
 
@@ -672,7 +737,7 @@ export function AutomationsDetailView() {
                       "h-3.5 w-3.5 transition-transform",
                       !pastRunsExpanded && "-rotate-90"
                     )} />
-                    <span>Past Runs</span>
+                    <span>{t("automations.detail.pastRuns")}</span>
                     {allExecutions.length > 0 && (
                       <span className="text-muted-foreground/60 ml-1">
                         ({totalExecutions})
@@ -685,7 +750,7 @@ export function AutomationsDetailView() {
                       {allExecutions.length === 0 ? (
                         <div className="p-6 text-center">
                           <p className="text-sm text-muted-foreground">
-                            No runs yet. This automation will appear here once triggered.
+                            {t("automations.detail.noRuns")}
                           </p>
                         </div>
                       ) : (
@@ -699,7 +764,7 @@ export function AutomationsDetailView() {
                                   getStatusColor(execution.status)
                                 )}
                               >
-                                {execution.status}
+                                {getExecutionStatusLabel(execution.status, t)}
                               </Badge>
 
                               <div className="flex-1 min-w-0">
@@ -715,13 +780,13 @@ export function AutomationsDetailView() {
                                     className="text-sm text-foreground hover:underline truncate inline-flex items-center gap-1 text-left"
                                   >
                                     <span className="truncate">
-                                      {formatExternalId(execution.external_id)}
+                                      {formatExternalId(execution.external_id, t)}
                                     </span>
                                     <ExternalLinkIcon className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                                   </button>
                                 ) : (
                                   <span className="text-sm text-muted-foreground truncate block">
-                                    {formatExternalId(execution.external_id)}
+                                    {formatExternalId(execution.external_id, t)}
                                   </span>
                                 )}
                                 {execution.status === "failed" && execution.error_message && (
@@ -732,7 +797,7 @@ export function AutomationsDetailView() {
                               </div>
 
                               <span className="text-xs text-muted-foreground flex-shrink-0">
-                                {formatDistanceToNow(new Date(execution.created_at))}
+                                {formatDistanceToNow(new Date(execution.created_at), t)}
                               </span>
                             </div>
                           ))}
@@ -749,7 +814,7 @@ export function AutomationsDetailView() {
                             {isFetchingMoreExecutions ? (
                               <IconSpinner className="h-3 w-3 mx-auto" />
                             ) : (
-                              "Show more"
+                              t("automations.detail.showMore")
                             )}
                           </button>
                         </div>
@@ -767,19 +832,19 @@ export function AutomationsDetailView() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Automation</AlertDialogTitle>
+            <AlertDialogTitle>{t("automations.detail.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this automation? This action cannot be undone.
+              {t("automations.detail.deleteDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteMutation.isPending ? <IconSpinner className="h-4 w-4 mr-2" /> : null}
-              Delete
+              {t("automations.detail.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -789,18 +854,18 @@ export function AutomationsDetailView() {
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogTitle>{t("automations.detail.discardTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+              {t("automations.detail.discardDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={doNavigateBack}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Discard
+              {t("automations.detail.discard")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

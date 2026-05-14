@@ -21,6 +21,7 @@ import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { trpc } from "../../lib/trpc";
 import { preferredEditorAtom } from "../../lib/atoms";
+import { useI18n } from "../../lib/i18n";
 import { APP_META } from "../../../shared/external-apps";
 import { fileViewerOpenAtomFamily, diffViewDisplayModeAtom, diffSidebarOpenAtomFamily, diffActiveTabAtom } from "../agents/atoms";
 import { useChangesStore } from "../../lib/stores/changes-store";
@@ -94,6 +95,7 @@ const ChangesFileItemWithContext = memo(function ChangesFileItemWithContext({
 	onCopySelectedPaths: () => void;
 	onCopySelectedRelativePaths: () => void;
 }) {
+	const { t } = useI18n();
 	const fileName = file.path.split("/").pop() || file.path;
 	const dirPath = file.path.includes("/")
 		? file.path.substring(0, file.path.lastIndexOf("/"))
@@ -168,49 +170,49 @@ const ChangesFileItemWithContext = memo(function ChangesFileItemWithContext({
 							onClick={onDiscardSelected}
 							className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
 						>
-							Discard {highlightedCount} Selected Changes...
+							{t("changes.discardSelected", { count: highlightedCount })}
 						</ContextMenuItem>
 						<ContextMenuSeparator />
 						<ContextMenuItem onClick={onIncludeSelected}>
-							Include Selected Files
+							{t("changes.includeSelected")}
 						</ContextMenuItem>
 						<ContextMenuItem onClick={onExcludeSelected}>
-							Exclude Selected Files
+							{t("changes.excludeSelected")}
 						</ContextMenuItem>
 						<ContextMenuSeparator />
 						<ContextMenuItem onClick={onCopySelectedPaths}>
-							Copy Paths
+							{t("changes.copyPaths")}
 						</ContextMenuItem>
 						<ContextMenuItem onClick={onCopySelectedRelativePaths}>
-							Copy Relative Paths
+							{t("changes.copyRelativePaths")}
 						</ContextMenuItem>
 					</>
 				) : (
 					<>
 						{/* Single file context menu */}
 						<ContextMenuItem onClick={onCopyPath}>
-							Copy Path
+							{t("changes.copyPath")}
 						</ContextMenuItem>
 						<ContextMenuItem onClick={onCopyRelativePath}>
-							Copy Relative Path
+							{t("changes.copyRelativePath")}
 						</ContextMenuItem>
 						<ContextMenuSeparator />
 						<ContextMenuItem onClick={onRevealInFinder}>
-							Reveal in Finder
+							{t("changes.revealInFinder")}
 						</ContextMenuItem>
 						<ContextMenuSeparator />
 						<ContextMenuItem onClick={onOpenInFilePreview}>
-							Open in File Preview
+							{t("changes.openInFilePreview")}
 						</ContextMenuItem>
 						<ContextMenuItem onClick={onOpenInEditor}>
-							Open in {editorLabel}
+							{t("changes.openInEditor", { editor: editorLabel })}
 						</ContextMenuItem>
 						<ContextMenuSeparator />
 						<ContextMenuItem
 							onClick={onToggleViewed}
 							className="justify-between"
 						>
-							{isViewed ? "Mark as unviewed" : "Mark as viewed"}
+							{isViewed ? t("changes.markUnviewed") : t("changes.markViewed")}
 							<Kbd>V</Kbd>
 						</ContextMenuItem>
 						<ContextMenuSeparator />
@@ -218,7 +220,7 @@ const ChangesFileItemWithContext = memo(function ChangesFileItemWithContext({
 							onClick={onDiscard}
 							className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
 						>
-							{isUntracked ? "Delete File..." : "Discard Changes..."}
+							{isUntracked ? t("changes.deleteFile") : t("changes.discardChanges")}
 						</ContextMenuItem>
 					</>
 				)}
@@ -284,6 +286,7 @@ export function ChangesView({
 	onActiveTabChange,
 	pushCount,
 }: ChangesViewProps) {
+	const { t } = useI18n();
 	useFileChangeListener(worktreePath);
 
 	// Viewed files state from agents diff view (for showing eye icon and toggling)
@@ -356,44 +359,44 @@ export function ChangesView({
 	// Discard changes - single file
 	const discardChangesMutation = trpc.changes.discardChanges.useMutation({
 		onSuccess: () => {
-			toast.success("Changes discarded");
+			toast.success(t("changes.toast.discarded"));
 			refetch();
 			onDiscardSuccess?.();
 		},
 		onError: (error) => {
-			toast.error(`Failed to discard changes: ${error.message}`);
+			toast.error(t("changes.toast.failedDiscard", { message: error.message }));
 		},
 	});
 	const deleteUntrackedMutation = trpc.changes.deleteUntracked.useMutation({
 		onSuccess: () => {
-			toast.success("File deleted");
+			toast.success(t("changes.toast.fileDeleted"));
 			refetch();
 			onDiscardSuccess?.();
 		},
 		onError: (error) => {
-			toast.error(`Failed to delete file: ${error.message}`);
+			toast.error(t("changes.toast.failedDeleteFile", { message: error.message }));
 		},
 	});
 
 	// Discard changes - multiple files (batch)
 	const discardMultipleChangesMutation = trpc.changes.discardMultipleChanges.useMutation({
 		onSuccess: () => {
-			toast.success("Changes discarded");
+			toast.success(t("changes.toast.discarded"));
 			refetch();
 			onDiscardSuccess?.();
 		},
 		onError: (error) => {
-			toast.error(`Failed to discard changes: ${error.message}`);
+			toast.error(t("changes.toast.failedDiscard", { message: error.message }));
 		},
 	});
 	const deleteMultipleUntrackedMutation = trpc.changes.deleteMultipleUntracked.useMutation({
 		onSuccess: () => {
-			toast.success("Files deleted");
+			toast.success(t("changes.toast.filesDeleted"));
 			refetch();
 			onDiscardSuccess?.();
 		},
 		onError: (error) => {
-			toast.error(`Failed to delete files: ${error.message}`);
+			toast.error(t("changes.toast.failedDeleteFiles", { message: error.message }));
 		},
 	});
 
@@ -650,14 +653,14 @@ export function ChangesView({
 	const handleCopySelectedPaths = useCallback((worktreePath: string) => {
 		const paths = highlightedPaths.map(p => `${worktreePath}/${p}`);
 		navigator.clipboard.writeText(paths.join("\n"));
-		toast.success(`Copied ${paths.length} paths`);
-	}, [highlightedPaths]);
+		toast.success(t("changes.toast.copiedPaths", { count: paths.length }));
+	}, [highlightedPaths, t]);
 
 	// Copy relative paths of highlighted files
 	const handleCopySelectedRelativePaths = useCallback(() => {
 		navigator.clipboard.writeText(highlightedPaths.join("\n"));
-		toast.success(`Copied ${highlightedPaths.length} paths`);
-	}, [highlightedPaths]);
+		toast.success(t("changes.toast.copiedPaths", { count: highlightedPaths.length }));
+	}, [highlightedPaths, t]);
 
 	// Toggle all files selection
 	const handleSelectAllChange = useCallback(() => {
@@ -789,7 +792,7 @@ export function ChangesView({
 	if (!worktreePath) {
 	return (
 			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-				No worktree path available
+				{t("changes.noWorktreePath")}
 			</div>
 		);
 	}
@@ -797,7 +800,7 @@ export function ChangesView({
 	if (isLoading) {
 	return (
 			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-				Loading changes...
+				{t("changes.loading")}
 			</div>
 		);
 	}
@@ -805,7 +808,7 @@ export function ChangesView({
 	if (!status) {
 		return (
 			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-				Unable to load changes
+				{t("changes.unableToLoad")}
 			</div>
 		);
 	}
@@ -910,13 +913,13 @@ export function ChangesView({
 							value="changes"
 							className="h-6 px-2.5 text-xs rounded-md data-[state=active]:bg-muted data-[state=active]:shadow-none"
 						>
-							Changes
+							{t("changes.title")}
 						</TabsTrigger>
 						<TabsTrigger
 							value="history"
 							className="h-6 px-2.5 text-xs rounded-md data-[state=active]:bg-muted data-[state=active]:shadow-none"
 						>
-							History
+							{t("changes.history")}
 						</TabsTrigger>
 					</TabsList>
 
@@ -939,18 +942,22 @@ export function ChangesView({
 								className="size-4 border-muted-foreground/50"
 							/>
 							<span className="text-xs text-muted-foreground">
-								{selectedCount} of {totalCount} file{totalCount !== 1 ? "s" : ""} selected
+								{t("changes.filesSelected", {
+									selected: selectedCount,
+									total: totalCount,
+									plural: totalCount !== 1 ? "s" : "",
+								})}
 							</span>
 						</div>
 
 						{/* File list */}
 						{totalCount === 0 ? (
 							<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
-								No changes detected
+								{t("changes.noDetected")}
 							</div>
 						) : filteredCount === 0 ? (
 							<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
-								No files match filter
+								{t("changes.noFilesMatch")}
 							</div>
 						) : (
 							<div
@@ -1029,14 +1036,18 @@ export function ChangesView({
 					<AlertDialogHeader>
 						<AlertDialogTitle>
 							{discardFile?.status === "untracked" || discardFile?.status === "added"
-								? `Delete "${discardFile?.path.split("/").pop()}"?`
-								: `Discard changes to "${discardFile?.path.split("/").pop()}"?`}
+								? t("changes.deleteTitle", {
+									name: discardFile?.path.split("/").pop() ?? "",
+								})
+								: t("changes.discardTitle", {
+									name: discardFile?.path.split("/").pop() ?? "",
+								})}
 						</AlertDialogTitle>
 					</AlertDialogHeader>
 					<AlertDialogDescription className="px-5 pb-5">
 						{discardFile?.status === "untracked" || discardFile?.status === "added"
-							? "This will permanently delete this file. This action cannot be undone."
-							: "This will revert all changes to this file. This action cannot be undone."}
+							? t("changes.deleteDescription")
+							: t("changes.discardDescription")}
 					</AlertDialogDescription>
 					<AlertDialogFooter>
 						<Button
@@ -1044,7 +1055,7 @@ export function ChangesView({
 							size="sm"
 							onClick={() => setDiscardFile(null)}
 						>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button
 							variant="destructive"
@@ -1052,8 +1063,8 @@ export function ChangesView({
 							onClick={handleConfirmDiscard}
 						>
 							{discardFile?.status === "untracked" || discardFile?.status === "added"
-								? "Delete"
-								: "Discard"}
+								? t("changes.delete")
+								: t("changes.discard")}
 						</Button>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -1064,12 +1075,14 @@ export function ChangesView({
 				<AlertDialogContent className="w-[400px]">
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							Discard {discardFiles?.length} Selected Changes?
+							{t("changes.discardSelectedTitle", {
+								count: discardFiles?.length ?? 0,
+							})}
 						</AlertDialogTitle>
 					</AlertDialogHeader>
 					<AlertDialogDescription asChild>
 						<div className="px-5 pb-5">
-							<p className="mb-2">Are you sure you want to discard all changes to:</p>
+							<p className="mb-2">{t("changes.discardSelectedDescription")}</p>
 							<ul className="max-h-40 overflow-y-auto text-xs font-mono bg-muted/50 rounded-md p-2 space-y-0.5">
 								{discardFiles?.map(f => (
 									<li key={f.path} className="truncate text-muted-foreground">
@@ -1085,14 +1098,14 @@ export function ChangesView({
 							size="sm"
 							onClick={() => setDiscardFiles(null)}
 						>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button
 							variant="destructive"
 							size="sm"
 							onClick={handleConfirmMultiDiscard}
 						>
-							Discard
+							{t("changes.discard")}
 						</Button>
 					</AlertDialogFooter>
 				</AlertDialogContent>

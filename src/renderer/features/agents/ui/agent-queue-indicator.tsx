@@ -12,6 +12,7 @@ import { cn } from "../../../lib/utils"
 import type { AgentQueueItem } from "../lib/queue-utils"
 import { RenderFileMentions } from "../mentions/render-file-mentions"
 import { getWindowId } from "../../../contexts/WindowContext"
+import { useI18n } from "@/lib/i18n"
 
 // Window-scoped key so each window has its own queue expanded state
 const getQueueExpandedKey = () => `${getWindowId()}:agent-queue-expanded`
@@ -26,6 +27,7 @@ const QueueItemRow = memo(function QueueItemRow({
   onRemove?: (itemId: string) => void
   onSendNow?: (itemId: string) => void
 }) {
+  const { t } = useI18n()
   const handleRemove = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -51,19 +53,39 @@ const QueueItemRow = memo(function QueueItemRow({
   const pastedCount = item.pastedTexts?.length || 0
 
   if (imageCount > 0) {
-    attachmentParts.push(imageCount === 1 ? "image" : `${imageCount} images`)
+    attachmentParts.push(
+      imageCount === 1
+        ? t("agent.attachment.image")
+        : t("agent.attachment.images", { count: imageCount })
+    )
   }
   if (fileCount > 0) {
-    attachmentParts.push(fileCount === 1 ? "file" : `${fileCount} files`)
+    attachmentParts.push(
+      fileCount === 1
+        ? t("agent.attachment.file")
+        : t("agent.attachment.files", { count: fileCount })
+    )
   }
   if (quoteCount > 0) {
-    attachmentParts.push(quoteCount === 1 ? "selected text" : `${quoteCount} text selections`)
+    attachmentParts.push(
+      quoteCount === 1
+        ? t("agent.attachment.selectedText")
+        : t("agent.attachment.textSelections", { count: quoteCount })
+    )
   }
   if (pastedCount > 0) {
-    attachmentParts.push(pastedCount === 1 ? "pasted text" : `${pastedCount} pasted texts`)
+    attachmentParts.push(
+      pastedCount === 1
+        ? t("agent.attachment.pastedText")
+        : t("agent.attachment.pastedTexts", { count: pastedCount })
+    )
   }
   if (diffCount > 0) {
-    attachmentParts.push(diffCount === 1 ? "code selection" : `${diffCount} code selections`)
+    attachmentParts.push(
+      diffCount === 1
+        ? t("agent.attachment.codeSelection")
+        : t("agent.attachment.codeSelections", { count: diffCount })
+    )
   }
 
   return (
@@ -74,7 +96,7 @@ const QueueItemRow = memo(function QueueItemRow({
         </span>
       ) : attachmentParts.length > 0 ? (
         <span className="truncate flex-1 text-muted-foreground italic">
-          Using {attachmentParts.join(", ")}
+          {t("agent.attachment.using", { items: attachmentParts.join(", ") })}
         </span>
       ) : null}
       {attachmentParts.length > 0 && (
@@ -93,7 +115,7 @@ const QueueItemRow = memo(function QueueItemRow({
                 <ArrowUp className="w-3.5 h-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top">Send now</TooltipContent>
+            <TooltipContent side="top">{t("agent.queue.sendNow")}</TooltipContent>
           </Tooltip>
         )}
         {onRemove && (
@@ -106,7 +128,7 @@ const QueueItemRow = memo(function QueueItemRow({
                 <X className="w-3.5 h-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top">Remove</TooltipContent>
+            <TooltipContent side="top">{t("agent.queue.remove")}</TooltipContent>
           </Tooltip>
         )}
       </div>
@@ -130,6 +152,7 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
   isStreaming = false,
   hasStatusCardBelow = false,
 }: AgentQueueIndicatorProps) {
+  const { t } = useI18n()
   // Load expanded state from localStorage (window-scoped)
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined") return true
@@ -167,7 +190,7 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
           }
         }}
         aria-expanded={isExpanded}
-        aria-label={`${isExpanded ? "Collapse" : "Expand"} queue`}
+        aria-label={isExpanded ? t("agent.queue.collapse") : t("agent.queue.expand")}
         className="flex items-center justify-between pr-1 pl-3 h-8 cursor-pointer hover:bg-muted/50 transition-colors duration-150 focus:outline-none rounded-sm"
       >
         <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
@@ -178,7 +201,7 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
             )}
           />
           <span className="text-xs text-muted-foreground">
-            {queue.length} in queue
+            {t("agent.queue.inQueue", { count: queue.length })}
           </span>
         </div>
 

@@ -26,6 +26,7 @@ import {
 import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "@/features/terminal/types"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/lib/i18n"
 
 interface TerminalWidgetProps {
   chatId: string
@@ -66,6 +67,7 @@ export const TerminalWidget = memo(function TerminalWidget({
   workspaceId,
   onExpand,
 }: TerminalWidgetProps) {
+  const { t } = useI18n()
   // Terminal state - reuse existing atoms
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
@@ -303,12 +305,12 @@ export const TerminalWidget = memo(function TerminalWidget({
                 size="icon"
                 onClick={createTerminal}
                 className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md flex-shrink-0"
-                aria-label="New terminal"
+                aria-label={t("terminal.new")}
               >
                 <PlusIcon className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">New terminal</TooltipContent>
+            <TooltipContent side="bottom">{t("terminal.new")}</TooltipContent>
           </Tooltip>
 
           {/* Expand to sidebar button */}
@@ -320,13 +322,13 @@ export const TerminalWidget = memo(function TerminalWidget({
                   size="icon"
                   onClick={onExpand}
                   className="h-5 w-5 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md opacity-0 group-hover:opacity-100 transition-[background-color,opacity,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
-                  aria-label="Expand terminal"
+                  aria-label={t("details.expandTerminal")}
                 >
                   <ArrowUpRight className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                Expand to sidebar
+                {t("details.expandToSidebar")}
                 {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>
@@ -355,7 +357,7 @@ export const TerminalWidget = memo(function TerminalWidget({
             </motion.div>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              {!canRenderTerminal ? "" : "No terminal open"}
+              {!canRenderTerminal ? "" : t("terminal.noTerminalOpen")}
             </div>
           )}
         </div>

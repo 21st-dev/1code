@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react"
 import { cn } from "../../../lib/utils"
 import { AUTOMATION_TABS } from "./constants"
 import type { ViewTab } from "./types"
+import { useI18n } from "@/lib/i18n"
 
 interface TabToggleProps {
   value: ViewTab
@@ -9,6 +10,7 @@ interface TabToggleProps {
 }
 
 export function TabToggle({ value, onChange }: TabToggleProps) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const [indicator, setIndicator] = useState({ left: 0, width: 0 })
 
@@ -48,7 +50,7 @@ export function TabToggle({ value, onChange }: TabToggleProps) {
             value === tab.value ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          {tab.label}
+          {t(tab.labelKey)}
         </button>
       ))}
     </div>

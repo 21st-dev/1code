@@ -42,6 +42,7 @@ import { OpenLocallyDialog } from "../agents/components/open-locally-dialog"
 import { useAutoImport } from "../agents/hooks/use-auto-import"
 import { trpc } from "../../lib/trpc"
 import type { RemoteChat } from "../../lib/remote-api"
+import { useI18n } from "../../lib/i18n"
 
 interface InboxChat {
   id: string
@@ -177,6 +178,7 @@ function InboxItemDesktop({
   isOnlyChat: boolean
   isLastChat: boolean
 }) {
+  const { t } = useI18n()
   const repoName = chat.meta?.repository?.split("/").pop() || null
   const displayText = repoName || chat.automationName
 
@@ -199,7 +201,7 @@ function InboxItemDesktop({
             <div className="flex-1 min-w-0 flex flex-col gap-0.5">
               <div className="flex items-center gap-1">
                 <span className="truncate block text-sm leading-tight flex-1">
-                  {chat.name || "Untitled"}
+                  {chat.name || t("inbox.untitled")}
                 </span>
                 {/* Archive button - appears on hover */}
                 <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center relative">
@@ -207,7 +209,7 @@ function InboxItemDesktop({
                     onClick={onArchive}
                     tabIndex={-1}
                     className="absolute inset-0 flex items-center justify-center text-muted-foreground hover:text-foreground active:text-foreground transition-[opacity,transform,color] duration-150 ease-out opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto active:scale-[0.97]"
-                    aria-label="Archive"
+                    aria-label={t("inbox.archive")}
                   >
                     <ArchiveIcon className="h-3.5 w-3.5" />
                   </button>
@@ -223,17 +225,17 @@ function InboxItemDesktop({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         <ContextMenuItem onClick={onForkLocally}>
-          Fork Locally
+          {t("inbox.forkLocally")}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={(e) => onArchive(e as unknown as React.MouseEvent)}>
-          Archive
+          {t("inbox.archive")}
         </ContextMenuItem>
         <ContextMenuItem onClick={onArchiveOthers} disabled={isOnlyChat}>
-          Archive others
+          {t("inbox.archiveOthers")}
         </ContextMenuItem>
         <ContextMenuItem onClick={onArchiveBelow} disabled={isLastChat}>
-          Archive all below
+          {t("inbox.archiveAllBelow")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -249,6 +251,7 @@ function InboxItemMobile({
   onClick: () => void
   onArchive: (e: React.MouseEvent) => void
 }) {
+  const { t } = useI18n()
   const repoName = chat.meta?.repository?.split("/").pop() || null
   const displayText = repoName || chat.automationName
 
@@ -264,13 +267,13 @@ function InboxItemMobile({
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
           <div className="flex items-center gap-1">
             <span className={cn("truncate block text-sm leading-tight flex-1", !chat.isRead && "font-semibold")}>
-              {chat.name || "Untitled"}
+              {chat.name || t("inbox.untitled")}
             </span>
             <button
               onClick={onArchive}
               tabIndex={-1}
               className="flex-shrink-0 flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-              aria-label="Archive"
+              aria-label={t("inbox.archive")}
             >
               <ArchiveIcon className="h-3.5 w-3.5" />
             </button>
@@ -286,6 +289,7 @@ function InboxItemMobile({
 }
 
 export function InboxView() {
+  const { t } = useI18n()
   const teamId = useAtomValue(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(inboxSelectedChatIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
@@ -525,10 +529,10 @@ export function InboxView() {
   }
 
   const filterOptions = [
-    { value: "unread_and_read" as const, label: "Unread & read", icon: InboxIcon },
-    { value: "unread" as const, label: "Unread", icon: UnreadMailIcon },
-    { value: "archived" as const, label: "Archived", icon: ArchiveIcon },
-    { value: "all" as const, label: "All workspace updates", icon: Clock },
+    { value: "unread_and_read" as const, label: t("inbox.filter.unreadAndRead"), icon: InboxIcon },
+    { value: "unread" as const, label: t("inbox.filter.unread"), icon: UnreadMailIcon },
+    { value: "archived" as const, label: t("inbox.filter.archived"), icon: ArchiveIcon },
+    { value: "all" as const, label: t("inbox.filter.all"), icon: Clock },
   ]
 
   // Mobile layout - fullscreen list or fullscreen chat
@@ -544,11 +548,11 @@ export function InboxView() {
                   <button
                     onClick={handleMobileBackToChats}
                     className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
-                    aria-label="Back to chats"
+                    aria-label={t("common.back")}
                   >
                     <AlignJustify className="h-4 w-4" />
                   </button>
-                  <h1 className="text-lg font-semibold">Inbox</h1>
+                  <h1 className="text-lg font-semibold">{t("inbox.title")}</h1>
                 </div>
                 <div className="flex items-center gap-1">
                     <DropdownMenu>
@@ -558,7 +562,9 @@ export function InboxView() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-[220px]">
-                        <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                        <DropdownMenuLabel className="px-1.5">
+                          {t("inbox.filter")}
+                        </DropdownMenuLabel>
                         {filterOptions.map(({ value, label, icon: Icon }) => (
                           <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
                             <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -577,15 +583,15 @@ export function InboxView() {
                       <DropdownMenuContent align="end" className="w-[200px]">
                         <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
                           <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Mark all as read</span>
+                          <span>{t("inbox.markAllRead")}</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
                           <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive all</span>
+                          <span>{t("inbox.archiveAll")}</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
                           <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive read</span>
+                          <span>{t("inbox.archiveRead")}</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -593,7 +599,7 @@ export function InboxView() {
               </div>
               <div className="px-4 pb-3">
                 <input
-                  placeholder="Search inbox..."
+                  placeholder={t("inbox.search")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40"
@@ -611,7 +617,7 @@ export function InboxView() {
                 <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                   <InboxIcon className="h-8 w-8 text-border mb-3" />
                   <p className="text-sm text-muted-foreground">
-                    {searchQuery ? "No results found" : "Your inbox is empty"}
+                    {searchQuery ? t("inbox.noResults") : t("inbox.empty")}
                   </p>
                 </div>
               ) : (
@@ -683,7 +689,9 @@ export function InboxView() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[220px]">
-                  <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                  <DropdownMenuLabel className="px-1.5">
+                    {t("inbox.filter")}
+                  </DropdownMenuLabel>
                   {filterOptions.map(({ value, label, icon: Icon }) => (
                     <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
                       <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -702,15 +710,15 @@ export function InboxView() {
                 <DropdownMenuContent align="end" className="w-[200px]">
                   <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
                     <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Mark all as read</span>
+                    <span>{t("inbox.markAllRead")}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
                     <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Archive all</span>
+                    <span>{t("inbox.archiveAll")}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
                     <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Archive read</span>
+                    <span>{t("inbox.archiveRead")}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -728,7 +736,7 @@ export function InboxView() {
                   <button
                     onClick={() => setSidebarOpen(true)}
                     className="h-6 w-6 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
-                    aria-label="Open sidebar"
+                    aria-label={t("sidebar.open")}
                     style={{
                       // @ts-expect-error - WebKit-specific property
                       WebkitAppRegion: "no-drag",
@@ -751,7 +759,9 @@ export function InboxView() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-[220px]">
-                        <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                        <DropdownMenuLabel className="px-1.5">
+                          {t("inbox.filter")}
+                        </DropdownMenuLabel>
                         {filterOptions.map(({ value, label, icon: Icon }) => (
                           <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
                             <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -770,15 +780,15 @@ export function InboxView() {
                       <DropdownMenuContent align="end" className="w-[200px]">
                         <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
                           <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Mark all as read</span>
+                          <span>{t("inbox.markAllRead")}</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
                           <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive all</span>
+                          <span>{t("inbox.archiveAll")}</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
                           <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive read</span>
+                          <span>{t("inbox.archiveRead")}</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -786,7 +796,7 @@ export function InboxView() {
                 </div>
               )}
               <input
-                placeholder="Search inbox..."
+                placeholder={t("inbox.search")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40"
@@ -804,7 +814,7 @@ export function InboxView() {
               <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                 <InboxIcon className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  {searchQuery ? "No results found" : "Your inbox is empty"}
+                  {searchQuery ? t("inbox.noResults") : t("inbox.empty")}
                 </p>
               </div>
             ) : (
@@ -842,8 +852,13 @@ export function InboxView() {
             <InboxIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
               {unreadCount > 0
-                ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
-                : "No unread notifications"}
+                ? t(
+                    unreadCount === 1
+                      ? "inbox.unreadNotification"
+                      : "inbox.unreadNotifications",
+                    { count: unreadCount }
+                  )
+                : t("inbox.noUnreadNotifications")}
             </p>
           </div>
         )}

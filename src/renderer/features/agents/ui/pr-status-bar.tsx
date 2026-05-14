@@ -1,6 +1,7 @@
 import { trpc } from "../../../lib/trpc"
 import { GitPullRequest } from "lucide-react"
 import { IconSpinner } from "../../../components/ui/icons"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 interface PrStatusBarProps {
   chatId: string
@@ -11,16 +12,21 @@ interface PrStatusBarProps {
 type PrState = "open" | "draft" | "merged" | "closed"
 type ReviewDecision = "approved" | "changes_requested" | "pending"
 
-function getStatusLabel(state: PrState, reviewDecision?: ReviewDecision): string {
-  if (state === "merged") return "Merged"
-  if (state === "closed") return "Closed"
-  if (state === "draft") return "Draft"
-  if (reviewDecision === "approved") return "Ready to merge"
-  if (reviewDecision === "changes_requested") return "Changes requested"
-  return "Open"
+function getStatusLabel(
+  state: PrState,
+  t: (key: TranslationKey) => string,
+  reviewDecision?: ReviewDecision
+): string {
+  if (state === "merged") return t("agent.pr.merged")
+  if (state === "closed") return t("agent.pr.closed")
+  if (state === "draft") return t("agent.pr.draft")
+  if (reviewDecision === "approved") return t("agent.pr.readyToMerge")
+  if (reviewDecision === "changes_requested") return t("agent.pr.changesRequested")
+  return t("agent.pr.open")
 }
 
 export function PrStatusBar({ chatId, prUrl, prNumber }: PrStatusBarProps) {
+  const { t } = useI18n()
   console.log("[PrStatusBar] Rendered with props:", { chatId, prUrl, prNumber })
 
   // Poll PR status every 30 seconds
@@ -53,7 +59,7 @@ export function PrStatusBar({ chatId, prUrl, prNumber }: PrStatusBarProps) {
         <IconSpinner className="h-3.5 w-3.5" />
       ) : pr ? (
         <span className="text-xs font-mono text-muted-foreground">
-          {getStatusLabel(pr.state as PrState, pr.reviewDecision as ReviewDecision)}
+          {getStatusLabel(pr.state as PrState, t, pr.reviewDecision as ReviewDecision)}
         </span>
       ) : null}
     </div>

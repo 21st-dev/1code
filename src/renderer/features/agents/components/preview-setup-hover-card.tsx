@@ -13,12 +13,14 @@ import { useSetAtom, atom } from "jotai"
 const agentsSettingsDialogOpenAtom = atom(false)
 const agentsSettingsDialogActiveTabAtom = atom<string | null>(null)
 import { GitHubIcon } from "../../../icons"
+import { useI18n } from "../../../lib/i18n"
 
 interface PreviewSetupHoverCardProps {
   children: React.ReactNode
 }
 
 export function PreviewSetupHoverCard({ children }: PreviewSetupHoverCardProps) {
+  const { t } = useI18n()
   const { resolvedTheme } = useTheme()
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
@@ -60,7 +62,7 @@ export function PreviewSetupHoverCard({ children }: PreviewSetupHoverCardProps) 
                       ? "/agents-onboarding-dark.webp"
                       : "/agents-onboarding-light.webp"
                   }
-                  alt="Preview setup"
+                  alt={t("agent.previewSetup.imageAlt")}
                   className="object-cover w-full h-full"
                   style={{ objectPosition: "top" }}
                 />
@@ -72,9 +74,11 @@ export function PreviewSetupHoverCard({ children }: PreviewSetupHoverCardProps) 
         {/* Content */}
         <div className="p-4 space-y-3">
           <div className="space-y-1.5">
-            <h4 className="text-sm font-semibold">Preview not available</h4>
+            <h4 className="text-sm font-semibold">
+              {t("agent.previewSetup.notAvailable")}
+            </h4>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
-              To see live preview of your changes, you need to set up your repository first.
+              {t("agent.previewSetup.description")}
             </p>
           </div>
 
@@ -84,11 +88,10 @@ export function PreviewSetupHoverCard({ children }: PreviewSetupHoverCardProps) 
             className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-medium bg-foreground text-background hover:bg-foreground/90 rounded-md transition-colors"
           >
             <GitHubIcon className="h-3.5 w-3.5" />
-            <span>Set up repository</span>
+            <span>{t("agent.previewSetup.setUpRepository")}</span>
           </button>
         </div>
       </HoverCardContent>
     </HoverCard>
   )
 }
-

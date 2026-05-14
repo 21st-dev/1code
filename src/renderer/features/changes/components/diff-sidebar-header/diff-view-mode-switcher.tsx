@@ -14,6 +14,7 @@ import {
   IconFullPage,
 } from "@/components/ui/icons"
 import type { DiffViewDisplayMode } from "@/features/agents/atoms"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 interface DiffViewModeSwitcherProps {
   mode: DiffViewDisplayMode
@@ -23,17 +24,17 @@ interface DiffViewModeSwitcherProps {
 const MODES = [
   {
     value: "side-peek" as const,
-    label: "Sidebar",
+    labelKey: "changes.diff.sidebar" as TranslationKey,
     Icon: IconSidePeek,
   },
   {
     value: "center-peek" as const,
-    label: "Dialog",
+    labelKey: "changes.diff.dialog" as TranslationKey,
     Icon: IconCenterPeek,
   },
   {
     value: "full-page" as const,
-    label: "Fullscreen",
+    labelKey: "changes.diff.fullscreen" as TranslationKey,
     Icon: IconFullPage,
   },
 ]
@@ -42,6 +43,7 @@ export function DiffViewModeSwitcher({
   mode,
   onModeChange,
 }: DiffViewModeSwitcherProps) {
+  const { t } = useI18n()
   const currentMode = MODES.find((m) => m.value === mode) ?? MODES[0]
   const CurrentIcon = currentMode.Icon
 
@@ -57,14 +59,14 @@ export function DiffViewModeSwitcher({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[140px]">
-        {MODES.map(({ value, label, Icon }) => (
+        {MODES.map(({ value, labelKey, Icon }) => (
           <DropdownMenuItem
             key={value}
             onClick={() => onModeChange(value)}
             className="flex items-center gap-2"
           >
             <Icon className="size-4 text-muted-foreground" />
-            <span className="flex-1">{label}</span>
+            <span className="flex-1">{t(labelKey)}</span>
             {mode === value && (
               <Check className="size-4 text-muted-foreground ml-auto" />
             )}

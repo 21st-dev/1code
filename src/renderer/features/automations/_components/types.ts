@@ -1,4 +1,5 @@
 import { GITHUB_TRIGGER_OPTIONS, LINEAR_TRIGGER_OPTIONS } from "./constants"
+import type { TranslationKey } from "@/lib/i18n"
 
 export type GitHubTriggerType = (typeof GITHUB_TRIGGER_OPTIONS)[number]["value"]
 export type LinearTriggerType = (typeof LINEAR_TRIGGER_OPTIONS)[number]["value"]
@@ -22,6 +23,7 @@ export interface TriggerConfig {
 export interface AutomationTemplate {
   id: string
   name: string
+  nameKey: TranslationKey
   platform: Platform
   triggerType: TriggerType
   description: string

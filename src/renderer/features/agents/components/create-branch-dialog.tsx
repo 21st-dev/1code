@@ -26,6 +26,7 @@ import {
 import { IconSpinner } from "../../../components/ui/icons"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import { formatTimeAgo } from "../utils/format-time-ago"
 
 interface CreateBranchDialogProps {
@@ -50,6 +51,7 @@ export function CreateBranchDialog({
   defaultBranch,
   onBranchCreated,
 }: CreateBranchDialogProps) {
+  const { t } = useI18n()
   const [branchName, setBranchName] = useState("")
   const [baseBranch, setBaseBranch] = useState(defaultBranch)
   const [baseBranchOpen, setBaseBranchOpen] = useState(false)
@@ -81,7 +83,7 @@ export function CreateBranchDialog({
 
   const createBranchMutation = trpc.changes.createBranch.useMutation({
     onSuccess: (data) => {
-      toast.success(`Branch '${data.branchName}' created successfully`)
+      toast.success(t("agent.branch.created", { name: data.branchName }))
       // Invalidate branches query to refresh the list
       utils.changes.getBranches.invalidate({ worktreePath: projectPath })
       onBranchCreated(data.branchName)
@@ -90,7 +92,7 @@ export function CreateBranchDialog({
       setBaseBranch(defaultBranch)
     },
     onError: (error) => {
-      toast.error(`Failed to create branch: ${error.message}`)
+      toast.error(t("agent.branch.failedCreate", { message: error.message }))
     },
   })
 
@@ -98,15 +100,13 @@ export function CreateBranchDialog({
     e.preventDefault()
 
     if (!branchName.trim()) {
-      toast.error("Branch name is required")
+      toast.error(t("agent.branch.nameRequired"))
       return
     }
 
     // Basic validation for branch name
     if (!/^[a-zA-Z0-9._/-]+$/.test(branchName)) {
-      toast.error(
-        "Branch name can only contain letters, numbers, dots, hyphens, underscores, and slashes",
-      )
+      toast.error(t("agent.branch.invalidName"))
       return
     }
 
@@ -121,14 +121,14 @@ export function CreateBranchDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <CanvasDialogContent className="sm:max-w-[350px] overflow-visible">
         <CanvasDialogHeader>
-          <DialogTitle>Create a Branch</DialogTitle>
+          <DialogTitle>{t("agent.branch.createTitle")}</DialogTitle>
         </CanvasDialogHeader>
 
         <CanvasDialogBody className="space-y-4">
           {/* Branch Name Input */}
           <div className="space-y-2">
             <Label htmlFor="branch-name" className="text-sm">
-              Name
+              {t("agent.branch.name")}
             </Label>
             <Input
               id="branch-name"
@@ -153,7 +153,7 @@ export function CreateBranchDialog({
 
           {/* Base Branch Selection with Search */}
           <div className="space-y-2">
-            <Label className="text-sm">Create branch based on...</Label>
+            <Label className="text-sm">{t("agent.branch.baseLabel")}</Label>
             {/* Using Popover WITHOUT Portal so it renders inside Dialog's DOM tree */}
             <PopoverPrimitive.Root
               open={baseBranchOpen}
@@ -183,13 +183,13 @@ export function CreateBranchDialog({
               >
                 <Command>
                   <CommandInput
-                    placeholder="Search branches..."
+                    placeholder={t("agent.branch.searchPlaceholder")}
                     value={baseBranchSearch}
                     onValueChange={setBaseBranchSearch}
                   />
                   <CommandList className="max-h-[200px]">
                     {filteredBaseBranches.length === 0 ? (
-                      <CommandEmpty>No branches found.</CommandEmpty>
+                      <CommandEmpty>{t("agent.branch.noBranches")}</CommandEmpty>
                     ) : (
                       <CommandGroup>
                         {filteredBaseBranches.map((branch) => (
@@ -231,7 +231,7 @@ export function CreateBranchDialog({
             disabled={createBranchMutation.isPending}
             className="transition-transform duration-150 active:scale-[0.97] rounded-md"
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             type="button"
@@ -242,10 +242,10 @@ export function CreateBranchDialog({
             {createBranchMutation.isPending ? (
               <>
                 <IconSpinner className="w-4 h-4 mr-2" />
-                Creating...
+                {t("agent.branch.creating")}
               </>
             ) : (
-              "Create Branch"
+              t("agent.branch.create")
             )}
           </Button>
         </CanvasDialogFooter>

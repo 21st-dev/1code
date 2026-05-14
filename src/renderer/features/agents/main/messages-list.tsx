@@ -12,6 +12,8 @@ import {
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import { MessageJsonDisplay } from "../ui/message-json-display"
 import { AssistantMessageItem } from "./assistant-message-item"
+import { useI18n } from "@/lib/i18n"
+import type { ToolMeta } from "../ui/agent-tool-registry"
 
 // ============================================================================
 // MESSAGE STORE - External store for fine-grained subscriptions
@@ -940,7 +942,7 @@ interface SimpleIsolatedGroupProps {
     isError: boolean
   }>
   MessageGroupComponent: React.ComponentType<{ children: React.ReactNode }>
-  toolRegistry: Record<string, { icon: any; title: (args: any) => string }>
+  toolRegistry: Record<string, ToolMeta>
 }
 
 function areSimpleGroupPropsEqual(
@@ -976,6 +978,7 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
   MessageGroupComponent,
   toolRegistry,
 }: SimpleIsolatedGroupProps) {
+  const { t } = useI18n()
   // Subscribe to this specific user message and its assistant IDs
   const { userMsg, assistantMsgIds, isLastGroup } = useUserMessageWithAssistants(userMsgId)
   const { isStreaming } = useStreamingStatus()
@@ -1077,7 +1080,7 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
           <div className="mt-4">
             <ToolCallComponent
               icon={toolRegistry["tool-cloning"]?.icon}
-              title={toolRegistry["tool-cloning"]?.title({}) || "Cloning..."}
+              title={toolRegistry["tool-cloning"]?.title({}, t) || t("agent.sandbox.cloning")}
               isPending={true}
               isError={false}
             />
@@ -1089,12 +1092,12 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
           <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
             <div className="flex items-center gap-2 text-destructive text-sm">
               <span>
-                Failed to set up sandbox
+                {t("agent.sandbox.failedSetup")}
                 {sandboxSetupError ? `: ${sandboxSetupError}` : ""}
               </span>
               {onRetrySetup && (
                 <button className="px-2 py-1 text-sm hover:bg-destructive/20 rounded" onClick={onRetrySetup}>
-                  Retry
+                  {t("common.retry")}
                 </button>
               )}
             </div>
@@ -1124,7 +1127,7 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
         <div className="mt-4">
           <ToolCallComponent
             icon={toolRegistry["tool-planning"]?.icon}
-            title={toolRegistry["tool-planning"]?.title({}) || "Planning..."}
+            title={toolRegistry["tool-planning"]?.title({}, t) || t("agent.sandbox.planning")}
             isPending={true}
             isError={false}
           />

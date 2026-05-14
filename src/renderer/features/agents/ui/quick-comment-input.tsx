@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { type TextSelectionSource } from "../context/text-selection-context"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 
 interface QuickCommentInputProps {
   selectedText: string
@@ -20,6 +21,7 @@ export function QuickCommentInput({
   onSubmit,
   onCancel,
 }: QuickCommentInputProps) {
+  const { t } = useI18n()
   const [comment, setComment] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -105,7 +107,7 @@ export function QuickCommentInput({
   // Get source label
   const sourceLabel = source.type === "diff" || source.type === "tool-edit"
     ? `${source.filePath.split("/").pop()}${source.type === "diff" && source.lineNumber ? `:${source.lineNumber}` : ""}`
-    : "from chat"
+    : t("agent.quickComment.fromChat")
 
   // Animation: scale from direction of selection
   const animationClass = showBelow
@@ -122,7 +124,7 @@ export function QuickCommentInput({
         {/* Preview of selected text */}
         <div className="px-2.5 py-1.5 border-b border-border bg-muted/30">
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
-            <span>Replying to</span>
+            <span>{t("agent.quickComment.replyingTo")}</span>
             <span className="font-medium text-foreground/70">{sourceLabel}</span>
           </div>
           <div className="text-xs text-muted-foreground font-mono line-clamp-2">
@@ -139,7 +141,7 @@ export function QuickCommentInput({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Add your reply..."
+              placeholder={t("agent.quickComment.placeholder")}
               className="flex-1 text-xs bg-transparent outline-none text-foreground placeholder:text-muted-foreground px-1"
             />
             <button
@@ -152,7 +154,7 @@ export function QuickCommentInput({
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               )}
             >
-              Send
+              {t("agent.quickComment.send")}
             </button>
           </div>
         </div>

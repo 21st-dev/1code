@@ -19,6 +19,7 @@ import { preferredEditorAtom } from "@/lib/atoms"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { APP_META } from "../../../../shared/external-apps"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
+import { useI18n } from "@/lib/i18n"
 
 interface InfoSectionProps {
   chatId: string
@@ -51,6 +52,7 @@ function PropertyRow({
   /** Tooltip to show on hover (for clickable items) */
   tooltip?: string
 }) {
+  const { t } = useI18n()
   const [showCopied, setShowCopied] = useState(false)
 
   const handleClick = useCallback(() => {
@@ -95,7 +97,7 @@ function PropertyRow({
               {valueEl}
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
-              {showCopied ? "Copied" : "Click to copy"}
+              {showCopied ? t("details.copied") : t("details.clickToCopy")}
             </TooltipContent>
           </Tooltip>
         ) : tooltip ? (
@@ -126,8 +128,9 @@ export const InfoSection = memo(function InfoSection({
   isExpanded = false,
   remoteInfo,
 }: InfoSectionProps) {
+  const { t } = useI18n()
   // Extract folder name from path
-  const folderName = worktreePath?.split("/").pop() || "Unknown"
+  const folderName = worktreePath?.split("/").pop() || t("details.unknown")
 
   // Preferred editor from settings
   const preferredEditor = useAtomValue(preferredEditorAtom)
@@ -242,7 +245,7 @@ export const InfoSection = memo(function InfoSection({
     return (
       <div className="px-2 py-2">
         <div className="text-xs text-muted-foreground">
-          No workspace info available
+          {t("details.noWorkspaceInfo")}
         </div>
       </div>
     )
@@ -254,37 +257,37 @@ export const InfoSection = memo(function InfoSection({
       {repositoryName && (
         <PropertyRow
           icon={FolderFilledIcon}
-          label="Repository"
+          label={t("details.repository")}
           value={repositoryName}
           title={remoteInfo?.repository}
           onClick={handleOpenRepository}
-          tooltip="Open in GitHub"
+          tooltip={t("details.openInGitHub")}
         />
       )}
       {/* Branch - for both local and remote */}
       {branchName && (
-        <PropertyRow icon={GitBranchFilledIcon} label="Branch" value={branchName} copyable />
+        <PropertyRow icon={GitBranchFilledIcon} label={t("details.branch")} value={branchName} copyable />
       )}
       {/* PR - only for local chats */}
       {pr && (
         <PropertyRow
           icon={GitPullRequestFilledIcon}
-          label="Pull Request"
+          label={t("details.pullRequest")}
           value={`#${pr.number}`}
           title={pr.title}
           onClick={handleOpenPr}
-          tooltip="Open in GitHub"
+          tooltip={t("details.openInGitHub")}
         />
       )}
       {/* Path - only for local chats */}
       {worktreePath && (
         <PropertyRow
           icon={FolderFilledIcon}
-          label="Path"
+          label={t("details.path")}
           value={folderName}
           title={worktreePath}
           onClick={handleOpenFolder}
-          tooltip="Open in Finder"
+          tooltip={t("details.openInFinder")}
         />
       )}
       {/* Open in Editor - only for actual git worktrees (under ~/.21st/worktrees/) */}
@@ -292,7 +295,9 @@ export const InfoSection = memo(function InfoSection({
         <div className="flex items-center min-h-[28px]">
           <div className="flex items-center gap-1.5 w-[100px] flex-shrink-0">
             <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-            <span className="text-xs text-muted-foreground truncate">Open in</span>
+            <span className="text-xs text-muted-foreground truncate">
+              {t("details.openIn")}
+            </span>
           </div>
           <div className="flex-1 min-w-0 pl-2">
             <Tooltip delayDuration={500}>
@@ -313,7 +318,7 @@ export const InfoSection = memo(function InfoSection({
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                Open in {editorMeta.label}
+                {t("changes.openInEditor", { editor: editorMeta.label })}
                 {openInEditorHotkey && <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>

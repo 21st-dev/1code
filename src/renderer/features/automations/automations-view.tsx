@@ -16,6 +16,7 @@ import { Plus, AlignJustify } from "lucide-react"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
 import { remoteTrpc } from "../../lib/remote-trpc"
 import { useQuery } from "@tanstack/react-query"
+import { useI18n } from "../../lib/i18n"
 
 import {
   AutomationCard,
@@ -27,6 +28,7 @@ import {
 } from "./_components"
 
 export function AutomationsView() {
+  const { t } = useI18n()
   const teamId = useAtomValue(selectedTeamIdAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const setAutomationDetailId = useSetAtom(automationDetailIdAtom)
@@ -88,7 +90,7 @@ export function AutomationsView() {
   const handleUseTemplate = (template: typeof AUTOMATION_TEMPLATES[number]) => {
     setAutomationDetailId("new")
     setTemplateParams({
-      name: template.name,
+      name: t(template.nameKey),
       platform: template.platform,
       trigger: template.triggerType,
       instructions: template.instructions,
@@ -107,10 +109,10 @@ export function AutomationsView() {
 
   const getTemplateDisabledReason = (platform: Platform): string | undefined => {
     if (platform === "github" && !isGithubConnected) {
-      return "Connect GitHub in Settings to use this template"
+      return t("automations.connectGithub")
     }
     if (platform === "linear" && !isLinearConnected) {
-      return "Connect Linear in Settings to use this template"
+      return t("automations.connectLinear")
     }
     return undefined
   }
@@ -135,15 +137,17 @@ export function AutomationsView() {
                 <button
                   onClick={handleSidebarToggle}
                   className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
-                  aria-label={isMobile ? "Back to chats" : "Open sidebar"}
+                  aria-label={isMobile ? t("common.back") : t("sidebar.open")}
                 >
                   <AlignJustify className="h-4 w-4" />
                 </button>
               )}
               <div>
-                <h1 className="text-lg font-semibold text-foreground">Automations</h1>
+                <h1 className="text-lg font-semibold text-foreground">
+                  {t("automations.title")}
+                </h1>
                 <p className="text-sm text-muted-foreground hidden min-420:block">
-                  Background automations for your repositories
+                  {t("automations.subtitle")}
                 </p>
               </div>
             </div>
@@ -152,7 +156,9 @@ export function AutomationsView() {
               className="h-8 px-3 rounded-lg text-sm font-medium border border-border hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex items-center gap-1.5 flex-shrink-0"
             >
               <Plus className="h-4 w-4" />
-              <span className="text-sm font-medium hidden min-420:inline">New</span>
+              <span className="text-sm font-medium hidden min-420:inline">
+                {t("automations.new")}
+              </span>
             </button>
           </div>
 
@@ -162,7 +168,7 @@ export function AutomationsView() {
 
             {activeTab !== "templates" && (
               <input
-                placeholder="Search..."
+                placeholder={t("automations.search")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full max-w-[160px] h-8 rounded-lg text-sm bg-muted border-0 px-3 placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
@@ -229,20 +235,20 @@ export function AutomationsView() {
                     <div className="flex flex-col">
                       {searchQuery ? (
                         <div className="text-center py-12 text-muted-foreground">
-                          <p className="text-sm">No automations match your search.</p>
+                          <p className="text-sm">{t("automations.noMatch")}</p>
                         </div>
                       ) : (
                         <>
                           <div className="text-center py-8 text-muted-foreground">
                             <p className="text-sm">
-                              No automations yet. Get started with a template below.
+                              {t("automations.empty")}
                             </p>
                           </div>
 
                           {/* Templates section */}
                           <div className="mt-2">
                             <h3 className="text-xs font-medium text-muted-foreground mb-3">
-                              Templates
+                              {t("automations.templates")}
                             </h3>
                             <div className="grid grid-cols-1 min-420:grid-cols-2 md:grid-cols-3 gap-2">
                               {AUTOMATION_TEMPLATES.map((template) => {

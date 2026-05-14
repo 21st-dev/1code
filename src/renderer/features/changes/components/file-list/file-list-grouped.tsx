@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ChangedFile } from "../../../../../shared/changes-types";
 import { FileItem } from "../file-item";
 import { FolderRow } from "../folder-row";
+import { useI18n } from "../../../../lib/i18n";
 
 interface FileListGroupedProps {
 	files: ChangedFile[];
@@ -89,9 +90,10 @@ function FolderGroupItem({
 	worktreePath,
 	onDiscard,
 }: FolderGroupItemProps) {
+	const { t } = useI18n();
 	const [isExpanded, setIsExpanded] = useState(true);
 	const isRoot = group.folderPath === "";
-	const displayName = isRoot ? "Root Path" : group.folderPath;
+	const displayName = isRoot ? t("changes.rootPath") : group.folderPath;
 
 	return (
 		<FolderRow
