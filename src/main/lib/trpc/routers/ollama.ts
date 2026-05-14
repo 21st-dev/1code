@@ -6,6 +6,10 @@
 import { z } from "zod"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { publicProcedure, router } from "../index"
+import {
+  buildCommitMessagePrompt,
+  cleanGeneratedCommitMessage,
+} from "./commit-message-utils"
 
 /**
  * Generate text using local Ollama model
@@ -142,24 +146,18 @@ Title:`
       })
     )
     .mutation(async ({ input }) => {
-      const prompt = `Generate a conventional commit message for these changes. Use format: type: short description
-
-Types: feat (new feature), fix (bug fix), docs, style, refactor, test, chore
-
-Changes: ${input.fileCount} files, +${input.additions}/-${input.deletions} lines
-
-Diff (truncated):
-${input.diff.slice(0, 3000)}
-
-Commit message:`
+      const prompt = buildCommitMessagePrompt(
+        input.diff,
+        "",
+        input.fileCount,
+        input.additions,
+        input.deletions,
+        3_000,
+      )
 
       const result = await generateWithOllama(prompt, input.model)
       if (result) {
-        // Clean up - get just the first line
-        const firstLine = result.split("\n")[0]?.trim()
-        if (firstLine && firstLine.length > 0 && firstLine.length < 100) {
-          return { message: firstLine }
-        }
+        return { message: cleanGeneratedCommitMessage(result) }
       }
       return { message: null }
     }),

@@ -4,7 +4,6 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { getAuthManager } from "../../../index"
 import {
   trackPRCreated,
   trackWorkspaceArchived,
@@ -24,10 +23,18 @@ import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
-import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
+import { checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
-import { getActiveLocalApiProviderConfig } from "./local-api-provider-config"
+import {
+  getActiveLocalApiProviderConfig,
+  type LocalApiProviderPurpose,
+} from "./local-api-provider-config"
+import {
+  buildCommitFileSummary,
+  buildCommitMessagePrompt,
+  cleanGeneratedCommitMessage,
+} from "./commit-message-utils"
 
 type WorktreeSetupFailurePayload = {
   kind: "create-failed" | "setup-failed"
@@ -67,11 +74,13 @@ function getFallbackName(userMessage: string): string {
   return trimmed.substring(0, 25) + "..."
 }
 
-type ChatTitleProviderConfig = {
+type LocalChatCompletionProviderConfig = {
   apiKey: string
   apiUrl: string
   model: string
 }
+
+const COMMIT_MESSAGE_PROVIDER_TIMEOUT_MS = 15_000
 
 function cleanGeneratedChatName(value: unknown): string | null {
   if (typeof value !== "string") return null
@@ -96,8 +105,10 @@ function buildChatCompletionUrl(baseUrl: string): string {
   return `${normalizedBaseUrl}/chat/completions`
 }
 
-function getChatTitleProviderConfig(): ChatTitleProviderConfig | null {
-  const config = getActiveLocalApiProviderConfig("sub_chat_title")
+function getLocalChatCompletionProviderConfig(
+  purpose: LocalApiProviderPurpose,
+): LocalChatCompletionProviderConfig | null {
+  const config = getActiveLocalApiProviderConfig(purpose)
   if (!config) return null
 
   return {
@@ -109,12 +120,12 @@ function getChatTitleProviderConfig(): ChatTitleProviderConfig | null {
 
 /**
  * Generate chat title using the Settings-configured OpenAI-compatible provider.
- * This never falls back to 21st.dev.
+ * This is only used after local Ollama has been tried.
  */
 async function generateChatNameWithConfiguredProvider(
   userMessage: string,
 ): Promise<string | null> {
-  const config = getChatTitleProviderConfig()
+  const config = getLocalChatCompletionProviderConfig("sub_chat_title")
   if (!config) {
     return null
   }
@@ -154,6 +165,76 @@ async function generateChatNameWithConfiguredProvider(
   } catch (error) {
     console.error("[ChatTitle] Provider request error:", error)
     return null
+  }
+}
+
+async function generateCommitMessageWithConfiguredProvider(
+  diff: string,
+  fileSummary: string,
+  fileCount: number,
+  additions: number,
+  deletions: number,
+): Promise<string | null> {
+  const config = getLocalChatCompletionProviderConfig("commit_message")
+  if (!config) {
+    return null
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    COMMIT_MESSAGE_PROVIDER_TIMEOUT_MS,
+  )
+
+  try {
+    const response = await fetch(config.apiUrl, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write concise Conventional Commit subject lines from code diffs. Return only the subject line.",
+          },
+          {
+            role: "user",
+            content: buildCommitMessagePrompt(
+              diff,
+              fileSummary,
+              fileCount,
+              additions,
+              deletions,
+              10_000,
+            ),
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 50,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error("[CommitMessage] Provider request failed:", response.status)
+      return null
+    }
+
+    const data = await response.json()
+    return cleanGeneratedCommitMessage(data?.choices?.[0]?.message?.content)
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("[CommitMessage] Provider request timed out")
+    } else {
+      console.error("[CommitMessage] Provider request error:", error)
+    }
+    return null
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
@@ -228,6 +309,7 @@ Title:`
  */
 async function generateCommitMessageWithOllama(
   diff: string,
+  fileSummary: string,
   fileCount: number,
   additions: number,
   deletions: number,
@@ -246,16 +328,14 @@ async function generateCommitMessageWithOllama(
       return null
     }
 
-    const prompt = `Generate a conventional commit message for these changes. Use format: type: short description
-
-Types: feat (new feature), fix (bug fix), docs, style, refactor, test, chore
-
-Changes: ${fileCount} files, +${additions}/-${deletions} lines
-
-Diff (truncated):
-${diff.slice(0, 3000)}
-
-Commit message:`
+    const prompt = buildCommitMessagePrompt(
+      diff,
+      fileSummary,
+      fileCount,
+      additions,
+      deletions,
+      3_000,
+    )
 
     const response = await fetch("http://localhost:11434/api/generate", {
       method: "POST",
@@ -265,7 +345,7 @@ Commit message:`
         prompt,
         stream: false,
         options: {
-          temperature: 0.3,
+          temperature: 0.2,
           num_predict: 50,
         },
       }),
@@ -279,11 +359,7 @@ Commit message:`
     const data = await response.json()
     const result = data.response?.trim()
     if (result) {
-      // Clean up - get just the first line
-      const firstLine = result.split("\n")[0]?.trim()
-      if (firstLine && firstLine.length > 0 && firstLine.length < 100) {
-        return firstLine
-      }
+      return cleanGeneratedCommitMessage(result)
     }
     return null
   } catch (error) {
@@ -1332,73 +1408,35 @@ export const chatsRouter = router({
 
       // Build filtered diff text for API (only selected files)
       const filteredDiff = files.map(f => f.diffText).join('\n')
+      const fileSummary = buildCommitFileSummary(files)
       const additions = files.reduce((sum, f) => sum + f.additions, 0)
       const deletions = files.reduce((sum, f) => sum + f.deletions, 0)
 
-      // Check internet first - if offline, use Ollama
-      const hasInternet = await checkInternetConnection()
+      console.log("[generateCommitMessage] Trying configured commit provider...")
+      const configuredMessage = await generateCommitMessageWithConfiguredProvider(
+        filteredDiff,
+        fileSummary,
+        files.length,
+        additions,
+        deletions,
+      )
+      if (configuredMessage) {
+        console.log("[generateCommitMessage] Generated via configured provider")
+        return { message: configuredMessage }
+      }
 
-      if (!hasInternet) {
-        console.log("[generateCommitMessage] Offline - trying Ollama...")
-        const ollamaMessage = await generateCommitMessageWithOllama(
-          filteredDiff,
-          files.length,
-          additions,
-          deletions,
-          input.ollamaModel
-        )
-        if (ollamaMessage) {
-          console.log("[generateCommitMessage] Generated via Ollama:", ollamaMessage)
-          return { message: ollamaMessage }
-        }
-        console.log("[generateCommitMessage] Ollama failed, using heuristic fallback")
-        // Fall through to heuristic fallback below
-      } else {
-        // Online - call web API to generate commit message
-        let apiError: string | null = null
-        try {
-          const authManager = getAuthManager()
-          const token = await authManager.getValidToken()
-          // Use localhost in dev, production otherwise
-          const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://21st.dev"
-
-          if (!token) {
-            apiError = "No auth token available"
-          } else {
-            const response = await fetch(
-              `${apiUrl}/api/agents/generate-commit-message`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Desktop-Token": token,
-                },
-                body: JSON.stringify({
-                  diff: filteredDiff.slice(0, 10000), // Limit diff size, use filtered diff
-                  fileCount: files.length,
-                  additions,
-                  deletions,
-                }),
-              },
-            )
-
-            if (response.ok) {
-              const data = await response.json()
-              if (data.message) {
-                return { message: data.message }
-              }
-              apiError = "API returned ok but no message in response"
-            } else {
-              apiError = `API returned ${response.status}`
-            }
-          }
-        } catch (error) {
-          apiError = `API call failed: ${error instanceof Error ? error.message : String(error)}`
-        }
-
-        if (apiError) {
-          console.log("[generateCommitMessage] API error:", apiError)
-        }
+      console.log("[generateCommitMessage] Trying local Ollama...")
+      const ollamaMessage = await generateCommitMessageWithOllama(
+        filteredDiff,
+        fileSummary,
+        files.length,
+        additions,
+        deletions,
+        input.ollamaModel,
+      )
+      if (ollamaMessage) {
+        console.log("[generateCommitMessage] Generated via Ollama:", ollamaMessage)
+        return { message: ollamaMessage }
       }
 
       // Fallback: Generate commit message with conventional commits style
