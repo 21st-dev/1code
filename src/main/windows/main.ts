@@ -81,7 +81,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("app:set-badge", (event, count: number | null) => {
     const win = getWindowFromEvent(event)
     if (process.platform === "darwin") {
-      app.dock.setBadge(count ? String(count) : "")
+      app.dock?.setBadge(count ? String(count) : "")
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
       if (count !== null && count > 0) {
