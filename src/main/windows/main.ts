@@ -367,9 +367,10 @@ function registerIpcHandlers(): void {
     } catch (err) {
       console.error("[Auth] Failed to clear cookie:", err)
     }
-    // Show login page in all windows
+    // Return to the local app shell after logout. Hosted-only actions can ask
+    // the user to log in again when needed.
     for (const win of windowManager.getAll()) {
-      showLoginPageInWindow(win)
+      loadAppInWindow(win)
     }
   })
 
@@ -539,6 +540,37 @@ function registerIpcHandlers(): void {
 
   // Register VS Code theme scanner IPC handlers
   registerThemeScannerIPC()
+}
+
+/**
+ * Load the local app shell in a specific window.
+ */
+function loadAppInWindow(
+  window: BrowserWindow,
+  options?: { chatId?: string; subChatId?: string },
+): void {
+  const windowId = windowManager.getStableId(window)
+
+  const buildParams = (params: URLSearchParams) => {
+    params.set("windowId", windowId)
+    if (options?.chatId) params.set("chatId", options.chatId)
+    if (options?.subChatId) params.set("subChatId", options.subChatId)
+  }
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    const url = new URL(process.env.ELECTRON_RENDERER_URL)
+    buildParams(url.searchParams)
+    window.loadURL(url.toString())
+    if (!app.isPackaged && windowId === "main") {
+      window.webContents.openDevTools()
+    }
+  } else {
+    const hashParams = new URLSearchParams()
+    buildParams(hashParams)
+    window.loadFile(join(__dirname, "../renderer/index.html"), {
+      hash: hashParams.toString(),
+    })
+  }
 }
 
 /**
@@ -780,8 +812,8 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     // windowManager handles cleanup via 'closed' event listener
   })
 
-  // Load the renderer - check auth first
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL
+  // Load the local app shell. Authentication is optional for open-source local
+  // usage; hosted-only actions can request login inside the app when needed.
   const authManager = getAuthManager()
 
   console.log("[Main] ========== AUTH CHECK ==========")
@@ -792,46 +824,12 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
   console.log("[Main] getUser():", user ? user.email : "null")
   console.log("[Main] ================================")
 
-  if (isAuth) {
-    console.log("[Main] ✓ User authenticated, loading app")
-    // Get stable window ID from manager (assigned during register)
-    // "main" for first window, "window-2", "window-3", etc. for additional windows
-    const windowId = windowManager.getStableId(window)
-
-    // Build URL params including optional chatId/subChatId
-    const buildParams = (params: URLSearchParams) => {
-      params.set("windowId", windowId)
-      if (options?.chatId) params.set("chatId", options.chatId)
-      if (options?.subChatId) params.set("subChatId", options.subChatId)
-    }
-
-    if (devServerUrl) {
-      // Pass params via query for dev mode
-      const url = new URL(devServerUrl)
-      buildParams(url.searchParams)
-      window.loadURL(url.toString())
-      // Only open devtools for first window in development
-      if (!app.isPackaged && windowId === "main") {
-        window.webContents.openDevTools()
-      }
-    } else {
-      // Pass params via hash for production (file:// URLs)
-      const hashParams = new URLSearchParams()
-      buildParams(hashParams)
-      window.loadFile(join(__dirname, "../renderer/index.html"), {
-        hash: hashParams.toString(),
-      })
-    }
-  } else {
-    console.log("[Main] ✗ Not authenticated, showing login page")
-    // In dev mode, login.html is in src/renderer
-    if (devServerUrl) {
-      const loginPath = join(app.getAppPath(), "src/renderer/login.html")
-      window.loadFile(loginPath)
-    } else {
-      window.loadFile(join(__dirname, "../renderer/login.html"))
-    }
-  }
+  console.log(
+    isAuth
+      ? "[Main] ✓ User authenticated, loading app"
+      : "[Main] Local mode: not authenticated, loading app",
+  )
+  loadAppInWindow(window, options)
 
   // Log page load - traffic light visibility is managed by the renderer
   window.webContents.on("did-finish-load", () => {

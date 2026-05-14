@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/electron/main"
 import { app, BrowserWindow, dialog, Menu, nativeImage, session } from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
@@ -58,18 +57,21 @@ if (IS_DEV) {
 // under heavy multi-chat workloads. Must be set before app readiness/window creation.
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=8192")
 
-// Initialize Sentry before app is ready (production only)
+// Initialize Sentry in production only. Keep the import lazy so dev startup does
+// not load @sentry/electron before Electron's app object is available.
 if (app.isPackaged && !IS_DEV) {
   const sentryDsn = import.meta.env.MAIN_VITE_SENTRY_DSN
   if (sentryDsn) {
-    try {
-      Sentry.init({
-        dsn: sentryDsn,
+    import("@sentry/electron/main")
+      .then((Sentry) => {
+        Sentry.init({
+          dsn: sentryDsn,
+        })
+        console.log("[App] Sentry initialized")
       })
-      console.log("[App] Sentry initialized")
-    } catch (error) {
-      console.warn("[App] Failed to initialize Sentry:", error)
-    }
+      .catch((error) => {
+        console.warn("[App] Failed to initialize Sentry:", error)
+      })
   } else {
     console.log("[App] Skipping Sentry initialization (no DSN configured)")
   }
