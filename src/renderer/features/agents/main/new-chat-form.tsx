@@ -57,11 +57,9 @@ import {
   apiKeyOnboardingCompletedAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
-  normalizeCustomClaudeConfig,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -236,10 +234,9 @@ export function NewChatForm({
   }, [])
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+  const { data: providerConfigData } =
+    trpc.claudeProviderConfig.get.useQuery()
+  const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)

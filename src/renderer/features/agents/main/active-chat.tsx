@@ -64,10 +64,8 @@ import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
 import {
   chatSourceModeAtom,
-  customClaudeConfigAtom,
   defaultAgentModeAtom,
   isDesktopAtom, isFullscreenAtom,
-  normalizeCustomClaudeConfig,
   sessionInfoAtom,
   selectedOllamaModelAtom,
   soundNotificationsEnabledAtom
@@ -4871,11 +4869,10 @@ export function ChatView({
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
   const sidebarOpen = useAtomValue(agentsSidebarOpenAtom)
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
   const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+  const { data: providerConfigData } =
+    trpc.claudeProviderConfig.get.useQuery()
+  const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   const setLoadingSubChats = useSetAtom(loadingSubChatsAtom)
   const unseenChanges = useAtomValue(agentsUnseenChangesAtom)
   const setUnseenChanges = useSetAtom(agentsUnseenChangesAtom)

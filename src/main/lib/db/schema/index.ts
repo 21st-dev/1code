@@ -128,6 +128,22 @@ export const anthropicSettings = sqliteTable("anthropic_settings", {
   ),
 })
 
+// ============ CLAUDE PROVIDER CONFIG ============
+// Stores one active Claude-compatible provider token encrypted with safeStorage.
+export const claudeProviderConfig = sqliteTable("claude_provider_config", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  model: text("model").notNull(),
+  baseUrl: text("base_url").notNull(),
+  authMode: text("auth_mode").notNull().default("auth_token"), // "api_key" | "auth_token"
+  encryptedToken: text("encrypted_token").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -140,3 +156,5 @@ export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
 export type AnthropicAccount = typeof anthropicAccounts.$inferSelect
 export type NewAnthropicAccount = typeof anthropicAccounts.$inferInsert
 export type AnthropicSettings = typeof anthropicSettings.$inferSelect
+export type ClaudeProviderConfig = typeof claudeProviderConfig.$inferSelect
+export type NewClaudeProviderConfig = typeof claudeProviderConfig.$inferInsert

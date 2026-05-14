@@ -44,11 +44,9 @@ import {
   apiKeyOnboardingCompletedAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
-  normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
@@ -575,10 +573,9 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatCodexThinking,
   ])
 
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+  const { data: providerConfigData } =
+    trpc.claudeProviderConfig.get.useQuery()
+  const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||

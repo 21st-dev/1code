@@ -1,6 +1,6 @@
 "use client"
 
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { useState, useEffect } from "react"
 import { ChevronLeft } from "lucide-react"
 
@@ -11,9 +11,9 @@ import { Logo } from "../../components/ui/logo"
 import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
-  customClaudeConfigAtom,
-  type CustomClaudeConfig,
+  type ClaudeProviderAuthMode,
 } from "../../lib/atoms"
+import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
 
 // Check if the key looks like a valid Anthropic API key
@@ -23,10 +23,12 @@ const isValidApiKey = (key: string) => {
 }
 
 export function ApiKeyOnboardingPage() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
+  const trpcUtils = trpc.useUtils()
+  const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
+  const saveProviderConfig = trpc.claudeProviderConfig.save.useMutation()
 
   const isCustomModel = billingMethod === "custom-model"
 
@@ -34,21 +36,23 @@ export function ApiKeyOnboardingPage() {
   const defaultModel = "claude-sonnet-4-6"
   const defaultBaseUrl = "https://api.anthropic.com"
 
-  const [apiKey, setApiKey] = useState(storedConfig.token)
-  const [model, setModel] = useState(storedConfig.model || "")
-  const [token, setToken] = useState(storedConfig.token)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl || "")
+  const [apiKey, setApiKey] = useState("")
+  const [model, setModel] = useState("")
+  const [token, setToken] = useState("")
+  const [baseUrl, setBaseUrl] = useState("")
+  const [authMode, setAuthMode] =
+    useState<ClaudeProviderAuthMode>("auth_token")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Sync from stored config on mount
+  // Sync non-secret metadata from secure provider config.
   useEffect(() => {
-    if (storedConfig.token) {
-      setApiKey(storedConfig.token)
-      setToken(storedConfig.token)
-    }
-    if (storedConfig.model) setModel(storedConfig.model)
-    if (storedConfig.baseUrl) setBaseUrl(storedConfig.baseUrl)
-  }, [])
+    const config = providerConfigData?.config
+    if (!config) return
+
+    setModel(config.model)
+    setBaseUrl(config.baseUrl)
+    setAuthMode(config.authMode)
+  }, [providerConfigData?.config])
 
   const handleBack = () => {
     setBillingMethod(null)
@@ -60,15 +64,21 @@ export function ApiKeyOnboardingPage() {
 
     setIsSubmitting(true)
 
-    const config: CustomClaudeConfig = {
-      model: defaultModel,
-      token: key.trim(),
-      baseUrl: defaultBaseUrl,
-    }
-    setStoredConfig(config)
-    setApiKeyOnboardingCompleted(true)
-
-    setIsSubmitting(false)
+    saveProviderConfig.mutate(
+      {
+        model: defaultModel,
+        token: key.trim(),
+        baseUrl: defaultBaseUrl,
+        authMode: "api_key",
+      },
+      {
+        onSuccess: async () => {
+          await trpcUtils.claudeProviderConfig.get.invalidate()
+          setApiKeyOnboardingCompleted(true)
+        },
+        onSettled: () => setIsSubmitting(false),
+      },
+    )
   }
 
   // Submit for custom model mode (all three fields)
@@ -81,15 +91,21 @@ export function ApiKeyOnboardingPage() {
 
     setIsSubmitting(true)
 
-    const config: CustomClaudeConfig = {
-      model: trimmedModel,
-      token: trimmedToken,
-      baseUrl: trimmedBaseUrl,
-    }
-    setStoredConfig(config)
-    setApiKeyOnboardingCompleted(true)
-
-    setIsSubmitting(false)
+    saveProviderConfig.mutate(
+      {
+        model: trimmedModel,
+        token: trimmedToken,
+        baseUrl: trimmedBaseUrl,
+        authMode,
+      },
+      {
+        onSuccess: async () => {
+          await trpcUtils.claudeProviderConfig.get.invalidate()
+          setApiKeyOnboardingCompleted(true)
+        },
+        onSettled: () => setIsSubmitting(false),
+      },
+    )
   }
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -253,6 +269,37 @@ export function ApiKeyOnboardingPage() {
             <p className="text-xs text-muted-foreground">
               Your API key or token
             </p>
+          </div>
+
+          {/* Auth Mode */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Auth env</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAuthMode("api_key")}
+                className={cn(
+                  "h-8 rounded-lg border text-xs font-medium transition-colors",
+                  authMode === "api_key"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground",
+                )}
+              >
+                ANTHROPIC_API_KEY
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode("auth_token")}
+                className={cn(
+                  "h-8 rounded-lg border text-xs font-medium transition-colors",
+                  authMode === "auth_token"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground",
+                )}
+              >
+                ANTHROPIC_AUTH_TOKEN
+              </button>
+            </div>
           </div>
 
           {/* Base URL */}
