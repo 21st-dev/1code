@@ -113,6 +113,7 @@ import {
 import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
 import { AgentModelSelector } from "../components/agent-model-selector"
+import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
@@ -519,6 +520,7 @@ export function NewChatForm({
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionSearchText, setMentionSearchText] = useState("")
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 })
+  const [draftText, setDraftText] = useState("")
 
   // Mention subpage navigation state
   const [showingFilesList, setShowingFilesList] = useState(false)
@@ -1266,6 +1268,7 @@ export function NewChatForm({
 
     // Otherwise: insert mention as normal
     editorRef.current?.insertMention(mention)
+    setDraftText(editorRef.current?.getValue() || "")
     setShowMentionDropdown(false)
     // Reset subpage state
     setShowingFilesList(false)
@@ -1274,11 +1277,17 @@ export function NewChatForm({
     setShowingToolsList(false)
   }, [])
 
+  const handleRecommendationSelect = useCallback((mention: FileMentionOption) => {
+    editorRef.current?.insertMention(mention)
+    setDraftText(editorRef.current?.getValue() || "")
+  }, [])
+
   // Save draft to localStorage when content changes
   const handleContentChange = useCallback(
     (hasContent: boolean) => {
       setHasContent(hasContent)
       const text = editorRef.current?.getValue() || ""
+      setDraftText(text)
 
       // Skip if text hasn't changed
       if (text === lastSavedTextRef.current) {
@@ -1685,6 +1694,12 @@ export function NewChatForm({
                   contextItems={contextItems}
                 >
                   <PromptInputContextItems />
+                  <AgentContextRecommendations
+                    draftText={draftText}
+                    projectPath={validatedProject?.path}
+                    isSuppressed={showMentionDropdown || showSlashDropdown}
+                    onSelect={handleRecommendationSelect}
+                  />
                   <div className="relative">
                     <AgentsMentionsEditor
                       ref={editorRef}

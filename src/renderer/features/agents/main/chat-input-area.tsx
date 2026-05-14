@@ -68,6 +68,7 @@ import {
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentModelSelector } from "../components/agent-model-selector"
+import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import {
@@ -414,6 +415,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const { t } = useI18n()
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
+  const [draftText, setDraftText] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -976,6 +978,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     onInputContentChange?.(newHasContent)
     // Sync the draft text ref for unmount save
     const draft = editorRef.current?.getValue() || ""
+    setDraftText(draft)
     currentDraftTextRef.current = draft
   }, [editorRef, onInputContentChange])
 
@@ -1019,12 +1022,22 @@ export const ChatInputArea = memo(function ChatInputArea({
 
     // Otherwise: insert mention as normal
     editorRef.current?.insertMention(mention)
+    const draft = editorRef.current?.getValue() || ""
+    setDraftText(draft)
+    currentDraftTextRef.current = draft
     setShowMentionDropdown(false)
     // Reset subpage state
     setShowingFilesList(false)
     setShowingSkillsList(false)
     setShowingAgentsList(false)
     setShowingToolsList(false)
+  }, [editorRef])
+
+  const handleRecommendationSelect = useCallback((mention: FileMentionOption) => {
+    editorRef.current?.insertMention(mention)
+    const draft = editorRef.current?.getValue() || ""
+    setDraftText(draft)
+    currentDraftTextRef.current = draft
   }, [editorRef])
 
   // Slash command handlers
@@ -1336,6 +1349,12 @@ export const ChatInputArea = memo(function ChatInputArea({
               }
             >
               <PromptInputContextItems />
+              <AgentContextRecommendations
+                draftText={draftText}
+                projectPath={projectPath}
+                isSuppressed={showMentionDropdown || showSlashDropdown}
+                onSelect={handleRecommendationSelect}
+              />
               <div className="relative">
                 <AgentsMentionsEditor
                   ref={editorRef}
