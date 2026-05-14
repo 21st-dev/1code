@@ -281,6 +281,10 @@ export function AgentsModelsTab() {
     trpc.localApiProviderConfig.get.useQuery({
       purpose: "sub_chat_title",
     })
+  const { data: commitMessageProviderData } =
+    trpc.localApiProviderConfig.get.useQuery({
+      purpose: "commit_message",
+    })
   const { data: claudeCodeIntegration, isLoading: isClaudeCodeLoading } =
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
@@ -298,6 +302,9 @@ export function AgentsModelsTab() {
   const [subChatTitleModel, setSubChatTitleModel] = useState("")
   const [subChatTitleBaseUrl, setSubChatTitleBaseUrl] = useState("")
   const [subChatTitleToken, setSubChatTitleToken] = useState("")
+  const [commitMessageModel, setCommitMessageModel] = useState("")
+  const [commitMessageBaseUrl, setCommitMessageBaseUrl] = useState("")
+  const [commitMessageToken, setCommitMessageToken] = useState("")
   const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const trpcUtils = trpc.useUtils()
@@ -306,6 +313,10 @@ export function AgentsModelsTab() {
   const saveSubChatTitleProviderMutation =
     trpc.localApiProviderConfig.save.useMutation()
   const clearSubChatTitleProviderMutation =
+    trpc.localApiProviderConfig.clear.useMutation()
+  const saveCommitMessageProviderMutation =
+    trpc.localApiProviderConfig.save.useMutation()
+  const clearCommitMessageProviderMutation =
     trpc.localApiProviderConfig.clear.useMutation()
 
   useEffect(() => {
@@ -326,6 +337,15 @@ export function AgentsModelsTab() {
     setSubChatTitleBaseUrl(config?.baseUrl ?? "")
     setSubChatTitleToken("")
   }, [subChatTitleProviderData])
+
+  useEffect(() => {
+    if (!commitMessageProviderData) return
+
+    const config = commitMessageProviderData.config
+    setCommitMessageModel(config?.model ?? "")
+    setCommitMessageBaseUrl(config?.baseUrl ?? "")
+    setCommitMessageToken("")
+  }, [commitMessageProviderData])
 
   useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
@@ -652,6 +672,98 @@ export function AgentsModelsTab() {
       subChatTitleBaseUrl.trim() ||
       subChatTitleToken.trim() ||
       subChatTitleProviderData?.config?.hasToken,
+  )
+
+  const handleCommitMessageBlurSave = useCallback(() => {
+    const trimmedModel = commitMessageModel.trim()
+    const trimmedBaseUrl = commitMessageBaseUrl.trim()
+    const trimmedToken = commitMessageToken.trim()
+    const storedConfig = commitMessageProviderData?.config
+    const hasStoredToken = Boolean(storedConfig?.hasToken)
+
+    if (trimmedModel && trimmedBaseUrl && (trimmedToken || hasStoredToken)) {
+      const metadataChanged =
+        !storedConfig ||
+        storedConfig.model !== trimmedModel ||
+        storedConfig.baseUrl !== trimmedBaseUrl
+
+      if (!metadataChanged && !trimmedToken) return
+
+      saveCommitMessageProviderMutation.mutate(
+        {
+          purpose: "commit_message",
+          model: trimmedModel,
+          baseUrl: trimmedBaseUrl,
+          ...(trimmedToken && { token: trimmedToken }),
+        },
+        {
+          onSuccess: async () => {
+            setCommitMessageToken("")
+            await trpcUtils.localApiProviderConfig.get.invalidate()
+            toast.success(t("toast.models.commitMessageSettingsSaved"))
+          },
+          onError: (error) => {
+            toast.error(
+              error.message || t("toast.models.failedToSaveCommitMessageSettings"),
+            )
+          },
+        },
+      )
+    } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
+      if (storedConfig) {
+        clearCommitMessageProviderMutation.mutate(
+          { purpose: "commit_message" },
+          {
+            onSuccess: async () => {
+              await trpcUtils.localApiProviderConfig.get.invalidate()
+              toast.success(t("toast.models.commitMessageSettingsReset"))
+            },
+            onError: (error) => {
+              toast.error(
+                error.message ||
+                  t("toast.models.failedToResetCommitMessageSettings"),
+              )
+            },
+          },
+        )
+      }
+    }
+  }, [
+    clearCommitMessageProviderMutation,
+    commitMessageBaseUrl,
+    commitMessageModel,
+    commitMessageProviderData?.config,
+    commitMessageToken,
+    saveCommitMessageProviderMutation,
+    t,
+    trpcUtils.localApiProviderConfig.get,
+  ])
+
+  const handleResetCommitMessage = () => {
+    clearCommitMessageProviderMutation.mutate(
+      { purpose: "commit_message" },
+      {
+        onSuccess: async () => {
+          setCommitMessageModel("")
+          setCommitMessageBaseUrl("")
+          setCommitMessageToken("")
+          await trpcUtils.localApiProviderConfig.get.invalidate()
+          toast.success(t("toast.models.commitMessageSettingsReset"))
+        },
+        onError: (error) => {
+          toast.error(
+            error.message || t("toast.models.failedToResetCommitMessageSettings"),
+          )
+        },
+      },
+    )
+  }
+
+  const canResetCommitMessage = Boolean(
+    commitMessageModel.trim() ||
+      commitMessageBaseUrl.trim() ||
+      commitMessageToken.trim() ||
+      commitMessageProviderData?.config?.hasToken,
   )
 
   // All models merged into one list for the top section
@@ -1004,23 +1116,116 @@ export function AgentsModelsTab() {
             </div>
           </div>
 
+          {/* Commit message provider */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium text-foreground">
+                  {t("settings.models.commitMessage.title")}
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.models.commitMessage.description")}
+                </p>
+              </div>
+              {canResetCommitMessage && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetCommitMessage}
+                  disabled={clearCommitMessageProviderMutation.isPending}
+                  className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+                >
+                  {t("common.reset")}
+                </Button>
+              )}
+            </div>
+
+            <div className="bg-background rounded-lg border border-border overflow-hidden">
+              <div className="flex items-center justify-between p-4">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">
+                    {t("onboarding.customModel.modelName")}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.commitMessage.modelHint")}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-80">
+                  <Input
+                    value={commitMessageModel}
+                    onChange={(e) => setCommitMessageModel(e.target.value)}
+                    onBlur={() => handleCommitMessageBlurSave()}
+                    disabled={saveCommitMessageProviderMutation.isPending}
+                    className="w-full"
+                    placeholder="deepseek-chat"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border-t border-border">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">
+                    {t("onboarding.customModel.apiToken")}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.commitMessage.tokenHint")}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-80">
+                  <Input
+                    type="password"
+                    value={commitMessageToken}
+                    onChange={(e) => setCommitMessageToken(e.target.value)}
+                    onBlur={() => handleCommitMessageBlurSave()}
+                    disabled={saveCommitMessageProviderMutation.isPending}
+                    className="w-full"
+                    placeholder={
+                      commitMessageProviderData?.config?.hasToken
+                        ? t("common.savedToken")
+                        : "sk-..."
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border-t border-border">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Base URL</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.commitMessage.baseUrlHint")}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-80">
+                  <Input
+                    value={commitMessageBaseUrl}
+                    onChange={(e) => setCommitMessageBaseUrl(e.target.value)}
+                    onBlur={() => handleCommitMessageBlurSave()}
+                    disabled={saveCommitMessageProviderMutation.isPending}
+                    className="w-full"
+                    placeholder="https://api.deepseek.com"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Override Model */}
           <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-foreground">
-                  {t("settings.models.overrideModel.title")}
-                </h4>
-                {canReset && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleReset}
-                    disabled={clearProviderConfigMutation.isPending}
-                    className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
-                  >
-                    {t("common.reset")}
-                  </Button>
-                )}
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-foreground">
+                {t("settings.models.overrideModel.title")}
+              </h4>
+              {canReset && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleReset}
+                  disabled={clearProviderConfigMutation.isPending}
+                  className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+                >
+                  {t("common.reset")}
+                </Button>
+              )}
             </div>
             <div className="bg-background rounded-lg border border-border overflow-hidden">
               <div className="flex items-center justify-between p-4">

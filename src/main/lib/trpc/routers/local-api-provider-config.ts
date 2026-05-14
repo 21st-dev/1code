@@ -4,7 +4,10 @@ import { z } from "zod"
 import { getDatabase, localApiProviderConfigs } from "../../db"
 import { publicProcedure, router } from "../index"
 
-export const localApiProviderPurposeSchema = z.enum(["sub_chat_title"])
+export const localApiProviderPurposeSchema = z.enum([
+  "sub_chat_title",
+  "commit_message",
+])
 export type LocalApiProviderPurpose = z.infer<
   typeof localApiProviderPurposeSchema
 >

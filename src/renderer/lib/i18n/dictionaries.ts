@@ -165,6 +165,15 @@ export const en = {
     "Stored encrypted on this device",
   "settings.models.subChatTitle.baseUrlHint":
     "Base URL or /chat/completions endpoint",
+  "settings.models.commitMessage.title": "Commit Message API",
+  "settings.models.commitMessage.description":
+    "Optional OpenAI-compatible API for commit messages. When configured, selected diff context is sent to this provider; Ollama is used as fallback.",
+  "settings.models.commitMessage.modelHint":
+    "Model used only for commit message generation",
+  "settings.models.commitMessage.tokenHint":
+    "Stored encrypted on this device",
+  "settings.models.commitMessage.baseUrlHint":
+    "Base URL or /chat/completions endpoint",
   "settings.models.overrideModel.title": "Override Model",
   "settings.models.overrideModel.modelHint":
     "Model identifier to use for requests",
@@ -185,6 +194,8 @@ export const en = {
   "toast.models.openaiApiKeyRemoved": "OpenAI API key removed",
   "toast.models.subChatTitleSettingsSaved": "Sub-chat title API saved",
   "toast.models.subChatTitleSettingsReset": "Sub-chat title API reset",
+  "toast.models.commitMessageSettingsSaved": "Commit message API saved",
+  "toast.models.commitMessageSettingsReset": "Commit message API reset",
   "toast.models.failedToSaveModelSettings": "Failed to save model settings",
   "toast.models.failedToResetModelSettings": "Failed to reset model settings",
   "toast.models.failedToDisconnectCodex": "Failed to disconnect Codex",
@@ -198,6 +209,10 @@ export const en = {
     "Failed to save sub-chat title API",
   "toast.models.failedToResetSubChatTitleSettings":
     "Failed to reset sub-chat title API",
+  "toast.models.failedToSaveCommitMessageSettings":
+    "Failed to save commit message API",
+  "toast.models.failedToResetCommitMessageSettings":
+    "Failed to reset commit message API",
   "toast.models.invalidCodexApiKey":
     "Invalid Codex API key format. Key should start with 'sk-'",
   "toast.models.invalidOpenaiApiKey":
@@ -1081,6 +1096,15 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "加密保存在这台设备上",
   "settings.models.subChatTitle.baseUrlHint":
     "Base URL 或 /chat/completions endpoint",
+  "settings.models.commitMessage.title": "Commit Message API",
+  "settings.models.commitMessage.description":
+    "可选的 OpenAI-compatible API，用于生成 commit message。配置后会把所选 diff 上下文发送给该 provider；失败时回退到 Ollama。",
+  "settings.models.commitMessage.modelHint":
+    "只用于生成 commit message 的 Model",
+  "settings.models.commitMessage.tokenHint":
+    "加密保存在这台设备上",
+  "settings.models.commitMessage.baseUrlHint":
+    "Base URL 或 /chat/completions endpoint",
   "settings.models.overrideModel.title": "Override Model",
   "settings.models.overrideModel.modelHint": "请求时使用的 Model 标识",
   "settings.models.overrideModel.authHint":
@@ -1100,6 +1124,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.openaiApiKeyRemoved": "OpenAI API key 已移除",
   "toast.models.subChatTitleSettingsSaved": "Sub-chat 标题 API 已保存",
   "toast.models.subChatTitleSettingsReset": "Sub-chat 标题 API 已重置",
+  "toast.models.commitMessageSettingsSaved": "Commit message API 已保存",
+  "toast.models.commitMessageSettingsReset": "Commit message API 已重置",
   "toast.models.failedToSaveModelSettings": "保存 Model 设置失败",
   "toast.models.failedToResetModelSettings": "重置 Model 设置失败",
   "toast.models.failedToDisconnectCodex": "断开 Codex 失败",
@@ -1113,6 +1139,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "保存 sub-chat 标题 API 失败",
   "toast.models.failedToResetSubChatTitleSettings":
     "重置 sub-chat 标题 API 失败",
+  "toast.models.failedToSaveCommitMessageSettings":
+    "保存 commit message API 失败",
+  "toast.models.failedToResetCommitMessageSettings":
+    "重置 commit message API 失败",
   "toast.models.invalidCodexApiKey":
     "Codex API key 格式不正确，应以 'sk-' 开头",
   "toast.models.invalidOpenaiApiKey":

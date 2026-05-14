@@ -116,7 +116,7 @@ export const anthropicAccounts = sqliteTable("anthropic_accounts", {
     () => new Date(),
   ),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
-  desktopUserId: text("desktop_user_id"), // Reference to 21st.dev user
+  desktopUserId: text("desktop_user_id"), // Reference to hosted desktop user
 })
 
 // Tracks which Anthropic account is currently active
@@ -147,7 +147,7 @@ export const claudeProviderConfig = sqliteTable("claude_provider_config", {
 // ============ LOCAL API PROVIDER CONFIGS ============
 // Stores encrypted OpenAI-compatible provider tokens for local utility features.
 export const localApiProviderConfigs = sqliteTable("local_api_provider_configs", {
-  id: text("id").primaryKey(), // e.g. "sub_chat_title"
+  id: text("id").primaryKey(), // e.g. "sub_chat_title" | "commit_message"
   model: text("model").notNull(),
   baseUrl: text("base_url").notNull(),
   encryptedToken: text("encrypted_token").notNull(),
