@@ -7,14 +7,29 @@ import matter from "gray-matter"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { isDirentDirectory } from "../../fs/dirent"
 import { getEnabledPlugins } from "./claude-settings"
+import {
+  installRegistrySkill,
+  listRegistrySkills,
+  rollbackRegistrySkill,
+  type RegistrySkillStatus,
+} from "../../skills/registry"
 
 export interface FileSkill {
   name: string
   description: string
-  source: "user" | "project" | "plugin"
+  source: "user" | "project" | "plugin" | "registry"
   pluginName?: string
   path: string
   content: string
+  directoryName?: string
+  registry?: {
+    id: string
+    status: RegistrySkillStatus
+    version: string
+    installedVersion?: string
+    registryId: string
+    hasRollback: boolean
+  }
 }
 
 /**
@@ -90,6 +105,7 @@ async function scanSkillsDirectory(
           source,
           path: displayPath,
           content: parsed.content,
+          directoryName: entry.name,
         })
       } catch (err) {
         // Skill directory doesn't have SKILL.md or read failed - skip it
@@ -140,15 +156,46 @@ const listSkillsProcedure = publicProcedure
     })
 
     // Scan all directories in parallel
-    const [userSkills, projectSkills, ...pluginSkillsArrays] =
+    const [userSkills, projectSkills, registrySkills, ...pluginSkillsArrays] =
       await Promise.all([
         userSkillsPromise,
         projectSkillsPromise,
+        listRegistrySkills().catch((err) => {
+          console.warn("[skills] Failed to load registry state:", err)
+          return []
+        }),
         ...pluginSkillsPromises,
       ])
     const pluginSkills = pluginSkillsArrays.flat()
+    const registryById = new Map(
+      registrySkills
+        .filter((skill) =>
+          ["installed", "modified", "update-available"].includes(skill.status),
+        )
+        .map((skill) => [skill.id, skill]),
+    )
+    const userSkillsWithRegistry = userSkills.map((skill) => {
+      const registry = skill.directoryName
+        ? registryById.get(skill.directoryName)
+        : undefined
 
-    return [...projectSkills, ...userSkills, ...pluginSkills]
+      if (!registry) return skill
+
+      return {
+        ...skill,
+        source: "registry" as const,
+        registry: {
+          id: registry.id,
+          status: registry.status,
+          version: registry.version,
+          installedVersion: registry.installedVersion,
+          registryId: registry.registryId,
+          hasRollback: registry.hasRollback,
+        },
+      }
+    })
+
+    return [...projectSkills, ...userSkillsWithRegistry, ...pluginSkills]
   })
 
 /**
@@ -185,6 +232,38 @@ export const skillsRouter = router({
    * Alias for list - used by @ mention
    */
   listEnabled: listSkillsProcedure,
+
+  /**
+   * List bundled/remote registry skills and install/update status.
+   */
+  registryList: publicProcedure
+    .input(z.object({ checkRemote: z.boolean().optional() }).optional())
+    .query(async ({ input }) => {
+      return listRegistrySkills({ checkRemote: input?.checkRemote })
+    }),
+
+  /**
+   * Install, update, or restore a registry-managed skill.
+   */
+  registryInstall: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      return installRegistrySkill(input)
+    }),
+
+  /**
+   * Roll back the most recent registry install/update for a skill.
+   */
+  registryRollback: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      return rollbackRegistrySkill(input)
+    }),
 
   /**
    * Create a new skill

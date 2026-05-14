@@ -4,7 +4,7 @@ import { useAtomValue } from "jotai"
 import { selectedProjectAtom, settingsSkillsSidebarWidthAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, Download, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { SkillIcon, MarkdownIcon, CodeIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -29,14 +29,23 @@ import { toast } from "sonner"
 // --- Unified Item Type ---
 interface UnifiedItem {
   id: string
-  kind: "skill" | "command"
+  kind: "skill" | "command" | "registry-skill"
   name: string
   description: string
-  source: "user" | "project" | "plugin"
+  source: "user" | "project" | "plugin" | "registry"
   pluginName?: string
   path: string
   content: string
   argumentHint?: string
+  registry?: {
+    id: string
+    status: string
+    version: string
+    installedVersion?: string
+    registryId: string
+    hasRollback: boolean
+    statusMessage?: string
+  }
 }
 
 // --- Detail Panel (Editable) ---
@@ -44,18 +53,26 @@ function ItemDetail({
   item,
   onSave,
   onDelete,
+  onRegistryInstall,
+  onRegistryRollback,
   isSaving,
+  isRegistryActionPending,
 }: {
   item: UnifiedItem
   onSave: (data: { description: string; content: string }) => void
   onDelete?: () => void
+  onRegistryInstall?: (item: UnifiedItem, force?: boolean) => void
+  onRegistryRollback?: (item: UnifiedItem) => void
   isSaving: boolean
+  isRegistryActionPending?: boolean
 }) {
   const [description, setDescription] = useState(item.description)
   const [content, setContent] = useState(item.content)
   const [viewMode, setViewMode] = useState<"rendered" | "editor">("rendered")
 
-  const isReadOnly = item.source === "plugin"
+  const isRegistryItem = item.source === "registry" || item.kind === "registry-skill"
+  const isReadOnly = item.source === "plugin" || isRegistryItem
+  const registryStatus = item.registry?.status
 
   // Reset local state when item changes
   useEffect(() => {
@@ -103,12 +120,26 @@ function ItemDetail({
               <h3 className="text-sm font-semibold text-foreground truncate">{item.name}</h3>
               <span className={cn(
                 "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
-                item.kind === "skill"
-                  ? "bg-blue-500/10 text-blue-500"
-                  : "bg-orange-500/10 text-orange-500"
+                item.kind === "command"
+                  ? "bg-orange-500/10 text-orange-500"
+                  : item.source === "registry"
+                    ? "bg-emerald-500/10 text-emerald-500"
+                    : "bg-blue-500/10 text-blue-500"
               )}>
-                {item.kind === "skill" ? "Skill" : "Command"}
+                {item.kind === "command" ? "Command" : item.source === "registry" ? "Registry" : "Skill"}
               </span>
+              {registryStatus && (
+                <span className={cn(
+                  "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
+                  registryStatus === "installed"
+                    ? "bg-emerald-500/10 text-emerald-500"
+                    : registryStatus === "not-installed"
+                      ? "bg-muted text-muted-foreground"
+                      : "bg-amber-500/10 text-amber-500"
+                )}>
+                  {registryStatus}
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">{item.path}</p>
           </div>
@@ -131,7 +162,7 @@ function ItemDetail({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={handleBlur}
-              placeholder={item.kind === "skill" ? "Skill description..." : "Command description..."}
+              placeholder={item.kind === "command" ? "Command description..." : "Skill description..."}
             />
           )}
         </div>
@@ -141,10 +172,78 @@ function ItemDetail({
           <Label>Usage</Label>
           <div className="px-3 py-2 text-sm bg-muted/50 border border-border rounded-lg">
             <code className="text-xs text-foreground">
-              {item.kind === "skill" ? `@${item.name}` : `/${item.name}`}
+              {item.kind === "command" ? `/${item.name}` : `@${item.name}`}
             </code>
           </div>
         </div>
+
+        {item.registry && (
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">Registry managed</p>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {item.registry.registryId} · version {item.registry.version}
+                  {item.registry.installedVersion && item.registry.installedVersion !== item.registry.version
+                    ? ` · installed ${item.registry.installedVersion}`
+                    : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {["not-installed", "user-owned"].includes(registryStatus || "") && onRegistryInstall && (
+                  <Button
+                    size="sm"
+                    variant={registryStatus === "user-owned" ? "outline" : "default"}
+                    onClick={() => {
+                      const force = registryStatus === "user-owned"
+                        ? window.confirm(`Replace existing user skill "${item.registry?.id}" with the registry version? A backup will be created.`)
+                        : false
+                      if (registryStatus === "user-owned" && !force) return
+                      onRegistryInstall(item, force)
+                    }}
+                    disabled={isRegistryActionPending}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                    {registryStatus === "user-owned" ? "Restore" : "Install"}
+                  </Button>
+                )}
+                {["update-available", "modified"].includes(registryStatus || "") && onRegistryInstall && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const force = registryStatus === "modified"
+                        ? window.confirm(`Replace local changes to "${item.registry?.id}" with the registry version? A backup will be created.`)
+                        : false
+                      if (registryStatus === "modified" && !force) return
+                      onRegistryInstall(item, force)
+                    }}
+                    disabled={isRegistryActionPending}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                    {registryStatus === "modified" ? "Restore" : "Update"}
+                  </Button>
+                )}
+                {item.registry.hasRollback && onRegistryRollback && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onRegistryRollback(item)}
+                    disabled={isRegistryActionPending}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    Roll back
+                  </Button>
+                )}
+              </div>
+            </div>
+            {item.registry.statusMessage && (
+              <div className="flex items-start gap-2 text-[11px] text-amber-500">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>{item.registry.statusMessage}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Instructions */}
         <div className="space-y-1.5">
@@ -204,7 +303,7 @@ function ItemDetail({
               onBlur={handleBlur}
               rows={16}
               className="font-mono resize-y"
-              placeholder={item.kind === "skill" ? "Skill instructions (markdown)..." : "Command prompt (markdown)..."}
+              placeholder={item.kind === "command" ? "Command prompt (markdown)..." : "Skill instructions (markdown)..."}
               autoFocus
             />
           )}
@@ -220,7 +319,7 @@ function ItemDetail({
               onClick={onDelete}
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Delete {item.kind === "skill" ? "Skill" : "Command"}
+              Delete {item.kind === "command" ? "Command" : "Skill"}
             </Button>
           </div>
         )}
@@ -357,7 +456,11 @@ function SidebarListItem({
       <div className="flex items-center gap-1.5">
         <span className={cn(
           "text-[10px] font-medium shrink-0 w-3 text-center",
-          item.kind === "command" ? "text-orange-500/70" : "text-blue-500/70"
+          item.kind === "command"
+            ? "text-orange-500/70"
+            : item.source === "registry"
+              ? "text-emerald-500/70"
+              : "text-blue-500/70"
         )}>
           {item.kind === "command" ? "/" : "@"}
         </span>
@@ -405,11 +508,17 @@ export function AgentsSkillsTab() {
     selectedProject?.path ? { projectPath: selectedProject.path } : undefined,
   )
 
-  const isLoading = isLoadingSkills || isLoadingCommands
+  const {
+    data: registrySkills = [],
+    isLoading: isLoadingRegistry,
+    refetch: refetchRegistry,
+  } = trpc.skills.registryList.useQuery()
+
+  const isLoading = isLoadingSkills || isLoadingCommands || isLoadingRegistry
 
   const refetchAll = useCallback(async () => {
-    await Promise.all([refetchSkills(), refetchCommands()])
-  }, [refetchSkills, refetchCommands])
+    await Promise.all([refetchSkills(), refetchCommands(), refetchRegistry()])
+  }, [refetchSkills, refetchCommands, refetchRegistry])
 
   // Delete confirmation dialog state
   const [deletingItem, setDeletingItem] = useState<UnifiedItem | null>(null)
@@ -418,14 +527,17 @@ export function AgentsSkillsTab() {
   const updateSkillMutation = trpc.skills.update.useMutation()
   const createSkillMutation = trpc.skills.create.useMutation()
   const deleteSkillMutation = trpc.skills.delete.useMutation()
+  const installRegistrySkillMutation = trpc.skills.registryInstall.useMutation()
+  const rollbackRegistrySkillMutation = trpc.skills.registryRollback.useMutation()
   const updateCommandMutation = trpc.commands.update.useMutation()
   const createCommandMutation = trpc.commands.create.useMutation()
   const deleteCommandMutation = trpc.commands.delete.useMutation()
 
   // Build unified items
   const allItems = useMemo<UnifiedItem[]>(() => {
+    const registryById = new Map(registrySkills.map((skill) => [skill.id, skill]))
     const skillItems: UnifiedItem[] = skills.map((s) => ({
-      id: `skill:${s.source}:${s.name}`,
+      id: `skill:${s.source}:${s.registry?.id || s.name}`,
       kind: "skill" as const,
       name: s.name,
       description: s.description,
@@ -433,6 +545,12 @@ export function AgentsSkillsTab() {
       pluginName: s.pluginName,
       path: s.path,
       content: s.content,
+      registry: s.registry
+        ? {
+            ...s.registry,
+            statusMessage: registryById.get(s.registry.id)?.statusMessage,
+          }
+        : undefined,
     }))
     const cmdItems: UnifiedItem[] = commands.map((c) => ({
       id: `cmd:${c.source}:${c.name}`,
@@ -445,8 +563,41 @@ export function AgentsSkillsTab() {
       content: c.content,
       argumentHint: c.argumentHint,
     }))
-    return [...skillItems, ...cmdItems]
-  }, [skills, commands])
+    const installedRegistryIds = new Set(
+      skillItems
+        .map((item) => item.registry?.id)
+        .filter((id): id is string => !!id),
+    )
+    const registryItems: UnifiedItem[] = registrySkills
+      .filter((skill) => !installedRegistryIds.has(skill.id))
+      .map((skill) => ({
+        id: `registry:${skill.id}`,
+        kind: "registry-skill" as const,
+        name: skill.displayName || skill.id,
+        description: skill.description,
+        source: "registry" as const,
+        path: `registry:${skill.id}`,
+        content: [
+          `# ${skill.displayName || skill.id}`,
+          "",
+          skill.description || "No description.",
+          "",
+          `Version: ${skill.version}`,
+          `Status: ${skill.status}`,
+        ].join("\n"),
+        registry: {
+          id: skill.id,
+          status: skill.status,
+          version: skill.version,
+          installedVersion: skill.installedVersion,
+          registryId: skill.registryId,
+          hasRollback: skill.hasRollback,
+          statusMessage: skill.statusMessage,
+        },
+      }))
+
+    return [...skillItems, ...cmdItems, ...registryItems]
+  }, [skills, commands, registrySkills])
 
   // Filter by search
   const filteredItems = useMemo(() => {
@@ -460,11 +611,12 @@ export function AgentsSkillsTab() {
   // Group by source
   const userItems = filteredItems.filter((i) => i.source === "user")
   const projectItems = filteredItems.filter((i) => i.source === "project")
+  const registryItems = filteredItems.filter((i) => i.source === "registry")
   const pluginItems = filteredItems.filter((i) => i.source === "plugin")
 
   const allItemIds = useMemo(
-    () => [...userItems, ...projectItems, ...pluginItems].map((i) => i.id),
-    [userItems, projectItems, pluginItems]
+    () => [...registryItems, ...userItems, ...projectItems, ...pluginItems].map((i) => i.id),
+    [registryItems, userItems, projectItems, pluginItems]
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
@@ -571,9 +723,50 @@ export function AgentsSkillsTab() {
     }
   }, [deletingItem, deleteSkillMutation, deleteCommandMutation, selectedProject?.path, refetchAll])
 
+  const handleRegistryInstall = useCallback(async (item: UnifiedItem, force?: boolean) => {
+    if (!item.registry?.id) return
+    try {
+      const result = await installRegistrySkillMutation.mutateAsync({
+        id: item.registry.id,
+        force,
+      })
+      toast.success("Registry skill synced", { description: result.displayName })
+      await refetchAll()
+      setSelectedItemId(`skill:registry:${result.id}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to sync registry skill"
+      toast.error("Failed to sync registry skill", { description: message })
+    }
+  }, [installRegistrySkillMutation, refetchAll])
+
+  const handleRegistryRollback = useCallback(async (item: UnifiedItem) => {
+    if (!item.registry?.id) return
+    try {
+      await rollbackRegistrySkillMutation.mutateAsync({ id: item.registry.id })
+      toast.success("Registry skill rolled back", { description: item.registry.id })
+      await refetchAll()
+      setSelectedItemId(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to roll back registry skill"
+      toast.error("Failed to roll back registry skill", { description: message })
+    }
+  }, [rollbackRegistrySkillMutation, refetchAll])
+
+  const handleCheckRegistry = useCallback(async () => {
+    try {
+      await refetchRegistry()
+      toast.success("Skill registry checked")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to check registry"
+      toast.error("Failed to check registry", { description: message })
+    }
+  }, [refetchRegistry])
+
   const isSaving = updateSkillMutation.isPending || updateCommandMutation.isPending
   const isCreating = createSkillMutation.isPending || createCommandMutation.isPending
   const isDeleting = deleteSkillMutation.isPending || deleteCommandMutation.isPending
+  const isRegistryActionPending =
+    installRegistrySkillMutation.isPending || rollbackRegistrySkillMutation.isPending
   const totalCount = allItems.length
 
   return (
@@ -602,6 +795,14 @@ export function AgentsSkillsTab() {
               onKeyDown={listKeyDown}
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
+            <button
+              onClick={handleCheckRegistry}
+              disabled={isLoadingRegistry}
+              className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 disabled:opacity-50 transition-colors cursor-pointer"
+              title="Check skill registry"
+            >
+              <RefreshCw className={cn("h-4 w-4", isLoadingRegistry && "animate-spin")} />
+            </button>
             <button
               onClick={() => { setShowAddForm(true); setSelectedItemId(null) }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
@@ -636,6 +837,25 @@ export function AgentsSkillsTab() {
               </div>
             ) : (
               <div className="space-y-3">
+                {/* Registry */}
+                {registryItems.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
+                      Registry
+                    </p>
+                    <div className="space-y-0.5">
+                      {registryItems.map((item) => (
+                        <SidebarListItem
+                          key={item.id}
+                          item={item}
+                          isSelected={selectedItemId === item.id}
+                          onSelect={setSelectedItemId}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* User */}
                 {userItems.length > 0 && (
                   <div>
@@ -713,8 +933,11 @@ export function AgentsSkillsTab() {
           <ItemDetail
             item={selectedItem}
             onSave={(data) => handleSave(selectedItem, data)}
-            onDelete={selectedItem.source !== "plugin" ? () => setDeletingItem(selectedItem) : undefined}
+            onDelete={!["plugin", "registry"].includes(selectedItem.source) ? () => setDeletingItem(selectedItem) : undefined}
+            onRegistryInstall={handleRegistryInstall}
+            onRegistryRollback={handleRegistryRollback}
             isSaving={isSaving}
+            isRegistryActionPending={isRegistryActionPending}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">

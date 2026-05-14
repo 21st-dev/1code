@@ -173,6 +173,13 @@
       {
         "from": "resources/bin/VERSION",
         "to": "bin/VERSION"
+      },
+      {
+        "from": "resources/skill-registry",
+        "to": "skill-registry",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,

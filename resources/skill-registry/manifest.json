@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "registryId": "1code-core-skills",
+  "generatedAt": "2026-05-15T00:00:00.000Z",
+  "skills": [
+    {
+      "id": "changelog-generator",
+      "displayName": "changelog-generator",
+      "version": "1.0.0",
+      "description": "Automatically creates user-facing changelogs from git commits by analyzing commit history, categorizing changes, and transforming technical commits into clear, customer-friendly release notes. Turns hours of manual changelog writing into minutes of automated generation.",
+      "source": "skills/changelog-generator",
+      "sha256": "f6f3b79cf3b8af25ce70eee55884c4685f25f8ee205eb6f9b6872ed12d565113",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    },
+    {
+      "id": "mcp-builder",
+      "displayName": "mcp-builder",
+      "version": "1.0.0",
+      "description": "Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK).",
+      "source": "skills/mcp-builder",
+      "sha256": "5a904ea67e691bc7454cc2a631f24a52f3a95f397d76862cdfc6a9370d79363d",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      },
+      "license": "Complete terms in LICENSE.txt"
+    },
+    {
+      "id": "next-best-practices",
+      "displayName": "next-best-practices",
+      "version": "1.0.0",
+      "description": "Next.js best practices - file conventions, RSC boundaries, data patterns, async APIs, metadata, error handling, route handlers, image/font optimization, bundling",
+      "source": "skills/next-best-practices",
+      "sha256": "a69355277ccf12637721a0b069d16bfe7f916d85dba3616ee2d767c29996f43d",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    },
+    {
+      "id": "planning-workflow",
+      "displayName": "planning-workflow",
+      "version": "1.0.0",
+      "description": "General planning workflow for turning an ambiguous development request into a clear, executable plan before implementation.",
+      "source": "skills/planning-workflow",
+      "sha256": "a2efa8627679e20d713acc6e6ec9f2e0cce4316bb61ee01f5f6d7a2b4a5c4bf5",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    },
+    {
+      "id": "postgres-best-practices",
+      "displayName": "supabase-postgres-best-practices",
+      "version": "1.1.1",
+      "description": "Postgres performance optimization and best practices from Supabase. Use this skill when writing, reviewing, or optimizing Postgres queries, schema designs, or database configurations.",
+      "source": "skills/postgres-best-practices",
+      "sha256": "7840f05c2216edfb472fa98c78aa59a09f79240456038e4a93d3047fa6995bb4",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      },
+      "license": "MIT"
+    },
+    {
+      "id": "react-best-practices",
+      "displayName": "vercel-react-best-practices",
+      "version": "1.0.0",
+      "description": "React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.",
+      "source": "skills/react-best-practices",
+      "sha256": "1e0f13a672dc1684cfa488a1f7c2ade274a05423050ec1b7b167f454f4e668cc",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      },
+      "license": "MIT"
+    },
+    {
+      "id": "security-threat-model",
+      "displayName": "security-threat-model",
+      "version": "1.0.0",
+      "description": "Repository-grounded threat modeling that enumerates trust boundaries, assets, attacker capabilities, abuse paths, and mitigations, and writes a concise Markdown threat model. Trigger only when the user explicitly asks to threat model a codebase or path, enumerate threats/abuse paths, or perform AppSec threat modeling. Do not trigger for general architecture summaries, code review, or non-security design work.",
+      "source": "skills/security-threat-model",
+      "sha256": "3e38c85b68a3c8721ae122cddc50eb3cd236dd31f7f7d047c81dab0be93d6a40",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    },
+    {
+      "id": "subagent-workflow",
+      "displayName": "subagent-workflow",
+      "version": "1.0.0",
+      "description": "General workflow for coordinating specialist agents on implementation, review, security, and verification tasks.",
+      "source": "skills/subagent-workflow",
+      "sha256": "5d86edff785d65ed1fc43303d0a1ecfc72ffcf0942ac87c2139c32bedd2c1a88",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    },
+    {
+      "id": "systematic-debugging",
+      "displayName": "systematic-debugging",
+      "version": "1.0.0",
+      "description": "General debugging workflow for finding root cause before applying fixes.",
+      "source": "skills/systematic-debugging",
+      "sha256": "edf210387ca14780709b47998dddf9eeaf67cd941cd30290490dce6693d55534",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    },
+    {
+      "id": "ui-ux-pro-max",
+      "displayName": "ui-ux-pro-max",
+      "version": "1.0.0",
+      "description": "UI/UX design intelligence for web and mobile. Includes 50+ styles, 161 color palettes, 57 font pairings, 161 product types, 99 UX guidelines, and 25 chart types across 10 stacks (React, Next.js, Vue, Svelte, SwiftUI, React Native, Flutter, Tailwind, shadcn/ui, and HTML/CSS). Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, and check UI/UX code. Projects: website, landing page, dashboard, admin panel, e-commerce, SaaS, portfolio, blog, and mobile app. Elements: button, modal, navbar, sidebar, card, table, form, and chart. Styles: glassmorphism, claymorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, responsive, skeuomorphism, and flat design. Topics: color systems, accessibility, animation, layout, typography, font pairing, spacing, interaction states, shadow, and gradient. Integrations: shadcn/ui MCP for component search and examples.",
+      "source": "skills/ui-ux-pro-max",
+      "sha256": "9370c7650d14ad53d6d83afcf9ef9f8959c2497c20eeb1e231e0471dd3b3ca4e",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    },
+    {
+      "id": "verification-before-completion",
+      "displayName": "verification-before-completion",
+      "version": "1.0.0",
+      "description": "General completion checklist that requires evidence before claiming work is done, fixed, passing, or ready.",
+      "source": "skills/verification-before-completion",
+      "sha256": "474a43073b9ccb063a01a79214b39e3f941f9881acada3e76fed8b4137bdad43",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude"
+        ]
+      }
+    }
+  ]
+}
