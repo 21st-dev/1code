@@ -29,9 +29,19 @@ const STRIPPED_ENV_KEYS_BASE = [
 // In dev mode, also strip ANTHROPIC_API_KEY so OAuth token is used instead
 // This allows devs to test OAuth flow without unsetting their shell env
 // Added by Sergey Bunas for dev purposes
-const STRIPPED_ENV_KEYS = !app.isPackaged
-  ? [...STRIPPED_ENV_KEYS_BASE, "ANTHROPIC_API_KEY"]
-  : STRIPPED_ENV_KEYS_BASE
+function isClaudeEnvPackaged(): boolean {
+  return app?.isPackaged ?? process.env.NODE_ENV === "production"
+}
+
+function getAppPath(): string {
+  return app?.getAppPath?.() ?? process.cwd()
+}
+
+function getStrippedEnvKeys(): string[] {
+  return isClaudeEnvPackaged()
+    ? STRIPPED_ENV_KEYS_BASE
+    : [...STRIPPED_ENV_KEYS_BASE, "ANTHROPIC_API_KEY"]
+}
 
 // Cache the bundled binary path (only compute once)
 let cachedBinaryPath: string | null = null
@@ -48,22 +58,23 @@ export function getBundledClaudeBinaryPath(): string {
     return cachedBinaryPath!
   }
 
-  const isDev = !app.isPackaged
+  const isDev = !isClaudeEnvPackaged()
   const currentPlatform = process.platform
   const arch = process.arch
+  const appPath = getAppPath()
 
   // Always log on first call to help debug
   console.log("[claude-binary] ========== BUNDLED BINARY DEBUG ==========")
   console.log("[claude-binary] isDev:", isDev)
   console.log("[claude-binary] platform:", currentPlatform)
   console.log("[claude-binary] arch:", arch)
-  console.log("[claude-binary] appPath:", app.getAppPath())
+  console.log("[claude-binary] appPath:", appPath)
 
   // In dev: apps/desktop/resources/bin/{platform}-{arch}/claude
   // In production: {resourcesPath}/bin/claude
   const resourcesPath = isDev
     ? path.join(
-        app.getAppPath(),
+        appPath,
         "resources/bin",
         `${currentPlatform}-${arch}`
       )
@@ -129,7 +140,7 @@ function parseEnvOutput(output: string): Record<string, string> {
  * Strip sensitive keys from environment
  */
 function stripSensitiveKeys(env: Record<string, string>): void {
-  for (const key of STRIPPED_ENV_KEYS) {
+  for (const key of getStrippedEnvKeys()) {
     if (key in env) {
       console.log(`[claude-env] Stripped ${key} from shell environment`)
       delete env[key]
@@ -240,7 +251,7 @@ export function buildClaudeEnv(options?: {
   // 2b. Strip sensitive keys again (process.env may have re-added them)
   // This ensures ANTHROPIC_API_KEY from dev's shell doesn't override OAuth in dev mode
   // Added by Sergey Bunas for dev purposes
-  for (const key of STRIPPED_ENV_KEYS) {
+  for (const key of getStrippedEnvKeys()) {
     if (key in env) {
       console.log(`[claude-env] Stripped ${key} from final environment`)
       delete env[key]
