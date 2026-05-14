@@ -277,6 +277,10 @@ export function AgentsModelsTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
+  const { data: subChatTitleProviderData } =
+    trpc.localApiProviderConfig.get.useQuery({
+      purpose: "sub_chat_title",
+    })
   const { data: claudeCodeIntegration, isLoading: isClaudeCodeLoading } =
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
@@ -291,11 +295,18 @@ export function AgentsModelsTab() {
   const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
   const [storedOpenAIKey, setStoredOpenAIKey] = useAtom(openaiApiKeyAtom)
   const [openaiKey, setOpenaiKey] = useState(storedOpenAIKey)
+  const [subChatTitleModel, setSubChatTitleModel] = useState("")
+  const [subChatTitleBaseUrl, setSubChatTitleBaseUrl] = useState("")
+  const [subChatTitleToken, setSubChatTitleToken] = useState("")
   const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const trpcUtils = trpc.useUtils()
   const saveProviderConfigMutation = trpc.claudeProviderConfig.save.useMutation()
   const clearProviderConfigMutation = trpc.claudeProviderConfig.clear.useMutation()
+  const saveSubChatTitleProviderMutation =
+    trpc.localApiProviderConfig.save.useMutation()
+  const clearSubChatTitleProviderMutation =
+    trpc.localApiProviderConfig.clear.useMutation()
 
   useEffect(() => {
     if (!providerConfigData) return
@@ -306,6 +317,15 @@ export function AgentsModelsTab() {
     setAuthMode(config?.authMode ?? "auth_token")
     setToken("")
   }, [providerConfigData])
+
+  useEffect(() => {
+    if (!subChatTitleProviderData) return
+
+    const config = subChatTitleProviderData.config
+    setSubChatTitleModel(config?.model ?? "")
+    setSubChatTitleBaseUrl(config?.baseUrl ?? "")
+    setSubChatTitleToken("")
+  }, [subChatTitleProviderData])
 
   useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
@@ -541,6 +561,98 @@ export function AgentsModelsTab() {
       toast.error(t("toast.models.failedToRemoveOpenaiApiKey"))
     }
   }
+
+  const handleSubChatTitleBlurSave = useCallback(() => {
+    const trimmedModel = subChatTitleModel.trim()
+    const trimmedBaseUrl = subChatTitleBaseUrl.trim()
+    const trimmedToken = subChatTitleToken.trim()
+    const storedConfig = subChatTitleProviderData?.config
+    const hasStoredToken = Boolean(storedConfig?.hasToken)
+
+    if (trimmedModel && trimmedBaseUrl && (trimmedToken || hasStoredToken)) {
+      const metadataChanged =
+        !storedConfig ||
+        storedConfig.model !== trimmedModel ||
+        storedConfig.baseUrl !== trimmedBaseUrl
+
+      if (!metadataChanged && !trimmedToken) return
+
+      saveSubChatTitleProviderMutation.mutate(
+        {
+          purpose: "sub_chat_title",
+          model: trimmedModel,
+          baseUrl: trimmedBaseUrl,
+          ...(trimmedToken && { token: trimmedToken }),
+        },
+        {
+          onSuccess: async () => {
+            setSubChatTitleToken("")
+            await trpcUtils.localApiProviderConfig.get.invalidate()
+            toast.success(t("toast.models.subChatTitleSettingsSaved"))
+          },
+          onError: (error) => {
+            toast.error(
+              error.message || t("toast.models.failedToSaveSubChatTitleSettings"),
+            )
+          },
+        },
+      )
+    } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
+      if (storedConfig) {
+        clearSubChatTitleProviderMutation.mutate(
+          { purpose: "sub_chat_title" },
+          {
+            onSuccess: async () => {
+              await trpcUtils.localApiProviderConfig.get.invalidate()
+              toast.success(t("toast.models.subChatTitleSettingsReset"))
+            },
+            onError: (error) => {
+              toast.error(
+                error.message ||
+                  t("toast.models.failedToResetSubChatTitleSettings"),
+              )
+            },
+          },
+        )
+      }
+    }
+  }, [
+    clearSubChatTitleProviderMutation,
+    saveSubChatTitleProviderMutation,
+    subChatTitleBaseUrl,
+    subChatTitleModel,
+    subChatTitleProviderData?.config,
+    subChatTitleToken,
+    t,
+    trpcUtils.localApiProviderConfig.get,
+  ])
+
+  const handleResetSubChatTitle = () => {
+    clearSubChatTitleProviderMutation.mutate(
+      { purpose: "sub_chat_title" },
+      {
+        onSuccess: async () => {
+          setSubChatTitleModel("")
+          setSubChatTitleBaseUrl("")
+          setSubChatTitleToken("")
+          await trpcUtils.localApiProviderConfig.get.invalidate()
+          toast.success(t("toast.models.subChatTitleSettingsReset"))
+        },
+        onError: (error) => {
+          toast.error(
+            error.message || t("toast.models.failedToResetSubChatTitleSettings"),
+          )
+        },
+      },
+    )
+  }
+
+  const canResetSubChatTitle = Boolean(
+    subChatTitleModel.trim() ||
+      subChatTitleBaseUrl.trim() ||
+      subChatTitleToken.trim() ||
+      subChatTitleProviderData?.config?.hasToken,
+  )
 
   // All models merged into one list for the top section
   const allModels = useMemo(() => {
@@ -795,6 +907,99 @@ export function AgentsModelsTab() {
                   className="w-full"
                   placeholder="sk-..."
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Sub-chat title provider */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium text-foreground">
+                  {t("settings.models.subChatTitle.title")}
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.models.subChatTitle.description")}
+                </p>
+              </div>
+              {canResetSubChatTitle && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetSubChatTitle}
+                  disabled={clearSubChatTitleProviderMutation.isPending}
+                  className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+                >
+                  {t("common.reset")}
+                </Button>
+              )}
+            </div>
+
+            <div className="bg-background rounded-lg border border-border overflow-hidden">
+              <div className="flex items-center justify-between p-4">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">
+                    {t("onboarding.customModel.modelName")}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.subChatTitle.modelHint")}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-80">
+                  <Input
+                    value={subChatTitleModel}
+                    onChange={(e) => setSubChatTitleModel(e.target.value)}
+                    onBlur={() => handleSubChatTitleBlurSave()}
+                    disabled={saveSubChatTitleProviderMutation.isPending}
+                    className="w-full"
+                    placeholder="deepseek-chat"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border-t border-border">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">
+                    {t("onboarding.customModel.apiToken")}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.subChatTitle.tokenHint")}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-80">
+                  <Input
+                    type="password"
+                    value={subChatTitleToken}
+                    onChange={(e) => setSubChatTitleToken(e.target.value)}
+                    onBlur={() => handleSubChatTitleBlurSave()}
+                    disabled={saveSubChatTitleProviderMutation.isPending}
+                    className="w-full"
+                    placeholder={
+                      subChatTitleProviderData?.config?.hasToken
+                        ? t("common.savedToken")
+                        : "sk-..."
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border-t border-border">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Base URL</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.subChatTitle.baseUrlHint")}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-80">
+                  <Input
+                    value={subChatTitleBaseUrl}
+                    onChange={(e) => setSubChatTitleBaseUrl(e.target.value)}
+                    onBlur={() => handleSubChatTitleBlurSave()}
+                    disabled={saveSubChatTitleProviderMutation.isPending}
+                    className="w-full"
+                    placeholder="https://api.deepseek.com"
+                  />
+                </div>
               </div>
             </div>
           </div>

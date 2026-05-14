@@ -27,6 +27,7 @@ import { applyRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
+import { getActiveLocalApiProviderConfig } from "./local-api-provider-config"
 
 type WorktreeSetupFailurePayload = {
   kind: "create-failed" | "setup-failed"
@@ -64,6 +65,96 @@ function getFallbackName(userMessage: string): string {
     return trimmed || "New Chat"
   }
   return trimmed.substring(0, 25) + "..."
+}
+
+type ChatTitleProviderConfig = {
+  apiKey: string
+  apiUrl: string
+  model: string
+}
+
+function cleanGeneratedChatName(value: unknown): string | null {
+  if (typeof value !== "string") return null
+
+  const cleaned = value
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/^title:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 50)
+
+  return cleaned.length > 0 ? cleaned : null
+}
+
+function buildChatCompletionUrl(baseUrl: string): string {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "")
+  if (/\/chat\/completions$/i.test(normalizedBaseUrl)) {
+    return normalizedBaseUrl
+  }
+
+  return `${normalizedBaseUrl}/chat/completions`
+}
+
+function getChatTitleProviderConfig(): ChatTitleProviderConfig | null {
+  const config = getActiveLocalApiProviderConfig("sub_chat_title")
+  if (!config) return null
+
+  return {
+    apiKey: config.token,
+    apiUrl: buildChatCompletionUrl(config.baseUrl),
+    model: config.model,
+  }
+}
+
+/**
+ * Generate chat title using the Settings-configured OpenAI-compatible provider.
+ * This never falls back to 21st.dev.
+ */
+async function generateChatNameWithConfiguredProvider(
+  userMessage: string,
+): Promise<string | null> {
+  const config = getChatTitleProviderConfig()
+  if (!config) {
+    return null
+  }
+
+  try {
+    const response = await fetch(config.apiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Generate a very short 2-5 word coding chat title in the same language as the user. Return only the title.",
+          },
+          {
+            role: "user",
+            content: userMessage.slice(0, 500),
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 30,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error("[ChatTitle] Provider request failed:", response.status)
+      return null
+    }
+
+    const data = await response.json()
+    return cleanGeneratedChatName(data?.choices?.[0]?.message?.content)
+  } catch (error) {
+    console.error("[ChatTitle] Provider request error:", error)
+    return null
+  }
 }
 
 /**
@@ -117,15 +208,7 @@ Title:`
     const data = await response.json()
     const result = data.response?.trim()
     if (result) {
-      // Clean up the result - remove quotes, trim, limit length
-      const cleaned = result
-        .replace(/^["']|["']$/g, "")
-        .replace(/^title:\s*/i, "")
-        .trim()
-        .slice(0, 50)
-      if (cleaned.length > 0) {
-        return cleaned
-      }
+      return cleanGeneratedChatName(result)
     }
     return null
   } catch (error) {
@@ -1376,66 +1459,36 @@ export const chatsRouter = router({
 
   /**
    * Generate a name for a sub-chat using AI
-   * Uses Ollama when offline, otherwise calls web API
+   * Uses local Ollama first, then an explicitly configured provider, then fallback.
    */
   generateSubChatName: publicProcedure
     .input(z.object({
       userMessage: z.string(),
-      ollamaModel: z.string().nullish(), // Optional model for offline mode
+      ollamaModel: z.string().nullish(), // Optional model for local title generation
     }))
     .mutation(async ({ input }) => {
       try {
-        // Check internet first - if offline, use Ollama
-        const hasInternet = await checkInternetConnection()
-
-        if (!hasInternet) {
-          console.log("[generateSubChatName] Offline - trying Ollama...")
-          const ollamaName = await generateChatNameWithOllama(input.userMessage, input.ollamaModel)
-          if (ollamaName) {
-            console.log("[generateSubChatName] Generated name via Ollama:", ollamaName)
-            return { name: ollamaName }
-          }
-          console.log("[generateSubChatName] Ollama failed, using fallback")
-          return { name: getFallbackName(input.userMessage) }
+        console.log("[generateSubChatName] Trying local Ollama...")
+        const ollamaName = await generateChatNameWithOllama(
+          input.userMessage,
+          input.ollamaModel,
+        )
+        if (ollamaName) {
+          console.log("[generateSubChatName] Generated name via Ollama:", ollamaName)
+          return { name: ollamaName }
         }
 
-        // Online - use web API
-        const authManager = getAuthManager()
-        const token = await authManager.getValidToken()
-        const apiUrl = "https://21st.dev"
-
-        console.log(
-          "[generateSubChatName] Online - calling API with token:",
-          token ? "present" : "missing",
+        console.log("[generateSubChatName] Trying configured title provider...")
+        const configuredName = await generateChatNameWithConfiguredProvider(
+          input.userMessage,
         )
-
-        const response = await fetch(
-          `${apiUrl}/api/agents/sub-chat/generate-name`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token && { "X-Desktop-Token": token }),
-            },
-            body: JSON.stringify({ userMessage: input.userMessage }),
-          },
-        )
-
-        console.log("[generateSubChatName] Response status:", response.status)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error(
-            "[generateSubChatName] API error:",
-            response.status,
-            errorText,
-          )
-          return { name: getFallbackName(input.userMessage) }
+        if (configuredName) {
+          console.log("[generateSubChatName] Generated name via configured provider")
+          return { name: configuredName }
         }
 
-        const data = await response.json()
-        console.log("[generateSubChatName] Generated name:", data.name)
-        return { name: data.name || getFallbackName(input.userMessage) }
+        console.log("[generateSubChatName] Title providers unavailable, using fallback")
+        return { name: getFallbackName(input.userMessage) }
       } catch (error) {
         console.error("[generateSubChatName] Error:", error)
         return { name: getFallbackName(input.userMessage) }

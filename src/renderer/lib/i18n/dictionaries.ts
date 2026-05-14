@@ -156,6 +156,15 @@ export const en = {
   "settings.models.codexApiKey.priority": "Takes priority over subscription",
   "settings.models.openaiApiKey.description":
     "Required for voice transcription (Whisper API)",
+  "settings.models.subChatTitle.title": "Sub-chat Title API",
+  "settings.models.subChatTitle.description":
+    "Optional OpenAI-compatible API for naming sub-chats. Ollama is tried first.",
+  "settings.models.subChatTitle.modelHint":
+    "Model used only for sub-chat title generation",
+  "settings.models.subChatTitle.tokenHint":
+    "Stored encrypted on this device",
+  "settings.models.subChatTitle.baseUrlHint":
+    "Base URL or /chat/completions endpoint",
   "settings.models.overrideModel.title": "Override Model",
   "settings.models.overrideModel.modelHint":
     "Model identifier to use for requests",
@@ -174,6 +183,8 @@ export const en = {
   "toast.models.codexApiKeyRemoved": "Codex API key removed",
   "toast.models.openaiApiKeySaved": "OpenAI API key saved",
   "toast.models.openaiApiKeyRemoved": "OpenAI API key removed",
+  "toast.models.subChatTitleSettingsSaved": "Sub-chat title API saved",
+  "toast.models.subChatTitleSettingsReset": "Sub-chat title API reset",
   "toast.models.failedToSaveModelSettings": "Failed to save model settings",
   "toast.models.failedToResetModelSettings": "Failed to reset model settings",
   "toast.models.failedToDisconnectCodex": "Failed to disconnect Codex",
@@ -183,6 +194,10 @@ export const en = {
   "toast.models.failedToRemoveCodexApiKey": "Failed to remove Codex API key",
   "toast.models.failedToSaveOpenaiApiKey": "Failed to save OpenAI API key",
   "toast.models.failedToRemoveOpenaiApiKey": "Failed to remove OpenAI API key",
+  "toast.models.failedToSaveSubChatTitleSettings":
+    "Failed to save sub-chat title API",
+  "toast.models.failedToResetSubChatTitleSettings":
+    "Failed to reset sub-chat title API",
   "toast.models.invalidCodexApiKey":
     "Invalid Codex API key format. Key should start with 'sk-'",
   "toast.models.invalidOpenaiApiKey":
@@ -1057,6 +1072,15 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.codexApiKey.priority": "优先级高于 subscription",
   "settings.models.openaiApiKey.description":
     "语音转写需要使用（Whisper API）",
+  "settings.models.subChatTitle.title": "Sub-chat 标题 API",
+  "settings.models.subChatTitle.description":
+    "可选的 OpenAI-compatible API，用于给 sub-chat 命名。会优先尝试 Ollama。",
+  "settings.models.subChatTitle.modelHint":
+    "只用于生成 sub-chat 标题的 Model",
+  "settings.models.subChatTitle.tokenHint":
+    "加密保存在这台设备上",
+  "settings.models.subChatTitle.baseUrlHint":
+    "Base URL 或 /chat/completions endpoint",
   "settings.models.overrideModel.title": "Override Model",
   "settings.models.overrideModel.modelHint": "请求时使用的 Model 标识",
   "settings.models.overrideModel.authHint":
@@ -1074,6 +1098,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.codexApiKeyRemoved": "Codex API key 已移除",
   "toast.models.openaiApiKeySaved": "OpenAI API key 已保存",
   "toast.models.openaiApiKeyRemoved": "OpenAI API key 已移除",
+  "toast.models.subChatTitleSettingsSaved": "Sub-chat 标题 API 已保存",
+  "toast.models.subChatTitleSettingsReset": "Sub-chat 标题 API 已重置",
   "toast.models.failedToSaveModelSettings": "保存 Model 设置失败",
   "toast.models.failedToResetModelSettings": "重置 Model 设置失败",
   "toast.models.failedToDisconnectCodex": "断开 Codex 失败",
@@ -1083,6 +1109,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.failedToRemoveCodexApiKey": "移除 Codex API key 失败",
   "toast.models.failedToSaveOpenaiApiKey": "保存 OpenAI API key 失败",
   "toast.models.failedToRemoveOpenaiApiKey": "移除 OpenAI API key 失败",
+  "toast.models.failedToSaveSubChatTitleSettings":
+    "保存 sub-chat 标题 API 失败",
+  "toast.models.failedToResetSubChatTitleSettings":
+    "重置 sub-chat 标题 API 失败",
   "toast.models.invalidCodexApiKey":
     "Codex API key 格式不正确，应以 'sk-' 开头",
   "toast.models.invalidOpenaiApiKey":
