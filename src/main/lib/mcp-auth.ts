@@ -83,6 +83,8 @@ const BLOCKED_ENV_VARS = [
   'OPENAI_API_KEY',
 ];
 
+const STDIO_MCP_FETCH_TIMEOUT_MS = 40_000;
+
 /**
  * Fetch tools from a stdio-based MCP server
  * Uses shell environment to ensure proper PATH (homebrew, nvm, etc.) in production
@@ -91,8 +93,11 @@ export async function fetchMcpToolsStdio(config: {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  cwd?: string;
+  timeoutMs?: number;
 }): Promise<McpToolInfo[]> {
   let transport: StdioClientTransport | null = null;
+  let timeout: NodeJS.Timeout | null = null;
 
   try {
     const client = new Client({
@@ -117,11 +122,24 @@ export async function fetchMcpToolsStdio(config: {
       command: config.command,
       args: config.args,
       env: { ...safeEnv, ...config.env },
+      cwd: config.cwd,
     });
 
-    await client.connect(transport);
-    const result = await client.listTools();
-    const tools = result.tools || [];
+    const fetchPromise = (async () => {
+      await client.connect(transport!);
+      const result = await client.listTools();
+      return result.tools || [];
+    })();
+    fetchPromise.catch(() => undefined);
+
+    const timeoutMs = config.timeoutMs ?? STDIO_MCP_FETCH_TIMEOUT_MS;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        reject(new Error(`Timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    const tools = await Promise.race([fetchPromise, timeoutPromise]);
 
     console.log(`[MCP] Fetched ${tools.length} tools via stdio`);
     return tools.map(t => ({ name: t.name, description: t.description }));
@@ -129,6 +147,9 @@ export async function fetchMcpToolsStdio(config: {
     console.error('[MCP] Failed to fetch tools via stdio:', error);
     return [];
   } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
     try {
       if (transport) {
         await transport.close();

@@ -8,7 +8,7 @@ import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { basename, dirname, join, sep } from "node:path"
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path"
 import { z } from "zod"
 import {
   normalizeCodexAssistantMessage,
@@ -731,6 +731,32 @@ function resolveCodexHttpHeaders(
   return Object.keys(merged).length > 0 ? merged : undefined
 }
 
+function resolveCodexStdioCwd(
+  transport: CodexMcpListEntry["transport"],
+): string | undefined {
+  const cwd = transport.cwd?.trim()
+  return cwd ? cwd : undefined
+}
+
+function resolveCodexStdioCommand(
+  transport: CodexMcpListEntry["transport"],
+): string | undefined {
+  const command = transport.command?.trim()
+  if (!command) return undefined
+
+  const cwd = resolveCodexStdioCwd(transport)
+  if (!cwd || isAbsolute(command)) {
+    return command
+  }
+
+  const isPathLike =
+    command.startsWith(".") ||
+    command.includes("/") ||
+    command.includes("\\")
+
+  return isPathLike ? resolve(cwd, command) : command
+}
+
 function normalizeCodexTools(tools: McpToolInfo[]): McpToolInfo[] {
   const unique = new Map<string, McpToolInfo>()
   for (const tool of tools) {
@@ -753,12 +779,13 @@ async function fetchCodexMcpTools(entry: CodexMcpListEntry): Promise<McpToolInfo
 
   const fetchPromise = (async (): Promise<McpToolInfo[]> => {
     if (transportType === "stdio") {
-      const command = entry.transport.command?.trim()
+      const command = resolveCodexStdioCommand(entry.transport)
       if (!command) return []
       return await fetchMcpToolsStdio({
         command,
         args: entry.transport.args || undefined,
         env: resolveCodexStdioEnv(entry.transport),
+        cwd: resolveCodexStdioCwd(entry.transport),
       })
     }
 
@@ -844,7 +871,7 @@ async function resolveCodexMcpSnapshot(params: {
 
       let sessionServer: CodexMcpServerForSession | null = null
       if (transportType === "stdio") {
-        const command = entry.transport.command || undefined
+        const command = resolveCodexStdioCommand(entry.transport)
         const args = entry.transport.args || undefined
         if (includeInSession && command) {
           const envPairs = objectToPairs(resolvedStdioEnv) || []
@@ -861,6 +888,7 @@ async function resolveCodexMcpSnapshot(params: {
         settingsConfig.args = args
         settingsConfig.env = entry.transport.env || undefined
         settingsConfig.envVars = entry.transport.env_vars || undefined
+        settingsConfig.cwd = entry.transport.cwd || undefined
       } else if (
         transportType === "streamable_http" ||
         transportType === "http" ||
@@ -888,10 +916,11 @@ async function resolveCodexMcpSnapshot(params: {
         shouldIncludeTools &&
         includeInSession &&
         !authState.needsAuth &&
+        transportType !== "stdio" &&
         (
-          // Probe unauthenticated/public servers and stdio servers.
+          // Probe unauthenticated/public HTTP servers. Avoid probing stdio
+          // servers during startup because they can launch GUI/permission flows.
           !authState.supportsAuth ||
-          transportType === "stdio" ||
           // For auth-capable HTTP, only probe if explicit auth header is available.
           Boolean(resolvedHttpHeaders?.Authorization)
         )
@@ -952,6 +981,7 @@ function getCodexServerIdentity(
     transportType: config.transportType ?? null,
     command: config.command ?? null,
     args: config.args ?? null,
+    cwd: config.cwd ?? null,
     env: config.env ?? null,
     envVars: config.envVars ?? null,
     url: config.url ?? null,

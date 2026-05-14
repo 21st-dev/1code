@@ -22,8 +22,8 @@
     "dist:upload": "node scripts/upload-release.mjs",
     "claude:download": "node scripts/download-claude-binary.mjs --version=2.1.45",
     "claude:download:all": "node scripts/download-claude-binary.mjs --version=2.1.45 --all",
-    "codex:download": "node scripts/download-codex-binary.mjs --version=0.98.0",
-    "codex:download:all": "node scripts/download-codex-binary.mjs --version=0.98.0 --all",
+    "codex:download": "node scripts/download-codex-binary.mjs --version=0.130.0",
+    "codex:download:all": "node scripts/download-codex-binary.mjs --version=0.130.0 --all",
     "release": "rm -rf release && bun i && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && bun run dist:manifest && ./scripts/upload-release-wrangler.sh",
     "release:dev": "rm -rf release && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && rm -rf node_modules && bun i",
     "sync:public": "./scripts/sync-to-public.sh",
@@ -31,7 +31,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "ts:check": "tsgo --noEmit",
+    "ts:check": "tsc --noEmit",
     "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
   },
   "dependencies": {
