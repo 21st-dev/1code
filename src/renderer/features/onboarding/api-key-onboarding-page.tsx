@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react"
 
 import { IconSpinner, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
 import { Input } from "../../components/ui/input"
+import { LanguageSwitcher } from "../../components/language-switcher"
 import { Label } from "../../components/ui/label"
 import { Logo } from "../../components/ui/logo"
 import {
@@ -13,6 +14,7 @@ import {
   billingMethodAtom,
   type ClaudeProviderAuthMode,
 } from "../../lib/atoms"
+import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
 
@@ -23,6 +25,7 @@ const isValidApiKey = (key: string) => {
 }
 
 export function ApiKeyOnboardingPage() {
+  const { t } = useI18n()
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
@@ -138,6 +141,8 @@ export function ApiKeyOnboardingPage() {
           style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         />
 
+        <LanguageSwitcher compact className="fixed top-12 right-4" />
+
         {/* Back button - fixed in top left corner below traffic lights */}
         <button
           onClick={handleBack}
@@ -159,10 +164,10 @@ export function ApiKeyOnboardingPage() {
             </div>
             <div className="space-y-1">
               <h1 className="text-base font-semibold tracking-tight">
-                Enter API Key
+                {t("onboarding.apiKey.title")}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Get your API key from{" "}
+                {t("onboarding.apiKey.subtitle")}{" "}
                 <a
                   href="https://console.anthropic.com"
                   target="_blank"
@@ -194,7 +199,7 @@ export function ApiKeyOnboardingPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground text-center">
-              Your API key starts with sk-ant-
+              {t("onboarding.apiKey.hint")}
             </p>
           </div>
         </div>
@@ -210,6 +215,8 @@ export function ApiKeyOnboardingPage() {
         className="fixed top-0 left-0 right-0 h-10"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
+
+      <LanguageSwitcher compact className="fixed top-12 right-4" />
 
       {/* Back button - fixed in top left corner below traffic lights */}
       <button
@@ -232,10 +239,10 @@ export function ApiKeyOnboardingPage() {
           </div>
           <div className="space-y-1">
             <h1 className="text-base font-semibold tracking-tight">
-              Configure Custom Model
+              {t("onboarding.customModel.title")}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Enter your custom model configuration
+              {t("onboarding.customModel.subtitle")}
             </p>
           </div>
         </div>
@@ -244,7 +251,9 @@ export function ApiKeyOnboardingPage() {
         <div className="space-y-4">
           {/* Model Name */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Model name</Label>
+            <Label className="text-sm font-medium">
+              {t("onboarding.customModel.modelName")}
+            </Label>
             <Input
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -252,13 +261,15 @@ export function ApiKeyOnboardingPage() {
               className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              Model identifier for API requests
+              {t("onboarding.customModel.modelHint")}
             </p>
           </div>
 
           {/* API Token */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">API token</Label>
+            <Label className="text-sm font-medium">
+              {t("onboarding.customModel.apiToken")}
+            </Label>
             <Input
               type="password"
               value={token}
@@ -267,13 +278,15 @@ export function ApiKeyOnboardingPage() {
               className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              Your API key or token
+              {t("onboarding.customModel.tokenHint")}
             </p>
           </div>
 
           {/* Auth Mode */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Auth env</Label>
+            <Label className="text-sm font-medium">
+              {t("onboarding.customModel.authEnv")}
+            </Label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -311,7 +324,9 @@ export function ApiKeyOnboardingPage() {
               placeholder="https://api.anthropic.com"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">API endpoint URL</p>
+            <p className="text-xs text-muted-foreground">
+              {t("onboarding.customModel.baseUrlHint")}
+            </p>
           </div>
         </div>
 
@@ -325,7 +340,11 @@ export function ApiKeyOnboardingPage() {
               "opacity-50 cursor-not-allowed"
           )}
         >
-          {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Continue"}
+          {isSubmitting ? (
+            <IconSpinner className="h-4 w-4" />
+          ) : (
+            t("common.continue")
+          )}
         </button>
       </div>
     </div>

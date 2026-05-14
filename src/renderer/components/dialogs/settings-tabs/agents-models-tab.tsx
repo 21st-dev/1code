@@ -14,6 +14,7 @@ import {
   openaiApiKeyAtom,
   type ClaudeProviderAuthMode,
 } from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
 import { CLAUDE_MODELS, CODEX_MODELS } from "../../../features/agents/lib/models"
 import { trpc } from "../../../lib/trpc"
@@ -72,21 +73,26 @@ function AccountRow({
   onRemove: () => void
   isLoading: boolean
 }) {
+  const { resolvedLanguage, t } = useI18n()
   return (
     <div className="flex items-center justify-between p-3 hover:bg-muted/50">
       <div className="flex items-center gap-3">
         <div>
           <div className="text-sm font-medium">
-            {account.displayName || "Anthropic Account"}
+            {account.displayName || t("settings.models.accountFallback")}
           </div>
           {account.email && (
             <div className="text-xs text-muted-foreground">{account.email}</div>
           )}
           {!account.email && account.connectedAt && (
             <div className="text-xs text-muted-foreground">
-              Connected{" "}
-              {new Date(account.connectedAt).toLocaleDateString(undefined, {
-                dateStyle: "short",
+              {t("settings.models.accountConnected", {
+                date: new Date(account.connectedAt).toLocaleDateString(
+                  resolvedLanguage === "zh-CN" ? "zh-CN" : undefined,
+                  {
+                    dateStyle: "short",
+                  },
+                ),
               })}
             </div>
           )}
@@ -101,12 +107,12 @@ function AccountRow({
             onClick={onSetActive}
             disabled={isLoading}
           >
-            Switch
+            {t("common.switch")}
           </Button>
         )}
         {isActive && (
           <Badge variant="secondary" className="text-xs">
-            Active
+            {t("common.active")}
           </Badge>
         )}
         <DropdownMenu>
@@ -116,12 +122,14 @@ function AccountRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
+            <DropdownMenuItem onClick={onRename}>
+              {t("common.rename")}
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
               onClick={onRemove}
             >
-              Remove
+              {t("common.remove")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -132,6 +140,7 @@ function AccountRow({
 
 // Anthropic accounts section component
 function AnthropicAccountsSection() {
+  const { t } = useI18n()
   const { data: accounts, isLoading: isAccountsLoading, refetch: refetchList } =
     trpc.anthropicAccounts.list.useQuery(undefined, {
       refetchOnMount: true,
@@ -171,10 +180,10 @@ function AnthropicAccountsSection() {
       trpcUtils.anthropicAccounts.list.invalidate()
       trpcUtils.anthropicAccounts.getActive.invalidate()
       trpcUtils.claudeCode.getIntegration.invalidate()
-      toast.success("Account switched")
+      toast.success(t("toast.models.accountSwitched"))
     },
     onError: (err) => {
-      toast.error(`Failed to switch account: ${err.message}`)
+      toast.error(err.message)
     },
   })
 
@@ -182,10 +191,10 @@ function AnthropicAccountsSection() {
     onSuccess: () => {
       trpcUtils.anthropicAccounts.list.invalidate()
       trpcUtils.anthropicAccounts.getActive.invalidate()
-      toast.success("Account renamed")
+      toast.success(t("toast.models.accountRenamed"))
     },
     onError: (err) => {
-      toast.error(`Failed to rename account: ${err.message}`)
+      toast.error(err.message)
     },
   })
 
@@ -194,17 +203,17 @@ function AnthropicAccountsSection() {
       trpcUtils.anthropicAccounts.list.invalidate()
       trpcUtils.anthropicAccounts.getActive.invalidate()
       trpcUtils.claudeCode.getIntegration.invalidate()
-      toast.success("Account removed")
+      toast.success(t("toast.models.accountRemoved"))
     },
     onError: (err) => {
-      toast.error(`Failed to remove account: ${err.message}`)
+      toast.error(err.message)
     },
   })
 
   const handleRename = (accountId: string, currentName: string | null) => {
     const newName = window.prompt(
-      "Enter new name for this account:",
-      currentName || "Anthropic Account"
+      t("settings.models.renamePrompt"),
+      currentName || t("settings.models.accountFallback")
     )
     if (newName && newName.trim()) {
       renameMutation.mutate({ accountId, displayName: newName.trim() })
@@ -213,7 +222,9 @@ function AnthropicAccountsSection() {
 
   const handleRemove = (accountId: string, displayName: string | null) => {
     const confirmed = window.confirm(
-      `Are you sure you want to remove "${displayName || "this account"}"? You will need to re-authenticate to use it again.`
+      t("settings.models.removeConfirm", {
+        name: displayName || t("settings.models.accountFallback"),
+      })
     )
     if (confirmed) {
       removeMutation.mutate({ accountId })
@@ -234,7 +245,7 @@ function AnthropicAccountsSection() {
     <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
         {isAccountsLoading ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
-            Loading accounts...
+            {t("settings.models.accountsLoading")}
           </div>
         ) : (
           accounts?.map((account) => (
@@ -254,6 +265,7 @@ function AnthropicAccountsSection() {
 }
 
 export function AgentsModelsTab() {
+  const { t } = useI18n()
   const [model, setModel] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
   const [token, setToken] = useState("")
@@ -330,10 +342,10 @@ export function AgentsModelsTab() {
           onSuccess: async () => {
             setToken("")
             await trpcUtils.claudeProviderConfig.get.invalidate()
-            toast.success("Model settings saved")
+            toast.success(t("toast.models.modelSettingsSaved"))
           },
           onError: (error) => {
-            toast.error(error.message || "Failed to save model settings")
+            toast.error(error.message || t("toast.models.failedToSaveModelSettings"))
           },
         },
       )
@@ -342,10 +354,10 @@ export function AgentsModelsTab() {
         clearProviderConfigMutation.mutate(undefined, {
           onSuccess: async () => {
             await trpcUtils.claudeProviderConfig.get.invalidate()
-            toast.success("Model settings reset")
+            toast.success(t("toast.models.modelSettingsReset"))
           },
           onError: (error) => {
-            toast.error(error.message || "Failed to reset model settings")
+            toast.error(error.message || t("toast.models.failedToResetModelSettings"))
           },
         })
       }
@@ -357,6 +369,7 @@ export function AgentsModelsTab() {
     model,
     providerConfigData?.config,
     saveProviderConfigMutation,
+    t,
     token,
     trpcUtils.claudeProviderConfig.get,
   ])
@@ -374,10 +387,10 @@ export function AgentsModelsTab() {
         setToken("")
         setAuthMode("auth_token")
         await trpcUtils.claudeProviderConfig.get.invalidate()
-        toast.success("Model settings reset")
+        toast.success(t("toast.models.modelSettingsReset"))
       },
       onError: (error) => {
-        toast.error(error.message || "Failed to reset model settings")
+        toast.error(error.message || t("toast.models.failedToResetModelSettings"))
       },
     })
   }
@@ -403,17 +416,17 @@ export function AgentsModelsTab() {
 
   const handleCodexLogout = async () => {
     const confirmed = window.confirm(
-      "Log out from Codex on this device?",
+      t("settings.models.codexLogoutConfirm"),
     )
     if (!confirmed) return
 
     try {
       await codexLogoutMutation.mutateAsync()
       await trpcUtils.codex.getIntegration.invalidate()
-      toast.success("Codex disconnected")
+      toast.success(t("toast.models.codexDisconnected"))
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to disconnect Codex"
+        err instanceof Error ? err.message : t("toast.models.failedToDisconnectCodex")
       toast.error(message)
     }
   }
@@ -439,12 +452,12 @@ export function AgentsModelsTab() {
   }, [setHiddenModels])
 
   const codexConnectionText = isCodexSubscriptionConnected
-    ? "Connected via ChatGPT"
+    ? t("settings.models.codex.connectedViaChatGPT")
     : codexIntegration?.state === "connected_api_key"
-      ? "Not connected to subscription"
+      ? t("settings.models.codex.notConnectedToSubscription")
       : codexIntegration?.state === "not_logged_in"
-        ? "Not connected"
-        : "Status unavailable"
+        ? t("settings.models.codex.notConnected")
+        : t("settings.models.codex.statusUnavailable")
   const showCodexLoading =
     isCodexLoading && !hasAppCodexApiKey && !hasLocalCodexSubscription
 
@@ -460,7 +473,7 @@ export function AgentsModelsTab() {
 
     const normalized = normalizeCodexApiKey(trimmedKey)
     if (!normalized) {
-      toast.error("Invalid Codex API key format. Key should start with 'sk-'")
+      toast.error(t("toast.models.invalidCodexApiKey"))
       setCodexApiKey(storedCodexApiKey)
       return
     }
@@ -470,9 +483,9 @@ export function AgentsModelsTab() {
       setStoredCodexApiKey(normalized)
       setCodexApiKey(normalized)
       await trpcUtils.codex.getIntegration.invalidate()
-      toast.success("Codex API key saved")
+      toast.success(t("toast.models.codexApiKeySaved"))
     } catch {
-      toast.error("Failed to save Codex API key")
+      toast.error(t("toast.models.failedToSaveCodexApiKey"))
     } finally {
       setIsSavingCodexApiKey(false)
     }
@@ -486,14 +499,14 @@ export function AgentsModelsTab() {
 
       if (codexIntegration?.state === "connected_api_key") {
         await codexLogoutMutation.mutateAsync().catch(() => {
-          toast.error("Codex API key removed, but failed to log out Codex CLI")
+          toast.error(t("toast.models.codexApiKeyRemovedLogoutFailed"))
         })
       }
 
       await trpcUtils.codex.getIntegration.invalidate()
-      toast.success("Codex API key removed")
+      toast.success(t("toast.models.codexApiKeyRemoved"))
     } catch {
-      toast.error("Failed to remove Codex API key")
+      toast.error(t("toast.models.failedToRemoveCodexApiKey"))
     } finally {
       setIsSavingCodexApiKey(false)
     }
@@ -502,7 +515,7 @@ export function AgentsModelsTab() {
   const handleSaveOpenAI = async () => {
     if (trimmedOpenAIKey === storedOpenAIKey) return // No change
     if (trimmedOpenAIKey && !trimmedOpenAIKey.startsWith("sk-")) {
-      toast.error("Invalid OpenAI API key format. Key should start with 'sk-'")
+      toast.error(t("toast.models.invalidOpenaiApiKey"))
       return
     }
 
@@ -511,9 +524,9 @@ export function AgentsModelsTab() {
       setStoredOpenAIKey(trimmedOpenAIKey)
       // Invalidate voice availability check
       await trpcUtils.voice.isAvailable.invalidate()
-      toast.success("OpenAI API key saved")
+      toast.success(t("toast.models.openaiApiKeySaved"))
     } catch (err) {
-      toast.error("Failed to save OpenAI API key")
+      toast.error(t("toast.models.failedToSaveOpenaiApiKey"))
     }
   }
 
@@ -523,9 +536,9 @@ export function AgentsModelsTab() {
       setStoredOpenAIKey("")
       setOpenaiKey("")
       await trpcUtils.voice.isAvailable.invalidate()
-      toast.success("OpenAI API key removed")
+      toast.success(t("toast.models.openaiApiKeyRemoved"))
     } catch (err) {
-      toast.error("Failed to remove OpenAI API key")
+      toast.error(t("toast.models.failedToRemoveOpenaiApiKey"))
     }
   }
 
@@ -555,7 +568,9 @@ export function AgentsModelsTab() {
       {/* Header */}
       {!isNarrowScreen && (
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">
-          <h3 className="text-sm font-semibold text-foreground">Models</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("settings.models.title")}
+          </h3>
         </div>
       )}
 
@@ -569,7 +584,7 @@ export function AgentsModelsTab() {
               <input
                 value={modelSearch}
                 onChange={(e) => setModelSearch(e.target.value)}
-                placeholder="Add or search model"
+                placeholder={t("settings.models.searchPlaceholder")}
                 className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
@@ -601,7 +616,7 @@ export function AgentsModelsTab() {
             })}
             {filteredModels.length === 0 && (
               <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                No models found
+                {t("settings.models.noModelsFound")}
               </div>
             )}
           </div>
@@ -614,10 +629,10 @@ export function AgentsModelsTab() {
         <div className="pb-2 flex items-center justify-between">
           <div>
             <h4 className="text-sm font-medium text-foreground">
-              Anthropic Accounts
+              {t("settings.models.anthropicAccounts.title")}
             </h4>
             <p className="text-xs text-muted-foreground">
-              Manage your Claude API accounts
+              {t("settings.models.anthropicAccounts.description")}
             </p>
           </div>
           <Button
@@ -627,7 +642,7 @@ export function AgentsModelsTab() {
             disabled={isClaudeCodeLoading}
           >
             <Plus className="h-3 w-3 mr-1" />
-            {isClaudeCodeConnected ? "Add" : "Connect"}
+            {isClaudeCodeConnected ? t("common.add") : t("common.connect")}
           </Button>
         </div>
 
@@ -638,10 +653,10 @@ export function AgentsModelsTab() {
         <div className="pb-2 flex items-center justify-between">
           <div>
             <h4 className="text-sm font-medium text-foreground">
-              Codex Account
+              {t("settings.models.codexAccount.title")}
             </h4>
             <p className="text-xs text-muted-foreground">
-              Manage your Codex account
+              {t("settings.models.codexAccount.description")}
             </p>
           </div>
         </div>
@@ -649,13 +664,15 @@ export function AgentsModelsTab() {
         <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
           {showCodexLoading ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
-              Loading account...
+              {t("settings.models.codex.loadingAccount")}
             </div>
           ) : (
             <>
               <div className="flex items-center justify-between gap-6 p-4 hover:bg-muted/50">
                 <div>
-                  <div className="text-sm font-medium">Codex Subscription</div>
+                  <div className="text-sm font-medium">
+                    {t("settings.models.codexSubscription")}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {codexConnectionText}
                   </div>
@@ -664,7 +681,7 @@ export function AgentsModelsTab() {
                 <div className="flex items-center gap-2">
                   {isCodexSubscriptionActive && (
                     <Badge variant="secondary" className="text-xs">
-                      Active
+                      {t("common.active")}
                     </Badge>
                   )}
                   {isCodexSubscriptionConnected ? (
@@ -674,7 +691,9 @@ export function AgentsModelsTab() {
                       onClick={() => void handleCodexLogout()}
                       disabled={codexLogoutMutation.isPending}
                     >
-                      {codexLogoutMutation.isPending ? "..." : "Logout"}
+                      {codexLogoutMutation.isPending
+                        ? "..."
+                        : t("settings.models.codex.logout")}
                     </Button>
                   ) : (
                     <Button
@@ -687,7 +706,7 @@ export function AgentsModelsTab() {
                         isSavingCodexApiKey
                       }
                     >
-                      Connect
+                      {t("common.connect")}
                     </Button>
                   )}
                 </div>
@@ -701,7 +720,7 @@ export function AgentsModelsTab() {
       <Collapsible open={isApiKeysOpen} onOpenChange={setIsApiKeysOpen}>
         <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors">
           <ChevronDown className={`h-4 w-4 transition-transform ${isApiKeysOpen ? "" : "-rotate-90"}`} />
-          API Keys
+          {t("settings.models.apiKeys")}
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 pt-3">
           {/* Codex API Key */}
@@ -712,12 +731,12 @@ export function AgentsModelsTab() {
                   <Label className="text-sm font-medium">Codex API Key</Label>
                   {hasAppCodexApiKey && (
                     <Badge variant="secondary" className="text-xs">
-                      Active
+                      {t("common.active")}
                     </Badge>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Takes priority over subscription
+                  {t("settings.models.codexApiKey.priority")}
                 </p>
               </div>
               <div className="flex-shrink-0 w-80 flex items-center gap-2">
@@ -735,7 +754,7 @@ export function AgentsModelsTab() {
                     variant="ghost"
                     onClick={() => void handleRemoveCodexApiKey()}
                     disabled={isSavingCodexApiKey}
-                    aria-label="Remove Codex API key"
+                    aria-label={t("settings.models.removeCodexApiKey")}
                     className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -759,12 +778,12 @@ export function AgentsModelsTab() {
                       disabled={setOpenAIKeyMutation.isPending}
                       className="h-5 px-1.5 text-xs text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
                     >
-                      Remove
+                      {t("common.remove")}
                     </Button>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Required for voice transcription (Whisper API)
+                  {t("settings.models.openaiApiKey.description")}
                 </p>
               </div>
               <div className="flex-shrink-0 w-80">
@@ -784,7 +803,7 @@ export function AgentsModelsTab() {
           <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium text-foreground">
-                  Override Model
+                  {t("settings.models.overrideModel.title")}
                 </h4>
                 {canReset && (
                   <Button
@@ -794,16 +813,18 @@ export function AgentsModelsTab() {
                     disabled={clearProviderConfigMutation.isPending}
                     className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
                   >
-                    Reset
+                    {t("common.reset")}
                   </Button>
                 )}
             </div>
             <div className="bg-background rounded-lg border border-border overflow-hidden">
               <div className="flex items-center justify-between p-4">
                 <div className="flex-1">
-                  <Label className="text-sm font-medium">Model name</Label>
+                  <Label className="text-sm font-medium">
+                    {t("onboarding.customModel.modelName")}
+                  </Label>
                   <p className="text-xs text-muted-foreground">
-                    Model identifier to use for requests
+                    {t("settings.models.overrideModel.modelHint")}
                   </p>
                 </div>
                 <div className="flex-shrink-0 w-80">
@@ -820,7 +841,9 @@ export function AgentsModelsTab() {
 
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex-1">
-                  <Label className="text-sm font-medium">API token</Label>
+                  <Label className="text-sm font-medium">
+                    {t("onboarding.customModel.apiToken")}
+                  </Label>
                   <p className="text-xs text-muted-foreground">
                     {authMode === "api_key"
                       ? "ANTHROPIC_API_KEY env"
@@ -837,7 +860,7 @@ export function AgentsModelsTab() {
                     className="w-full"
                     placeholder={
                       providerConfigData?.config?.hasToken
-                        ? "Saved token"
+                        ? t("common.savedToken")
                         : "sk-ant-..."
                     }
                   />
@@ -846,9 +869,11 @@ export function AgentsModelsTab() {
 
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex-1">
-                  <Label className="text-sm font-medium">Auth env</Label>
+                  <Label className="text-sm font-medium">
+                    {t("onboarding.customModel.authEnv")}
+                  </Label>
                   <p className="text-xs text-muted-foreground">
-                    Select how Claude Code receives the provider token
+                    {t("settings.models.overrideModel.authHint")}
                   </p>
                 </div>
                 <div className="grid w-80 grid-cols-2 gap-2">
