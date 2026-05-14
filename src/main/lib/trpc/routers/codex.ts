@@ -916,10 +916,11 @@ async function resolveCodexMcpSnapshot(params: {
         shouldIncludeTools &&
         includeInSession &&
         !authState.needsAuth &&
+        transportType !== "stdio" &&
         (
-          // Probe unauthenticated/public servers and stdio servers.
+          // Probe unauthenticated/public HTTP servers. Avoid probing stdio
+          // servers during startup because they can launch GUI/permission flows.
           !authState.supportsAuth ||
-          transportType === "stdio" ||
           // For auth-capable HTTP, only probe if explicit auth header is available.
           Boolean(resolvedHttpHeaders?.Authorization)
         )
