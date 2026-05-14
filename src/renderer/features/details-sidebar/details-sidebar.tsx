@@ -46,6 +46,7 @@ import {
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
 } from "@/lib/atoms"
+import { useI18n } from "@/lib/i18n"
 
 // ============================================================================
 // WidgetCard — extracted as a real component to avoid remounts
@@ -89,6 +90,7 @@ function WidgetCard({
   hideExpand?: boolean
   onExpand?: () => void
 }) {
+  const { t } = useI18n()
   const Icon = getWidgetIcon(widgetId)
   const config = WIDGET_REGISTRY.find((w) => w.id === widgetId)
   const canExpand = (config?.canExpand ?? false) && !hideExpand && !!onExpand
@@ -124,12 +126,12 @@ function WidgetCard({
                   size="icon"
                   onClick={onExpand}
                   className="h-5 w-5 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md opacity-0 group-hover:opacity-100 transition-[background-color,opacity,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
-                  aria-label={`Expand ${widgetId}`}
+                  aria-label={t("details.expandToSidebar")}
                 >
                   <ArrowUpRight className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="left">Expand to sidebar</TooltipContent>
+              <TooltipContent side="left">{t("details.expandToSidebar")}</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -230,6 +232,7 @@ export function DetailsSidebar({
   remoteInfo,
   isRemoteChat = false,
 }: DetailsSidebarProps) {
+  const { t } = useI18n()
   // Global sidebar open state
   const [isOpen, setIsOpen] = useAtom(detailsSidebarOpenAtom)
 
@@ -331,13 +334,13 @@ export function DetailsSidebar({
                   size="icon"
                   onClick={closeSidebar}
                   className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                  aria-label="Close details"
+                  aria-label={t("details.close")}
                 >
                   <IconDoubleChevronRight className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Close details
+                {t("details.close")}
                 {toggleDetailsHotkey && <Kbd>{toggleDetailsHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>
@@ -354,7 +357,7 @@ export function DetailsSidebar({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Details
+                {t("details.details")}
               </button>
               <button
                 type="button"
@@ -366,7 +369,7 @@ export function DetailsSidebar({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Files
+                {t("details.files")}
               </button>
             </div>
           </div>
@@ -388,7 +391,7 @@ export function DetailsSidebar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  Search files
+                  {t("details.searchFiles")}
                   {fileSearchHotkey && <Kbd>{fileSearchHotkey}</Kbd>}
                 </TooltipContent>
               </Tooltip>
@@ -408,7 +411,7 @@ export function DetailsSidebar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {filesAllExpanded ? "Collapse all" : "Expand all"}
+                  {filesAllExpanded ? t("details.collapseAll") : t("details.expandAll")}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -424,7 +427,7 @@ export function DetailsSidebar({
             switch (widgetId) {
               case "info":
                 return (
-                  <WidgetCard key="info" widgetId="info" title="Workspace">
+                  <WidgetCard key="info" widgetId="info" title={t("details.workspace")}>
                     <InfoSection
                       chatId={chatId}
                       worktreePath={worktreePath}
@@ -500,7 +503,7 @@ export function DetailsSidebar({
                   <WidgetCard
                     key="mcp"
                     widgetId="mcp"
-                    title="MCP Servers"
+                    title={t("details.mcpServers")}
                     badge={
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -509,12 +512,12 @@ export function DetailsSidebar({
                             size="icon"
                             onClick={handleOpenMcpSettings}
                             className="h-5 w-5 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md opacity-0 group-hover:opacity-100 transition-[background-color,opacity] duration-150 ease-out flex-shrink-0"
-                            aria-label="MCP Settings"
+                            aria-label={t("details.mcpSettings")}
                           >
                             <ArrowUpRight className="h-3 w-3" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="left">Open settings</TooltipContent>
+                        <TooltipContent side="left">{t("details.openSettings")}</TooltipContent>
                       </Tooltip>
                     }
                     hideExpand

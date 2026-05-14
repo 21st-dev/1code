@@ -6,6 +6,7 @@ import { IconSpinner, PlanIcon } from "@/components/ui/icons"
 import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
 import { trpc } from "@/lib/trpc"
 import { planContentCacheAtomFamily } from "../atoms"
+import { useI18n } from "@/lib/i18n"
 
 interface PlanSectionProps {
   chatId: string
@@ -25,6 +26,7 @@ export const PlanSection = memo(function PlanSection({
   refetchTrigger,
   isExpanded = false,
 }: PlanSectionProps) {
+  const { t } = useI18n()
   // Refs for scroll gradients (avoid re-renders)
   const contentRef = useRef<HTMLDivElement>(null)
   const topGradientRef = useRef<HTMLDivElement>(null)
@@ -122,10 +124,10 @@ export const PlanSection = memo(function PlanSection({
 
   // Extract plan title from markdown (first H1)
   const planTitle = useMemo(() => {
-    if (!displayContent) return "Plan"
+    if (!displayContent) return t("details.plan")
     const match = displayContent.match(/^#\s+(.+)$/m)
-    return match ? match[1] : "Plan"
-  }, [displayContent])
+    return match ? match[1] : t("details.plan")
+  }, [displayContent, t])
 
   // No plan path - don't render anything (parent should hide the widget)
   if (!planPath) {

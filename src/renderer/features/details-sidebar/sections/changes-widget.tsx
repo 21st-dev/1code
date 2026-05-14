@@ -25,6 +25,7 @@ import { trpc } from "@/lib/trpc"
 import { preferredEditorAtom } from "@/lib/atoms"
 import { APP_META } from "../../../../shared/external-apps"
 import type { ParsedDiffFile } from "../types"
+import { useI18n } from "@/lib/i18n"
 
 interface ChangesWidgetProps {
   chatId: string
@@ -87,6 +88,7 @@ export const ChangesWidget = memo(function ChangesWidget({
   onFileSelect,
   diffDisplayMode = "side-peek",
 }: ChangesWidgetProps) {
+  const { t } = useI18n()
   // Data is now cached at the ActiveChat level via workspaceDiffCacheAtomFamily
   // So parsedFileDiffs and diffStats persist across workspace switches
   const displayFiles = parsedFileDiffs ?? []
@@ -96,10 +98,10 @@ export const ChangesWidget = memo(function ChangesWidget({
 
   // Get tooltip text based on diff display mode
   const expandTooltip = diffDisplayMode === "side-peek"
-    ? "Open in sidebar"
+    ? t("changes.diff.openInSidebar")
     : diffDisplayMode === "center-peek"
-      ? "Open in dialog"
-      : "Open fullscreen"
+      ? t("changes.diff.openInDialog")
+      : t("changes.diff.openFullscreen")
 
   // Resolved hotkey for tooltip
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
@@ -262,10 +264,12 @@ export const ChangesWidget = memo(function ChangesWidget({
 
           {/* Title + branch */}
           <div className="flex items-center gap-1 min-w-0">
-            <span className="text-xs font-medium text-foreground">Changes</span>
+            <span className="text-xs font-medium text-foreground">
+              {t("changes.title")}
+            </span>
             {currentBranch && (
               <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
-                <span className="shrink-0">on</span>
+                <span className="shrink-0">{t("changes.onBranch")}</span>
                 <span className="truncate max-w-[120px] text-foreground">
                   {currentBranch}
                 </span>
@@ -294,7 +298,7 @@ export const ChangesWidget = memo(function ChangesWidget({
                   size="icon"
                   onClick={onExpand}
                   className="h-5 w-5 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md opacity-0 group-hover:opacity-100 transition-[background-color,opacity,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
-                  aria-label="Expand changes"
+                  aria-label={t("details.expandChanges")}
                 >
                   <ArrowUpRight className="h-3 w-3" />
                 </Button>
@@ -318,8 +322,11 @@ export const ChangesWidget = memo(function ChangesWidget({
                 className="size-4 border-muted-foreground/50"
               />
               <span className="text-xs text-muted-foreground">
-                {selectedCount} of {displayFiles.length} file
-                {displayFiles.length !== 1 ? "s" : ""} selected
+                {t("changes.filesSelected", {
+                  selected: selectedCount,
+                  total: displayFiles.length,
+                  plural: displayFiles.length !== 1 ? "s" : "",
+                })}
               </span>
             </div>
 
@@ -384,10 +391,12 @@ export const ChangesWidget = memo(function ChangesWidget({
                   disabled={isCommitting || selectedCount === 0}
                 >
                   {isCommitting
-                    ? (shouldCommitAndPush ? "Committing & pushing..." : "Committing...")
+                    ? (shouldCommitAndPush
+                      ? t("changes.commit.committingAndPushing")
+                      : t("changes.commit.committing"))
                     : (shouldCommitAndPush
-                      ? `Commit & Push${commitLabelSuffix}`
-                      : `Commit${commitLabelSuffix}`)}
+                      ? t("changes.commit.commitAndPush", { suffix: commitLabelSuffix })
+                      : t("changes.commit.commitWithSuffix", { suffix: commitLabelSuffix }))}
                 </Button>
               )}
 
@@ -398,13 +407,13 @@ export const ChangesWidget = memo(function ChangesWidget({
                 className={cn("h-7 text-xs", onCommit ? "w-24" : "w-full")}
                 onClick={() => onExpand?.()}
               >
-                View Diff
+                {t("changes.viewDiff")}
               </Button>
             </div>
           </>
         ) : (
           <div className="text-xs text-muted-foreground px-2 py-2">
-            No changes
+            {t("changes.noChanges")}
           </div>
         )}
       </div>

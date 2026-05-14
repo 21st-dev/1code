@@ -9,6 +9,7 @@ import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
 import { AgentToolCall } from "./agent-tool-call"
 import { areExploringGroupPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "@/lib/i18n"
 
 interface AgentExploringGroupProps {
   parts: any[]
@@ -25,6 +26,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
   chatStatus,
   isStreaming,
 }: AgentExploringGroupProps) {
+  const { t } = useI18n()
   const onOpenFile = useFileOpen()
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
@@ -78,7 +80,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
         <div className="flex-1 min-w-0 flex items-center gap-1">
           <div className="text-xs flex items-center gap-1.5 min-w-0">
             <span className="font-medium whitespace-nowrap flex-shrink-0 text-muted-foreground">
-              {isStreaming ? "Exploring" : "Explored"}
+              {isStreaming ? t("agent.tool.exploring") : t("agent.tool.explored")}
             </span>
             <span className="text-muted-foreground/60 whitespace-nowrap flex-shrink-0">
               {subtitle}
@@ -142,8 +144,8 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
                 <AgentToolCall
                   key={idx}
                   icon={meta.icon}
-                  title={meta.title(part)}
-                  subtitle={meta.subtitle?.(part)}
+                  title={meta.title(part, t)}
+                  subtitle={meta.subtitle?.(part, t)}
                   tooltipContent={meta.tooltipContent?.(part, projectPath)}
                   isPending={isPending}
                   isError={isError}

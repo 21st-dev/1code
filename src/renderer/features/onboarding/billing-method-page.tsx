@@ -10,11 +10,13 @@ import {
   KeyFilledIcon,
   SettingsFilledIcon,
 } from "../../components/ui/icons"
+import { LanguageSwitcher } from "../../components/language-switcher"
 import {
   billingMethodAtom,
   codexOnboardingCompletedAtom,
   type BillingMethod,
 } from "../../lib/atoms"
+import { useI18n } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
 
 type BillingOptionGroup = "claude-code" | "codex"
@@ -75,6 +77,7 @@ const billingOptions: BillingOption[] = [
 ]
 
 export function BillingMethodPage() {
+  const { t } = useI18n()
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const [selectedGroup, setSelectedGroup] =
@@ -104,6 +107,30 @@ export function BillingMethodPage() {
     setBillingMethod(selectedOption.method)
   }
 
+  const getOptionTitle = (option: BillingOption) => {
+    if (option.id === "codex-subscription") {
+      return t("onboarding.billing.codexSubscription.title")
+    }
+    return option.title
+  }
+
+  const getOptionSubtitle = (option: BillingOption) => {
+    switch (option.id) {
+      case "claude-subscription":
+        return t("onboarding.billing.claudeSubscription.subtitle")
+      case "api-key":
+        return t("onboarding.billing.anthropicApiKey.subtitle")
+      case "custom-model":
+        return t("onboarding.billing.customModel.subtitle")
+      case "codex-subscription":
+        return t("onboarding.billing.codexSubscription.subtitle")
+      case "codex-api-key":
+        return t("onboarding.billing.codexApiKey.subtitle")
+      default:
+        return option.subtitle
+    }
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
       {/* Draggable title bar area */}
@@ -112,14 +139,16 @@ export function BillingMethodPage() {
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
 
+      <LanguageSwitcher compact className="fixed top-12 right-4" />
+
       <div className="w-full max-w-[440px] min-h-[520px] space-y-8 px-4">
         {/* Header */}
         <div className="text-center space-y-1">
           <h1 className="text-base font-semibold tracking-tight">
-            Connect AI Provider
+            {t("onboarding.billing.title")}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Choose how you'd like to connect your provider.
+            {t("onboarding.billing.subtitle")}
           </p>
         </div>
 
@@ -195,15 +224,17 @@ export function BillingMethodPage() {
                 </div>
                 <div className="flex-1 min-w-0 pt-0.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{option.title}</span>
+                    <span className="text-sm font-medium">
+                      {getOptionTitle(option)}
+                    </span>
                     {option.recommended && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                        Recommended
+                        {t("onboarding.billing.recommended")}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {option.subtitle}
+                    {getOptionSubtitle(option)}
                   </p>
                 </div>
               </div>
@@ -216,7 +247,7 @@ export function BillingMethodPage() {
           onClick={handleContinue}
           className="w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center"
         >
-          Continue
+          {t("common.continue")}
         </button>
       </div>
     </div>

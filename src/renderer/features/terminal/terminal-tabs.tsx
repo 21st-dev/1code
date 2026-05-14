@@ -23,6 +23,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import type { TerminalInstance } from "./types"
+import { useI18n } from "@/lib/i18n"
 
 /**
  * Get the shortened path (last folder name) from a full path
@@ -79,6 +80,7 @@ const TerminalTab = memo(
     },
     ref,
   ) {
+    const { t } = useI18n()
     // Only show path if it's different from initial cwd
     const isDifferentFromInitial = cwd && cwd !== initialCwd
     const shortPath = isDifferentFromInitial ? getShortPath(cwd) : null
@@ -246,7 +248,7 @@ const TerminalTab = memo(
                   type="button"
                   onClick={handleCloseClick}
                   className="relative z-20 hover:text-foreground rounded p-0.5 transition-[color,transform] duration-150 ease-out active:scale-[0.97]"
-                  aria-label="Close terminal"
+                  aria-label={t("terminal.close")}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -256,20 +258,20 @@ const TerminalTab = memo(
         </ContextMenuTrigger>
         <ContextMenuContent className="w-48">
           <ContextMenuItem onClick={onStartRename}>
-            Rename terminal
+            {t("terminal.rename")}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             onClick={() => onClose(terminal.id)}
             disabled={isOnly}
           >
-            Close terminal
+            {t("terminal.close")}
           </ContextMenuItem>
           <ContextMenuItem onClick={onCloseOthers} disabled={!canCloseOthers}>
-            Close other terminals
+            {t("terminal.closeOther")}
           </ContextMenuItem>
           <ContextMenuItem onClick={onCloseToRight} disabled={!hasTabsToRight}>
-            Close terminals to the right
+            {t("terminal.closeToRight")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -311,6 +313,7 @@ export const TerminalTabs = memo(function TerminalTabs({
   onCreateTerminal,
   onRenameTerminal,
 }: TerminalTabsProps) {
+  const { t } = useI18n()
   const tabsContainerRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const textRefs = useRef<Map<string, HTMLSpanElement>>(new Map())
@@ -535,12 +538,12 @@ export const TerminalTabs = memo(function TerminalTabs({
                   size="icon"
                   onClick={onCreateTerminal}
                   className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md"
-                  aria-label="New terminal"
+                  aria-label={t("terminal.new")}
                 >
                   <PlusIcon className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">New terminal</TooltipContent>
+              <TooltipContent side="bottom">{t("terminal.new")}</TooltipContent>
             </Tooltip>
           </div>
         </div>

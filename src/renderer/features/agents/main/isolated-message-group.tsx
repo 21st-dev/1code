@@ -17,6 +17,8 @@ import { IconTextUndo } from "../../../components/ui/icons"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
+import { useI18n } from "@/lib/i18n"
+import type { ToolMeta } from "../ui/agent-tool-registry"
 
 // Context for fork callback - avoids threading props through MemoizedAssistantMessages
 export const ForkContext = createContext<((messageId: string) => void) | null>(null)
@@ -63,7 +65,7 @@ interface IsolatedMessageGroupProps {
     isError: boolean
   }>
   MessageGroupWrapper: React.ComponentType<{ children: React.ReactNode; isLastGroup?: boolean }>
-  toolRegistry: Record<string, { icon: any; title: (args: any) => string }>
+  toolRegistry: Record<string, ToolMeta>
 }
 
 function areGroupPropsEqual(
@@ -104,6 +106,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
   MessageGroupWrapper,
   toolRegistry,
 }: IsolatedMessageGroupProps) {
+  const { t } = useI18n()
   // Subscribe to specific atoms - NOT the whole messages array
   const perChatKey = `${subChatId}:${userMsgId}`
   const userMsg = useAtomValue(messageAtomFamily(getPerChatMessageKey(subChatId, userMsgId)))
@@ -262,7 +265,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
           <div className="mt-4">
             <ToolCallComponent
               icon={toolRegistry["tool-cloning"]?.icon}
-              title={toolRegistry["tool-cloning"]?.title({}) || "Cloning..."}
+              title={toolRegistry["tool-cloning"]?.title({}, t) || t("agent.sandbox.cloning")}
               isPending={true}
               isError={false}
             />
@@ -274,7 +277,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
           <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
             <div className="flex items-center gap-2 text-destructive text-sm">
               <span>
-                Failed to set up sandbox
+                {t("agent.sandbox.failedSetup")}
                 {sandboxSetupError ? `: ${sandboxSetupError}` : ""}
               </span>
               {onRetrySetup && (
@@ -282,7 +285,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
                   className="px-2 py-1 text-sm hover:bg-destructive/20 rounded"
                   onClick={onRetrySetup}
                 >
-                  Retry
+                  {t("common.retry")}
                 </button>
               )}
             </div>
@@ -311,7 +314,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
           <div className="mt-4">
             <ToolCallComponent
               icon={toolRegistry["tool-planning"]?.icon}
-              title={toolRegistry["tool-planning"]?.title({}) || "Planning..."}
+              title={toolRegistry["tool-planning"]?.title({}, t) || t("agent.sandbox.planning")}
               isPending={true}
               isError={false}
             />

@@ -4,6 +4,7 @@ import { memo } from "react"
 import { useAtomValue } from "jotai"
 import { userMessageIdsPerChatAtom } from "../stores/message-store"
 import { IsolatedMessageGroup } from "./isolated-message-group"
+import type { ToolMeta } from "../ui/agent-tool-registry"
 
 // ============================================================================
 // ISOLATED MESSAGES SECTION (LAYER 3)
@@ -42,7 +43,7 @@ interface IsolatedMessagesSectionProps {
     isError: boolean
   }>
   MessageGroupWrapper: React.ComponentType<{ children: React.ReactNode; isLastGroup?: boolean }>
-  toolRegistry: Record<string, { icon: any; title: (args: any) => string }>
+  toolRegistry: Record<string, ToolMeta>
 }
 
 function areSectionPropsEqual(

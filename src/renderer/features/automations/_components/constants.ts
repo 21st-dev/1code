@@ -1,26 +1,28 @@
+import type { TranslationKey } from "@/lib/i18n"
+
 // ==============================================================================
 // Trigger Options
 // ==============================================================================
 
 export const GITHUB_TRIGGER_OPTIONS = [
-  { value: "pr_opened", label: "Pull Request Opened" },
-  { value: "pr_closed", label: "Pull Request Closed" },
-  { value: "pr_merged", label: "Pull Request Merged" },
-  { value: "pr_commits_pushed", label: "Pull Request Commits Pushed" },
-  { value: "issue_opened", label: "Issue Opened" },
-  { value: "issue_closed", label: "Issue Closed" },
-  { value: "issue_comment_created", label: "Issue Comment Created" },
-  { value: "branch_created", label: "Branch or Tag Created" },
-  { value: "workflow_failed", label: "GitHub Action Run Failed" },
+  { value: "pr_opened", labelKey: "automations.trigger.github.prOpened" as TranslationKey },
+  { value: "pr_closed", labelKey: "automations.trigger.github.prClosed" as TranslationKey },
+  { value: "pr_merged", labelKey: "automations.trigger.github.prMerged" as TranslationKey },
+  { value: "pr_commits_pushed", labelKey: "automations.trigger.github.prCommitsPushed" as TranslationKey },
+  { value: "issue_opened", labelKey: "automations.trigger.github.issueOpened" as TranslationKey },
+  { value: "issue_closed", labelKey: "automations.trigger.github.issueClosed" as TranslationKey },
+  { value: "issue_comment_created", labelKey: "automations.trigger.github.issueCommentCreated" as TranslationKey },
+  { value: "branch_created", labelKey: "automations.trigger.github.branchCreated" as TranslationKey },
+  { value: "workflow_failed", labelKey: "automations.trigger.github.workflowFailed" as TranslationKey },
 ] as const
 
 export const LINEAR_TRIGGER_OPTIONS = [
-  { value: "linear_issue_created", label: "Issue Created" },
-  { value: "linear_issue_updated", label: "Issue Updated" },
-  { value: "linear_label_added", label: "Label Added to Issue" },
-  { value: "linear_issue_assigned", label: "Issue Assigned" },
-  { value: "linear_comment_created", label: "Comment Created" },
-  { value: "linear_issue_state_changed", label: "Issue State Changed" },
+  { value: "linear_issue_created", labelKey: "automations.trigger.linear.issueCreated" as TranslationKey },
+  { value: "linear_issue_updated", labelKey: "automations.trigger.linear.issueUpdated" as TranslationKey },
+  { value: "linear_label_added", labelKey: "automations.trigger.linear.labelAdded" as TranslationKey },
+  { value: "linear_issue_assigned", labelKey: "automations.trigger.linear.issueAssigned" as TranslationKey },
+  { value: "linear_comment_created", labelKey: "automations.trigger.linear.commentCreated" as TranslationKey },
+  { value: "linear_issue_state_changed", labelKey: "automations.trigger.linear.issueStateChanged" as TranslationKey },
 ] as const
 
 // ==============================================================================
@@ -28,8 +30,8 @@ export const LINEAR_TRIGGER_OPTIONS = [
 // ==============================================================================
 
 export const AUTOMATION_TABS = [
-  { value: "active", label: "Automations" },
-  { value: "templates", label: "Templates" },
+  { value: "active", labelKey: "automations.tab.automations" as TranslationKey },
+  { value: "templates", labelKey: "automations.tab.templates" as TranslationKey },
 ] as const
 
 // ==============================================================================

@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "@/lib/i18n"
 
 interface SearchResult {
   title: string
@@ -22,6 +23,7 @@ export const AgentWebSearchCollapsible = memo(
     part,
     chatStatus,
   }: AgentWebSearchCollapsibleProps) {
+    const { t } = useI18n()
     const [isExpanded, setIsExpanded] = useState(false)
 
     const isPending =
@@ -76,10 +78,10 @@ export const AgentWebSearchCollapsible = memo(
                     duration={1.2}
                     className="inline-flex items-center text-xs leading-none"
                   >
-                    Searching web
+                    {t("agent.tool.searchingWeb")}
                   </TextShimmer>
                 ) : (
-                  "Searched web"
+                  t("agent.tool.searchedWeb")
                 )}
               </span>
               {/* Query preview when collapsed */}
@@ -89,7 +91,10 @@ export const AgentWebSearchCollapsible = memo(
               {/* Result count */}
               {!isStreaming && hasResults && (
                 <span className="text-muted-foreground/60 whitespace-nowrap flex-shrink-0">
-                  · {resultCount} {resultCount === 1 ? "result" : "results"}
+                  · {resultCount}{" "}
+                  {resultCount === 1
+                    ? t("agent.webSearch.result")
+                    : t("agent.webSearch.results")}
                 </span>
               )}
               {/* Chevron - rotates when expanded, visible on hover when collapsed */}

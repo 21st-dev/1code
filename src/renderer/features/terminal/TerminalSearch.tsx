@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react"
 import type { SearchAddon } from "@xterm/addon-search"
 import { X, ChevronUp, ChevronDown } from "lucide-react"
+import { useI18n } from "@/lib/i18n"
 
 interface TerminalSearchProps {
   searchAddon: SearchAddon | null
@@ -13,6 +14,7 @@ export function TerminalSearch({
   isOpen,
   onClose,
 }: TerminalSearchProps) {
+  const { t } = useI18n()
   const [query, setQuery] = useState("")
   const [matchCount, setMatchCount] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -84,32 +86,32 @@ export function TerminalSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Find..."
+        placeholder={t("terminal.find")}
         className="w-40 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground"
       />
       {matchCount !== null && (
         <span className="px-1 text-xs text-muted-foreground">
-          {matchCount} matches
+          {t("terminal.matches", { count: matchCount })}
         </span>
       )}
       <button
         onClick={() => handleSearch("prev")}
         className="rounded p-1 hover:bg-muted"
-        title="Previous match (Shift+Enter)"
+        title={t("terminal.previousMatch")}
       >
         <ChevronUp className="h-4 w-4 text-muted-foreground" />
       </button>
       <button
         onClick={() => handleSearch("next")}
         className="rounded p-1 hover:bg-muted"
-        title="Next match (Enter)"
+        title={t("terminal.nextMatch")}
       >
         <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </button>
       <button
         onClick={onClose}
         className="rounded p-1 hover:bg-muted"
-        title="Close (Escape)"
+        title={t("terminal.closeSearch")}
       >
         <X className="h-4 w-4 text-muted-foreground" />
       </button>

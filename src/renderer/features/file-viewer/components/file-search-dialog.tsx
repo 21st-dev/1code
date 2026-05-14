@@ -9,6 +9,7 @@ import { SearchIcon } from "@/components/ui/icons"
 import { UnknownFileIcon } from "@/icons/framework-icons"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
 import { recentlyOpenedFilesAtom } from "../../agents/atoms"
+import { useI18n } from "@/lib/i18n"
 
 // ============================================================================
 // Highlight helper – splits text into segments with matching parts marked
@@ -51,6 +52,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
   projectPath,
   onSelectFile,
 }: FileSearchDialogProps) {
+  const { t } = useI18n()
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -213,7 +215,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
               <SearchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
               <Input
                 ref={searchInputRef}
-                placeholder="Go to file..."
+                placeholder={t("fileViewer.goToFile")}
                 value={query}
                 onChange={handleSearchChange}
                 className="h-auto p-0 border-0 rounded-none bg-transparent text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -225,7 +227,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
           <div className="flex-1 overflow-y-auto py-1 max-h-[400px] border-t scrollbar-hide">
             {allItems.length === 0 && debouncedQuery ? (
               <div className="min-h-[32px] py-[5px] px-1.5 mx-1 flex items-center text-sm text-muted-foreground">
-                No files found
+                {t("fileViewer.noFilesFound")}
               </div>
             ) : (
               <>

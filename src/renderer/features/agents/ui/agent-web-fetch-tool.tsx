@@ -12,6 +12,7 @@ import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "@/lib/i18n"
 
 interface AgentWebFetchToolProps {
   part: any
@@ -22,6 +23,7 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
   part,
   chatStatus,
 }: AgentWebFetchToolProps) {
+  const { t } = useI18n()
   const [isExpanded, setIsExpanded] = useState(false)
   const { isPending, isError, isInterrupted } = getToolStatus(part, chatStatus)
 
@@ -50,7 +52,7 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
 
   // Show interrupted state if fetch was interrupted without completing
   if (isInterrupted && !result) {
-    return <AgentToolInterrupted toolName="Fetch" subtitle={hostname} />
+    return <AgentToolInterrupted toolName={t("agent.tool.fetch")} subtitle={hostname} />
   }
 
   return (
@@ -72,10 +74,12 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
               duration={1.2}
               className="text-xs text-muted-foreground"
             >
-              Fetching
+              {t("agent.tool.fetching")}
             </TextShimmer>
           ) : (
-            <span className="text-xs text-muted-foreground">Fetched</span>
+            <span className="text-xs text-muted-foreground">
+              {t("agent.tool.fetched")}
+            </span>
           )}
           
           <span className="truncate text-foreground">{hostname}</span>
@@ -88,7 +92,7 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
               <IconSpinner className="w-3 h-3" />
             ) : isError || !isSuccess ? (
               <span className="text-destructive">
-                {statusCode ? `Error ${statusCode}` : "Failed"}
+                {statusCode ? `Error ${statusCode}` : t("agent.tool.failed")}
               </span>
             ) : (
               <span className="text-muted-foreground">
@@ -128,4 +132,3 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
     </div>
   )
 }, areToolPropsEqual)
-

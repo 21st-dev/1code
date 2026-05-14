@@ -4,6 +4,7 @@ import * as React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import {
   chatSearchCountInfoAtom,
   chatSearchInputAtom,
@@ -28,6 +29,7 @@ interface ChatSearchBarProps {
 }
 
 export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarProps) {
+  const { t } = useI18n()
   const isOpen = useAtomValue(chatSearchOpenAtom)
   const [inputValue, setInputValue] = useAtom(chatSearchInputAtom)
   const setSearchQuery = useSetAtom(chatSearchQueryAtom)
@@ -155,7 +157,7 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Search..."
+        placeholder={t("agent.search.placeholder")}
         className={cn(
           "flex-1 min-w-[80px] h-7 px-2 text-sm bg-transparent",
           "border-none outline-none",
@@ -172,7 +174,10 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
         {countInfo.total > 0 ? (
           <>
             <span className="text-xs text-muted-foreground mr-1">
-              {`${countInfo.current} of ${countInfo.total}`}
+              {t("agent.search.count", {
+                current: countInfo.current,
+                total: countInfo.total,
+              })}
             </span>
             <button
               type="button"
@@ -181,7 +186,7 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
                 goToPrev()
                 inputRef.current?.focus()
               }}
-              title="Previous match (Shift+Enter)"
+              title={t("agent.search.previousMatch")}
             >
               <ChevronUp className="h-4 w-4" />
             </button>
@@ -192,14 +197,16 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
                 goToNext()
                 inputRef.current?.focus()
               }}
-              title="Next match (Enter)"
+              title={t("agent.search.nextMatch")}
             >
               <ChevronDown className="h-4 w-4" />
             </button>
           </>
         ) : (
           inputValue.trim() && searchCompleted && (
-            <span className="text-xs text-muted-foreground">No results</span>
+            <span className="text-xs text-muted-foreground">
+              {t("agent.search.noResults")}
+            </span>
           )
         )}
       </div>
@@ -209,7 +216,7 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
         type="button"
         className="h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95 transition-all duration-150 ease-out"
         onClick={() => closeSearch()}
-        title="Close (Esc)"
+        title={t("agent.search.close")}
       >
         <X className="h-4 w-4" />
       </button>

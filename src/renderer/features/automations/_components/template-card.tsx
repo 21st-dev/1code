@@ -4,6 +4,7 @@ import { cn } from "../../../lib/utils"
 import { PlatformIcon } from "./platform-icon"
 import { getTriggerLabel } from "./utils"
 import type { AutomationTemplate } from "./types"
+import { useI18n } from "@/lib/i18n"
 
 interface TemplateCardProps {
   template: AutomationTemplate
@@ -13,7 +14,8 @@ interface TemplateCardProps {
 }
 
 export function TemplateCard({ template, onUseTemplate, disabled, disabledReason }: TemplateCardProps) {
-  const triggerLabel = getTriggerLabel(template.triggerType, template.platform)
+  const { t } = useI18n()
+  const triggerLabel = getTriggerLabel(template.triggerType, template.platform, t)
 
   return (
     <div
@@ -36,10 +38,12 @@ export function TemplateCard({ template, onUseTemplate, disabled, disabledReason
       </div>
       <div className="flex flex-col gap-0">
         <span className="text-sm font-medium text-foreground line-clamp-2">
-          {template.name}
+          {t(template.nameKey)}
         </span>
         <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-          {disabled && disabledReason ? disabledReason : `When ${triggerLabel}, run Claude Code`}
+          {disabled && disabledReason
+            ? disabledReason
+            : t("automations.description.single", { trigger: triggerLabel })}
         </p>
       </div>
     </div>

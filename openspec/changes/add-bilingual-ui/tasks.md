@@ -1,0 +1,36 @@
+## 1. Proposal Gate
+- [x] 1.1 Review and approve this OpenSpec change before implementation.
+- [x] 1.2 Confirm the initial language default: `system` or English.
+- [x] 1.3 Confirm whether onboarding needs a language switch before Preferences is reachable.
+
+## 2. Localization Infrastructure
+- [x] 2.1 Add typed language IDs and language preference atom.
+- [x] 2.2 Add renderer i18n provider, locale resolver, dictionaries, and `useI18n` hook.
+- [x] 2.3 Add helper support for simple interpolation and count-based strings where needed.
+- [x] 2.4 Add missing-key fallback behavior to English.
+
+## 3. First Migration Batch
+- [x] 3.1 Migrate billing/provider onboarding screens.
+- [x] 3.2 Migrate API key, custom model, Codex, and Claude onboarding wrappers.
+- [x] 3.3 Migrate repository selection and clone screens.
+- [x] 3.4 Add language preference controls in Settings > Preferences.
+- [x] 3.5 Migrate settings sidebar labels and core Preferences/Models copy.
+
+## 4. Second Migration Batch
+- [x] 4.1 Migrate main sidebar navigation and workspace actions.
+- [x] 4.2 Migrate archive/search/new workspace entry points.
+- [x] 4.3 Migrate primary chat input controls and mode labels.
+- [x] 4.4 Migrate common toast titles/descriptions where they are app-authored.
+
+## 5. Later Migration Batch
+- [x] 5.1 Migrate agent tool/status wrapper labels.
+- [x] 5.2 Migrate changes/diff UI shell labels.
+- [x] 5.3 Migrate terminal and file viewer UI shell labels.
+- [x] 5.4 Migrate automations and inbox UI shell labels.
+
+## 6. Verification
+- [ ] 6.1 Run OpenSpec validation when CLI is available. Current environment has no working `openspec` executable.
+- [x] 6.2 Run `bun run ts:check`. Current run still fails on existing type debt in the baseline; a filtered rerun found no new errors in the files touched for this migration batch.
+- [x] 6.3 Run `bun run build`.
+- [ ] 6.4 Smoke test language switching in Electron for English and Simplified Chinese. Dev startup now reaches the renderer, but macOS Apple Events permission blocked automated UI inspection.
+- [x] 6.5 Sweep remaining hardcoded English strings and document intentional exclusions in `hardcoded-english-sweep.md`.

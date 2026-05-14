@@ -21,6 +21,7 @@ import { getAppOption } from "@/components/open-in-button"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
 import { fileSearchDialogOpenAtom } from "../../agents/atoms"
 import { fileTreeExpandedAtomFamily } from "../atoms"
+import { useI18n } from "@/lib/i18n"
 
 // ============================================================================
 // Types
@@ -178,6 +179,7 @@ const TreeNode = memo(function TreeNode({
   onContextAction: (action: string, node: FileTreeNode) => void
   treeRef: React.RefObject<HTMLDivElement | null>
 }) {
+  const { t } = useI18n()
   const isFolder = node.type === "folder" && !!node.children
   const isFocused = focusedPath === node.path
   const isActive = !isFocused && activePath === node.path
@@ -255,37 +257,37 @@ const TreeNode = memo(function TreeNode({
           {!isFolder && (
             <>
               <ContextMenuItem onClick={() => onContextAction("open-preview", node)}>
-                Open Preview
+                {t("details.files.openPreview")}
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           )}
           <ContextMenuItem onClick={() => onContextAction("mention", node)}>
-            Add to Chat Context
+            {t("details.files.addToChatContext")}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onContextAction("open-editor", node)}>
-            Open in {editorLabel}
+            {t("changes.openInEditor", { editor: editorLabel })}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => onContextAction("reveal-finder", node)}>
-            Reveal in Finder
+            {t("changes.revealInFinder")}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onContextAction("copy-path", node)}>
-            Copy Path
+            {t("changes.copyPath")}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => onContextAction("copy-relative", node)}>
-            Copy Relative Path
+            {t("changes.copyRelativePath")}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onContextAction("rename", node)}>
-            Rename...
+            {t("details.files.rename")}...
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => onContextAction("delete", node)}
             className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
           >
-            Delete
+            {t("changes.delete")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -324,6 +326,7 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
   currentViewerFilePath,
   className,
 }, ref) {
+  const { t } = useI18n()
   // activePath = file currently open in viewer (secondary highlight), derived from prop
   const activePath = useMemo(() => {
     if (!currentViewerFilePath || !worktreePath) return null
@@ -505,12 +508,12 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
 
       case "copy-path":
         navigator.clipboard.writeText(absolutePath)
-        toast.success("Copied to clipboard", { description: absolutePath })
+        toast.success(t("terminal.copied"), { description: absolutePath })
         break
 
       case "copy-relative":
         navigator.clipboard.writeText(node.path)
-        toast.success("Copied to clipboard", { description: node.path })
+        toast.success(t("terminal.copied"), { description: node.path })
         break
 
       case "rename":
@@ -518,17 +521,19 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
         break
 
       case "delete": {
-        const label = node.type === "folder" ? "folder" : "file"
-        if (window.confirm(`Move "${node.name}" to trash?`)) {
+        const label = node.type === "folder"
+          ? t("details.files.folder")
+          : t("details.files.file")
+        if (window.confirm(t("details.files.moveToTrash", { name: node.name }))) {
           deleteMutation.mutate(
             { absolutePath },
             {
               onSuccess: () => {
-                toast.success(`${node.name} moved to trash`)
+                toast.success(t("details.files.movedToTrash", { name: node.name }))
                 invalidateFiles()
               },
               onError: (err) => {
-                toast.error(`Failed to delete ${label}`, { description: err.message })
+                toast.error(t("details.files.failedDelete", { type: label }), { description: err.message })
               },
             },
           )
@@ -536,7 +541,7 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
         break
       }
     }
-  }, [toAbsolute, activateFile, openInAppMutation, openInFinderMutation, preferredEditor, deleteMutation, invalidateFiles])
+  }, [toAbsolute, activateFile, openInAppMutation, openInFinderMutation, preferredEditor, deleteMutation, invalidateFiles, t])
 
   const handleRenameSave = useCallback(async (newName: string) => {
     if (!renameTarget || !worktreePath) return
@@ -544,7 +549,7 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
     setRenameLoading(true)
     try {
       await renameMutation.mutateAsync({ absolutePath, newName })
-      toast.success(`Renamed to ${newName}`)
+      toast.success(t("details.files.renamedTo", { name: newName }))
 
       // Update expanded paths: replace old path prefix with new
       const oldPath = renameTarget.path
@@ -576,12 +581,12 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
       invalidateFiles()
       setRenameTarget(null)
     } catch (err: any) {
-      toast.error("Failed to rename", { description: err.message })
+      toast.error(t("details.files.failedRename"), { description: err.message })
       throw err // Keep dialog open
     } finally {
       setRenameLoading(false)
     }
-  }, [renameTarget, worktreePath, toAbsolute, renameMutation, invalidateFiles, setExpandedPaths])
+  }, [renameTarget, worktreePath, toAbsolute, renameMutation, invalidateFiles, setExpandedPaths, t])
 
   // ---- Keyboard (VS Code behaviour) ----
 
@@ -723,7 +728,7 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
   if (!worktreePath) {
     return (
       <div className={cn("flex-1 flex items-center justify-center p-4", className)}>
-        <p className="text-xs text-muted-foreground">No project open</p>
+        <p className="text-xs text-muted-foreground">{t("details.files.noProjectOpen")}</p>
       </div>
     )
   }
@@ -733,7 +738,9 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
       <div className="flex-1 overflow-y-auto pb-2">
         {tree.length === 0 ? (
           <div className="px-2 py-4 text-center">
-            <p className="text-xs text-muted-foreground">Loading files...</p>
+            <p className="text-xs text-muted-foreground">
+              {t("details.files.loading")}
+            </p>
           </div>
         ) : (
           <div
@@ -771,8 +778,8 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
         onSave={handleRenameSave}
         currentName={renameTarget?.name ?? ""}
         isLoading={renameLoading}
-        title="Rename"
-        placeholder="New name"
+        title={t("details.files.rename")}
+        placeholder={t("details.files.newName")}
       />
     </div>
   )

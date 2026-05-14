@@ -31,6 +31,7 @@ import {
 import { Minus, Plus } from "lucide-react";
 import type { ChangedFile } from "../../../../../shared/changes-types";
 import { getStatusColor, getStatusIndicator } from "../../utils";
+import { useI18n } from "../../../../lib/i18n";
 
 interface FileItemProps {
 	file: ChangedFile;
@@ -90,6 +91,7 @@ export function FileItem({
 	showCheckbox = false,
 	isStaged = false,
 }: FileItemProps) {
+	const { t } = useI18n();
 	const [showDiscardDialog, setShowDiscardDialog] = useState(false);
 
 	const fileName = getFileName(file.path);
@@ -145,13 +147,15 @@ export function FileItem({
 	};
 
 	const isDeleteAction = file.status === "untracked" || file.status === "added";
-	const discardLabel = isDeleteAction ? "Delete" : "Discard Changes";
+	const discardLabel = isDeleteAction
+		? t("changes.delete")
+		: t("changes.discardChanges");
 	const discardDialogTitle = isDeleteAction
-		? `Delete "${fileName}"?`
-		: `Discard changes to "${fileName}"?`;
+		? t("changes.deleteTitle", { name: fileName })
+		: t("changes.discardTitle", { name: fileName });
 	const discardDialogDescription = isDeleteAction
-		? "This will permanently delete this file. This action cannot be undone."
-		: "This will revert all changes to this file. This action cannot be undone.";
+		? t("changes.deleteDescription")
+		: t("changes.discardDescription");
 
 	const fileContent = (
 		<div
@@ -237,7 +241,7 @@ export function FileItem({
 									<HiMiniPlus className="size-3" />
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent side="right">Stage</TooltipContent>
+							<TooltipContent side="right">{t("changes.diff.stage")}</TooltipContent>
 						</Tooltip>
 					)}
 					{onUnstage && (
@@ -256,7 +260,7 @@ export function FileItem({
 									<HiMiniMinus className="size-3" />
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent side="right">Unstage</TooltipContent>
+							<TooltipContent side="right">{t("changes.diff.unstage")}</TooltipContent>
 						</Tooltip>
 					)}
 				</div>
@@ -275,20 +279,22 @@ export function FileItem({
 				<ContextMenuContent className="w-48">
 					<ContextMenuItem onClick={handleCopyPath}>
 						<ClipboardIcon className="mr-2 size-4" />
-						Copy Path
+						{t("changes.copyPath")}
 					</ContextMenuItem>
 					<ContextMenuItem onClick={handleCopyRelativePath}>
 						<ClipboardIcon className="mr-2 size-4" />
-						Copy Relative Path
+						{t("changes.copyRelativePath")}
 					</ContextMenuItem>
 					<ContextMenuSeparator />
 					<ContextMenuItem onClick={handleRevealInFinder}>
 						<FolderIcon className="mr-2 size-4" />
-						Reveal in Finder
+						{t("changes.revealInFinder")}
 					</ContextMenuItem>
 					<ContextMenuItem onClick={handleOpenInEditor}>
 						<ExternalLinkIcon className="mr-2 size-4" />
-						Open in Editor
+						{t("changes.openInEditor", {
+							editor: t("changes.openInEditorFallback"),
+						})}
 					</ContextMenuItem>
 
 					{(onStage || onUnstage || onDiscard) && <ContextMenuSeparator />}
@@ -296,14 +302,14 @@ export function FileItem({
 					{onStage && (
 						<ContextMenuItem onClick={onStage} disabled={isActioning}>
 							<Plus className="mr-2 size-4" />
-							Stage
+							{t("changes.diff.stage")}
 						</ContextMenuItem>
 					)}
 
 					{onUnstage && (
 						<ContextMenuItem onClick={onUnstage} disabled={isActioning}>
 							<Minus className="mr-2 size-4" />
-							Unstage
+							{t("changes.diff.unstage")}
 						</ContextMenuItem>
 					)}
 
@@ -335,14 +341,14 @@ export function FileItem({
 							size="sm"
 							onClick={() => setShowDiscardDialog(false)}
 						>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button
 							variant="destructive"
 							size="sm"
 							onClick={handleConfirmDiscard}
 						>
-							{isDeleteAction ? "Delete" : "Discard"}
+							{isDeleteAction ? t("changes.delete") : t("changes.discard")}
 						</Button>
 					</AlertDialogFooter>
 				</AlertDialogContent>

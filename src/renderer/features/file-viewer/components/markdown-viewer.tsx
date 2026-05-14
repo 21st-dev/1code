@@ -35,11 +35,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
 import { fileViewerWordWrapAtom, fileViewerDisplayModeAtom } from "../../agents/atoms"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 const FILE_VIEWER_MODES = [
-  { value: "side-peek" as const, label: "Sidebar", Icon: IconSidePeek },
-  { value: "center-peek" as const, label: "Dialog", Icon: IconCenterPeek },
-  { value: "full-page" as const, label: "Fullscreen", Icon: IconFullPage },
+  { value: "side-peek" as const, labelKey: "changes.diff.sidebar" as TranslationKey, Icon: IconSidePeek },
+  { value: "center-peek" as const, labelKey: "changes.diff.dialog" as TranslationKey, Icon: IconCenterPeek },
+  { value: "full-page" as const, labelKey: "changes.diff.fullscreen" as TranslationKey, Icon: IconFullPage },
 ]
 import { defaultEditorOptions, getMonacoTheme } from "./monaco-config"
 import { getFileName } from "../utils/file-utils"
@@ -55,6 +56,7 @@ export function MarkdownViewer({
   projectPath,
   onClose,
 }: MarkdownViewerProps) {
+  const { t } = useI18n()
   const fileName = getFileName(filePath)
   const { resolvedTheme } = useTheme()
   const monacoTheme = getMonacoTheme(resolvedTheme || "dark")
@@ -132,7 +134,7 @@ export function MarkdownViewer({
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="text-sm">Loading file...</span>
+            <span className="text-sm">{t("fileViewer.loadingFile")}</span>
           </div>
         </div>
       </div>
@@ -140,13 +142,13 @@ export function MarkdownViewer({
   }
 
   if (error || (data && !data.ok)) {
-    let errorMessage = "Failed to load file"
+    let errorMessage = t("fileViewer.failedLoadFile")
     if (data && !data.ok) {
       errorMessage = data.reason === "too-large"
-        ? "File too large"
+        ? t("fileViewer.fileTooLarge")
         : data.reason === "binary"
-        ? "Binary file"
-        : "File not found"
+        ? t("fileViewer.binaryFile")
+        : t("fileViewer.fileNotFound")
     }
 
     return (
@@ -225,6 +227,7 @@ function Header({
   onClose: () => void
   content?: string
 }) {
+  const { t } = useI18n()
   const Icon = getFileIconByExtension(filePath)
   const [displayMode, setDisplayMode] = useAtom(fileViewerDisplayModeAtom)
   const preferredEditor = useAtomValue(preferredEditorAtom)
@@ -270,14 +273,14 @@ function Header({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[140px]">
-            {FILE_VIEWER_MODES.map(({ value, label, Icon: ModeIcon }) => (
+            {FILE_VIEWER_MODES.map(({ value, labelKey, Icon: ModeIcon }) => (
               <DropdownMenuItem
                 key={value}
                 onClick={() => setDisplayMode(value)}
                 className="flex items-center gap-2"
               >
                 <ModeIcon className="size-4 text-muted-foreground" />
-                <span className="flex-1">{label}</span>
+                <span className="flex-1">{t(labelKey)}</span>
                 {displayMode === value && (
                   <Check className="size-4 text-muted-foreground ml-auto" />
                 )}
@@ -300,7 +303,7 @@ function Header({
               onClick={handleOpenInEditor}
               className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer rounded-md px-1.5 py-1 hover:bg-accent hover:text-accent-foreground transition-colors"
             >
-              <span className="hidden @[400px]:inline">Open in</span>
+              <span className="hidden @[400px]:inline">{t("details.openIn")}</span>
               {EDITOR_ICONS[preferredEditor] && (
                 <img
                   src={EDITOR_ICONS[preferredEditor]}
@@ -311,7 +314,7 @@ function Header({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" showArrow={false}>
-            Open in {editorMeta.label}
+            {t("changes.openInEditor", { editor: editorMeta.label })}
             {openInEditorHotkey && <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>}
           </TooltipContent>
         </Tooltip>
@@ -325,7 +328,7 @@ function Header({
                 size="icon"
                 onClick={onToggleView}
                 className="h-6 w-6 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground"
-                aria-label={showPreview ? "Show source" : "Show rendered"}
+                aria-label={showPreview ? t("fileViewer.showSource") : t("fileViewer.showRendered")}
               >
                 <div className="relative w-4 h-4">
                   <MarkdownIcon
@@ -344,7 +347,7 @@ function Header({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" showArrow={false}>
-              {showPreview ? "View source" : "View rendered"}
+              {showPreview ? t("fileViewer.viewSource") : t("fileViewer.viewRendered")}
             </TooltipContent>
           </Tooltip>
         )}
@@ -358,7 +361,7 @@ function Header({
               </div>
             </TooltipTrigger>
             <TooltipContent side="bottom" showArrow={false}>
-              Copy file content
+              {t("fileViewer.copyContent")}
             </TooltipContent>
           </Tooltip>
         )}

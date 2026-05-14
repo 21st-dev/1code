@@ -18,6 +18,7 @@ import {
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
+import { useI18n } from "@/lib/i18n"
 
 interface AgentPlanFileToolProps {
   part: {
@@ -45,6 +46,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   subChatId,
   isEdit = false,
 }: AgentPlanFileToolProps) {
+  const { t } = useI18n()
   const [isExpanded, setIsExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
   const { isPending } = getToolStatus(part, chatStatus)
@@ -171,10 +173,10 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
         <span className="text-xs text-muted-foreground">
           {shouldShowShimmer ? (
             <TextShimmer as="span" duration={1.2}>
-              {isEdit ? "Updating plan..." : "Creating plan..."}
+              {isEdit ? t("agent.tool.updatingPlan") : t("agent.tool.creatingPlan")}
             </TextShimmer>
           ) : (
-            "Plan"
+            t("agent.plan.plan")
           )}
         </span>
       </div>
@@ -192,10 +194,12 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
           <PlanIcon className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
           {shouldShowShimmer ? (
             <TextShimmer as="span" duration={1.2} className="truncate">
-              {isEdit ? "Updating plan..." : "Creating plan..."}
+              {isEdit ? t("agent.tool.updatingPlan") : t("agent.tool.creatingPlan")}
             </TextShimmer>
           ) : (
-            <span className="truncate text-foreground font-medium">Plan</span>
+            <span className="truncate text-foreground font-medium">
+              {t("agent.plan.plan")}
+            </span>
           )}
         </div>
 
@@ -228,7 +232,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" showArrow={false}>
-                Copy plan
+                {t("agent.plan.copy")}
               </TooltipContent>
             </Tooltip>
           )}
@@ -301,7 +305,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
             disabled={!viewPlanEnabled}
             className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
-            View plan
+            {t("details.viewPlan")}
           </Button>
         </div>
 
@@ -312,7 +316,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
             disabled={buildDisabled}
             className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97] disabled:opacity-50"
           >
-            Approve
+            {t("details.approve")}
             <Kbd className="ml-1.5 text-primary-foreground/70">⌘↵</Kbd>
           </Button>
         )}

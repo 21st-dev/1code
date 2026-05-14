@@ -27,6 +27,7 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import {
   agentsDebugModeAtom,
   justCreatedIdsAtom,
@@ -178,6 +179,7 @@ export function NewChatForm({
   isMobileFullscreen = false,
   onBackToChats,
 }: NewChatFormProps = {}) {
+  const { t } = useI18n()
   // UNCONTROLLED: just track if editor has content for send button
   const [hasContent, setHasContent] = useState(false)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
@@ -1636,7 +1638,7 @@ export function NewChatForm({
           {validatedProject && (
             <div className="text-center">
               <h1 className="text-2xl md:text-4xl font-medium tracking-tight">
-                What do you want to get done?
+                {t("chat.new.title")}
               </h1>
             </div>
           )}
@@ -1650,7 +1652,7 @@ export function NewChatForm({
                 disabled={openFolder.isPending}
                 className="h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {openFolder.isPending ? "Opening..." : "Select repo"}
+                {openFolder.isPending ? t("chat.opening") : t("chat.selectRepo")}
               </button>
             </div>
           ) : (
@@ -1686,7 +1688,7 @@ export function NewChatForm({
                       onContentChange={handleContentChange}
                       onSubmit={handleSend}
                       onShiftTab={toggleMode}
-                      placeholder="Plan, @ for context, / for commands"
+                      placeholder={t("chat.placeholder.default")}
                       className={cn(
                         "bg-transparent max-h-[240px] overflow-y-auto p-1",
                         isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
@@ -1720,7 +1722,7 @@ export function NewChatForm({
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
-                          <span>{agentMode === "plan" ? "Plan" : "Agent"}</span>
+                          <span>{agentMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -1779,7 +1781,7 @@ export function NewChatForm({
                           >
                             <div className="flex items-center gap-2">
                               <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Agent</span>
+                              <span>{t("chat.mode.agent")}</span>
                             </div>
                             {agentMode !== "plan" && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
@@ -1834,7 +1836,7 @@ export function NewChatForm({
                           >
                             <div className="flex items-center gap-2">
                               <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Plan</span>
+                              <span>{t("chat.mode.plan")}</span>
                             </div>
                             {agentMode === "plan" && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
@@ -1857,8 +1859,8 @@ export function NewChatForm({
                               >
                                 <span>
                                   {modeTooltip.mode === "agent"
-                                    ? "Apply changes directly without a plan"
-                                    : "Create a plan before making changes"}
+                                    ? t("chat.mode.agentTooltip")
+                                    : t("chat.mode.planTooltip")}
                                 </span>
                               </div>
                             </div>,
@@ -2025,7 +2027,7 @@ export function NewChatForm({
                           <SearchIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                           <input
                             type="text"
-                            placeholder="Search branches..."
+                            placeholder={t("chat.branch.search")}
                             value={branchSearch}
                             onChange={(e) => setBranchSearch(e.target.value)}
                             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -2043,14 +2045,14 @@ export function NewChatForm({
                             }}
                           >
                             <Plus className="h-3 w-3" />
-                            Create
+                            {t("chat.branch.create")}
                           </Button>
                         </div>
 
                         {/* Virtualized branch list */}
                         {filteredBranches.length === 0 ? (
                           <div className="py-6 text-center text-sm text-muted-foreground">
-                            No branches found.
+                            {t("chat.branch.empty")}
                           </div>
                         ) : (
                           <div

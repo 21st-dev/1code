@@ -12,6 +12,7 @@ import { HiArrowPath, HiChevronDown } from "react-icons/hi2";
 import { LuGitBranch, LuGitPullRequest } from "react-icons/lu";
 import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
+import { useI18n, type TranslationKey } from "../../../../lib/i18n";
 import { usePRStatus } from "../../../../hooks/usePRStatus";
 import { PRIcon } from "../pr-icon";
 
@@ -23,15 +24,20 @@ interface ChangesPanelHeaderProps {
 	layoutMode: LayoutMode;
 }
 
-function formatTimeSince(date: Date): string {
+type Translate = (
+	key: TranslationKey,
+	values?: Record<string, string | number>,
+) => string;
+
+function formatTimeSince(date: Date, t: Translate): string {
 	const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-	if (seconds < 60) return "just now";
+	if (seconds < 60) return t("changes.diff.justNow");
 	const minutes = Math.floor(seconds / 60);
-	if (minutes < 60) return `${minutes}m ago`;
+	if (minutes < 60) return t("changes.diff.minutesAgo", { count: minutes });
 	const hours = Math.floor(minutes / 60);
-	if (hours < 24) return `${hours}h ago`;
+	if (hours < 24) return t("changes.diff.hoursAgo", { count: hours });
 	const days = Math.floor(hours / 24);
-	return `${days}d ago`;
+	return t("changes.diff.daysAgo", { count: days });
 }
 
 export function ChangesPanelHeader({
@@ -39,6 +45,7 @@ export function ChangesPanelHeader({
 	currentBranch,
 	layoutMode,
 }: ChangesPanelHeaderProps) {
+	const { t } = useI18n();
 	const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [displayTime, setDisplayTime] = useState<string>("");
@@ -72,13 +79,13 @@ export function ChangesPanelHeader({
 		if (!lastFetchTime) return;
 
 		const updateTime = () => {
-			setDisplayTime(formatTimeSince(lastFetchTime));
+			setDisplayTime(formatTimeSince(lastFetchTime, t));
 		};
 
 		updateTime();
 		const interval = setInterval(updateTime, 60000);
 		return () => clearInterval(interval);
-	}, [lastFetchTime]);
+	}, [lastFetchTime, t]);
 
 	const handleFetch = () => {
 		setIsRefreshing(true);
@@ -129,13 +136,15 @@ export function ChangesPanelHeader({
 							>
 								<LuGitBranch className={cn("size-3.5 shrink-0", isCompact && "size-3")} />
 								<span className="truncate max-w-[120px]">
-									{currentBranch || "No branch"}
+									{currentBranch || t("changes.noBranch")}
 								</span>
 								<HiChevronDown className={cn("size-3 shrink-0 opacity-50", isCompact && "size-2.5")} />
 							</Button>
 						</DropdownMenuTrigger>
 					</TooltipTrigger>
-					<TooltipContent side="bottom">Switch branch</TooltipContent>
+					<TooltipContent side="bottom">
+						{t("changes.branch.switch")}
+					</TooltipContent>
 				</Tooltip>
 				<DropdownMenuContent align="start" className="w-48">
 					{branches.map((branchInfo) => (
@@ -151,7 +160,7 @@ export function ChangesPanelHeader({
 							<span className="truncate">{branchInfo.branch}</span>
 							{branchInfo.branch === branchData?.defaultBranch && (
 								<span className="ml-auto text-[10px] text-muted-foreground">
-									default
+									{t("changes.defaultBranch")}
 								</span>
 							)}
 						</DropdownMenuItem>
@@ -164,7 +173,7 @@ export function ChangesPanelHeader({
 						className="text-xs"
 					>
 						<LuGitBranch className="mr-2 size-3.5" />
-						Create new branch...
+						{t("changes.branch.createNew")}
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -220,15 +229,15 @@ export function ChangesPanelHeader({
 							/>
 							{layoutMode !== "compact" && (
 								<span className="text-[10px] text-muted-foreground">
-									{displayTime || "Fetch"}
+									{displayTime || t("changes.diff.fetch")}
 								</span>
 							)}
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">
 						{lastFetchTime
-							? `Last fetched ${displayTime}`
-							: "Fetch from remote"}
+							? t("changes.diff.lastFetched", { time: displayTime })
+							: t("changes.diff.fetchFromRemote")}
 					</TooltipContent>
 				</Tooltip>
 			</div>

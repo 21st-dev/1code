@@ -28,11 +28,12 @@ import {
 import { fileViewerDisplayModeAtom } from "../../agents/atoms"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
 import { getFileName } from "../utils/file-utils"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 const FILE_VIEWER_MODES = [
-  { value: "side-peek" as const, label: "Sidebar", Icon: IconSidePeek },
-  { value: "center-peek" as const, label: "Dialog", Icon: IconCenterPeek },
-  { value: "full-page" as const, label: "Fullscreen", Icon: IconFullPage },
+  { value: "side-peek" as const, labelKey: "changes.diff.sidebar" as TranslationKey, Icon: IconSidePeek },
+  { value: "center-peek" as const, labelKey: "changes.diff.dialog" as TranslationKey, Icon: IconCenterPeek },
+  { value: "full-page" as const, labelKey: "changes.diff.fullscreen" as TranslationKey, Icon: IconFullPage },
 ]
 
 interface ImageViewerProps {
@@ -46,6 +47,7 @@ export function ImageViewer({
   projectPath,
   onClose,
 }: ImageViewerProps) {
+  const { t } = useI18n()
   const fileName = getFileName(filePath)
   const [displayMode, setDisplayMode] = useAtom(fileViewerDisplayModeAtom)
   const preferredEditor = useAtomValue(preferredEditorAtom)
@@ -101,14 +103,14 @@ export function ImageViewer({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[140px]">
-              {FILE_VIEWER_MODES.map(({ value, label, Icon }) => (
+              {FILE_VIEWER_MODES.map(({ value, labelKey, Icon }) => (
                 <DropdownMenuItem
                   key={value}
                   onClick={() => setDisplayMode(value)}
                   className="flex items-center gap-2"
                 >
                   <Icon className="size-4 text-muted-foreground" />
-                  <span className="flex-1">{label}</span>
+                  <span className="flex-1">{t(labelKey)}</span>
                   {displayMode === value && (
                     <Check className="size-4 text-muted-foreground ml-auto" />
                   )}
@@ -136,7 +138,7 @@ export function ImageViewer({
                 onClick={handleOpenInEditor}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer rounded-md px-1.5 py-1 hover:bg-accent hover:text-accent-foreground transition-colors"
               >
-                <span className="hidden @[400px]:inline">Open in</span>
+                <span className="hidden @[400px]:inline">{t("details.openIn")}</span>
                 {EDITOR_ICONS[preferredEditor] && (
                   <img
                     src={EDITOR_ICONS[preferredEditor]}
@@ -147,7 +149,7 @@ export function ImageViewer({
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" showArrow={false}>
-              Open in {editorMeta.label}
+              {t("changes.openInEditor", { editor: editorMeta.label })}
               {openInEditorHotkey && <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
@@ -159,14 +161,16 @@ export function ImageViewer({
         {isLoading && (
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="text-sm">Loading image...</span>
+            <span className="text-sm">{t("fileViewer.loadingImage")}</span>
           </div>
         )}
 
         {error && (
           <div className="flex flex-col items-center gap-3 text-center max-w-[300px]">
             <AlertCircle className="h-10 w-10 text-muted-foreground" />
-            <p className="font-medium text-foreground">Failed to load image</p>
+            <p className="font-medium text-foreground">
+              {t("fileViewer.failedLoadImage")}
+            </p>
           </div>
         )}
 
@@ -174,12 +178,14 @@ export function ImageViewer({
           <div className="flex flex-col items-center gap-3 text-center max-w-[300px]">
             <AlertCircle className="h-10 w-10 text-muted-foreground" />
             <p className="font-medium text-foreground">
-              {data.reason === "too-large" ? "Image too large" : "Image not found"}
+              {data.reason === "too-large"
+                ? t("fileViewer.imageTooLarge")
+                : t("fileViewer.imageNotFound")}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               {data.reason === "too-large"
-                ? "The image exceeds the 20MB size limit."
-                : "The file could not be found."}
+                ? t("fileViewer.imageTooLargeDescription")
+                : t("fileViewer.fileNotFoundDescription")}
             </p>
           </div>
         )}

@@ -3,6 +3,7 @@
 import { useAtomValue, useSetAtom } from "jotai"
 import { ChevronLeft } from "lucide-react"
 import { useEffect, useMemo, useRef } from "react"
+import { LanguageSwitcher } from "../../components/language-switcher"
 import { CodexLoginContent } from "../agents/components/codex-login-content"
 import { useCodexLoginFlow } from "../agents/hooks/use-codex-login-flow"
 import {
@@ -81,6 +82,8 @@ export function CodexOnboardingPage() {
         className="fixed top-0 left-0 right-0 h-10"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
+
+      <LanguageSwitcher compact className="fixed top-12 right-4" />
 
       <button
         onClick={() => void handleBack()}

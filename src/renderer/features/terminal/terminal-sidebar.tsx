@@ -40,6 +40,7 @@ import {
 import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "./types"
 import { isSharedTerminalScope } from "./utils"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 // Animation constants - keep in sync with ResizableSidebar animationDuration
 const SIDEBAR_ANIMATION_DURATION_SECONDS = 0 // Disabled for performance
@@ -92,8 +93,8 @@ function getNextTerminalName(terminals: TerminalInstance[]): string {
 }
 
 const TERMINAL_MODES = [
-  { value: "side-peek" as const, label: "Sidebar", Icon: IconSidePeek },
-  { value: "bottom" as const, label: "Bottom", Icon: IconBottomPanel },
+  { value: "side-peek" as const, labelKey: "terminal.sidebarMode" as TranslationKey, Icon: IconSidePeek },
+  { value: "bottom" as const, labelKey: "terminal.bottomMode" as TranslationKey, Icon: IconBottomPanel },
 ]
 
 function TerminalModeSwitcher({
@@ -103,6 +104,7 @@ function TerminalModeSwitcher({
   mode: TerminalDisplayMode
   onModeChange: (mode: TerminalDisplayMode) => void
 }) {
+  const { t } = useI18n()
   const currentMode = TERMINAL_MODES.find((m) => m.value === mode) ?? TERMINAL_MODES[0]
   const CurrentIcon = currentMode.Icon
 
@@ -118,14 +120,14 @@ function TerminalModeSwitcher({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[140px]">
-        {TERMINAL_MODES.map(({ value, label, Icon }) => (
+        {TERMINAL_MODES.map(({ value, labelKey, Icon }) => (
           <DropdownMenuItem
             key={value}
             onClick={() => onModeChange(value)}
             className="flex items-center gap-2"
           >
             <Icon className="size-4 text-muted-foreground" />
-            <span className="flex-1">{label}</span>
+            <span className="flex-1">{t(labelKey)}</span>
             {mode === value && (
               <Check className="size-4 text-muted-foreground ml-auto" />
             )}
@@ -146,6 +148,7 @@ export function TerminalSidebar({
   isMobileFullscreen = false,
   onClose,
 }: TerminalSidebarProps) {
+  const { t } = useI18n()
   // Per-chat terminal sidebar state (sidebar open/close is per-workspace, not per-scope)
   const terminalSidebarAtom = useMemo(
     () => terminalSidebarOpenAtomFamily(chatId),
@@ -447,7 +450,7 @@ export function TerminalSidebar({
             size="icon"
             onClick={handleMobileClose}
             className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
-            aria-label="Back to chat"
+            aria-label={t("terminal.backToChat")}
             style={{
               // @ts-expect-error - WebKit-specific property
               WebkitAppRegion: "no-drag",
@@ -501,7 +504,7 @@ export function TerminalSidebar({
             </motion.div>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              {!canRenderTerminal ? "" : "No terminal open"}
+              {!canRenderTerminal ? "" : t("terminal.noTerminalOpen")}
             </div>
           )}
         </div>
@@ -545,13 +548,13 @@ export function TerminalSidebar({
                   size="icon"
                   onClick={closeSidebar}
                   className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                  aria-label="Close terminal"
+                  aria-label={t("terminal.close")}
                 >
                   <IconDoubleChevronRight className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Close terminal
+                {t("terminal.close")}
                 {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>
@@ -601,7 +604,7 @@ export function TerminalSidebar({
             </motion.div>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              {!canRenderTerminal ? "" : "No terminal open"}
+              {!canRenderTerminal ? "" : t("terminal.noTerminalOpen")}
             </div>
           )}
         </div>
@@ -633,6 +636,7 @@ export function TerminalBottomPanelContent({
   initialCommands,
   onClose,
 }: TerminalBottomPanelContentProps) {
+  const { t } = useI18n()
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
@@ -818,13 +822,13 @@ export function TerminalBottomPanelContent({
                 size="icon"
                 onClick={onClose}
                 className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                aria-label="Close terminal"
+                aria-label={t("terminal.close")}
               >
                 <ChevronsDown className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">
-              Close terminal
+              {t("terminal.close")}
               {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
@@ -874,7 +878,7 @@ export function TerminalBottomPanelContent({
           </motion.div>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            No terminal open
+            {t("terminal.noTerminalOpen")}
           </div>
         )}
       </div>

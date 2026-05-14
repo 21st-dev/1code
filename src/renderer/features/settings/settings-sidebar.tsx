@@ -12,6 +12,7 @@ import {
   isDesktopAtom,
   type SettingsTab,
 } from "../../lib/atoms"
+import { useI18n, type TranslationKey } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
 import {
   BrainFilledIcon,
@@ -33,86 +34,89 @@ const isDevelopment = import.meta.env.DEV
 const DEVTOOLS_UNLOCK_CLICKS = 5
 
 // General settings tabs
-const MAIN_TABS = [
+const MAIN_TABS: SettingsTabDefinition[] = [
   {
     id: "preferences" as SettingsTab,
-    label: "Preferences",
+    labelKey: "settings.sidebar.preferences",
     icon: SlidersFilledIcon,
   },
   {
     id: "profile" as SettingsTab,
-    label: "Account",
+    labelKey: "settings.sidebar.account",
     icon: ProfileIconFilled,
   },
   {
     id: "appearance" as SettingsTab,
-    label: "Appearance",
+    labelKey: "settings.sidebar.appearance",
     icon: EyeOpenFilledIcon,
   },
   {
     id: "keyboard" as SettingsTab,
-    label: "Keyboard",
+    labelKey: "settings.sidebar.keyboard",
     icon: KeyboardFilledIcon,
   },
   {
     id: "beta" as SettingsTab,
-    label: "Beta",
+    labelKey: "settings.sidebar.beta",
     icon: FlaskFilledIcon,
   },
 ]
 
 // Advanced tabs (base - without Debug)
-const ADVANCED_TABS_BASE = [
+const ADVANCED_TABS_BASE: SettingsTabDefinition[] = [
   {
     id: "projects" as SettingsTab,
-    label: "Projects",
+    labelKey: "settings.sidebar.projects",
     icon: FolderFilledIcon,
   },
   {
     id: "models" as SettingsTab,
-    label: "Models",
+    labelKey: "settings.sidebar.models",
     icon: BrainFilledIcon,
   },
   {
     id: "skills" as SettingsTab,
-    label: "Skills",
+    labelKey: "settings.sidebar.skills",
     icon: SkillIconFilled,
   },
   {
     id: "agents" as SettingsTab,
-    label: "Custom Agents",
+    labelKey: "settings.sidebar.customAgents",
     icon: CustomAgentIconFilled,
   },
   {
     id: "mcp" as SettingsTab,
-    label: "MCP Servers",
+    labelKey: "settings.sidebar.mcpServers",
     icon: OriginalMCPIcon,
   },
   {
     id: "plugins" as SettingsTab,
-    label: "Plugins",
+    labelKey: "settings.sidebar.plugins",
     icon: PluginFilledIcon,
   },
 ]
 
 // Debug tab definition
-const DEBUG_TAB = {
+const DEBUG_TAB: SettingsTabDefinition = {
   id: "debug" as SettingsTab,
-  label: "Debug",
+  labelKey: "settings.sidebar.debug",
   icon: BugFilledIcon,
 }
 
+type SettingsTabDefinition = {
+  id: SettingsTab
+  labelKey: TranslationKey
+  icon: React.ComponentType<{ className?: string }> | any
+}
+
 interface TabButtonProps {
-  tab: {
-    id: SettingsTab
-    label: string
-    icon: React.ComponentType<{ className?: string }> | any
-  }
+  tab: SettingsTabDefinition
   isActive: boolean
   onClick: () => void
 }
 
 function TabButton({ tab, isActive, onClick }: TabButtonProps) {
+  const { t } = useI18n()
   const Icon = tab.icon
   const isProjectTab = "projectId" in tab
 
@@ -133,12 +137,13 @@ function TabButton({ tab, isActive, onClick }: TabButtonProps) {
           isProjectTab ? "opacity-100" : isActive ? "opacity-100" : "opacity-50"
         )}
       />
-      <span className="flex-1 truncate">{tab.label}</span>
+      <span className="flex-1 truncate">{t(tab.labelKey)}</span>
     </button>
   )
 }
 
 export function SettingsSidebar() {
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useAtom(agentsSettingsDialogActiveTabAtom)
   const [devToolsUnlocked, setDevToolsUnlocked] = useAtom(devToolsUnlockedAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
@@ -195,7 +200,7 @@ export function SettingsSidebar() {
           className="inline-flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm h-7 rounded-md text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"
         >
           <ChevronLeft className="h-4 w-4" />
-          <span>Back</span>
+          <span>{t("common.back")}</span>
         </button>
       </div>
 

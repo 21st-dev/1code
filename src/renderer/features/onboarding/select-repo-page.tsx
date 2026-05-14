@@ -5,12 +5,15 @@ import { useAtom } from "jotai"
 import { ChevronLeft } from "lucide-react"
 
 import { IconSpinner, GitHubIcon } from "../../components/ui/icons"
+import { LanguageSwitcher } from "../../components/language-switcher"
 import { Logo } from "../../components/ui/logo"
 import { Input } from "../../components/ui/input"
 import { trpc } from "../../lib/trpc"
 import { selectedProjectAtom } from "../agents/atoms"
+import { useI18n } from "../../lib/i18n"
 
 export function SelectRepoPage() {
+  const { t } = useI18n()
   const [, setSelectedProject] = useAtom(selectedProjectAtom)
   const [showClonePage, setShowClonePage] = useState(false)
   const [githubUrl, setGithubUrl] = useState("")
@@ -110,6 +113,8 @@ export function SelectRepoPage() {
           style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         />
 
+        <LanguageSwitcher compact className="fixed top-12 right-4" />
+
         {/* Back button */}
         <button
           onClick={handleBack}
@@ -132,10 +137,10 @@ export function SelectRepoPage() {
             </div>
             <div className="space-y-1">
               <h1 className="text-base font-semibold tracking-tight">
-                Clone from GitHub
+                {t("onboarding.repo.cloneTitle")}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Enter a repository URL or owner/repo
+                {t("onboarding.repo.cloneSubtitle")}
               </p>
             </div>
           </div>
@@ -163,7 +168,7 @@ export function SelectRepoPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground text-center">
-              Example: facebook/react or https://github.com/facebook/react
+              {t("onboarding.repo.cloneExample")}
             </p>
           </div>
         </div>
@@ -180,6 +185,8 @@ export function SelectRepoPage() {
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
 
+      <LanguageSwitcher compact className="fixed top-12 right-4" />
+
       <div className="w-full max-w-[440px] space-y-8 px-4">
         {/* Header */}
         <div className="text-center space-y-4">
@@ -190,10 +197,10 @@ export function SelectRepoPage() {
           </div>
           <div className="space-y-1">
             <h1 className="text-base font-semibold tracking-tight">
-              Select a repository
+              {t("onboarding.repo.selectTitle")}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Choose a local folder to start working with
+              {t("onboarding.repo.selectSubtitle")}
             </p>
           </div>
         </div>
@@ -208,7 +215,7 @@ export function SelectRepoPage() {
             {openFolder.isPending ? (
               <IconSpinner className="h-4 w-4" />
             ) : (
-              "Select folder"
+              t("onboarding.repo.selectFolder")
             )}
           </button>
           <button
@@ -219,7 +226,7 @@ export function SelectRepoPage() {
             {cloneFromGitHub.isPending ? (
               <IconSpinner className="h-4 w-4" />
             ) : (
-              "Clone from GitHub"
+              t("onboarding.repo.cloneTitle")
             )}
           </button>
         </div>

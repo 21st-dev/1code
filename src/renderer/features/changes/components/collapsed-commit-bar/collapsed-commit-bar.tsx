@@ -3,6 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/
 import { ChevronUp } from "lucide-react";
 import { IconSpinner } from "../../../../components/ui/icons";
 import { cn } from "../../../../lib/utils";
+import { useI18n } from "../../../../lib/i18n";
 
 interface CollapsedCommitBarProps {
 	fileCount: number;
@@ -21,22 +22,26 @@ export function CollapsedCommitBar({
 	onCommit,
 	isCommitting = false,
 }: CollapsedCommitBarProps) {
+	const { t } = useI18n();
 	const canCommit = stagedCount > 0;
 
 	const getCommitLabel = () => {
 		if (stagedCount > 0 && currentBranch) {
-			return `Commit ${stagedCount} to ${currentBranch}`;
+			return t("changes.commit.commitCountToBranch", {
+				count: stagedCount,
+				branch: currentBranch,
+			});
 		}
 		if (currentBranch) {
-			return `Commit to ${currentBranch}`;
+			return t("changes.commit.commitToBranch", { branch: currentBranch });
 		}
-		return "Commit";
+		return t("changes.commit.commit");
 	};
 
 	const getTooltip = () => {
-		if (stagedCount === 0) return "No staged changes";
-		if (isCommitting) return "AI is generating commit...";
-		return "Commit staged changes with AI-generated message";
+		if (stagedCount === 0) return t("changes.commit.noStagedChanges");
+		if (isCommitting) return t("changes.commit.aiGenerating");
+		return t("changes.commit.commitStagedWithAI");
 	};
 
 	return (
@@ -52,9 +57,9 @@ export function CollapsedCommitBar({
 				)}
 			>
 				<ChevronUp className="size-3.5 text-muted-foreground flex-shrink-0" />
-				<span className="text-xs font-medium">Changes</span>
+				<span className="text-xs font-medium">{t("changes.title")}</span>
 				<span className="text-xs text-muted-foreground">
-					({fileCount} file{fileCount !== 1 ? "s" : ""})
+					({fileCount} {fileCount === 1 ? t("changes.filter.file") : t("changes.filter.files")})
 				</span>
 			</button>
 

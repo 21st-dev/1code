@@ -2,6 +2,7 @@ import { Button } from "../../../../components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
 import { LuFolder, LuFolderTree } from "react-icons/lu";
 import type { ChangesViewMode } from "../../types";
+import { useI18n } from "../../../../lib/i18n";
 
 interface ViewModeToggleProps {
 	viewMode: ChangesViewMode;
@@ -12,6 +13,7 @@ export function ViewModeToggle({
 	viewMode,
 	onViewModeChange,
 }: ViewModeToggleProps) {
+	const { t } = useI18n();
 	const handleToggle = () => {
 		onViewModeChange(viewMode === "grouped" ? "tree" : "grouped");
 	};
@@ -24,7 +26,7 @@ export function ViewModeToggle({
 					size="icon"
 					onClick={handleToggle}
 					className="size-6 p-0"
-					aria-label={viewMode === "grouped" ? "Grouped view" : "Tree view"}
+					aria-label={viewMode === "grouped" ? t("changes.view.groupedView") : t("changes.view.treeView")}
 				>
 					{viewMode === "grouped" ? (
 						<LuFolder className="size-3.5" />
@@ -35,8 +37,8 @@ export function ViewModeToggle({
 			</TooltipTrigger>
 			<TooltipContent side="bottom" showArrow={false}>
 				{viewMode === "grouped"
-					? "Switch to tree view"
-					: "Switch to grouped view"}
+					? t("changes.view.switchToTree")
+					: t("changes.view.switchToGrouped")}
 			</TooltipContent>
 		</Tooltip>
 	);

@@ -11,6 +11,7 @@ import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areTaskToolPropsEqual } from "./agent-tool-utils"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "@/lib/i18n"
 
 interface AgentTaskToolProps {
   part: any
@@ -38,6 +39,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   nestedTools,
   chatStatus,
 }: AgentTaskToolProps) {
+  const { t } = useI18n()
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
   const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
@@ -97,8 +99,8 @@ export const AgentTaskTool = memo(function AgentTaskTool({
       const lastTool = nestedTools[nestedTools.length - 1]
       const meta = lastTool ? AgentToolRegistry[lastTool.type] : null
       if (meta) {
-        const title = meta.title(lastTool)
-        const sub = meta.subtitle?.(lastTool)
+        const title = meta.title(lastTool, t)
+        const sub = meta.subtitle?.(lastTool, t)
         return sub ? `${title} ${sub}` : title
       }
     }
@@ -115,12 +117,14 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 
   // Get title text based on status
   const getTitle = () => {
-    return isPending ? "Running Subagent" : "Completed Subagent"
+    return isPending
+      ? t("agent.tool.runningSubagent")
+      : t("agent.tool.completedSubagent")
   }
 
   // Show interrupted state if task was interrupted without completing
   if (isInterrupted && !part.output) {
-    return <AgentToolInterrupted toolName="Subagent" subtitle={subtitle} />
+    return <AgentToolInterrupted toolName={t("agent.tool.subagent")} subtitle={subtitle} />
   }
 
   return (
@@ -218,8 +222,8 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                 <AgentToolCall
                   key={idx}
                   icon={nestedMeta.icon}
-                  title={nestedMeta.title(nestedPart)}
-                  subtitle={nestedMeta.subtitle?.(nestedPart)}
+                  title={nestedMeta.title(nestedPart, t)}
+                  subtitle={nestedMeta.subtitle?.(nestedPart, t)}
                   tooltipContent={nestedMeta.tooltipContent?.(nestedPart, projectPath)}
                   isPending={nestedIsPending}
                   isError={nestedIsError}

@@ -12,6 +12,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/lib/i18n"
 import { getStatusIndicator } from "../utils/status"
 import type { FileStatus } from "../../../../shared/changes-types"
 
@@ -84,6 +85,7 @@ export const FileListItem = memo(function FileListItem({
   onDiscard,
   showContextMenu = true,
 }: FileListItemProps) {
+  const { t } = useI18n()
   const content = (
     <div
       data-file-item
@@ -131,11 +133,13 @@ export const FileListItem = memo(function FileListItem({
       <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
         {onCopyPath && (
-          <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
+          <ContextMenuItem onClick={onCopyPath}>
+            {t("changes.copyPath")}
+          </ContextMenuItem>
         )}
         {onCopyRelativePath && (
           <ContextMenuItem onClick={onCopyRelativePath}>
-            Copy Relative Path
+            {t("changes.copyRelativePath")}
           </ContextMenuItem>
         )}
         {(onCopyPath || onCopyRelativePath) && onRevealInFinder && (
@@ -143,7 +147,7 @@ export const FileListItem = memo(function FileListItem({
         )}
         {onRevealInFinder && (
           <ContextMenuItem onClick={onRevealInFinder}>
-            Reveal in Finder
+            {t("changes.revealInFinder")}
           </ContextMenuItem>
         )}
         {(onOpenInFilePreview || onOpenInEditor) && (
@@ -151,19 +155,21 @@ export const FileListItem = memo(function FileListItem({
         )}
         {onOpenInFilePreview && (
           <ContextMenuItem onClick={onOpenInFilePreview}>
-            Open in File Preview
+            {t("changes.openInFilePreview")}
           </ContextMenuItem>
         )}
         {onOpenInEditor && (
           <ContextMenuItem onClick={onOpenInEditor}>
-            Open in {editorLabel || "Editor"}
+            {t("changes.openInEditor", {
+              editor: editorLabel || t("changes.openInEditorFallback"),
+            })}
           </ContextMenuItem>
         )}
         {onToggleViewed && (
           <>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={onToggleViewed} className="justify-between">
-              {isViewed ? "Mark as unviewed" : "Mark as viewed"}
+              {isViewed ? t("changes.markUnviewed") : t("changes.markViewed")}
               <Kbd>V</Kbd>
             </ContextMenuItem>
           </>
@@ -175,7 +181,9 @@ export const FileListItem = memo(function FileListItem({
               onClick={onDiscard}
               className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
             >
-              {isUntracked ? "Delete File..." : "Discard Changes..."}
+              {isUntracked
+                ? t("changes.deleteFile")
+                : t("changes.discardChanges")}
             </ContextMenuItem>
           </>
         )}

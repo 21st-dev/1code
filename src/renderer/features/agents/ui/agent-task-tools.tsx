@@ -8,6 +8,12 @@ import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
 import { currentTaskToolsAtomFamily } from "../atoms"
 import { getToolStatus } from "./agent-tool-registry"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
+
+type Translate = (
+  key: TranslationKey,
+  values?: Record<string, string | number>
+) => string
 
 /**
  * Format a task subject with its ID prefix.
@@ -463,25 +469,25 @@ function extractReadDataFromParts(parts: any[]): ExtractedReadData {
  * Get human-readable description of the change
  * Returns null for "created" since header already says "Created X tasks"
  */
-function getChangeDescription(change: TaskChange): string | null {
+function getChangeDescription(change: TaskChange, t: Translate): string | null {
   switch (change.changeType) {
     case "created":
       return null // Header already says "Created X tasks"
     case "deleted":
-      return "Deleted"
+      return t("agent.task.deleted")
     case "status_changed":
-      if (change.newStatus === "in_progress") return "Started"
-      if (change.newStatus === "completed") return "Completed"
-      if (change.newStatus === "pending") return "Reset to pending"
-      return "Updated"
+      if (change.newStatus === "in_progress") return t("agent.task.started")
+      if (change.newStatus === "completed") return t("agent.task.completed")
+      if (change.newStatus === "pending") return t("agent.task.resetToPending")
+      return t("agent.task.updated")
     case "updated":
       // For dependency updates, we'll show the details in the component
       if (change.updatedFields?.includes("blockedBy") || change.updatedFields?.includes("blocks")) {
         return null // Details shown separately
       }
-      return "Updated"
+      return t("agent.task.updated")
     default:
-      return "Changed"
+      return t("agent.task.changed")
   }
 }
 
@@ -715,7 +721,8 @@ const ChangeItem = memo(function ChangeItem({
   taskSubjects: Map<string, string>
   taskSnapshot: Map<string, TaskSnapshot>
 }) {
-  const statusSuffix = getChangeDescription(change)
+  const { t } = useI18n()
+  const statusSuffix = getChangeDescription(change, t)
   const displayText = change.newStatus === "in_progress" && change.activeForm
     ? change.activeForm
     : change.subject
@@ -729,7 +736,7 @@ const ChangeItem = memo(function ChangeItem({
     const deps = change.blocksIds
       .map(id => taskSubjects.get(id) ?? `#${id}`)
       .join(", ")
-    blocksDesc = `blocks ${deps}`
+    blocksDesc = t("agent.task.blocks", { items: deps })
   }
 
   return (
@@ -785,6 +792,7 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
   isStreaming,
   subChatId,
 }: AgentTaskToolsGroupProps) {
+  const { t } = useI18n()
   // Build snapshots using linear history
   // Each group gets its own snapshot keyed by groupKey (first toolCallId)
   // previousSnapshot = state before this group, currentSnapshot = state after
@@ -954,7 +962,7 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
                   duration={1.2}
                   className="inline-flex items-center text-xs leading-none h-4 m-0"
                 >
-                  Updating tasks...
+                  {t("agent.task.updatingTasks")}
                 </TextShimmer>
               </span>
             </div>
@@ -966,7 +974,7 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
   }
 
   // Generate header text based on what we're showing
-  let headerText = "Tasks"
+  let headerText = t("agent.task.tasksTitle")
 
   if (hasChanges) {
     // Count changes by type for header
@@ -974,17 +982,49 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
     const completedCount = changes.filter(c => c.newStatus === "completed").length
     const startedCount = changes.filter(c => c.newStatus === "in_progress").length
 
+    const createdNoun = createdCount === 1
+      ? t("agent.task.task")
+      : t("agent.task.tasks")
+    const completedNoun = completedCount === 1
+      ? t("agent.task.task")
+      : t("agent.task.tasks")
+    const startedNoun = startedCount === 1
+      ? t("agent.task.task")
+      : t("agent.task.tasks")
+    const changedNoun = changes.length === 1
+      ? t("agent.task.task")
+      : t("agent.task.tasks")
+
     if (createdCount > 0 && createdCount === changes.length) {
-      headerText = `Created ${createdCount} task${createdCount > 1 ? "s" : ""}`
+      headerText = t("agent.task.createdCount", {
+        count: createdCount,
+        noun: createdNoun,
+      })
     } else if (completedCount > 0 && completedCount === changes.length) {
-      headerText = `Completed ${completedCount} task${completedCount > 1 ? "s" : ""}`
+      headerText = t("agent.task.completedCount", {
+        count: completedCount,
+        noun: completedNoun,
+      })
     } else if (startedCount > 0 && startedCount === changes.length) {
-      headerText = `Started ${startedCount} task${startedCount > 1 ? "s" : ""}`
+      headerText = t("agent.task.startedCount", {
+        count: startedCount,
+        noun: startedNoun,
+      })
     } else {
-      headerText = `${changes.length} task update${changes.length > 1 ? "s" : ""}`
+      headerText = t("agent.task.updateCount", {
+        count: changes.length,
+        suffix: changes.length > 1 ? "s" : "",
+        noun: changedNoun,
+      })
     }
   } else if (hasTaskList) {
-    headerText = `List ${taskList!.length} task${taskList!.length > 1 ? "s" : ""}`
+    const noun = taskList!.length === 1
+      ? t("agent.task.task")
+      : t("agent.task.tasks")
+    headerText = t("agent.task.listCount", {
+      count: taskList!.length,
+      noun,
+    })
   } else if (hasTaskGet) {
     // For TaskGet, we'll use a custom header with bold "Read task" prefix
     // The headerText will be used as a flag to trigger special rendering
@@ -1038,7 +1078,9 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
           <PlanIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           {headerText.startsWith("__TASK_GET__") ? (
             <span className="text-xs flex-1">
-              <span className="font-medium text-foreground">Read task</span>
+              <span className="font-medium text-foreground">
+                {t("agent.task.readTask")}
+              </span>
               <span className="text-muted-foreground ml-1">
                 {(() => {
                   const parts = headerText.replace("__TASK_GET__", "").split("__")

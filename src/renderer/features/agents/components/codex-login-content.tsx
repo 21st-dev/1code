@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/button"
 import { CodexIcon } from "../../../components/ui/icons"
 import { Input } from "../../../components/ui/input"
 import { Logo } from "../../../components/ui/logo"
+import { useI18n } from "../../../lib/i18n"
 import type { CodexAuthMethod, CodexLoginFlowState } from "../hooks/use-codex-login-flow"
 
 type CodexLoginContentProps = {
@@ -37,6 +38,7 @@ export function CodexLoginContent({
   onApiKeyChange,
   onSubmitApiKey,
 }: CodexLoginContentProps) {
+  const { t } = useI18n()
   const isApiKeyMode = method === "api_key"
   const showRetry = !isApiKeyMode && (state === "error" || state === "cancelled")
   const showConnect = !isApiKeyMode && showConnectButton && state === "idle"
@@ -54,11 +56,13 @@ export function CodexLoginContent({
           </div>
         </div>
         <div className="space-y-1">
-          <h1 className="text-base font-semibold tracking-tight">Connect OpenAI Codex</h1>
+          <h1 className="text-base font-semibold tracking-tight">
+            {t("onboarding.codex.title")}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {isApiKeyMode
-              ? "Connect with your API key"
-              : "Connect your Codex subscription"}
+              ? t("onboarding.codex.apiKeySubtitle")
+              : t("onboarding.codex.subscriptionSubtitle")}
           </p>
 
           {!isApiKeyMode && url && (
@@ -68,7 +72,9 @@ export function CodexLoginContent({
                 disabled={isOpeningUrl}
                 className="text-primary hover:underline disabled:opacity-50"
               >
-                {isOpeningUrl ? "Opening..." : "Didn't open? Click here"}
+                {isOpeningUrl
+                  ? t("onboarding.codex.opening")
+                  : t("onboarding.claude.didntOpen")}
               </button>
             </p>
           )}
@@ -98,20 +104,22 @@ export function CodexLoginContent({
                 disabled={isConnecting || apiKey.trim().length === 0}
                 className="w-full"
               >
-                {isConnecting ? "Connecting..." : "Connect with API key"}
+                {isConnecting
+                  ? t("common.connecting")
+                  : t("onboarding.codex.connectWithApiKey")}
               </Button>
             </>
           ) : (
             <>
               {showRetry && (
                 <Button variant="secondary" onClick={onRetry} className="w-full">
-                  Retry
+                  {t("common.retry")}
                 </Button>
               )}
 
               {showConnect && (
                 <Button onClick={onConnect} disabled={!onConnect || isConnecting} className="w-full">
-                  {isConnecting ? "Connecting..." : "Connect"}
+                  {isConnecting ? t("common.connecting") : t("common.connect")}
                 </Button>
               )}
             </>

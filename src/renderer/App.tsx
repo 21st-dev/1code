@@ -24,6 +24,7 @@ import {
   customClaudeConfigAtom,
   normalizeCustomClaudeConfig,
 } from "./lib/atoms"
+import { I18nProvider } from "./lib/i18n"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
 import { trpc } from "./lib/trpc"
@@ -275,17 +276,19 @@ export function App() {
       <JotaiProvider store={appStore}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <VSCodeThemeProvider>
-            <TooltipProvider delayDuration={100}>
-              <TRPCProvider>
-                <div
-                  data-agents-page
-                  className="h-screen w-screen bg-background text-foreground overflow-hidden"
-                >
-                  <AppContent />
-                </div>
-                <ThemedToaster />
-              </TRPCProvider>
-            </TooltipProvider>
+            <I18nProvider>
+              <TooltipProvider delayDuration={100}>
+                <TRPCProvider>
+                  <div
+                    data-agents-page
+                    className="h-screen w-screen bg-background text-foreground overflow-hidden"
+                  >
+                    <AppContent />
+                  </div>
+                  <ThemedToaster />
+                </TRPCProvider>
+              </TooltipProvider>
+            </I18nProvider>
           </VSCodeThemeProvider>
         </ThemeProvider>
       </JotaiProvider>

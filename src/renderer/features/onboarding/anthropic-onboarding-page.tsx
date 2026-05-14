@@ -6,11 +6,13 @@ import { useEffect, useRef, useState } from "react"
 
 import { ClaudeCodeIcon, IconSpinner } from "../../components/ui/icons"
 import { Input } from "../../components/ui/input"
+import { LanguageSwitcher } from "../../components/language-switcher"
 import { Logo } from "../../components/ui/logo"
 import {
   anthropicOnboardingCompletedAtom,
   billingMethodAtom,
 } from "../../lib/atoms"
+import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 
 type AuthFlowState =
@@ -33,6 +35,7 @@ type AuthFlowState =
   | { step: "error"; message: string }
 
 export function AnthropicOnboardingPage() {
+  const { t } = useI18n()
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
   const [authCode, setAuthCode] = useState("")
   const [userClickedConnect, setUserClickedConnect] = useState(false)
@@ -264,6 +267,8 @@ export function AnthropicOnboardingPage() {
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
 
+      <LanguageSwitcher compact className="fixed top-12 right-4" />
+
       {/* Back button - fixed in top left corner below traffic lights */}
       <button
         onClick={handleBack}
@@ -285,10 +290,10 @@ export function AnthropicOnboardingPage() {
           </div>
           <div className="space-y-1">
             <h1 className="text-base font-semibold tracking-tight">
-              Connect Claude Code
+              {t("onboarding.claude.title")}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Connect your Claude Code subscription to get started
+              {t("onboarding.claude.subtitle")}
             </p>
           </div>
         </div>
@@ -300,7 +305,7 @@ export function AnthropicOnboardingPage() {
             <div className="space-y-4 w-full">
               <div className="p-4 bg-muted/50 border border-border rounded-lg">
                 <p className="text-sm font-medium">
-                  Existing Claude Code credentials found
+                  {t("onboarding.claude.existingCredentials")}
                 </p>
                 {existingToken && (
                   <pre className="mt-2 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono bg-background/60 rounded border border-border/60">
@@ -321,7 +326,7 @@ export function AnthropicOnboardingPage() {
                   disabled={isUsingExistingToken}
                   className="h-8 px-3 flex-1 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  Auth with Anthropic
+                  {t("onboarding.claude.authWithAnthropic")}
                 </button>
                 <button
                   onClick={handleUseExistingToken}
@@ -331,7 +336,7 @@ export function AnthropicOnboardingPage() {
                   {isUsingExistingToken ? (
                     <IconSpinner className="h-4 w-4" />
                   ) : (
-                    "Use existing token"
+                    t("onboarding.claude.useExistingToken")
                   )}
                 </button>
               </div>
@@ -352,7 +357,7 @@ export function AnthropicOnboardingPage() {
                 {userClickedConnect && isLoadingAuth ? (
                   <IconSpinner className="h-4 w-4" />
                 ) : (
-                  "Connect"
+                  t("common.connect")
                 )}
               </button>
             )}
@@ -368,7 +373,7 @@ export function AnthropicOnboardingPage() {
                   value={authCode}
                   onChange={handleCodeChange}
                   onKeyDown={handleKeyDown}
-                  placeholder="Paste your authentication code here..."
+                  placeholder={t("onboarding.claude.pasteCode")}
                   className="font-mono text-center pr-10"
                   autoFocus
                   disabled={isSubmitting}
@@ -380,7 +385,7 @@ export function AnthropicOnboardingPage() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground text-center">
-                A new tab has opened for authentication.
+                {t("onboarding.claude.openedAuthTab")}
                 {savedOauthUrl && (
                   <>
                     {" "}
@@ -388,7 +393,7 @@ export function AnthropicOnboardingPage() {
                       onClick={handleOpenFallbackUrl}
                       className="text-primary hover:underline"
                     >
-                      Didn't open? Click here
+                      {t("onboarding.claude.didntOpen")}
                     </button>
                   </>
                 )}
@@ -406,7 +411,7 @@ export function AnthropicOnboardingPage() {
                 onClick={handleConnectClick}
                 className="w-full h-8 px-3 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] flex items-center justify-center"
               >
-                Try Again
+                {t("common.tryAgain")}
               </button>
             </div>
           )}

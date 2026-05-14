@@ -7,6 +7,7 @@ import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
+import { useI18n } from "@/lib/i18n"
 
 interface ThinkingToolPart {
   type: string
@@ -41,6 +42,7 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
   part,
   chatStatus,
 }: AgentThinkingToolProps) {
+  const { t } = useI18n()
   const isPending =
     part.state !== "output-available" && part.state !== "output-error"
   const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
@@ -91,7 +93,7 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
   const elapsedDisplay = isStreaming ? formatElapsedTime(elapsedMs) : ""
 
   if (isInterrupted && !thinkingText) {
-    return <AgentToolInterrupted toolName="Thinking" />
+    return <AgentToolInterrupted toolName={t("agent.tool.thinking")} />
   }
 
   return (
@@ -110,10 +112,10 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
                   duration={1.2}
                   className="inline-flex items-center text-xs leading-none h-4 m-0"
                 >
-                  Thinking
+                  {t("agent.tool.thinking")}
                 </TextShimmer>
               ) : (
-                <span className="text-muted-foreground">Thought</span>
+                <span className="text-muted-foreground">{t("agent.tool.thought")}</span>
               )}
             </span>
             {/* Preview when collapsed */}

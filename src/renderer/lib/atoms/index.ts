@@ -409,6 +409,16 @@ export const notifyWhenFocusedAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Preferences - Interface Language
+// "system" follows navigator.language; explicit values force the UI language.
+export type AppLanguagePreference = "system" | "en" | "zh-CN"
+export const appLanguagePreferenceAtom = atomWithStorage<AppLanguagePreference>(
+  "preferences:language",
+  "system",
+  undefined,
+  { getOnInit: true },
+)
+
 // Preferences - Windows Window Frame Style
 // When true, uses native frame (standard Windows title bar)
 // When false, uses frameless window (dark custom title bar)

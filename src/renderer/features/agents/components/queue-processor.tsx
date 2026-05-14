@@ -12,6 +12,7 @@ import { loadingSubChatsAtom, setLoading, clearLoading } from "../atoms"
 import { MENTION_PREFIXES } from "../mentions/agents-mentions-editor"
 import { utf8ToBase64 } from "../utils/base64"
 import type { AgentQueueItem } from "../lib/queue-utils"
+import { useI18n } from "../../../lib/i18n"
 
 // Delay between processing queue items (ms)
 const QUEUE_PROCESS_DELAY = 1000
@@ -27,6 +28,7 @@ const QUEUE_PROCESS_DELAY = 1000
  * ALL queues and streaming statuses globally.
  */
 export function QueueProcessor() {
+  const { t } = useI18n()
   // Track which sub-chats are currently being processed to avoid double-sends
   const processingRef = useRef<Set<string>>(new Set())
   // Track timers for cleanup
@@ -176,7 +178,7 @@ export function QueueProcessor() {
         )
 
         // Notify user
-        toast.error("Failed to send queued message. It will be retried.")
+        toast.error(t("agent.queue.failed"))
       } finally {
         processingRef.current.delete(subChatId)
         // Re-kick after releasing lock to avoid lost wakeups
@@ -248,7 +250,7 @@ export function QueueProcessor() {
       }
       timersRef.current.clear()
     }
-  }, [])
+  }, [t])
 
   // This component doesn't render anything
   return null
