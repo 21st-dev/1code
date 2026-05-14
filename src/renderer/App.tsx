@@ -1,6 +1,6 @@
-import { Provider as JotaiProvider, useAtomValue, useSetAtom } from "jotai"
+import { Provider as JotaiProvider, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { Toaster } from "sonner"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
@@ -21,6 +21,8 @@ import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
   codexOnboardingCompletedAtom,
+  customClaudeConfigAtom,
+  normalizeCustomClaudeConfig,
 } from "./lib/atoms"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
@@ -47,6 +49,9 @@ function ThemedToaster() {
 function AppContent() {
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
+  const [legacyCustomClaudeConfig, setLegacyCustomClaudeConfig] = useAtom(
+    customClaudeConfigAtom
+  )
   const anthropicOnboardingCompleted = useAtomValue(
     anthropicOnboardingCompletedAtom
   )
@@ -57,6 +62,9 @@ function AppContent() {
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
+  const legacyProviderMigrationAttemptedRef = useRef(false)
+  const importLegacyProviderConfig =
+    trpc.claudeProviderConfig.importLegacy.useMutation()
 
   // Apply initial window params (chatId/subChatId) when opening via "Open in new window"
   useEffect(() => {
@@ -94,6 +102,8 @@ function AppContent() {
   // Based on PR #29 by @sa4hnd
   const { data: cliConfig, isLoading: isLoadingCliConfig } =
     trpc.claudeCode.hasExistingCliConfig.useQuery()
+  const { data: secureProviderConfig } =
+    trpc.claudeProviderConfig.get.useQuery()
 
   // Migration: If user already completed Anthropic onboarding but has no billing method set,
   // automatically set it to "claude-subscription" (legacy users before billing method was added)
@@ -112,6 +122,65 @@ function AppContent() {
       setApiKeyOnboardingCompleted(true)
     }
   }, [cliConfig?.hasConfig, billingMethod, setBillingMethod, setApiKeyOnboardingCompleted])
+
+  useEffect(() => {
+    const config = secureProviderConfig?.config
+    if (!config?.hasToken) return
+
+    if (!billingMethod) {
+      setBillingMethod(
+        config.baseUrl.includes("anthropic.com") ? "api-key" : "custom-model"
+      )
+    }
+    setApiKeyOnboardingCompleted(true)
+  }, [
+    billingMethod,
+    secureProviderConfig?.config,
+    setApiKeyOnboardingCompleted,
+    setBillingMethod,
+  ])
+
+  // Migrate the legacy renderer-stored custom Claude token into secure
+  // main-process storage, then clear the raw token from localStorage.
+  useEffect(() => {
+    if (legacyProviderMigrationAttemptedRef.current) return
+
+    const normalized = normalizeCustomClaudeConfig(legacyCustomClaudeConfig)
+    if (!normalized) return
+
+    legacyProviderMigrationAttemptedRef.current = true
+    const authMode = normalized.baseUrl.includes("anthropic.com")
+      ? "api_key"
+      : "auth_token"
+
+    importLegacyProviderConfig.mutate(
+      { ...normalized, authMode },
+      {
+        onSuccess: () => {
+          setLegacyCustomClaudeConfig({ model: "", token: "", baseUrl: "" })
+          if (!billingMethod) {
+            setBillingMethod(
+              normalized.baseUrl.includes("anthropic.com")
+                ? "api-key"
+                : "custom-model"
+            )
+          }
+          setApiKeyOnboardingCompleted(true)
+        },
+        onError: (error) => {
+          console.warn("[App] Failed to migrate legacy Claude provider config:", error)
+          legacyProviderMigrationAttemptedRef.current = false
+        },
+      }
+    )
+  }, [
+    importLegacyProviderConfig,
+    billingMethod,
+    legacyCustomClaudeConfig,
+    setApiKeyOnboardingCompleted,
+    setBillingMethod,
+    setLegacyCustomClaudeConfig,
+  ])
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =

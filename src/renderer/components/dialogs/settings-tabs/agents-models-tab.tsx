@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown, MoreHorizontal, Plus, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   agentsLoginModalOpenAtom,
@@ -9,11 +9,10 @@ import {
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   openaiApiKeyAtom,
-  type CustomClaudeConfig,
+  type ClaudeProviderAuthMode,
 } from "../../../lib/atoms"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
 import { CLAUDE_MODELS, CODEX_MODELS } from "../../../features/agents/lib/models"
@@ -50,12 +49,6 @@ function useIsNarrowScreen(): boolean {
   }, [])
 
   return isNarrow
-}
-
-const EMPTY_CONFIG: CustomClaudeConfig = {
-  model: "",
-  token: "",
-  baseUrl: "",
 }
 
 // Account row component
@@ -261,14 +254,17 @@ function AnthropicAccountsSection() {
 }
 
 export function AgentsModelsTab() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
-  const [model, setModel] = useState(storedConfig.model)
-  const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
-  const [token, setToken] = useState(storedConfig.token)
+  const [model, setModel] = useState("")
+  const [baseUrl, setBaseUrl] = useState("")
+  const [token, setToken] = useState("")
+  const [authMode, setAuthMode] =
+    useState<ClaudeProviderAuthMode>("auth_token")
   const setClaudeLoginModalConfig = useSetAtom(claudeLoginModalConfigAtom)
   const setClaudeLoginModalOpen = useSetAtom(agentsLoginModalOpenAtom)
   const setCodexLoginModalOpen = useSetAtom(codexLoginModalOpenAtom)
   const isNarrowScreen = useIsNarrowScreen()
+  const { data: providerConfigData } =
+    trpc.claudeProviderConfig.get.useQuery()
   const { data: claudeCodeIntegration, isLoading: isClaudeCodeLoading } =
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
@@ -286,12 +282,18 @@ export function AgentsModelsTab() {
   const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const trpcUtils = trpc.useUtils()
+  const saveProviderConfigMutation = trpc.claudeProviderConfig.save.useMutation()
+  const clearProviderConfigMutation = trpc.claudeProviderConfig.clear.useMutation()
 
   useEffect(() => {
-    setModel(storedConfig.model)
-    setBaseUrl(storedConfig.baseUrl)
-    setToken(storedConfig.token)
-  }, [storedConfig.model, storedConfig.baseUrl, storedConfig.token])
+    if (!providerConfigData) return
+
+    const config = providerConfigData.config
+    setModel(config?.model ?? "")
+    setBaseUrl(config?.baseUrl ?? "")
+    setAuthMode(config?.authMode ?? "auth_token")
+    setToken("")
+  }, [providerConfigData])
 
   useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
@@ -301,47 +303,91 @@ export function AgentsModelsTab() {
     setCodexApiKey(storedCodexApiKey)
   }, [storedCodexApiKey])
 
-  const savedConfigRef = useRef(storedConfig)
-
-  const handleBlurSave = useCallback(() => {
+  const handleBlurSave = useCallback((nextAuthMode: ClaudeProviderAuthMode = authMode) => {
     const trimmedModel = model.trim()
     const trimmedBaseUrl = baseUrl.trim()
     const trimmedToken = token.trim()
+    const storedConfig = providerConfigData?.config
+    const hasStoredToken = Boolean(storedConfig?.hasToken)
 
-    // Only save if all fields are filled
-    if (trimmedModel && trimmedBaseUrl && trimmedToken) {
-      const next: CustomClaudeConfig = {
-        model: trimmedModel,
-        token: trimmedToken,
-        baseUrl: trimmedBaseUrl,
-      }
-      if (
-        next.model !== savedConfigRef.current.model ||
-        next.token !== savedConfigRef.current.token ||
-        next.baseUrl !== savedConfigRef.current.baseUrl
-      ) {
-        setStoredConfig(next)
-        savedConfigRef.current = next
-      }
+    if (trimmedModel && trimmedBaseUrl && (trimmedToken || hasStoredToken)) {
+      const metadataChanged =
+        !storedConfig ||
+        storedConfig.model !== trimmedModel ||
+        storedConfig.baseUrl !== trimmedBaseUrl ||
+        storedConfig.authMode !== nextAuthMode
+
+      if (!metadataChanged && !trimmedToken) return
+
+      saveProviderConfigMutation.mutate(
+        {
+          model: trimmedModel,
+          baseUrl: trimmedBaseUrl,
+          authMode: nextAuthMode,
+          ...(trimmedToken && { token: trimmedToken }),
+        },
+        {
+          onSuccess: async () => {
+            setToken("")
+            await trpcUtils.claudeProviderConfig.get.invalidate()
+            toast.success("Model settings saved")
+          },
+          onError: (error) => {
+            toast.error(error.message || "Failed to save model settings")
+          },
+        },
+      )
     } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
-      // All cleared — reset
-      if (savedConfigRef.current.model || savedConfigRef.current.token || savedConfigRef.current.baseUrl) {
-        setStoredConfig(EMPTY_CONFIG)
-        savedConfigRef.current = EMPTY_CONFIG
+      if (storedConfig) {
+        clearProviderConfigMutation.mutate(undefined, {
+          onSuccess: async () => {
+            await trpcUtils.claudeProviderConfig.get.invalidate()
+            toast.success("Model settings reset")
+          },
+          onError: (error) => {
+            toast.error(error.message || "Failed to reset model settings")
+          },
+        })
       }
     }
-  }, [model, baseUrl, token, setStoredConfig])
+  }, [
+    authMode,
+    baseUrl,
+    clearProviderConfigMutation,
+    model,
+    providerConfigData?.config,
+    saveProviderConfigMutation,
+    token,
+    trpcUtils.claudeProviderConfig.get,
+  ])
 
-  const handleReset = () => {
-    setStoredConfig(EMPTY_CONFIG)
-    savedConfigRef.current = EMPTY_CONFIG
-    setModel("")
-    setBaseUrl("")
-    setToken("")
-    toast.success("Model settings reset")
+  const handleAuthModeChange = (nextAuthMode: ClaudeProviderAuthMode) => {
+    setAuthMode(nextAuthMode)
+    handleBlurSave(nextAuthMode)
   }
 
-  const canReset = Boolean(model.trim() || baseUrl.trim() || token.trim())
+  const handleReset = () => {
+    clearProviderConfigMutation.mutate(undefined, {
+      onSuccess: async () => {
+        setModel("")
+        setBaseUrl("")
+        setToken("")
+        setAuthMode("auth_token")
+        await trpcUtils.claudeProviderConfig.get.invalidate()
+        toast.success("Model settings reset")
+      },
+      onError: (error) => {
+        toast.error(error.message || "Failed to reset model settings")
+      },
+    })
+  }
+
+  const canReset = Boolean(
+    model.trim() ||
+      baseUrl.trim() ||
+      token.trim() ||
+      providerConfigData?.config?.hasToken,
+  )
 
   const handleClaudeCodeSetup = () => {
     setClaudeLoginModalConfig({
@@ -736,15 +782,21 @@ export function AgentsModelsTab() {
 
           {/* Override Model */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-foreground">
-                Override Model
-              </h4>
-              {canReset && (
-                <Button variant="ghost" size="sm" onClick={handleReset} className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10">
-                  Reset
-                </Button>
-              )}
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium text-foreground">
+                  Override Model
+                </h4>
+                {canReset && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleReset}
+                    disabled={clearProviderConfigMutation.isPending}
+                    className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+                  >
+                    Reset
+                  </Button>
+                )}
             </div>
             <div className="bg-background rounded-lg border border-border overflow-hidden">
               <div className="flex items-center justify-between p-4">
@@ -758,7 +810,8 @@ export function AgentsModelsTab() {
                   <Input
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    onBlur={handleBlurSave}
+                    onBlur={() => handleBlurSave()}
+                    disabled={saveProviderConfigMutation.isPending}
                     className="w-full"
                     placeholder="claude-3-7-sonnet-20250219"
                   />
@@ -769,7 +822,9 @@ export function AgentsModelsTab() {
                 <div className="flex-1">
                   <Label className="text-sm font-medium">API token</Label>
                   <p className="text-xs text-muted-foreground">
-                    ANTHROPIC_AUTH_TOKEN env
+                    {authMode === "api_key"
+                      ? "ANTHROPIC_API_KEY env"
+                      : "ANTHROPIC_AUTH_TOKEN env"}
                   </p>
                 </div>
                 <div className="flex-shrink-0 w-80">
@@ -777,10 +832,46 @@ export function AgentsModelsTab() {
                     type="password"
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
-                    onBlur={handleBlurSave}
+                    onBlur={() => handleBlurSave()}
+                    disabled={saveProviderConfigMutation.isPending}
                     className="w-full"
-                    placeholder="sk-ant-..."
+                    placeholder={
+                      providerConfigData?.config?.hasToken
+                        ? "Saved token"
+                        : "sk-ant-..."
+                    }
                   />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border-t border-border">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Auth env</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Select how Claude Code receives the provider token
+                  </p>
+                </div>
+                <div className="grid w-80 grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={authMode === "api_key" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleAuthModeChange("api_key")}
+                    disabled={saveProviderConfigMutation.isPending}
+                    className="text-xs"
+                  >
+                    API_KEY
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={authMode === "auth_token" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleAuthModeChange("auth_token")}
+                    disabled={saveProviderConfigMutation.isPending}
+                    className="text-xs"
+                  >
+                    AUTH_TOKEN
+                  </Button>
                 </div>
               </div>
 
@@ -795,7 +886,8 @@ export function AgentsModelsTab() {
                   <Input
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
-                    onBlur={handleBlurSave}
+                    onBlur={() => handleBlurSave()}
+                    disabled={saveProviderConfigMutation.isPending}
                     className="w-full"
                     placeholder="https://api.anthropic.com"
                   />

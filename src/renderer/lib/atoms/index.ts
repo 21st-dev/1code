@@ -204,10 +204,13 @@ export const agentsSettingsDialogOpenAtom = atom(
   }
 )
 
+export type ClaudeProviderAuthMode = "api_key" | "auth_token"
+
 export type CustomClaudeConfig = {
   model: string
   token: string
   baseUrl: string
+  authMode?: ClaudeProviderAuthMode
 }
 
 // Model profile system - support multiple configs

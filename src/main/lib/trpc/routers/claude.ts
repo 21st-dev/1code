@@ -30,6 +30,11 @@ import {
   type McpServerConfig,
 } from "../../claude-config"
 import { anthropicAccounts, anthropicSettings, chats, claudeCodeCredentials, getDatabase, projects as projectsTable, subChats } from "../../db"
+import {
+  buildClaudeProviderEnv,
+  getActiveClaudeProviderConfig,
+  type ClaudeProviderRuntimeConfig,
+} from "./claude-provider-config"
 import { createRollbackStash } from "../../git/stash"
 import {
   ensureMcpTokensFresh,
@@ -157,6 +162,20 @@ function decryptToken(encrypted: string): string {
   return safeStorage.decryptString(buffer)
 }
 
+function normalizeRuntimeProviderConfig(config: {
+  model: string
+  token: string
+  baseUrl: string
+  authMode?: "api_key" | "auth_token"
+}): ClaudeProviderRuntimeConfig {
+  return {
+    model: config.model,
+    token: config.token,
+    baseUrl: config.baseUrl,
+    authMode: config.authMode ?? "auth_token",
+  }
+}
+
 /**
  * Get Claude Code OAuth token from local SQLite
  * Uses multi-account system first (active account), falls back to legacy table
@@ -189,11 +208,6 @@ function getClaudeCodeToken(): string | null {
         )
         const decrypted = decryptToken(account.oauthToken)
         console.log("[claude-auth] Token decrypted successfully")
-        console.log(
-          "[claude-auth] Token preview:",
-          decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
-        )
-        console.log("[claude-auth] Token total length:", decrypted.length)
         console.log("[claude-auth] ============================================")
         return decrypted
       }
@@ -231,11 +245,6 @@ function getClaudeCodeToken(): string | null {
 
     const decrypted = decryptToken(cred.oauthToken)
     console.log("[claude-auth] Token decrypted successfully (legacy)")
-    console.log(
-      "[claude-auth] Token preview:",
-      decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
-    )
-    console.log("[claude-auth] Token total length:", decrypted.length)
     console.log("[claude-auth] ============================================")
 
     return decrypted
@@ -808,6 +817,7 @@ export const claudeRouter = router({
             model: z.string().min(1),
             token: z.string().min(1),
             baseUrl: z.string().min(1),
+            authMode: z.enum(["api_key", "auth_token"]).optional(),
           })
           .optional(),
         maxThinkingTokens: z.number().optional(), // Enable extended thinking
@@ -977,11 +987,19 @@ export const claudeRouter = router({
                 .run()
             }
 
+            const secureProviderConfig = getActiveClaudeProviderConfig()
+            const legacyProviderConfig = input.customConfig
+              ? normalizeRuntimeProviderConfig(input.customConfig)
+              : undefined
+            const providerConfig =
+              secureProviderConfig || legacyProviderConfig
+
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
-            // Only check if offline mode is enabled in settings
-            const claudeCodeToken = getClaudeCodeToken()
+            // Only check if offline mode is enabled in settings. When a custom
+            // provider is active, it takes precedence over Claude OAuth.
+            const claudeCodeToken = providerConfig ? null : getClaudeCodeToken()
             const offlineResult = await checkOfflineFallback(
-              input.customConfig,
+              providerConfig,
               claudeCodeToken,
               undefined, // selectedOllamaModel - will be read from customConfig if present
               input.offlineModeEnabled ?? false, // Pass offline mode setting
@@ -997,8 +1015,11 @@ export const claudeRouter = router({
               return
             }
 
-            // Use offline config if available
-            const finalCustomConfig = offlineResult.config || input.customConfig
+            // Use offline config if available. Non-secure legacy input defaults
+            // to ANTHROPIC_AUTH_TOKEN to preserve previous behavior.
+            const finalCustomConfig = offlineResult.config
+              ? normalizeRuntimeProviderConfig(offlineResult.config)
+              : providerConfig
             const isUsingOllama = offlineResult.isUsingOllama
 
             // Track connection method for analytics
@@ -1129,10 +1150,7 @@ export const claudeRouter = router({
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
             const claudeEnv = buildClaudeEnv({
               ...(finalCustomConfig && {
-                customEnv: {
-                  ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
-                  ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
-                },
+                customEnv: buildClaudeProviderEnv(finalCustomConfig),
               }),
               enableTasks: input.enableTasks ?? true,
             })
@@ -1399,7 +1417,7 @@ export const claudeRouter = router({
 
             // Build final env - only add OAuth token if we have one AND no existing API config
             // Existing CLI config takes precedence over OAuth
-            const finalEnv = {
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
               ...(claudeCodeToken &&
                 !hasExistingApiConfig && {
@@ -1477,17 +1495,19 @@ export const claudeRouter = router({
               `[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`,
             )
             if (finalCustomConfig) {
-              const redactedConfig = {
-                ...finalCustomConfig,
-                token: `${finalCustomConfig.token.slice(0, 6)}...`,
-              }
               if (isUsingOllama) {
                 console.log(
                   `[Ollama] Using offline mode - Model: ${finalCustomConfig.model}, Base URL: ${finalCustomConfig.baseUrl}`,
                 )
               } else {
                 console.log(
-                  `[claude] Custom config: ${JSON.stringify(redactedConfig)}`,
+                  "[claude] Custom provider config:",
+                  {
+                    model: finalCustomConfig.model,
+                    baseUrl: finalCustomConfig.baseUrl,
+                    authMode: finalCustomConfig.authMode,
+                    hasToken: true,
+                  },
                 )
               }
             }
@@ -1572,8 +1592,6 @@ export const claudeRouter = router({
                 cwd: input.cwd,
                 configDir: isolatedConfigDir,
                 hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-                tokenPreview:
-                  finalEnv.ANTHROPIC_AUTH_TOKEN?.slice(0, 10) + "...",
               })
               console.log("[Ollama Debug] Session settings:", {
                 resumeSessionId: resumeSessionId || "none (first message)",
