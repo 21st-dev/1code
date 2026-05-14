@@ -144,6 +144,21 @@ export const claudeProviderConfig = sqliteTable("claude_provider_config", {
   ),
 })
 
+// ============ LOCAL API PROVIDER CONFIGS ============
+// Stores encrypted OpenAI-compatible provider tokens for local utility features.
+export const localApiProviderConfigs = sqliteTable("local_api_provider_configs", {
+  id: text("id").primaryKey(), // e.g. "sub_chat_title"
+  model: text("model").notNull(),
+  baseUrl: text("base_url").notNull(),
+  encryptedToken: text("encrypted_token").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -158,3 +173,5 @@ export type NewAnthropicAccount = typeof anthropicAccounts.$inferInsert
 export type AnthropicSettings = typeof anthropicSettings.$inferSelect
 export type ClaudeProviderConfig = typeof claudeProviderConfig.$inferSelect
 export type NewClaudeProviderConfig = typeof claudeProviderConfig.$inferInsert
+export type LocalApiProviderConfig = typeof localApiProviderConfigs.$inferSelect
+export type NewLocalApiProviderConfig = typeof localApiProviderConfigs.$inferInsert

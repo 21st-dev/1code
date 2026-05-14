@@ -5,6 +5,7 @@ import { claudeRouter } from "./claude"
 import { claudeCodeRouter } from "./claude-code"
 import { claudeSettingsRouter } from "./claude-settings"
 import { claudeProviderConfigRouter } from "./claude-provider-config"
+import { localApiProviderConfigRouter } from "./local-api-provider-config"
 import { anthropicAccountsRouter } from "./anthropic-accounts"
 import { ollamaRouter } from "./ollama"
 import { codexRouter } from "./codex"
@@ -34,6 +35,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     claudeCode: claudeCodeRouter,
     claudeSettings: claudeSettingsRouter,
     claudeProviderConfig: claudeProviderConfigRouter,
+    localApiProviderConfig: localApiProviderConfigRouter,
     anthropicAccounts: anthropicAccountsRouter,
     ollama: ollamaRouter,
     codex: codexRouter,
