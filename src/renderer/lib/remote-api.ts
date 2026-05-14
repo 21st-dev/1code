@@ -3,15 +3,27 @@
  * Provides clean interface for fetching remote sandbox data
  */
 import { remoteTrpc } from "./remote-trpc"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../shared/local-only"
 
 // API base URL - dynamically fetched from main process
-let API_BASE: string | null = null
+let API_BASE: string | null | undefined = undefined
 
 async function getApiBase(): Promise<string> {
-  if (!API_BASE) {
-    API_BASE = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+  if (await window.desktopApi?.isLocalOnlyMode?.()) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
   }
-  return API_BASE
+
+  if (API_BASE === undefined) {
+    API_BASE = await window.desktopApi?.getApiBaseUrl()
+    if (!API_BASE) {
+      throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+    }
+  }
+  const apiBase = API_BASE
+  if (!apiBase) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+  }
+  return apiBase
 }
 
 // Re-export types for convenience

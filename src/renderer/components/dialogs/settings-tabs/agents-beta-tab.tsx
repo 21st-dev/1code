@@ -12,6 +12,7 @@ import {
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { remoteTrpc } from "../../../lib/remote-trpc"
+import { useLocalOnlyModeState } from "../../../lib/hooks/use-local-only-mode"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../ui/button"
 import { ExternalLinkIcon } from "../../ui/icons"
@@ -52,15 +53,18 @@ export function AgentsBetaTab() {
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
   const [automationsEnabled, setAutomationsEnabled] = useAtom(betaAutomationsEnabledAtom)
   const [betaUpdatesEnabled, setBetaUpdatesEnabled] = useAtom(betaUpdatesEnabledAtom)
+  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
+    useLocalOnlyModeState()
 
   // Check subscription to gate automations behind paid plan
   const { data: subscription } = useQuery({
     queryKey: ["agents", "subscription"],
     queryFn: () => remoteTrpc.agents.getAgentsSubscription.query(),
+    enabled: !isLocalOnly,
   })
   const isPaidPlan = subscription?.type !== "free" && !!subscription?.type
   const isDev = process.env.NODE_ENV === "development"
-  const canEnableAutomations = isPaidPlan || isDev
+  const canEnableAutomations = !isLocalOnly && (isPaidPlan || isDev)
   const [copied, setCopied] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "not-available" | "error">("idle")
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
@@ -69,13 +73,34 @@ export function AgentsBetaTab() {
   // Get current version on mount and sync update channel state
   useEffect(() => {
     window.desktopApi?.getVersion().then(setCurrentVersion)
+  }, [])
+
+  useEffect(() => {
+    if (!isLocalOnlyResolved) return
+
+    if (isLocalOnly) {
+      setAutomationsEnabled(false)
+      setBetaUpdatesEnabled(false)
+      return
+    }
+
     window.desktopApi?.getUpdateChannel().then((ch) => {
       setBetaUpdatesEnabled(ch === "beta")
     })
-  }, [])
+  }, [
+    isLocalOnly,
+    isLocalOnlyResolved,
+    setAutomationsEnabled,
+    setBetaUpdatesEnabled,
+  ])
 
   // Check for updates with force flag to bypass cache
   const handleCheckForUpdates = async () => {
+    if (isLocalOnly) {
+      setUpdateStatus("error")
+      return
+    }
+
     // Check if we're in dev mode
     const isPackaged = await window.desktopApi?.isPackaged?.()
     if (!isPackaged) {
@@ -158,28 +183,29 @@ export function AgentsBetaTab() {
           />
         </div>
 
-        {/* Automations & Inbox Toggle */}
-        <div className="flex items-center justify-between p-4 border-t border-border">
-          <div className="flex flex-col space-y-1">
-            <span className={cn("text-sm font-medium", canEnableAutomations ? "text-foreground" : "text-muted-foreground")}>
-              Automations & Inbox
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {canEnableAutomations
-                ? "Automate workflows with GitHub and Linear triggers, and manage inbox notifications."
-                : "Requires a paid plan. Upgrade to enable automations and inbox."}
-            </span>
+        {!isLocalOnly && (
+          <div className="flex items-center justify-between p-4 border-t border-border">
+            <div className="flex flex-col space-y-1">
+              <span className={cn("text-sm font-medium", canEnableAutomations ? "text-foreground" : "text-muted-foreground")}>
+                Automations & Inbox
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {canEnableAutomations
+                  ? "Automate workflows with GitHub and Linear triggers, and manage inbox notifications."
+                  : "Requires a paid plan. Upgrade to enable automations and inbox."}
+              </span>
+            </div>
+            <Switch
+              checked={automationsEnabled && canEnableAutomations}
+              onCheckedChange={(checked) => {
+                if (canEnableAutomations) {
+                  setAutomationsEnabled(checked)
+                }
+              }}
+              disabled={!canEnableAutomations}
+            />
           </div>
-          <Switch
-            checked={automationsEnabled && canEnableAutomations}
-            onCheckedChange={(checked) => {
-              if (canEnableAutomations) {
-                setAutomationsEnabled(checked)
-              }
-            }}
-            disabled={!canEnableAutomations}
-          />
-        </div>
+        )}
 
       </div>
 
@@ -324,7 +350,7 @@ export function AgentsBetaTab() {
       )}
 
       {/* Updates Section */}
-      <div className="space-y-2">
+      {!isLocalOnly && <div className="space-y-2">
         <div className="pb-2">
           <h4 className="text-sm font-medium text-foreground">Updates</h4>
           <p className="text-xs text-muted-foreground mt-1">
@@ -377,7 +403,7 @@ export function AgentsBetaTab() {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

@@ -34,6 +34,8 @@ import {
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { Switch } from "../../ui/switch"
+import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -505,6 +507,7 @@ export function AgentsModelsTab() {
   const setClaudeLoginModalOpen = useSetAtom(agentsLoginModalOpenAtom)
   const setCodexLoginModalOpen = useSetAtom(codexLoginModalOpenAtom)
   const isNarrowScreen = useIsNarrowScreen()
+  const isLocalOnly = useLocalOnlyMode()
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
   const { data: claudeCodeIntegration, isLoading: isClaudeCodeLoading } =
@@ -633,6 +636,11 @@ export function AgentsModelsTab() {
   )
 
   const handleClaudeCodeSetup = () => {
+    if (isLocalOnly) {
+      toast.error(LOCAL_ONLY_BLOCKED_MESSAGE)
+      return
+    }
+
     setClaudeLoginModalConfig({
       hideCustomModelSettingsLink: true,
       autoStartAuth: true,
@@ -865,15 +873,17 @@ export function AgentsModelsTab() {
               {t("settings.models.anthropicAccounts.description")}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleClaudeCodeSetup}
-            disabled={isClaudeCodeLoading}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            {isClaudeCodeConnected ? t("common.add") : t("common.connect")}
-          </Button>
+          {!isLocalOnly && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleClaudeCodeSetup}
+              disabled={isClaudeCodeLoading}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              {isClaudeCodeConnected ? t("common.add") : t("common.connect")}
+            </Button>
+          )}
         </div>
 
         <AnthropicAccountsSection />

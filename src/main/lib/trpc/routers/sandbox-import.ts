@@ -12,6 +12,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { assertOfficialCloudAllowed } from "../../local-only";
 
 const execAsync = promisify(exec);
 
@@ -125,6 +126,7 @@ export const sandboxImportRouter = router({
 			const db = getDatabase();
 			const authManager = getAuthManager();
 			const apiUrl = getBaseUrl();
+			assertOfficialCloudAllowed("sandbox import", apiUrl);
 
 			console.log(`[OPEN-LOCALLY] Starting import: remoteChatId=${input.remoteChatId}, remoteSubChatId=${input.remoteSubChatId || "all"}, sandboxId=${input.sandboxId}`);
 
@@ -149,6 +151,7 @@ export const sandboxImportRouter = router({
 			const chatExportUrl = input.remoteSubChatId
 				? `${apiUrl}/api/agents/chat/${input.remoteChatId}/export?subChatId=${input.remoteSubChatId}`
 				: `${apiUrl}/api/agents/chat/${input.remoteChatId}/export`;
+			assertOfficialCloudAllowed("sandbox chat export", chatExportUrl);
 			console.log(`[OPEN-LOCALLY] Fetching chat data from: ${chatExportUrl}`);
 
 			const chatResponse = await fetch(chatExportUrl, {
@@ -305,6 +308,7 @@ export const sandboxImportRouter = router({
 		.query(async ({ input }) => {
 			const authManager = getAuthManager();
 			const apiUrl = getBaseUrl();
+			assertOfficialCloudAllowed("remote sandbox chats", apiUrl);
 
 			const token = await authManager.getValidToken();
 			if (!token) {
@@ -313,15 +317,14 @@ export const sandboxImportRouter = router({
 
 			// Call web API to get sandbox chats
 			// Note: This would need a corresponding endpoint on the web side
-			const response = await fetch(
-				`${apiUrl}/api/agents/chats?teamId=${input.teamId}`,
-				{
-					method: "GET",
-					headers: {
-						"X-Desktop-Token": token,
-					},
+			const chatsUrl = `${apiUrl}/api/agents/chats?teamId=${input.teamId}`;
+			assertOfficialCloudAllowed("remote sandbox chats", chatsUrl);
+			const response = await fetch(chatsUrl, {
+				method: "GET",
+				headers: {
+					"X-Desktop-Token": token,
 				},
-			);
+			});
 
 			if (!response.ok) {
 				throw new Error(`Failed to fetch sandbox chats: ${response.statusText}`);
@@ -357,6 +360,7 @@ export const sandboxImportRouter = router({
 			const db = getDatabase();
 			const authManager = getAuthManager();
 			const apiUrl = getBaseUrl();
+			assertOfficialCloudAllowed("sandbox clone import", apiUrl);
 			console.log(`[OPEN-LOCALLY] API URL: ${apiUrl}`);
 
 			// Verify auth
@@ -372,6 +376,7 @@ export const sandboxImportRouter = router({
 			const chatExportUrl = input.remoteSubChatId
 				? `${apiUrl}/api/agents/chat/${input.remoteChatId}/export?subChatId=${input.remoteSubChatId}`
 				: `${apiUrl}/api/agents/chat/${input.remoteChatId}/export`;
+			assertOfficialCloudAllowed("sandbox chat export", chatExportUrl);
 			console.log(`[OPEN-LOCALLY] Fetching chat data from: ${chatExportUrl}`);
 			const chatResponse = await fetch(chatExportUrl, {
 				method: "GET",
@@ -412,6 +417,7 @@ export const sandboxImportRouter = router({
 			// DEBUG: Fetch sandbox debug info to see what Claude sessions exist
 			try {
 				const debugUrl = `${apiUrl}/api/agents/sandbox/${input.sandboxId}/export/debug`;
+				assertOfficialCloudAllowed("sandbox debug export", debugUrl);
 				console.log(`[OPEN-LOCALLY] Fetching debug info from: ${debugUrl}`);
 				const debugResponse = await fetch(debugUrl, {
 					method: "GET",

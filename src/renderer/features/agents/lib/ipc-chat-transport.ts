@@ -25,6 +25,7 @@ import {
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -326,26 +327,35 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle authentication errors - show Claude login modal
               if (chunk.type === "auth-error") {
-                // Store the failed message for retry after successful auth
-                // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
-                appStore.set(pendingAuthRetryMessageAtom, {
-                  subChatId: this.config.subChatId,
-                  provider: "claude-code",
-                  prompt,
-                  ...(images.length > 0 && { images }),
-                  readyToRetry: false,
-                })
-                appStore.set(claudeLoginModalConfigAtom, {
-                  hideCustomModelSettingsLink: false,
-                  autoStartAuth: false,
-                })
-                // Show the Claude Code login modal
-                appStore.set(agentsLoginModalOpenAtom, true)
-                // Use controller.error() instead of controller.close() so that
-                // the SDK Chat properly resets status from "streaming" to "ready"
-                // This allows user to retry sending messages after failed auth
-                console.log(`[SD] R:AUTH_ERR sub=${subId}`)
-                controller.error(new Error("Authentication required"))
+                void (window.desktopApi?.isLocalOnlyMode?.() ?? Promise.resolve(true))
+                  .catch(() => true)
+                  .then((isLocalOnly) => {
+                    if (isLocalOnly !== false) {
+                      toast.error("Claude Code login is unavailable", {
+                        description: LOCAL_ONLY_BLOCKED_MESSAGE,
+                      })
+                      controller.error(new Error(LOCAL_ONLY_BLOCKED_MESSAGE))
+                      return
+                    }
+
+                    // Store the failed message for retry after successful auth.
+                    // readyToRetry=false prevents immediate retry; modal sets it
+                    // to true on OAuth success.
+                    appStore.set(pendingAuthRetryMessageAtom, {
+                      subChatId: this.config.subChatId,
+                      provider: "claude-code",
+                      prompt,
+                      ...(images.length > 0 && { images }),
+                      readyToRetry: false,
+                    })
+                    appStore.set(claudeLoginModalConfigAtom, {
+                      hideCustomModelSettingsLink: false,
+                      autoStartAuth: false,
+                    })
+                    appStore.set(agentsLoginModalOpenAtom, true)
+                    console.log(`[SD] R:AUTH_ERR sub=${subId}`)
+                    controller.error(new Error("Authentication required"))
+                  })
                 return
               }
 

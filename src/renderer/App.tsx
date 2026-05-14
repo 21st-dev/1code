@@ -16,6 +16,7 @@ import {
   SelectRepoPage,
 } from "./features/onboarding"
 import { identify, initAnalytics, shutdown } from "./lib/analytics"
+import { useLocalOnlyModeState } from "./lib/hooks/use-local-only-mode"
 import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
@@ -50,6 +51,8 @@ function ThemedToaster() {
 function AppContent() {
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
+  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
+    useLocalOnlyModeState()
   const [legacyCustomClaudeConfig, setLegacyCustomClaudeConfig] = useAtom(
     customClaudeConfigAtom
   )
@@ -109,10 +112,25 @@ function AppContent() {
   // Migration: If user already completed Anthropic onboarding but has no billing method set,
   // automatically set it to "claude-subscription" (legacy users before billing method was added)
   useEffect(() => {
-    if (!billingMethod && anthropicOnboardingCompleted) {
+    if (!billingMethod && anthropicOnboardingCompleted && !isLocalOnly) {
       setBillingMethod("claude-subscription")
     }
-  }, [billingMethod, anthropicOnboardingCompleted, setBillingMethod])
+  }, [billingMethod, anthropicOnboardingCompleted, isLocalOnly, setBillingMethod])
+
+  useEffect(() => {
+    if (!isLocalOnlyResolved || !isLocalOnly) return
+    if (billingMethod === "claude-subscription") {
+      setBillingMethod(null)
+      setAnthropicOnboardingCompleted(false)
+    }
+  }, [
+    anthropicOnboardingCompleted,
+    billingMethod,
+    isLocalOnly,
+    isLocalOnlyResolved,
+    setAnthropicOnboardingCompleted,
+    setBillingMethod,
+  ])
 
   // Auto-skip onboarding if user has existing CLI config (API key or proxy)
   // This allows users with ANTHROPIC_API_KEY to use the app without OAuth
@@ -205,7 +223,7 @@ function AppContent() {
   // 4. API key or custom model selected but not completed -> ApiKeyOnboardingPage
   // 5. No valid project selected -> SelectRepoPage
   // 6. Otherwise -> AgentsLayout
-  if (!billingMethod) {
+  if (!billingMethod || (isLocalOnly && billingMethod === "claude-subscription")) {
     return <BillingMethodPage />
   }
 

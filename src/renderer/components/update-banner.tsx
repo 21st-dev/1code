@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { useUpdateChecker } from "../lib/hooks/use-update-checker"
 import { useJustUpdated } from "../lib/hooks/use-just-updated"
+import { useLocalOnlyMode } from "../lib/hooks/use-local-only-mode"
 import { Button } from "./ui/button"
 import { IconSpinner } from "../icons"
 
@@ -10,6 +11,7 @@ import { IconSpinner } from "../icons"
 const MOCK_STATE: "none" | "available" | "downloading" | "just-updated" = "none"
 
 export function UpdateBanner() {
+  const isLocalOnly = useLocalOnlyMode()
   const {
     state: realState,
     downloadUpdate,
@@ -154,7 +156,7 @@ export function UpdateBanner() {
   }
 
   // For open source builds (!isPackaged), hide all update banners
-  if (!isPackaged) {
+  if (isLocalOnly || !isPackaged) {
     return null
   }
 

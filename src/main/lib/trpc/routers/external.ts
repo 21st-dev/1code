@@ -9,6 +9,7 @@ import {
 	externalAppSchema,
 	type ExternalApp,
 } from "../../../../shared/external-apps";
+import { assertOfficialCloudAllowed } from "../../local-only";
 
 function expandTilde(filePath: string): string {
 	if (filePath.startsWith("~/") || filePath === "~") {
@@ -120,6 +121,7 @@ export const externalRouter = router({
 	openExternal: publicProcedure
 		.input(z.string())
 		.mutation(async ({ input: url }) => {
+			assertOfficialCloudAllowed("open external URL", url);
 			await shell.openExternal(url);
 			return { success: true };
 		}),

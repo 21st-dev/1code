@@ -12,6 +12,7 @@ import {
   getAvailableAgentActions,
 } from "./agents-actions"
 import type { SettingsTab, CustomHotkeysConfig } from "../../../lib/atoms"
+import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 import { getResolvedHotkey, type ShortcutActionId } from "../../../lib/hotkeys"
 
 // ============================================================================
@@ -136,6 +137,7 @@ export function useAgentsHotkeys(
   options: UseAgentsHotkeysOptions = {},
 ) {
   const { enabled = true, preventDefault = true } = options
+  const isLocalOnly = useLocalOnlyMode()
 
   const createActionContext = useCallback(
     (): AgentActionContext => ({
@@ -148,6 +150,7 @@ export function useAgentsHotkeys(
       setFileSearchDialogOpen: config.setFileSearchDialogOpen,
       toggleChatSearch: config.toggleChatSearch,
       selectedChatId: config.selectedChatId,
+      isLocalOnly,
     }),
     [
       config.setSelectedChatId,
@@ -159,6 +162,7 @@ export function useAgentsHotkeys(
       config.setFileSearchDialogOpen,
       config.toggleChatSearch,
       config.selectedChatId,
+      isLocalOnly,
     ],
   )
 

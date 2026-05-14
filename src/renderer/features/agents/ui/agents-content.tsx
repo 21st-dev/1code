@@ -47,6 +47,7 @@ import { AutomationsView, AutomationsDetailView, InboxView } from "../../automat
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
+import { useLocalOnlyModeState } from "../../../lib/hooks/use-local-only-mode"
 import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
 import { AgentsSubChatsSidebar } from "../../sidebar/agents-subchats-sidebar"
@@ -79,6 +80,8 @@ const useIsAdmin = () => false
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const desktopView = useAtomValue(desktopViewAtom)
+  const setDesktopView = useSetAtom(desktopViewAtom)
+  const selectedChatIsRemote = useAtomValue(selectedChatIsRemoteAtom)
   const setSelectedChatIsRemote = useSetAtom(selectedChatIsRemoteAtom)
   const setChatSourceMode = useSetAtom(chatSourceModeAtom)
   const chatSourceMode = useAtomValue(chatSourceModeAtom)
@@ -119,6 +122,7 @@ export function AgentsContent() {
   const isNavigatingRef = useRef(false)
   const newChatFormKeyRef = useRef(0)
   const isMobile = useIsMobile()
+  const { isLocalOnly, isResolved: isLocalOnlyResolved } = useLocalOnlyModeState()
   const [isHydrated, setIsHydrated] = useState(false)
   const { userId } = useCombinedAuth()
   const { user } = useUser()
@@ -193,7 +197,7 @@ export function AgentsContent() {
   const { data: automationsData } = useQuery({
     queryKey: ["automations", "autoActivateCheck", selectedTeamId],
     queryFn: () => remoteTrpc.automations.listAutomations.query({ teamId: selectedTeamId! }),
-    enabled: !!selectedTeamId && !betaAutomationsEnabled,
+    enabled: !!selectedTeamId && !betaAutomationsEnabled && !isLocalOnly,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -205,6 +209,36 @@ export function AgentsContent() {
       setBetaAutomationsEnabled(true)
     }
   }, [betaAutomationsEnabled, automationsData, setBetaAutomationsEnabled])
+
+  useEffect(() => {
+    if (!isLocalOnlyResolved || !isLocalOnly) return
+
+    if (betaAutomationsEnabled) {
+      setBetaAutomationsEnabled(false)
+    }
+    if (desktopView === "automations" || desktopView === "automations-detail" || desktopView === "inbox") {
+      setDesktopView(null)
+    }
+    if (chatSourceMode !== "local") {
+      setChatSourceMode("local")
+    }
+    if (selectedChatIsRemote) {
+      setSelectedChatIsRemote(false)
+      setSelectedChatId(null)
+    }
+  }, [
+    betaAutomationsEnabled,
+    chatSourceMode,
+    desktopView,
+    isLocalOnly,
+    isLocalOnlyResolved,
+    selectedChatIsRemote,
+    setBetaAutomationsEnabled,
+    setChatSourceMode,
+    setDesktopView,
+    setSelectedChatId,
+    setSelectedChatIsRemote,
+  ])
 
   // Fetch agent chats for keyboard navigation and mobile view
   const { data: agentChats } = api.agents.getAgentChats.useQuery(
@@ -834,12 +868,13 @@ export function AgentsContent() {
     | undefined
   const isQuickSetup = chatMeta?.isQuickSetup === true
   const canShowPreview = !!(
+    !isLocalOnly &&
     chatData?.sandbox_id &&
     !isQuickSetup &&
     chatMeta?.sandboxConfig?.port
   )
   // Check if diff can be shown (sandbox exists)
-  const canShowDiff = !!chatData?.sandbox_id
+  const canShowDiff = !!(!isLocalOnly && chatData?.sandbox_id)
 
   // Check if terminal can be shown (worktree exists - desktop only)
   const worktreePath = (chatData as any)?.worktreePath as string | undefined
@@ -866,11 +901,11 @@ export function AgentsContent() {
         {/* Mobile: Settings/Automations/Inbox fullscreen views */}
         {desktopView === "settings" ? (
           <SettingsContent />
-        ) : betaAutomationsEnabled && desktopView === "automations" ? (
+        ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations" ? (
           <AutomationsView />
-        ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
+        ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations-detail" ? (
           <AutomationsDetailView />
-        ) : betaAutomationsEnabled && desktopView === "inbox" ? (
+        ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "inbox" ? (
           <InboxView />
         ) : mobileViewMode === "chats" ? (
           // Chats List Mode (default) - uses AgentsSidebar in fullscreen
@@ -1005,11 +1040,11 @@ export function AgentsContent() {
         >
           {desktopView === "settings" ? (
             <SettingsContent />
-          ) : betaAutomationsEnabled && desktopView === "automations" ? (
+          ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations" ? (
             <AutomationsView />
-          ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
+          ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations-detail" ? (
             <AutomationsDetailView />
-          ) : betaAutomationsEnabled && desktopView === "inbox" ? (
+          ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "inbox" ? (
             <InboxView />
           ) : selectedChatId ? (
             <div className="h-full flex flex-col relative overflow-hidden">
@@ -1060,7 +1095,8 @@ export function AgentsContent() {
       />
 
       {/* Dev mode / Admin sandbox debugger */}
-      {(process.env.NODE_ENV === "development" || isAdmin) &&
+      {!isLocalOnly &&
+        (process.env.NODE_ENV === "development" || isAdmin) &&
         chatData?.sandbox_id && (
           <a
             href={`https://codesandbox.io/p/devbox/${chatData.sandbox_id}`}

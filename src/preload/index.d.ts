@@ -29,11 +29,15 @@ export interface DesktopApi {
   platform: NodeJS.Platform
   arch: string
   getVersion: () => Promise<string>
+  isPackaged: () => Promise<boolean>
+  isLocalOnlyMode: () => Promise<boolean>
 
   // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
   installUpdate: () => void
+  setUpdateChannel: (channel: "latest" | "beta") => Promise<boolean>
+  getUpdateChannel: () => Promise<"latest" | "beta">
   onUpdateChecking: (callback: () => void) => () => void
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void
   onUpdateNotAvailable: (callback: () => void) => () => void
@@ -69,7 +73,7 @@ export interface DesktopApi {
   setBadge: (count: number | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
-  getApiBaseUrl: () => Promise<string>
+  getApiBaseUrl: () => Promise<string | null>
 
   // Clipboard
   clipboardWrite: (text: string) => Promise<void>

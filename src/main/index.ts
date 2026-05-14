@@ -17,6 +17,7 @@ import {
   initAutoUpdater,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
+import { isLocalOnlyMode } from "./lib/local-only"
 import { closeDatabase, initDatabase } from "./lib/db"
 import {
   getLaunchDirectory,
@@ -59,7 +60,7 @@ app.commandLine.appendSwitch("js-flags", "--max-old-space-size=8192")
 
 // Initialize Sentry in production only. Keep the import lazy so dev startup does
 // not load @sentry/electron before Electron's app object is available.
-if (app.isPackaged && !IS_DEV) {
+if (app.isPackaged && !IS_DEV && !isLocalOnlyMode()) {
   const sentryDsn = import.meta.env.MAIN_VITE_SENTRY_DSN
   if (sentryDsn) {
     import("@sentry/electron/main")
@@ -76,7 +77,11 @@ if (app.isPackaged && !IS_DEV) {
     console.log("[App] Skipping Sentry initialization (no DSN configured)")
   }
 } else {
-  console.log("[App] Skipping Sentry initialization (dev mode)")
+  console.log(
+    isLocalOnlyMode()
+      ? "[App] Skipping Sentry initialization (local-only mode)"
+      : "[App] Skipping Sentry initialization (dev mode)",
+  )
 }
 
 // URL configuration (exported for use in other modules)
@@ -89,8 +94,8 @@ export function getBaseUrl(): string {
   return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
 }
 
-export function getAppUrl(): string {
-  return process.env.ELECTRON_RENDERER_URL || "https://21st.dev/agents"
+export function getAppUrl(): string | null {
+  return process.env.ELECTRON_RENDERER_URL || (isLocalOnlyMode() ? null : "https://21st.dev/agents")
 }
 
 // Auth manager singleton (use the one from auth-manager module)
@@ -625,6 +630,7 @@ if (gotTheLock) {
     const buildMenu = () => {
       // Show devtools menu item only in dev mode or when unlocked
       const showDevTools = !app.isPackaged || devToolsUnlocked
+      const localOnly = isLocalOnlyMode()
       const template: Electron.MenuItemConstructorOptions[] = [
         {
           label: app.name,
@@ -633,24 +639,28 @@ if (gotTheLock) {
               label: "About 1Code",
               click: () => app.showAboutPanel(),
             },
-            {
-              label: updateAvailable
-                ? `Update to v${availableVersion}...`
-                : "Check for Updates...",
-              click: () => {
-                // Send event to renderer to clear dismiss state
-                const win = getWindow()
-                if (win) {
-                  win.webContents.send("update:manual-check")
-                }
-                // If update is already available, start downloading immediately
-                if (updateAvailable) {
-                  downloadUpdate()
-                } else {
-                  checkForUpdates(true)
-                }
-              },
-            },
+            ...(!localOnly
+              ? [
+                  {
+                    label: updateAvailable
+                      ? `Update to v${availableVersion}...`
+                      : "Check for Updates...",
+                    click: () => {
+                      // Send event to renderer to clear dismiss state
+                      const win = getWindow()
+                      if (win) {
+                        win.webContents.send("update:manual-check")
+                      }
+                      // If update is already available, start downloading immediately
+                      if (updateAvailable) {
+                        downloadUpdate()
+                      } else {
+                        checkForUpdates(true)
+                      }
+                    },
+                  },
+                ]
+              : []),
             { type: "separator" },
             {
               label: "Settings...",
@@ -841,13 +851,17 @@ if (gotTheLock) {
         {
           role: "help",
           submenu: [
-            {
-              label: "Learn More",
-              click: async () => {
-                const { shell } = await import("electron")
-                await shell.openExternal("https://21st.dev")
-              },
-            },
+            ...(!localOnly
+              ? [
+                  {
+                    label: "Learn More",
+                    click: async () => {
+                      const { shell } = await import("electron")
+                      await shell.openExternal("https://21st.dev")
+                    },
+                  },
+                ]
+              : []),
           ],
         },
       ]
@@ -897,19 +911,23 @@ if (gotTheLock) {
     console.log("[App] Auth manager initialized")
 
     // Initialize analytics after auth manager so we can identify user
-    initAnalytics()
+    if (!isLocalOnlyMode()) {
+      initAnalytics()
 
-    // If user already authenticated from previous session, identify them
-    if (authManager.isAuthenticated()) {
-      const user = authManager.getUser()
-      if (user) {
-        identify(user.id, { email: user.email })
-        console.log("[Analytics] User identified from saved session:", user.id)
+      // If user already authenticated from previous session, identify them
+      if (authManager.isAuthenticated()) {
+        const user = authManager.getUser()
+        if (user) {
+          identify(user.id, { email: user.email })
+          console.log("[Analytics] User identified from saved session:", user.id)
+        }
       }
-    }
 
-    // Track app opened (now with correct user ID if authenticated)
-    trackAppOpened()
+      // Track app opened (now with correct user ID if authenticated)
+      trackAppOpened()
+    } else {
+      console.log("[Analytics] Skipping analytics initialization (local-only mode)")
+    }
 
     // Set up callback to update cookie when token is refreshed
     authManager.setOnTokenRefresh(async (authData) => {
@@ -945,7 +963,7 @@ if (gotTheLock) {
     createMainWindow()
 
     // Initialize auto-updater (production only)
-    if (app.isPackaged) {
+    if (app.isPackaged && !isLocalOnlyMode()) {
       await initAutoUpdater(getAllWindows)
       // Setup update check on window focus (instead of periodic interval)
       setupFocusUpdateCheck(getAllWindows)
@@ -953,6 +971,8 @@ if (gotTheLock) {
       setTimeout(() => {
         checkForUpdates(true)
       }, 5000)
+    } else if (isLocalOnlyMode()) {
+      console.log("[AutoUpdater] Skipping initialization (local-only mode)")
     }
 
     // Warm up MCP cache 3 seconds after startup (background, non-blocking)

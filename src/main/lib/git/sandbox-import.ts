@@ -4,6 +4,7 @@ import { join, dirname } from "node:path";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import simpleGit from "simple-git";
+import { assertOfficialCloudAllowed } from "../local-only";
 
 const execFileAsync = promisify(execFile);
 
@@ -371,6 +372,7 @@ export async function importSandboxToWorktree(
 		if (sessionId) queryParams.push(`sessionId=${sessionId}`);
 		const queryString = queryParams.length > 0 ? `?${queryParams.join("&")}` : "";
 		const exportUrl = `${apiUrl}/api/agents/sandbox/${sandboxId}/export${queryString}`;
+		assertOfficialCloudAllowed("sandbox export", exportUrl);
 		console.log(`[OPEN-LOCALLY] Fetching sandbox export from: ${exportUrl}`);
 
 		const response = await fetch(exportUrl, {

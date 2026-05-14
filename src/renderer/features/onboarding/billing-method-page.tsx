@@ -2,7 +2,7 @@
 
 import { useSetAtom } from "jotai"
 import { Check } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import {
   ClaudeCodeIcon,
@@ -17,6 +17,7 @@ import {
   type BillingMethod,
 } from "../../lib/atoms"
 import { useI18n } from "../../lib/i18n"
+import { useLocalOnlyModeState } from "../../lib/hooks/use-local-only-mode"
 import { cn } from "../../lib/utils"
 
 type BillingOptionGroup = "claude-code" | "codex"
@@ -80,20 +81,34 @@ export function BillingMethodPage() {
   const { t } = useI18n()
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
+  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
+    useLocalOnlyModeState()
   const [selectedGroup, setSelectedGroup] =
     useState<BillingOptionGroup>("claude-code")
   const [selectedOptionId, setSelectedOptionId] =
     useState<string>("claude-subscription")
 
   const visibleOptions = useMemo(
-    () => billingOptions.filter((option) => option.group === selectedGroup),
-    [selectedGroup],
+    () =>
+      billingOptions.filter(
+        (option) =>
+          option.group === selectedGroup &&
+          (!isLocalOnly || option.id !== "claude-subscription"),
+      ),
+    [isLocalOnly, selectedGroup],
   )
 
   const selectedOption = useMemo(() => {
-    const found = billingOptions.find((option) => option.id === selectedOptionId)
-    return found || billingOptions[0]
-  }, [selectedOptionId])
+    const found = visibleOptions.find((option) => option.id === selectedOptionId)
+    return found || visibleOptions[0] || billingOptions[0]
+  }, [selectedOptionId, visibleOptions])
+
+  useEffect(() => {
+    if (!isLocalOnlyResolved || !isLocalOnly) return
+    if (selectedOptionId === "claude-subscription") {
+      setSelectedOptionId("api-key")
+    }
+  }, [isLocalOnly, isLocalOnlyResolved, selectedOptionId])
 
   const handleContinue = () => {
     if (
@@ -157,7 +172,7 @@ export function BillingMethodPage() {
             type="button"
             onClick={() => {
               setSelectedGroup("claude-code")
-              setSelectedOptionId("claude-subscription")
+              setSelectedOptionId(isLocalOnly ? "api-key" : "claude-subscription")
             }}
             className={cn(
               "h-8 flex-1 rounded-full text-sm font-medium transition-colors",

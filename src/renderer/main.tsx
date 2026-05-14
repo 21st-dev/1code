@@ -3,8 +3,11 @@ import "./wdyr"
 
 // Only initialize Sentry in production to avoid IPC errors in dev mode
 if (import.meta.env.PROD) {
-  import("@sentry/electron/renderer").then((Sentry) => {
-    Sentry.init()
+  window.desktopApi?.isLocalOnlyMode?.().then((isLocalOnly) => {
+    if (isLocalOnly !== false) return
+    import("@sentry/electron/renderer").then((Sentry) => {
+      Sentry.init()
+    })
   })
 }
 

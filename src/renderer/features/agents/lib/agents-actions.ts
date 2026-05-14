@@ -29,6 +29,7 @@ export interface AgentActionContext {
 
   // Data
   selectedChatId?: string | null
+  isLocalOnly?: boolean
 }
 
 export interface AgentActionResult {
@@ -150,7 +151,11 @@ const openAutomationsAction: AgentActionDefinition = {
   label: "Automations",
   description: "Open automations page",
   category: "navigation",
+  isAvailable: (context) => context.isLocalOnly !== true,
   handler: async (context) => {
+    if (context.isLocalOnly) {
+      return { success: false, error: "Local-only mode blocks hosted 1Code services" }
+    }
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)
     context.setShowNewChatForm?.(false)
@@ -177,7 +182,11 @@ const openInboxAction: AgentActionDefinition = {
   label: "Inbox",
   description: "Open inbox",
   category: "navigation",
+  isAvailable: (context) => context.isLocalOnly !== true,
   handler: async (context) => {
+    if (context.isLocalOnly) {
+      return { success: false, error: "Local-only mode blocks hosted 1Code services" }
+    }
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)
     context.setShowNewChatForm?.(false)

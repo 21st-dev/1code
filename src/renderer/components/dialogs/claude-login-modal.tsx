@@ -13,6 +13,8 @@ import {
 } from "../../lib/atoms"
 import { appStore } from "../../lib/jotai-store"
 import { trpc } from "../../lib/trpc"
+import { useLocalOnlyMode } from "../../lib/hooks/use-local-only-mode"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../shared/local-only"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -64,6 +66,7 @@ export function ClaudeLoginModal({
   const [savedOauthUrl, setSavedOauthUrl] = useState<string | null>(null)
   const urlOpenedRef = useRef(false)
   const didAutoStartForOpenRef = useRef(false)
+  const isLocalOnly = useLocalOnlyMode()
 
   // tRPC mutations
   const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
@@ -78,7 +81,7 @@ export function ClaudeLoginModal({
       sessionId: flowState.step === "waiting_url" ? flowState.sessionId : "",
     },
     {
-      enabled: flowState.step === "waiting_url",
+      enabled: flowState.step === "waiting_url" && !isLocalOnly,
       refetchInterval: 1500,
     }
   )
@@ -178,6 +181,14 @@ export function ClaudeLoginModal({
   const handleConnectClick = useCallback(async () => {
     setUserClickedConnect(true)
 
+    if (isLocalOnly) {
+      setFlowState({
+        step: "error",
+        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+      })
+      return
+    }
+
     if (flowState.step === "has_url") {
       // URL is ready, open it immediately
       urlOpenedRef.current = true
@@ -220,7 +231,7 @@ export function ClaudeLoginModal({
         })
       }
     }
-  }, [flowState, openOAuthUrlMutation, startAuthMutation])
+  }, [flowState, isLocalOnly, openOAuthUrlMutation, startAuthMutation])
 
   useEffect(() => {
     if (
@@ -238,6 +249,13 @@ export function ClaudeLoginModal({
 
   const handleSubmitCode = async () => {
     if (!authCode.trim() || flowState.step !== "has_url") return
+    if (isLocalOnly) {
+      setFlowState({
+        step: "error",
+        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+      })
+      return
+    }
 
     const { sandboxUrl, sessionId } = flowState
     setFlowState({ step: "submitting" })
@@ -262,7 +280,7 @@ export function ClaudeLoginModal({
     setAuthCode(value)
 
     // Auto-submit if the pasted value looks like a valid auth code
-    if (isValidCodeFormat(value) && flowState.step === "has_url") {
+    if (!isLocalOnly && isValidCodeFormat(value) && flowState.step === "has_url") {
       const { sandboxUrl, sessionId } = flowState
       setTimeout(async () => {
         setFlowState({ step: "submitting" })
@@ -290,7 +308,7 @@ export function ClaudeLoginModal({
   }
 
   const handleOpenFallbackUrl = () => {
-    if (savedOauthUrl) {
+    if (!isLocalOnly && savedOauthUrl) {
       openOAuthUrlMutation.mutate(savedOauthUrl)
     }
   }

@@ -12,6 +12,7 @@ import {
   getDatabase,
 } from "../../db"
 import { createId } from "../../db/utils"
+import { assertOfficialCloudAllowed } from "../../local-only"
 import { publicProcedure, router } from "../index"
 
 /**
@@ -172,13 +173,16 @@ export const claudeCodeRouter = router({
    * Start OAuth flow - calls server to create sandbox
    */
   startAuth: publicProcedure.mutation(async () => {
+    const apiUrl = getApiUrl()
+    assertOfficialCloudAllowed("Claude Code hosted auth", apiUrl)
+
     const token = await getDesktopToken()
     if (!token) {
       throw new Error("Not authenticated with 21st.dev")
     }
 
     // Server creates sandbox (has CodeSandbox SDK)
-    const response = await fetch(`${getApiUrl()}/api/auth/claude-code/start`, {
+    const response = await fetch(`${apiUrl}/api/auth/claude-code/start`, {
       method: "POST",
       headers: { "x-desktop-token": token },
     })
@@ -207,9 +211,10 @@ export const claudeCodeRouter = router({
     )
     .query(async ({ input }) => {
       try {
-        const response = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
+        const statusUrl = `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
+        assertOfficialCloudAllowed("Claude Code sandbox status", statusUrl)
+
+        const response = await fetch(statusUrl)
 
         if (!response.ok) {
           return { state: "error" as const, oauthUrl: null, error: "Failed to poll status" }
@@ -223,7 +228,11 @@ export const claudeCodeRouter = router({
         }
       } catch (error) {
         console.error("[ClaudeCode] Poll status error:", error)
-        return { state: "error" as const, oauthUrl: null, error: "Connection failed" }
+        return {
+          state: "error" as const,
+          oauthUrl: null,
+          error: error instanceof Error ? error.message : "Connection failed",
+        }
       }
     }),
 
@@ -240,14 +249,14 @@ export const claudeCodeRouter = router({
     )
     .mutation(async ({ input }) => {
       // Submit code to sandbox
-      const codeRes = await fetch(
-        `${input.sandboxUrl}/api/auth/${input.sessionId}/code`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: input.code }),
-        }
-      )
+      const codeUrl = `${input.sandboxUrl}/api/auth/${input.sessionId}/code`
+      assertOfficialCloudAllowed("Claude Code sandbox code submission", codeUrl)
+
+      const codeRes = await fetch(codeUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: input.code }),
+      })
 
       if (!codeRes.ok) {
         throw new Error(`Code submission failed: ${codeRes.statusText}`)
@@ -259,9 +268,10 @@ export const claudeCodeRouter = router({
       for (let i = 0; i < 10; i++) {
         await new Promise((r) => setTimeout(r, 1000))
 
-        const statusRes = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
+        const statusUrl = `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
+        assertOfficialCloudAllowed("Claude Code sandbox token polling", statusUrl)
+
+        const statusRes = await fetch(statusUrl)
 
         if (!statusRes.ok) continue
 
@@ -435,6 +445,7 @@ export const claudeCodeRouter = router({
   openOAuthUrl: publicProcedure
     .input(z.string())
     .mutation(async ({ input: url }) => {
+      assertOfficialCloudAllowed("Claude Code OAuth URL", url)
       await shell.openExternal(url)
       return { success: true }
     }),

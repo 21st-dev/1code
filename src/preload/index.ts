@@ -1,8 +1,14 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
 import { exposeElectronTRPC } from "trpc-electron/main"
+import { shouldEnableLocalOnly } from "../shared/local-only"
+
+const preloadLocalOnly = shouldEnableLocalOnly(
+  process.env,
+  import.meta.env as Record<string, string | undefined>,
+)
 
 // Only initialize Sentry in production to avoid IPC errors in dev mode
-if (process.env.NODE_ENV === "production") {
+if (process.env.NODE_ENV === "production" && !preloadLocalOnly) {
   import("@sentry/electron/renderer").then((Sentry) => {
     Sentry.init()
   })
@@ -28,6 +34,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
   arch: process.arch,
   getVersion: () => ipcRenderer.invoke("app:version"),
   isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
+  isLocalOnlyMode: () => ipcRenderer.invoke("app:is-local-only-mode"),
 
   // Auto-update methods
   checkForUpdates: (force?: boolean) => ipcRenderer.invoke("update:check", force),
@@ -289,6 +296,7 @@ export interface DesktopApi {
   arch: string
   getVersion: () => Promise<string>
   isPackaged: () => Promise<boolean>
+  isLocalOnlyMode: () => Promise<boolean>
   // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
@@ -333,7 +341,7 @@ export interface DesktopApi {
   setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
-  getApiBaseUrl: () => Promise<string>
+  getApiBaseUrl: () => Promise<string | null>
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
   saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) => Promise<{ success: boolean; filePath?: string }>

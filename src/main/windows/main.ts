@@ -20,6 +20,12 @@ import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/rou
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
+import {
+  blockedOfficialCloudResponse,
+  isLocalOnlyMode,
+  isOfficialCloudUrl,
+  LOCAL_ONLY_BLOCKED_MESSAGE,
+} from "../lib/local-only"
 
 // Flag to bypass close confirmation when app.quit() has already been confirmed
 let isQuitting = false
@@ -47,6 +53,7 @@ function registerIpcHandlers(): void {
   // App info
   ipcMain.handle("app:version", () => app.getVersion())
   ipcMain.handle("app:isPackaged", () => app.isPackaged)
+  ipcMain.handle("app:is-local-only-mode", () => isLocalOnlyMode())
 
   // Windows: Frame preference persistence
   ipcMain.handle("window:set-frame-preference", (_event, useNativeFrame: boolean) => {
@@ -147,7 +154,9 @@ function registerIpcHandlers(): void {
   )
 
   // API base URL for fetch requests
-  ipcMain.handle("app:get-api-base-url", () => getBaseUrl())
+  ipcMain.handle("app:get-api-base-url", () =>
+    isLocalOnlyMode() ? null : getBaseUrl(),
+  )
 
   // Window controls - use event.sender to identify window
   ipcMain.handle("window:minimize", (event) => {
@@ -285,9 +294,13 @@ function registerIpcHandlers(): void {
   })
 
   // Shell
-  ipcMain.handle("shell:open-external", (_event, url: string) =>
-    shell.openExternal(url),
-  )
+  ipcMain.handle("shell:open-external", (_event, url: string) => {
+    if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
+      console.warn(`[LocalOnly] Blocked external URL: ${url}`)
+      return
+    }
+    return shell.openExternal(url)
+  })
 
   // Clipboard
   ipcMain.handle("clipboard:write", (_event, text: string) =>
@@ -339,7 +352,9 @@ function registerIpcHandlers(): void {
       const parsed = new URL(senderUrl)
       if (parsed.protocol === "file:") return true
       const hostname = parsed.hostname.toLowerCase()
-      const trusted = ["21st.dev", "localhost", "127.0.0.1"]
+      const trusted = isLocalOnlyMode()
+        ? ["localhost", "127.0.0.1"]
+        : ["21st.dev", "localhost", "127.0.0.1"]
       return trusted.some((h) => hostname === h || hostname.endsWith(`.${h}`))
     } catch {
       return false
@@ -422,6 +437,11 @@ function registerIpcHandlers(): void {
       }
       console.log("[SignedFetch] Sender validated OK")
 
+      if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
+        console.warn(`[LocalOnly] Blocked signedFetch: ${url}`)
+        return blockedOfficialCloudResponse("signedFetch", url)
+      }
+
       const token = await getAuthManager().getValidToken()
       console.log("[SignedFetch] Token:", token ? "present" : "missing", "URL:", url)
       if (!token) {
@@ -474,6 +494,11 @@ function registerIpcHandlers(): void {
       if (!validateSender(event)) {
         console.log("[StreamFetch] Unauthorized sender")
         return { ok: false, status: 403, error: "Unauthorized sender" }
+      }
+
+      if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
+        console.warn(`[LocalOnly] Blocked streamFetch: ${url}`)
+        return { ok: false, status: 451, error: LOCAL_ONLY_BLOCKED_MESSAGE }
       }
 
       const token = await getAuthManager().getValidToken()
@@ -769,6 +794,10 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
 
   // Handle external links
   window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
+      console.warn(`[LocalOnly] Blocked window.open URL: ${url}`)
+      return { action: "deny" }
+    }
     shell.openExternal(url)
     return { action: "deny" }
   })

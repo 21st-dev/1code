@@ -4,18 +4,30 @@
  */
 import { createTRPCClient, httpLink } from "@trpc/client"
 import SuperJSON from "superjson"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../shared/local-only"
 
 // Placeholder URL - actual base is fetched dynamically from main process
 const TRPC_PLACEHOLDER = "/__dynamic__/api/trpc"
 
 // Cache the API base URL after first fetch
-let cachedApiBase: string | null = null
+let cachedApiBase: string | null | undefined = undefined
 
 async function getApiBase(): Promise<string> {
-  if (!cachedApiBase) {
-    cachedApiBase = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+  if (await window.desktopApi?.isLocalOnlyMode?.()) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
   }
-  return cachedApiBase
+
+  if (cachedApiBase === undefined) {
+    cachedApiBase = await window.desktopApi?.getApiBaseUrl()
+    if (!cachedApiBase) {
+      throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+    }
+  }
+  const apiBase = cachedApiBase
+  if (!apiBase) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+  }
+  return apiBase
 }
 
 /**

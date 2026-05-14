@@ -14,6 +14,8 @@ import {
 } from "../../lib/atoms"
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
+import { useLocalOnlyMode } from "../../lib/hooks/use-local-only-mode"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../shared/local-only"
 
 type AuthFlowState =
   | { step: "idle" }
@@ -45,6 +47,7 @@ export function AnthropicOnboardingPage() {
   const [isUsingExistingToken, setIsUsingExistingToken] = useState(false)
   const [existingTokenError, setExistingTokenError] = useState<string | null>(null)
   const urlOpenedRef = useRef(false)
+  const isLocalOnly = useLocalOnlyMode()
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
@@ -81,7 +84,7 @@ export function AnthropicOnboardingPage() {
       sessionId: flowState.step === "waiting_url" ? flowState.sessionId : "",
     },
     {
-      enabled: flowState.step === "waiting_url",
+      enabled: flowState.step === "waiting_url" && !isLocalOnly,
       refetchInterval: 1500,
     }
   )
@@ -89,6 +92,15 @@ export function AnthropicOnboardingPage() {
   // Auto-start auth on mount
   useEffect(() => {
     if (!checkedExistingToken || shouldOfferExistingToken) return
+    if (isLocalOnly) {
+      if (flowState.step === "idle") {
+        setFlowState({
+          step: "error",
+          message: LOCAL_ONLY_BLOCKED_MESSAGE,
+        })
+      }
+      return
+    }
 
     if (flowState.step === "idle") {
       setFlowState({ step: "starting" })
@@ -109,7 +121,13 @@ export function AnthropicOnboardingPage() {
         },
       })
     }
-  }, [flowState.step, startAuthMutation, checkedExistingToken, shouldOfferExistingToken])
+  }, [
+    flowState.step,
+    isLocalOnly,
+    startAuthMutation,
+    checkedExistingToken,
+    shouldOfferExistingToken,
+  ])
 
   // Update flow state when we get the OAuth URL
   useEffect(() => {
@@ -155,6 +173,13 @@ export function AnthropicOnboardingPage() {
 
   const handleConnectClick = async () => {
     setUserClickedConnect(true)
+    if (isLocalOnly) {
+      setFlowState({
+        step: "error",
+        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+      })
+      return
+    }
 
     if (flowState.step === "has_url") {
       // URL is ready, open it immediately
@@ -212,6 +237,13 @@ export function AnthropicOnboardingPage() {
   // Submit code - reusable for both auto-submit and manual Enter
   const submitCode = async (code: string) => {
     if (!code.trim() || flowState.step !== "has_url") return
+    if (isLocalOnly) {
+      setFlowState({
+        step: "error",
+        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+      })
+      return
+    }
 
     const { sandboxUrl, sessionId } = flowState
     setFlowState({ step: "submitting" })
@@ -237,7 +269,7 @@ export function AnthropicOnboardingPage() {
     setAuthCode(value)
 
     // Auto-submit if the pasted value looks like a valid auth code
-    if (isValidCodeFormat(value) && flowState.step === "has_url") {
+    if (!isLocalOnly && isValidCodeFormat(value) && flowState.step === "has_url") {
       // Small delay to let the UI update before submitting
       setTimeout(() => submitCode(value), 100)
     }
@@ -250,7 +282,7 @@ export function AnthropicOnboardingPage() {
   }
 
   const handleOpenFallbackUrl = () => {
-    if (savedOauthUrl) {
+    if (!isLocalOnly && savedOauthUrl) {
       openOAuthUrlMutation.mutate(savedOauthUrl)
     }
   }

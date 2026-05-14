@@ -13,7 +13,21 @@ bun run package:mac  # Create distributable
 
 ## Open Source vs Hosted Version
 
-This is the open-source version of 1Code. Some features require the hosted backend at 1code.dev:
+This repository runs in **Local-only mode by default**. In Local-only mode the
+desktop app does not call the official 1Code/21st hosted services, CDN,
+analytics, error tracking, hosted auth, subscription, remote sandbox,
+background-agent, hosted voice/TTS, or updater endpoints.
+
+Local-only can only be disabled explicitly for development or internal builds:
+
+```bash
+ONECODE_LOCAL_ONLY=false bun run dev
+# or
+MAIN_VITE_LOCAL_ONLY=false bun run dev
+```
+
+User-configured providers, Ollama, local projects, Git, and GitHub operations
+remain available in Local-only mode.
 
 | Feature | Open Source | Hosted (1code.dev) |
 |---------|-------------|-------------------|
@@ -21,15 +35,20 @@ This is the open-source version of 1Code. Some features require the hosted backe
 | Claude Code integration | Yes | Yes |
 | Git worktrees | Yes | Yes |
 | Terminal | Yes | Yes |
-| Sign in / Sync | No | Yes |
-| Background agents | No | Yes |
-| Auto-updates | No | Yes |
+| Sign in / Sync | Blocked by Local-only | Yes |
+| Inbox / Automations | Blocked by Local-only | Yes |
+| Remote sandbox / Open Locally import | Blocked by Local-only | Yes |
+| Background agents | Blocked by Local-only | Yes |
+| Auto-updates | Blocked by Local-only | Yes |
 | Private Discord & support | No | Yes |
-| Early access to new features | No | Yes |
+| Early access update channel | Blocked by Local-only | Yes |
 
 ## Analytics & Telemetry
 
-Analytics (PostHog) and error tracking (Sentry) are **disabled by default** in open source builds. They only activate if you set the environment variables in `.env.local`.
+Analytics (PostHog) and error tracking (Sentry) are **disabled by default**.
+They only activate when Local-only is explicitly disabled and the relevant
+environment variables are configured. There is no hardcoded analytics key in
+open-source builds.
 
 ## Contributing
 

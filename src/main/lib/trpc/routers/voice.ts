@@ -12,6 +12,11 @@ import { z } from "zod"
 import { publicProcedure, router } from "../index"
 import { getApiUrl } from "../../config"
 import { getAuthManager } from "../../../auth-manager"
+import {
+  assertOfficialCloudAllowed,
+  isLocalOnlyMode,
+  LOCAL_ONLY_BLOCKED_MESSAGE,
+} from "../../local-only"
 
 // Max audio size: 25MB (Whisper API limit)
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024
@@ -68,6 +73,10 @@ const PLAN_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
  * Fetch and cache user's subscription plan
  */
 async function getUserPlan(): Promise<{ plan: string; status: string | null } | null> {
+  if (isLocalOnlyMode()) {
+    return null
+  }
+
   const authManager = getAuthManager()
   if (!authManager?.isAuthenticated()) {
     return null
@@ -201,6 +210,8 @@ async function transcribeViaBackend(
   }
 
   const apiUrl = getApiUrl()
+  const transcribeUrl = `${apiUrl}/api/voice/transcribe`
+  assertOfficialCloudAllowed("hosted voice transcription", transcribeUrl)
 
   // Create form data for the API request
   const formData = new FormData()
@@ -216,7 +227,7 @@ async function transcribeViaBackend(
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
   try {
-    const response = await fetch(`${apiUrl}/api/voice/transcribe`, {
+    const response = await fetch(transcribeUrl, {
       method: "POST",
       headers: {
         "X-Desktop-Token": token,
@@ -372,6 +383,12 @@ export const voiceRouter = router({
         return { text }
       }
 
+      if (isLocalOnlyMode()) {
+        throw new Error(
+          `${LOCAL_ONLY_BLOCKED_MESSAGE}. Set OPENAI_API_KEY to use local voice transcription.`
+        )
+      }
+
       // Otherwise, try backend if user is authenticated
       const authManager = getAuthManager()
       const isAuthenticated = authManager?.isAuthenticated() ?? false
@@ -406,6 +423,15 @@ export const voiceRouter = router({
         available: true,
         method: "local" as const,
         reason: undefined,
+      }
+    }
+
+    if (isLocalOnlyMode()) {
+      return {
+        available: false,
+        method: null,
+        reason:
+          "Set OPENAI_API_KEY in Settings > Models to use voice input in local-only mode",
       }
     }
 

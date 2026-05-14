@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useAtom, useAtomValue } from "jotai"
 import { useCallback, useEffect } from "react"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../shared/local-only"
 import { selectedTeamIdAtom } from "../atoms"
 import { remoteApi, type RemoteChat, type RemoteChatWithSubChats } from "../remote-api"
+import { useLocalOnlyMode } from "./use-local-only-mode"
 
 /**
  * Fetch user's teams and auto-select first team if none selected
@@ -10,6 +12,7 @@ import { remoteApi, type RemoteChat, type RemoteChatWithSubChats } from "../remo
  */
 export function useUserTeams(enabled: boolean = true) {
   const [teamId, setTeamId] = useAtom(selectedTeamIdAtom)
+  const isLocalOnly = useLocalOnlyMode()
 
   const query = useQuery({
     queryKey: ["user-teams"],
@@ -18,12 +21,17 @@ export function useUserTeams(enabled: boolean = true) {
     gcTime: Infinity,           // Never garbage collect
     refetchOnMount: true,       // Revalidate if stale
     refetchOnWindowFocus: false,
-    enabled,
+    enabled: enabled && !isLocalOnly,
     retry: 1,
   })
 
   // Auto-select first team OR fix stale teamId
   useEffect(() => {
+    if (isLocalOnly) {
+      if (teamId) setTeamId(null)
+      return
+    }
+
     // Wait for successful fetch
     if (query.status !== "success" || !query.data) return
 
@@ -48,7 +56,7 @@ export function useUserTeams(enabled: boolean = true) {
         setTeamId(null)
       }
     }
-  }, [query.status, query.data, teamId, setTeamId])
+  }, [isLocalOnly, query.status, query.data, teamId, setTeamId])
 
   return query
 }
@@ -59,11 +67,12 @@ export function useUserTeams(enabled: boolean = true) {
  */
 export function useRemoteChats() {
   const teamId = useAtomValue(selectedTeamIdAtom)
+  const isLocalOnly = useLocalOnlyMode()
 
   return useQuery({
     queryKey: ["remote-chats", teamId],
     queryFn: () => remoteApi.getAgentChats(teamId!),
-    enabled: !!teamId,
+    enabled: !!teamId && !isLocalOnly,
     staleTime: 30 * 1000,       // Consider stale after 30s
     gcTime: 30 * 60 * 1000,     // Keep in cache 30 min
     refetchOnMount: true,       // Revalidate on mount
@@ -76,10 +85,12 @@ export function useRemoteChats() {
  * Fetch a single remote chat with all its sub-chats
  */
 export function useRemoteChat(chatId: string | null) {
+  const isLocalOnly = useLocalOnlyMode()
+
   return useQuery({
     queryKey: ["remote-chat", chatId],
     queryFn: () => remoteApi.getAgentChat(chatId!),
-    enabled: !!chatId,
+    enabled: !!chatId && !isLocalOnly,
     staleTime: 60 * 1000,      // 1 minute
     gcTime: 30 * 60 * 1000,    // 30 minutes
   })
@@ -90,16 +101,19 @@ export function useRemoteChat(chatId: string | null) {
  */
 export function usePrefetchRemoteChat() {
   const queryClient = useQueryClient()
+  const isLocalOnly = useLocalOnlyMode()
 
   return useCallback(
     (chatId: string) => {
+      if (isLocalOnly) return
+
       queryClient.prefetchQuery({
         queryKey: ["remote-chat", chatId],
         queryFn: () => remoteApi.getAgentChat(chatId),
         staleTime: 60 * 1000,
       })
     },
-    [queryClient]
+    [isLocalOnly, queryClient]
   )
 }
 
@@ -108,11 +122,12 @@ export function usePrefetchRemoteChat() {
  */
 export function useRemoteArchivedChats() {
   const teamId = useAtomValue(selectedTeamIdAtom)
+  const isLocalOnly = useLocalOnlyMode()
 
   return useQuery({
     queryKey: ["remote-archived-chats", teamId],
     queryFn: () => remoteApi.getArchivedChats(teamId!),
-    enabled: !!teamId,
+    enabled: !!teamId && !isLocalOnly,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   })
@@ -124,9 +139,13 @@ export function useRemoteArchivedChats() {
 export function useArchiveRemoteChat() {
   const queryClient = useQueryClient()
   const teamId = useAtomValue(selectedTeamIdAtom)
+  const isLocalOnly = useLocalOnlyMode()
 
   return useMutation({
-    mutationFn: (chatId: string) => remoteApi.archiveChat(chatId),
+    mutationFn: (chatId: string) => {
+      if (isLocalOnly) throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+      return remoteApi.archiveChat(chatId)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["remote-chats", teamId] })
       queryClient.invalidateQueries({ queryKey: ["remote-archived-chats", teamId] })
@@ -140,9 +159,13 @@ export function useArchiveRemoteChat() {
 export function useArchiveRemoteChatsBatch() {
   const queryClient = useQueryClient()
   const teamId = useAtomValue(selectedTeamIdAtom)
+  const isLocalOnly = useLocalOnlyMode()
 
   return useMutation({
-    mutationFn: (chatIds: string[]) => remoteApi.archiveChatsBatch(chatIds),
+    mutationFn: (chatIds: string[]) => {
+      if (isLocalOnly) throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+      return remoteApi.archiveChatsBatch(chatIds)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["remote-chats", teamId] })
       queryClient.invalidateQueries({ queryKey: ["remote-archived-chats", teamId] })
@@ -156,9 +179,13 @@ export function useArchiveRemoteChatsBatch() {
 export function useRestoreRemoteChat() {
   const queryClient = useQueryClient()
   const teamId = useAtomValue(selectedTeamIdAtom)
+  const isLocalOnly = useLocalOnlyMode()
 
   return useMutation({
-    mutationFn: (chatId: string) => remoteApi.restoreChat(chatId),
+    mutationFn: (chatId: string) => {
+      if (isLocalOnly) throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+      return remoteApi.restoreChat(chatId)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["remote-chats", teamId] })
       queryClient.invalidateQueries({ queryKey: ["remote-archived-chats", teamId] })
@@ -171,10 +198,13 @@ export function useRestoreRemoteChat() {
  */
 export function useRenameRemoteSubChat() {
   const queryClient = useQueryClient()
+  const isLocalOnly = useLocalOnlyMode()
 
   return useMutation({
-    mutationFn: ({ subChatId, name }: { subChatId: string; name: string }) =>
-      remoteApi.renameSubChat(subChatId, name),
+    mutationFn: ({ subChatId, name }: { subChatId: string; name: string }) => {
+      if (isLocalOnly) throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+      return remoteApi.renameSubChat(subChatId, name)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["remote-chat"] })
     },
@@ -187,10 +217,13 @@ export function useRenameRemoteSubChat() {
 export function useRenameRemoteChat() {
   const queryClient = useQueryClient()
   const teamId = useAtomValue(selectedTeamIdAtom)
+  const isLocalOnly = useLocalOnlyMode()
 
   return useMutation({
-    mutationFn: ({ chatId, name }: { chatId: string; name: string }) =>
-      remoteApi.renameChat(chatId, name),
+    mutationFn: ({ chatId, name }: { chatId: string; name: string }) => {
+      if (isLocalOnly) throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+      return remoteApi.renameChat(chatId, name)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["remote-chats", teamId] })
       queryClient.invalidateQueries({ queryKey: ["remote-chat"] })

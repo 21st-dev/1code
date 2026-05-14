@@ -14,6 +14,7 @@ import { KeyboardIcon } from "../../../components/ui/icons"
 import { DiscordIcon } from "../../../icons"
 import { useSetAtom } from "jotai"
 import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "../../../lib/atoms"
+import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 
 interface ReleaseHighlight {
   version: string
@@ -64,11 +65,17 @@ export function AgentsHelpPopover({
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [highlights, setHighlights] = useState<ReleaseHighlight[]>([])
+  const isLocalOnly = useLocalOnlyMode()
 
   const open = controlledOpen ?? internalOpen
   const setOpen = controlledOnOpenChange ?? setInternalOpen
 
   useEffect(() => {
+    if (isLocalOnly) {
+      setHighlights([])
+      return
+    }
+
     let cancelled = false
     window.desktopApi
       .signedFetch("https://21st.dev/api/changelog/desktop?per_page=3")
@@ -91,17 +98,19 @@ export function AgentsHelpPopover({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isLocalOnly])
 
   const handleCommunityClick = () => {
     window.desktopApi.openExternal("https://discord.gg/8ektTZGnj4")
   }
 
   const handleChangelogClick = () => {
+    if (isLocalOnly) return
     window.desktopApi.openExternal("https://1code.dev/agents/changelog")
   }
 
   const handleReleaseClick = (version: string) => {
+    if (isLocalOnly) return
     window.desktopApi.openExternal(
       `https://1code.dev/agents/changelog#${version}`,
     )

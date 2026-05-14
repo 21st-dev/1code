@@ -3,6 +3,7 @@ import log from "electron-log"
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater"
 import { readFileSync, writeFileSync, existsSync } from "fs"
 import { join } from "path"
+import { isLocalOnlyMode, LOCAL_ONLY_BLOCKED_MESSAGE } from "./local-only"
 
 /**
  * IMPORTANT: Do NOT use lazy/dynamic imports for electron-updater!
@@ -65,6 +66,7 @@ function saveChannel(channel: UpdateChannel): void {
 }
 
 let getAllWindows: (() => BrowserWindow[]) | null = null
+let ipcHandlersRegistered = false
 
 /**
  * Send update event to all renderer windows
@@ -88,6 +90,12 @@ function sendToAllRenderers(channel: string, data?: unknown) {
  */
 export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
   getAllWindows = getWindows
+  registerIpcHandlers()
+
+  if (isLocalOnlyMode()) {
+    log.info("[AutoUpdater] Disabled by local-only mode")
+    return
+  }
 
   // Initialize config
   initAutoUpdaterConfig()
@@ -177,9 +185,6 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
     sendToAllRenderers("update:error", error.message)
   })
 
-  // Register IPC handlers
-  registerIpcHandlers()
-
   log.info("[AutoUpdater] Initialized with feed URL:", CDN_BASE)
 }
 
@@ -187,8 +192,15 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
  * Register IPC handlers for update operations
  */
 function registerIpcHandlers() {
+  if (ipcHandlersRegistered) return
+  ipcHandlersRegistered = true
+
   // Check for updates
   ipcMain.handle("update:check", async (_event, force?: boolean) => {
+    if (isLocalOnlyMode()) {
+      log.info("[AutoUpdater] Skipping update check in local-only mode")
+      return null
+    }
     if (!app.isPackaged) {
       log.info("[AutoUpdater] Skipping update check in dev mode")
       return null
@@ -220,6 +232,10 @@ function registerIpcHandlers() {
 
   // Download update
   ipcMain.handle("update:download", async () => {
+    if (isLocalOnlyMode()) {
+      log.info("[AutoUpdater] Skipping update download in local-only mode")
+      return false
+    }
     try {
       await autoUpdater.downloadUpdate()
       return true
@@ -231,6 +247,10 @@ function registerIpcHandlers() {
 
   // Install update and restart
   ipcMain.handle("update:install", () => {
+    if (isLocalOnlyMode()) {
+      log.info("[AutoUpdater] Skipping update install in local-only mode")
+      return
+    }
     log.info("[AutoUpdater] Installing update and restarting...")
     // Give renderer time to save state
     setTimeout(() => {
@@ -242,11 +262,16 @@ function registerIpcHandlers() {
   ipcMain.handle("update:get-state", () => {
     return {
       currentVersion: app.getVersion(),
+      disabledReason: isLocalOnlyMode() ? LOCAL_ONLY_BLOCKED_MESSAGE : null,
     }
   })
 
   // Set update channel (latest = stable only, beta = stable + beta)
   ipcMain.handle("update:set-channel", async (_event, channel: string) => {
+    if (isLocalOnlyMode()) {
+      log.info("[AutoUpdater] Skipping update channel change in local-only mode")
+      return false
+    }
     if (channel !== "latest" && channel !== "beta") {
       log.warn(`[AutoUpdater] Invalid channel: ${channel}`)
       return false
@@ -279,6 +304,11 @@ function registerIpcHandlers() {
  * @param force - Skip the minimum interval check
  */
 export async function checkForUpdates(force = false) {
+  if (isLocalOnlyMode()) {
+    log.info("[AutoUpdater] Skipping update check in local-only mode")
+    return Promise.resolve(null)
+  }
+
   if (!app.isPackaged) {
     log.info("[AutoUpdater] Skipping update check in dev mode")
     return Promise.resolve(null)
@@ -301,6 +331,11 @@ export async function checkForUpdates(force = false) {
  * Start downloading the update
  */
 export async function downloadUpdate() {
+  if (isLocalOnlyMode()) {
+    log.info("[AutoUpdater] Skipping download in local-only mode")
+    return false
+  }
+
   if (!app.isPackaged) {
     log.info("[AutoUpdater] Skipping download in dev mode")
     return false
@@ -321,6 +356,11 @@ export async function downloadUpdate() {
  * This is more natural than checking on an interval
  */
 export function setupFocusUpdateCheck(_getWindows: () => BrowserWindow[]) {
+  if (isLocalOnlyMode()) {
+    log.info("[AutoUpdater] Focus update check disabled by local-only mode")
+    return
+  }
+
   // Listen for window focus events
   app.on("browser-window-focus", () => {
     log.info("[AutoUpdater] Window focused - checking for updates")

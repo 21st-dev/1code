@@ -40,6 +40,10 @@ import {
   useRestoreRemoteChat,
   useRenameRemoteChat,
 } from "../../lib/hooks/use-remote-chats"
+import {
+  useLocalOnlyMode,
+  useLocalOnlyModeState,
+} from "../../lib/hooks/use-local-only-mode"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
@@ -1175,6 +1179,7 @@ function SidebarAutomationsIcon(props: React.SVGProps<SVGSVGElement>) {
 // Isolated Inbox Button - full-width navigation link matching web layout
 const InboxButton = memo(function InboxButton() {
   const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
+  const isLocalOnly = useLocalOnlyMode()
   const desktopView = useAtomValue(desktopViewAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
@@ -1186,7 +1191,7 @@ const InboxButton = memo(function InboxButton() {
   const { data: unreadData } = useQuery({
     queryKey: ["automations", "inboxUnreadCount", teamId],
     queryFn: () => remoteTrpc.automations.getInboxUnreadCount.query({ teamId: teamId! }),
-    enabled: !!teamId && automationsEnabled,
+    enabled: !!teamId && automationsEnabled && !isLocalOnly,
     refetchInterval: 30_000,
   })
   const inboxUnreadCount = unreadData?.count ?? 0
@@ -1198,7 +1203,7 @@ const InboxButton = memo(function InboxButton() {
     setDesktopView("inbox")
   }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
 
-  if (!automationsEnabled) return null
+  if (!automationsEnabled || isLocalOnly) return null
 
   const isActive = desktopView === "inbox"
 
@@ -1227,13 +1232,14 @@ const InboxButton = memo(function InboxButton() {
 // Isolated Automations Button - full-width navigation link matching web layout
 const AutomationsButton = memo(function AutomationsButton() {
   const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
+  const isLocalOnly = useLocalOnlyMode()
   const { t } = useI18n()
 
   const handleClick = useCallback(() => {
     window.desktopApi.openExternal("https://21st.dev/agents/app/automations")
   }, [])
 
-  if (!automationsEnabled) return null
+  if (!automationsEnabled || isLocalOnly) return null
 
   return (
     <button
@@ -1700,6 +1706,8 @@ export function AgentsSidebar({
   const { t } = useI18n()
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedChatIsRemote, setSelectedChatIsRemote] = useAtom(selectedChatIsRemoteAtom)
+  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
+    useLocalOnlyModeState()
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
   const autoAdvanceTarget = useAtomValue(autoAdvanceTargetAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
@@ -1814,14 +1822,33 @@ export function AgentsSidebar({
   // This fixes the race condition where atoms load independently from localStorage
   const hasRunStartupSync = useRef(false)
   useEffect(() => {
-    if (hasRunStartupSync.current) return
+    if (!isLocalOnlyResolved || hasRunStartupSync.current) return
     hasRunStartupSync.current = true
+
+    if (isLocalOnly) {
+      if (chatSourceMode !== "local") {
+        setChatSourceMode("local")
+      }
+      if (selectedChatIsRemote) {
+        setSelectedChatIsRemote(false)
+        setSelectedChatId(null)
+      }
+      return
+    }
 
     const correctMode = selectedChatIsRemote ? "sandbox" : "local"
     if (chatSourceMode !== correctMode) {
       setChatSourceMode(correctMode)
     }
-  }, [])
+  }, [
+    chatSourceMode,
+    isLocalOnly,
+    isLocalOnlyResolved,
+    selectedChatIsRemote,
+    setChatSourceMode,
+    setSelectedChatId,
+    setSelectedChatIsRemote,
+  ])
 
   // Fetch all local chats (no project filter)
   const { data: localChats } = trpc.chats.list.useQuery({})
@@ -1878,7 +1905,7 @@ export function AgentsSidebar({
     }
 
     // Add remote chats with prefixed IDs to avoid collisions
-    if (remoteChats) {
+    if (!isLocalOnly && remoteChats) {
       for (const chat of remoteChats) {
         unified.push({
           id: `remote_${chat.id}`,
@@ -1908,7 +1935,7 @@ export function AgentsSidebar({
     })
 
     return unified
-  }, [localChats, remoteChats])
+  }, [isLocalOnly, localChats, remoteChats])
 
   // Track open sub-chat changes for reactivity
   const [openSubChatsVersion, setOpenSubChatsVersion] = useState(0)
@@ -2090,6 +2117,10 @@ export function AgentsSidebar({
         if (lastItem.type === "workspace") {
           // Restore workspace from archive
           if (lastItem.isRemote) {
+            if (isLocalOnly) {
+              toast.error("Remote workspaces are unavailable in local-only mode")
+              return
+            }
             // Strip remote_ prefix before calling API (stored with prefix for undo stack identification)
             const originalId = lastItem.chatId.replace(/^remote_/, '')
             restoreRemoteChatMutation.mutate(originalId, {
@@ -2117,7 +2148,7 @@ export function AgentsSidebar({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [undoStack, setUndoStack, restoreChatMutation, restoreRemoteChatMutation, setSelectedChatId, t])
+  }, [isLocalOnly, undoStack, setUndoStack, restoreChatMutation, restoreRemoteChatMutation, setSelectedChatId, t])
 
   // Batch archive mutation
   const archiveChatsBatchMutation = trpc.chats.archiveBatch.useMutation({
@@ -2668,6 +2699,10 @@ export function AgentsSidebar({
 
     // Check if this is a remote chat (has remote_ prefix)
     const isRemote = chatId.startsWith('remote_')
+    if (isRemote && isLocalOnly) {
+      toast.error("Remote workspaces are unavailable in local-only mode")
+      return
+    }
     // Extract original ID for remote chats
     const originalId = isRemote ? chatId.replace(/^remote_/, '') : chatId
 
@@ -2699,7 +2734,7 @@ export function AgentsSidebar({
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
-  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode, setShowNewChatForm, setDesktopView, isMobileFullscreen, onChatSelect, t])
+  }, [filteredChats, isLocalOnly, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode, setShowNewChatForm, setDesktopView, isMobileFullscreen, onChatSelect, t])
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()
@@ -2827,6 +2862,11 @@ export function AgentsSidebar({
   // Handle open locally for sandbox chats
   const handleOpenLocally = useCallback(
     (chatId: string) => {
+      if (isLocalOnly) {
+        toast.error("Open locally is unavailable in local-only mode")
+        return
+      }
+
       const remoteChat = remoteChats?.find((c) => c.id === chatId)
       if (!remoteChat) return
 
@@ -2841,7 +2881,7 @@ export function AgentsSidebar({
         setImportDialogOpen(true)
       }
     },
-    [remoteChats, projects, getMatchingProjects, autoImport]
+    [isLocalOnly, remoteChats, projects, getMatchingProjects, autoImport]
   )
 
   // Close import sandbox dialog
@@ -3261,10 +3301,12 @@ export function AgentsSidebar({
       </div>
 
       {/* Navigation Links - Inbox & Automations */}
-      <div className="px-2 pb-3 flex-shrink-0 space-y-0.5 -mx-1">
-        <InboxButton />
-        <AutomationsButton />
-      </div>
+      {!isLocalOnly && (
+        <div className="px-2 pb-3 flex-shrink-0 space-y-0.5 -mx-1">
+          <InboxButton />
+          <AutomationsButton />
+        </div>
+      )}
 
       {/* Scrollable Agents List */}
       <div className="flex-1 min-h-0 relative">
@@ -3569,7 +3611,7 @@ export function AgentsSidebar({
 
       {/* Open Locally Dialog */}
       <OpenLocallyDialog
-        isOpen={importDialogOpen}
+        isOpen={!isLocalOnly && importDialogOpen}
         onClose={handleCloseImportDialog}
         remoteChat={importingRemoteChat}
         matchingProjects={importMatchingProjects}

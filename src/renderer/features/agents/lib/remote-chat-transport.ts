@@ -1,15 +1,26 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // Cache the API base URL (fetched once from main process)
-let cachedApiBase: string | null = null
+let cachedApiBase: string | null | undefined = undefined
 
 async function getApiBase(): Promise<string> {
-  if (!cachedApiBase) {
-    // Uses MAIN_VITE_API_URL in dev, "https://21st.dev" in production
-    cachedApiBase = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+  if (await window.desktopApi?.isLocalOnlyMode?.()) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
   }
-  return cachedApiBase
+
+  if (cachedApiBase === undefined) {
+    cachedApiBase = await window.desktopApi?.getApiBaseUrl()
+    if (!cachedApiBase) {
+      throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+    }
+  }
+  const apiBase = cachedApiBase
+  if (!apiBase) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+  }
+  return apiBase
 }
 
 type UIMessageChunk = any
@@ -41,6 +52,13 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[]
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
+    if (await window.desktopApi?.isLocalOnlyMode?.()) {
+      toast.error("Remote chat is unavailable", {
+        description: LOCAL_ONLY_BLOCKED_MESSAGE,
+      })
+      throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+    }
+
     if (!window.desktopApi?.streamFetch) {
       console.error("[RemoteTransport] Desktop API not available")
       toast.error("Desktop API not available", {

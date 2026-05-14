@@ -14,6 +14,7 @@ let currentUserId: string | null = null
 let appVersion: string | null = null
 let appPlatform: string | null = null
 let appArch: string | null = null
+let localOnlyMode = true
 
 // Check if we're in development mode
 // Renderer can't access env vars directly, so we check a global flag
@@ -50,6 +51,12 @@ function getCommonProperties() {
  * Initialize PostHog for renderer process
  */
 export async function initAnalytics() {
+  localOnlyMode = (await window.desktopApi?.isLocalOnlyMode?.()) !== false
+  if (localOnlyMode) {
+    console.log("[Analytics] Skipping PostHog initialization (local-only mode)")
+    return
+  }
+
   // Skip in development mode
   if (isDev) return
 
@@ -98,6 +105,8 @@ export function capture(
   eventName: string,
   properties?: Record<string, any>,
 ) {
+  if (localOnlyMode) return
+
   // Skip in development mode
   if (isDev) return
 
@@ -120,6 +129,8 @@ export function identify(
   traits?: Record<string, any>,
 ) {
   currentUserId = userId
+
+  if (localOnlyMode) return
 
   // Skip in development mode
   if (isDev) return
@@ -147,6 +158,7 @@ export function getCurrentUserId(): string | null {
  */
 export function reset() {
   currentUserId = null
+  if (localOnlyMode) return
   if (initialized) {
     posthog.reset()
   }
@@ -156,6 +168,7 @@ export function reset() {
  * Shutdown PostHog
  */
 export function shutdown() {
+  if (localOnlyMode) return
   if (initialized) {
     posthog.reset()
     initialized = false
@@ -180,4 +193,3 @@ export function trackMessageSent(data: {
     mode: data.mode,
   })
 }
-

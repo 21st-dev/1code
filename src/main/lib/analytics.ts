@@ -7,10 +7,10 @@ import { PostHog } from "posthog-node"
 import { app } from "electron"
 import * as fs from "fs"
 import * as path from "path"
+import { isLocalOnlyMode } from "./local-only"
 
-// PostHog configuration - hardcoded key for opensource users, env var override for internal builds
-// This enables analytics for all users including those building from source
-const POSTHOG_DESKTOP_KEY = import.meta.env.MAIN_VITE_POSTHOG_KEY || "phc_wM7gbrJhOLTvynyhnhPkrVGDc5mKRSXsLGQHqM3T3vq"
+// PostHog is opt-in for builds that explicitly configure a key and disable local-only mode.
+const POSTHOG_DESKTOP_KEY = import.meta.env.MAIN_VITE_POSTHOG_KEY
 const POSTHOG_HOST = import.meta.env.MAIN_VITE_POSTHOG_HOST || "https://us.i.posthog.com"
 
 let posthog: PostHog | null = null
@@ -110,6 +110,11 @@ export function setConnectionMethod(method: string) {
  * Initialize PostHog for main process
  */
 export function initAnalytics() {
+  if (isLocalOnlyMode()) {
+    console.log("[Analytics] Skipping PostHog initialization (local-only mode)")
+    return
+  }
+
   // Skip in development mode
   if (isDev()) return
 
@@ -136,6 +141,8 @@ export function capture(
   eventName: string,
   properties?: Record<string, any>,
 ) {
+  if (isLocalOnlyMode()) return
+
   // Skip in development mode
   if (isDev()) return
 
@@ -164,6 +171,8 @@ export function identify(
   traits?: Record<string, any>,
 ) {
   currentUserId = userId
+
+  if (isLocalOnlyMode()) return
 
   // Skip in development mode
   if (isDev()) return
@@ -205,6 +214,11 @@ export function reset() {
  * Shutdown PostHog and flush pending events
  */
 export async function shutdown() {
+  if (isLocalOnlyMode()) {
+    posthog = null
+    return
+  }
+
   if (posthog) {
     await posthog.shutdown()
     posthog = null

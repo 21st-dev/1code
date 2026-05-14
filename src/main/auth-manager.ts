@@ -1,6 +1,7 @@
 import { AuthStore, AuthData, AuthUser } from "./auth-store"
 import { app, BrowserWindow } from "electron"
 import { AUTH_SERVER_PORT } from "./constants"
+import { isLocalOnlyMode, LocalOnlyBlockedError } from "./lib/local-only"
 
 // Get API URL - in packaged app always use production, in dev allow override
 function getApiBaseUrl(): string {
@@ -21,7 +22,7 @@ export class AuthManager {
     this.isDev = isDev
 
     // Schedule refresh if already authenticated
-    if (this.store.isAuthenticated()) {
+    if (!isLocalOnlyMode() && this.store.isAuthenticated()) {
       this.scheduleRefresh()
     }
   }
@@ -43,6 +44,10 @@ export class AuthManager {
    * Called after receiving code via deep link
    */
   async exchangeCode(code: string): Promise<AuthData> {
+    if (isLocalOnlyMode()) {
+      throw new LocalOnlyBlockedError("auth code exchange", this.getApiUrl())
+    }
+
     const response = await fetch(`${this.getApiUrl()}/api/auth/desktop/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -86,6 +91,10 @@ export class AuthManager {
    * Get a valid token, refreshing if necessary
    */
   async getValidToken(): Promise<string | null> {
+    if (isLocalOnlyMode()) {
+      return null
+    }
+
     if (!this.store.isAuthenticated()) {
       return null
     }
@@ -101,6 +110,11 @@ export class AuthManager {
    * Refresh the current session
    */
   async refresh(): Promise<boolean> {
+    if (isLocalOnlyMode()) {
+      console.log("[AuthManager] Skipping refresh in local-only mode")
+      return false
+    }
+
     const refreshToken = this.store.getRefreshToken()
     if (!refreshToken) {
       console.warn("No refresh token available")
@@ -175,6 +189,7 @@ export class AuthManager {
    * Check if user is authenticated
    */
   isAuthenticated(): boolean {
+    if (isLocalOnlyMode()) return false
     return this.store.isAuthenticated()
   }
 
@@ -182,6 +197,7 @@ export class AuthManager {
    * Get current user
    */
   getUser(): AuthUser | null {
+    if (isLocalOnlyMode()) return null
     return this.store.getUser()
   }
 
@@ -189,6 +205,7 @@ export class AuthManager {
    * Get current auth data
    */
   getAuth(): AuthData | null {
+    if (isLocalOnlyMode()) return null
     return this.store.load()
   }
 
@@ -207,6 +224,15 @@ export class AuthManager {
    * Start auth flow by opening browser
    */
   startAuthFlow(mainWindow: BrowserWindow | null): void {
+    if (isLocalOnlyMode()) {
+      console.warn("[AuthManager] Hosted auth is disabled in local-only mode")
+      mainWindow?.webContents.send(
+        "auth:error",
+        "Local-only mode blocks hosted 1Code services",
+      )
+      return
+    }
+
     const { shell } = require("electron")
 
     let authUrl = `${this.getApiUrl()}/auth/desktop?auto=true`
@@ -226,6 +252,10 @@ export class AuthManager {
    * Update user profile on server and locally
    */
   async updateUser(updates: { name?: string }): Promise<AuthUser | null> {
+    if (isLocalOnlyMode()) {
+      throw new LocalOnlyBlockedError("profile update", this.getApiUrl())
+    }
+
     const token = await this.getValidToken()
     if (!token) {
       throw new Error("Not authenticated")
@@ -257,6 +287,10 @@ export class AuthManager {
    * Used for PostHog analytics enrichment
    */
   async fetchUserPlan(): Promise<{ email: string; plan: string; status: string | null } | null> {
+    if (isLocalOnlyMode()) {
+      return null
+    }
+
     const token = await this.getValidToken()
     if (!token) return null
 

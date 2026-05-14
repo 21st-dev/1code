@@ -7,6 +7,7 @@ import * as os from "os"
 import path from "path"
 import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
+import { isLocalOnlyMode } from "../../local-only"
 import {
   buildClaudeEnv,
   checkOfflineFallback,
@@ -2565,7 +2566,7 @@ ${prompt}
                 }
 
                 // Track error in Sentry (only if app is ready and Sentry is available)
-                if (app.isReady() && app.isPackaged) {
+                if (app.isReady() && app.isPackaged && !isLocalOnlyMode()) {
                   try {
                     const Sentry = await import("@sentry/electron/main")
                     Sentry.captureException(err, {

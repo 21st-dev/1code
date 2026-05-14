@@ -6,15 +6,23 @@
  * This helper provides the correct base URL for API requests.
  */
 
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../shared/local-only"
+
 let cachedBaseUrl: string | null = null
 
 /**
  * Get the API base URL (cached after first call)
- * Always returns https://21st.dev (both in dev and production)
+ * Returns the hosted API base only when hosted services are explicitly enabled.
  */
 export async function getApiBaseUrl(): Promise<string> {
   if (cachedBaseUrl) return cachedBaseUrl
+  if (await window.desktopApi?.isLocalOnlyMode?.()) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+  }
   cachedBaseUrl = await window.desktopApi.getApiBaseUrl()
+  if (!cachedBaseUrl) {
+    throw new Error(LOCAL_ONLY_BLOCKED_MESSAGE)
+  }
   return cachedBaseUrl
 }
 

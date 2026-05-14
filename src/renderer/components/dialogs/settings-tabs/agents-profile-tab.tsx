@@ -3,6 +3,7 @@ import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { IconSpinner } from "../../../icons"
 import { toast } from "sonner"
+import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -33,6 +34,7 @@ export function AgentsProfileTab() {
   const [user, setUser] = useState<DesktopUser | null>(null)
   const [fullName, setFullName] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const isLocalOnly = useLocalOnlyMode()
   const isNarrowScreen = useIsNarrowScreen()
   const savedNameRef = useRef("")
 
@@ -53,6 +55,11 @@ export function AgentsProfileTab() {
   const handleBlurSave = useCallback(async () => {
     const trimmed = fullName.trim()
     if (trimmed === savedNameRef.current) return
+    if (isLocalOnly) {
+      toast.error("Local-only mode blocks hosted 1Code services")
+      setFullName(savedNameRef.current)
+      return
+    }
     try {
       if (window.desktopApi?.updateUser) {
         const updatedUser = await window.desktopApi.updateUser({ name: trimmed })
@@ -68,7 +75,7 @@ export function AgentsProfileTab() {
         error instanceof Error ? error.message : "Failed to update profile"
       )
     }
-  }, [fullName])
+  }, [fullName, isLocalOnly])
 
   if (isLoading) {
     return (
@@ -102,6 +109,7 @@ export function AgentsProfileTab() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 onBlur={handleBlurSave}
+                disabled={isLocalOnly}
                 className="w-full"
                 placeholder="Enter your name"
               />

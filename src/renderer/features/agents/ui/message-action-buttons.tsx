@@ -11,6 +11,7 @@ import {
 } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
 import { apiFetch } from "../../../lib/api-fetch"
+import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 import { useHaptic } from "../hooks/use-haptic"
 import {
   ttsPlaybackRateAtom,
@@ -81,6 +82,7 @@ export const PlayButton = memo(function PlayButton({
   text,
   isMobile = false,
 }: PlayButtonProps) {
+  const isLocalOnly = useLocalOnlyMode()
   const [state, setState] = useState<PlayButtonState>("idle")
   const [playbackRate] = useAtom(ttsPlaybackRateAtom)
   const setPlaybackRate = useSetAtom(setTtsPlaybackRateAtom)
@@ -346,6 +348,10 @@ export const PlayButton = memo(function PlayButton({
     const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length
     setPlaybackRate(PLAYBACK_SPEEDS[nextIndex]!)
   }, [playbackRate, setPlaybackRate])
+
+  if (isLocalOnly) {
+    return null
+  }
 
   return (
     <div className="relative flex items-center">

@@ -71,6 +71,10 @@ import {
   soundNotificationsEnabledAtom
 } from "../../../lib/atoms"
 import { useFileChangeListener, useGitWatcher } from "../../../lib/hooks/use-file-change-listener"
+import {
+  useLocalOnlyMode,
+  useLocalOnlyModeState,
+} from "../../../lib/hooks/use-local-only-mode"
 import { useRemoteChat } from "../../../lib/hooks/use-remote-chats"
 import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { appStore } from "../../../lib/jotai-store"
@@ -452,6 +456,7 @@ function PlayButton({
   playbackRate?: PlaybackSpeed
   onPlaybackRateChange?: (rate: PlaybackSpeed) => void
 }) {
+  const isLocalOnly = useLocalOnlyMode()
   const [state, setState] = useState<PlayButtonState>("idle")
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const mediaSourceRef = useRef<MediaSource | null>(null)
@@ -712,6 +717,10 @@ function PlayButton({
   useEffect(() => {
     return cleanup
   }, [cleanup])
+
+  if (isLocalOnly) {
+    return null
+  }
 
   return (
     <div className="relative flex items-center">
@@ -5342,15 +5351,25 @@ export function ChatView({
 
   // Determine if we're in sandbox mode
   const chatSourceMode = useAtomValue(chatSourceModeAtom)
+  const setChatSourceMode = useSetAtom(chatSourceModeAtom)
+  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
+    useLocalOnlyModeState()
+  const effectiveChatSourceMode = isLocalOnly ? "local" : chatSourceMode
+
+  useEffect(() => {
+    if (isLocalOnlyResolved && isLocalOnly && chatSourceMode === "sandbox") {
+      setChatSourceMode("local")
+    }
+  }, [chatSourceMode, isLocalOnly, isLocalOnlyResolved, setChatSourceMode])
 
   // Fetch chat data from local or remote based on mode
   const { data: localAgentChat, isLoading: isLocalLoading } = api.agents.getAgentChat.useQuery(
     { chatId },
-    { enabled: !!chatId && chatSourceMode === "local" },
+    { enabled: !!chatId && effectiveChatSourceMode === "local" },
   )
 
   const { data: remoteAgentChat, isLoading: isRemoteLoading } = useRemoteChat(
-    chatSourceMode === "sandbox" ? chatId : null,
+    effectiveChatSourceMode === "sandbox" ? chatId : null,
   )
 
   // Use the appropriate data source
@@ -5358,7 +5377,7 @@ export function ChatView({
   // The inline object spread creates a new reference on every render,
   // which triggers the useEffect that calls setAllSubChats(), causing re-renders
   const agentChat = useMemo(() => {
-    if (chatSourceMode === "sandbox") {
+    if (effectiveChatSourceMode === "sandbox") {
       if (!remoteAgentChat) return null
       return {
         ...remoteAgentChat,
@@ -5385,12 +5404,13 @@ export function ChatView({
       }
     }
     return localAgentChat
-  }, [chatSourceMode, remoteAgentChat, localAgentChat])
+  }, [effectiveChatSourceMode, remoteAgentChat, localAgentChat])
 
-  const isLoading = chatSourceMode === "sandbox" ? isRemoteLoading : isLocalLoading
+  const isLoading =
+    effectiveChatSourceMode === "sandbox" ? isRemoteLoading : isLocalLoading
 
   // Compute if we're waiting for local chat data (used as loading gate)
-  const isLocalChatLoading = chatSourceMode === "local" && isLocalLoading
+  const isLocalChatLoading = effectiveChatSourceMode === "local" && isLocalLoading
 
   // Projects query for "Open Locally" functionality
   const { data: projects } = trpc.projects.list.useQuery()
@@ -5403,6 +5423,11 @@ export function ChatView({
 
   // Handler for "Open Locally" button in header
   const handleOpenLocally = useCallback(() => {
+    if (isLocalOnly) {
+      toast.error("Open locally is unavailable in local-only mode")
+      return
+    }
+
     if (!remoteAgentChat) return
 
     const matchingProjects = getMatchingProjects(projects ?? [], remoteAgentChat)
@@ -5414,10 +5439,11 @@ export function ChatView({
       // Show dialog: 0 or 2+ matches
       setOpenLocallyDialogOpen(true)
     }
-  }, [remoteAgentChat, projects, getMatchingProjects, autoImport])
+  }, [isLocalOnly, remoteAgentChat, projects, getMatchingProjects, autoImport])
 
   // Determine if "Open Locally" button should show
-  const showOpenLocally = chatSourceMode === "sandbox" && !!remoteAgentChat
+  const showOpenLocally =
+    !isLocalOnly && effectiveChatSourceMode === "sandbox" && !!remoteAgentChat
 
   // Get matching projects for dialog (only computed when needed)
   const openLocallyMatchingProjects = useMemo(() => {
@@ -5665,7 +5691,7 @@ export function ChatView({
   const sandboxId = agentChat?.sandbox_id
   const sandboxUrl = sandboxId ? `https://3003-${sandboxId}.e2b.app` : null
   // Desktop uses worktreePath, web uses sandboxUrl
-  const chatWorkingDir = worktreePath || sandboxUrl
+  const chatWorkingDir = worktreePath || (isLocalOnly ? null : sandboxUrl)
 
   // Plugin MCP approval - disabled for now since official marketplace plugins
   // are trusted by default. Will re-enable when third-party plugin support is added.
@@ -5681,13 +5707,13 @@ export function ChatView({
 
   // Remote info for Details sidebar (when worktreePath is null but sandboxId exists)
   const remoteInfo = useMemo(() => {
-    if (worktreePath || !sandboxId) return null
+    if (isLocalOnly || worktreePath || !sandboxId) return null
     return {
       repository: meta?.repository,
       branch: meta?.branch,
       sandboxId,
     }
-  }, [worktreePath, sandboxId, meta?.repository, meta?.branch])
+  }, [isLocalOnly, worktreePath, sandboxId, meta?.repository, meta?.branch])
 
   // Track if we've already triggered sandbox setup for this chat
   // Check if this is a quick setup (no preview available)
@@ -5696,6 +5722,7 @@ export function ChatView({
 
   // Check if preview can be opened (sandbox with port exists and not quick setup)
   const canOpenPreview = !!(
+    !isLocalOnly &&
     sandboxId &&
     !isQuickSetup &&
     meta?.sandboxConfig?.port
@@ -5703,11 +5730,12 @@ export function ChatView({
 
   // Check if diff button can be shown (stats available)
   // This shows the Changes button with stats in header
-  const canShowDiffButton = !!worktreePath || !!sandboxId
+  const canShowDiffButton = !!worktreePath || (!isLocalOnly && !!sandboxId)
 
   // Check if diff sidebar can be opened (actual diff content available)
   // Desktop remote chats (sandboxId without worktree) cannot open diff sidebar - only stats in header
-  const canOpenDiff = !!worktreePath || (!!sandboxId && !isDesktopApp())
+  const canOpenDiff =
+    !!worktreePath || (!isLocalOnly && !!sandboxId && !isDesktopApp())
 
   // Create list of subchats with changed files for filtering
   // Only include subchats that have uncommitted changes, sorted by most recent first
@@ -5762,6 +5790,12 @@ export function ChatView({
 
   const fetchDiffStats = useCallback(async () => {
     console.log("[fetchDiffStats] Called with:", { worktreePath, sandboxId, chatId, isDesktop: isDesktopApp() })
+
+    if (isLocalOnly && !worktreePath) {
+      console.log("[fetchDiffStats] Skipping sandbox diff in local-only mode")
+      setDiffStats((prev: DiffStats) => ({ ...prev, isLoading: false }))
+      return
+    }
 
     // Desktop uses worktreePath, web uses sandboxId
     // Don't reset stats if worktreePath is temporarily undefined - just skip the fetch
@@ -5915,7 +5949,7 @@ export function ChatView({
       console.log("[fetchDiffStats] Done")
       isFetchingDiffRef.current = false
     }
-  }, [worktreePath, sandboxId, chatId, agentChat]) // Note: activeSubChatId removed - diff is same for whole chat
+  }, [isLocalOnly, worktreePath, sandboxId, chatId, agentChat]) // Note: activeSubChatId removed - diff is same for whole chat
 
   // Debounced version for calling after stream ends
   const fetchDiffStatsDebounced = useCallback(() => {
@@ -6566,7 +6600,8 @@ Make sure to preserve all functionality from both branches when resolving confli
       const projectPath = (agentChat as any)?.project?.path as string | undefined
       const chatSandboxId = (agentChat as any)?.sandboxId || (agentChat as any)?.sandbox_id
       const chatSandboxUrl = chatSandboxId ? `https://3003-${chatSandboxId}.e2b.app` : null
-      const isRemoteChat = !!(agentChat as any)?.isRemote || !!chatSandboxId
+      const isRemoteChat =
+        !isLocalOnly && (!!(agentChat as any)?.isRemote || !!chatSandboxId)
 
       // Fast path for existing chats. Only inspect messages when a local empty-chat provider override
       // might require transport recreation.
@@ -6769,6 +6804,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     [
       agentChat,
       chatWorkingDir,
+      isLocalOnly,
       worktreePath,
       chatId,
       currentMode,
@@ -6829,7 +6865,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     const newSubChatProvider = inferProviderFromMessages(activeSubChatId || undefined)
 
     // Check if this is a remote sandbox chat
-    const isRemoteChat = !!(agentChat as any)?.isRemote
+    const isRemoteChat = !isLocalOnly && !!(agentChat as any)?.isRemote
 
     let newId: string
 
@@ -6909,7 +6945,8 @@ Make sure to preserve all functionality from both branches when resolving confli
     const projectPath = (agentChat as any)?.project?.path as string | undefined
     const newSubChatSandboxId = (agentChat as any)?.sandboxId || (agentChat as any)?.sandbox_id
     const newSubChatSandboxUrl = newSubChatSandboxId ? `https://3003-${newSubChatSandboxId}.e2b.app` : null
-    const isNewSubChatRemote = !!(agentChat as any)?.isRemote || !!newSubChatSandboxId
+    const isNewSubChatRemote =
+      !isLocalOnly && (!!(agentChat as any)?.isRemote || !!newSubChatSandboxId)
 
     console.log("[createNewSubChat] Transport selection", {
       newId: newId.slice(-8),
@@ -7042,6 +7079,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     }
   }, [
     worktreePath,
+    isLocalOnly,
     chatId,
     defaultAgentMode,
     activeSubChatId,
@@ -8123,7 +8161,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Open Locally Dialog - for importing sandbox chats to local */}
         <OpenLocallyDialog
-          isOpen={openLocallyDialogOpen}
+          isOpen={!isLocalOnly && openLocallyDialogOpen}
           onClose={() => setOpenLocallyDialogOpen(false)}
           remoteChat={remoteAgentChat ?? null}
           matchingProjects={openLocallyMatchingProjects}
@@ -8133,7 +8171,9 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Unified Details Sidebar - combines all right sidebars into one (rightmost) */}
         {/* Show for both local (worktreePath) and remote (sandboxId) chats */}
-        {isUnifiedSidebarEnabled && !isMobileFullscreen && (worktreePath || sandboxId) && (
+        {isUnifiedSidebarEnabled &&
+          !isMobileFullscreen &&
+          (worktreePath || (!isLocalOnly && sandboxId)) && (
           <DetailsSidebar
             chatId={chatId}
             worktreePath={worktreePath}
