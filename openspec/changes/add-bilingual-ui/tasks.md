@@ -29,8 +29,8 @@
 - [x] 5.4 Migrate automations and inbox UI shell labels.
 
 ## 6. Verification
-- [ ] 6.1 Run OpenSpec validation when CLI is available. Current environment has no working `openspec` executable.
+- [x] 6.1 Run OpenSpec validation. `openspec validate add-bilingual-ui --strict --no-interactive` passes.
 - [x] 6.2 Run `bun run ts:check`. Current run still fails on existing type debt in the baseline; a filtered rerun found no new errors in the files touched for this migration batch.
 - [x] 6.3 Run `bun run build`.
-- [ ] 6.4 Smoke test language switching in Electron for English and Simplified Chinese. Dev startup now reaches the renderer, but macOS Apple Events permission blocked automated UI inspection.
+- [x] 6.4 Smoke test language switching in Electron for English and Simplified Chinese. Manual testing passed.
 - [x] 6.5 Sweep remaining hardcoded English strings and document intentional exclusions in `hardcoded-english-sweep.md`.
