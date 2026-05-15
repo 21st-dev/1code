@@ -16,6 +16,29 @@ The system SHALL allow users to import existing Claude Code credentials from loc
 - **THEN** the app reports that no local Claude Code credentials were found
 - **AND** it does not start hosted 21st authentication while local-only mode is enabled
 
+### Requirement: Local Claude Code Browser Login
+The system SHALL allow users to start Claude Code's official local CLI login from the app without using hosted 21st authentication.
+
+#### Scenario: User starts local Claude Code login
+- **WHEN** local-only mode is enabled
+- **AND** the user chooses to connect Claude Code
+- **THEN** the app starts the bundled Claude Code CLI with the official login command
+- **AND** exposes the official Anthropic login URL when the CLI prints one
+- **AND** does not request hosted 21st auth, hosted sandbox status, or hosted desktop auth endpoints
+
+#### Scenario: Local CLI login succeeds
+- **WHEN** the bundled Claude Code CLI exits successfully after browser login
+- **THEN** the app imports the resulting local Claude Code credentials from system credential stores or Claude credential files
+- **AND** stores them as the same encrypted refreshable credential envelope used by manual local import
+- **AND** marks Claude Code as connected without exposing raw tokens to the renderer
+
+#### Scenario: Local CLI login is cancelled or fails
+- **WHEN** the user cancels local Claude Code login
+- **OR** the bundled Claude Code CLI exits with an error
+- **THEN** the app stops the local login session
+- **AND** shows a retryable local-login error
+- **AND** does not fall back to hosted 21st authentication while local-only mode is enabled
+
 ### Requirement: Refreshable Claude Code Credential Storage
 The system SHALL store Claude Code credentials as a versioned encrypted payload that can include refresh token, expiry, scopes, source, and update timestamps.
 

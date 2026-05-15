@@ -72,6 +72,11 @@ export const en = {
     "Local Claude Code credentials are available on this machine.",
   "onboarding.claude.localOnlyNeedsCredentials":
     "Local-only mode cannot use hosted Claude Code auth. Run Claude Code login on this machine, then import local credentials.",
+  "onboarding.claude.localOnlyLoginPrompt":
+    "Local-only mode uses the Claude Code CLI on this machine. Sign in with Claude Code to open Anthropic's official login page, then credentials will be imported locally.",
+  "onboarding.claude.waitingForLocalLogin":
+    "Waiting for Claude Code sign-in in your browser...",
+  "onboarding.claude.signInWithClaudeCode": "Sign in with Claude Code",
   "onboarding.claude.refreshableCredentials":
     "Refreshable local credentials are available on this machine.",
   "onboarding.claude.nonRefreshableCredentials":
@@ -1030,6 +1035,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "这台设备上已发现本地 Claude Code 凭证。",
   "onboarding.claude.localOnlyNeedsCredentials":
     "Local-only 模式不能使用 hosted Claude Code auth。请先在这台设备上完成 Claude Code login，然后导入本地凭证。",
+  "onboarding.claude.localOnlyLoginPrompt":
+    "Local-only 模式会使用这台设备上的 Claude Code CLI。点击后会打开 Anthropic 官方登录页，完成后自动导入本地凭证。",
+  "onboarding.claude.waitingForLocalLogin":
+    "正在等待浏览器里的 Claude Code 登录完成...",
+  "onboarding.claude.signInWithClaudeCode": "使用 Claude Code 登录",
   "onboarding.claude.refreshableCredentials":
     "这台设备上发现可刷新的本地凭证。",
   "onboarding.claude.nonRefreshableCredentials":

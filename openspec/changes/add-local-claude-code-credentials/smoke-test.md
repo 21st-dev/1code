@@ -28,11 +28,13 @@ Observed:
 
 ## Manual Credential Smoke Remaining
 
-The import-and-send path should be manually verified from the UI because it reads the user's local Claude Code credential store and may consume Claude Code subscription usage:
+The login/import-and-send path should be manually verified from the UI because it reads the user's local Claude Code credential store, may open an Anthropic browser login, and may consume Claude Code subscription usage:
 
 1. Open Settings > Models.
-2. Click `Import local credentials` under Anthropic Accounts.
-3. Confirm the account row shows refreshable or non-refreshable local credential status.
-4. Open a local repo chat.
-5. Send a read-only prompt such as `Read AGENTS.md and summarize the repo instructions.`
-6. Confirm no 21st hosted auth, sandbox status, or hosted desktop auth requests appear in main-process logs.
+2. Click `Connect` under Anthropic Accounts.
+3. If local Claude Code credentials already exist, confirm the app imports them without opening hosted 21st auth.
+4. If no local credentials exist, confirm the app launches bundled `claude auth login`, opens Anthropic's official browser login URL, then imports the resulting local credentials after the CLI succeeds.
+5. Confirm the account row shows refreshable or non-refreshable local credential status.
+6. Open a local repo chat.
+7. Send a read-only prompt such as `Read AGENTS.md and summarize the repo instructions.`
+8. Confirm no 21st hosted auth, sandbox status, or hosted desktop auth requests appear in main-process logs.

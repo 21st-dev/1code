@@ -541,8 +541,6 @@ export function AgentsModelsTab() {
   const trpcUtils = trpc.useUtils()
   const saveProviderConfigMutation = trpc.claudeProviderConfig.save.useMutation()
   const clearProviderConfigMutation = trpc.claudeProviderConfig.clear.useMutation()
-  const importClaudeCodeCredentialMutation =
-    trpc.claudeCode.importSystemToken.useMutation()
 
   useEffect(() => {
     if (!providerConfigData) return
@@ -651,21 +649,11 @@ export function AgentsModelsTab() {
 
   const handleClaudeCodeSetup = async () => {
     if (isLocalOnly) {
-      try {
-        await importClaudeCodeCredentialMutation.mutateAsync()
-        await Promise.allSettled([
-          trpcUtils.anthropicAccounts.list.invalidate(),
-          trpcUtils.anthropicAccounts.getActive.invalidate(),
-          trpcUtils.claudeCode.getIntegration.invalidate(),
-        ])
-        toast.success(t("toast.models.claudeCodeCredentialsImported"))
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : t("toast.models.failedToImportClaudeCodeCredentials")
-        toast.error(message)
-      }
+      setClaudeLoginModalConfig({
+        hideCustomModelSettingsLink: true,
+        autoStartAuth: true,
+      })
+      setClaudeLoginModalOpen(true)
       return
     }
 
@@ -905,17 +893,10 @@ export function AgentsModelsTab() {
             size="sm"
             variant="outline"
             onClick={() => void handleClaudeCodeSetup()}
-            disabled={
-              isClaudeCodeLoading ||
-              importClaudeCodeCredentialMutation.isPending
-            }
+            disabled={isClaudeCodeLoading}
           >
             <Plus className="h-3 w-3 mr-1" />
-            {isLocalOnly
-              ? t("onboarding.claude.importLocalCredentials")
-              : isClaudeCodeConnected
-                ? t("common.add")
-                : t("common.connect")}
+            {isClaudeCodeConnected ? t("common.add") : t("common.connect")}
           </Button>
         </div>
 

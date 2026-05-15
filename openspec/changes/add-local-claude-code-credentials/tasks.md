@@ -17,8 +17,15 @@
 - [x] 3.3 Add settings metadata for connected local Claude Code credentials, including refreshable/non-refreshable status and source.
 - [x] 3.4 Update English and Simplified Chinese copy while keeping specialist terms such as Claude Code, Agent, API Key, OAuth, and token in English where clearer.
 
-## 4. Validation
-- [x] 4.1 Add focused unit or integration tests for credential envelope parsing, legacy token compatibility, expiry checks, and refresh persistence where the current test setup allows. Covered by TypeScript boundary checks; no project test runner exists for main-process safeStorage helpers.
-- [x] 4.2 Run `bun run ts:check`.
-- [x] 4.3 Run `bun run build`.
-- [ ] 4.4 Smoke-test local-only startup with no desktop login, import local Claude Code credentials, send a simple read-only task, and confirm no 21st hosted auth requests are made. Local-only startup was verified; credential import and agent send were left manual to avoid consuming or touching user credentials without an explicit UI action.
+## 4. Local CLI Login
+- [x] 4.1 Add a main-process local login session API that runs the bundled `claude auth login` command without hosted 21st auth.
+- [x] 4.2 Capture and expose the official Anthropic login URL plus redacted CLI status output without exposing raw credential values.
+- [x] 4.3 Import local Claude Code credentials after successful CLI login and refresh account metadata.
+- [x] 4.4 Add cancellation for in-progress local login sessions.
+- [x] 4.5 Wire onboarding, retry modal, and Models settings to launch local CLI login in local-only mode.
+
+## 5. Validation
+- [x] 5.1 Add focused unit or integration tests for credential envelope parsing, legacy token compatibility, expiry checks, and refresh persistence where the current test setup allows. Covered by TypeScript boundary checks; no project test runner exists for main-process safeStorage helpers.
+- [x] 5.2 Run `bun run ts:check`.
+- [x] 5.3 Run `bun run build`.
+- [ ] 5.4 Smoke-test local-only startup with no desktop login, import local Claude Code credentials, send a simple read-only task, and confirm no 21st hosted auth requests are made. Local-only startup was verified; real browser login/import and agent send were left manual to avoid opening auth pages, touching user credentials, or consuming subscription usage without an explicit UI action.

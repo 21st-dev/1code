@@ -23,6 +23,7 @@ The renderer already has a disabled "existing token" path in `anthropic-onboardi
 
 ## Decisions
 - Treat local Claude Code credential import as the default local-first path. Hosted sandbox OAuth remains available only when local-only mode is explicitly disabled.
+- Provide an app-triggered local login helper that runs the bundled `claude auth login` command and relies on Anthropic/Claude Code's official browser login rather than implementing OAuth in this app.
 - Store a structured credential payload encrypted with Electron `safeStorage`, including access token, optional refresh token, optional expiry, optional scopes, source, and import/update timestamps.
 - Reuse the existing `anthropic_accounts` multi-account model, but evolve its encrypted payload from "plain token string" to a versioned JSON credential envelope. Read code must remain backward compatible with existing encrypted plain strings.
 - Add a central main-process credential service for Claude Code credential read/import/refresh/runtime resolution. Runtime code should ask that service for a valid access token instead of decrypting DB rows directly.
@@ -40,9 +41,10 @@ The renderer already has a disabled "existing token" path in `anthropic-onboardi
 2. Introduce a versioned credential envelope and helpers to parse both legacy encrypted token strings and new encrypted JSON payloads.
 3. Update system credential import to store access token plus refresh token, expiry, scopes, and source metadata.
 4. Update runtime token resolution to refresh expiring credentials and write refreshed token data back before starting Claude Code.
-5. Update onboarding, login retry modal, settings, and i18n copy to make local import the primary path in local-only mode.
-6. Add smoke-test notes that prove a local-only launch can import credentials and send a simple Claude Code read task without hosted auth.
+5. Add a local login session API that starts the bundled Claude Code CLI, captures its official Anthropic login URL, allows cancellation, and imports local credentials after successful CLI exit.
+6. Update onboarding, login retry modal, settings, and i18n copy to make local login/import the primary path in local-only mode.
+7. Add smoke-test notes that prove a local-only launch can import credentials and send a simple Claude Code read task without hosted auth.
 
 ## Open Questions
-- Should the implementation include an optional "Launch Claude Code login" helper, or should users run `claude auth login` / `claude setup-token` outside the app first?
+- Resolved: include a "Launch Claude Code login" helper backed by bundled `claude auth login`; users may still import existing credentials if they already logged in outside the app.
 - Should multiple imported Claude Code accounts be selectable immediately, or should this change only support one active imported account while preserving the existing multi-account schema?

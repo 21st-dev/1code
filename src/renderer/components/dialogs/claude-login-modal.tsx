@@ -4,6 +4,7 @@ import { useAtom, useSetAtom } from "jotai"
 import { X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
+import { useClaudeCodeLoginFlow } from "../../features/agents/hooks/use-claude-code-login-flow"
 import {
   agentsLoginModalOpenAtom,
   agentsSettingsDialogActiveTabAtom,
@@ -66,8 +67,21 @@ export function ClaudeLoginModal({
   const [savedOauthUrl, setSavedOauthUrl] = useState<string | null>(null)
   const urlOpenedRef = useRef(false)
   const didAutoStartForOpenRef = useRef(false)
+  const localLoginSuccessHandledRef = useRef(false)
   const isLocalOnly = useLocalOnlyMode()
   const { t } = useI18n()
+  const localLogin = useClaudeCodeLoginFlow()
+  const {
+    state: localLoginState,
+    url: localLoginUrl,
+    output: localLoginOutput,
+    error: localLoginErrorMessage,
+    isRunning: isLocalLoginRunning,
+    start: startLocalLogin,
+    cancel: cancelLocalLogin,
+    reset: resetLocalLogin,
+    openUrl: openLocalLoginUrl,
+  } = localLogin
 
   // tRPC mutations
   const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
@@ -140,10 +154,15 @@ export function ClaudeLoginModal({
       setSavedOauthUrl(null)
       urlOpenedRef.current = false
       didAutoStartForOpenRef.current = false
+      localLoginSuccessHandledRef.current = false
+      if (isLocalLoginRunning) {
+        void cancelLocalLogin()
+      }
+      resetLocalLogin()
       // Clear pending retry if modal closed without success (user cancelled)
       // Note: We don't clear here because success handler sets readyToRetry=true first
     }
-  }, [open])
+  }, [cancelLocalLogin, isLocalLoginRunning, open, resetLocalLogin])
 
   // Helper to trigger retry after successful OAuth
   const triggerAuthRetry = () => {
@@ -178,6 +197,19 @@ export function ClaudeLoginModal({
     ])
   }
 
+  useEffect(() => {
+    if (
+      !isLocalOnly ||
+      localLoginState !== "success" ||
+      localLoginSuccessHandledRef.current
+    ) {
+      return
+    }
+
+    localLoginSuccessHandledRef.current = true
+    handleAuthSuccess()
+  }, [isLocalOnly, localLoginState])
+
   // Check if the code looks like a valid Claude auth code (format: XXX#YYY)
   const isValidCodeFormat = (code: string) => {
     const trimmed = code.trim()
@@ -188,10 +220,25 @@ export function ClaudeLoginModal({
     setUserClickedConnect(true)
 
     if (isLocalOnly) {
-      setFlowState({
-        step: "error",
-        message: t("onboarding.claude.localOnlyNeedsCredentials"),
-      })
+      if (hasLocalClaudeCredential) {
+        setFlowState({ step: "submitting" })
+        try {
+          await importSystemTokenMutation.mutateAsync()
+          handleAuthSuccess()
+        } catch (err) {
+          setFlowState({
+            step: "error",
+            message:
+              err instanceof Error
+                ? err.message
+                : t("onboarding.claude.failedToImportLocalCredentials"),
+          })
+        }
+        return
+      }
+
+      setFlowState({ step: "idle" })
+      await startLocalLogin()
       return
     }
 
@@ -237,7 +284,16 @@ export function ClaudeLoginModal({
         })
       }
     }
-  }, [flowState, isLocalOnly, openOAuthUrlMutation, startAuthMutation, t])
+  }, [
+    flowState,
+    hasLocalClaudeCredential,
+    importSystemTokenMutation,
+    isLocalOnly,
+    openOAuthUrlMutation,
+    startAuthMutation,
+    startLocalLogin,
+    t,
+  ])
 
   useEffect(() => {
     if (
@@ -345,6 +401,8 @@ export function ClaudeLoginModal({
   const isLoadingAuth =
     flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
+  const localLoginError =
+    isLocalOnly && localLoginState === "error" ? localLoginErrorMessage : null
 
   // Handle modal open/close - clear pending retry if closing without success
   const handleOpenChange = (newOpen: boolean) => {
@@ -391,7 +449,9 @@ export function ClaudeLoginModal({
                 <p className="text-sm text-muted-foreground">
                   {hasLocalClaudeCredential
                     ? t("onboarding.claude.localCredentialsReady")
-                    : t("onboarding.claude.localOnlyNeedsCredentials")}
+                    : isLocalLoginRunning
+                      ? t("onboarding.claude.waitingForLocalLogin")
+                      : t("onboarding.claude.localOnlyLoginPrompt")}
                 </p>
               </div>
             )}
@@ -410,6 +470,40 @@ export function ClaudeLoginModal({
               </Button>
             )}
 
+            {isLocalOnly && !hasLocalClaudeCredential && (
+              <Button
+                onClick={() => void handleConnectClick()}
+                className="w-full"
+                disabled={isLocalLoginRunning || isSubmitting}
+              >
+                {isLocalLoginRunning || isSubmitting ? (
+                  <IconSpinner className="h-4 w-4" />
+                ) : (
+                  t("onboarding.claude.signInWithClaudeCode")
+                )}
+              </Button>
+            )}
+
+            {isLocalOnly &&
+              (isLocalLoginRunning || localLoginState === "importing") && (
+                <div className="space-y-3">
+                  {localLoginOutput && (
+                    <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 p-3 text-xs text-muted-foreground">
+                      {localLoginOutput.trim()}
+                    </pre>
+                  )}
+                  {localLoginUrl && (
+                    <button
+                      type="button"
+                      onClick={() => void openLocalLoginUrl()}
+                      className="w-full text-xs text-primary hover:underline"
+                    >
+                      {t("onboarding.claude.didntOpen")}
+                    </button>
+                  )}
+                </div>
+              )}
+
             {/* Connect Button - shows loader only if user clicked AND loading */}
             {!isLocalOnly && !urlOpened && flowState.step !== "has_url" && flowState.step !== "error" && (
               <Button
@@ -426,9 +520,10 @@ export function ClaudeLoginModal({
             )}
 
             {/* Code Input - Show after URL is opened or if has_url */}
-            {(urlOpened ||
-              flowState.step === "has_url" ||
-              flowState.step === "submitting") && (
+            {!isLocalOnly &&
+              (urlOpened ||
+                flowState.step === "has_url" ||
+                flowState.step === "submitting") && (
               <div className="space-y-4">
                 <Input
                   value={authCode}
@@ -464,22 +559,29 @@ export function ClaudeLoginModal({
             )}
 
             {/* Error State */}
-            {flowState.step === "error" && (
+            {(flowState.step === "error" || localLoginError) && (
               <div className="space-y-4">
                 <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <p className="text-sm text-destructive">{flowState.message}</p>
+                  <p className="text-sm text-destructive">
+                    {localLoginError ||
+                      (flowState.step === "error" ? flowState.message : "")}
+                  </p>
                 </div>
                 <Button
                   variant="secondary"
                   onClick={
                     isLocalOnly && hasLocalClaudeCredential
                       ? () => void handleImportLocalCredentials()
+                      : isLocalOnly
+                        ? () => void startLocalLogin()
                       : handleConnectClick
                   }
                   className="w-full"
                 >
                   {isLocalOnly && hasLocalClaudeCredential
                     ? t("onboarding.claude.importLocalCredentials")
+                    : isLocalOnly
+                      ? t("onboarding.claude.signInWithClaudeCode")
                     : "Try Again"}
                 </Button>
               </div>

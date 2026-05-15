@@ -15,6 +15,7 @@ import {
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { useLocalOnlyMode } from "../../lib/hooks/use-local-only-mode"
+import { useClaudeCodeLoginFlow } from "../agents/hooks/use-claude-code-login-flow"
 
 type AuthFlowState =
   | { step: "idle" }
@@ -47,6 +48,16 @@ export function AnthropicOnboardingPage() {
   const [existingTokenError, setExistingTokenError] = useState<string | null>(null)
   const urlOpenedRef = useRef(false)
   const isLocalOnly = useLocalOnlyMode()
+  const localLogin = useClaudeCodeLoginFlow()
+  const {
+    state: localLoginState,
+    url: localLoginUrl,
+    output: localLoginOutput,
+    error: localLoginErrorMessage,
+    isRunning: isLocalLoginRunning,
+    start: startLocalLogin,
+    openUrl: openLocalLoginUrl,
+  } = localLogin
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
@@ -87,12 +98,6 @@ export function AnthropicOnboardingPage() {
   useEffect(() => {
     if (!checkedExistingToken || shouldOfferExistingToken) return
     if (isLocalOnly) {
-      if (flowState.step === "idle") {
-        setFlowState({
-          step: "error",
-          message: t("onboarding.claude.localOnlyNeedsCredentials"),
-        })
-      }
       return
     }
 
@@ -160,6 +165,14 @@ export function AnthropicOnboardingPage() {
     }
   }, [flowState, userClickedConnect, openOAuthUrlMutation])
 
+  useEffect(() => {
+    if (!isLocalOnly || localLoginState !== "success") {
+      return
+    }
+
+    setAnthropicOnboardingCompleted(true)
+  }, [isLocalOnly, localLoginState, setAnthropicOnboardingCompleted])
+
   // Check if the code looks like a valid Claude auth code (format: XXX#YYY)
   const isValidCodeFormat = (code: string) => {
     const trimmed = code.trim()
@@ -169,10 +182,8 @@ export function AnthropicOnboardingPage() {
   const handleConnectClick = async () => {
     setUserClickedConnect(true)
     if (isLocalOnly) {
-      setFlowState({
-        step: "error",
-        message: t("onboarding.claude.localOnlyNeedsCredentials"),
-      })
+      setFlowState({ step: "idle" })
+      await startLocalLogin()
       return
     }
 
@@ -227,10 +238,7 @@ export function AnthropicOnboardingPage() {
     setIgnoredExistingToken(true)
     setExistingTokenError(null)
     if (isLocalOnly) {
-      setFlowState({
-        step: "error",
-        message: t("onboarding.claude.localOnlyNeedsCredentials"),
-      })
+      void startLocalLogin()
       return
     }
     handleConnectClick()
@@ -292,6 +300,8 @@ export function AnthropicOnboardingPage() {
   const isLoadingAuth =
     flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
+  const localLoginError =
+    isLocalOnly && localLoginState === "error" ? localLoginErrorMessage : null
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
@@ -375,19 +385,55 @@ export function AnthropicOnboardingPage() {
             </div>
           )}
 
+          {isLocalOnly && !shouldOfferExistingToken && (
+            <div className="w-full space-y-3">
+              <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  {isLocalLoginRunning
+                    ? t("onboarding.claude.waitingForLocalLogin")
+                    : t("onboarding.claude.localOnlyLoginPrompt")}
+                </p>
+              </div>
+              {(isLocalLoginRunning || localLoginState === "importing") && (
+                <>
+                  {localLoginOutput && (
+                    <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 p-3 text-xs text-muted-foreground">
+                      {localLoginOutput.trim()}
+                    </pre>
+                  )}
+                  {localLoginUrl && (
+                    <button
+                      type="button"
+                      onClick={() => void openLocalLoginUrl()}
+                      className="w-full text-xs text-primary hover:underline"
+                    >
+                      {t("onboarding.claude.didntOpen")}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Connect Button - shows loader only if user clicked AND loading */}
           {checkedExistingToken &&
             !shouldOfferExistingToken &&
             !urlOpened &&
+            !localLoginError &&
             flowState.step !== "has_url" &&
             flowState.step !== "error" && (
               <button
                 onClick={handleConnectClick}
-                disabled={userClickedConnect && isLoadingAuth}
+                disabled={
+                  isLocalLoginRunning ||
+                  (userClickedConnect && isLoadingAuth)
+                }
                 className="h-8 px-4 min-w-[85px] bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                {userClickedConnect && isLoadingAuth ? (
+                {isLocalLoginRunning || (userClickedConnect && isLoadingAuth) ? (
                   <IconSpinner className="h-4 w-4" />
+                ) : isLocalOnly ? (
+                  t("onboarding.claude.signInWithClaudeCode")
                 ) : (
                   t("common.connect")
                 )}
@@ -396,9 +442,10 @@ export function AnthropicOnboardingPage() {
 
           {/* Code Input - Show after URL is opened, if has_url (after redirect), or if submitting */}
           {/* No Continue button - auto-submit on valid code paste */}
-          {(urlOpened ||
-            flowState.step === "has_url" ||
-            flowState.step === "submitting") && (
+          {!isLocalOnly &&
+            (urlOpened ||
+              flowState.step === "has_url" ||
+              flowState.step === "submitting") && (
             <div className="space-y-4">
               <div className="relative">
                 <Input
@@ -434,10 +481,13 @@ export function AnthropicOnboardingPage() {
           )}
 
           {/* Error State */}
-          {flowState.step === "error" && (
+          {(flowState.step === "error" || localLoginError) && (
             <div className="space-y-4">
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <p className="text-sm text-destructive">{flowState.message}</p>
+                <p className="text-sm text-destructive">
+                  {localLoginError ||
+                    (flowState.step === "error" ? flowState.message : "")}
+                </p>
               </div>
               <button
                 onClick={handleConnectClick}
