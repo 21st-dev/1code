@@ -90,7 +90,10 @@ export const en = {
 
   "onboarding.codex.title": "Connect OpenAI Codex",
   "onboarding.codex.apiKeySubtitle": "Connect with your API key",
-  "onboarding.codex.subscriptionSubtitle": "Connect your Codex subscription",
+  "onboarding.codex.subscriptionSubtitle":
+    "Use the local Codex CLI to open OpenAI's official sign-in page.",
+  "onboarding.codex.waitingForBrowser":
+    "Waiting for Codex sign-in in your browser...",
   "onboarding.codex.opening": "Opening...",
   "onboarding.codex.connectWithApiKey": "Connect with API key",
 
@@ -1052,7 +1055,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
 
   "onboarding.codex.title": "连接 OpenAI Codex",
   "onboarding.codex.apiKeySubtitle": "使用你的 API Key 连接",
-  "onboarding.codex.subscriptionSubtitle": "连接你的 Codex subscription",
+  "onboarding.codex.subscriptionSubtitle":
+    "使用本地 Codex CLI 打开 OpenAI 官方登录页。",
+  "onboarding.codex.waitingForBrowser":
+    "正在等待浏览器里的 Codex 登录完成...",
   "onboarding.codex.opening": "打开中...",
   "onboarding.codex.connectWithApiKey": "使用 API Key 连接",
 

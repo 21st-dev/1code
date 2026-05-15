@@ -48,6 +48,7 @@ type CodexLoginSession = {
   process: ChildProcess | null
   state: CodexLoginSessionState
   output: string
+  rawOutput: string
   url: string | null
   error: string | null
   exitCode: number | null
@@ -298,14 +299,56 @@ function extractFirstNonLocalhostUrl(output: string): string | null {
   return null
 }
 
+function redactUrlForDisplay(match: string): string {
+  const trailingMatch = match.match(/[),.;!?]+$/)
+  const trailing = trailingMatch?.[0] ?? ""
+  const rawUrl = trailing ? match.slice(0, -trailing.length) : match
+
+  try {
+    const parsedUrl = new URL(rawUrl)
+    if (isLocalhostHostname(parsedUrl.hostname)) {
+      return match
+    }
+
+    const hadSearch = parsedUrl.search.length > 0
+    const hadHash = parsedUrl.hash.length > 0
+    parsedUrl.search = ""
+    parsedUrl.hash = ""
+
+    return [
+      parsedUrl.toString(),
+      hadSearch ? "?[redacted]" : "",
+      hadHash ? "#[redacted]" : "",
+      trailing,
+    ].join("")
+  } catch {
+    return match
+  }
+}
+
+function redactCodexLoginOutput(output: string): string {
+  return output
+    .replace(URL_CANDIDATE_REGEX, redactUrlForDisplay)
+    .replace(/sk-[A-Za-z0-9_-]{16,}/g, "sk-[redacted]")
+    .replace(
+      /("(?:access|refresh|id)_?token"\s*:\s*")[^"]+(")/gi,
+      "$1[redacted]$2",
+    )
+    .replace(
+      /\b((?:access|refresh|id)_?token|code|state|nonce|verifier)\s*=\s*[^\s]+/gi,
+      "$1=[redacted]",
+    )
+}
+
 function appendLoginOutput(session: CodexLoginSession, chunk: string): void {
   const cleanChunk = stripAnsi(chunk)
   if (!cleanChunk) return
 
-  session.output += cleanChunk
+  session.rawOutput += cleanChunk
+  session.output += redactCodexLoginOutput(cleanChunk)
 
   if (!session.url) {
-    session.url = extractFirstNonLocalhostUrl(session.output)
+    session.url = extractFirstNonLocalhostUrl(session.rawOutput)
   }
 }
 
@@ -1391,6 +1434,7 @@ export const codexRouter = router({
       process: child,
       state: "running",
       output: "",
+      rawOutput: "",
       url: null,
       error: null,
       exitCode: null,

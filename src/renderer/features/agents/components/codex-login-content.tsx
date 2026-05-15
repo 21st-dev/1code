@@ -65,6 +65,12 @@ export function CodexLoginContent({
               : t("onboarding.codex.subscriptionSubtitle")}
           </p>
 
+          {!isApiKeyMode && state === "running" && (
+            <p className="text-xs text-muted-foreground">
+              {t("onboarding.codex.waitingForBrowser")}
+            </p>
+          )}
+
           {!isApiKeyMode && url && (
             <p className="text-xs text-muted-foreground">
               <button
