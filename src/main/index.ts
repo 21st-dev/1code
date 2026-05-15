@@ -295,9 +295,10 @@ console.log("[Protocol] =============================================")
 
 // Note: app.on("open-url") will be registered in app.whenReady()
 
-// SVG favicon as data URI for auth callback pages (matches web app favicon)
-const FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="1024" height="1024" fill="#0033FF"/><path fill-rule="evenodd" clip-rule="evenodd" d="M800.165 148C842.048 148 876 181.952 876 223.835V686.415C876 690.606 872.606 694 868.415 694H640.915C636.729 694 633.335 697.394 633.335 701.585V868.415C633.335 872.606 629.936 876 625.75 876H223.835C181.952 876 148 842.048 148 800.165V702.59C148 697.262 150.807 692.326 155.376 689.586L427.843 526.1C434.031 522.388 431.956 513.238 425.327 512.118L423.962 512H155.585C151.394 512 148 508.606 148 504.415V337.585C148 333.394 151.394 330 155.585 330H443.75C447.936 330 451.335 326.606 451.335 322.415V155.585C451.335 151.394 454.729 148 458.915 148H800.165ZM458.915 330C454.729 330 451.335 333.394 451.335 337.585V686.415C451.335 690.606 454.729 694 458.915 694H625.75C629.936 694 633.335 690.606 633.335 686.415V337.585C633.335 333.394 629.936 330 625.75 330H458.915Z" fill="#F4F4F4"/></svg>`
+// SVG favicon and auth-page mark.
+const FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#111827"/><g stroke="#D9FEFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 24.5C8 19.8 11.8 16 16.5 16H31C35.2 16 37.7 18.1 40 21.7L42.5 25.5"/><path d="M31.5 43H16.5C11.8 43 8 39.2 8 34.5V24.5"/><path d="M41 24.5C44.1 21.1 47.8 19.5 52 19.5C56.4 19.5 60 23.1 60 27.5V39.5C60 43.9 56.4 47.5 52 47.5H47.5L39.5 54V47.5H37.5C33 47.5 29.7 45.2 28.5 41.4"/><path d="M16.5 27.5L22 33L16.5 38.5"/><path d="M23.5 38.5H29.5"/></g><path d="M39.5 6L41.2 10.8L46 12.5L41.2 14.2L39.5 19L37.8 14.2L33 12.5L37.8 10.8L39.5 6Z" fill="#D9FEFF"/></svg>`
 const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
+const AUTH_PAGE_LOGO_SVG = `<svg class="logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><g stroke="#0033FF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 24.5C8 19.8 11.8 16 16.5 16H31C35.2 16 37.7 18.1 40 21.7L42.5 25.5"/><path d="M31.5 43H16.5C11.8 43 8 39.2 8 34.5V24.5"/><path d="M41 24.5C44.1 21.1 47.8 19.5 52 19.5C56.4 19.5 60 23.1 60 27.5V39.5C60 43.9 56.4 47.5 52 47.5H47.5L39.5 54V47.5H37.5C33 47.5 29.7 45.2 28.5 41.4"/><path d="M16.5 27.5L22 33L16.5 38.5"/><path d="M23.5 38.5H29.5"/></g><path d="M39.5 6L41.2 10.8L46 12.5L41.2 14.2L39.5 19L37.8 14.2L33 12.5L37.8 10.8L39.5 6Z" fill="#0033FF"/></svg>`
 
 // Start local HTTP server for auth callbacks
 // This catches http://localhost:{AUTH_SERVER_PORT}/auth/callback?code=xxx and /callback (for MCP OAuth)
@@ -378,9 +379,7 @@ const server = createServer((req, res) => {
 </head>
 <body>
   <div class="container">
-    <svg class="logo" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path fill-rule="evenodd" clip-rule="evenodd" d="M14.3333 0C15.2538 0 16 0.746192 16 1.66667V11.8333C16 11.9254 15.9254 12 15.8333 12H10.8333C10.7413 12 10.6667 12.0746 10.6667 12.1667V15.8333C10.6667 15.9254 10.592 16 10.5 16H1.66667C0.746192 16 0 15.2538 0 14.3333V12.1888C0 12.0717 0.0617409 11.9632 0.162081 11.903L6.15043 8.30986C6.28644 8.22833 6.24077 8.02716 6.09507 8.00256L6.06511 8H0.166667C0.0746186 8 0 7.92538 0 7.83333V4.16667C0 4.07462 0.0746193 4 0.166667 4H6.5C6.59205 4 6.66667 3.92538 6.66667 3.83333V0.166667C6.66667 0.0746193 6.74129 0 6.83333 0H14.3333ZM6.83333 4C6.74129 4 6.66667 4.07462 6.66667 4.16667V11.8333C6.66667 11.9254 6.74129 12 6.83333 12H10.5C10.592 12 10.6667 11.9254 10.6667 11.8333V4.16667C10.6667 4.07462 10.592 4 10.5 4H6.83333Z" fill="#0033FF"/>
-    </svg>
+    ${AUTH_PAGE_LOGO_SVG}
     <h1>Authentication successful</h1>
     <p>You can close this tab</p>
   </div>
@@ -462,9 +461,7 @@ const server = createServer((req, res) => {
 </head>
 <body>
   <div class="container">
-    <svg class="logo" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path fill-rule="evenodd" clip-rule="evenodd" d="M14.3333 0C15.2538 0 16 0.746192 16 1.66667V11.8333C16 11.9254 15.9254 12 15.8333 12H10.8333C10.7413 12 10.6667 12.0746 10.6667 12.1667V15.8333C10.6667 15.9254 10.592 16 10.5 16H1.66667C0.746192 16 0 15.2538 0 14.3333V12.1888C0 12.0717 0.0617409 11.9632 0.162081 11.903L6.15043 8.30986C6.28644 8.22833 6.24077 8.02716 6.09507 8.00256L6.06511 8H0.166667C0.0746186 8 0 7.92538 0 7.83333V4.16667C0 4.07462 0.0746193 4 0.166667 4H6.5C6.59205 4 6.66667 3.92538 6.66667 3.83333V0.166667C6.66667 0.0746193 6.74129 0 6.83333 0H14.3333ZM6.83333 4C6.74129 4 6.66667 4.07462 6.66667 4.16667V11.8333C6.66667 11.9254 6.74129 12 6.83333 12H10.5C10.592 12 10.6667 11.9254 10.6667 11.8333V4.16667C10.6667 4.07462 10.592 4 10.5 4H6.83333Z" fill="#0033FF"/>
-    </svg>
+    ${AUTH_PAGE_LOGO_SVG}
     <h1>MCP Server authenticated</h1>
     <p>You can close this tab</p>
   </div>
