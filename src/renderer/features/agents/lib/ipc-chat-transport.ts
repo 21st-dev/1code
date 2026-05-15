@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
@@ -386,23 +385,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 console.error(`[SDK ERROR] Full chunk:`, JSON.stringify(chunk, null, 2))
                 console.error(`[SDK ERROR] ========================================`)
 
-                // Track error in Sentry
-                Sentry.captureException(
-                  new Error(chunk.errorText || "Claude transport error"),
-                  {
-                    tags: {
-                      errorCategory: category,
-                      mode: currentMode,
-                    },
-                    extra: {
-                      debugInfo: chunk.debugInfo,
-                      cwd: this.config.cwd,
-                      chatId: this.config.chatId,
-                      subChatId: this.config.subChatId,
-                    },
-                  },
-                )
-
                 // Build detailed error string for copying (available for ALL errors)
                 const errorDetails = [
                   `Error: ${chunk.errorText || "Unknown error"}`,
@@ -464,19 +446,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             },
             onError: (err: Error) => {
               console.log(`[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
-              // Track transport errors in Sentry
-              Sentry.captureException(err, {
-                tags: {
-                  errorCategory: "TRANSPORT_ERROR",
-                  mode: currentMode,
-                },
-                extra: {
-                  cwd: this.config.cwd,
-                  chatId: this.config.chatId,
-                  subChatId: this.config.subChatId,
-                },
-              })
-
               controller.error(err)
             },
             onComplete: () => {

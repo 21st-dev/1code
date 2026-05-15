@@ -1,18 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
 import { exposeElectronTRPC } from "trpc-electron/main"
-import { shouldEnableLocalOnly } from "../shared/local-only"
-
-const preloadLocalOnly = shouldEnableLocalOnly(
-  process.env,
-  import.meta.env as Record<string, string | undefined>,
-)
-
-// Only initialize Sentry in production to avoid IPC errors in dev mode
-if (process.env.NODE_ENV === "production" && !preloadLocalOnly) {
-  import("@sentry/electron/renderer").then((Sentry) => {
-    Sentry.init()
-  })
-}
 
 // Expose tRPC IPC bridge for type-safe communication
 exposeElectronTRPC()
@@ -22,11 +9,6 @@ contextBridge.exposeInMainWorld("webUtils", {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 })
 
-// Expose analytics force flag for testing
-if (process.env.FORCE_ANALYTICS === "true") {
-  contextBridge.exposeInMainWorld("__FORCE_ANALYTICS__", true)
-}
-
 // Expose desktop-specific APIs
 contextBridge.exposeInMainWorld("desktopApi", {
   // Platform info
@@ -35,50 +17,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
   getVersion: () => ipcRenderer.invoke("app:version"),
   isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
   isLocalOnlyMode: () => ipcRenderer.invoke("app:is-local-only-mode"),
-
-  // Auto-update methods
-  checkForUpdates: (force?: boolean) => ipcRenderer.invoke("update:check", force),
-  downloadUpdate: () => ipcRenderer.invoke("update:download"),
-  installUpdate: () => ipcRenderer.invoke("update:install"),
-  setUpdateChannel: (channel: "latest" | "beta") => ipcRenderer.invoke("update:set-channel", channel),
-  getUpdateChannel: () => ipcRenderer.invoke("update:get-channel") as Promise<"latest" | "beta">,
-
-  // Auto-update event listeners
-  onUpdateChecking: (callback: () => void) => {
-    const handler = () => callback()
-    ipcRenderer.on("update:checking", handler)
-    return () => ipcRenderer.removeListener("update:checking", handler)
-  },
-  onUpdateAvailable: (callback: (info: { version: string; releaseDate?: string }) => void) => {
-    const handler = (_event: unknown, info: { version: string; releaseDate?: string }) => callback(info)
-    ipcRenderer.on("update:available", handler)
-    return () => ipcRenderer.removeListener("update:available", handler)
-  },
-  onUpdateNotAvailable: (callback: () => void) => {
-    const handler = () => callback()
-    ipcRenderer.on("update:not-available", handler)
-    return () => ipcRenderer.removeListener("update:not-available", handler)
-  },
-  onUpdateProgress: (callback: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => {
-    const handler = (_event: unknown, progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => callback(progress)
-    ipcRenderer.on("update:progress", handler)
-    return () => ipcRenderer.removeListener("update:progress", handler)
-  },
-  onUpdateDownloaded: (callback: (info: { version: string }) => void) => {
-    const handler = (_event: unknown, info: { version: string }) => callback(info)
-    ipcRenderer.on("update:downloaded", handler)
-    return () => ipcRenderer.removeListener("update:downloaded", handler)
-  },
-  onUpdateError: (callback: (error: string) => void) => {
-    const handler = (_event: unknown, error: string) => callback(error)
-    ipcRenderer.on("update:error", handler)
-    return () => ipcRenderer.removeListener("update:error", handler)
-  },
-  onUpdateManualCheck: (callback: () => void) => {
-    const handler = () => callback()
-    ipcRenderer.on("update:manual-check", handler)
-    return () => ipcRenderer.removeListener("update:manual-check", handler)
-  },
 
   // Window controls
   windowMinimize: () => ipcRenderer.invoke("window:minimize"),
@@ -128,9 +66,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
   // DevTools
   toggleDevTools: () => ipcRenderer.invoke("window:toggle-devtools"),
   unlockDevTools: () => ipcRenderer.invoke("window:unlock-devtools"),
-
-  // Analytics
-  setAnalyticsOptOut: (optedOut: boolean) => ipcRenderer.invoke("analytics:set-opt-out", optedOut),
 
   // Native features
   setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
@@ -254,19 +189,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
   loadVSCodeTheme: (themePath: string) => ipcRenderer.invoke("vscode:load-theme", themePath),
 })
 
-// Type definitions
-export interface UpdateInfo {
-  version: string
-  releaseDate?: string
-}
-
-export interface UpdateProgress {
-  percent: number
-  bytesPerSecond: number
-  transferred: number
-  total: number
-}
-
 export type EditorSource = "vscode" | "vscode-insiders" | "cursor" | "windsurf"
 
 export interface DiscoveredTheme {
@@ -297,19 +219,6 @@ export interface DesktopApi {
   getVersion: () => Promise<string>
   isPackaged: () => Promise<boolean>
   isLocalOnlyMode: () => Promise<boolean>
-  // Auto-update
-  checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
-  downloadUpdate: () => Promise<boolean>
-  installUpdate: () => void
-  setUpdateChannel: (channel: "latest" | "beta") => Promise<boolean>
-  getUpdateChannel: () => Promise<"latest" | "beta">
-  onUpdateChecking: (callback: () => void) => () => void
-  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void
-  onUpdateNotAvailable: (callback: () => void) => () => void
-  onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void
-  onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void
-  onUpdateError: (callback: (error: string) => void) => () => void
-  onUpdateManualCheck: (callback: () => void) => () => void
   // Window controls
   windowMinimize: () => Promise<void>
   windowMaximize: () => Promise<void>
@@ -336,7 +245,6 @@ export interface DesktopApi {
   focusChatOwner: (chatId: string) => Promise<boolean>
   toggleDevTools: () => Promise<void>
   unlockDevTools: () => Promise<void>
-  setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
   setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>

@@ -1,101 +1,17 @@
 /**
- * PostHog analytics for Agent Code for Me - Renderer Process
- * Uses PostHog JS SDK for client-side tracking
+ * Local-first renderer analytics boundary.
+ *
+ * Hosted telemetry is not part of the default product. Keep these helpers as
+ * no-ops so UI code does not need telemetry-specific branching.
  */
 
-import posthog from "posthog-js"
-
-// PostHog configuration from environment
-const POSTHOG_DESKTOP_KEY = import.meta.env.VITE_POSTHOG_KEY
-const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com"
-
-let initialized = false
 let currentUserId: string | null = null
-let appVersion: string | null = null
-let appPlatform: string | null = null
-let appArch: string | null = null
-let localOnlyMode = true
-
-// Check if we're in development mode
-// Renderer can't access env vars directly, so we check a global flag
-const isDev = typeof window !== "undefined" &&
-  window.location.hostname === "localhost" &&
-  !(window as any).__FORCE_ANALYTICS__
 
 /**
- * Check if user has opted out of analytics
- * Reads directly from localStorage to avoid circular dependencies
- */
-function isOptedOut(): boolean {
-  try {
-    const optOut = localStorage.getItem("preferences:analytics-opt-out")
-    return optOut === "true"
-  } catch {
-    return false
-  }
-}
-
-/**
- * Get common properties for all events
- */
-function getCommonProperties() {
-  return {
-    app_version: appVersion,
-    platform: appPlatform,
-    arch: appArch,
-    source: "desktop_renderer",
-  }
-}
-
-/**
- * Initialize PostHog for renderer process
+ * Initialize analytics for renderer process
  */
 export async function initAnalytics() {
-  localOnlyMode = (await window.desktopApi?.isLocalOnlyMode?.()) !== false
-  if (localOnlyMode) {
-    console.log("[Analytics] Skipping PostHog initialization (local-only mode)")
-    return
-  }
-
-  // Skip in development mode
-  if (isDev) return
-
-  if (initialized) return
-
-  // Skip if no PostHog key configured
-  if (!POSTHOG_DESKTOP_KEY) {
-    console.log("[Analytics] Skipping PostHog initialization (no key configured)")
-    return
-  }
-
-  // Get app info from main process
-  try {
-    if (window.desktopApi?.getVersion) {
-      appVersion = await window.desktopApi.getVersion()
-    }
-    if (window.desktopApi?.platform) {
-      appPlatform = window.desktopApi.platform
-    }
-    if (window.desktopApi?.arch) {
-      appArch = window.desktopApi.arch
-    }
-  } catch (error) {
-    console.warn("[Analytics] Failed to get app info:", error)
-  }
-
-  posthog.init(POSTHOG_DESKTOP_KEY, {
-    api_host: POSTHOG_HOST,
-    // Disable automatic tracking - we track manually
-    autocapture: false,
-    capture_pageview: false,
-    capture_pageleave: false,
-    disable_session_recording: true,
-    // Privacy settings
-    person_profiles: "identified_only",
-    persistence: "localStorage",
-  })
-
-  initialized = true
+  console.log("[Analytics] Hosted telemetry removed from local-first build")
 }
 
 /**
@@ -105,20 +21,8 @@ export function capture(
   eventName: string,
   properties?: Record<string, any>,
 ) {
-  if (localOnlyMode) return
-
-  // Skip in development mode
-  if (isDev) return
-
-  // Skip if user opted out
-  if (isOptedOut()) return
-
-  if (!initialized) return
-
-  posthog.capture(eventName, {
-    ...getCommonProperties(),
-    ...properties,
-  })
+  void eventName
+  void properties
 }
 
 /**
@@ -129,21 +33,7 @@ export function identify(
   traits?: Record<string, any>,
 ) {
   currentUserId = userId
-
-  if (localOnlyMode) return
-
-  // Skip in development mode
-  if (isDev) return
-
-  // Skip if user opted out
-  if (isOptedOut()) return
-
-  if (!initialized) return
-
-  posthog.identify(userId, {
-    ...getCommonProperties(),
-    ...traits,
-  })
+  void traits
 }
 
 /**
@@ -158,21 +48,13 @@ export function getCurrentUserId(): string | null {
  */
 export function reset() {
   currentUserId = null
-  if (localOnlyMode) return
-  if (initialized) {
-    posthog.reset()
-  }
 }
 
 /**
- * Shutdown PostHog
+ * Shutdown analytics
  */
 export function shutdown() {
-  if (localOnlyMode) return
-  if (initialized) {
-    posthog.reset()
-    initialized = false
-  }
+  return
 }
 
 // ============================================================================

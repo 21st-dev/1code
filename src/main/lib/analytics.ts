@@ -1,101 +1,25 @@
 /**
- * PostHog analytics for Agent Code for Me - Main Process
- * Uses PostHog Node.js SDK for server-side tracking
+ * Local-first analytics boundary.
+ *
+ * Hosted telemetry has been removed from the default desktop build. The exported
+ * helpers remain as no-ops so feature code can keep calling tracking hooks
+ * without pulling in hosted telemetry or upstream account-plan state.
  */
 
-import { PostHog } from "posthog-node"
-import { app } from "electron"
-import * as fs from "fs"
-import * as path from "path"
-import { isLocalOnlyMode } from "./local-only"
-
-// PostHog is opt-in for builds that explicitly configure a key and disable local-only mode.
-const POSTHOG_DESKTOP_KEY = import.meta.env.MAIN_VITE_POSTHOG_KEY
-const POSTHOG_HOST = import.meta.env.MAIN_VITE_POSTHOG_HOST || "https://us.i.posthog.com"
-
-let posthog: PostHog | null = null
 let currentUserId: string | null = null
-let userOptedOut = false // Synced from renderer
-
-// track first launch using a marker file
-const FIRST_LAUNCH_MARKER = ".first_launch_tracked"
-
-function getFirstLaunchMarkerPath(): string {
-  try {
-    return path.join(app.getPath("userData"), FIRST_LAUNCH_MARKER)
-  } catch {
-    // app not ready yet
-    return ""
-  }
-}
-
-function isFirstLaunch(): boolean {
-  const markerPath = getFirstLaunchMarkerPath()
-  if (!markerPath) return false
-
-  try {
-    return !fs.existsSync(markerPath)
-  } catch {
-    return false
-  }
-}
-
-function markFirstLaunchTracked(): void {
-  const markerPath = getFirstLaunchMarkerPath()
-  if (!markerPath) return
-
-  try {
-    fs.writeFileSync(markerPath, new Date().toISOString())
-  } catch {
-    // ignore errors writing marker
-  }
-}
-
-// Cached user properties for analytics enrichment
-let cachedSubscriptionPlan: string | null = null
-let cachedConnectionMethod: string | null = null
-
-// Check if we're in development mode
-// Set FORCE_ANALYTICS=true to test analytics in development
-// Use a function to check lazily after app is ready
-function isDev(): boolean {
-  try {
-    return !app.isPackaged && process.env.FORCE_ANALYTICS !== "true"
-  } catch {
-    // App not ready yet, assume dev mode
-    return process.env.FORCE_ANALYTICS !== "true"
-  }
-}
-
-/**
- * Get common properties for all events
- */
-function getCommonProperties() {
-  return {
-    source: "desktop", // Unified source for desktop vs web analytics
-    app_version: app.getVersion(),
-    platform: process.platform,
-    arch: process.arch,
-    electron_version: process.versions.electron,
-    node_version: process.versions.node,
-    // Analytics enrichment properties
-    subscription_plan: cachedSubscriptionPlan,
-    connection_method: cachedConnectionMethod,
-  }
-}
 
 /**
  * Set opt-out status (called from renderer when user preference changes)
  */
 export function setOptOut(optedOut: boolean) {
-  userOptedOut = optedOut
+  void optedOut
 }
 
 /**
  * Set subscription plan (called after fetching from API)
  */
 export function setSubscriptionPlan(plan: string) {
-  cachedSubscriptionPlan = plan
+  void plan
 }
 
 /**
@@ -103,35 +27,14 @@ export function setSubscriptionPlan(plan: string) {
  * Values: "claude-subscription" | "api-key" | "custom-model"
  */
 export function setConnectionMethod(method: string) {
-  cachedConnectionMethod = method
+  void method
 }
 
 /**
- * Initialize PostHog for main process
+ * Initialize analytics for main process
  */
 export function initAnalytics() {
-  if (isLocalOnlyMode()) {
-    console.log("[Analytics] Skipping PostHog initialization (local-only mode)")
-    return
-  }
-
-  // Skip in development mode
-  if (isDev()) return
-
-  if (posthog) return
-
-  // Skip if no PostHog key configured
-  if (!POSTHOG_DESKTOP_KEY) {
-    console.log("[Analytics] Skipping PostHog initialization (no key configured)")
-    return
-  }
-
-  posthog = new PostHog(POSTHOG_DESKTOP_KEY, {
-    host: POSTHOG_HOST,
-    // Flush events every 30 seconds or when 20 events are queued
-    flushAt: 20,
-    flushInterval: 30000,
-  })
+  console.log("[Analytics] Hosted telemetry removed from local-first build")
 }
 
 /**
@@ -141,26 +44,8 @@ export function capture(
   eventName: string,
   properties?: Record<string, any>,
 ) {
-  if (isLocalOnlyMode()) return
-
-  // Skip in development mode
-  if (isDev()) return
-
-  // Skip if user opted out
-  if (userOptedOut) return
-
-  if (!posthog) return
-
-  const distinctId = currentUserId || "anonymous"
-
-  posthog.capture({
-    distinctId,
-    event: eventName,
-    properties: {
-      ...getCommonProperties(),
-      ...properties,
-    },
-  })
+  void eventName
+  void properties
 }
 
 /**
@@ -171,24 +56,7 @@ export function identify(
   traits?: Record<string, any>,
 ) {
   currentUserId = userId
-
-  if (isLocalOnlyMode()) return
-
-  // Skip in development mode
-  if (isDev()) return
-
-  // Skip if user opted out
-  if (userOptedOut) return
-
-  if (!posthog) return
-
-  posthog.identify({
-    distinctId: userId,
-    properties: {
-      ...getCommonProperties(),
-      ...traits,
-    },
-  })
+  void traits
 }
 
 /**
@@ -203,26 +71,13 @@ export function getCurrentUserId(): string | null {
  */
 export function reset() {
   currentUserId = null
-  // Reset cached analytics properties
-  cachedSubscriptionPlan = null
-  cachedConnectionMethod = null
-  // PostHog Node.js SDK doesn't have a reset method
-  // Events will be sent as anonymous until next identify
 }
 
 /**
- * Shutdown PostHog and flush pending events
+ * Shutdown analytics
  */
 export async function shutdown() {
-  if (isLocalOnlyMode()) {
-    posthog = null
-    return
-  }
-
-  if (posthog) {
-    await posthog.shutdown()
-    posthog = null
-  }
+  return Promise.resolve()
 }
 
 // ============================================================================
@@ -233,22 +88,7 @@ export async function shutdown() {
  * Track app opened event
  */
 export function trackAppOpened() {
-  const firstLaunch = isFirstLaunch()
-
-  capture("desktop_opened", {
-    first_launch: firstLaunch,
-  })
-
-  if (firstLaunch) {
-    // mark as tracked so subsequent opens don't count as first launch
-    markFirstLaunchTracked()
-
-    // also fire a separate first_launch event for funnel analysis
-    capture("first_launch", {
-      app_version: app.getVersion(),
-      platform: process.platform,
-    })
-  }
+  capture("desktop_opened")
 }
 
 /**

@@ -279,34 +279,6 @@ export class AuthManager {
     return this.store.updateUser({ name: updates.name ?? null })
   }
 
-  /**
-   * Fetch user's subscription plan from web backend
-   * Used for PostHog analytics enrichment
-   */
-  async fetchUserPlan(): Promise<{ email: string; plan: string; status: string | null } | null> {
-    if (isLocalOnlyMode()) {
-      return null
-    }
-
-    const token = await this.getValidToken()
-    if (!token) return null
-
-    try {
-      const response = await fetch(`${this.getApiUrl()}/api/desktop/user/plan`, {
-        headers: { "X-Desktop-Token": token },
-      })
-
-      if (!response.ok) {
-        console.error("[AuthManager] Failed to fetch user plan:", response.status)
-        return null
-      }
-
-      return response.json()
-    } catch (error) {
-      console.error("[AuthManager] Failed to fetch user plan:", error)
-      return null
-    }
-  }
 }
 
 // Global singleton instance

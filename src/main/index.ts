@@ -3,20 +3,6 @@ import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
 import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
-import {
-  identify,
-  initAnalytics,
-  setSubscriptionPlan,
-  shutdown as shutdownAnalytics,
-  trackAppOpened,
-  trackAuthCompleted,
-} from "./lib/analytics"
-import {
-  checkForUpdates,
-  downloadUpdate,
-  initAutoUpdater,
-  setupFocusUpdateCheck,
-} from "./lib/auto-updater"
 import { isLocalOnlyMode } from "./lib/local-only"
 import { closeDatabase, initDatabase } from "./lib/db"
 import {
@@ -63,32 +49,6 @@ if (IS_DEV) {
 // under heavy multi-chat workloads. Must be set before app readiness/window creation.
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=8192")
 
-// Initialize Sentry in production only. Keep the import lazy so dev startup does
-// not load @sentry/electron before Electron's app object is available.
-if (app.isPackaged && !IS_DEV && !isLocalOnlyMode()) {
-  const sentryDsn = import.meta.env.MAIN_VITE_SENTRY_DSN
-  if (sentryDsn) {
-    import("@sentry/electron/main")
-      .then((Sentry) => {
-        Sentry.init({
-          dsn: sentryDsn,
-        })
-        console.log("[App] Sentry initialized")
-      })
-      .catch((error) => {
-        console.warn("[App] Failed to initialize Sentry:", error)
-      })
-  } else {
-    console.log("[App] Skipping Sentry initialization (no DSN configured)")
-  }
-} else {
-  console.log(
-    isLocalOnlyMode()
-      ? "[App] Skipping Sentry initialization (local-only mode)"
-      : "[App] Skipping Sentry initialization (dev mode)",
-  )
-}
-
 // URL configuration (exported for optional hosted/internal builds)
 export function getBaseUrl(): string {
   return HOSTED_API_BASE_URL
@@ -118,19 +78,6 @@ export async function handleAuthCode(code: string): Promise<void> {
   try {
     const authData = await authManager.exchangeCode(code)
     console.log("[Auth] Success for user:", authData.user.email)
-
-    // Track successful authentication
-    trackAuthCompleted(authData.user.id, authData.user.email)
-
-    // Fetch and set subscription plan for analytics
-    try {
-      const planData = await authManager.fetchUserPlan()
-      if (planData) {
-        setSubscriptionPlan(planData.plan)
-      }
-    } catch (e) {
-      console.warn("[Auth] Failed to fetch user plan for analytics:", e)
-    }
 
     // Set desktop token cookie using persist:main partition
     const ses = session.fromPartition("persist:main")
@@ -617,9 +564,6 @@ if (gotTheLock) {
       copyright: APP_COPYRIGHT,
     })
 
-    // Track update availability for menu
-    let updateAvailable = false
-    let availableVersion: string | null = null
     // Track devtools unlock state (hidden feature - 5 clicks on Beta tab)
     let devToolsUnlocked = false
 
@@ -645,28 +589,6 @@ if (gotTheLock) {
               label: `About ${APP_NAME}`,
               click: () => app.showAboutPanel(),
             },
-            ...(!localOnly
-              ? [
-                  {
-                    label: updateAvailable
-                      ? `Update to v${availableVersion}...`
-                      : "Check for Updates...",
-                    click: () => {
-                      // Send event to renderer to clear dismiss state
-                      const win = getWindow()
-                      if (win) {
-                        win.webContents.send("update:manual-check")
-                      }
-                      // If update is already available, start downloading immediately
-                      if (updateAvailable) {
-                        downloadUpdate()
-                      } else {
-                        checkForUpdates(true)
-                      }
-                    },
-                  },
-                ]
-              : []),
             { type: "separator" },
             {
               label: "Settings...",
@@ -888,13 +810,6 @@ if (gotTheLock) {
       app.dock?.setMenu(dockMenu)
     }
 
-    // Set update state and rebuild menu
-    const setUpdateAvailable = (available: boolean, version?: string) => {
-      updateAvailable = available
-      availableVersion = version || null
-      buildMenu()
-    }
-
     // Unlock devtools and rebuild menu (called from renderer via IPC)
     const unlockDevTools = () => {
       if (!devToolsUnlocked) {
@@ -904,8 +819,6 @@ if (gotTheLock) {
       }
     }
 
-    // Expose setUpdateAvailable globally for auto-updater
-    ;(global as any).__setUpdateAvailable = setUpdateAvailable
     // Expose unlockDevTools globally for IPC handler
     ;(global as any).__unlockDevTools = unlockDevTools
 
@@ -916,24 +829,7 @@ if (gotTheLock) {
     authManager = initAuthManager(!!process.env.ELECTRON_RENDERER_URL)
     console.log("[App] Auth manager initialized")
 
-    // Initialize analytics after auth manager so we can identify user
-    if (!isLocalOnlyMode()) {
-      initAnalytics()
-
-      // If user already authenticated from previous session, identify them
-      if (authManager.isAuthenticated()) {
-        const user = authManager.getUser()
-        if (user) {
-          identify(user.id, { email: user.email })
-          console.log("[Analytics] User identified from saved session:", user.id)
-        }
-      }
-
-      // Track app opened (now with correct user ID if authenticated)
-      trackAppOpened()
-    } else {
-      console.log("[Analytics] Skipping analytics initialization (local-only mode)")
-    }
+    console.log("[Analytics] Hosted telemetry removed from local-first build")
 
     // Set up callback to update cookie when token is refreshed
     authManager.setOnTokenRefresh(async (authData) => {
@@ -968,18 +864,7 @@ if (gotTheLock) {
     // Create main window
     createMainWindow()
 
-    // Initialize auto-updater (production only)
-    if (app.isPackaged && !isLocalOnlyMode()) {
-      await initAutoUpdater(getAllWindows)
-      // Setup update check on window focus (instead of periodic interval)
-      setupFocusUpdateCheck(getAllWindows)
-      // Check for updates 5 seconds after startup (force to bypass interval check)
-      setTimeout(() => {
-        checkForUpdates(true)
-      }, 5000)
-    } else if (isLocalOnlyMode()) {
-      console.log("[AutoUpdater] Skipping initialization (local-only mode)")
-    }
+    console.log("[AutoUpdater] Hosted updater removed from local-first build")
 
     // Warm up MCP cache 3 seconds after startup (background, non-blocking)
     // This populates the cache so all future sessions can use filtered MCP servers
@@ -1032,7 +917,6 @@ if (gotTheLock) {
     console.log("[App] Shutting down...")
     cancelAllPendingOAuth()
     await cleanupGitWatchers()
-    await shutdownAnalytics()
     await closeDatabase()
   })
 

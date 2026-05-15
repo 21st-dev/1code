@@ -28,7 +28,6 @@ import {
   type ChatSourceMode,
   showWorkspaceIconAtom,
   betaKanbanEnabledAtom,
-  betaAutomationsEnabledAtom,
   type SettingsTab,
 } from "../../lib/atoms"
 import {
@@ -46,9 +45,7 @@ import {
 } from "../../lib/hooks/use-local-only-mode"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight, Github } from "lucide-react"
-import { useQuery } from "@tanstack/react-query"
-import { remoteTrpc } from "../../lib/remote-trpc"
+import { ChevronDown, MoreHorizontal, Columns3, Github } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null, isLoaded: true })
@@ -1139,123 +1136,6 @@ const KanbanButton = memo(function KanbanButton() {
         {openKanbanHotkey && <Kbd>{openKanbanHotkey}</Kbd>}
       </TooltipContent>
     </Tooltip>
-  )
-})
-
-// Custom SVG icons matching web's icons.tsx
-function SidebarInboxIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <path
-        d="M3 12H7.5C8.12951 12 8.72229 12.2964 9.1 12.8L9.4 13.2C9.77771 13.7036 10.3705 14 11 14H13C13.6295 14 14.2223 13.7036 14.6 13.2L14.9 12.8C15.2777 12.2964 15.8705 12 16.5 12H21M21.7365 11.5389L18.5758 6.00772C18.2198 5.38457 17.5571 5 16.8394 5H7.16065C6.44293 5 5.78024 5.38457 5.42416 6.00772L2.26351 11.5389C2.09083 11.841 2 12.1831 2 12.5311V17C2 18.1046 2.89543 19 4 19H20C21.1046 19 22 18.1046 22 17V12.5311C22 12.1831 21.9092 11.841 21.7365 11.5389Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function SidebarAutomationsIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <path
-        d="M9.50006 5.39844C7.09268 6.1897 5.1897 8.09268 4.39844 10.5001M19.8597 14.5001C19.9518 14.0142 20.0001 13.5128 20.0001 13.0001C20.0001 10.9895 19.2584 9.1522 18.0337 7.74679M6.70841 19.0001C8.11868 20.2448 9.97117 21.0001 12.0001 21.0001C12.5127 21.0001 13.0141 20.9518 13.5 20.8597"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="5" r="2.5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="20" cy="17" r="2.5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="4" cy="17" r="2.5" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  )
-}
-
-// Isolated Inbox Button - full-width navigation link matching web layout
-const InboxButton = memo(function InboxButton() {
-  const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
-  const isLocalOnly = useLocalOnlyMode()
-  const desktopView = useAtomValue(desktopViewAtom)
-  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
-  const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
-  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
-  const teamId = useAtomValue(selectedTeamIdAtom)
-  const { t } = useI18n()
-
-  const { data: unreadData } = useQuery({
-    queryKey: ["automations", "inboxUnreadCount", teamId],
-    queryFn: () => remoteTrpc.automations.getInboxUnreadCount.query({ teamId: teamId! }),
-    enabled: !!teamId && automationsEnabled && !isLocalOnly,
-    refetchInterval: 30_000,
-  })
-  const inboxUnreadCount = unreadData?.count ?? 0
-
-  const handleClick = useCallback(() => {
-    setSelectedChatId(null)
-    setSelectedDraftId(null)
-    setShowNewChatForm(false)
-    setDesktopView("inbox")
-  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
-
-  if (!automationsEnabled || isLocalOnly) return null
-
-  const isActive = desktopView === "inbox"
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className={cn(
-        "flex items-center gap-2.5 w-full pl-2 pr-2 py-1.5 rounded-md text-sm transition-colors duration-150",
-        isActive
-          ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-      )}
-    >
-      <SidebarInboxIcon className="h-4 w-4" />
-      <span className="flex-1 text-left">{t("sidebar.inbox")}</span>
-      {inboxUnreadCount > 0 && (
-        <span className="bg-muted text-muted-foreground text-xs font-medium px-1.5 py-0.5 rounded-md min-w-[20px] text-center">
-          {inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}
-        </span>
-      )}
-    </button>
-  )
-})
-
-// Isolated Automations Button - full-width navigation link matching web layout
-const AutomationsButton = memo(function AutomationsButton() {
-  const automationsEnabled = useAtomValue(betaAutomationsEnabledAtom)
-  const isLocalOnly = useLocalOnlyMode()
-  const { t } = useI18n()
-
-  const handleClick = useCallback(() => {
-    void window.desktopApi.getApiBaseUrl().then((apiBase) => {
-      if (apiBase) {
-        window.desktopApi.openExternal(`${apiBase}/agents/app/automations`)
-      }
-    })
-  }, [])
-
-  if (!automationsEnabled || isLocalOnly) return null
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className={cn(
-        "group flex items-center gap-2.5 w-full pl-2 pr-2 py-1.5 rounded-md text-sm transition-colors duration-150",
-        "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-      )}
-    >
-      <SidebarAutomationsIcon className="h-4 w-4" />
-      <span className="flex-1 text-left">{t("sidebar.automations")}</span>
-      <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-    </button>
   )
 })
 
@@ -3301,14 +3181,6 @@ export function AgentsSidebar({
           </Tooltip>
         </div>
       </div>
-
-      {/* Navigation Links - Inbox & Automations */}
-      {!isLocalOnly && (
-        <div className="px-2 pb-3 flex-shrink-0 space-y-0.5 -mx-1">
-          <InboxButton />
-          <AutomationsButton />
-        </div>
-      )}
 
       {/* Scrollable Agents List */}
       <div className="flex-1 min-h-0 relative">

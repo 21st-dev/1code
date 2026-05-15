@@ -2500,28 +2500,6 @@ ${prompt}
                   errorCategory = "NETWORK_ERROR"
                 }
 
-                // Track error in Sentry (only if app is ready and Sentry is available)
-                if (app.isReady() && app.isPackaged && !isLocalOnlyMode()) {
-                  try {
-                    const Sentry = await import("@sentry/electron/main")
-                    Sentry.captureException(err, {
-                      tags: {
-                        errorCategory,
-                        mode: input.mode,
-                      },
-                      extra: {
-                        context: errorContext,
-                        cwd: input.cwd,
-                        stderr: stderrOutput || "(no stderr captured)",
-                        chatId: input.chatId,
-                        subChatId: input.subChatId,
-                      },
-                    })
-                  } catch {
-                    // Sentry not available or failed to import - ignore
-                  }
-                }
-
                 // Send error with stderr output to frontend (only if not aborted by user)
                 if (!abortController.signal.aborted) {
                   safeEmit({

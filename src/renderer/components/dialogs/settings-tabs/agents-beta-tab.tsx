@@ -1,20 +1,14 @@
 import { useAtom } from "jotai"
-import { Check, Copy, RefreshCw } from "lucide-react"
+import { Check, Copy } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
 import {
   autoOfflineModeAtom,
-  betaAutomationsEnabledAtom,
-  betaUpdatesEnabledAtom,
   historyEnabledAtom,
   selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
-import { remoteTrpc } from "../../../lib/remote-trpc"
-import { useLocalOnlyModeState } from "../../../lib/hooks/use-local-only-mode"
 import { cn } from "../../../lib/utils"
-import { Button } from "../../ui/button"
 import { ExternalLinkIcon } from "../../ui/icons"
 import {
   Select,
@@ -51,79 +45,7 @@ export function AgentsBetaTab() {
   const [showOfflineFeatures, setShowOfflineFeatures] = useAtom(showOfflineModeFeaturesAtom)
   const [autoOffline, setAutoOffline] = useAtom(autoOfflineModeAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
-  const [automationsEnabled, setAutomationsEnabled] = useAtom(betaAutomationsEnabledAtom)
-  const [betaUpdatesEnabled, setBetaUpdatesEnabled] = useAtom(betaUpdatesEnabledAtom)
-  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
-    useLocalOnlyModeState()
-
-  // Check subscription to gate automations behind paid plan
-  const { data: subscription } = useQuery({
-    queryKey: ["agents", "subscription"],
-    queryFn: () => remoteTrpc.agents.getAgentsSubscription.query(),
-    enabled: !isLocalOnly,
-  })
-  const isPaidPlan = subscription?.type !== "free" && !!subscription?.type
-  const isDev = process.env.NODE_ENV === "development"
-  const canEnableAutomations = !isLocalOnly && (isPaidPlan || isDev)
   const [copied, setCopied] = useState(false)
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "not-available" | "error">("idle")
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
-  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
-
-  // Get current version on mount and sync update channel state
-  useEffect(() => {
-    window.desktopApi?.getVersion().then(setCurrentVersion)
-  }, [])
-
-  useEffect(() => {
-    if (!isLocalOnlyResolved) return
-
-    if (isLocalOnly) {
-      setAutomationsEnabled(false)
-      setBetaUpdatesEnabled(false)
-      return
-    }
-
-    window.desktopApi?.getUpdateChannel().then((ch) => {
-      setBetaUpdatesEnabled(ch === "beta")
-    })
-  }, [
-    isLocalOnly,
-    isLocalOnlyResolved,
-    setAutomationsEnabled,
-    setBetaUpdatesEnabled,
-  ])
-
-  // Check for updates with force flag to bypass cache
-  const handleCheckForUpdates = async () => {
-    if (isLocalOnly) {
-      setUpdateStatus("error")
-      return
-    }
-
-    // Check if we're in dev mode
-    const isPackaged = await window.desktopApi?.isPackaged?.()
-    if (!isPackaged) {
-      setUpdateStatus("error")
-      console.log("Update check skipped in dev mode")
-      return
-    }
-
-    setUpdateStatus("checking")
-    setUpdateVersion(null)
-    try {
-      const result = await window.desktopApi?.checkForUpdates(true)
-      if (result) {
-        setUpdateStatus("available")
-        setUpdateVersion(result.version)
-      } else {
-        setUpdateStatus("not-available")
-      }
-    } catch (error) {
-      console.error("Failed to check for updates:", error)
-      setUpdateStatus("error")
-    }
-  }
 
   // Get Ollama status
   const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
@@ -182,30 +104,6 @@ export function AgentsBetaTab() {
             onCheckedChange={setShowOfflineFeatures}
           />
         </div>
-
-        {!isLocalOnly && (
-          <div className="flex items-center justify-between p-4 border-t border-border">
-            <div className="flex flex-col space-y-1">
-              <span className={cn("text-sm font-medium", canEnableAutomations ? "text-foreground" : "text-muted-foreground")}>
-                Automations & Inbox
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {canEnableAutomations
-                  ? "Automate workflows with GitHub and Linear triggers, and manage inbox notifications."
-                  : "Requires a paid plan. Upgrade to enable automations and inbox."}
-              </span>
-            </div>
-            <Switch
-              checked={automationsEnabled && canEnableAutomations}
-              onCheckedChange={(checked) => {
-                if (canEnableAutomations) {
-                  setAutomationsEnabled(checked)
-                }
-              }}
-              disabled={!canEnableAutomations}
-            />
-          </div>
-        )}
 
       </div>
 
@@ -348,62 +246,6 @@ export function AgentsBetaTab() {
           </div>
         </div>
       )}
-
-      {/* Updates Section */}
-      {!isLocalOnly && <div className="space-y-2">
-        <div className="pb-2">
-          <h4 className="text-sm font-medium text-foreground">Updates</h4>
-          <p className="text-xs text-muted-foreground mt-1">
-            Check for new versions manually (bypasses CDN cache)
-          </p>
-        </div>
-
-        <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex flex-col space-y-1">
-              <span className="text-sm font-medium text-foreground">
-                Early Access
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Receive beta versions before they're released to everyone. Beta versions may be less stable.
-              </span>
-            </div>
-            <Switch
-              checked={betaUpdatesEnabled}
-              onCheckedChange={(checked) => {
-                setBetaUpdatesEnabled(checked)
-                window.desktopApi?.setUpdateChannel(checked ? "beta" : "latest")
-              }}
-            />
-          </div>
-
-          <div className="p-4 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col space-y-1">
-                <span className="text-sm font-medium text-foreground">
-                  {currentVersion ? `Current: v${currentVersion}` : "Version"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {updateStatus === "checking" && "Checking for updates..."}
-                  {updateStatus === "available" && `Update available: v${updateVersion}`}
-                  {updateStatus === "not-available" && "You're on the latest version"}
-                  {updateStatus === "error" && "Failed to check (dev mode?)"}
-                  {updateStatus === "idle" && "Click to check for updates"}
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCheckForUpdates}
-                disabled={updateStatus === "checking"}
-              >
-                <RefreshCw className={cn("h-4 w-4 mr-2", updateStatus === "checking" && "animate-spin")} />
-                {updateStatus === "checking" ? "Checking..." : "Check Now"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>}
     </div>
   )
 }

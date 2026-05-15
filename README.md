@@ -2,7 +2,7 @@
 
 Local-first desktop client for coding agents.
 
-This project is a fork of [1Code](https://github.com/21st-dev/1code) adapted for a local-first workflow. It keeps the desktop UI, local project selection, worktrees, terminal, git tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local provider storage while disabling upstream hosted services by default.
+This project is a fork of [1Code](https://github.com/21st-dev/1code) adapted for a local-first workflow. It keeps the desktop UI, local project selection, worktrees, terminal, git tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local provider storage while removing upstream hosted product surfaces from the default build.
 
 ## Current Scope
 
@@ -11,12 +11,12 @@ This project is a fork of [1Code](https://github.com/21st-dev/1code) adapted for
 - Codex subscription, API key, and local Codex integration
 - Local chat, tools, terminal, git diff, staging, commit generation, and worktrees
 - Ollama-first helper generation with Settings-configured provider fallback
-- Local-only mode enabled by default
-- Upstream hosted auth, subscription checks, remote sandbox, automations, inbox, analytics, error tracking, and updater calls blocked unless explicitly opted in for internal development
+- Local-only guard enabled by default as defense-in-depth
+- Upstream hosted auth, subscription checks, remote sandbox, automations, inbox, analytics, error tracking, and updater UI removed or isolated from the default local-first build
 
 ## Local-Only Mode
 
-Local-only mode is enabled by default. It prevents the desktop app from contacting upstream hosted services, CDN update feeds, analytics, error tracking, hosted auth, remote sandbox/import, hosted voice/TTS fallback, automations, and inbox endpoints.
+Local-only mode is enabled by default. It prevents the desktop app from contacting upstream hosted services if a dormant compatibility path is accidentally reached. Hosted auth, subscription checks, remote sandbox/import, hosted voice/TTS fallback, automations, inbox, telemetry, and updater UI are not part of the default local-first product.
 
 To intentionally test hosted/internal services, disable it explicitly:
 
@@ -55,13 +55,13 @@ bun run package:win
 bun run package:linux
 ```
 
-Auto-update publishing is not configured by default. If you later operate your own update feed, set `MAIN_VITE_UPDATE_FEED_URL` and configure signing/publishing separately.
+Auto-update publishing is not part of the default local-first build. If this fork later needs app updates, add a fork-owned update proposal and feed instead of reusing upstream hosted update paths.
 
 ## Notes
 
-- Voice transcription is currently not a core local workflow and may require additional local/provider configuration later.
+- Voice transcription uses a user-provided OpenAI API key only; the upstream hosted subscription fallback has been removed from the default build.
 - Some compatibility names and paths such as `.1code/worktree.json`, `1code` CLI, and `~/.21st/worktrees` may still exist to avoid breaking existing local project data.
-- Some upstream cloud modules remain in the codebase but are guarded by Local-only mode.
+- Some upstream compatibility names remain to avoid breaking existing local project data, but hosted product surfaces should not be reintroduced without an OpenSpec proposal.
 
 ## License
 

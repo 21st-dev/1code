@@ -5,7 +5,6 @@
 
 import type { SettingsTab } from "../../../lib/atoms"
 import type { DesktopView } from "../atoms"
-import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // ============================================================================
 // TYPES
@@ -86,7 +85,7 @@ const createNewAgentAction: AgentActionDefinition = {
     context.setSelectedDraftId?.(null)
     // Explicitly show new chat form
     context.setShowNewChatForm?.(true)
-    // Clear automations/inbox view
+    // Clear secondary desktop view
     context.setDesktopView?.(null)
     return { success: true }
   },
@@ -141,26 +140,8 @@ const openKanbanAction: AgentActionDefinition = {
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)
     context.setShowNewChatForm?.(false)
-    // Clear automations/inbox view
+    // Clear secondary desktop view
     context.setDesktopView?.(null)
-    return { success: true }
-  },
-}
-
-const openAutomationsAction: AgentActionDefinition = {
-  id: "open-automations",
-  label: "Automations",
-  description: "Open automations page",
-  category: "navigation",
-  isAvailable: (context) => context.isLocalOnly !== true,
-  handler: async (context) => {
-    if (context.isLocalOnly) {
-      return { success: false, error: LOCAL_ONLY_BLOCKED_MESSAGE }
-    }
-    context.setSelectedChatId?.(null)
-    context.setSelectedDraftId?.(null)
-    context.setShowNewChatForm?.(false)
-    context.setDesktopView?.("automations")
     return { success: true }
   },
 }
@@ -174,24 +155,6 @@ const openInEditorAction: AgentActionDefinition = {
   handler: async () => {
     // Handled by the info-section component via event dispatch
     window.dispatchEvent(new CustomEvent("open-in-editor"))
-    return { success: true }
-  },
-}
-
-const openInboxAction: AgentActionDefinition = {
-  id: "open-inbox",
-  label: "Inbox",
-  description: "Open inbox",
-  category: "navigation",
-  isAvailable: (context) => context.isLocalOnly !== true,
-  handler: async (context) => {
-    if (context.isLocalOnly) {
-      return { success: false, error: LOCAL_ONLY_BLOCKED_MESSAGE }
-    }
-    context.setSelectedChatId?.(null)
-    context.setSelectedDraftId?.(null)
-    context.setShowNewChatForm?.(false)
-    context.setDesktopView?.("inbox")
     return { success: true }
   },
 }
@@ -231,8 +194,6 @@ export const AGENT_ACTIONS: Record<string, AgentActionDefinition> = {
   "toggle-sidebar": toggleSidebarAction,
   "toggle-chat-search": toggleChatSearchAction,
   "open-kanban": openKanbanAction,
-  "open-automations": openAutomationsAction,
-  "open-inbox": openInboxAction,
   "open-in-editor": openInEditorAction,
   "open-file-in-editor": openFileInEditorAction,
   "file-search": fileSearchAction,

@@ -20,9 +20,9 @@ bun run codex:download
 
 ## Local-Only Boundary
 
-This repository runs in **Local-only mode by default**. In Local-only mode the desktop app does not call upstream hosted services, CDN update feeds, analytics, error tracking, hosted auth, subscription, remote sandbox, background-agent, hosted voice/TTS, automations, inbox, or updater endpoints.
+This repository runs in **Local-only mode by default**. Hosted upstream product surfaces are removed or isolated from the default local-first build, and the Local-only guard remains as defense-in-depth against accidental upstream calls.
 
-Local-only can only be disabled explicitly for development or internal builds:
+Local-only can only be disabled explicitly for development or internal compatibility checks:
 
 ```bash
 AGENT_CODE_FOR_ME_LOCAL_ONLY=false bun run dev
@@ -39,15 +39,15 @@ User-configured providers, Ollama, local projects, Git, and GitHub operations re
 | Codex integration | Yes | Yes |
 | Git worktrees | Yes | Yes |
 | Terminal | Yes | Yes |
-| Sign in / sync | Blocked by Local-only | Upstream only |
-| Inbox / automations | Blocked by Local-only | Upstream only |
-| Remote sandbox / Open Locally import | Blocked by Local-only | Upstream only |
-| Background agents | Blocked by Local-only | Upstream only |
-| Auto-updates | Disabled unless you configure your own feed | Upstream only |
+| Sign in / sync | Removed from default build | Upstream only |
+| Inbox / automations | Removed from default build | Upstream only |
+| Remote sandbox / Open Locally import | Hidden from default build | Upstream only |
+| Background agents | Removed from default build | Upstream only |
+| Auto-updates | Removed from default build | Upstream only |
 
 ## Analytics & Telemetry
 
-Analytics and error tracking are disabled by default. They only activate when Local-only is explicitly disabled and the relevant environment variables are configured. There is no hardcoded analytics key in this local-first build.
+Hosted analytics and error tracking are not included in the default local-first build. Do not add telemetry or crash reporting without an explicit product/privacy proposal and opt-in design.
 
 ## Contribution Workflow
 

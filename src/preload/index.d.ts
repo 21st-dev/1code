@@ -1,15 +1,3 @@
-export interface UpdateInfo {
-  version: string
-  releaseDate?: string
-}
-
-export interface UpdateProgress {
-  percent: number
-  bytesPerSecond: number
-  transferred: number
-  total: number
-}
-
 export interface DesktopUser {
   id: string
   email: string
@@ -32,20 +20,6 @@ export interface DesktopApi {
   isPackaged: () => Promise<boolean>
   isLocalOnlyMode: () => Promise<boolean>
 
-  // Auto-update
-  checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
-  downloadUpdate: () => Promise<boolean>
-  installUpdate: () => void
-  setUpdateChannel: (channel: "latest" | "beta") => Promise<boolean>
-  getUpdateChannel: () => Promise<"latest" | "beta">
-  onUpdateChecking: (callback: () => void) => () => void
-  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void
-  onUpdateNotAvailable: (callback: () => void) => () => void
-  onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void
-  onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void
-  onUpdateError: (callback: (error: string) => void) => () => void
-  onUpdateManualCheck: (callback: () => void) => () => void
-
   // Window controls
   windowMinimize: () => Promise<void>
   windowMaximize: () => Promise<void>
@@ -65,9 +39,6 @@ export interface DesktopApi {
 
   // DevTools
   toggleDevTools: () => Promise<void>
-
-  // Analytics
-  setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
 
   // Native features
   setBadge: (count: number | null) => Promise<void>

@@ -86,7 +86,6 @@ function registerIpcHandlers(): void {
     }
   })
 
-  // Note: Update checking is now handled by auto-updater module (lib/auto-updater.ts)
   ipcMain.handle("app:set-badge", (event, count: number | null) => {
     const win = getWindowFromEvent(event)
     if (process.platform === "darwin") {
@@ -287,12 +286,6 @@ function registerIpcHandlers(): void {
     if ((global as any).__unlockDevTools) {
       ;(global as any).__unlockDevTools()
     }
-  })
-
-  // Analytics
-  ipcMain.handle("analytics:set-opt-out", async (_event, optedOut: boolean) => {
-    const { setOptOut } = await import("../lib/analytics")
-    setOptOut(optedOut)
   })
 
   // Shell

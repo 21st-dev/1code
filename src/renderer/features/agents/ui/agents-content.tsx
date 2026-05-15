@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useQuery } from "@tanstack/react-query"
 // import { useSearchParams, useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: mock Next.js navigation hooks
 const useSearchParams = () => ({ get: (_key: string) => null as string | null })
@@ -38,12 +37,10 @@ import {
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
   betaKanbanEnabledAtom,
-  betaAutomationsEnabledAtom,
   chatSourceModeAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { KanbanView } from "../../kanban"
-import { AutomationsView, AutomationsDetailView, InboxView } from "../../automations"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
@@ -71,7 +68,6 @@ import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { isDesktopApp } from "../../../lib/utils/platform"
-import { remoteTrpc } from "../../../lib/remote-trpc"
 import { SettingsContent } from "../../settings/settings-content"
 // Desktop mock
 const useIsAdmin = () => false
@@ -88,7 +84,6 @@ export function AgentsContent() {
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
-  const [betaAutomationsEnabled, setBetaAutomationsEnabled] = useAtom(betaAutomationsEnabledAtom)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
@@ -192,30 +187,9 @@ export function AgentsContent() {
   })
   const selectedTeam = teams?.find((t: any) => t.id === selectedTeamId) as any
 
-  // Auto-activate automations & inbox if user has any automations configured
-  // One-shot check on app startup — no refetches, no polling
-  const { data: automationsData } = useQuery({
-    queryKey: ["automations", "autoActivateCheck", selectedTeamId],
-    queryFn: () => remoteTrpc.automations.listAutomations.query({ teamId: selectedTeamId! }),
-    enabled: !!selectedTeamId && !betaAutomationsEnabled && !isLocalOnly,
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: 1,
-  })
-
-  useEffect(() => {
-    if (!betaAutomationsEnabled && automationsData && automationsData.length > 0) {
-      setBetaAutomationsEnabled(true)
-    }
-  }, [betaAutomationsEnabled, automationsData, setBetaAutomationsEnabled])
-
   useEffect(() => {
     if (!isLocalOnlyResolved || !isLocalOnly) return
 
-    if (betaAutomationsEnabled) {
-      setBetaAutomationsEnabled(false)
-    }
     if (desktopView === "automations" || desktopView === "automations-detail" || desktopView === "inbox") {
       setDesktopView(null)
     }
@@ -227,13 +201,11 @@ export function AgentsContent() {
       setSelectedChatId(null)
     }
   }, [
-    betaAutomationsEnabled,
     chatSourceMode,
     desktopView,
     isLocalOnly,
     isLocalOnlyResolved,
     selectedChatIsRemote,
-    setBetaAutomationsEnabled,
     setChatSourceMode,
     setDesktopView,
     setSelectedChatId,
@@ -898,15 +870,9 @@ export function AgentsContent() {
         data-agents-page
         data-mobile-view
       >
-        {/* Mobile: Settings/Automations/Inbox fullscreen views */}
+        {/* Mobile: Settings fullscreen view */}
         {desktopView === "settings" ? (
           <SettingsContent />
-        ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations" ? (
-          <AutomationsView />
-        ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations-detail" ? (
-          <AutomationsDetailView />
-        ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "inbox" ? (
-          <InboxView />
         ) : mobileViewMode === "chats" ? (
           // Chats List Mode (default) - uses AgentsSidebar in fullscreen
           <AgentsSidebar
@@ -1040,12 +1006,6 @@ export function AgentsContent() {
         >
           {desktopView === "settings" ? (
             <SettingsContent />
-          ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations" ? (
-            <AutomationsView />
-          ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "automations-detail" ? (
-            <AutomationsDetailView />
-          ) : !isLocalOnly && betaAutomationsEnabled && desktopView === "inbox" ? (
-            <InboxView />
           ) : selectedChatId ? (
             <div className="h-full flex flex-col relative overflow-hidden">
               <ChatView

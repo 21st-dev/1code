@@ -430,15 +430,6 @@ export const useNativeFrameAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
-// Preferences - Analytics Opt-out
-// When true, user has opted out of analytics tracking
-export const analyticsOptOutAtom = atomWithStorage<boolean>(
-  "preferences:analytics-opt-out",
-  false, // Default to opt-in (false means not opted out)
-  undefined,
-  { getOnInit: true },
-)
-
 // Beta: Enable git features in diff sidebar (commit, staging, file selection)
 // When enabled, shows checkboxes for file selection and commit UI in diff sidebar
 // When disabled, shows simple file list with "Create PR" button
@@ -454,15 +445,6 @@ export const betaGitFeaturesEnabledAtom = atomWithStorage<boolean>(
 export const betaKanbanEnabledAtom = atomWithStorage<boolean>(
   "preferences:beta-kanban-enabled",
   true, // Default ON — graduated from beta
-  undefined,
-  { getOnInit: true },
-)
-
-// Beta: Enable Automations & Inbox
-// When enabled, shows Automations and Inbox navigation in sidebar
-export const betaAutomationsEnabledAtom = atomWithStorage<boolean>(
-  "preferences:beta-automations-enabled",
-  false, // Default OFF
   undefined,
   { getOnInit: true },
 )
@@ -698,46 +680,6 @@ export const agentsQuickSwitchSelectedIndexAtom = atom<number>(0)
 // Quick switch dialog - Sub-chats
 export const subChatsQuickSwitchOpenAtom = atom<boolean>(false)
 export const subChatsQuickSwitchSelectedIndexAtom = atom<number>(0)
-
-// ============================================
-// UPDATE ATOMS
-// ============================================
-
-export type UpdateStatus =
-  | "idle"
-  | "checking"
-  | "available"
-  | "downloading"
-  | "ready"
-  | "error"
-
-export type UpdateState = {
-  status: UpdateStatus
-  version?: string
-  progress?: number // 0-100
-  bytesPerSecond?: number
-  transferred?: number
-  total?: number
-  error?: string
-}
-
-export const updateStateAtom = atom<UpdateState>({ status: "idle" })
-
-// Track if app was just updated (to show "What's New" banner)
-// This is set to true when app launches with a new version, reset when user dismisses
-export const justUpdatedAtom = atom<boolean>(false)
-
-// Store the version that triggered the "just updated" state
-export const justUpdatedVersionAtom = atom<string | null>(null)
-
-// Legacy atom for backwards compatibility (deprecated)
-export type UpdateInfo = {
-  version: string
-  downloadUrl: string
-  releaseNotes?: string
-}
-
-export const updateInfoAtom = atom<UpdateInfo | null>(null)
 
 // ============================================
 // DESKTOP/FULLSCREEN STATE ATOMS

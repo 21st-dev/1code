@@ -15,7 +15,6 @@ import {
   CodexOnboardingPage,
   SelectRepoPage,
 } from "./features/onboarding"
-import { identify, initAnalytics, shutdown } from "./lib/analytics"
 import { useLocalOnlyModeState } from "./lib/hooks/use-local-only-mode"
 import {
   anthropicOnboardingCompletedAtom,
@@ -260,41 +259,6 @@ function AppContent() {
 }
 
 export function App() {
-  // Initialize analytics on mount
-  useEffect(() => {
-    initAnalytics()
-
-    // Sync analytics opt-out status to main process
-    const syncOptOutStatus = async () => {
-      try {
-        const optOut =
-          localStorage.getItem("preferences:analytics-opt-out") === "true"
-        await window.desktopApi?.setAnalyticsOptOut(optOut)
-      } catch (error) {
-        console.warn("[Analytics] Failed to sync opt-out status:", error)
-      }
-    }
-    syncOptOutStatus()
-
-    // Identify user if already authenticated
-    const identifyUser = async () => {
-      try {
-        const user = await window.desktopApi?.getUser()
-        if (user?.id) {
-          identify(user.id, { email: user.email, name: user.name })
-        }
-      } catch (error) {
-        console.warn("[Analytics] Failed to identify user:", error)
-      }
-    }
-    identifyUser()
-
-    // Cleanup on unmount
-    return () => {
-      shutdown()
-    }
-  }, [])
-
   return (
     <WindowProvider>
       <JotaiProvider store={appStore}>
