@@ -1,12 +1,11 @@
 {
-  "name": "21st-desktop",
+  "name": "agent-code-for-me",
   "version": "0.0.72",
   "private": true,
-  "description": "1Code - UI for parallel work with AI agents",
-  "homepage": "https://21st.dev",
+  "description": "Local-first desktop UI for coding agents",
+  "homepage": "https://github.com/lupanpan1030/agent-code-for-me",
   "author": {
-    "name": "21st.dev",
-    "email": "support@21st.dev"
+    "name": "Agent Code for Me"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -19,14 +18,14 @@
     "package:linux": "electron-builder --linux",
     "dist": "electron-builder",
     "dist:manifest": "node scripts/generate-update-manifest.mjs",
-    "dist:upload": "node scripts/upload-release.mjs",
+    "dist:upload": "echo \"No update upload target configured for Agent Code for Me\"",
     "claude:download": "node scripts/download-claude-binary.mjs --version=2.1.45",
     "claude:download:all": "node scripts/download-claude-binary.mjs --version=2.1.45 --all",
     "codex:download": "node scripts/download-codex-binary.mjs --version=0.130.0",
     "codex:download:all": "node scripts/download-codex-binary.mjs --version=0.130.0 --all",
-    "release": "rm -rf release && bun i && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && bun run dist:manifest && ./scripts/upload-release-wrangler.sh",
+    "release": "rm -rf release && bun i && bun run claude:download && bun run codex:download && bun run build && bun run package:mac",
     "release:dev": "rm -rf release && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && rm -rf node_modules && bun i",
-    "sync:public": "./scripts/sync-to-public.sh",
+    "sync:public": "echo \"Upstream sync is disabled for Agent Code for Me\"",
     "icon:generate": "node scripts/generate-icon.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
@@ -140,14 +139,14 @@
     "vite": "^6.3.4"
   },
   "build": {
-    "appId": "dev.21st.agents",
-    "productName": "1Code",
+    "appId": "io.github.lupanpan1030.agentcodeforme",
+    "productName": "Agent Code for Me",
     "npmRebuild": true,
     "protocols": [
       {
-        "name": "1Code",
+        "name": "Agent Code for Me",
         "schemes": [
-          "twentyfirst-agents"
+          "agent-code-for-me"
         ]
       }
     ],
@@ -214,7 +213,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "1Code needs microphone access for voice dictation"
+        "NSMicrophoneUsageDescription": "Agent Code for Me needs microphone access for voice dictation"
       }
     },
     "dmg": {
@@ -257,10 +256,6 @@
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico"
-    },
-    "publish": {
-      "provider": "generic",
-      "url": "https://cdn.21st.dev/releases/desktop"
     }
   },
   "pnpm": {

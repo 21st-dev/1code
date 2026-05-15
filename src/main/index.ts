@@ -41,15 +41,20 @@ import { windowManager } from "./windows/window-manager"
 
 import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
 
+const APP_NAME = "Agent Code for Me"
+const APP_COPYRIGHT = "Copyright © 2026 Agent Code for Me"
+const HOSTED_API_BASE_URL = import.meta.env.MAIN_VITE_API_URL || ""
+const APP_HOMEPAGE_URL = "https://github.com/lupanpan1030/agent-code-for-me"
+
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+const PROTOCOL = IS_DEV ? "agent-code-for-me-dev" : "agent-code-for-me"
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
 if (IS_DEV) {
   const { join } = require("path")
-  const devUserData = join(app.getPath("userData"), "..", "Agents Dev")
+  const devUserData = join(app.getPath("userData"), "..", `${APP_NAME} Dev`)
   app.setPath("userData", devUserData)
   console.log("[Dev] Using separate userData path:", devUserData)
 }
@@ -84,18 +89,18 @@ if (app.isPackaged && !IS_DEV && !isLocalOnlyMode()) {
   )
 }
 
-// URL configuration (exported for use in other modules)
-// In packaged app, ALWAYS use production URL to prevent localhost leaking into releases
-// In dev mode, allow override via MAIN_VITE_API_URL env variable
+// URL configuration (exported for optional hosted/internal builds)
 export function getBaseUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
+  return HOSTED_API_BASE_URL
 }
 
 export function getAppUrl(): string | null {
-  return process.env.ELECTRON_RENDERER_URL || (isLocalOnlyMode() ? null : "https://21st.dev/agents")
+  return (
+    process.env.ELECTRON_RENDERER_URL ||
+    (isLocalOnlyMode() || !HOSTED_API_BASE_URL
+      ? null
+      : `${HOSTED_API_BASE_URL}/agents`)
+  )
 }
 
 // Auth manager singleton (use the one from auth-manager module)
@@ -199,7 +204,7 @@ function handleDeepLink(url: string): void {
   try {
     const parsed = new URL(url)
 
-    // Handle auth callback: twentyfirst-agents://auth?code=xxx
+    // Handle auth callback: agent-code-for-me://auth?code=xxx
     if (parsed.pathname === "/auth" || parsed.host === "auth") {
       const code = parsed.searchParams.get("code")
       if (code) {
@@ -208,7 +213,7 @@ function handleDeepLink(url: string): void {
       }
     }
 
-    // Handle MCP OAuth callback: twentyfirst-agents://mcp-oauth?code=xxx&state=yyy
+    // Handle MCP OAuth callback: agent-code-for-me://mcp-oauth?code=xxx&state=yyy
     if (parsed.pathname === "/mcp-oauth" || parsed.host === "mcp-oauth") {
       const code = parsed.searchParams.get("code")
       const state = parsed.searchParams.get("state")
@@ -324,7 +329,7 @@ const server = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - Authentication</title>
+  <title>Agent Code for Me - Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -408,7 +413,7 @@ const server = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - MCP Authentication</title>
+  <title>Agent Code for Me - MCP Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -578,10 +583,14 @@ if (gotTheLock) {
 
     // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
     if (process.platform === "win32") {
-      app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
+      app.setAppUserModelId(
+        IS_DEV
+          ? "io.github.lupanpan1030.agentcodeforme.dev"
+          : "io.github.lupanpan1030.agentcodeforme",
+      )
     }
 
-    console.log(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
+    console.log(`[App] Starting ${APP_NAME}${IS_DEV ? " (DEV)" : ""}...`)
 
     // Verify protocol registration after app is ready
     // This helps diagnose first-install issues where the protocol isn't recognized yet
@@ -605,10 +614,10 @@ if (gotTheLock) {
 
     // Set About panel options with Claude Code version
     app.setAboutPanelOptions({
-      applicationName: "1Code",
+      applicationName: APP_NAME,
       applicationVersion: app.getVersion(),
       version: `Claude Code ${claudeCodeVersion}`,
-      copyright: "Copyright © 2026 21st.dev",
+      copyright: APP_COPYRIGHT,
     })
 
     // Track update availability for menu
@@ -636,7 +645,7 @@ if (gotTheLock) {
           label: app.name,
           submenu: [
             {
-              label: "About 1Code",
+              label: `About ${APP_NAME}`,
               click: () => app.showAboutPanel(),
             },
             ...(!localOnly
@@ -700,7 +709,7 @@ if (gotTheLock) {
                       type: "info",
                       message: "CLI command installed",
                       detail:
-                        "You can now use '1code .' in any terminal to open 1Code in that directory.",
+                        `You can now use '1code .' in any terminal to open ${APP_NAME} in that directory.`,
                     })
                     buildMenu()
                   } else {
@@ -857,7 +866,7 @@ if (gotTheLock) {
                     label: "Learn More",
                     click: async () => {
                       const { shell } = await import("electron")
-                      await shell.openExternal("https://21st.dev")
+                      await shell.openExternal(APP_HOMEPAGE_URL)
                     },
                   },
                 ]

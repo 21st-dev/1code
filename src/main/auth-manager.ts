@@ -3,12 +3,9 @@ import { app, BrowserWindow } from "electron"
 import { AUTH_SERVER_PORT } from "./constants"
 import { isLocalOnlyMode, LocalOnlyBlockedError } from "./lib/local-only"
 
-// Get API URL - in packaged app always use production, in dev allow override
+// Optional hosted API URL for internal builds. Local-only mode is the default.
 function getApiBaseUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
+  return import.meta.env.MAIN_VITE_API_URL || ""
 }
 
 export class AuthManager {
@@ -84,7 +81,7 @@ export class AuthManager {
     const platform = process.platform
     const arch = process.arch
     const version = app.getVersion()
-    return `21st Desktop ${version} (${platform} ${arch})`
+    return `Agent Code for Me ${version} (${platform} ${arch})`
   }
 
   /**
@@ -228,7 +225,7 @@ export class AuthManager {
       console.warn("[AuthManager] Hosted auth is disabled in local-only mode")
       mainWindow?.webContents.send(
         "auth:error",
-        "Local-only mode blocks hosted 1Code services",
+        "Local-only mode blocks hosted upstream services",
       )
       return
     }
@@ -242,7 +239,7 @@ export class AuthManager {
     if (this.isDev) {
       authUrl += `&callback=${encodeURIComponent(`http://localhost:${AUTH_SERVER_PORT}/auth/callback`)}`
       // Pass dev protocol so production web can use correct deep link if callback fails
-      authUrl += `&protocol=twentyfirst-agents-dev`
+      authUrl += `&protocol=agent-code-for-me-dev`
     }
 
     shell.openExternal(authUrl)

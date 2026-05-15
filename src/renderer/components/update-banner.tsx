@@ -137,8 +137,10 @@ export function UpdateBanner() {
   }
 
   const handleOpenChangelog = () => {
-    // Open changelog URL
-    window.desktopApi?.openExternal("https://1code.dev/changelog")
+    // Open release notes
+    window.desktopApi?.openExternal(
+      "https://github.com/lupanpan1030/agent-code-for-me/releases",
+    )
     // Dismiss the banner
     if (isMocking) {
       setMockStatus("dismissed")

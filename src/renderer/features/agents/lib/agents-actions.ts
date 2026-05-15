@@ -5,6 +5,7 @@
 
 import type { SettingsTab } from "../../../lib/atoms"
 import type { DesktopView } from "../atoms"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // ============================================================================
 // TYPES
@@ -154,7 +155,7 @@ const openAutomationsAction: AgentActionDefinition = {
   isAvailable: (context) => context.isLocalOnly !== true,
   handler: async (context) => {
     if (context.isLocalOnly) {
-      return { success: false, error: "Local-only mode blocks hosted 1Code services" }
+      return { success: false, error: LOCAL_ONLY_BLOCKED_MESSAGE }
     }
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)
@@ -185,7 +186,7 @@ const openInboxAction: AgentActionDefinition = {
   isAvailable: (context) => context.isLocalOnly !== true,
   handler: async (context) => {
     if (context.isLocalOnly) {
-      return { success: false, error: "Local-only mode blocks hosted 1Code services" }
+      return { success: false, error: LOCAL_ONLY_BLOCKED_MESSAGE }
     }
     context.setSelectedChatId?.(null)
     context.setSelectedDraftId?.(null)

@@ -777,7 +777,7 @@ export const billingMethodAtom = atomWithStorage<BillingMethod>(
 )
 
 // Whether user has completed Anthropic OAuth during onboarding
-// This is used to show the onboarding screen after 21st.dev sign-in
+// This is used to show the onboarding screen after hosted sign-in
 // Reset on logout
 export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:anthropic-completed",

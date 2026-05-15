@@ -50,9 +50,10 @@ export function useJustUpdated() {
   const openChangelog = useCallback(() => {
     const api = window.desktopApi
     if (api) {
-      // Link to changelog with anchor to current version
-      const version = justUpdatedVersion ? `#v${justUpdatedVersion}` : ""
-      api.openExternal(`https://1code.dev/changelog${version}`)
+      const versionPath = justUpdatedVersion ? `/tag/v${justUpdatedVersion}` : ""
+      api.openExternal(
+        `https://github.com/lupanpan1030/agent-code-for-me/releases${versionPath}`,
+      )
     }
     dismissJustUpdated()
   }, [justUpdatedVersion, dismissJustUpdated])

@@ -1,7 +1,7 @@
 # Change: Add skill registry synchronization
 
 ## Why
-Packaged 1Code cannot rely on a developer's local `~/.codex/skills` directory. Global skills should come from a versioned, verifiable data source so a packaged app can discover, install, update, and roll back reusable skills consistently across machines.
+Packaged Agent Code for Me cannot rely on a developer's local `~/.codex/skills` directory. Global skills should come from a versioned, verifiable data source so a packaged app can discover, install, update, and roll back reusable skills consistently across machines.
 
 ## What Changes
 - Add a skill registry concept for versioned skill packs and manifests.

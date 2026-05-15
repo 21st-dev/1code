@@ -4,6 +4,7 @@ import { Label } from "../../ui/label"
 import { IconSpinner } from "../../../icons"
 import { toast } from "sonner"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -56,7 +57,7 @@ export function AgentsProfileTab() {
     const trimmed = fullName.trim()
     if (trimmed === savedNameRef.current) return
     if (isLocalOnly) {
-      toast.error("Local-only mode blocks hosted 1Code services")
+      toast.error(LOCAL_ONLY_BLOCKED_MESSAGE)
       setFullName(savedNameRef.current)
       return
     }

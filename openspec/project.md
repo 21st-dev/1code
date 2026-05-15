@@ -1,7 +1,7 @@
 # Project Context
 
 ## Purpose
-**21st Agents** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**Agent Code for Me** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude/Codex-compatible agents in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
 
 ## Tech Stack
 | Layer | Tech |
@@ -54,5 +54,5 @@
 
 ## External Dependencies
 - **Claude Code SDK**: `@anthropic-ai/claude-code` for AI interactions
-- **21st.dev CDN**: Auto-update manifests and releases at `cdn.21st.dev`
-- **OAuth Provider**: Authentication flow
+- **Update Feed**: Optional fork-owned update feed configured with `MAIN_VITE_UPDATE_FEED_URL`
+- **OAuth Provider**: Optional hosted authentication flow configured with `MAIN_VITE_API_URL`

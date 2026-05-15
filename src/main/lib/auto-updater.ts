@@ -26,8 +26,9 @@ function initAutoUpdaterConfig() {
   autoUpdater.autoRunAppAfterInstall = true // Restart app after install
 }
 
-// CDN base URL for updates
-const CDN_BASE = "https://cdn.21st.dev/releases/desktop"
+// Optional update feed for internal builds. Open-source/local-only builds do not
+// configure a feed by default.
+const UPDATE_FEED_URL = import.meta.env.MAIN_VITE_UPDATE_FEED_URL || ""
 
 // Minimum interval between update checks (prevent spam on rapid focus/blur)
 const MIN_CHECK_INTERVAL = 60 * 1000 // 1 minute
@@ -97,6 +98,11 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
     return
   }
 
+  if (!UPDATE_FEED_URL) {
+    log.info("[AutoUpdater] Disabled because MAIN_VITE_UPDATE_FEED_URL is not configured")
+    return
+  }
+
   // Initialize config
   initAutoUpdaterConfig()
 
@@ -108,11 +114,11 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
   autoUpdater.allowDowngrade = false
   log.info(`[AutoUpdater] Using update channel: ${savedChannel}`)
 
-  // Configure feed URL to point to R2 CDN
+  // Configure feed URL for builds that explicitly opt into updates.
   // Note: We use a custom request headers to bypass CDN cache
   autoUpdater.setFeedURL({
     provider: "generic",
-    url: CDN_BASE,
+    url: UPDATE_FEED_URL,
   })
 
   // Add cache-busting to update requests
@@ -185,7 +191,7 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
     sendToAllRenderers("update:error", error.message)
   })
 
-  log.info("[AutoUpdater] Initialized with feed URL:", CDN_BASE)
+  log.info("[AutoUpdater] Initialized with feed URL:", UPDATE_FEED_URL)
 }
 
 /**
@@ -201,6 +207,10 @@ function registerIpcHandlers() {
       log.info("[AutoUpdater] Skipping update check in local-only mode")
       return null
     }
+    if (!UPDATE_FEED_URL) {
+      log.info("[AutoUpdater] Skipping update check without configured feed URL")
+      return null
+    }
     if (!app.isPackaged) {
       log.info("[AutoUpdater] Skipping update check in dev mode")
       return null
@@ -211,16 +221,16 @@ function registerIpcHandlers() {
         const cacheBuster = `?t=${Date.now()}`
         autoUpdater.setFeedURL({
           provider: "generic",
-          url: `${CDN_BASE}${cacheBuster}`,
+          url: `${UPDATE_FEED_URL}${cacheBuster}`,
         })
-        log.info("[AutoUpdater] Force check with cache-busting:", `${CDN_BASE}${cacheBuster}`)
+        log.info("[AutoUpdater] Force check with cache-busting:", `${UPDATE_FEED_URL}${cacheBuster}`)
       }
       const result = await autoUpdater.checkForUpdates()
       // Reset feed URL back to normal after force check
       if (force) {
         autoUpdater.setFeedURL({
           provider: "generic",
-          url: CDN_BASE,
+          url: UPDATE_FEED_URL,
         })
       }
       return result?.updateInfo || null
@@ -234,6 +244,10 @@ function registerIpcHandlers() {
   ipcMain.handle("update:download", async () => {
     if (isLocalOnlyMode()) {
       log.info("[AutoUpdater] Skipping update download in local-only mode")
+      return false
+    }
+    if (!UPDATE_FEED_URL) {
+      log.info("[AutoUpdater] Skipping update download without configured feed URL")
       return false
     }
     try {
@@ -262,7 +276,11 @@ function registerIpcHandlers() {
   ipcMain.handle("update:get-state", () => {
     return {
       currentVersion: app.getVersion(),
-      disabledReason: isLocalOnlyMode() ? LOCAL_ONLY_BLOCKED_MESSAGE : null,
+      disabledReason: isLocalOnlyMode()
+        ? LOCAL_ONLY_BLOCKED_MESSAGE
+        : UPDATE_FEED_URL
+          ? null
+          : "Auto-updates are disabled because no update feed is configured",
     }
   })
 
@@ -270,6 +288,10 @@ function registerIpcHandlers() {
   ipcMain.handle("update:set-channel", async (_event, channel: string) => {
     if (isLocalOnlyMode()) {
       log.info("[AutoUpdater] Skipping update channel change in local-only mode")
+      return false
+    }
+    if (!UPDATE_FEED_URL) {
+      log.info("[AutoUpdater] Skipping update channel change without configured feed URL")
       return false
     }
     if (channel !== "latest" && channel !== "beta") {
@@ -309,6 +331,11 @@ export async function checkForUpdates(force = false) {
     return Promise.resolve(null)
   }
 
+  if (!UPDATE_FEED_URL) {
+    log.info("[AutoUpdater] Skipping update check without configured feed URL")
+    return Promise.resolve(null)
+  }
+
   if (!app.isPackaged) {
     log.info("[AutoUpdater] Skipping update check in dev mode")
     return Promise.resolve(null)
@@ -333,6 +360,11 @@ export async function checkForUpdates(force = false) {
 export async function downloadUpdate() {
   if (isLocalOnlyMode()) {
     log.info("[AutoUpdater] Skipping download in local-only mode")
+    return false
+  }
+
+  if (!UPDATE_FEED_URL) {
+    log.info("[AutoUpdater] Skipping download without configured feed URL")
     return false
   }
 

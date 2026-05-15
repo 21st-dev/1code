@@ -1380,7 +1380,7 @@ export function getDetectedFrameworkIcon(
     }
   }
 
-  // Return 21st.dev logo as final fallback
+  // Return a generic code icon as final fallback
   return <CodeIcon className={className} />
 }
 
@@ -1475,7 +1475,7 @@ export function PDFIcon({ className }: FrameworkIconProps) {
   )
 }
 
-// Default/Unknown - 21st.dev logo (same as canvas sidebar placeholder)
+// Default/Unknown - generic code icon
 export function CodeIcon({ className }: FrameworkIconProps) {
   return (
     <svg
@@ -1483,7 +1483,7 @@ export function CodeIcon({ className }: FrameworkIconProps) {
       className={cn("w-4 h-4 text-muted-foreground", className)}
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="21st.dev Logo"
+      aria-label="Code icon"
     >
       <path
         fillRule="evenodd"

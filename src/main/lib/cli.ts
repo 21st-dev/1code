@@ -1,9 +1,10 @@
 /**
- * CLI command support for 1code
- * Allows users to open 1code from terminal with: 1code . or 1code /path/to/project
+ * CLI command support for the legacy `1code` command.
+ * Allows users to open Agent Code for Me from terminal with:
+ * 1code . or 1code /path/to/project
  *
  * Based on PR #16 by @caffeinum (Aleksey Bykhun)
- * https://github.com/21st-dev/1code/pull/16
+ * Kept as a compatibility command while the app is rebranded.
  */
 
 import { app } from "electron"

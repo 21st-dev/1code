@@ -7,11 +7,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "../../../components/ui/dropdown-menu"
-import { ArrowUpRight } from "lucide-react"
+import { ArrowUpRight, Github } from "lucide-react"
 import { KeyboardIcon } from "../../../components/ui/icons"
-import { DiscordIcon } from "../../../icons"
 import { useSetAtom } from "jotai"
 import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "../../../lib/atoms"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
@@ -78,8 +76,15 @@ export function AgentsHelpPopover({
 
     let cancelled = false
     window.desktopApi
-      .signedFetch("https://21st.dev/api/changelog/desktop?per_page=3")
+      .getApiBaseUrl()
+      .then((apiBase) => {
+        if (!apiBase) return null
+        return window.desktopApi.signedFetch(
+          `${apiBase}/api/changelog/desktop?per_page=3`,
+        )
+      })
       .then((result) => {
+        if (!result) return
         if (cancelled) return
         const data = result.data as {
           releases?: Array<{ version?: string; content?: string }>
@@ -101,18 +106,16 @@ export function AgentsHelpPopover({
   }, [isLocalOnly])
 
   const handleCommunityClick = () => {
-    window.desktopApi.openExternal("https://discord.gg/8ektTZGnj4")
+    window.desktopApi.openExternal("https://github.com/lupanpan1030/agent-code-for-me")
   }
 
   const handleChangelogClick = () => {
-    if (isLocalOnly) return
-    window.desktopApi.openExternal("https://1code.dev/agents/changelog")
+    window.desktopApi.openExternal("https://github.com/lupanpan1030/agent-code-for-me/releases")
   }
 
   const handleReleaseClick = (version: string) => {
-    if (isLocalOnly) return
     window.desktopApi.openExternal(
-      `https://1code.dev/agents/changelog#${version}`,
+      `https://github.com/lupanpan1030/agent-code-for-me/releases/tag/v${version}`,
     )
   }
 
@@ -127,8 +130,8 @@ export function AgentsHelpPopover({
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
         <DropdownMenuItem onClick={handleCommunityClick} className="gap-2">
-          <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span className="flex-1">Discord</span>
+          <Github className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="flex-1">Repository</span>
         </DropdownMenuItem>
 
         {!isMobile && (

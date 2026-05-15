@@ -1,5 +1,5 @@
 /**
- * tRPC client for remote web backend (21st.dev)
+ * tRPC client for optional hosted web backend
  * Uses signedFetch via IPC for authentication (no CORS issues)
  */
 import { createTRPCClient, httpLink } from "@trpc/client"

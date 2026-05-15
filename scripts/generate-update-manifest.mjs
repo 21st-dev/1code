@@ -245,7 +245,7 @@ console.log("Manifest generation complete!")
 console.log()
 const prefix = channel === "beta" ? "beta" : "latest"
 console.log("Next steps:")
-console.log("1. Upload the following files to cdn.21st.dev/releases/desktop/:")
+console.log("1. Upload the following files to your configured update feed:")
 if (arm64Manifest) {
   console.log(`   - ${prefix}-mac.yml`)
   console.log(`   - Agents-${version}-arm64-mac.zip`)

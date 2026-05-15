@@ -27,6 +27,8 @@ import {
   LOCAL_ONLY_BLOCKED_MESSAGE,
 } from "../lib/local-only"
 
+const APP_NAME = "Agent Code for Me"
+
 // Flag to bypass close confirmation when app.quit() has already been confirmed
 let isQuitting = false
 
@@ -92,9 +94,9 @@ function registerIpcHandlers(): void {
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
       if (count !== null && count > 0) {
-        win.setTitle(`1Code (${count})`)
+        win.setTitle(`${APP_NAME} (${count})`)
       } else {
-        win.setTitle("1Code")
+        win.setTitle(APP_NAME)
         win.setOverlayIcon(null, "")
       }
     }
@@ -263,7 +265,7 @@ function registerIpcHandlers(): void {
     const win = getWindowFromEvent(event)
     if (win) {
       // Show just the title, or default app name if empty
-      win.setTitle(title || "1Code")
+      win.setTitle(title || APP_NAME)
     }
   })
 
@@ -352,9 +354,17 @@ function registerIpcHandlers(): void {
       const parsed = new URL(senderUrl)
       if (parsed.protocol === "file:") return true
       const hostname = parsed.hostname.toLowerCase()
-      const trusted = isLocalOnlyMode()
-        ? ["localhost", "127.0.0.1"]
-        : ["21st.dev", "localhost", "127.0.0.1"]
+      const trusted = ["localhost", "127.0.0.1"]
+      if (!isLocalOnlyMode()) {
+        const hostedBaseUrl = getBaseUrl()
+        if (hostedBaseUrl) {
+          try {
+            trusted.push(new URL(hostedBaseUrl).hostname.toLowerCase())
+          } catch {
+            console.warn("[Auth] Ignoring invalid hosted API base URL:", hostedBaseUrl)
+          }
+        }
+      }
       return trusted.some((h) => hostname === h || hostname.endsWith(`.${h}`))
     } catch {
       return false
@@ -681,7 +691,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     minWidth: 500, // Allow narrow mobile-like mode
     minHeight: 600,
     show: false,
-    title: "1Code",
+    title: APP_NAME,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#09090b" : "#ffffff",
     // hiddenInset shows native traffic lights inset in the window
     // hiddenInset hides the native title bar but keeps traffic lights visible

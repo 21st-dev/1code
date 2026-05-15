@@ -2,7 +2,7 @@
  * Voice TRPC router
  * Provides voice-to-text transcription using OpenAI Whisper API
  *
- * For authenticated users (with subscription): uses 21st.dev backend
+ * For authenticated users in hosted/internal mode: uses the hosted backend
  * For open-source users: requires OPENAI_API_KEY in environment
  */
 
@@ -193,7 +193,7 @@ export function clearOpenAIKeyCache(): void {
 }
 
 /**
- * Transcribe audio using 21st.dev backend (for authenticated users)
+ * Transcribe audio using the hosted backend (for authenticated users)
  */
 async function transcribeViaBackend(
   audioBuffer: Buffer,

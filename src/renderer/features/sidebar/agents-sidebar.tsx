@@ -46,7 +46,7 @@ import {
 } from "../../lib/hooks/use-local-only-mode"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight, Github } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { remoteTrpc } from "../../lib/remote-trpc"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
@@ -55,8 +55,6 @@ const useCombinedAuth = () => ({ userId: null, isLoaded: true })
 // import { AuthDialog } from "@/components/auth/auth-dialog"
 const AuthDialog = (_props: { open: boolean; onOpenChange: (open: boolean) => void }) => null
 // Desktop: archive is handled inline, not via hook
-// import { DiscordIcon } from "@/components/icons"
-import { DiscordIcon } from "../../icons"
 import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
 import { OpenLocallyDialog } from "../agents/components/open-locally-dialog"
 import { useAutoImport } from "../agents/hooks/use-auto-import"
@@ -143,9 +141,9 @@ import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
 import { exportChat, copyChat, type ExportFormat } from "../agents/lib/export-chat"
 
-// Feedback URL: uses env variable for hosted version, falls back to public Discord for open source
+// Feedback URL: uses env variable for hosted version, falls back to this fork's issues.
 const FEEDBACK_URL =
-  import.meta.env.VITE_FEEDBACK_URL || "https://discord.gg/8ektTZGnj4"
+  import.meta.env.VITE_FEEDBACK_URL || "https://github.com/lupanpan1030/agent-code-for-me/issues"
 
 // GitHub avatar with loading placeholder
 const GitHubAvatar = React.memo(function GitHubAvatar({
@@ -1236,7 +1234,11 @@ const AutomationsButton = memo(function AutomationsButton() {
   const { t } = useI18n()
 
   const handleClick = useCallback(() => {
-    window.desktopApi.openExternal("https://21st.dev/agents/app/automations")
+    void window.desktopApi.getApiBaseUrl().then((apiBase) => {
+      if (apiBase) {
+        window.desktopApi.openExternal(`${apiBase}/agents/app/automations`)
+      }
+    })
   }, [])
 
   if (!automationsEnabled || isLocalOnly) return null
@@ -1427,7 +1429,7 @@ const SidebarHeader = memo(function SidebarHeader({
                     </div>
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="text-sm font-medium text-foreground truncate">
-                        1Code
+                        Agent Code for Me
                       </div>
                     </div>
                     {showOfflineFeatures && (
@@ -1500,15 +1502,15 @@ const SidebarHeader = memo(function SidebarHeader({
                         <DropdownMenuItem
                           onSelect={() => {
                             window.open(
-                              "https://discord.gg/8ektTZGnj4",
+                              "https://github.com/lupanpan1030/agent-code-for-me",
                               "_blank",
                             )
                             setIsDropdownOpen(false)
                           }}
                           className="gap-2"
                         >
-                          <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">{t("sidebar.discord")}</span>
+                          <Github className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="flex-1">{t("sidebar.repository")}</span>
                         </DropdownMenuItem>
                         {!isMobileFullscreen && (
                           <DropdownMenuItem
@@ -1601,15 +1603,15 @@ const SidebarHeader = memo(function SidebarHeader({
                         <DropdownMenuItem
                           onSelect={() => {
                             window.open(
-                              "https://discord.gg/8ektTZGnj4",
+                              "https://github.com/lupanpan1030/agent-code-for-me",
                               "_blank",
                             )
                             setIsDropdownOpen(false)
                           }}
                           className="gap-2"
                         >
-                          <DiscordIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">{t("sidebar.discord")}</span>
+                          <Github className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="flex-1">{t("sidebar.repository")}</span>
                         </DropdownMenuItem>
                         {!isMobileFullscreen && (
                           <DropdownMenuItem

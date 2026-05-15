@@ -1,5 +1,5 @@
 export const LOCAL_ONLY_BLOCKED_MESSAGE =
-  "Local-only mode blocks hosted 1Code services"
+  "Local-only mode blocks hosted upstream services"
 
 const FALSE_VALUES = new Set(["0", "false", "off", "no"])
 
@@ -8,8 +8,10 @@ export function shouldEnableLocalOnly(
   viteEnv: Record<string, string | undefined> = {},
 ): boolean {
   const values = [
+    env.AGENT_CODE_FOR_ME_LOCAL_ONLY,
     env.ONECODE_LOCAL_ONLY,
     env.MAIN_VITE_LOCAL_ONLY,
+    viteEnv.AGENT_CODE_FOR_ME_LOCAL_ONLY,
     viteEnv.ONECODE_LOCAL_ONLY,
     viteEnv.MAIN_VITE_LOCAL_ONLY,
     viteEnv.VITE_LOCAL_ONLY,

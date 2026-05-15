@@ -178,7 +178,7 @@ export const claudeCodeRouter = router({
 
     const token = await getDesktopToken()
     if (!token) {
-      throw new Error("Not authenticated with 21st.dev")
+      throw new Error("Not authenticated with hosted upstream service")
     }
 
     // Server creates sandbox (has CodeSandbox SDK)

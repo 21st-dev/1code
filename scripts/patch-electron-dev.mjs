@@ -1,4 +1,4 @@
-// Patches the Electron.app bundle in node_modules to show "1Code" name and icon in macOS dock during dev mode.
+// Patches the Electron.app bundle in node_modules to show the app name and icon in macOS dock during dev mode.
 import { execSync } from "child_process"
 import { copyFileSync, existsSync } from "fs"
 import { join, dirname } from "path"
@@ -18,9 +18,9 @@ if (process.platform !== "darwin") {
 
 if (existsSync(plistPath)) {
   try {
-    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleName 1Code" "${plistPath}"`)
-    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 1Code" "${plistPath}"`)
-    console.log("[patch-electron-dev] Updated Info.plist: name -> 1Code")
+    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleName Agent Code for Me" "${plistPath}"`)
+    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Agent Code for Me" "${plistPath}"`)
+    console.log("[patch-electron-dev] Updated Info.plist: name -> Agent Code for Me")
   } catch (e) {
     console.warn("[patch-electron-dev] Failed to update Info.plist:", e.message)
   }

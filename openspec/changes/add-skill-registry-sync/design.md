@@ -1,7 +1,7 @@
 # Skill Registry Synchronization Design
 
 ## Context
-1Code currently scans skills from filesystem locations:
+Agent Code for Me currently scans skills from filesystem locations:
 - user skills: `~/.claude/skills`
 - project skills: `<project>/.claude/skills`
 - plugin skills: enabled plugin component paths
@@ -48,7 +48,7 @@ The registry manifest should be explicit and machine-verifiable:
 ```json
 {
   "schemaVersion": 1,
-  "registryId": "1code-core-skills",
+  "registryId": "agent-code-for-me-core-skills",
   "generatedAt": "2026-05-15T00:00:00Z",
   "skills": [
     {
@@ -126,6 +126,6 @@ Default behavior should be check-only, not auto-apply.
 The temporary local Codex-to-Claude sync script can remain a developer utility, but it is not the packaged product model. If retained, it should be documented as local bootstrap only.
 
 ## Open Questions
-- Should the first remote registry live on the existing 21st.dev CDN or a separate GitHub release asset?
+- Should the first remote registry live on a fork-owned update feed or a separate GitHub release asset?
 - Should registry-managed skills be editable in the existing Skill editor, or should edits first fork them into user-owned skills?
 - Should third-party registries be allowed in the first release, or only the official bundled/remote registry?
