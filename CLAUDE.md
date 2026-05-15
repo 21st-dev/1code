@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is this?
 
-**21st Agents** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**Agent Code for Me** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude/Codex-compatible agents in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
 
 ## Commands
 
@@ -159,17 +159,16 @@ When testing auth flows or behavior for new users, you need to simulate a fresh 
 
 ```bash
 # 1. Clear all app data (auth, database, settings)
-rm -rf ~/Library/Application\ Support/Agents\ Dev/
+rm -rf ~/Library/Application\ Support/Agent\ Code\ for\ Me\ Dev/
 
 # 2. Reset macOS protocol handler registration (if testing deep links)
 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -kill -r -domain local -domain system -domain user
 
-# 3. Clear app preferences
-defaults delete dev.21st.agents.dev  # Dev mode
-defaults delete dev.21st.agents      # Production
+# 3. Clear app preferences if present
+defaults delete io.github.lupanpan1030.agentcodeforme.dev 2>/dev/null || true
+defaults delete io.github.lupanpan1030.agentcodeforme 2>/dev/null || true
 
 # 4. Run in dev mode with clean state
-cd apps/desktop
 bun run dev
 ```
 
@@ -178,59 +177,59 @@ bun run dev
 - **Folder dialog not appearing**: Window focus timing issues on first launch. Fixed by ensuring window focus before showing `dialog.showOpenDialog()`.
 
 **Dev vs Production App:**
-- Dev mode uses `twentyfirst-agents-dev://` protocol
-- Dev mode uses separate userData path (`~/Library/Application Support/Agents Dev/`)
+- Dev mode uses `agent-code-for-me-dev://` protocol
+- Production uses `agent-code-for-me://` protocol
+- Dev mode uses separate userData path (`~/Library/Application Support/Agent Code for Me Dev/`)
 - This prevents conflicts between dev and production installs
 
 ## Releasing a New Version
 
 ### Prerequisites for Notarization
 
-- Keychain profile: `21st-notarize`
-- Create with: `xcrun notarytool store-credentials "21st-notarize" --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID`
+- Apple signing identity configured through `APPLE_IDENTITY`
+- Optional keychain profile for manual notarization, for example `agent-code-for-me-notarize`
+- Create with: `xcrun notarytool store-credentials "agent-code-for-me-notarize" --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID`
 
 ### Release Commands
 
 ```bash
-# Full release (build, sign, submit notarization, upload to CDN)
+# Full local release build
 bun run release
 
 # Or step by step:
 bun run build              # Compile TypeScript
-bun run package:mac        # Build & sign macOS app
+bun run package:mac        # Build macOS app artifacts
 bun run dist:manifest      # Generate latest-mac.yml manifests
-./scripts/upload-release-wrangler.sh  # Submit notarization & upload to R2 CDN
 ```
 
 ### Bump Version Before Release
 
 ```bash
-npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
+npm version patch --no-git-tag-version
 ```
 
 ### After Release Script Completes
 
-1. Wait for notarization (2-5 min): `xcrun notarytool history --keychain-profile "21st-notarize"`
+1. If signing/notarizing, submit and check notarization with your configured keychain profile.
 2. Staple DMGs: `cd release && xcrun stapler staple *.dmg`
-3. Re-upload stapled DMGs to R2 and GitHub (see RELEASE.md for commands)
-4. Update changelog: `gh release edit v0.0.X --notes "..."`
-5. **Upload manifests (triggers auto-updates!)** — see RELEASE.md
-6. Sync to public: `./scripts/sync-to-public.sh`
+3. Upload stapled DMGs/ZIPs and generated manifests to your own update feed if one is configured.
+4. Update GitHub release notes if publishing a GitHub release.
 
-### Files Uploaded to CDN
+### Update Artifacts
 
 | File | Purpose |
 |------|---------|
 | `latest-mac.yml` | Manifest for arm64 auto-updates |
 | `latest-mac-x64.yml` | Manifest for Intel auto-updates |
-| `1Code-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
-| `1Code-{version}-mac.zip` | Auto-update payload (Intel) |
-| `1Code-{version}-arm64.dmg` | Manual download (arm64) |
-| `1Code-{version}.dmg` | Manual download (Intel) |
+| `*{version}-arm64-mac.zip` | Auto-update payload (arm64) |
+| `*{version}-mac.zip` | Auto-update payload (Intel) |
+| `*{version}-arm64.dmg` | Manual download (arm64) |
+| `*{version}.dmg` | Manual download (Intel) |
 
 ### Auto-Update Flow
 
-1. App checks `https://cdn.21st.dev/releases/desktop/latest-mac.yml` on startup and when window regains focus (with 1 min cooldown)
+1. Auto-updates are disabled unless `MAIN_VITE_UPDATE_FEED_URL` is configured and Local-only mode is disabled.
+2. When enabled, the app checks the configured update feed on startup and when window regains focus (with 1 min cooldown).
 2. If version in manifest > current version, shows "Update Available" banner
 3. User clicks Download → downloads ZIP in background
 4. User clicks "Restart Now" → installs update and restarts

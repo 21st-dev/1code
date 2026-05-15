@@ -564,7 +564,7 @@ if (gotTheLock) {
   app.whenReady().then(async () => {
     // Set dev mode app name (userData path was already set before requestSingleInstanceLock)
     // if (IS_DEV) {
-    //   app.name = "Agents Dev"
+    //   app.name = "Agent Code for Me Dev"
     // }
 
 

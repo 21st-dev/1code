@@ -9,16 +9,16 @@
  * Usage:
  *   node scripts/generate-update-manifest.mjs
  *
- * The script expects ZIP files to exist in the release/ directory:
- *   - Agents-{version}-arm64-mac.zip
- *   - Agents-{version}-mac.zip
+ * The script expects electron-builder ZIP files to exist in the release/ directory:
+ *   - Agent Code for Me-{version}-arm64-mac.zip
+ *   - Agent Code for Me-{version}-mac.zip
  *
  * Run this after `npm run dist` to generate the manifest files.
  */
 
 import { createHash } from "crypto"
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "fs"
-import { join, dirname } from "path"
+import { join, dirname, basename } from "path"
 import { fileURLToPath } from "url"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -77,8 +77,8 @@ function findReleaseFile(pattern, ext = ".zip") {
  */
 function generateManifest(arch) {
   // electron-builder names files differently:
-  // arm64: Agents-{version}-arm64-mac.zip
-  // x64: Agents-{version}-mac.zip
+  // arm64: Agent Code for Me-{version}-arm64-mac.zip
+  // x64: Agent Code for Me-{version}-mac.zip
   const pattern = arch === "arm64" ? `${version}-arm64-mac` : `${version}-mac`
   const zipPath = findReleaseFile(pattern, ".zip")
 
@@ -88,7 +88,7 @@ function generateManifest(arch) {
     return null
   }
 
-  const zipName = zipPath.split("/").pop()
+  const zipName = basename(zipPath)
   const sha512 = calculateSha512(zipPath)
   const size = getFileSize(zipPath)
 
@@ -126,7 +126,12 @@ function generateManifest(arch) {
   console.log(`  SHA512: ${sha512.substring(0, 20)}...`)
   console.log()
 
-  return manifestPath
+  return {
+    manifestPath,
+    artifactName: zipName,
+    manualDownloadPattern:
+      arch === "arm64" ? `*${version}-arm64.dmg` : `*${version}.dmg`,
+  }
 }
 
 /**
@@ -186,7 +191,7 @@ function generateLinuxManifest() {
     return null
   }
 
-  const appImageName = appImagePath.split("/").pop()
+  const appImageName = basename(appImagePath)
   const sha512 = calculateSha512(appImagePath)
   const size = getFileSize(appImagePath)
 
@@ -218,7 +223,10 @@ function generateLinuxManifest() {
   console.log(`  SHA512: ${sha512.substring(0, 20)}...`)
   console.log()
 
-  return manifestPath
+  return {
+    manifestPath,
+    artifactName: appImageName,
+  }
 }
 
 // Main execution
@@ -248,13 +256,17 @@ console.log("Next steps:")
 console.log("1. Upload the following files to your configured update feed:")
 if (arm64Manifest) {
   console.log(`   - ${prefix}-mac.yml`)
-  console.log(`   - Agents-${version}-arm64-mac.zip`)
-  console.log(`   - Agents-${version}-arm64.dmg (for manual download)`)
+  console.log(`   - ${arm64Manifest.artifactName}`)
+  console.log(`   - ${arm64Manifest.manualDownloadPattern} (manual download, if built)`)
 }
 if (x64Manifest) {
   console.log(`   - ${prefix}-mac-x64.yml`)
-  console.log(`   - Agents-${version}-mac.zip`)
-  console.log(`   - Agents-${version}.dmg (for manual download)`)
+  console.log(`   - ${x64Manifest.artifactName}`)
+  console.log(`   - ${x64Manifest.manualDownloadPattern} (manual download, if built)`)
 }
-console.log("2. Create a release entry in the admin dashboard")
+if (linuxManifest) {
+  console.log(`   - ${prefix}-linux.yml`)
+  console.log(`   - ${linuxManifest.artifactName}`)
+}
+console.log("2. Publish release notes wherever you host Agent Code for Me releases")
 console.log("=".repeat(50))

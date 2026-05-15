@@ -23,7 +23,7 @@
 2. Enter custom provider model, base URL, token, and auth env mode.
 3. Confirm `claude_provider_config` contains one row with non-secret metadata and an encrypted token length:
    ```bash
-   sqlite3 "$HOME/Library/Application Support/Agents Dev/data/agents.db" \
+   sqlite3 "$HOME/Library/Application Support/Agent Code for Me Dev/data/agents.db" \
      'select id, model, base_url, auth_mode, length(encrypted_token) from claude_provider_config;'
    ```
 4. Confirm renderer localStorage no longer stores the raw provider token after migration.
