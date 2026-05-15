@@ -42,7 +42,7 @@
         "@xterm/addon-serialize": "^0.14.0",
         "@xterm/addon-web-links": "^0.12.0",
         "@xterm/addon-webgl": "^0.19.0",
-        "@zed-industries/codex-acp": "0.9.3",
+        "@zed-industries/codex-acp": "0.14.0",
         "ai": "^6.0.14",
         "async-mutex": "^0.5.0",
         "better-sqlite3": "^12.6.2",
@@ -688,19 +688,19 @@
 
     "@xterm/xterm": ["@xterm/xterm@5.5.0", "", {}, "sha512-hqJHYaQb5OptNunnyAnkHyM8aCjZ1MEIDTQu1iIbbTD/xops91NB5yq1ZK/dC2JDbVWtF23zUtl9JE2NqwT87A=="],
 
-    "@zed-industries/codex-acp": ["@zed-industries/codex-acp@0.9.3", "", { "optionalDependencies": { "@zed-industries/codex-acp-darwin-arm64": "0.9.3", "@zed-industries/codex-acp-darwin-x64": "0.9.3", "@zed-industries/codex-acp-linux-arm64": "0.9.3", "@zed-industries/codex-acp-linux-x64": "0.9.3", "@zed-industries/codex-acp-win32-arm64": "0.9.3", "@zed-industries/codex-acp-win32-x64": "0.9.3" }, "bin": { "codex-acp": "bin/codex-acp.js" } }, "sha512-RqY1Z1Usqal5kC2mnVyZnuyz7VI/GOwPNGav51Lj9Epkrj34m/hieQXheodnSUDlfcC1REp5DELC5DzIwWvtKg=="],
+    "@zed-industries/codex-acp": ["@zed-industries/codex-acp@0.14.0", "", { "optionalDependencies": { "@zed-industries/codex-acp-darwin-arm64": "0.14.0", "@zed-industries/codex-acp-darwin-x64": "0.14.0", "@zed-industries/codex-acp-linux-arm64": "0.14.0", "@zed-industries/codex-acp-linux-x64": "0.14.0", "@zed-industries/codex-acp-win32-arm64": "0.14.0", "@zed-industries/codex-acp-win32-x64": "0.14.0" }, "bin": { "codex-acp": "bin/codex-acp.js" } }, "sha512-IT9Zh9YDsRfXnc+RN9T00OCBFZrvQxzsWARWL9C1f0do4xB67eCZGildkJCHjoXmGAyYn1V7rIdRR6/+PzDdmw=="],
 
-    "@zed-industries/codex-acp-darwin-arm64": ["@zed-industries/codex-acp-darwin-arm64@0.9.3", "", { "os": "darwin", "cpu": "arm64", "bin": { "codex-acp-darwin-arm64": "bin/codex-acp" } }, "sha512-E+rCADM8n5EW7+YTFCsUhEOQy/8cfHM5YaEyGDnYcuDf263xyb12/PEodhVuwZkjIPkHKgLhs6LpGEcYLDkmWg=="],
+    "@zed-industries/codex-acp-darwin-arm64": ["@zed-industries/codex-acp-darwin-arm64@0.14.0", "", { "os": "darwin", "cpu": "arm64", "bin": { "codex-acp-darwin-arm64": "bin/codex-acp" } }, "sha512-FWjHKlNJTZmXWM/2/GAQAg0WJEjPlfxEQJgvfxuzK1xZh81CDg9U6uSgZ1ggBkkN2bOoCnOupvGAPOmBoL5m2Q=="],
 
-    "@zed-industries/codex-acp-darwin-x64": ["@zed-industries/codex-acp-darwin-x64@0.9.3", "", { "os": "darwin", "cpu": "x64", "bin": { "codex-acp-darwin-x64": "bin/codex-acp" } }, "sha512-LjbqfErO3z42WhwUvJ9kxXZeNMrD4vpwYz+yA9Bke7eSVJUjipfSbT8PxrYhWtZ+RhP1q0L2mudIfoblyTFruA=="],
+    "@zed-industries/codex-acp-darwin-x64": ["@zed-industries/codex-acp-darwin-x64@0.14.0", "", { "os": "darwin", "cpu": "x64", "bin": { "codex-acp-darwin-x64": "bin/codex-acp" } }, "sha512-KgC92J5wxOJM2N0VMNX7UQSGHVKa7xQCFsniWcxClsLWleJGlUdGlde5Aefd/yoU0J86ii6HCK8RfalUC76Inw=="],
 
-    "@zed-industries/codex-acp-linux-arm64": ["@zed-industries/codex-acp-linux-arm64@0.9.3", "", { "os": "linux", "cpu": "arm64", "bin": { "codex-acp-linux-arm64": "bin/codex-acp" } }, "sha512-7lwOYbg1wo0vaehV++QUkJ9CoaV+PJOUB3MD8iu45ajjRZPxHd6U7MR4J4Fp1IHIs3mzENxVLu/tSVxn2TPJ+g=="],
+    "@zed-industries/codex-acp-linux-arm64": ["@zed-industries/codex-acp-linux-arm64@0.14.0", "", { "os": "linux", "cpu": "arm64", "bin": { "codex-acp-linux-arm64": "bin/codex-acp" } }, "sha512-KGfQq0/tdY31XBsdLe5nsKiV97pcsCruW28UDw7sgHUjPq8NPh9IiDdVj+xr1L4opihnswGelcoVvya+Vng8jQ=="],
 
-    "@zed-industries/codex-acp-linux-x64": ["@zed-industries/codex-acp-linux-x64@0.9.3", "", { "os": "linux", "cpu": "x64", "bin": { "codex-acp-linux-x64": "bin/codex-acp" } }, "sha512-buqH4H98VQrcmt5f9lhfOpGc7TTA4tlbopSYrEgRxZjSaXDPqKxdOLl8DzNVCrqlNJM/KqieeBvf5g31PosyyA=="],
+    "@zed-industries/codex-acp-linux-x64": ["@zed-industries/codex-acp-linux-x64@0.14.0", "", { "os": "linux", "cpu": "x64", "bin": { "codex-acp-linux-x64": "bin/codex-acp" } }, "sha512-y1wrDOTJ/OYjYNRVmrf9Jti2571DjSp1xe5lSiZ9pBohA4oUQk9YIhlnv7NzeI0PYWyrjLd6QpQ09wTfxZFC8w=="],
 
-    "@zed-industries/codex-acp-win32-arm64": ["@zed-industries/codex-acp-win32-arm64@0.9.3", "", { "os": "win32", "cpu": "arm64", "bin": { "codex-acp-win32-arm64": "bin/codex-acp.exe" } }, "sha512-iv9kjq3Z1kVvNxB5OvKsd6nC+jaiiQj7oXP3PJ84tmCOE+5wIeNLkV6+r26A9KD2we0fi5bOjc5DyfpFMBvCRQ=="],
+    "@zed-industries/codex-acp-win32-arm64": ["@zed-industries/codex-acp-win32-arm64@0.14.0", "", { "os": "win32", "cpu": "arm64", "bin": { "codex-acp-win32-arm64": "bin/codex-acp.exe" } }, "sha512-mUNZYfcpkM9YSs0tFzH7j2NHlxpjScFz2lpyJKiMl8wcTHLU8HYzeJZ7xodHzsIJrb5YMKxZ44zkBM3FBGAVaw=="],
 
-    "@zed-industries/codex-acp-win32-x64": ["@zed-industries/codex-acp-win32-x64@0.9.3", "", { "os": "win32", "cpu": "x64", "bin": { "codex-acp-win32-x64": "bin/codex-acp.exe" } }, "sha512-ptMNDyLJU0rICptyKThAS2VySgoUPU3UWC08yVenDi+OZ04oVrwwyxTvrhp4/u25yqiVjf210P2z5n7Iqw5tTg=="],
+    "@zed-industries/codex-acp-win32-x64": ["@zed-industries/codex-acp-win32-x64@0.14.0", "", { "os": "win32", "cpu": "x64", "bin": { "codex-acp-win32-x64": "bin/codex-acp.exe" } }, "sha512-KYckY87//om8Vsnb3fMUOkex76z2MF+e3H/n91tXnBep9ecnDT0rtEuoTvr4gP7evAf210YoSSGi0BB4ljse4w=="],
 
     "abbrev": ["abbrev@3.0.1", "", {}, "sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg=="],
 
