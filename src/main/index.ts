@@ -247,9 +247,9 @@ const FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 64 64" fill="none"
 const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
 const AUTH_PAGE_LOGO_SVG = `<svg class="logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><g stroke="#0033FF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 24.5C8 19.8 11.8 16 16.5 16H31C35.2 16 37.7 18.1 40 21.7L42.5 25.5"/><path d="M31.5 43H16.5C11.8 43 8 39.2 8 34.5V24.5"/><path d="M41 24.5C44.1 21.1 47.8 19.5 52 19.5C56.4 19.5 60 23.1 60 27.5V39.5C60 43.9 56.4 47.5 52 47.5H47.5L39.5 54V47.5H37.5C33 47.5 29.7 45.2 28.5 41.4"/><path d="M16.5 27.5L22 33L16.5 38.5"/><path d="M23.5 38.5H29.5"/></g><path d="M39.5 6L41.2 10.8L46 12.5L41.2 14.2L39.5 19L37.8 14.2L33 12.5L37.8 10.8L39.5 6Z" fill="#0033FF"/></svg>`
 
-// Start local HTTP server for auth callbacks
-// This catches http://localhost:{AUTH_SERVER_PORT}/auth/callback?code=xxx and /callback (for MCP OAuth)
-const server = createServer((req, res) => {
+// Local HTTP server for auth callbacks. Start it only after this process owns the
+// Electron single-instance lock so second launches do not crash on EADDRINUSE.
+const authCallbackServer = createServer((req, res) => {
     const url = new URL(req.url || "", `http://localhost:${AUTH_SERVER_PORT}`)
 
     // Serve favicon
@@ -423,11 +423,51 @@ const server = createServer((req, res) => {
       res.writeHead(404, { "Content-Type": "text/plain" })
       res.end("Not found")
     }
-  })
-
-server.listen(AUTH_SERVER_PORT, () => {
-  console.log(`[Auth Server] Listening on http://localhost:${AUTH_SERVER_PORT}`)
 })
+
+let authCallbackServerStartAttempted = false
+
+authCallbackServer.on("error", (error: NodeJS.ErrnoException) => {
+  authCallbackServerStartAttempted = false
+
+  if (error.code === "EADDRINUSE") {
+    console.warn(
+      `[Auth Server] Port ${AUTH_SERVER_PORT} is already in use; continuing without the local callback server.`,
+    )
+    console.warn(
+      "[Auth Server] Close the other Agent Code for Me instance or free the port if auth callbacks do not complete.",
+    )
+    return
+  }
+
+  console.error("[Auth Server] Failed to start local callback server:", error)
+})
+
+function startAuthCallbackServer(): void {
+  if (authCallbackServerStartAttempted || authCallbackServer.listening) return
+
+  authCallbackServerStartAttempted = true
+  authCallbackServer.listen(AUTH_SERVER_PORT, () => {
+    console.log(`[Auth Server] Listening on http://localhost:${AUTH_SERVER_PORT}`)
+  })
+}
+
+function stopAuthCallbackServer(): Promise<void> {
+  authCallbackServerStartAttempted = false
+
+  if (!authCallbackServer.listening) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    authCallbackServer.close((error) => {
+      if (error) {
+        console.warn("[Auth Server] Failed to close local callback server:", error)
+      }
+      resolve()
+    })
+  })
+}
 
 // Clean up stale lock files from crashed instances
 // Returns true if locks were cleaned, false otherwise
@@ -828,6 +868,7 @@ if (gotTheLock) {
     // Initialize auth manager (uses singleton from auth-manager module)
     authManager = initAuthManager(!!process.env.ELECTRON_RENDERER_URL)
     console.log("[App] Auth manager initialized")
+    startAuthCallbackServer()
 
     console.log("[Analytics] Hosted telemetry removed from local-first build")
 
@@ -916,6 +957,7 @@ if (gotTheLock) {
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
     cancelAllPendingOAuth()
+    await stopAuthCallbackServer()
     await cleanupGitWatchers()
     await closeDatabase()
   })
