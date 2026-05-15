@@ -14,7 +14,7 @@ import {
 import { appStore } from "../../lib/jotai-store"
 import { trpc } from "../../lib/trpc"
 import { useLocalOnlyMode } from "../../lib/hooks/use-local-only-mode"
-import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../shared/local-only"
+import { useI18n } from "../../lib/i18n"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -67,12 +67,18 @@ export function ClaudeLoginModal({
   const urlOpenedRef = useRef(false)
   const didAutoStartForOpenRef = useRef(false)
   const isLocalOnly = useLocalOnlyMode()
+  const { t } = useI18n()
 
   // tRPC mutations
   const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
   const submitCodeMutation = trpc.claudeCode.submitCode.useMutation()
   const openOAuthUrlMutation = trpc.claudeCode.openOAuthUrl.useMutation()
+  const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
+  const systemTokenQuery = trpc.claudeCode.getSystemToken.useQuery(undefined, {
+    enabled: open,
+  })
   const trpcUtils = trpc.useUtils()
+  const hasLocalClaudeCredential = Boolean(systemTokenQuery.data?.hasCredentials)
 
   // Poll for OAuth URL
   const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(
@@ -184,7 +190,7 @@ export function ClaudeLoginModal({
     if (isLocalOnly) {
       setFlowState({
         step: "error",
-        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+        message: t("onboarding.claude.localOnlyNeedsCredentials"),
       })
       return
     }
@@ -231,7 +237,7 @@ export function ClaudeLoginModal({
         })
       }
     }
-  }, [flowState, isLocalOnly, openOAuthUrlMutation, startAuthMutation])
+  }, [flowState, isLocalOnly, openOAuthUrlMutation, startAuthMutation, t])
 
   useEffect(() => {
     if (
@@ -252,7 +258,7 @@ export function ClaudeLoginModal({
     if (isLocalOnly) {
       setFlowState({
         step: "error",
-        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+        message: t("onboarding.claude.localOnlyNeedsCredentials"),
       })
       return
     }
@@ -320,6 +326,22 @@ export function ClaudeLoginModal({
     setOpen(false)
   }
 
+  const handleImportLocalCredentials = async () => {
+    setFlowState({ step: "submitting" })
+    try {
+      await importSystemTokenMutation.mutateAsync()
+      handleAuthSuccess()
+    } catch (err) {
+      setFlowState({
+        step: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : t("onboarding.claude.failedToImportLocalCredentials"),
+      })
+    }
+  }
+
   const isLoadingAuth =
     flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
@@ -364,8 +386,32 @@ export function ClaudeLoginModal({
 
           {/* Content */}
           <div className="space-y-6">
+            {isLocalOnly && (
+              <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  {hasLocalClaudeCredential
+                    ? t("onboarding.claude.localCredentialsReady")
+                    : t("onboarding.claude.localOnlyNeedsCredentials")}
+                </p>
+              </div>
+            )}
+
+            {isLocalOnly && hasLocalClaudeCredential && (
+              <Button
+                onClick={() => void handleImportLocalCredentials()}
+                className="w-full"
+                disabled={importSystemTokenMutation.isPending || isSubmitting}
+              >
+                {importSystemTokenMutation.isPending || isSubmitting ? (
+                  <IconSpinner className="h-4 w-4" />
+                ) : (
+                  t("onboarding.claude.importLocalCredentials")
+                )}
+              </Button>
+            )}
+
             {/* Connect Button - shows loader only if user clicked AND loading */}
-            {!urlOpened && flowState.step !== "has_url" && flowState.step !== "error" && (
+            {!isLocalOnly && !urlOpened && flowState.step !== "has_url" && flowState.step !== "error" && (
               <Button
                 onClick={handleConnectClick}
                 className="w-full"
@@ -425,10 +471,16 @@ export function ClaudeLoginModal({
                 </div>
                 <Button
                   variant="secondary"
-                  onClick={handleConnectClick}
+                  onClick={
+                    isLocalOnly && hasLocalClaudeCredential
+                      ? () => void handleImportLocalCredentials()
+                      : handleConnectClick
+                  }
                   className="w-full"
                 >
-                  Try Again
+                  {isLocalOnly && hasLocalClaudeCredential
+                    ? t("onboarding.claude.importLocalCredentials")
+                    : "Try Again"}
                 </Button>
               </div>
             )}

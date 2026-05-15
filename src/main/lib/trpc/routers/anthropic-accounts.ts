@@ -2,6 +2,10 @@ import { eq, sql } from "drizzle-orm"
 import { safeStorage } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
+import {
+  decryptClaudeCodeCredential,
+  getClaudeCodeCredentialMetadata,
+} from "../../claude-credentials"
 import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../../db"
 import { createId } from "../../db/utils"
 import { publicProcedure, router } from "../index"
@@ -16,17 +20,6 @@ function encryptToken(token: string): string {
     return Buffer.from(token).toString("base64")
   }
   return safeStorage.encryptString(token).toString("base64")
-}
-
-/**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
 }
 
 /**
@@ -45,6 +38,7 @@ export const anthropicAccountsRouter = router({
           id: anthropicAccounts.id,
           email: anthropicAccounts.email,
           displayName: anthropicAccounts.displayName,
+          oauthToken: anthropicAccounts.oauthToken,
           connectedAt: anthropicAccounts.connectedAt,
           lastUsedAt: anthropicAccounts.lastUsedAt,
         })
@@ -54,11 +48,25 @@ export const anthropicAccountsRouter = router({
 
       // If we have accounts in new table, return them
       if (accounts.length > 0) {
-        return accounts.map((acc) => ({
-          ...acc,
-          connectedAt: acc.connectedAt?.toISOString() ?? null,
-          lastUsedAt: acc.lastUsedAt?.toISOString() ?? null,
-        }))
+        return accounts.map((acc) => {
+          const stored = decryptClaudeCodeCredential(acc.oauthToken)
+
+          return {
+            id: acc.id,
+            email: acc.email,
+            displayName: acc.displayName,
+            connectedAt: acc.connectedAt?.toISOString() ?? null,
+            lastUsedAt: acc.lastUsedAt?.toISOString() ?? null,
+            credential: {
+              source: stored?.envelope.source ?? null,
+              storageFormat: stored?.storageFormat ?? null,
+              refreshable: Boolean(stored?.envelope.refreshToken),
+              expiresAt: stored?.envelope.expiresAt
+                ? new Date(stored.envelope.expiresAt).toISOString()
+                : null,
+            },
+          }
+        })
       }
     } catch {
       // Table doesn't exist yet, fall through to legacy
@@ -73,12 +81,21 @@ export const anthropicAccountsRouter = router({
         .get()
 
       if (legacyCred?.oauthToken) {
+        const stored = decryptClaudeCodeCredential(legacyCred.oauthToken)
         return [{
           id: "legacy-default",
           email: null,
           displayName: "Anthropic Account",
           connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
           lastUsedAt: null,
+          credential: {
+            source: stored?.envelope.source ?? null,
+            storageFormat: stored?.storageFormat ?? null,
+            refreshable: Boolean(stored?.envelope.refreshToken),
+            expiresAt: stored?.envelope.expiresAt
+              ? new Date(stored.envelope.expiresAt).toISOString()
+              : null,
+          },
         }]
       }
     } catch {
@@ -108,15 +125,27 @@ export const anthropicAccountsRouter = router({
             email: anthropicAccounts.email,
             displayName: anthropicAccounts.displayName,
             connectedAt: anthropicAccounts.connectedAt,
+            oauthToken: anthropicAccounts.oauthToken,
           })
           .from(anthropicAccounts)
           .where(eq(anthropicAccounts.id, settings.activeAccountId))
           .get()
 
         if (account) {
+          const stored = decryptClaudeCodeCredential(account.oauthToken)
           return {
-            ...account,
+            id: account.id,
+            email: account.email,
+            displayName: account.displayName,
             connectedAt: account.connectedAt?.toISOString() ?? null,
+            credential: {
+              source: stored?.envelope.source ?? null,
+              storageFormat: stored?.storageFormat ?? null,
+              refreshable: Boolean(stored?.envelope.refreshToken),
+              expiresAt: stored?.envelope.expiresAt
+                ? new Date(stored.envelope.expiresAt).toISOString()
+                : null,
+            },
           }
         }
       }
@@ -133,11 +162,20 @@ export const anthropicAccountsRouter = router({
         .get()
 
       if (legacyCred?.oauthToken) {
+        const stored = decryptClaudeCodeCredential(legacyCred.oauthToken)
         return {
           id: "legacy-default",
           email: null,
           displayName: "Anthropic Account",
           connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
+          credential: {
+            source: stored?.envelope.source ?? null,
+            storageFormat: stored?.storageFormat ?? null,
+            refreshable: Boolean(stored?.envelope.refreshToken),
+            expiresAt: stored?.envelope.expiresAt
+              ? new Date(stored.envelope.expiresAt).toISOString()
+              : null,
+          },
         }
       }
     } catch {
@@ -151,33 +189,10 @@ export const anthropicAccountsRouter = router({
    * Get decrypted OAuth token for active account
    */
   getActiveToken: publicProcedure.query(() => {
-    const db = getDatabase()
-    const settings = db
-      .select()
-      .from(anthropicSettings)
-      .where(eq(anthropicSettings.id, "singleton"))
-      .get()
-
-    if (!settings?.activeAccountId) {
-      return { token: null, error: "No active account" }
-    }
-
-    const account = db
-      .select()
-      .from(anthropicAccounts)
-      .where(eq(anthropicAccounts.id, settings.activeAccountId))
-      .get()
-
-    if (!account) {
-      return { token: null, error: "Active account not found" }
-    }
-
-    try {
-      const token = decryptToken(account.oauthToken)
-      return { token, error: null }
-    } catch (error) {
-      console.error("[AnthropicAccounts] Decrypt error:", error)
-      return { token: null, error: "Failed to decrypt token" }
+    return {
+      token: null,
+      error: "Raw Claude Code tokens are not exposed to the renderer",
+      metadata: getClaudeCodeCredentialMetadata(),
     }
   }),
 

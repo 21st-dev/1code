@@ -66,7 +66,18 @@ export const en = {
   "onboarding.claude.existingCredentials":
     "Existing Claude Code credentials found",
   "onboarding.claude.authWithAnthropic": "Auth with Anthropic",
-  "onboarding.claude.useExistingToken": "Use existing token",
+  "onboarding.claude.useExistingToken": "Import local credentials",
+  "onboarding.claude.importLocalCredentials": "Import local credentials",
+  "onboarding.claude.localCredentialsReady":
+    "Local Claude Code credentials are available on this machine.",
+  "onboarding.claude.localOnlyNeedsCredentials":
+    "Local-only mode cannot use hosted Claude Code auth. Run Claude Code login on this machine, then import local credentials.",
+  "onboarding.claude.refreshableCredentials":
+    "Refreshable local credentials are available on this machine.",
+  "onboarding.claude.nonRefreshableCredentials":
+    "Local credentials are available, but no refresh token was found.",
+  "onboarding.claude.failedToImportLocalCredentials":
+    "Failed to import local Claude Code credentials",
   "onboarding.claude.pasteCode": "Paste your authentication code here...",
   "onboarding.claude.openedAuthTab":
     "A new tab has opened for authentication.",
@@ -135,7 +146,9 @@ export const en = {
   "settings.models.noModelsFound": "No models found",
   "settings.models.anthropicAccounts.title": "Anthropic Accounts",
   "settings.models.anthropicAccounts.description":
-    "Manage your Claude API accounts",
+    "Manage local Claude Code credentials",
+  "settings.models.claudeCode.refreshable": "Refreshable local credential",
+  "settings.models.claudeCode.nonRefreshable": "Non-refreshable legacy token",
   "settings.models.accountFallback": "Anthropic Account",
   "settings.models.accountConnected": "Connected {date}",
   "settings.models.renamePrompt": "Enter new name for this account:",
@@ -187,6 +200,10 @@ export const en = {
   "toast.models.accountRemoved": "Account removed",
   "toast.models.modelSettingsSaved": "Model settings saved",
   "toast.models.modelSettingsReset": "Model settings reset",
+  "toast.models.claudeCodeCredentialsImported":
+    "Claude Code credentials imported",
+  "toast.models.failedToImportClaudeCodeCredentials":
+    "Failed to import Claude Code credentials",
   "toast.models.codexDisconnected": "Codex disconnected",
   "toast.models.codexApiKeySaved": "Codex API key saved",
   "toast.models.codexApiKeyRemoved": "Codex API key removed",
@@ -1007,7 +1024,18 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.subtitle": "连接你的 Claude Code 订阅后开始使用",
   "onboarding.claude.existingCredentials": "发现已有 Claude Code 凭证",
   "onboarding.claude.authWithAnthropic": "使用 Anthropic 授权",
-  "onboarding.claude.useExistingToken": "使用现有 token",
+  "onboarding.claude.useExistingToken": "导入本地凭证",
+  "onboarding.claude.importLocalCredentials": "导入本地凭证",
+  "onboarding.claude.localCredentialsReady":
+    "这台设备上已发现本地 Claude Code 凭证。",
+  "onboarding.claude.localOnlyNeedsCredentials":
+    "Local-only 模式不能使用 hosted Claude Code auth。请先在这台设备上完成 Claude Code login，然后导入本地凭证。",
+  "onboarding.claude.refreshableCredentials":
+    "这台设备上发现可刷新的本地凭证。",
+  "onboarding.claude.nonRefreshableCredentials":
+    "这台设备上发现本地凭证，但没有 refresh token。",
+  "onboarding.claude.failedToImportLocalCredentials":
+    "导入本地 Claude Code 凭证失败",
   "onboarding.claude.pasteCode": "在这里粘贴 authentication code...",
   "onboarding.claude.openedAuthTab": "已打开新的浏览器标签用于授权。",
   "onboarding.claude.didntOpen": "没有打开？点击这里",
@@ -1071,7 +1099,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.searchPlaceholder": "添加或搜索 Model",
   "settings.models.noModelsFound": "没有找到 Model",
   "settings.models.anthropicAccounts.title": "Anthropic Accounts",
-  "settings.models.anthropicAccounts.description": "管理你的 Claude API accounts",
+  "settings.models.anthropicAccounts.description": "管理本地 Claude Code 凭证",
+  "settings.models.claudeCode.refreshable": "可刷新的本地凭证",
+  "settings.models.claudeCode.nonRefreshable": "不可刷新的 legacy token",
   "settings.models.accountFallback": "Anthropic Account",
   "settings.models.accountConnected": "已连接 {date}",
   "settings.models.renamePrompt": "输入这个 account 的新名称：",
@@ -1121,6 +1151,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.accountRemoved": "Account 已移除",
   "toast.models.modelSettingsSaved": "Model 设置已保存",
   "toast.models.modelSettingsReset": "Model 设置已重置",
+  "toast.models.claudeCodeCredentialsImported": "Claude Code 凭证已导入",
+  "toast.models.failedToImportClaudeCodeCredentials":
+    "导入 Claude Code 凭证失败",
   "toast.models.codexDisconnected": "Codex 已断开连接",
   "toast.models.codexApiKeySaved": "Codex API key 已保存",
   "toast.models.codexApiKeyRemoved": "Codex API key 已移除",

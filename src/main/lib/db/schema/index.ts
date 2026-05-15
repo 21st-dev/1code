@@ -92,11 +92,11 @@ export const subChatsRelations = relations(subChats, ({ one }) => ({
 }))
 
 // ============ CLAUDE CODE CREDENTIALS ============
-// Stores encrypted OAuth token for Claude Code integration
+// Stores encrypted OAuth credential for Claude Code integration
 // DEPRECATED: Use anthropicAccounts for multi-account support
 export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
   id: text("id").primaryKey().default("default"), // Single row, always "default"
-  oauthToken: text("oauth_token").notNull(), // Encrypted with safeStorage
+  oauthToken: text("oauth_token").notNull(), // Encrypted legacy token or credential envelope
   connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
@@ -104,7 +104,9 @@ export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
 })
 
 // ============ ANTHROPIC ACCOUNTS (Multi-account support) ============
-// Stores multiple Anthropic OAuth accounts for quick switching
+// Stores multiple Anthropic OAuth accounts for quick switching.
+// oauthToken may contain a legacy encrypted access token or a versioned
+// encrypted Claude Code credential envelope with refresh metadata.
 export const anthropicAccounts = sqliteTable("anthropic_accounts", {
   id: text("id")
     .primaryKey()

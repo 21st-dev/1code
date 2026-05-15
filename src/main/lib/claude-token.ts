@@ -18,7 +18,15 @@ export interface ClaudeOAuthCredential {
   refreshToken?: string;
   expiresAt?: number;
   scopes?: string[];
+  source?: ClaudeOAuthCredentialSource;
 }
+
+export type ClaudeOAuthCredentialSource =
+  | "macos_keychain"
+  | "windows_credentials_file"
+  | "linux_secret_service"
+  | "linux_pass"
+  | "credentials_file";
 
 /**
  * Read Claude OAuth credentials from system credential store
@@ -53,6 +61,7 @@ function readFromMacOSKeychain(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          source: "macos_keychain",
         };
       }
     }
@@ -79,6 +88,7 @@ function readFromWindowsCredentialManager(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          source: "windows_credentials_file",
         };
       }
     }
@@ -108,6 +118,7 @@ function readFromLinuxSecretService(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          source: "linux_secret_service",
         };
       }
     }
@@ -130,6 +141,7 @@ function readFromLinuxSecretService(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          source: "linux_pass",
         };
       }
     }
@@ -156,6 +168,7 @@ function readFromCredentialsFile(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          source: "credentials_file",
         };
       }
     }

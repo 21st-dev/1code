@@ -35,7 +35,6 @@ import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { Switch } from "../../ui/switch"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
-import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -68,6 +67,12 @@ function AccountRow({
     displayName: string | null
     email: string | null
     connectedAt: string | null
+    credential?: {
+      refreshable?: boolean
+      source?: string | null
+      storageFormat?: string | null
+      expiresAt?: string | null
+    } | null
   }
   isActive: boolean
   onSetActive: () => void
@@ -96,6 +101,13 @@ function AccountRow({
                   },
                 ),
               })}
+            </div>
+          )}
+          {account.credential && (
+            <div className="text-xs text-muted-foreground">
+              {account.credential.refreshable
+                ? t("settings.models.claudeCode.refreshable")
+                : t("settings.models.claudeCode.nonRefreshable")}
             </div>
           )}
         </div>
@@ -529,6 +541,8 @@ export function AgentsModelsTab() {
   const trpcUtils = trpc.useUtils()
   const saveProviderConfigMutation = trpc.claudeProviderConfig.save.useMutation()
   const clearProviderConfigMutation = trpc.claudeProviderConfig.clear.useMutation()
+  const importClaudeCodeCredentialMutation =
+    trpc.claudeCode.importSystemToken.useMutation()
 
   useEffect(() => {
     if (!providerConfigData) return
@@ -635,9 +649,23 @@ export function AgentsModelsTab() {
       providerConfigData?.config?.hasToken,
   )
 
-  const handleClaudeCodeSetup = () => {
+  const handleClaudeCodeSetup = async () => {
     if (isLocalOnly) {
-      toast.error(LOCAL_ONLY_BLOCKED_MESSAGE)
+      try {
+        await importClaudeCodeCredentialMutation.mutateAsync()
+        await Promise.allSettled([
+          trpcUtils.anthropicAccounts.list.invalidate(),
+          trpcUtils.anthropicAccounts.getActive.invalidate(),
+          trpcUtils.claudeCode.getIntegration.invalidate(),
+        ])
+        toast.success(t("toast.models.claudeCodeCredentialsImported"))
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : t("toast.models.failedToImportClaudeCodeCredentials")
+        toast.error(message)
+      }
       return
     }
 
@@ -873,17 +901,22 @@ export function AgentsModelsTab() {
               {t("settings.models.anthropicAccounts.description")}
             </p>
           </div>
-          {!isLocalOnly && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleClaudeCodeSetup}
-              disabled={isClaudeCodeLoading}
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              {isClaudeCodeConnected ? t("common.add") : t("common.connect")}
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void handleClaudeCodeSetup()}
+            disabled={
+              isClaudeCodeLoading ||
+              importClaudeCodeCredentialMutation.isPending
+            }
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            {isLocalOnly
+              ? t("onboarding.claude.importLocalCredentials")
+              : isClaudeCodeConnected
+                ? t("common.add")
+                : t("common.connect")}
+          </Button>
         </div>
 
         <AnthropicAccountsSection />

@@ -15,7 +15,6 @@ import {
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { useLocalOnlyMode } from "../../lib/hooks/use-local-only-mode"
-import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../shared/local-only"
 
 type AuthFlowState =
   | { step: "idle" }
@@ -57,25 +56,20 @@ export function AnthropicOnboardingPage() {
     setBillingMethod(null)
   }
 
-  const formatTokenPreview = (token: string) => {
-    const trimmed = token.trim()
-    if (trimmed.length <= 16) return trimmed
-    return `${trimmed.slice(0, 19)}...${trimmed.slice(-6)}`
-  }
-
   // tRPC mutations
   const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
   const submitCodeMutation = trpc.claudeCode.submitCode.useMutation()
   const openOAuthUrlMutation = trpc.claudeCode.openOAuthUrl.useMutation()
   const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
-  // Disabled: importing CLI token is broken — access tokens expire in ~8 hours
-  // and we don't store the refresh token. Always use sandbox OAuth flow instead.
-  // const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
-  // const existingToken = existingTokenQuery.data?.token ?? null
-  const existingToken = null
-  const hasExistingToken = false
-  const checkedExistingToken = true
-  const shouldOfferExistingToken = false
+  const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
+  const existingCredential = existingTokenQuery.data
+  const hasExistingToken = Boolean(existingCredential?.hasCredentials)
+  const checkedExistingToken = !existingTokenQuery.isLoading
+  const shouldOfferExistingToken =
+    checkedExistingToken && hasExistingToken && !ignoredExistingToken
+  const existingCredentialDescription = existingCredential?.hasRefreshToken
+    ? t("onboarding.claude.refreshableCredentials")
+    : t("onboarding.claude.nonRefreshableCredentials")
 
   // Poll for OAuth URL
   const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(
@@ -96,7 +90,7 @@ export function AnthropicOnboardingPage() {
       if (flowState.step === "idle") {
         setFlowState({
           step: "error",
-          message: LOCAL_ONLY_BLOCKED_MESSAGE,
+          message: t("onboarding.claude.localOnlyNeedsCredentials"),
         })
       }
       return
@@ -127,6 +121,7 @@ export function AnthropicOnboardingPage() {
     startAuthMutation,
     checkedExistingToken,
     shouldOfferExistingToken,
+    t,
   ])
 
   // Update flow state when we get the OAuth URL
@@ -176,7 +171,7 @@ export function AnthropicOnboardingPage() {
     if (isLocalOnly) {
       setFlowState({
         step: "error",
-        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+        message: t("onboarding.claude.localOnlyNeedsCredentials"),
       })
       return
     }
@@ -231,6 +226,13 @@ export function AnthropicOnboardingPage() {
   const handleRejectExistingToken = () => {
     setIgnoredExistingToken(true)
     setExistingTokenError(null)
+    if (isLocalOnly) {
+      setFlowState({
+        step: "error",
+        message: t("onboarding.claude.localOnlyNeedsCredentials"),
+      })
+      return
+    }
     handleConnectClick()
   }
 
@@ -240,7 +242,7 @@ export function AnthropicOnboardingPage() {
     if (isLocalOnly) {
       setFlowState({
         step: "error",
-        message: LOCAL_ONLY_BLOCKED_MESSAGE,
+        message: t("onboarding.claude.localOnlyNeedsCredentials"),
       })
       return
     }
@@ -339,11 +341,9 @@ export function AnthropicOnboardingPage() {
                 <p className="text-sm font-medium">
                   {t("onboarding.claude.existingCredentials")}
                 </p>
-                {existingToken && (
-                  <pre className="mt-2 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono bg-background/60 rounded border border-border/60">
-                    {formatTokenPreview(existingToken)}
-                  </pre>
-                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {existingCredentialDescription}
+                </p>
               </div>
               {existingTokenError && (
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">

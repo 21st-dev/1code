@@ -1,0 +1,79 @@
+## ADDED Requirements
+
+### Requirement: Local Claude Code Credential Import
+The system SHALL allow users to import existing Claude Code credentials from local system credential stores or Claude credential files without using hosted 21st authentication.
+
+#### Scenario: Complete credentials are available locally
+- **WHEN** local Claude Code credentials include an access token and refresh token
+- **AND** the user chooses to import existing credentials
+- **THEN** the app stores the credential payload in main-process secure storage
+- **AND** the renderer does not receive or persist the raw access token or refresh token
+- **AND** the app marks Claude Code as connected
+
+#### Scenario: No local credentials are available
+- **WHEN** the user chooses to import existing credentials
+- **AND** the system credential store and Claude credential files do not contain Claude Code credentials
+- **THEN** the app reports that no local Claude Code credentials were found
+- **AND** it does not start hosted 21st authentication while local-only mode is enabled
+
+### Requirement: Refreshable Claude Code Credential Storage
+The system SHALL store Claude Code credentials as a versioned encrypted payload that can include refresh token, expiry, scopes, source, and update timestamps.
+
+#### Scenario: New credential is imported
+- **WHEN** a local Claude Code credential is imported
+- **THEN** the encrypted stored payload includes the access token
+- **AND** it includes the refresh token when one is available
+- **AND** it includes expiry and scope metadata when available
+- **AND** logs only indicate token presence and metadata, not token values
+
+#### Scenario: Legacy token row exists
+- **WHEN** an existing encrypted stored credential is a legacy plain access token string
+- **THEN** the app can still read it as a non-refreshable Claude Code credential
+- **AND** the UI identifies that credential as non-refreshable
+- **AND** the user can replace it by importing complete local credentials
+
+### Requirement: Runtime Token Refresh
+The system SHALL refresh expiring Claude Code access tokens before starting a Claude Code agent run when a refresh token is available.
+
+#### Scenario: Token expires soon
+- **WHEN** the active Claude Code credential has an `expiresAt` value within the refresh buffer
+- **AND** a refresh token is available
+- **THEN** the app refreshes the access token through Anthropic's token endpoint
+- **AND** persists the refreshed credential payload before invoking Claude Code
+- **AND** passes only the valid access token to the Claude Code runtime environment
+
+#### Scenario: Refresh fails
+- **WHEN** the active Claude Code credential is expired or expiring
+- **AND** token refresh fails
+- **THEN** the agent run does not start with a known-expired token
+- **AND** the UI reports that Claude Code credentials need to be reconnected or re-imported
+- **AND** the app does not fall back to hosted 21st authentication in local-only mode
+
+### Requirement: Local-Only Hosted Auth Boundary
+The system SHALL keep Claude Code local credential import and runtime separate from hosted 21st authentication.
+
+#### Scenario: Local-only mode is enabled
+- **WHEN** the user opens Claude Code onboarding or an auth retry modal
+- **THEN** local credential import is available
+- **AND** hosted sandbox OAuth is blocked or hidden
+- **AND** no request is sent to hosted 21st auth, sandbox status, or hosted desktop auth endpoints
+
+#### Scenario: Hosted/internal mode is explicitly enabled
+- **WHEN** local-only mode is explicitly disabled for development or internal builds
+- **THEN** hosted sandbox OAuth may remain available behind existing auth and guard checks
+- **AND** local credential import remains available as an alternative
+
+### Requirement: Claude Code Runtime Invocation
+The system SHALL invoke Claude Code using the active valid local Claude Code credential unless a custom Claude-compatible provider configuration is active.
+
+#### Scenario: Claude Code subscription credential is active
+- **WHEN** a user sends a Claude Code agent message
+- **AND** no custom Claude-compatible provider configuration is active
+- **AND** a valid local Claude Code credential exists
+- **THEN** the main process passes the valid access token to the Claude Code runtime environment
+- **AND** the renderer does not pass a raw credential in the chat request
+
+#### Scenario: Custom provider configuration is active
+- **WHEN** a custom Claude-compatible provider configuration is active
+- **THEN** the custom provider configuration takes precedence according to the existing provider-config behavior
+- **AND** local Claude Code subscription credentials are not injected into that custom provider run

@@ -1,7 +1,7 @@
 import { observable } from "@trpc/server/observable"
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk"
 import { eq } from "drizzle-orm"
-import { app, BrowserWindow, safeStorage } from "electron"
+import { app, BrowserWindow } from "electron"
 import * as fs from "fs/promises"
 import * as os from "os"
 import path from "path"
@@ -31,7 +31,8 @@ import {
   type ClaudeConfig,
   type McpServerConfig,
 } from "../../claude-config"
-import { anthropicAccounts, anthropicSettings, chats, claudeCodeCredentials, getDatabase, projects as projectsTable, subChats } from "../../db"
+import { getValidClaudeCodeCredential } from "../../claude-credentials"
+import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
 import {
   buildClaudeProviderEnv,
   getActiveClaudeProviderConfig,
@@ -153,17 +154,6 @@ function parseMentions(prompt: string): {
   }
 }
 
-/**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
-}
-
 function normalizeRuntimeProviderConfig(config: {
   model: string
   token: string
@@ -175,84 +165,6 @@ function normalizeRuntimeProviderConfig(config: {
     token: config.token,
     baseUrl: config.baseUrl,
     authMode: config.authMode ?? "auth_token",
-  }
-}
-
-/**
- * Get Claude Code OAuth token from local SQLite
- * Uses multi-account system first (active account), falls back to legacy table
- * Returns null if not connected
- */
-function getClaudeCodeToken(): string | null {
-  try {
-    const db = getDatabase()
-
-    console.log("[claude-auth] ========== CLAUDE CODE AUTH DEBUG ==========")
-
-    // First try multi-account system
-    const settings = db
-      .select()
-      .from(anthropicSettings)
-      .where(eq(anthropicSettings.id, "singleton"))
-      .get()
-
-    if (settings?.activeAccountId) {
-      const account = db
-        .select()
-        .from(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, settings.activeAccountId))
-        .get()
-
-      if (account?.oauthToken) {
-        console.log(
-          "[claude-auth] Using multi-account system, activeAccountId:",
-          settings.activeAccountId,
-        )
-        const decrypted = decryptToken(account.oauthToken)
-        console.log("[claude-auth] Token decrypted successfully")
-        console.log("[claude-auth] ============================================")
-        return decrypted
-      }
-
-      console.log(
-        "[claude-auth] Active account not found or has no token, falling back to legacy",
-      )
-    }
-
-    // Fallback to legacy table
-    const cred = db
-      .select()
-      .from(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .get()
-
-    console.log(
-      "[claude-auth] Legacy credential record:",
-      cred
-        ? {
-            id: cred.id,
-            hasOauthToken: !!cred.oauthToken,
-            encryptedTokenLength: cred.oauthToken?.length ?? 0,
-            connectedAt: cred.connectedAt,
-            userId: cred.userId,
-          }
-        : null,
-    )
-
-    if (!cred?.oauthToken) {
-      console.log("[claude-auth] No Claude Code credentials found")
-      console.log("[claude-auth] ============================================")
-      return null
-    }
-
-    const decrypted = decryptToken(cred.oauthToken)
-    console.log("[claude-auth] Token decrypted successfully (legacy)")
-    console.log("[claude-auth] ============================================")
-
-    return decrypted
-  } catch (error) {
-    console.error("[claude-auth] Error getting Claude Code token:", error)
-    return null
   }
 }
 
@@ -999,7 +911,24 @@ export const claudeRouter = router({
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
             // Only check if offline mode is enabled in settings. When a custom
             // provider is active, it takes precedence over Claude OAuth.
-            const claudeCodeToken = providerConfig ? null : getClaudeCodeToken()
+            let claudeCodeToken: string | null = null
+            let claudeCredentialMetadata:
+              | Awaited<ReturnType<typeof getValidClaudeCodeCredential>>["metadata"]
+              | null = null
+
+            if (!providerConfig) {
+              try {
+                const credentialResult = await getValidClaudeCodeCredential()
+                claudeCodeToken = credentialResult.accessToken
+                claudeCredentialMetadata = credentialResult.metadata
+              } catch (credentialError) {
+                emitError(credentialError, "Claude Code credential unavailable")
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return
+              }
+            }
+
             const offlineResult = await checkOfflineFallback(
               providerConfig,
               claudeCodeToken,
@@ -1439,6 +1368,12 @@ export const claudeRouter = router({
               "[claude-auth] claudeCodeToken available:",
               !!claudeCodeToken,
             )
+            console.log("[claude-auth] credential metadata:", {
+              source: claudeCredentialMetadata?.source ?? null,
+              storageFormat: claudeCredentialMetadata?.storageFormat ?? null,
+              refreshable: claudeCredentialMetadata?.refreshable ?? false,
+              expiresAt: claudeCredentialMetadata?.expiresAt ?? null,
+            })
             console.log(
               "[claude-auth] Using CLAUDE_CODE_OAUTH_TOKEN:",
               !!finalEnv.CLAUDE_CODE_OAUTH_TOKEN,
@@ -2209,7 +2144,7 @@ ${prompt}
                       } else {
                         errorCategory = "AUTH_FAILED_SDK"
                         errorContext =
-                          "Authentication failed - not logged into Claude Code CLI"
+                          "Authentication failed - reconnect or import local Claude Code credentials"
                       }
                     } else if (
                       String(sdkError).includes("invalid_token") ||

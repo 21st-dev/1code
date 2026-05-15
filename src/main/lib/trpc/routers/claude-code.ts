@@ -1,9 +1,13 @@
-import { eq, sql } from "drizzle-orm"
-import { safeStorage, shell } from "electron"
+import { eq } from "drizzle-orm"
+import { shell } from "electron"
 import { z } from "zod"
-import { getAuthManager } from "../../../index"
 import { getClaudeShellEnvironment } from "../../claude"
-import { getExistingClaudeToken } from "../../claude-token"
+import { getExistingClaudeCredentials } from "../../claude-token"
+import {
+  getClaudeCodeCredentialMetadata,
+  importLocalClaudeCodeCredential,
+  storeClaudeCodeOAuthToken,
+} from "../../claude-credentials"
 import { getApiUrl } from "../../config"
 import {
   anthropicAccounts,
@@ -11,7 +15,6 @@ import {
   claudeCodeCredentials,
   getDatabase,
 } from "../../db"
-import { createId } from "../../db/utils"
 import { assertOfficialCloudAllowed } from "../../local-only"
 import { publicProcedure, router } from "../index"
 
@@ -19,30 +22,9 @@ import { publicProcedure, router } from "../index"
  * Get desktop auth token for server API calls
  */
 async function getDesktopToken(): Promise<string | null> {
+  const { getAuthManager } = await import("../../../index")
   const authManager = getAuthManager()
   return authManager.getValidToken()
-}
-
-/**
- * Encrypt token using Electron's safeStorage
- */
-function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[ClaudeCode] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-  return safeStorage.encryptString(token).toString("base64")
-}
-
-/**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
 }
 
 /**
@@ -50,57 +32,11 @@ function decryptToken(encrypted: string): string {
  * If setAsActive is true, also sets this account as active
  */
 function storeOAuthToken(oauthToken: string, setAsActive = true): string {
-  const authManager = getAuthManager()
-  const user = authManager.getUser()
-
-  const encryptedToken = encryptToken(oauthToken)
-  const db = getDatabase()
-  const newId = createId()
-
-  // Store in new multi-account table
-  db.insert(anthropicAccounts)
-    .values({
-      id: newId,
-      oauthToken: encryptedToken,
-      displayName: "Anthropic Account",
-      connectedAt: new Date(),
-      desktopUserId: user?.id ?? null,
-    })
-    .run()
-
-  if (setAsActive) {
-    // Set as active account
-    db.insert(anthropicSettings)
-      .values({
-        id: "singleton",
-        activeAccountId: newId,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: anthropicSettings.id,
-        set: {
-          activeAccountId: newId,
-          updatedAt: new Date(),
-        },
-      })
-      .run()
-  }
-
-  // Also update legacy table for backward compatibility
-  db.delete(claudeCodeCredentials)
-    .where(eq(claudeCodeCredentials.id, "default"))
-    .run()
-
-  db.insert(claudeCodeCredentials)
-    .values({
-      id: "default",
-      oauthToken: encryptedToken,
-      connectedAt: new Date(),
-      userId: user?.id ?? null,
-    })
-    .run()
-
-  return newId
+  return storeClaudeCodeOAuthToken(oauthToken, {
+    source: "hosted_oauth",
+    setAsActive,
+    displayName: "Claude Code",
+  })
 }
 
 /**
@@ -128,45 +64,7 @@ export const claudeCodeRouter = router({
    * Now uses multi-account system - checks for active account
    */
   getIntegration: publicProcedure.query(() => {
-    const db = getDatabase()
-
-    // First try multi-account system
-    const settings = db
-      .select()
-      .from(anthropicSettings)
-      .where(eq(anthropicSettings.id, "singleton"))
-      .get()
-
-    if (settings?.activeAccountId) {
-      const account = db
-        .select()
-        .from(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, settings.activeAccountId))
-        .get()
-
-      if (account) {
-        return {
-          isConnected: true,
-          connectedAt: account.connectedAt?.toISOString() ?? null,
-          accountId: account.id,
-          displayName: account.displayName,
-        }
-      }
-    }
-
-    // Fallback to legacy table
-    const cred = db
-      .select()
-      .from(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .get()
-
-    return {
-      isConnected: !!cred?.oauthToken,
-      connectedAt: cred?.connectedAt?.toISOString() ?? null,
-      accountId: null,
-      displayName: null,
-    }
+    return getClaudeCodeCredentialMetadata()
   }),
 
   /**
@@ -309,7 +207,10 @@ export const claudeCodeRouter = router({
     .mutation(async ({ input }) => {
       const oauthToken = input.token.trim()
 
-      storeOAuthToken(oauthToken)
+      storeClaudeCodeOAuthToken(oauthToken, {
+        source: "manual",
+        displayName: "Claude Code Manual Token",
+      })
 
       console.log("[ClaudeCode] Token imported locally")
       return { success: true }
@@ -319,22 +220,22 @@ export const claudeCodeRouter = router({
    * Check for existing Claude token in system credentials
    */
   getSystemToken: publicProcedure.query(() => {
-    const token = getExistingClaudeToken()?.trim() ?? null
-    return { token }
+    const credential = getExistingClaudeCredentials()
+    return {
+      hasCredentials: Boolean(credential?.accessToken),
+      hasRefreshToken: Boolean(credential?.refreshToken),
+      source: credential?.source ?? null,
+      expiresAt: credential?.expiresAt
+        ? new Date(credential.expiresAt).toISOString()
+        : null,
+    }
   }),
 
   /**
    * Import Claude token from system credentials
    */
   importSystemToken: publicProcedure.mutation(() => {
-    const token = getExistingClaudeToken()?.trim()
-    if (!token) {
-      throw new Error("No existing Claude token found")
-    }
-
-    storeOAuthToken(token)
-    console.log("[ClaudeCode] Token imported from system")
-    return { success: true }
+    return importLocalClaudeCodeCredential()
   }),
 
   /**
@@ -342,50 +243,10 @@ export const claudeCodeRouter = router({
    * Now uses multi-account system - gets token from active account
    */
   getToken: publicProcedure.query(() => {
-    const db = getDatabase()
-
-    // First try multi-account system
-    const settings = db
-      .select()
-      .from(anthropicSettings)
-      .where(eq(anthropicSettings.id, "singleton"))
-      .get()
-
-    if (settings?.activeAccountId) {
-      const account = db
-        .select()
-        .from(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, settings.activeAccountId))
-        .get()
-
-      if (account) {
-        try {
-          const token = decryptToken(account.oauthToken)
-          return { token, error: null }
-        } catch (error) {
-          console.error("[ClaudeCode] Decrypt error:", error)
-          return { token: null, error: "Failed to decrypt token" }
-        }
-      }
-    }
-
-    // Fallback to legacy table
-    const cred = db
-      .select()
-      .from(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .get()
-
-    if (!cred?.oauthToken) {
-      return { token: null, error: "Not connected" }
-    }
-
-    try {
-      const token = decryptToken(cred.oauthToken)
-      return { token, error: null }
-    } catch (error) {
-      console.error("[ClaudeCode] Decrypt error:", error)
-      return { token: null, error: "Failed to decrypt token" }
+    return {
+      token: null,
+      error: "Raw Claude Code tokens are not exposed to the renderer",
+      metadata: getClaudeCodeCredentialMetadata(),
     }
   }),
 

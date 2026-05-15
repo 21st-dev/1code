@@ -108,6 +108,8 @@ function AppContent() {
     trpc.claudeCode.hasExistingCliConfig.useQuery()
   const { data: secureProviderConfig } =
     trpc.claudeProviderConfig.get.useQuery()
+  const { data: claudeCodeIntegration } =
+    trpc.claudeCode.getIntegration.useQuery()
 
   // Migration: If user already completed Anthropic onboarding but has no billing method set,
   // automatically set it to "claude-subscription" (legacy users before billing method was added)
@@ -119,13 +121,17 @@ function AppContent() {
 
   useEffect(() => {
     if (!isLocalOnlyResolved || !isLocalOnly) return
-    if (billingMethod === "claude-subscription") {
+    if (
+      billingMethod === "claude-subscription" &&
+      !claudeCodeIntegration?.isConnected
+    ) {
       setBillingMethod(null)
       setAnthropicOnboardingCompleted(false)
     }
   }, [
     anthropicOnboardingCompleted,
     billingMethod,
+    claudeCodeIntegration?.isConnected,
     isLocalOnly,
     isLocalOnlyResolved,
     setAnthropicOnboardingCompleted,
