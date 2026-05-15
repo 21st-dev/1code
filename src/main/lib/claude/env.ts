@@ -1,5 +1,5 @@
 import { app } from "electron"
-import { execSync } from "node:child_process"
+import { execFile } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
@@ -12,6 +12,7 @@ import {
 
 // Cache the shell environment
 let cachedShellEnv: Record<string, string> | null = null
+let shellEnvRefreshStarted = false
 
 // Delimiter for parsing env output
 const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
@@ -148,10 +149,81 @@ function stripSensitiveKeys(env: Record<string, string>): void {
   }
 }
 
+function getProcessEnvironment(): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
+function buildFallbackShellEnvironment(): Record<string, string> {
+  const env = platform.buildEnvironment(getProcessEnvironment())
+  stripSensitiveKeys(env)
+  return env
+}
+
+function refreshShellEnvironmentInBackground(): void {
+  if (shellEnvRefreshStarted || isWindows()) return
+  shellEnvRefreshStarted = true
+
+  const shell = getDefaultShell()
+  const command = `echo -n "${DELIMITER}"; env; echo -n "${DELIMITER}"; exit`
+  const child = execFile(
+    shell,
+    ["-ilc", command],
+    {
+      encoding: "utf8",
+      timeout: 5000,
+      env: {
+        // Prevent common shell framework prompts from blocking startup.
+        DISABLE_AUTO_UPDATE: "true",
+        DISABLE_UPDATE_PROMPT: "true",
+        HOMEBREW_NO_AUTO_UPDATE: "1",
+        HOME: os.homedir(),
+        USER: os.userInfo().username,
+        SHELL: shell,
+      },
+    },
+    (error, stdout) => {
+      if (error) {
+        const code = "code" in error ? error.code : undefined
+        const signal = "signal" in error ? error.signal : undefined
+        const killed = "killed" in error ? error.killed : false
+        const didTimeout = code === "ETIMEDOUT" || signal === "SIGTERM" || killed
+        const message =
+          didTimeout
+            ? "login shell timed out; continuing with fallback environment"
+            : error.message
+        console.warn(`[claude-env] ${message}`)
+        return
+      }
+
+      const env = parseEnvOutput(stdout)
+      if (Object.keys(env).length === 0) {
+        console.warn("[claude-env] Login shell returned no environment; keeping fallback")
+        return
+      }
+
+      const mergedEnv = platform.buildEnvironment(env)
+      stripSensitiveKeys(mergedEnv)
+      cachedShellEnv = mergedEnv
+      console.log(
+        `[claude-env] Refreshed ${Object.keys(mergedEnv).length} environment variables from shell`
+      )
+    }
+  )
+
+  child.unref()
+}
+
 /**
  * Load full shell environment.
  * - Windows: Derives PATH from process.env + common install locations (no shell spawn)
- * - macOS/Linux: Spawns interactive login shell to capture PATH from shell profiles
+ * - macOS/Linux: Returns process/platform env immediately, then refreshes login
+ *   shell env in the background when available.
  * Results are cached for the lifetime of the process.
  */
 export function getClaudeShellEnvironment(): Record<string, string> {
@@ -178,43 +250,13 @@ export function getClaudeShellEnvironment(): Record<string, string> {
     return { ...env }
   }
 
-  // macOS/Linux: spawn interactive login shell to get full environment
-  const shell = getDefaultShell()
-  const command = `echo -n "${DELIMITER}"; env; echo -n "${DELIMITER}"; exit`
-
-  try {
-    const output = execSync(`${shell} -ilc '${command}'`, {
-      encoding: "utf8",
-      timeout: 5000,
-      env: {
-        // Prevent Oh My Zsh from blocking with auto-update prompts
-        DISABLE_AUTO_UPDATE: "true",
-        // Minimal env to bootstrap the shell
-        HOME: os.homedir(),
-        USER: os.userInfo().username,
-        SHELL: shell,
-      },
-    })
-
-    const env = parseEnvOutput(output)
-    stripSensitiveKeys(env)
-
-    console.log(
-      `[claude-env] Loaded ${Object.keys(env).length} environment variables from shell`
-    )
-    cachedShellEnv = env
-    return { ...env }
-  } catch (error) {
-    console.error("[claude-env] Failed to load shell environment:", error)
-
-    // Fallback: use platform provider
-    const env = platform.buildEnvironment()
-    stripSensitiveKeys(env)
-
-    console.log("[claude-env] Using fallback environment from platform provider")
-    cachedShellEnv = env
-    return { ...env }
-  }
+  const env = buildFallbackShellEnvironment()
+  cachedShellEnv = env
+  console.log(
+    `[claude-env] Using fast environment with ${Object.keys(env).length} vars`
+  )
+  refreshShellEnvironmentInBackground()
+  return { ...env }
 }
 
 /**
