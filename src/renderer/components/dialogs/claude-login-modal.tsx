@@ -20,6 +20,8 @@ import {
   AlertDialog,
   AlertDialogCancel,
   AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
 } from "../ui/alert-dialog"
 import { Button } from "../ui/button"
 import { ClaudeCodeIcon, IconSpinner } from "../ui/icons"
@@ -68,6 +70,7 @@ export function ClaudeLoginModal({
   const urlOpenedRef = useRef(false)
   const didAutoStartForOpenRef = useRef(false)
   const localLoginSuccessHandledRef = useRef(false)
+  const wasOpenRef = useRef(open)
   const isLocalOnly = useLocalOnlyMode()
   const { t } = useI18n()
   const localLogin = useClaudeCodeLoginFlow()
@@ -146,22 +149,28 @@ export function ClaudeLoginModal({
 
   // Reset state when modal closes
   useEffect(() => {
-    if (!open) {
-      setFlowState({ step: "idle" })
-      setAuthCode("")
-      setUserClickedConnect(false)
-      setUrlOpened(false)
-      setSavedOauthUrl(null)
-      urlOpenedRef.current = false
-      didAutoStartForOpenRef.current = false
-      localLoginSuccessHandledRef.current = false
-      if (isLocalLoginRunning) {
-        void cancelLocalLogin()
-      }
-      resetLocalLogin()
-      // Clear pending retry if modal closed without success (user cancelled)
-      // Note: We don't clear here because success handler sets readyToRetry=true first
+    if (open) {
+      wasOpenRef.current = true
+      return
     }
+
+    if (!wasOpenRef.current) return
+
+    wasOpenRef.current = false
+    setFlowState({ step: "idle" })
+    setAuthCode("")
+    setUserClickedConnect(false)
+    setUrlOpened(false)
+    setSavedOauthUrl(null)
+    urlOpenedRef.current = false
+    didAutoStartForOpenRef.current = false
+    localLoginSuccessHandledRef.current = false
+    if (isLocalLoginRunning) {
+      void cancelLocalLogin()
+    }
+    resetLocalLogin()
+    // Clear pending retry if modal closed without success (user cancelled)
+    // Note: We don't clear here because success handler sets readyToRetry=true first
   }, [cancelLocalLogin, isLocalLoginRunning, open, resetLocalLogin])
 
   // Helper to trigger retry after successful OAuth
@@ -415,6 +424,12 @@ export function ClaudeLoginModal({
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent className="w-[380px] p-6">
+        <AlertDialogTitle className="sr-only">
+          Claude Code login
+        </AlertDialogTitle>
+        <AlertDialogDescription className="sr-only">
+          Connect local Claude Code credentials.
+        </AlertDialogDescription>
         {/* Close button */}
         <AlertDialogCancel className="absolute right-4 top-4 h-6 w-6 p-0 border-0 bg-transparent hover:bg-muted rounded-sm opacity-70 hover:opacity-100">
           <X className="h-4 w-4" />

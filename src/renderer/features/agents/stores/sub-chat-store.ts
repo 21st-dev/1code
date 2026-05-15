@@ -76,6 +76,27 @@ const saveToLS = (chatId: string, type: "open" | "active" | "pinned" | "split" |
   }
 }
 
+function areSubChatsEqual(a: SubChatMeta[], b: SubChatMeta[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i]
+    const right = b[i]
+    if (
+      left?.id !== right?.id ||
+      left?.name !== right?.name ||
+      left?.created_at !== right?.created_at ||
+      left?.updated_at !== right?.updated_at ||
+      left?.mode !== right?.mode
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
 // Find data from old numeric window IDs (e.g., "1:agent-open-sub-chats-xxx")
 const findNumericWindowIdValue = (legacyKey: string, targetKey: string): string | null => {
   // Only migrate for "main" window
@@ -259,6 +280,7 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
   },
 
   setAllSubChats: (subChats) => {
+    if (areSubChatsEqual(get().allSubChats, subChats)) return
     set({ allSubChats: subChats })
   },
 

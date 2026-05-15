@@ -238,6 +238,12 @@ import { IsolatedMessagesSection } from "./isolated-messages-section"
 const clearSubChatSelectionAtom = atom(null, () => {})
 const isSubChatMultiSelectModeAtom = atom(false)
 const selectedSubChatIdsAtom = atom(new Set<string>())
+
+function useStableCallback<T extends (...args: any[]) => any>(callback: T): T {
+  const callbackRef = useRef(callback)
+  callbackRef.current = callback
+  return useCallback(((...args: Parameters<T>) => callbackRef.current(...args)) as T, [])
+}
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 const selectedTeamIdAtom = atom<string | null>(null)
 // import type { PlanType } from "@/lib/config/subscription-plans"
@@ -2230,6 +2236,8 @@ const ChatViewInner = memo(function ChatViewInner({
       console.error("Failed to update sub-chat mode:", error.message)
     },
   })
+  const updateSubChatModeMutationRef = useRef(updateSubChatModeMutation)
+  updateSubChatModeMutationRef.current = updateSubChatModeMutation
 
   // Sync atomFamily mode to Zustand store on mount/subChatId change
   // This ensures the sidebar shows the correct mode icon
@@ -2304,9 +2312,9 @@ const ChatViewInner = memo(function ChatViewInner({
 
     // Save to database (skip temp IDs that haven't been persisted yet)
     if (!subChatId.startsWith("temp-")) {
-      updateSubChatModeMutation.mutate({ subChatId, mode: newMode })
+      updateSubChatModeMutationRef.current.mutate({ subChatId, mode: newMode })
     }
-  }, [subChatId, setSubChatMode, updateSubChatModeMutation])
+  }, [subChatId, setSubChatMode])
 
   // File/image upload hook
   const {
@@ -4612,6 +4620,7 @@ const ChatViewInner = memo(function ChatViewInner({
     },
     [isStreaming, messages, subChatId, parentChatId, subChatMode, onProviderChange],
   )
+  const stableHandleContinueWithProvider = useStableCallback(handleContinueWithProvider)
 
   return (
     <SearchHighlightProvider>
@@ -4819,7 +4828,7 @@ const ChatViewInner = memo(function ChatViewInner({
         onInputContentChange={setInputHasContent}
         onSubmitWithQuestionAnswer={submitWithQuestionAnswerCallback}
         onProviderChange={handleInputProviderChange}
-        onContinueWithProvider={handleContinueWithProvider}
+        onContinueWithProvider={stableHandleContinueWithProvider}
         isActive={isActive}
       />
 
@@ -5334,12 +5343,20 @@ export function ChatView({
 
   // tRPC utils for optimistic cache updates
   const utils = api.useUtils()
+  const utilsRef = useRef(utils)
+  utilsRef.current = utils
 
   // tRPC mutations for renaming
   const renameSubChatMutation = api.agents.renameSubChat.useMutation()
   const renameChatMutation = api.agents.renameChat.useMutation()
   const generateSubChatNameMutation =
     api.agents.generateSubChatName.useMutation()
+  const renameSubChatMutationRef = useRef(renameSubChatMutation)
+  const renameChatMutationRef = useRef(renameChatMutation)
+  const generateSubChatNameMutationRef = useRef(generateSubChatNameMutation)
+  renameSubChatMutationRef.current = renameSubChatMutation
+  renameChatMutationRef.current = renameChatMutation
+  generateSubChatNameMutationRef.current = generateSubChatNameMutation
 
   // PR creation loading state - using atom to allow ChatViewInner to reset it
   const [isCreatingPr, setIsCreatingPr] = useAtom(isCreatingPrAtom)
@@ -5460,6 +5477,8 @@ export function ChatView({
     messages?: any
     stream_id?: string | null
   }>
+  const agentSubChatsRef = useRef(agentSubChats)
+  agentSubChatsRef.current = agentSubChats
 
   // Workspace isolation: limit mounted tabs to prevent memory growth
   // CRITICAL: Filter by workspace to prevent rendering sub-chats from other workspaces
@@ -5663,10 +5682,12 @@ export function ChatView({
       utils.agents.getAgentChat.invalidate({ chatId })
     },
   })
+  const restoreWorkspaceMutationRef = useRef(restoreWorkspaceMutation)
+  restoreWorkspaceMutationRef.current = restoreWorkspaceMutation
 
   const handleRestoreWorkspace = useCallback(() => {
-    restoreWorkspaceMutation.mutate({ id: chatId })
-  }, [chatId, restoreWorkspaceMutation])
+    restoreWorkspaceMutationRef.current.mutate({ id: chatId })
+  }, [chatId])
 
   // Check if this workspace is archived
   const isArchived = !!agentChat?.archivedAt
@@ -6798,7 +6819,6 @@ Make sure to preserve all functionality from both branches when resolving confli
       // Store streamId at creation time to prevent resume during active streaming
       // tRPC refetch would update stream_id in DB, but store stays stable
       agentChatStore.setStreamId(subChatId, subChat?.stream_id || null)
-      forceUpdate({}) // Trigger re-render to use new chat
       return newChat
     },
     [
@@ -6828,7 +6848,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         : 0
 
       if (messageCount === 0) {
-        const subChat = agentSubChats.find((sc) => sc.id === subChatId)
+        const subChat = agentSubChatsRef.current.find((sc) => sc.id === subChatId)
         const rawMessages = subChat?.messages
         if (Array.isArray(rawMessages)) {
           messageCount = rawMessages.length
@@ -6853,7 +6873,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       agentChatStore.delete(subChatId)
       forceUpdate({})
     },
-    [agentSubChats],
+    [],
   )
 
   // Handle creating a new sub-chat
@@ -7356,7 +7376,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     (userMessage: string, subChatId: string) => {
       // Check if this is the first sub-chat using agentSubChats directly
       // to avoid race condition with store initialization
-      const firstSubChatId = getFirstSubChatId(agentSubChats)
+      const firstSubChatId = getFirstSubChatId(agentSubChatsRef.current)
       const isFirst = firstSubChatId === subChatId
 
       autoRenameAgentChat({
@@ -7365,13 +7385,16 @@ Make sure to preserve all functionality from both branches when resolving confli
         userMessage,
         isFirstSubChat: isFirst,
         generateName: async (msg) => {
-          return generateSubChatNameMutation.mutateAsync({ userMessage: msg, ollamaModel: selectedOllamaModel })
+          return generateSubChatNameMutationRef.current.mutateAsync({
+            userMessage: msg,
+            ollamaModel: selectedOllamaModel,
+          })
         },
         renameSubChat: async (input) => {
-          await renameSubChatMutation.mutateAsync(input)
+          await renameSubChatMutationRef.current.mutateAsync(input)
         },
         renameChat: async (input) => {
-          await renameChatMutation.mutateAsync(input)
+          await renameChatMutationRef.current.mutateAsync(input)
         },
         updateSubChatName: (subChatIdToUpdate, name) => {
           // Update local store
@@ -7379,7 +7402,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             .getState()
             .updateSubChatName(subChatIdToUpdate, name)
           // Also update query cache so init effect doesn't overwrite
-          utils.agents.getAgentChat.setData({ chatId }, (old) => {
+          utilsRef.current.agents.getAgentChat.setData({ chatId }, (old) => {
             if (!old) return old
             const existsInCache = old.subChats.some(
               (sc: { id: string }) => sc.id === subChatIdToUpdate,
@@ -7414,7 +7437,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         updateChatName: (chatIdToUpdate, name) => {
           // Optimistic update for sidebar (list query)
           // On desktop, selectedTeamId is always null, so we update unconditionally
-          utils.agents.getAgentChats.setData(
+          utilsRef.current.agents.getAgentChats.setData(
             { teamId: selectedTeamId },
             (old: Array<{ id: string; name: string | null }> | undefined) => {
               if (!old) return old
@@ -7424,7 +7447,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             },
           )
           // Optimistic update for header (single chat query)
-          utils.agents.getAgentChat.setData(
+          utilsRef.current.agents.getAgentChat.setData(
             { chatId: chatIdToUpdate },
             (old) => {
               if (!old) return old
@@ -7436,14 +7459,8 @@ Make sure to preserve all functionality from both branches when resolving confli
     },
     [
       chatId,
-      agentSubChats,
-      generateSubChatNameMutation,
-      renameSubChatMutation,
-      renameChatMutation,
       selectedTeamId,
       selectedOllamaModel,
-      utils.agents.getAgentChats,
-      utils.agents.getAgentChat,
     ],
   )
 
@@ -7454,6 +7471,11 @@ Make sure to preserve all functionality from both branches when resolving confli
     }
     return getOrCreateChat(activeSubChatId)
   }, [activeSubChatId, agentChat, getOrCreateChat, chatId, chatWorkingDir])
+
+  const stableHandleAutoRename = useStableCallback(handleAutoRename)
+  const stableHandleCreateNewSubChat = useStableCallback(handleCreateNewSubChat)
+  const stableHandleProviderChange = useStableCallback(handleProviderChange)
+  const stableHandleRestoreWorkspace = useStableCallback(handleRestoreWorkspace)
 
   // Check if active sub-chat is the first one (for renaming parent chat)
   // Use agentSubChats directly to avoid race condition with store initialization
@@ -7512,7 +7534,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                   {/* Mobile header - simplified with chat name as trigger */}
                   {isMobileFullscreen ? (
                     <MobileChatHeader
-                      onCreateNew={handleCreateNewSubChat}
+                      onCreateNew={stableHandleCreateNewSubChat}
                       onBackToChats={onBackToChats}
                       onOpenPreview={onOpenPreview}
                       canOpenPreview={canOpenPreview}
@@ -7523,7 +7545,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       canOpenTerminal={!!worktreePath}
                       isTerminalOpen={isTerminalSidebarOpen}
                       isArchived={isArchived}
-                      onRestore={handleRestoreWorkspace}
+                      onRestore={stableHandleRestoreWorkspace}
                       onOpenLocally={handleOpenLocally}
                       showOpenLocally={showOpenLocally}
                     />
@@ -7539,7 +7561,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                         }
                       />
                       <SubChatSelector
-                        onCreateNew={handleCreateNewSubChat}
+                        onCreateNew={stableHandleCreateNewSubChat}
                         isMobile={false}
                         onBackToChats={onBackToChats}
                         onOpenPreview={onOpenPreview}
@@ -7668,7 +7690,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
-                        onClick={handleRestoreWorkspace}
+                        onClick={stableHandleRestoreWorkspace}
                         disabled={restoreWorkspaceMutation.isPending}
                         className="h-6 px-2 gap-1.5 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2 flex items-center"
                         aria-label="Restore workspace"
@@ -7727,9 +7749,9 @@ Make sure to preserve all functionality from both branches when resolving confli
                             parentChatId={chatId}
                             provider={inferProviderFromMessages(paneId)}
                             isFirstSubChat={isFirstSubChat}
-                            onAutoRename={handleAutoRename}
-                            onCreateNewSubChat={handleCreateNewSubChat}
-                            onProviderChange={handleProviderChange}
+                            onAutoRename={stableHandleAutoRename}
+                            onCreateNewSubChat={stableHandleCreateNewSubChat}
+                            onProviderChange={stableHandleProviderChange}
                             teamId={selectedTeamId || undefined}
                             repository={repository}
                             streamId={agentChatStore.getStreamId(paneId)}
@@ -7738,7 +7760,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                             sandboxId={sandboxId || undefined}
                             projectPath={worktreePath || undefined}
                             isArchived={isArchived}
-                            onRestoreWorkspace={handleRestoreWorkspace}
+                            onRestoreWorkspace={stableHandleRestoreWorkspace}
                             existingPrUrl={agentChat?.prUrl}
                             isActive={paneId === activeSubChatId}
                             isSplitPane={true}
@@ -7777,9 +7799,9 @@ Make sure to preserve all functionality from both branches when resolving confli
                                 parentChatId={chatId}
                                 provider={inferProviderFromMessages(subChatId)}
                                 isFirstSubChat={isFirstSubChat}
-                                onAutoRename={handleAutoRename}
-                                onCreateNewSubChat={handleCreateNewSubChat}
-                                onProviderChange={handleProviderChange}
+                                onAutoRename={stableHandleAutoRename}
+                                onCreateNewSubChat={stableHandleCreateNewSubChat}
+                                onProviderChange={stableHandleProviderChange}
                                 teamId={selectedTeamId || undefined}
                                 repository={repository}
                                 streamId={agentChatStore.getStreamId(subChatId)}
@@ -7788,7 +7810,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                                 sandboxId={sandboxId || undefined}
                                 projectPath={worktreePath || undefined}
                                 isArchived={isArchived}
-                                onRestoreWorkspace={handleRestoreWorkspace}
+                                onRestoreWorkspace={stableHandleRestoreWorkspace}
                                 existingPrUrl={agentChat?.prUrl}
                                 isActive={false}
                                 isSplitPane={false}
@@ -7840,9 +7862,9 @@ Make sure to preserve all functionality from both branches when resolving confli
                       parentChatId={chatId}
                       provider={inferProviderFromMessages(subChatId)}
                       isFirstSubChat={isFirstSubChat}
-                      onAutoRename={handleAutoRename}
-                      onCreateNewSubChat={handleCreateNewSubChat}
-                      onProviderChange={handleProviderChange}
+                      onAutoRename={stableHandleAutoRename}
+                      onCreateNewSubChat={stableHandleCreateNewSubChat}
+                      onProviderChange={stableHandleProviderChange}
                       teamId={selectedTeamId || undefined}
                       repository={repository}
                       streamId={agentChatStore.getStreamId(subChatId)}
@@ -7851,7 +7873,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       sandboxId={sandboxId || undefined}
                       projectPath={worktreePath || undefined}
                       isArchived={isArchived}
-                      onRestoreWorkspace={handleRestoreWorkspace}
+                      onRestoreWorkspace={stableHandleRestoreWorkspace}
                       existingPrUrl={agentChat?.prUrl}
                       isActive={isActive}
                       isSplitPane={false}

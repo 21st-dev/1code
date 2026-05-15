@@ -106,6 +106,12 @@ import { getResolvedHotkey } from "../../../lib/hotkeys"
 import { customHotkeysAtom } from "../../../lib/atoms"
 import { toast } from "sonner"
 
+function useStableCallback<T extends (...args: any[]) => any>(callback: T): T {
+  const callbackRef = useRef(callback)
+  callbackRef.current = callback
+  return useCallback(((...args: Parameters<T>) => callbackRef.current(...args)) as T, [])
+}
+
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
@@ -1033,6 +1039,30 @@ export const ChatInputArea = memo(function ChatInputArea({
     setShowingToolsList(false)
   }, [editorRef])
 
+  const resetMentionSubpages = useCallback(() => {
+    setShowingFilesList(false)
+    setShowingSkillsList(false)
+    setShowingAgentsList(false)
+    setShowingToolsList(false)
+  }, [])
+
+  const handleMentionTrigger = useCallback(
+    ({ searchText, rect }: { searchText: string; rect: DOMRect }) => {
+      // Desktop: use projectPath for local file search
+      if (projectPath || repository) {
+        setMentionSearchText(searchText)
+        setMentionPosition({ top: rect.top, left: rect.left })
+        setShowMentionDropdown(true)
+      }
+    },
+    [projectPath, repository],
+  )
+
+  const handleMentionClose = useCallback(() => {
+    setShowMentionDropdown(false)
+    resetMentionSubpages()
+  }, [resetMentionSubpages])
+
   const handleRecommendationSelect = useCallback((mention: FileMentionOption) => {
     editorRef.current?.insertMention(mention)
     const draft = editorRef.current?.getValue() || ""
@@ -1237,6 +1267,28 @@ export const ChatInputArea = memo(function ChatInputArea({
     [editorRef, projectPath, onCacheFileContent, onAddAttachments, trpcUtils],
   )
 
+  const stablePromptSubmit = useStableCallback(onSend)
+  const stableEditorSubmit = useStableCallback(onSubmitWithQuestionAnswer || handleEditorSubmit)
+  const stableForceSend = useStableCallback(onForceSend)
+  const handlePromptContainerClick = useCallback(() => {
+    editorRef.current?.focus()
+  }, [editorRef])
+  const handleSendButtonClick = useCallback(() => {
+    // If input is empty and queue has items, send first queue item
+    if (
+      !hasContent &&
+      images.length === 0 &&
+      files.length === 0 &&
+      queueLength > 0 &&
+      onSendFromQueue &&
+      firstQueueItemId
+    ) {
+      onSendFromQueue(firstQueueItemId)
+    } else {
+      onSend()
+    }
+  }, [firstQueueItemId, files.length, hasContent, images.length, onSend, onSendFromQueue, queueLength])
+
   return (
     <div
       ref={(el) => {
@@ -1267,7 +1319,7 @@ export const ChatInputArea = memo(function ChatInputArea({
         >
           <div
             className="relative w-full cursor-text"
-            onClick={() => editorRef.current?.focus()}
+            onClick={handlePromptContainerClick}
           >
             <PromptInput
               className={cn(
@@ -1276,7 +1328,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                 isFocused && !isDragOver && "ring-2 ring-primary/50",
               )}
               maxHeight={200}
-              onSubmit={onSend}
+              onSubmit={stablePromptSubmit}
               contextItems={
                 images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0 || pastedTexts.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-[6px]">
@@ -1358,27 +1410,13 @@ export const ChatInputArea = memo(function ChatInputArea({
               <div className="relative">
                 <AgentsMentionsEditor
                   ref={editorRef}
-                  onTrigger={({ searchText, rect }) => {
-                    // Desktop: use projectPath for local file search
-                    if (projectPath || repository) {
-                      setMentionSearchText(searchText)
-                      setMentionPosition({ top: rect.top, left: rect.left })
-                      setShowMentionDropdown(true)
-                    }
-                  }}
-                  onCloseTrigger={() => {
-                    setShowMentionDropdown(false)
-                    // Reset subpage state when closing
-                    setShowingFilesList(false)
-                    setShowingSkillsList(false)
-                    setShowingAgentsList(false)
-                    setShowingToolsList(false)
-                  }}
+                  onTrigger={handleMentionTrigger}
+                  onCloseTrigger={handleMentionClose}
                   onSlashTrigger={handleSlashTrigger}
                   onCloseSlashTrigger={handleCloseSlashTrigger}
                   onContentChange={handleContentChange}
-                  onSubmit={onSubmitWithQuestionAnswer || handleEditorSubmit}
-                  onForceSubmit={onForceSend}
+                  onSubmit={stableEditorSubmit}
+                  onForceSubmit={stableForceSend}
                   onShiftTab={toggleMode}
                   placeholder={isStreaming ? t("chat.placeholder.queue") : t("chat.placeholder.default")}
                   className={cn(
@@ -1689,14 +1727,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         isUploading
                       }
                       hasContent={hasContent || images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0}
-                      onClick={() => {
-                        // If input is empty and queue has items, send first queue item
-                        if (!hasContent && images.length === 0 && files.length === 0 && queueLength > 0 && onSendFromQueue && firstQueueItemId) {
-                          onSendFromQueue(firstQueueItemId)
-                        } else {
-                          onSend()
-                        }
-                      }}
+                      onClick={handleSendButtonClick}
                       onStop={onStop}
                       mode={subChatMode}
                       // Voice input props - show mic when input is empty and voice is available
@@ -1722,14 +1753,7 @@ export const ChatInputArea = memo(function ChatInputArea({
           showMentionDropdown &&
           (!!projectPath || !!repository || !!sandboxId)
         }
-        onClose={() => {
-          setShowMentionDropdown(false)
-          // Reset subpage state when closing
-          setShowingFilesList(false)
-          setShowingSkillsList(false)
-          setShowingAgentsList(false)
-          setShowingToolsList(false)
-        }}
+        onClose={handleMentionClose}
         onSelect={handleMentionSelect}
         searchText={mentionSearchText}
         position={mentionPosition}

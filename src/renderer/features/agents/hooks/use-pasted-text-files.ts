@@ -29,11 +29,13 @@ export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn 
   pastedTextsRef.current = pastedTexts
 
   const writePastedTextMutation = trpc.files.writePastedText.useMutation()
+  const writePastedTextMutationRef = useRef(writePastedTextMutation)
+  writePastedTextMutationRef.current = writePastedTextMutation
 
   const addPastedText = useCallback(
     async (text: string) => {
       try {
-        const result = await writePastedTextMutation.mutateAsync({
+        const result = await writePastedTextMutationRef.current.mutateAsync({
           subChatId,
           text,
         })
@@ -54,7 +56,7 @@ export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn 
         console.error("[usePastedTextFiles] Failed to write:", error)
       }
     },
-    [subChatId, writePastedTextMutation]
+    [subChatId]
   )
 
   const removePastedText = useCallback((id: string) => {
