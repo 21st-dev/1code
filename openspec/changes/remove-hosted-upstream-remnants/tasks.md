@@ -27,5 +27,5 @@
 - [x] 5.2 Run `bun run ts:check`.
 - [x] 5.3 Run `bun run build`.
 - [x] 5.4 Run `git diff --check`.
-- [ ] 5.5 Smoke-test local startup without hosted overrides and confirm no official upstream hosted startup calls occur.
+- [x] 5.5 Smoke-test local startup without hosted overrides and confirm no official upstream hosted startup calls occur.
 - [ ] 5.6 Smoke-test one local provider/Claude/Codex workflow to confirm user-owned external providers remain available.

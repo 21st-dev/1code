@@ -147,43 +147,13 @@ nextValue: [{ id: "abc", name: "Github projects access" }]
 ```
 
 ### Root Cause
-In `active-chat.tsx`, `agentChat` was created inline:
-
-```typescript
-const agentChat = chatSourceMode === "sandbox" ? {
-  ...remoteAgentChat,
-  // ... transforms
-} : localAgentChat
-```
-
-This created a **new object reference** on every render because of the spread operator.
-
-The `useEffect` that syncs sub-chats depended on `agentChat`:
-
-```typescript
-useEffect(() => {
-  // ... calls setAllSubChats(newArray)
-}, [agentChat, chatId])
-```
-
-**Chain reaction:**
-1. Component renders → new `agentChat` reference
-2. useEffect runs → calls `setAllSubChats()` with new array
-3. Zustand store updates → subscribers re-render
-4. Parent re-renders → back to step 1 → INFINITE LOOP
+In `active-chat.tsx`, derived chat data was created inline, producing a new
+object reference on every render. The `useEffect` that syncs sub-chats depended
+on that object, so it repeatedly wrote a new array into Zustand and re-rendered.
 
 ### Fix
-Wrap `agentChat` in `useMemo`:
-
-```typescript
-const agentChat = useMemo(() => {
-  if (chatSourceMode === "sandbox") {
-    if (!remoteAgentChat) return null
-    return { ...remoteAgentChat, /* transforms */ }
-  }
-  return localAgentChat
-}, [chatSourceMode, remoteAgentChat, localAgentChat])
-```
+Keep derived chat data memoized and avoid writing equivalent sub-chat arrays back
+into the store.
 
 ## Troubleshooting
 
