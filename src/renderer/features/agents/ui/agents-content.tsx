@@ -14,12 +14,10 @@ const useUser = () => ({ user: null })
 const useClerk = () => ({ signOut: async (_opts?: unknown) => {} })
 import {
   selectedAgentChatIdAtom,
-  selectedChatIsRemoteAtom,
   previousAgentChatIdAtom,
   selectedDraftIdAtom,
   showNewChatFormAtom,
   agentsMobileViewModeAtom,
-  agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatsSidebarWidthAtom,
@@ -37,18 +35,15 @@ import {
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
   betaKanbanEnabledAtom,
-  chatSourceModeAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { KanbanView } from "../../kanban"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
-import { useLocalOnlyModeState } from "../../../lib/hooks/use-local-only-mode"
 import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
 import { AgentsSubChatsSidebar } from "../../sidebar/agents-subchats-sidebar"
-import { AgentPreview } from "./agent-preview"
 import { AgentDiffView } from "./agent-diff-view"
 import { TerminalSidebar, terminalSidebarOpenAtomFamily } from "../../terminal"
 import { getTerminalScopeKey } from "../../terminal/utils"
@@ -69,18 +64,12 @@ import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialo
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { isDesktopApp } from "../../../lib/utils/platform"
 import { SettingsContent } from "../../settings/settings-content"
-// Desktop mock
-const useIsAdmin = () => false
 
 // Main Component
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const desktopView = useAtomValue(desktopViewAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
-  const selectedChatIsRemote = useAtomValue(selectedChatIsRemoteAtom)
-  const setSelectedChatIsRemote = useSetAtom(selectedChatIsRemoteAtom)
-  const setChatSourceMode = useSetAtom(chatSourceModeAtom)
-  const chatSourceMode = useAtomValue(chatSourceModeAtom)
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
@@ -92,9 +81,6 @@ export function AgentsContent() {
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
-  const [previewSidebarOpen, setPreviewSidebarOpen] = useAtom(
-    agentsPreviewSidebarOpenAtom,
-  )
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
   const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
     agentsSubChatsSidebarModeAtom,
@@ -117,12 +103,10 @@ export function AgentsContent() {
   const isNavigatingRef = useRef(false)
   const newChatFormKeyRef = useRef(0)
   const isMobile = useIsMobile()
-  const { isLocalOnly, isResolved: isLocalOnlyResolved } = useLocalOnlyModeState()
   const [isHydrated, setIsHydrated] = useState(false)
   const { userId } = useCombinedAuth()
   const { user } = useUser()
   const { signOut } = useClerk()
-  const isAdmin = useIsAdmin()
 
   // Quick-switch dialog state - Agents (Opt+Ctrl+Tab)
   const [quickSwitchOpen, setQuickSwitchOpen] = useAtom(
@@ -188,29 +172,10 @@ export function AgentsContent() {
   const selectedTeam = teams?.find((t: any) => t.id === selectedTeamId) as any
 
   useEffect(() => {
-    if (!isLocalOnlyResolved || !isLocalOnly) return
-
     if (desktopView === "automations" || desktopView === "automations-detail" || desktopView === "inbox") {
       setDesktopView(null)
     }
-    if (chatSourceMode !== "local") {
-      setChatSourceMode("local")
-    }
-    if (selectedChatIsRemote) {
-      setSelectedChatIsRemote(false)
-      setSelectedChatId(null)
-    }
-  }, [
-    chatSourceMode,
-    desktopView,
-    isLocalOnly,
-    isLocalOnlyResolved,
-    selectedChatIsRemote,
-    setChatSourceMode,
-    setDesktopView,
-    setSelectedChatId,
-    setSelectedChatIsRemote,
-  ])
+  }, [desktopView, setDesktopView])
 
   // Fetch agent chats for keyboard navigation and mobile view
   const { data: agentChats } = api.agents.getAgentChats.useQuery(
@@ -292,9 +257,8 @@ export function AgentsContent() {
   useEffect(() => {
     if (isMobile && isHydrated) {
       setSidebarOpen(false)
-      setPreviewSidebarOpen(false)
     }
-  }, [isMobile, isHydrated, setSidebarOpen, setPreviewSidebarOpen])
+  }, [isMobile, isHydrated, setSidebarOpen])
 
   // On mobile: when chat is selected, switch to chat mode
   useEffect(() => {
@@ -480,9 +444,6 @@ export function AgentsContent() {
             // If no chat selected, select first one
             if (!selectedChatId) {
               setSelectedChatId(sortedChats[0].id)
-              // agentChats are local chats only, so always set isRemote to false
-              setSelectedChatIsRemote(false)
-              setChatSourceMode("local")
               return
             }
 
@@ -493,8 +454,6 @@ export function AgentsContent() {
 
             if (currentIndex === -1) {
               setSelectedChatId(sortedChats[0].id)
-              setSelectedChatIsRemote(false)
-              setChatSourceMode("local")
               return
             }
 
@@ -513,8 +472,6 @@ export function AgentsContent() {
             }
 
             setSelectedChatId(sortedChats[nextIndex].id)
-            setSelectedChatIsRemote(false)
-            setChatSourceMode("local")
           }
           return
         }
@@ -526,9 +483,6 @@ export function AgentsContent() {
 
           if (selectedChat) {
             setSelectedChatId(selectedChat.id)
-            // agentChats are local chats only
-            setSelectedChatIsRemote(false)
-            setChatSourceMode("local")
           }
 
           setQuickSwitchOpen(false)
@@ -830,27 +784,11 @@ export function AgentsContent() {
     }
   }, [isSubChatsSidebarOpen])
 
-  // Check if chat has sandbox with port for preview
-  const chatMeta = chatData?.meta as
-    | {
-        sandboxConfig?: { port?: number }
-        isQuickSetup?: boolean
-        repository?: string
-      }
-    | undefined
-  const isQuickSetup = chatMeta?.isQuickSetup === true
-  const canShowPreview = !!(
-    !isLocalOnly &&
-    chatData?.sandbox_id &&
-    !isQuickSetup &&
-    chatMeta?.sandboxConfig?.port
-  )
-  // Check if diff can be shown (sandbox exists)
-  const canShowDiff = !!(!isLocalOnly && chatData?.sandbox_id)
-
   // Check if terminal can be shown (worktree exists - desktop only)
   const worktreePath = (chatData as any)?.worktreePath as string | undefined
+  const canShowDiff = !!worktreePath
   const canShowTerminal = !!worktreePath
+  const repository = (chatData?.meta as { repository?: string } | undefined)?.repository
 
   // Terminal scope key for shared terminals
   const terminalScopeKey = useMemo(() => {
@@ -883,22 +821,12 @@ export function AgentsContent() {
             isMobileFullscreen={true}
             onChatSelect={() => setMobileViewMode("chat")}
           />
-        ) : mobileViewMode === "preview" && selectedChatId && canShowPreview ? (
-          // Preview Mode
-          <AgentPreview
-            chatId={selectedChatId}
-            sandboxId={chatData!.sandbox_id!}
-            port={chatMeta?.sandboxConfig?.port!}
-            isMobile={true}
-            onClose={() => setMobileViewMode("chat")}
-          />
         ) : mobileViewMode === "diff" && selectedChatId && canShowDiff ? (
           // Diff Mode - fullscreen diff view
           <AgentDiffView
             chatId={selectedChatId}
-            sandboxId={chatData!.sandbox_id!}
             worktreePath={worktreePath}
-            repository={chatMeta?.repository}
+            repository={repository}
             showFooter={true}
             isMobile={true}
             onClose={() => setMobileViewMode("chat")}
@@ -923,7 +851,7 @@ export function AgentsContent() {
           >
             {selectedChatId ? (
               <ChatView
-                key={`${chatSourceMode}-${selectedChatId}`}
+                key={selectedChatId}
                 chatId={selectedChatId}
                 isSidebarOpen={false}
                 onToggleSidebar={() => {}}
@@ -934,11 +862,6 @@ export function AgentsContent() {
                   setMobileViewMode("chats")
                   setSelectedChatId(null)
                 }}
-                onOpenPreview={
-                  canShowPreview
-                    ? () => setMobileViewMode("preview")
-                    : undefined
-                }
                 onOpenDiff={
                   canShowDiff ? () => setMobileViewMode("diff") : undefined
                 }
@@ -1009,7 +932,7 @@ export function AgentsContent() {
           ) : selectedChatId ? (
             <div className="h-full flex flex-col relative overflow-hidden">
               <ChatView
-                key={`${chatSourceMode}-${selectedChatId}`}
+                key={selectedChatId}
                 chatId={selectedChatId}
                 isSidebarOpen={sidebarOpen}
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
@@ -1053,20 +976,6 @@ export function AgentsContent() {
         selectedIndex={subChatQuickSwitchSelectedIndex}
         onHover={setSubChatQuickSwitchSelectedIndex}
       />
-
-      {/* Dev mode / Admin sandbox debugger */}
-      {!isLocalOnly &&
-        (process.env.NODE_ENV === "development" || isAdmin) &&
-        chatData?.sandbox_id && (
-          <a
-            href={`https://codesandbox.io/p/devbox/${chatData.sandbox_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="fixed bottom-4 right-4 z-50 bg-zinc-900 text-zinc-300 px-3 py-1.5 rounded-md text-xs font-mono opacity-70 hover:opacity-100 hover:bg-zinc-800 transition-all cursor-pointer"
-          >
-            sandbox: {chatData.sandbox_id}
-          </a>
-        )}
     </>
   )
 }

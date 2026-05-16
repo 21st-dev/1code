@@ -29,17 +29,14 @@ import {
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
 import {
-  agentsDebugModeAtom,
   justCreatedIdsAtom,
   lastSelectedAgentIdAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedBranchesAtom,
   lastSelectedModelIdAtom,
-  lastSelectedRepoAtom,
   lastSelectedWorkModeAtom,
   selectedAgentChatIdAtom,
-  selectedChatIsRemoteAtom,
   selectedDraftIdAtom,
   selectedProjectAtom,
   getNextMode,
@@ -48,16 +45,6 @@ import {
 import { defaultAgentModeAtom } from "../../../lib/atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
-// import { selectedTeamIdAtom } from "@/lib/atoms/team"
-import { atom } from "jotai"
-const selectedTeamIdAtom = atom<string | null>(null)
-type RemoteRepository = {
-  id: string
-  name: string
-  full_name: string
-  sandbox_status?: "ready" | "not_setup" | "in_progress" | "error"
-  pushed_at?: string | null
-}
 import {
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
@@ -71,7 +58,6 @@ import {
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
-  chatSourceModeAtom,
 } from "../../../lib/atoms"
 // Desktop uses real tRPC
 import { toast } from "sonner"
@@ -190,10 +176,7 @@ export function NewChatForm({
   const { t } = useI18n()
   // UNCONTROLLED: just track if editor has content for send button
   const [hasContent, setHasContent] = useState(false)
-  const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
-  const setSelectedChatIsRemote = useSetAtom(selectedChatIsRemoteAtom)
-  const setChatSourceMode = useSetAtom(chatSourceModeAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
 
@@ -203,7 +186,6 @@ export function NewChatForm({
 
   // Check if any chat has unseen changes
   const hasAnyUnseenChanges = unseenChanges.size > 0
-  const [lastSelectedRepo, setLastSelectedRepo] = useAtom(lastSelectedRepoAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
 
   // Fetch projects to validate selectedProject exists
@@ -243,7 +225,6 @@ export function NewChatForm({
     setAgentMode(getNextMode)
   }, [])
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
-  const debugMode = useAtomValue(agentsDebugModeAtom)
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
@@ -261,7 +242,6 @@ export function NewChatForm({
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
-  const [repoSearchQuery, setRepoSearchQuery] = useState("")
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false)
 
   // Worktree config banner state
@@ -718,84 +698,6 @@ export function NewChatForm({
   // Keyboard shortcut: Cmd+Esc to toggle focus/blur
   useToggleFocusOnCmdEsc(editorRef)
 
-  // Fetch repos from team
-  // Desktop: no remote repos, we use local projects
-  const reposData: { repositories: RemoteRepository[] } = { repositories: [] }
-  const isLoadingRepos = false
-
-  // Memoize repos arrays to prevent useEffect from running on every keystroke
-  // Apply debug mode simulations
-  const repos = useMemo(() => {
-    if (debugMode.enabled && debugMode.simulateNoRepos) {
-      return []
-    }
-    return reposData?.repositories || []
-  }, [reposData?.repositories, debugMode.enabled, debugMode.simulateNoRepos])
-
-  const readyRepos = useMemo(() => {
-    if (debugMode.enabled && debugMode.simulateNoReadyRepos) {
-      return []
-    }
-    return repos.filter((r) => r.sandbox_status === "ready")
-  }, [repos, debugMode.enabled, debugMode.simulateNoReadyRepos])
-
-  const notReadyRepos = useMemo(
-    () => repos.filter((r) => r.sandbox_status !== "ready"),
-    [repos],
-  )
-
-  // Use state to avoid hydration mismatch
-  const [resolvedRepo, setResolvedRepo] = useState<(typeof repos)[0] | null>(
-    null,
-  )
-
-  // Derive selected repo from saved or first available (client-side only)
-  // Now includes all repos, not just ready ones
-  useEffect(() => {
-    if (lastSelectedRepo) {
-      // For public imports, use lastSelectedRepo directly (it won't be in repos list)
-      if (lastSelectedRepo.isPublicImport) {
-        setResolvedRepo({
-          id: lastSelectedRepo.id,
-          name: lastSelectedRepo.name,
-          full_name: lastSelectedRepo.full_name,
-          sandbox_status: lastSelectedRepo.sandbox_status || "not_setup",
-        } as (typeof repos)[0])
-        return
-      }
-
-      // Look in all repos by id or full_name
-      // Only compare IDs when lastSelectedRepo.id is non-empty (old localStorage data might have empty id)
-      const stillExists = repos.find(
-        (r) =>
-          (lastSelectedRepo.id && r.id === lastSelectedRepo.id) ||
-          r.full_name === lastSelectedRepo.full_name,
-      )
-      if (stillExists) {
-        setResolvedRepo(stillExists)
-        return
-      }
-    }
-
-    if (repos.length === 0) {
-      setResolvedRepo(null)
-      return
-    }
-
-    // Auto-save first repo if none saved (prefer ready repos, then any)
-    if (!lastSelectedRepo && repos.length > 0) {
-      const firstRepo = readyRepos[0] || repos[0]
-      setLastSelectedRepo({
-        id: firstRepo.id,
-        name: firstRepo.name,
-        full_name: firstRepo.full_name,
-        sandbox_status: firstRepo.sandbox_status,
-      })
-    }
-
-    setResolvedRepo(readyRepos[0] || repos[0] || null)
-  }, [lastSelectedRepo, repos, readyRepos, setLastSelectedRepo])
-
   // Desktop: fetch branches from local git repository
   const branchesQuery = trpc.changes.getBranches.useQuery(
     { worktreePath: validatedProject?.path || "" },
@@ -1015,26 +917,6 @@ export function NewChatForm({
     }
   }, [])
 
-  // Filter all repos by search (combined list) and sort by preview status
-  const filteredRepos = repos
-    .filter(
-      (repo) =>
-        repo.name.toLowerCase().includes(repoSearchQuery.toLowerCase()) ||
-        repo.full_name.toLowerCase().includes(repoSearchQuery.toLowerCase()),
-    )
-    .sort((a, b) => {
-      // 1. Repos with preview (sandbox_status === "ready") come first
-      const aHasPreview = a.sandbox_status === "ready"
-      const bHasPreview = b.sandbox_status === "ready"
-      if (aHasPreview && !bHasPreview) return -1
-      if (!aHasPreview && bHasPreview) return 1
-
-      // 2. Sort by last commit date (pushed_at) - most recent first
-      const aDate = a.pushed_at ? new Date(a.pushed_at).getTime() : 0
-      const bDate = b.pushed_at ? new Date(b.pushed_at).getTime() : 0
-      return bDate - aDate
-    })
-
   // Create chat mutation (real tRPC)
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
@@ -1048,9 +930,6 @@ export function NewChatForm({
       clearCurrentDraft()
       utils.chats.list.invalidate()
       setSelectedChatId(data.id)
-      // New chats are always local
-      setSelectedChatIsRemote(false)
-      setChatSourceMode("local")
       // Track this chat and its first subchat as just created for typewriter effect
       const ids = [data.id]
       if (data.subChats?.[0]?.id) {

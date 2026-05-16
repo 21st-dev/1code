@@ -192,14 +192,6 @@ interface DetailsSidebarProps {
   onFileSelect?: (filePath: string) => void
   /** Callback when a file is opened from Files tab - opens in file viewer */
   onOpenFile?: (absolutePath: string) => void
-  /** Remote chat info for sandbox workspaces */
-  remoteInfo?: {
-    repository?: string
-    branch?: string | null
-    sandboxId?: string
-  } | null
-  /** Whether this is a remote sandbox chat (no local worktree) */
-  isRemoteChat?: boolean
 }
 
 export function DetailsSidebar({
@@ -229,8 +221,6 @@ export function DetailsSidebar({
   onExpandDiff,
   onFileSelect,
   onOpenFile,
-  remoteInfo,
-  isRemoteChat = false,
 }: DetailsSidebarProps) {
   const { t } = useI18n()
   // Global sidebar open state
@@ -376,7 +366,7 @@ export function DetailsSidebar({
 
           {/* Right-side header actions */}
           {activeTab === "details" ? (
-            <WidgetSettingsPopup workspaceId={chatId} isRemoteChat={isRemoteChat} />
+            <WidgetSettingsPopup workspaceId={chatId} />
           ) : (
             <div className="flex items-center gap-0.5">
               <Tooltip>
@@ -431,7 +421,6 @@ export function DetailsSidebar({
                     <InfoSection
                       chatId={chatId}
                       worktreePath={worktreePath}
-                      remoteInfo={remoteInfo}
                     />
                   </WidgetCard>
                 )
@@ -471,11 +460,9 @@ export function DetailsSidebar({
                 )
 
               case "diff":
-                // Show widget if we have diff stats (local or remote)
+                // Show widget if we have local diff stats
                 // Hide only when Diff sidebar is open in side-peek mode
-                const hasDiffStats = !!diffStats && (diffStats.fileCount > 0 || diffStats.additions > 0 || diffStats.deletions > 0)
-                const canShowDiffWidget = canOpenDiff || (isRemoteChat && hasDiffStats)
-                if (!canShowDiffWidget || (isDiffSidebarOpen && diffDisplayMode === "side-peek")) return null
+                if (!canOpenDiff || (isDiffSidebarOpen && diffDisplayMode === "side-peek")) return null
                 return (
                   <ChangesWidget
                     key="diff"
@@ -491,9 +478,8 @@ export function DetailsSidebar({
                     hasUpstream={gitStatus?.hasUpstream ?? true}
                     isSyncStatusLoading={isGitStatusLoading}
                     currentBranch={currentBranch}
-                    // For remote chats on desktop, don't provide expand/file actions
-                    onExpand={canOpenDiff ? onExpandDiff : undefined}
-                    onFileSelect={canOpenDiff ? onFileSelect : undefined}
+                    onExpand={onExpandDiff}
+                    onFileSelect={onFileSelect}
                     diffDisplayMode={diffDisplayMode}
                   />
                 )

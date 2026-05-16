@@ -25,12 +25,6 @@ interface InfoSectionProps {
   chatId: string
   worktreePath: string | null
   isExpanded?: boolean
-  /** Remote chat data for sandbox workspaces */
-  remoteInfo?: {
-    repository?: string
-    branch?: string | null
-    sandboxId?: string
-  } | null
 }
 
 /** Property row component - Notion-style with icon, label, and value */
@@ -126,7 +120,6 @@ export const InfoSection = memo(function InfoSection({
   chatId,
   worktreePath,
   isExpanded = false,
-  remoteInfo,
 }: InfoSectionProps) {
   const { t } = useI18n()
   // Extract folder name from path
@@ -140,33 +133,23 @@ export const InfoSection = memo(function InfoSection({
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
   const openInAppMutation = trpc.external.openInApp.useMutation()
 
-  // Check if this is a remote sandbox chat (no local worktree)
-  const isRemoteChat = !worktreePath && !!remoteInfo
-
-  // Fetch branch data directly (only for local chats)
+  // Fetch branch data directly for local chats
   const { data: branchData, isLoading: isBranchLoading } = trpc.changes.getBranches.useQuery(
     { worktreePath: worktreePath || "" },
     { enabled: !!worktreePath }
   )
 
-  // Get PR status for current branch (only for local chats)
+  // Get PR status for current branch
   const { data: prStatus } = trpc.chats.getPrStatus.useQuery(
     { chatId },
     {
       refetchInterval: 30000, // Poll every 30 seconds
-      enabled: !!chatId && !!worktreePath, // Only enable for local chats
+      enabled: !!chatId && !!worktreePath,
     }
   )
 
-  // For local chats: use fetched branch data
-  // For remote chats: use remoteInfo from props
-  const branchName = isRemoteChat ? remoteInfo?.branch : branchData?.current
+  const branchName = branchData?.current
   const pr = prStatus?.pr
-
-  // Extract repo name from repository URL (e.g., "owner/repo" from "github.com/owner/repo")
-  const repositoryName = remoteInfo?.repository
-    ? remoteInfo.repository.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "")
-    : null
 
   const handleOpenFolder = () => {
     if (worktreePath) {
@@ -197,24 +180,8 @@ export const InfoSection = memo(function InfoSection({
     }
   }
 
-  const handleOpenRepository = () => {
-    if (remoteInfo?.repository) {
-      const repoUrl = remoteInfo.repository.startsWith("http")
-        ? remoteInfo.repository
-        : `https://github.com/${remoteInfo.repository}`
-      window.desktopApi.openExternal(repoUrl)
-    }
-  }
-
-  const handleOpenSandbox = () => {
-    if (remoteInfo?.sandboxId) {
-      const sandboxUrl = `https://3003-${remoteInfo.sandboxId}.e2b.app`
-      window.desktopApi.openExternal(sandboxUrl)
-    }
-  }
-
-  // Show loading state while branch data is loading (only for local chats)
-  if (!isRemoteChat && isBranchLoading) {
+  // Show loading state while branch data is loading
+  if (isBranchLoading) {
     return (
       <div className="px-2 py-1.5 flex flex-col gap-0.5">
         <div className="flex items-center min-h-[28px]">
@@ -239,7 +206,7 @@ export const InfoSection = memo(function InfoSection({
     )
   }
 
-  const hasContent = branchName || worktreePath || repositoryName || remoteInfo?.sandboxId
+  const hasContent = branchName || worktreePath
 
   if (!hasContent) {
     return (
@@ -253,22 +220,11 @@ export const InfoSection = memo(function InfoSection({
 
   return (
     <div className="px-2 py-1.5 flex flex-col gap-0.5">
-      {/* Repository - only for remote chats */}
-      {repositoryName && (
-        <PropertyRow
-          icon={FolderFilledIcon}
-          label={t("details.repository")}
-          value={repositoryName}
-          title={remoteInfo?.repository}
-          onClick={handleOpenRepository}
-          tooltip={t("details.openInGitHub")}
-        />
-      )}
-      {/* Branch - for both local and remote */}
+      {/* Branch */}
       {branchName && (
         <PropertyRow icon={GitBranchFilledIcon} label={t("details.branch")} value={branchName} copyable />
       )}
-      {/* PR - only for local chats */}
+      {/* PR */}
       {pr && (
         <PropertyRow
           icon={GitPullRequestFilledIcon}
@@ -279,7 +235,7 @@ export const InfoSection = memo(function InfoSection({
           tooltip={t("details.openInGitHub")}
         />
       )}
-      {/* Path - only for local chats */}
+      {/* Path */}
       {worktreePath && (
         <PropertyRow
           icon={FolderFilledIcon}

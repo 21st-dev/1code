@@ -108,7 +108,6 @@ interface AgentsFileMentionProps {
   position: { top: number; left: number }
   teamId?: string
   repository?: string
-  sandboxId?: string
   branch?: string // For fetching files from specific branch via GitHub API
   projectPath?: string // For fetching files from local project directory (desktop)
   changedFiles?: ChangedFile[] // Files changed in current sub-chat (shown at top)
@@ -701,7 +700,6 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   position,
   teamId,
   repository,
-  sandboxId,
   branch,
   projectPath,
   changedFiles = [],
@@ -754,8 +752,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     return words[0] || ""
   }, [debouncedSearchText])
 
-  // Fetch files from API
-  // Priority: sandboxId (includes uncommitted) > branch (GitHub API) > cached file_tree
+  // Fetch files from local project search or repository metadata.
   const {
     data: fileResults = [],
     isLoading,
@@ -767,13 +764,12 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       repository: repository!,
       query: apiSearchQuery,
       limit: 50,
-      sandboxId: sandboxId,
       branch: branch, // Pass branch for GitHub API fetch
       projectPath: projectPath, // For local project file search (desktop)
     },
     {
-      // Enable if we have projectPath (desktop) OR teamId with repository/sandboxId/branch (web)
-      enabled: isOpen && (!!projectPath || (!!teamId && (!!repository || !!sandboxId || !!branch))),
+      // Enable if we have projectPath (desktop) OR teamId with repository/branch metadata.
+      enabled: isOpen && (!!projectPath || (!!teamId && (!!repository || !!branch))),
       staleTime: 5000,
       refetchOnWindowFocus: false,
       // Keep showing previous results while fetching new ones
@@ -1335,4 +1331,3 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     document.body
   )
 })
-

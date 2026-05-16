@@ -12,9 +12,8 @@ import {
   widgetVisibilityAtomFamily,
   unifiedSidebarEnabledAtom,
 } from "../../details-sidebar/atoms"
-import { chatSourceModeAtom } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
-import { Plus, AlignJustify, Play, TerminalSquare, X } from "lucide-react"
+import { Plus, AlignJustify, TerminalSquare, X } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -169,8 +168,6 @@ interface SubChatSelectorProps {
   onCreateNew: () => void
   isMobile?: boolean
   onBackToChats?: () => void
-  onOpenPreview?: () => void
-  canOpenPreview?: boolean
   onOpenDiff?: () => void
   canOpenDiff?: boolean
   isDiffSidebarOpen?: boolean
@@ -185,8 +182,6 @@ export function SubChatSelector({
   onCreateNew,
   isMobile = false,
   onBackToChats,
-  onOpenPreview,
-  canOpenPreview = false,
   onOpenDiff,
   canOpenDiff = false,
   isDiffSidebarOpen = false,
@@ -232,7 +227,6 @@ export function SubChatSelector({
 
   // Overview sidebar state - to check if widgets are visible
   const isUnifiedSidebarEnabled = useAtomValue(unifiedSidebarEnabledAtom)
-  const chatSourceMode = useAtomValue(chatSourceModeAtom)
   const widgetVisibilityAtom = useMemo(
     () => widgetVisibilityAtomFamily(chatId || ""),
     [chatId],
@@ -241,9 +235,8 @@ export function SubChatSelector({
 
   // Show standalone buttons when:
   // 1. Unified sidebar is disabled (use legacy sidebars), OR
-  // 2. Unified sidebar is enabled but the widget is hidden by user, OR
-  // 3. Sandbox mode (DetailsSidebar doesn't render without worktreePath)
-  const showDiffButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("diff") || chatSourceMode === "sandbox"
+  // 2. Unified sidebar is enabled but the widget is hidden by user.
+  const showDiffButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("diff")
   const showTerminalButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("terminal")
 
   // Resolved hotkeys for tooltips
@@ -1037,27 +1030,6 @@ export function SubChatSelector({
           >
             <DiffIcon className="h-4 w-4" />
             <span className="sr-only">Open diff</span>
-          </Button>
-        </div>
-      )}
-
-      {/* Play button - only on mobile when preview is available */}
-      {isMobile && onOpenPreview && canOpenPreview && (
-        <div
-          className="rounded-md bg-background/10 backdrop-blur-[10px] flex items-center justify-center"
-          style={{
-            // @ts-expect-error - WebKit-specific property
-            WebkitAppRegion: "no-drag",
-          }}
-        >
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onOpenPreview}
-            className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 flex items-center justify-center"
-          >
-            <Play className="h-4 w-4" />
-            <span className="sr-only">Open preview</span>
           </Button>
         </div>
       )}

@@ -7,7 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../../components/ui/popover"
-import { IconChevronDown, CheckIcon, LaptopIcon, CloudIcon } from "../../../components/ui/icons"
+import { IconChevronDown, CheckIcon, LaptopIcon } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
 import type { WorkMode } from "../atoms"
 
@@ -27,13 +27,6 @@ const workModeOptions = [
     id: "worktree" as const,
     label: "Worktree",
     icon: GitBranch,
-  },
-  {
-    id: "sandbox" as const,
-    label: "Background",
-    icon: CloudIcon,
-    disabled: true,
-    soon: true,
   },
 ]
 
@@ -66,34 +59,23 @@ export function WorkModeSelector({
         {workModeOptions.map((option) => {
           const OptionIcon = option.icon
           const isSelected = value === option.id
-          const isDisabled = "disabled" in option && option.disabled
-          const isSoon = "soon" in option && option.soon
           return (
             <button
               key={option.id}
               onClick={() => {
-                if (isDisabled) return
                 onChange(option.id)
                 setOpen(false)
               }}
-              disabled={isDisabled}
               className={cn(
                 "flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] text-sm text-left rounded-md cursor-default select-none outline-none transition-colors",
-                isDisabled
-                  ? "opacity-50 cursor-not-allowed"
-                  : isSelected
-                    ? "dark:bg-neutral-800 text-foreground"
-                    : "dark:hover:bg-neutral-800 hover:text-foreground"
+                isSelected
+                  ? "dark:bg-neutral-800 text-foreground"
+                  : "dark:hover:bg-neutral-800 hover:text-foreground"
               )}
             >
               <OptionIcon className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="flex-1">{option.label}</span>
-              {isSoon && (
-                <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
-                  Soon
-                </span>
-              )}
-              {isSelected && !isDisabled && <CheckIcon className="h-4 w-4 shrink-0" />}
+              {isSelected && <CheckIcon className="h-4 w-4 shrink-0" />}
             </button>
           )
         })}

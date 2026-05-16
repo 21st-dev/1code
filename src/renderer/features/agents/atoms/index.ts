@@ -23,14 +23,6 @@ export const selectedAgentChatIdAtom = atomWithWindowStorage<string | null>(
   { getOnInit: true },
 )
 
-// Whether the selected chat is a remote (sandbox) chat
-// This is needed because remote and local chats may have the same ID
-export const selectedChatIsRemoteAtom = atomWithWindowStorage<boolean>(
-  "agents:selectedChatIsRemote",
-  false,
-  { getOnInit: true },
-)
-
 // Previous agent chat ID - used to navigate back after archiving current chat
 // Not persisted - only tracks within current session
 export const previousAgentChatIdAtom = atom<string | null>(null)
@@ -51,87 +43,6 @@ export const suppressInputFocusAtom = atom<boolean>(false)
 // Pending mention to insert into the editor from external components (e.g. MCP widget in sidebar)
 // When set, active-chat picks it up, calls editorRef.insertMention(), and resets to null
 export const pendingMentionAtom = atom<FileMentionOption | null>(null)
-
-// Preview paths storage - stores all preview paths keyed by chatId
-const previewPathsStorageAtom = atomWithStorage<Record<string, string>>(
-  "agents:previewPaths",
-  {},
-  undefined,
-  { getOnInit: true },
-)
-
-// atomFamily to get/set preview path per chatId
-export const previewPathAtomFamily = atomFamily((chatId: string) =>
-  atom(
-    (get) => get(previewPathsStorageAtom)[chatId] ?? "/",
-    (get, set, newPath: string) => {
-      const current = get(previewPathsStorageAtom)
-      set(previewPathsStorageAtom, { ...current, [chatId]: newPath })
-    },
-  ),
-)
-
-// Preview viewport modes storage - stores viewport mode per chatId
-const viewportModesStorageAtom = atomWithStorage<
-  Record<string, "desktop" | "mobile">
->("agents:viewportModes", {}, undefined, { getOnInit: true })
-
-// atomFamily to get/set viewport mode per chatId
-export const viewportModeAtomFamily = atomFamily((chatId: string) =>
-  atom(
-    (get) => get(viewportModesStorageAtom)[chatId] ?? "desktop",
-    (get, set, newMode: "desktop" | "mobile") => {
-      const current = get(viewportModesStorageAtom)
-      set(viewportModesStorageAtom, { ...current, [chatId]: newMode })
-    },
-  ),
-)
-
-// Preview scales storage - stores scale per chatId
-const previewScalesStorageAtom = atomWithStorage<Record<string, number>>(
-  "agents:previewScales",
-  {},
-  undefined,
-  { getOnInit: true },
-)
-
-// atomFamily to get/set preview scale per chatId
-export const previewScaleAtomFamily = atomFamily((chatId: string) =>
-  atom(
-    (get) => get(previewScalesStorageAtom)[chatId] ?? 100,
-    (get, set, newScale: number) => {
-      const current = get(previewScalesStorageAtom)
-      set(previewScalesStorageAtom, { ...current, [chatId]: newScale })
-    },
-  ),
-)
-
-// Mobile device dimensions storage - stores device settings per chatId
-type MobileDeviceSettings = {
-  width: number
-  height: number
-  preset: string
-}
-
-const mobileDevicesStorageAtom = atomWithStorage<
-  Record<string, MobileDeviceSettings>
->("agents:mobileDevices", {}, undefined, { getOnInit: true })
-
-// atomFamily to get/set mobile device settings per chatId
-export const mobileDeviceAtomFamily = atomFamily((chatId: string) =>
-  atom(
-    (get) =>
-      get(mobileDevicesStorageAtom)[chatId] ?? {
-        width: 393,
-        height: 852,
-        preset: "iPhone 16",
-      },
-    (get, set, newDevice: MobileDeviceSettings) => {
-      const current = get(mobileDevicesStorageAtom)
-      set(mobileDevicesStorageAtom, { ...current, [chatId]: newDevice })
-    },
-  ),
-)
 
 // Loading sub-chats: Map<subChatId, parentChatId>
 // Used to show loading indicators on tabs and sidebar
@@ -168,23 +79,6 @@ export const clearLoading = (
     return next
   })
 }
-
-// Persisted preferences for agents page
-export type SavedRepo = {
-  id: string
-  name: string
-  full_name: string
-  sandbox_status?: "not_setup" | "in_progress" | "ready" | "error"
-  installation_id?: string
-  isPublicImport?: boolean
-} | null
-
-export const lastSelectedRepoAtom = atomWithStorage<SavedRepo>(
-  "agents:lastSelectedRepo",
-  null,
-  undefined,
-  { getOnInit: true },
-)
 
 // Selected local project (persisted)
 export type SelectedProject = {
@@ -361,21 +255,6 @@ export const agentsSidebarWidthAtom = atomWithStorage<number>(
   "agents-sidebar-width",
   224,
   undefined,
-  { getOnInit: true },
-)
-
-// Preview sidebar (right) width and open state
-export const agentsPreviewSidebarWidthAtom = atomWithStorage<number>(
-  "agents-preview-sidebar-width",
-  500,
-  undefined,
-  { getOnInit: true },
-)
-
-// Preview sidebar open state - window-scoped
-export const agentsPreviewSidebarOpenAtom = atomWithWindowStorage<boolean>(
-  "agents-preview-sidebar-open",
-  true,
   { getOnInit: true },
 )
 
@@ -732,8 +611,8 @@ export interface PendingChatHistory {
 }
 export const pendingChatHistoryAtom = atom<PendingChatHistory | null>(null)
 
-// Work mode preference (local = work in project dir, worktree = create isolated worktree, sandbox = remote sandbox)
-export type WorkMode = "local" | "worktree" | "sandbox"
+// Work mode preference (local = work in project dir, worktree = create isolated worktree)
+export type WorkMode = "local" | "worktree"
 export const lastSelectedWorkModeAtom = atomWithStorage<WorkMode>(
   "agents:lastSelectedWorkMode",
   "worktree", // default to worktree for current behavior
@@ -841,7 +720,7 @@ export const askUserQuestionResultsAtom = atom<Map<string, unknown>>(new Map())
 // Unified undo stack for workspace and sub-chat archivation
 // Supports Cmd+Z to restore the last archived item (workspace or sub-chat)
 export type UndoItem =
-  | { type: "workspace"; chatId: string; timeoutId: ReturnType<typeof setTimeout>; isRemote?: boolean }
+  | { type: "workspace"; chatId: string; timeoutId: ReturnType<typeof setTimeout> }
   | { type: "subchat"; subChatId: string; chatId: string; timeoutId: ReturnType<typeof setTimeout> }
 
 export const undoStackAtom = atom<UndoItem[]>([])

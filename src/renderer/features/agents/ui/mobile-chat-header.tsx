@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { useAtomValue } from "jotai"
 import { loadingSubChatsAtom } from "../atoms"
-import { Plus, ChevronDown, Play, AlignJustify, FolderDown } from "lucide-react"
+import { Plus, ChevronDown, AlignJustify } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -33,8 +33,6 @@ interface DiffStats {
 interface MobileChatHeaderProps {
   onCreateNew: () => void
   onBackToChats?: () => void
-  onOpenPreview?: () => void
-  canOpenPreview?: boolean
   onOpenDiff?: () => void
   canOpenDiff?: boolean
   diffStats?: DiffStats
@@ -43,15 +41,11 @@ interface MobileChatHeaderProps {
   isTerminalOpen?: boolean
   isArchived?: boolean
   onRestore?: () => void
-  onOpenLocally?: () => void
-  showOpenLocally?: boolean
 }
 
 export function MobileChatHeader({
   onCreateNew,
   onBackToChats,
-  onOpenPreview,
-  canOpenPreview = false,
   onOpenDiff,
   canOpenDiff = false,
   diffStats,
@@ -60,8 +54,6 @@ export function MobileChatHeader({
   isTerminalOpen = false,
   isArchived = false,
   onRestore,
-  onOpenLocally,
-  showOpenLocally = false,
 }: MobileChatHeaderProps) {
   const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
   const allSubChats = useAgentSubChatStore((state) => state.allSubChats)
@@ -216,19 +208,6 @@ export function MobileChatHeader({
           WebkitAppRegion: "no-drag",
         }}
       >
-        {/* Open Locally - only for sandbox chats */}
-        {showOpenLocally && onOpenLocally && (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onOpenLocally}
-            className="h-7 px-2.5 gap-1.5 text-xs font-medium"
-          >
-            <FolderDown className="h-3.5 w-3.5" />
-            Open Locally
-          </Button>
-        )}
-
         {/* Create new */}
         <Button
           variant="ghost"
@@ -270,18 +249,6 @@ export function MobileChatHeader({
             ) : (
               <DiffIcon className="h-4 w-4" />
             )}
-          </Button>
-        )}
-
-        {/* Preview button */}
-        {onOpenPreview && canOpenPreview && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onOpenPreview}
-            className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md"
-          >
-            <Play className="h-4 w-4" />
           </Button>
         )}
 

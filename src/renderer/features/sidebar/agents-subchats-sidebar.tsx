@@ -30,7 +30,6 @@ import {
   selectedSubChatsCountAtom,
   isDesktopAtom,
   isFullscreenAtom,
-  chatSourceModeAtom,
   defaultAgentModeAtom,
 } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
@@ -336,9 +335,6 @@ export function AgentsSubChatsSidebar({
   // Global desktop/fullscreen state from atoms (initialized in AgentsLayout)
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
-
-  // Chat source mode: "local" or "sandbox"
-  const chatSourceMode = useAtomValue(chatSourceModeAtom)
 
   // Map open IDs to metadata and sort by updated_at (most recent first)
   const allSubChatsById = useMemo(() => {
@@ -719,21 +715,12 @@ export function AgentsSubChatsSidebar({
 
     const store = useAgentSubChatStore.getState()
 
-    let newId: string
-
-    if (chatSourceMode === "sandbox") {
-      // Sandbox mode: lazy creation (web app pattern)
-      // Sub-chat will be persisted on first message via RemoteChatTransport UPSERT
-      newId = crypto.randomUUID()
-    } else {
-      // Local mode: create sub-chat in DB first to get the real ID
-      const newSubChat = await trpcClient.chats.createSubChat.mutate({
-        chatId: parentChatId,
-        name: "New Chat",
-        mode: defaultAgentMode,
-      })
-      newId = newSubChat.id
-    }
+    const newSubChat = await trpcClient.chats.createSubChat.mutate({
+      chatId: parentChatId,
+      name: "New Chat",
+      mode: defaultAgentMode,
+    })
+    const newId = newSubChat.id
 
     // Track this subchat as just created for typewriter effect
     setJustCreatedIds((prev) => new Set([...prev, newId]))

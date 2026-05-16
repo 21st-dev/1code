@@ -192,7 +192,6 @@ export interface ChatInputAreaProps {
   provider?: "claude-code" | "codex"
   teamId?: string
   repository?: string
-  sandboxId?: string
   projectPath?: string
   changedFiles: SubChatFileChange[]
   // Mobile
@@ -228,7 +227,6 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.provider !== nextProps.provider ||
     prevProps.teamId !== nextProps.teamId ||
     prevProps.repository !== nextProps.repository ||
-    prevProps.sandboxId !== nextProps.sandboxId ||
     prevProps.projectPath !== nextProps.projectPath ||
     prevProps.isMobile !== nextProps.isMobile ||
     prevProps.queueLength !== nextProps.queueLength ||
@@ -405,7 +403,6 @@ export const ChatInputArea = memo(function ChatInputArea({
   provider = "claude-code",
   teamId,
   repository,
-  sandboxId,
   projectPath,
   changedFiles,
   isMobile = false,
@@ -633,7 +630,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     selectedModel,
   ])
   const canSwitchProvider =
-    messageTokenData.messageCount === 0 && !isStreaming && !sandboxId
+    messageTokenData.messageCount === 0 && !isStreaming
 
   // MCP status - from getAllMcpConfig query (provides global/local grouping)
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
@@ -1751,7 +1748,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       <AgentsFileMention
         isOpen={
           showMentionDropdown &&
-          (!!projectPath || !!repository || !!sandboxId)
+          (!!projectPath || !!repository)
         }
         onClose={handleMentionClose}
         onSelect={handleMentionSelect}
@@ -1759,7 +1756,6 @@ export const ChatInputArea = memo(function ChatInputArea({
         position={mentionPosition}
         teamId={teamId}
         repository={repository}
-        sandboxId={sandboxId}
         projectPath={projectPath}
         changedFiles={changedFiles}
         // Subpage navigation state

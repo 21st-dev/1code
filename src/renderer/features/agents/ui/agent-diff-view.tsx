@@ -75,10 +75,8 @@ import {
 // import { useIsHydrated } from "@/hooks/use-is-hydrated"
 const useIsHydrated = () => true // Desktop is always hydrated
 import { cn } from "../../../lib/utils"
-import { isDesktopApp } from "../../../lib/utils/platform"
 import { api } from "../../../lib/mock-api"
 import { trpcClient } from "../../../lib/trpc"
-import { remoteApi } from "../../../lib/remote-api"
 export type DiffViewMode = "unified" | "split"
 
 const LARGE_DIFF_LINE_THRESHOLD = 2000
@@ -996,7 +994,6 @@ export interface DiffStats {
 
 interface AgentDiffViewProps {
   chatId: string
-  sandboxId?: string | null
   /** Worktree path for local file access (desktop only) */
   worktreePath?: string
   repository?: string
@@ -1046,7 +1043,6 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
   function AgentDiffView(
     {
       chatId,
-      sandboxId,
       worktreePath,
       repository,
       onStatsChange,
@@ -1148,8 +1144,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       }
 
       const fetchDiff = async () => {
-        // Desktop: use tRPC if no sandboxId
-        if (!sandboxId && chatId) {
+        if (chatId) {
           try {
             setIsLoadingDiff(true)
             const result = await trpcClient.chats.getDiff.query({ chatId })
@@ -1165,40 +1160,12 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
           return
         }
 
-        // Web: use sandbox API
-        if (!sandboxId) {
-          setDiffError("Sandbox ID is required")
-          setIsLoadingDiff(false)
-          return
-        }
-
-        try {
-          setIsLoadingDiff(true)
-
-          const response = await fetch(`/api/agents/sandbox/${sandboxId}/diff`)
-          if (!response.ok) {
-            throw new Error(`Failed to fetch diff: ${response.statusText}`)
-          }
-
-          const data = await response.json()
-          const diffContent = data.diff || ""
-
-          if (diffContent.trim()) {
-            setDiff(diffContent)
-          } else {
-            setDiff("")
-          }
-        } catch (error) {
-          setDiffError(
-            error instanceof Error ? error.message : "Failed to fetch diff",
-          )
-        } finally {
-          setIsLoadingDiff(false)
-        }
+        setDiffError("Chat ID is required")
+        setIsLoadingDiff(false)
       }
 
       fetchDiff()
-    }, [sandboxId, chatId, initialDiff, initialParsedFiles])
+    }, [chatId, initialDiff, initialParsedFiles])
 
     const handleRefresh = useCallback(async () => {
       setIsLoadingDiff(true)
@@ -1207,20 +1174,11 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       try {
         let diffContent = ""
 
-        // Desktop: use tRPC to get diff from worktree
-        if (chatId && !sandboxId) {
-          const result = await trpcClient.chats.getDiff.query({ chatId })
-          diffContent = result.diff || ""
+        if (!chatId) {
+          throw new Error("Chat ID is required")
         }
-        // Web: use sandbox API
-        else if (sandboxId) {
-          const response = await fetch(`/api/agents/sandbox/${sandboxId}/diff`)
-          if (!response.ok) {
-            throw new Error(`Failed to fetch diff: ${response.statusText}`)
-          }
-          const data = await response.json()
-          diffContent = data.diff || ""
-        }
+        const result = await trpcClient.chats.getDiff.query({ chatId })
+        diffContent = result.diff || ""
 
         if (diffContent.trim()) {
           setDiff(diffContent)
@@ -1234,7 +1192,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       } finally {
         setIsLoadingDiff(false)
       }
-    }, [chatId, sandboxId])
+    }, [chatId])
 
     const isLight = isHydrated ? resolvedTheme !== "dark" : true
     const codeThemeId = useCodeTheme()
@@ -1568,9 +1526,8 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     const MAX_PREFETCH_FILES = 20
 
     useEffect(() => {
-      // Desktop: use worktreePath, Web: use sandboxId
       if (fileDiffs.length === 0 || isLoadingFileContents) return
-      if (!worktreePath && !sandboxId) return
+      if (!worktreePath) return
       // Skip if we already have enough contents
       const existingContentCount = Object.keys(fileContents).length
       if (
@@ -1604,54 +1561,19 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
             return
           }
 
-          // Desktop: use batch tRPC call
-          if (worktreePath) {
-            const results =
-              await trpcClient.changes.readMultipleWorkingFiles.query({
-                worktreePath,
-                files: filesToFetch,
-              })
+          const results =
+            await trpcClient.changes.readMultipleWorkingFiles.query({
+              worktreePath,
+              files: filesToFetch,
+            })
 
-            const newContents: Record<string, string> = {}
-            for (const [key, result] of Object.entries(results)) {
-              if (result.ok) {
-                newContents[key] = result.content
-              }
+          const newContents: Record<string, string> = {}
+          for (const [key, result] of Object.entries(results)) {
+            if (result.ok) {
+              newContents[key] = result.content
             }
-            setFileContents(newContents)
-          } else if (sandboxId) {
-            // Sandbox: use remoteApi on desktop, relative fetch on web
-            const results = await Promise.allSettled(
-              filesToFetch.map(async ({ key, filePath }) => {
-                if (isDesktopApp()) {
-                  // Desktop: use signedFetch via remoteApi
-                  const data = await remoteApi.getSandboxFile(sandboxId, filePath)
-                  return { key, content: data.content }
-                } else {
-                  // Web: use relative fetch
-                  const response = await Promise.race([
-                    fetch(
-                      `/api/agents/sandbox/${sandboxId}/files?path=${encodeURIComponent(filePath)}`,
-                    ),
-                    new Promise<never>((_, reject) =>
-                      setTimeout(() => reject(new Error("Timeout")), 5000),
-                    ),
-                  ])
-                  if (!response.ok) throw new Error("Failed to fetch file")
-                  const data = await response.json()
-                  return { key, content: data.content }
-                }
-              }),
-            )
-
-            const newContents: Record<string, string> = {}
-            for (const result of results) {
-              if (result.status === "fulfilled" && result.value?.content) {
-                newContents[result.value.key] = result.value.content
-              }
-            }
-            setFileContents(newContents)
           }
+          setFileContents(newContents)
         } catch (error) {
           console.error("Failed to prefetch file contents:", error)
         } finally {
@@ -1660,7 +1582,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       }
 
       fetchAllContents()
-    }, [fileDiffs, sandboxId, worktreePath]) // Note: fileContents intentionally not in deps
+    }, [fileDiffs, worktreePath]) // Note: fileContents intentionally not in deps
 
     const toggleFileCollapsed = useCallback((fileKey: string) => {
       setCollapsedByFileKey((prev) => ({

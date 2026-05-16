@@ -8,7 +8,6 @@ export { AgentUserMessageBubble } from "./agent-user-message-bubble"
 export { AgentsContent } from "./agents-content"
 
 // Preview components
-export { AgentPreview } from "./agent-preview"
 export { ViewportToggle } from "./viewport-toggle"
 export { ScaleControl } from "./scale-control"
 export { DevicePresetsBar } from "./device-presets-bar"

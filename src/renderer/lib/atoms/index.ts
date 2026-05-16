@@ -12,7 +12,6 @@ export {
   subChatModeAtomFamily,
   lastSelectedModelIdAtom,
   lastSelectedAgentIdAtom,
-  lastSelectedRepoAtom,
   selectedProjectAtom,
   agentsUnseenChangesAtom,
   agentsSubChatUnseenChangesAtom,
@@ -27,14 +26,6 @@ export {
   agentsSidebarWidthAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatsSidebarWidthAtom,
-
-  // Preview atoms
-  previewPathAtomFamily,
-  viewportModeAtomFamily,
-  previewScaleAtomFamily,
-  mobileDeviceAtomFamily,
-  agentsPreviewSidebarWidthAtom,
-  agentsPreviewSidebarOpenAtom,
 
   // Diff atoms
   agentsDiffSidebarWidthAtom,
@@ -62,7 +53,6 @@ export {
   pendingUserQuestionsAtom,
 
   // Types
-  type SavedRepo,
   type SelectedProject,
   type AgentsMobileViewMode,
   type AgentsDebugMode,
@@ -182,7 +172,6 @@ export const clearSubChatSelectionAtom = atom(null, (_get, set) => {
 
 // Settings dialog
 export type SettingsTab =
-  | "profile"
   | "appearance"
   | "preferences"
   | "models"
@@ -718,8 +707,7 @@ export const billingMethodAtom = atomWithStorage<BillingMethod>(
   { getOnInit: true },
 )
 
-// Whether user has completed Anthropic OAuth during onboarding
-// This is used to show the onboarding screen after hosted sign-in
+// Whether user has completed Claude Code local auth during onboarding
 // Reset on logout
 export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:anthropic-completed",
@@ -823,20 +811,6 @@ export type SessionInfo = {
 export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
   "21st-session-info",
   null,
-  undefined,
-  { getOnInit: true },
-)
-
-// ============================================
-// CHAT SOURCE MODE (Local vs Sandbox)
-// ============================================
-
-// Chat source toggle: "local" = worktree chats (SQLite), "sandbox" = remote sandbox chats
-export type ChatSourceMode = "local" | "sandbox"
-
-export const chatSourceModeAtom = atomWithStorage<ChatSourceMode>(
-  "agents:chat-source-mode",
-  "local",
   undefined,
   { getOnInit: true },
 )

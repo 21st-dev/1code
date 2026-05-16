@@ -529,7 +529,6 @@ export const api = {
           repository?: string
           query?: string
           limit?: number
-          sandboxId?: string
           branch?: string
           projectPath?: string
         },
