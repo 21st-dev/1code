@@ -9,6 +9,12 @@ export type ClaudeCodeLoginFlowState =
   | "error"
   | "cancelled"
 
+export type ClaudeCodeLoginSubmitState =
+  | "idle"
+  | "submitting"
+  | "submitted"
+  | "error"
+
 function isTerminalState(state: ClaudeCodeLoginFlowState): boolean {
   return state === "success" || state === "error" || state === "cancelled"
 }
@@ -31,6 +37,9 @@ export function useClaudeCodeLoginFlow() {
   const [url, setUrl] = useState<string | null>(null)
   const [output, setOutput] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [submitState, setSubmitState] =
+    useState<ClaudeCodeLoginSubmitState>("idle")
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const openedUrlRef = useRef<string | null>(null)
   const startRequestIdRef = useRef(0)
@@ -39,6 +48,7 @@ export function useClaudeCodeLoginFlow() {
 
   const startLoginMutation = trpc.claudeCode.startLocalLogin.useMutation()
   const cancelLoginMutation = trpc.claudeCode.cancelLocalLogin.useMutation()
+  const submitLoginCodeMutation = trpc.claudeCode.submitLocalLoginCode.useMutation()
   const openExternalMutation = trpc.external.openExternal.useMutation()
   const trpcUtils = trpc.useUtils()
 
@@ -65,6 +75,8 @@ export function useClaudeCodeLoginFlow() {
     setUrl(null)
     setOutput("")
     setError(null)
+    setSubmitState("idle")
+    setSubmitError(null)
     openedUrlRef.current = null
 
     try {
@@ -141,6 +153,8 @@ export function useClaudeCodeLoginFlow() {
     setUrl(null)
     setOutput("")
     setError(null)
+    setSubmitState("idle")
+    setSubmitError(null)
     openedUrlRef.current = null
   }, [])
 
@@ -162,6 +176,56 @@ export function useClaudeCodeLoginFlow() {
     [openExternalMutation, url],
   )
 
+  const submitCode = useCallback(
+    async (code: string) => {
+      const trimmedCode = code.trim()
+      if (!sessionId) {
+        const message = "Claude Code login session is not available yet"
+        setSubmitState("error")
+        setSubmitError(message)
+        return false
+      }
+
+      if (!trimmedCode) {
+        const message = "Claude Code authentication code is empty"
+        setSubmitState("error")
+        setSubmitError(message)
+        return false
+      }
+
+      try {
+        setSubmitState("submitting")
+        setSubmitError(null)
+        const result = await submitLoginCodeMutation.mutateAsync({
+          sessionId,
+          code: trimmedCode,
+        })
+        if (!result.success) {
+          const message =
+            result.session.error ||
+            "Failed to submit Claude Code authentication code"
+          setSubmitState("error")
+          setSubmitError(message)
+          return false
+        }
+
+        setError(null)
+        setSubmitState("submitted")
+        setSubmitError(null)
+        return true
+      } catch (submitError) {
+        const message = toErrorMessage(
+          submitError,
+          "Failed to submit Claude Code authentication code",
+        )
+        setSubmitState("error")
+        setSubmitError(message)
+        return false
+      }
+    },
+    [sessionId, submitLoginCodeMutation],
+  )
+
   useEffect(() => {
     const data = sessionQuery.data
     if (!data) return
@@ -177,6 +241,11 @@ export function useClaudeCodeLoginFlow() {
     setOutput(data.output || "")
     setState(data.state)
     setError(data.error || null)
+
+    if (data.state === "success" || data.state === "error") {
+      setSubmitState("idle")
+      setSubmitError(null)
+    }
 
     if (data.state === "success") {
       void Promise.allSettled([
@@ -204,11 +273,15 @@ export function useClaudeCodeLoginFlow() {
     url,
     output,
     error,
+    submitState,
+    submitError,
     isRunning: state === "running" || state === "importing",
     isOpeningUrl: openExternalMutation.isPending,
+    isSubmittingCode: submitLoginCodeMutation.isPending,
     start,
     cancel,
     reset,
     openUrl,
+    submitCode,
   }
 }

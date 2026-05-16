@@ -342,6 +342,34 @@ export function storeClaudeCodeOAuthToken(
   })
 }
 
+export function storeClaudeCodeOAuthCredential(
+  credential: ClaudeOAuthCredential,
+  options: {
+    source?: ClaudeCodeCredentialEnvelope["source"]
+    setAsActive?: boolean
+    displayName?: string
+  } = {},
+): {
+  success: true
+  accountId: string
+  metadata: ClaudeCodeCredentialMetadata
+} {
+  const envelope = createClaudeCodeCredentialEnvelope(
+    credential,
+    options.source ?? credential.source ?? "manual",
+  )
+  const accountId = persistCredentialEnvelope(envelope, {
+    setAsActive: options.setAsActive,
+    displayName: options.displayName ?? "Local Claude Code",
+  })
+
+  return {
+    success: true,
+    accountId,
+    metadata: getClaudeCodeCredentialMetadata(),
+  }
+}
+
 export function importLocalClaudeCodeCredential(): {
   success: true
   accountId: string

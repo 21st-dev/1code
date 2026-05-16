@@ -70,8 +70,6 @@ export const en = {
   "onboarding.claude.importLocalCredentials": "Import local credentials",
   "onboarding.claude.localCredentialsReady":
     "Local Claude Code credentials are available on this machine.",
-  "onboarding.claude.localOnlyNeedsCredentials":
-    "Local-only mode cannot use hosted Claude Code auth. Run Claude Code login on this machine, then import local credentials.",
   "onboarding.claude.localOnlyLoginPrompt":
     "Local-only mode uses the Claude Code CLI on this machine. Sign in with Claude Code to open Anthropic's official login page, then credentials will be imported locally.",
   "onboarding.claude.waitingForLocalLogin":
@@ -84,6 +82,11 @@ export const en = {
   "onboarding.claude.failedToImportLocalCredentials":
     "Failed to import local Claude Code credentials",
   "onboarding.claude.pasteCode": "Paste your authentication code here...",
+  "onboarding.claude.submitCode": "Submit code",
+  "onboarding.claude.submittingCode":
+    "Submitting authentication code to Claude Code...",
+  "onboarding.claude.codeSubmitted":
+    "Authentication code submitted. Waiting for Claude Code to finish login...",
   "onboarding.claude.openedAuthTab":
     "A new tab has opened for authentication.",
   "onboarding.claude.didntOpen": "Didn't open? Click here",
@@ -1034,8 +1037,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.importLocalCredentials": "导入本地凭证",
   "onboarding.claude.localCredentialsReady":
     "这台设备上已发现本地 Claude Code 凭证。",
-  "onboarding.claude.localOnlyNeedsCredentials":
-    "Local-only 模式不能使用 hosted Claude Code auth。请先在这台设备上完成 Claude Code login，然后导入本地凭证。",
   "onboarding.claude.localOnlyLoginPrompt":
     "Local-only 模式会使用这台设备上的 Claude Code CLI。点击后会打开 Anthropic 官方登录页，完成后自动导入本地凭证。",
   "onboarding.claude.waitingForLocalLogin":
@@ -1048,6 +1049,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.failedToImportLocalCredentials":
     "导入本地 Claude Code 凭证失败",
   "onboarding.claude.pasteCode": "在这里粘贴 authentication code...",
+  "onboarding.claude.submitCode": "提交 code",
+  "onboarding.claude.submittingCode":
+    "正在把 authentication code 提交给 Claude Code...",
+  "onboarding.claude.codeSubmitted":
+    "已提交 authentication code，正在等待 Claude Code 完成登录...",
   "onboarding.claude.openedAuthTab": "已打开新的浏览器标签用于授权。",
   "onboarding.claude.didntOpen": "没有打开？点击这里",
 

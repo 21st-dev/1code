@@ -1,28 +1,21 @@
 import { eq } from "drizzle-orm"
-import { shell } from "electron"
-import { spawn, type ChildProcess } from "node:child_process"
-import { randomUUID } from "node:crypto"
-import { stripVTControlCharacters } from "node:util"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 import { z } from "zod"
-import {
-  getBundledClaudeBinaryPath,
-  getClaudeShellEnvironment,
-} from "../../claude"
+import { getClaudeShellEnvironment } from "../../claude"
 import { getExistingClaudeCredentials } from "../../claude-token"
 import {
   type ClaudeCodeCredentialMetadata,
   getClaudeCodeCredentialMetadata,
   importLocalClaudeCodeCredential,
+  storeClaudeCodeOAuthCredential,
   storeClaudeCodeOAuthToken,
 } from "../../claude-credentials"
-import { getApiUrl } from "../../config"
 import {
   anthropicAccounts,
   anthropicSettings,
   claudeCodeCredentials,
   getDatabase,
 } from "../../db"
-import { assertOfficialCloudAllowed } from "../../local-only"
 import { publicProcedure, router } from "../index"
 
 type ClaudeCodeLocalLoginSessionState =
@@ -34,66 +27,35 @@ type ClaudeCodeLocalLoginSessionState =
 
 type ClaudeCodeLocalLoginSession = {
   id: string
-  process: ChildProcess | null
   state: ClaudeCodeLocalLoginSessionState
   output: string
   url: string | null
   error: string | null
   exitCode: number | null
   metadata: ClaudeCodeCredentialMetadata | null
+  codeVerifier: string
+  expectedState: string
 }
 
 const localLoginSessions = new Map<string, ClaudeCodeLocalLoginSession>()
-const URL_CANDIDATE_REGEX = /https?:\/\/[^\s]+/g
+const CLAUDE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+const CLAUDE_AI_AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
+const CLAUDE_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
+const CLAUDE_MANUAL_REDIRECT_URL =
+  "https://platform.claude.com/oauth/code/callback"
+const CLAUDE_OAUTH_SCOPES = [
+  "org:create_api_key",
+  "user:profile",
+  "user:inference",
+  "user:sessions:claude_code",
+  "user:mcp_servers",
+]
 
-/**
- * Get desktop auth token for server API calls
- */
-async function getDesktopToken(): Promise<string | null> {
-  const { getAuthManager } = await import("../../../index")
-  const authManager = getAuthManager()
-  return authManager.getValidToken()
-}
-
-/**
- * Store OAuth token - now uses multi-account system
- * If setAsActive is true, also sets this account as active
- */
-function storeOAuthToken(oauthToken: string, setAsActive = true): string {
-  return storeClaudeCodeOAuthToken(oauthToken, {
-    source: "hosted_oauth",
-    setAsActive,
-    displayName: "Claude Code",
-  })
-}
-
-function isLocalhostHostname(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase()
-  return (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "::1" ||
-    normalized === "[::1]" ||
-    normalized.endsWith(".localhost")
-  )
-}
-
-function extractFirstNonLocalhostUrl(output: string): string | null {
-  const matches = output.match(URL_CANDIDATE_REGEX)
-  if (!matches) return null
-
-  for (const match of matches) {
-    try {
-      const parsedUrl = new URL(match.trim().replace(/[),.;!?]+$/, ""))
-      if (!isLocalhostHostname(parsedUrl.hostname)) {
-        return parsedUrl.toString()
-      }
-    } catch {
-      // Ignore invalid URL candidates.
-    }
-  }
-
-  return null
+type ClaudeCodeTokenResponse = {
+  access_token?: string
+  refresh_token?: string
+  expires_in?: number
+  scope?: string
 }
 
 function redactClaudeLoginOutput(output: string): string {
@@ -113,14 +75,10 @@ function appendLocalLoginOutput(
   session: ClaudeCodeLocalLoginSession,
   chunk: string,
 ): void {
-  const cleanChunk = redactClaudeLoginOutput(stripVTControlCharacters(chunk))
+  const cleanChunk = redactClaudeLoginOutput(chunk)
   if (!cleanChunk) return
 
   session.output += cleanChunk
-
-  if (!session.url) {
-    session.url = extractFirstNonLocalhostUrl(session.output)
-  }
 }
 
 function toLocalLoginSessionResponse(session: ClaudeCodeLocalLoginSession) {
@@ -148,67 +106,108 @@ function getActiveLocalLoginSession(): ClaudeCodeLocalLoginSession | null {
   return null
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
+function base64Url(buffer: Buffer): string {
+  return buffer
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+}
+
+function generateCodeVerifier(): string {
+  return base64Url(randomBytes(96))
+}
+
+function generateCodeChallenge(codeVerifier: string): string {
+  return base64Url(createHash("sha256").update(codeVerifier).digest())
+}
+
+function buildClaudeCodeAuthUrl({
+  codeChallenge,
+  state,
+}: {
+  codeChallenge: string
+  state: string
+}): string {
+  const authUrl = new URL(CLAUDE_AI_AUTHORIZE_URL)
+  authUrl.searchParams.set("code", "true")
+  authUrl.searchParams.set("client_id", CLAUDE_OAUTH_CLIENT_ID)
+  authUrl.searchParams.set("response_type", "code")
+  authUrl.searchParams.set("redirect_uri", CLAUDE_MANUAL_REDIRECT_URL)
+  authUrl.searchParams.set("scope", CLAUDE_OAUTH_SCOPES.join(" "))
+  authUrl.searchParams.set("code_challenge", codeChallenge)
+  authUrl.searchParams.set("code_challenge_method", "S256")
+  authUrl.searchParams.set("state", state)
+  return authUrl.toString()
+}
+
+function parseManualClaudeAuthCode(input: string): {
+  authorizationCode: string
+  state: string
+} {
+  const [authorizationCode, state] = input.trim().split("#")
+  if (!authorizationCode || !state) {
+    throw new Error(
+      "Invalid Claude Code authentication code. Copy the full code, including the part after #.",
+    )
+  }
+
+  return { authorizationCode, state }
+}
+
+async function exchangeClaudeCodeAuthCode({
+  authorizationCode,
+  state,
+  codeVerifier,
+}: {
+  authorizationCode: string
+  state: string
+  codeVerifier: string
+}) {
+  const response = await fetch(CLAUDE_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      grant_type: "authorization_code",
+      code: authorizationCode,
+      redirect_uri: CLAUDE_MANUAL_REDIRECT_URL,
+      client_id: CLAUDE_OAUTH_CLIENT_ID,
+      code_verifier: codeVerifier,
+      state,
+    }),
   })
-}
 
-function isLocalLoginSessionCancelled(
-  session: ClaudeCodeLocalLoginSession,
-): boolean {
-  return session.state === "cancelled"
-}
-
-async function finalizeLocalLoginSession(
-  session: ClaudeCodeLocalLoginSession,
-  exitCode: number | null,
-): Promise<void> {
-  session.exitCode = exitCode
-  session.process = null
-
-  if (session.state === "cancelled") {
-    return
+  if (!response.ok) {
+    const body = await response.text().catch(() => "")
+    throw new Error(
+      response.status === 401
+        ? "Authentication failed: invalid or expired Claude Code authentication code."
+        : `Claude Code token exchange failed (${response.status}): ${body || response.statusText}`,
+    )
   }
 
-  if (exitCode !== 0) {
-    session.state = "error"
-    session.error =
-      session.error ||
-      `Claude Code login exited with code ${exitCode ?? "unknown"}`
-    return
+  const tokenResponse = (await response.json()) as ClaudeCodeTokenResponse
+  if (!tokenResponse.access_token) {
+    throw new Error(
+      "Claude Code token exchange succeeded, but no access token was returned.",
+    )
   }
 
-  session.state = "importing"
-  appendLocalLoginOutput(
-    session,
-    "\nClaude Code login completed; importing local credentials...\n",
-  )
-
-  await delay(500)
-
-  if (isLocalLoginSessionCancelled(session)) {
-    return
-  }
-
-  try {
-    const result = importLocalClaudeCodeCredential()
-    session.metadata = result.metadata
-    session.state = "success"
-    session.error = null
-    appendLocalLoginOutput(session, "Local Claude Code credentials imported.\n")
-  } catch (error) {
-    session.state = "error"
-    session.error =
-      error instanceof Error
-        ? error.message
-        : "Claude Code login completed, but local credentials were not found"
+  return {
+    accessToken: tokenResponse.access_token,
+    refreshToken: tokenResponse.refresh_token,
+    expiresAt: tokenResponse.expires_in
+      ? Date.now() + tokenResponse.expires_in * 1000
+      : undefined,
+    scopes: tokenResponse.scope?.split(" ").filter(Boolean),
   }
 }
 
 /**
  * Claude Code OAuth router for desktop
- * Uses server only for sandbox creation, stores token locally
+ * Uses first-party Claude Code OAuth and stores tokens locally.
  */
 export const claudeCodeRouter = router({
   /**
@@ -235,9 +234,9 @@ export const claudeCodeRouter = router({
   }),
 
   /**
-   * Start local Claude Code CLI login.
-   * This invokes the bundled Claude Code binary and lets it drive Anthropic's
-   * official browser login; no 21st hosted auth or sandbox is contacted.
+   * Start local Claude Code OAuth login.
+   * This uses Claude Code's first-party OAuth client parameters directly, then
+   * stores the exchanged token in the app's local encrypted credential store.
    */
   startLocalLogin: publicProcedure.mutation(() => {
     const existingSession = getActiveLocalLoginSession()
@@ -245,42 +244,28 @@ export const claudeCodeRouter = router({
       return toLocalLoginSessionResponse(existingSession)
     }
 
-    const claudeBinaryPath = getBundledClaudeBinaryPath()
     const sessionId = randomUUID()
-
-    const child = spawn(claudeBinaryPath, ["auth", "login"], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: getClaudeShellEnvironment(),
-      windowsHide: true,
+    const codeVerifier = generateCodeVerifier()
+    const expectedState = base64Url(randomBytes(32))
+    const url = buildClaudeCodeAuthUrl({
+      codeChallenge: generateCodeChallenge(codeVerifier),
+      state: expectedState,
     })
+
+    console.log("[ClaudeCodeLogin] Starting direct local Claude Code OAuth flow")
 
     const session: ClaudeCodeLocalLoginSession = {
       id: sessionId,
-      process: child,
       state: "running",
-      output: "",
-      url: null,
+      output:
+        "Opening Anthropic sign-in in your browser. Paste the full authentication code here after sign-in.\n",
+      url,
       error: null,
       exitCode: null,
       metadata: null,
+      codeVerifier,
+      expectedState,
     }
-
-    const handleChunk = (chunk: Buffer | string) => {
-      appendLocalLoginOutput(session, chunk.toString())
-    }
-
-    child.stdout.on("data", handleChunk)
-    child.stderr.on("data", handleChunk)
-
-    child.once("error", (error) => {
-      session.state = "error"
-      session.error = `[ClaudeCode] Failed to start local login flow: ${error.message}`
-      session.process = null
-    })
-
-    child.once("close", (exitCode) => {
-      void finalizeLocalLoginSession(session, exitCode)
-    })
 
     localLoginSessions.set(sessionId, session)
 
@@ -302,6 +287,75 @@ export const claudeCodeRouter = router({
       return toLocalLoginSessionResponse(session)
     }),
 
+  submitLocalLoginCode: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        code: z.string().trim().min(1).max(4096),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const session = localLoginSessions.get(input.sessionId)
+      if (!session || session.state !== "running") {
+        throw new Error("Claude Code local login session is not running")
+      }
+
+      const { authorizationCode, state } = parseManualClaudeAuthCode(
+        input.code.trim(),
+      )
+      if (state !== session.expectedState) {
+        throw new Error(
+          "Claude Code authentication code does not match this login session. Please start login again and paste the new full code.",
+        )
+      }
+
+      console.log("[ClaudeCodeLogin] Exchanging Claude Code auth code", {
+        sessionId: session.id,
+        codeLength: input.code.trim().length,
+      })
+
+      session.state = "importing"
+      session.error = null
+      appendLocalLoginOutput(
+        session,
+        "\nAuthentication code submitted; exchanging token locally...\n",
+      )
+
+      try {
+        const credential = await exchangeClaudeCodeAuthCode({
+          authorizationCode,
+          state,
+          codeVerifier: session.codeVerifier,
+        })
+        const result = storeClaudeCodeOAuthCredential(credential, {
+          source: "manual",
+          displayName: "Local Claude Code",
+        })
+        session.metadata = result.metadata
+        session.state = "success"
+        session.error = null
+        appendLocalLoginOutput(
+          session,
+          "Local Claude Code credentials imported.\n",
+        )
+      } catch (error) {
+        session.state = "error"
+        session.error =
+          error instanceof Error
+            ? error.message
+            : "Failed to exchange Claude Code authentication code"
+        appendLocalLoginOutput(
+          session,
+          `Claude Code login failed: ${session.error}\n`,
+        )
+      }
+
+      return {
+        success: session.state === "success",
+        session: toLocalLoginSessionResponse(session),
+      }
+    }),
+
   cancelLocalLogin: publicProcedure
     .input(
       z.object({
@@ -317,143 +371,11 @@ export const claudeCodeRouter = router({
       session.state = "cancelled"
       session.error = null
 
-      if (session.process && !session.process.killed) {
-        session.process.kill("SIGTERM")
-      }
-
       return {
         success: true,
         found: true,
         session: toLocalLoginSessionResponse(session),
       }
-    }),
-
-  /**
-   * Start OAuth flow - calls server to create sandbox
-   */
-  startAuth: publicProcedure.mutation(async () => {
-    const apiUrl = getApiUrl()
-    assertOfficialCloudAllowed("Claude Code hosted auth", apiUrl)
-
-    const token = await getDesktopToken()
-    if (!token) {
-      throw new Error("Not authenticated with hosted upstream service")
-    }
-
-    // Server creates sandbox (has CodeSandbox SDK)
-    const response = await fetch(`${apiUrl}/api/auth/claude-code/start`, {
-      method: "POST",
-      headers: { "x-desktop-token": token },
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }))
-      throw new Error(error.error || `Start auth failed: ${response.status}`)
-    }
-
-    return (await response.json()) as {
-      sandboxId: string
-      sandboxUrl: string
-      sessionId: string
-    }
-  }),
-
-  /**
-   * Poll for OAuth URL - calls sandbox directly
-   */
-  pollStatus: publicProcedure
-    .input(
-      z.object({
-        sandboxUrl: z.string(),
-        sessionId: z.string(),
-      })
-    )
-    .query(async ({ input }) => {
-      try {
-        const statusUrl = `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        assertOfficialCloudAllowed("Claude Code sandbox status", statusUrl)
-
-        const response = await fetch(statusUrl)
-
-        if (!response.ok) {
-          return { state: "error" as const, oauthUrl: null, error: "Failed to poll status" }
-        }
-
-        const data = await response.json()
-        return {
-          state: data.state as string,
-          oauthUrl: data.oauthUrl ?? null,
-          error: data.error ?? null,
-        }
-      } catch (error) {
-        console.error("[ClaudeCode] Poll status error:", error)
-        return {
-          state: "error" as const,
-          oauthUrl: null,
-          error: error instanceof Error ? error.message : "Connection failed",
-        }
-      }
-    }),
-
-  /**
-   * Submit OAuth code - calls sandbox directly, stores token locally
-   */
-  submitCode: publicProcedure
-    .input(
-      z.object({
-        sandboxUrl: z.string(),
-        sessionId: z.string(),
-        code: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
-      // Submit code to sandbox
-      const codeUrl = `${input.sandboxUrl}/api/auth/${input.sessionId}/code`
-      assertOfficialCloudAllowed("Claude Code sandbox code submission", codeUrl)
-
-      const codeRes = await fetch(codeUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: input.code }),
-      })
-
-      if (!codeRes.ok) {
-        throw new Error(`Code submission failed: ${codeRes.statusText}`)
-      }
-
-      // Poll for OAuth token (max 10 seconds)
-      let oauthToken: string | null = null
-
-      for (let i = 0; i < 10; i++) {
-        await new Promise((r) => setTimeout(r, 1000))
-
-        const statusUrl = `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        assertOfficialCloudAllowed("Claude Code sandbox token polling", statusUrl)
-
-        const statusRes = await fetch(statusUrl)
-
-        if (!statusRes.ok) continue
-
-        const status = await statusRes.json()
-
-        if (status.state === "success" && status.oauthToken) {
-          oauthToken = status.oauthToken
-          break
-        }
-
-        if (status.state === "error") {
-          throw new Error(status.error || "Authentication failed")
-        }
-      }
-
-      if (!oauthToken) {
-        throw new Error("Timeout waiting for OAuth token")
-      }
-
-      storeOAuthToken(oauthToken)
-
-      console.log("[ClaudeCode] Token stored locally")
-      return { success: true }
     }),
 
   /**
@@ -561,14 +483,4 @@ export const claudeCodeRouter = router({
     return { success: true }
   }),
 
-  /**
-   * Open OAuth URL in browser
-   */
-  openOAuthUrl: publicProcedure
-    .input(z.string())
-    .mutation(async ({ input: url }) => {
-      assertOfficialCloudAllowed("Claude Code OAuth URL", url)
-      await shell.openExternal(url)
-      return { success: true }
-    }),
 })

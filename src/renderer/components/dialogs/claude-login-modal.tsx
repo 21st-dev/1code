@@ -4,6 +4,7 @@ import { useAtom, useSetAtom } from "jotai"
 import { X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
+import { ClaudeCodeAuthCodeForm } from "../../features/agents/components/claude-code-auth-code-form"
 import { useClaudeCodeLoginFlow } from "../../features/agents/hooks/use-claude-code-login-flow"
 import {
   agentsLoginModalOpenAtom,
@@ -14,7 +15,6 @@ import {
 } from "../../lib/atoms"
 import { appStore } from "../../lib/jotai-store"
 import { trpc } from "../../lib/trpc"
-import { useLocalOnlyMode } from "../../lib/hooks/use-local-only-mode"
 import { useI18n } from "../../lib/i18n"
 import {
   AlertDialog,
@@ -25,25 +25,10 @@ import {
 } from "../ui/alert-dialog"
 import { Button } from "../ui/button"
 import { ClaudeCodeIcon, IconSpinner } from "../ui/icons"
-import { Input } from "../ui/input"
 import { Logo } from "../ui/logo"
 
 type AuthFlowState =
   | { step: "idle" }
-  | { step: "starting" }
-  | {
-      step: "waiting_url"
-      sandboxId: string
-      sandboxUrl: string
-      sessionId: string
-    }
-  | {
-      step: "has_url"
-      sandboxId: string
-      oauthUrl: string
-      sandboxUrl: string
-      sessionId: string
-    }
   | { step: "submitting" }
   | { step: "error"; message: string }
 
@@ -63,33 +48,26 @@ export function ClaudeLoginModal({
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
-  const [authCode, setAuthCode] = useState("")
-  const [userClickedConnect, setUserClickedConnect] = useState(false)
-  const [urlOpened, setUrlOpened] = useState(false)
-  const [savedOauthUrl, setSavedOauthUrl] = useState<string | null>(null)
-  const urlOpenedRef = useRef(false)
   const didAutoStartForOpenRef = useRef(false)
   const localLoginSuccessHandledRef = useRef(false)
   const wasOpenRef = useRef(open)
-  const isLocalOnly = useLocalOnlyMode()
   const { t } = useI18n()
-  const localLogin = useClaudeCodeLoginFlow()
   const {
     state: localLoginState,
     url: localLoginUrl,
     output: localLoginOutput,
     error: localLoginErrorMessage,
+    submitState: localLoginSubmitState,
+    submitError: localLoginSubmitError,
     isRunning: isLocalLoginRunning,
+    isSubmittingCode: isSubmittingLocalLoginCode,
     start: startLocalLogin,
     cancel: cancelLocalLogin,
     reset: resetLocalLogin,
     openUrl: openLocalLoginUrl,
-  } = localLogin
+    submitCode: submitLocalLoginCode,
+  } = useClaudeCodeLoginFlow()
 
-  // tRPC mutations
-  const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
-  const submitCodeMutation = trpc.claudeCode.submitCode.useMutation()
-  const openOAuthUrlMutation = trpc.claudeCode.openOAuthUrl.useMutation()
   const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
   const systemTokenQuery = trpc.claudeCode.getSystemToken.useQuery(undefined, {
     enabled: open,
@@ -97,57 +75,80 @@ export function ClaudeLoginModal({
   const trpcUtils = trpc.useUtils()
   const hasLocalClaudeCredential = Boolean(systemTokenQuery.data?.hasCredentials)
 
-  // Poll for OAuth URL
-  const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(
-    {
-      sandboxUrl: flowState.step === "waiting_url" ? flowState.sandboxUrl : "",
-      sessionId: flowState.step === "waiting_url" ? flowState.sessionId : "",
-    },
-    {
-      enabled: flowState.step === "waiting_url" && !isLocalOnly,
-      refetchInterval: 1500,
-    }
-  )
-
-  // Update flow state when we get the OAuth URL
-  useEffect(() => {
-    if (
-      flowState.step === "waiting_url" &&
-      pollStatusQuery.data?.oauthUrl
-    ) {
-      setSavedOauthUrl(pollStatusQuery.data.oauthUrl)
-      setFlowState({
-        step: "has_url",
-        sandboxId: flowState.sandboxId,
-        oauthUrl: pollStatusQuery.data.oauthUrl,
-        sandboxUrl: flowState.sandboxUrl,
-        sessionId: flowState.sessionId,
+  const triggerAuthRetry = useCallback(() => {
+    const pending = appStore.get(pendingAuthRetryMessageAtom)
+    if (pending && pending.provider === "claude-code") {
+      console.log(
+        "[ClaudeLoginModal] OAuth success - triggering retry for subChatId:",
+        pending.subChatId,
+      )
+      appStore.set(pendingAuthRetryMessageAtom, {
+        ...pending,
+        readyToRetry: true,
       })
-    } else if (
-      flowState.step === "waiting_url" &&
-      pollStatusQuery.data?.state === "error"
+    }
+  }, [])
+
+  const clearPendingRetry = useCallback(() => {
+    const pending = appStore.get(pendingAuthRetryMessageAtom)
+    if (
+      pending &&
+      pending.provider === "claude-code" &&
+      !pending.readyToRetry
     ) {
+      console.log(
+        "[ClaudeLoginModal] Modal closed without success - clearing pending retry",
+      )
+      appStore.set(pendingAuthRetryMessageAtom, null)
+    }
+  }, [])
+
+  const handleAuthSuccess = useCallback(() => {
+    triggerAuthRetry()
+    setAnthropicOnboardingCompleted(true)
+    setOpen(false)
+    void Promise.allSettled([
+      trpcUtils.anthropicAccounts.list.invalidate(),
+      trpcUtils.anthropicAccounts.getActive.invalidate(),
+      trpcUtils.claudeCode.getIntegration.invalidate(),
+    ])
+  }, [
+    setAnthropicOnboardingCompleted,
+    setOpen,
+    triggerAuthRetry,
+    trpcUtils,
+  ])
+
+  const handleImportLocalCredentials = useCallback(async () => {
+    setFlowState({ step: "submitting" })
+    try {
+      await importSystemTokenMutation.mutateAsync()
+      handleAuthSuccess()
+    } catch (err) {
       setFlowState({
         step: "error",
-        message: pollStatusQuery.data.error || "Failed to get OAuth URL",
+        message:
+          err instanceof Error
+            ? err.message
+            : t("onboarding.claude.failedToImportLocalCredentials"),
       })
     }
-  }, [pollStatusQuery.data, flowState])
+  }, [handleAuthSuccess, importSystemTokenMutation, t])
 
-  // Open URL in browser when ready (after user clicked Connect)
-  useEffect(() => {
-    if (
-      flowState.step === "has_url" &&
-      userClickedConnect &&
-      !urlOpenedRef.current
-    ) {
-      urlOpenedRef.current = true
-      setUrlOpened(true)
-      openOAuthUrlMutation.mutate(flowState.oauthUrl)
+  const handleConnectClick = useCallback(async () => {
+    if (hasLocalClaudeCredential) {
+      await handleImportLocalCredentials()
+      return
     }
-  }, [flowState, userClickedConnect, openOAuthUrlMutation])
 
-  // Reset state when modal closes
+    setFlowState({ step: "idle" })
+    await startLocalLogin()
+  }, [
+    handleImportLocalCredentials,
+    hasLocalClaudeCredential,
+    startLocalLogin,
+  ])
+
   useEffect(() => {
     if (open) {
       wasOpenRef.current = true
@@ -158,57 +159,16 @@ export function ClaudeLoginModal({
 
     wasOpenRef.current = false
     setFlowState({ step: "idle" })
-    setAuthCode("")
-    setUserClickedConnect(false)
-    setUrlOpened(false)
-    setSavedOauthUrl(null)
-    urlOpenedRef.current = false
     didAutoStartForOpenRef.current = false
     localLoginSuccessHandledRef.current = false
     if (isLocalLoginRunning) {
       void cancelLocalLogin()
     }
     resetLocalLogin()
-    // Clear pending retry if modal closed without success (user cancelled)
-    // Note: We don't clear here because success handler sets readyToRetry=true first
   }, [cancelLocalLogin, isLocalLoginRunning, open, resetLocalLogin])
-
-  // Helper to trigger retry after successful OAuth
-  const triggerAuthRetry = () => {
-    const pending = appStore.get(pendingAuthRetryMessageAtom)
-    if (pending && pending.provider === "claude-code") {
-      console.log("[ClaudeLoginModal] OAuth success - triggering retry for subChatId:", pending.subChatId)
-      appStore.set(pendingAuthRetryMessageAtom, { ...pending, readyToRetry: true })
-    }
-  }
-
-  // Helper to clear pending retry (on cancel/close without success)
-  const clearPendingRetry = () => {
-    const pending = appStore.get(pendingAuthRetryMessageAtom)
-    if (
-      pending &&
-      pending.provider === "claude-code" &&
-      !pending.readyToRetry
-    ) {
-      console.log("[ClaudeLoginModal] Modal closed without success - clearing pending retry")
-      appStore.set(pendingAuthRetryMessageAtom, null)
-    }
-  }
-
-  const handleAuthSuccess = () => {
-    triggerAuthRetry()
-    setAnthropicOnboardingCompleted(true)
-    setOpen(false)
-    void Promise.allSettled([
-      trpcUtils.anthropicAccounts.list.invalidate(),
-      trpcUtils.anthropicAccounts.getActive.invalidate(),
-      trpcUtils.claudeCode.getIntegration.invalidate(),
-    ])
-  }
 
   useEffect(() => {
     if (
-      !isLocalOnly ||
       localLoginState !== "success" ||
       localLoginSuccessHandledRef.current
     ) {
@@ -217,92 +177,7 @@ export function ClaudeLoginModal({
 
     localLoginSuccessHandledRef.current = true
     handleAuthSuccess()
-  }, [isLocalOnly, localLoginState])
-
-  // Check if the code looks like a valid Claude auth code (format: XXX#YYY)
-  const isValidCodeFormat = (code: string) => {
-    const trimmed = code.trim()
-    return trimmed.length > 50 && trimmed.includes("#")
-  }
-
-  const handleConnectClick = useCallback(async () => {
-    setUserClickedConnect(true)
-
-    if (isLocalOnly) {
-      if (hasLocalClaudeCredential) {
-        setFlowState({ step: "submitting" })
-        try {
-          await importSystemTokenMutation.mutateAsync()
-          handleAuthSuccess()
-        } catch (err) {
-          setFlowState({
-            step: "error",
-            message:
-              err instanceof Error
-                ? err.message
-                : t("onboarding.claude.failedToImportLocalCredentials"),
-          })
-        }
-        return
-      }
-
-      setFlowState({ step: "idle" })
-      await startLocalLogin()
-      return
-    }
-
-    if (flowState.step === "has_url") {
-      // URL is ready, open it immediately
-      urlOpenedRef.current = true
-      setUrlOpened(true)
-      openOAuthUrlMutation.mutate(flowState.oauthUrl)
-    } else if (flowState.step === "error") {
-      // Retry on error
-      urlOpenedRef.current = false
-      setUrlOpened(false)
-      setFlowState({ step: "starting" })
-      try {
-        const result = await startAuthMutation.mutateAsync()
-        setFlowState({
-          step: "waiting_url",
-          sandboxId: result.sandboxId,
-          sandboxUrl: result.sandboxUrl,
-          sessionId: result.sessionId,
-        })
-      } catch (err) {
-        setFlowState({
-          step: "error",
-          message: err instanceof Error ? err.message : "Failed to start authentication",
-        })
-      }
-    } else if (flowState.step === "idle") {
-      // Start auth
-      setFlowState({ step: "starting" })
-      try {
-        const result = await startAuthMutation.mutateAsync()
-        setFlowState({
-          step: "waiting_url",
-          sandboxId: result.sandboxId,
-          sandboxUrl: result.sandboxUrl,
-          sessionId: result.sessionId,
-        })
-      } catch (err) {
-        setFlowState({
-          step: "error",
-          message: err instanceof Error ? err.message : "Failed to start authentication",
-        })
-      }
-    }
-  }, [
-    flowState,
-    hasLocalClaudeCredential,
-    importSystemTokenMutation,
-    isLocalOnly,
-    openOAuthUrlMutation,
-    startAuthMutation,
-    startLocalLogin,
-    t,
-  ])
+  }, [handleAuthSuccess, localLoginState])
 
   useEffect(() => {
     if (
@@ -318,72 +193,6 @@ export function ClaudeLoginModal({
     void handleConnectClick()
   }, [autoStartAuth, flowState.step, handleConnectClick, open])
 
-  const handleSubmitCode = async () => {
-    if (!authCode.trim() || flowState.step !== "has_url") return
-    if (isLocalOnly) {
-      setFlowState({
-        step: "error",
-        message: t("onboarding.claude.localOnlyNeedsCredentials"),
-      })
-      return
-    }
-
-    const { sandboxUrl, sessionId } = flowState
-    setFlowState({ step: "submitting" })
-
-    try {
-      await submitCodeMutation.mutateAsync({
-        sandboxUrl,
-        sessionId,
-        code: authCode.trim(),
-      })
-      handleAuthSuccess()
-    } catch (err) {
-      setFlowState({
-        step: "error",
-        message: err instanceof Error ? err.message : "Failed to submit code",
-      })
-    }
-  }
-
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setAuthCode(value)
-
-    // Auto-submit if the pasted value looks like a valid auth code
-    if (!isLocalOnly && isValidCodeFormat(value) && flowState.step === "has_url") {
-      const { sandboxUrl, sessionId } = flowState
-      setTimeout(async () => {
-        setFlowState({ step: "submitting" })
-        try {
-          await submitCodeMutation.mutateAsync({
-            sandboxUrl,
-            sessionId,
-            code: value.trim(),
-          })
-          handleAuthSuccess()
-        } catch (err) {
-          setFlowState({
-            step: "error",
-            message: err instanceof Error ? err.message : "Failed to submit code",
-          })
-        }
-      }, 100)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && authCode.trim()) {
-      handleSubmitCode()
-    }
-  }
-
-  const handleOpenFallbackUrl = () => {
-    if (!isLocalOnly && savedOauthUrl) {
-      openOAuthUrlMutation.mutate(savedOauthUrl)
-    }
-  }
-
   const handleOpenModelsSettings = () => {
     clearPendingRetry()
     setSettingsActiveTab("models" as SettingsTab)
@@ -391,29 +200,11 @@ export function ClaudeLoginModal({
     setOpen(false)
   }
 
-  const handleImportLocalCredentials = async () => {
-    setFlowState({ step: "submitting" })
-    try {
-      await importSystemTokenMutation.mutateAsync()
-      handleAuthSuccess()
-    } catch (err) {
-      setFlowState({
-        step: "error",
-        message:
-          err instanceof Error
-            ? err.message
-            : t("onboarding.claude.failedToImportLocalCredentials"),
-      })
-    }
-  }
-
-  const isLoadingAuth =
-    flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
   const localLoginError =
-    isLocalOnly && localLoginState === "error" ? localLoginErrorMessage : null
+    localLoginState === "error" ? localLoginErrorMessage : null
+  const hasError = flowState.step === "error" || Boolean(localLoginError)
 
-  // Handle modal open/close - clear pending retry if closing without success
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       clearPendingRetry()
@@ -430,14 +221,12 @@ export function ClaudeLoginModal({
         <AlertDialogDescription className="sr-only">
           Connect local Claude Code credentials.
         </AlertDialogDescription>
-        {/* Close button */}
         <AlertDialogCancel className="absolute right-4 top-4 h-6 w-6 p-0 border-0 bg-transparent hover:bg-muted rounded-sm opacity-70 hover:opacity-100">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </AlertDialogCancel>
 
         <div className="space-y-8">
-          {/* Header with dual icons */}
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
               <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
@@ -457,21 +246,18 @@ export function ClaudeLoginModal({
             </div>
           </div>
 
-          {/* Content */}
           <div className="space-y-6">
-            {isLocalOnly && (
-              <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  {hasLocalClaudeCredential
-                    ? t("onboarding.claude.localCredentialsReady")
-                    : isLocalLoginRunning
-                      ? t("onboarding.claude.waitingForLocalLogin")
-                      : t("onboarding.claude.localOnlyLoginPrompt")}
-                </p>
-              </div>
-            )}
+            <div className="p-4 bg-muted/50 border border-border rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                {hasLocalClaudeCredential
+                  ? t("onboarding.claude.localCredentialsReady")
+                  : isLocalLoginRunning
+                    ? t("onboarding.claude.waitingForLocalLogin")
+                    : t("onboarding.claude.localOnlyLoginPrompt")}
+              </p>
+            </div>
 
-            {isLocalOnly && hasLocalClaudeCredential && (
+            {!hasError && hasLocalClaudeCredential && (
               <Button
                 onClick={() => void handleImportLocalCredentials()}
                 className="w-full"
@@ -485,7 +271,7 @@ export function ClaudeLoginModal({
               </Button>
             )}
 
-            {isLocalOnly && !hasLocalClaudeCredential && (
+            {!hasError && !hasLocalClaudeCredential && (
               <Button
                 onClick={() => void handleConnectClick()}
                 className="w-full"
@@ -499,82 +285,45 @@ export function ClaudeLoginModal({
               </Button>
             )}
 
-            {isLocalOnly &&
-              (isLocalLoginRunning || localLoginState === "importing") && (
-                <div className="space-y-3">
-                  {localLoginOutput && (
-                    <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 p-3 text-xs text-muted-foreground">
-                      {localLoginOutput.trim()}
-                    </pre>
-                  )}
-                  {localLoginUrl && (
-                    <button
-                      type="button"
-                      onClick={() => void openLocalLoginUrl()}
-                      className="w-full text-xs text-primary hover:underline"
-                    >
-                      {t("onboarding.claude.didntOpen")}
-                    </button>
-                  )}
-                </div>
-              )}
-
-            {/* Connect Button - shows loader only if user clicked AND loading */}
-            {!isLocalOnly && !urlOpened && flowState.step !== "has_url" && flowState.step !== "error" && (
-              <Button
-                onClick={handleConnectClick}
-                className="w-full"
-                disabled={userClickedConnect && isLoadingAuth}
-              >
-                {userClickedConnect && isLoadingAuth ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  "Connect"
+            {(isLocalLoginRunning || localLoginState === "importing") && (
+              <div className="space-y-3">
+                {localLoginOutput && (
+                  <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 p-3 text-xs text-muted-foreground">
+                    {localLoginOutput.trim()}
+                  </pre>
                 )}
-              </Button>
-            )}
-
-            {/* Code Input - Show after URL is opened or if has_url */}
-            {!isLocalOnly &&
-              (urlOpened ||
-                flowState.step === "has_url" ||
-                flowState.step === "submitting") && (
-              <div className="space-y-4">
-                <Input
-                  value={authCode}
-                  onChange={handleCodeChange}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Paste your authentication code here..."
-                  className="font-mono text-center"
-                  autoFocus
-                  disabled={isSubmitting}
+                {localLoginUrl && (
+                  <button
+                    type="button"
+                    onClick={() => void openLocalLoginUrl()}
+                    className="w-full text-xs text-primary hover:underline"
+                  >
+                    {t("onboarding.claude.didntOpen")}
+                  </button>
+                )}
+                <ClaudeCodeAuthCodeForm
+                  disabled={!isLocalLoginRunning}
+                  isSubmitting={isSubmittingLocalLoginCode}
+                  onSubmitCode={submitLocalLoginCode}
                 />
-                <Button
-                  onClick={handleSubmitCode}
-                  className="w-full"
-                  disabled={!authCode.trim() || isSubmitting}
-                >
-                  {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Continue"}
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  A new tab has opened for authentication.
-                  {savedOauthUrl && (
-                    <>
-                      {" "}
-                      <button
-                        onClick={handleOpenFallbackUrl}
-                        className="text-primary hover:underline"
-                      >
-                        Didn't open? Click here
-                      </button>
-                    </>
-                  )}
-                </p>
+                {localLoginSubmitState !== "idle" && (
+                  <p
+                    className={
+                      localLoginSubmitState === "error"
+                        ? "text-xs text-destructive"
+                        : "text-xs text-muted-foreground"
+                    }
+                  >
+                    {localLoginSubmitError ||
+                      (localLoginSubmitState === "submitting"
+                        ? t("onboarding.claude.submittingCode")
+                        : t("onboarding.claude.codeSubmitted"))}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Error State */}
-            {(flowState.step === "error" || localLoginError) && (
+            {hasError && (
               <div className="space-y-4">
                 <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                   <p className="text-sm text-destructive">
@@ -585,19 +334,15 @@ export function ClaudeLoginModal({
                 <Button
                   variant="secondary"
                   onClick={
-                    isLocalOnly && hasLocalClaudeCredential
+                    hasLocalClaudeCredential
                       ? () => void handleImportLocalCredentials()
-                      : isLocalOnly
-                        ? () => void startLocalLogin()
-                      : handleConnectClick
+                      : () => void startLocalLogin()
                   }
                   className="w-full"
                 >
-                  {isLocalOnly && hasLocalClaudeCredential
+                  {hasLocalClaudeCredential
                     ? t("onboarding.claude.importLocalCredentials")
-                    : isLocalOnly
-                      ? t("onboarding.claude.signInWithClaudeCode")
-                    : "Try Again"}
+                    : t("onboarding.claude.signInWithClaudeCode")}
                 </Button>
               </div>
             )}
