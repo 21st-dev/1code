@@ -89,34 +89,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
   getUser: () => ipcRenderer.invoke("auth:get-user"),
   isAuthenticated: () => ipcRenderer.invoke("auth:is-authenticated"),
   logout: () => ipcRenderer.invoke("auth:logout"),
-  startAuthFlow: () => ipcRenderer.invoke("auth:start-flow"),
-  submitAuthCode: (code: string) => ipcRenderer.invoke("auth:submit-code", code),
-  updateUser: (updates: { name?: string }) => ipcRenderer.invoke("auth:update-user", updates),
-  getAuthToken: () => ipcRenderer.invoke("auth:get-token"),
-
-  // Signed fetch - proxies through main process (no CORS issues)
-  signedFetch: (
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) =>
-    ipcRenderer.invoke("api:signed-fetch", url, options) as Promise<{
-      ok: boolean
-      status: number
-      data: unknown
-      error: string | null
-    }>,
-
-  // Streaming fetch - for SSE responses (chat streaming)
-  streamFetch: (
-    streamId: string,
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) =>
-    ipcRenderer.invoke("api:stream-fetch", streamId, url, options) as Promise<{
-      ok: boolean
-      status: number
-      error?: string
-    }>,
 
   // Stream event listeners
   onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => {
@@ -133,18 +105,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
     const handler = (_event: unknown, error: string) => callback(error)
     ipcRenderer.on(`stream:${streamId}:error`, handler)
     return () => ipcRenderer.removeListener(`stream:${streamId}:error`, handler)
-  },
-
-  // Auth events
-  onAuthSuccess: (callback: (user: any) => void) => {
-    const handler = (_event: unknown, user: any) => callback(user)
-    ipcRenderer.on("auth:success", handler)
-    return () => ipcRenderer.removeListener("auth:success", handler)
-  },
-  onAuthError: (callback: (error: string) => void) => {
-    const handler = (_event: unknown, error: string) => callback(error)
-    ipcRenderer.on("auth:error", handler)
-    return () => ipcRenderer.removeListener("auth:error", handler)
   },
 
   // Shortcut events (from main process menu accelerators)
@@ -263,31 +223,9 @@ export interface DesktopApi {
   } | null>
   isAuthenticated: () => Promise<boolean>
   logout: () => Promise<void>
-  startAuthFlow: () => Promise<void>
-  submitAuthCode: (code: string) => Promise<void>
-  updateUser: (updates: { name?: string }) => Promise<{
-    id: string
-    email: string
-    name: string | null
-    imageUrl: string | null
-    username: string | null
-  } | null>
-  getAuthToken: () => Promise<string | null>
-  signedFetch: (
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) => Promise<{ ok: boolean; status: number; data: unknown; error: string | null }>
-  // Streaming fetch
-  streamFetch: (
-    streamId: string,
-    url: string,
-    options?: { method?: string; body?: string; headers?: Record<string, string> },
-  ) => Promise<{ ok: boolean; status: number; error?: string }>
   onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => () => void
   onStreamDone: (streamId: string, callback: () => void) => () => void
   onStreamError: (streamId: string, callback: (error: string) => void) => () => void
-  onAuthSuccess: (callback: (user: any) => void) => () => void
-  onAuthError: (callback: (error: string) => void) => () => void
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   onShortcutOpenSettings: (callback: () => void) => () => void

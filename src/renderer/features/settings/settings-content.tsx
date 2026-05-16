@@ -13,7 +13,6 @@ import { AgentsKeyboardTab } from "../../components/dialogs/settings-tabs/agents
 import { AgentsMcpTab } from "../../components/dialogs/settings-tabs/agents-mcp-tab"
 import { AgentsModelsTab } from "../../components/dialogs/settings-tabs/agents-models-tab"
 import { AgentsPreferencesTab } from "../../components/dialogs/settings-tabs/agents-preferences-tab"
-import { AgentsProfileTab } from "../../components/dialogs/settings-tabs/agents-profile-tab"
 import { AgentsProjectsTab } from "../../components/dialogs/settings-tabs/agents-project-worktree-tab"
 import { AgentsSkillsTab } from "../../components/dialogs/settings-tabs/agents-skills-tab"
 import { AgentsPluginsTab } from "../../components/dialogs/settings-tabs/agents-plugins-tab"
@@ -41,8 +40,6 @@ export function SettingsContent() {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case "profile":
-        return <AgentsProfileTab />
       case "appearance":
         return <AgentsAppearanceTab />
       case "keyboard":

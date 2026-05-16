@@ -6,7 +6,6 @@ import {
   ipcMain,
   app,
   clipboard,
-  session,
   nativeImage,
   dialog,
 } from "electron"
@@ -14,18 +13,13 @@ import { join } from "path"
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
-import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
+import { getAuthManager } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/routers/claude"
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
-import {
-  blockedOfficialCloudResponse,
-  isLocalOnlyMode,
-  isOfficialCloudUrl,
-  LOCAL_ONLY_BLOCKED_MESSAGE,
-} from "../lib/local-only"
+import { isLocalOnlyMode, isOfficialCloudUrl } from "../lib/local-only"
 
 const APP_NAME = "Agent Code for Me"
 
@@ -155,9 +149,7 @@ function registerIpcHandlers(): void {
   )
 
   // API base URL for fetch requests
-  ipcMain.handle("app:get-api-base-url", () =>
-    isLocalOnlyMode() ? null : getBaseUrl(),
-  )
+  ipcMain.handle("app:get-api-base-url", () => null)
 
   // Window controls - use event.sender to identify window
   ipcMain.handle("window:minimize", (event) => {
@@ -348,16 +340,6 @@ function registerIpcHandlers(): void {
       if (parsed.protocol === "file:") return true
       const hostname = parsed.hostname.toLowerCase()
       const trusted = ["localhost", "127.0.0.1"]
-      if (!isLocalOnlyMode()) {
-        const hostedBaseUrl = getBaseUrl()
-        if (hostedBaseUrl) {
-          try {
-            trusted.push(new URL(hostedBaseUrl).hostname.toLowerCase())
-          } catch {
-            console.warn("[Auth] Ignoring invalid hosted API base URL:", hostedBaseUrl)
-          }
-        }
-      }
       return trusted.some((h) => hostname === h || hostname.endsWith(`.${h}`))
     } catch {
       return false
@@ -377,191 +359,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle("auth:logout", async (event) => {
     if (!validateSender(event)) return
     getAuthManager().logout()
-    // Clear cookie from persist:main partition
-    const ses = session.fromPartition("persist:main")
-    try {
-      await ses.cookies.remove(getBaseUrl(), "x-desktop-token")
-      console.log("[Auth] Cookie cleared on logout")
-    } catch (err) {
-      console.error("[Auth] Failed to clear cookie:", err)
-    }
-    // Return to the local app shell after logout. Hosted-only actions can ask
-    // the user to log in again when needed.
+    // Return to the local app shell after clearing any persisted auth state.
     for (const win of windowManager.getAll()) {
       loadAppInWindow(win)
     }
   })
-
-  ipcMain.handle("auth:start-flow", (event) => {
-    if (!validateSender(event)) return
-    const win = getWindowFromEvent(event)
-    getAuthManager().startAuthFlow(win)
-  })
-
-  ipcMain.handle("auth:submit-code", async (event, code: string) => {
-    if (!validateSender(event)) return
-    if (!code || typeof code !== "string") {
-      getWindowFromEvent(event)?.webContents.send(
-        "auth:error",
-        "Invalid authorization code",
-      )
-      return
-    }
-    await handleAuthCode(code)
-  })
-
-  ipcMain.handle("auth:update-user", async (event, updates: { name?: string }) => {
-    if (!validateSender(event)) return null
-    try {
-      return await getAuthManager().updateUser(updates)
-    } catch (error) {
-      console.error("[Auth] Failed to update user:", error)
-      throw error
-    }
-  })
-
-  ipcMain.handle("auth:get-token", async (event) => {
-    if (!validateSender(event)) return null
-    return getAuthManager().getValidToken()
-  })
-
-  // Signed fetch - proxies requests through main process (no CORS)
-  ipcMain.handle(
-    "api:signed-fetch",
-    async (
-      event,
-      url: string,
-      options?: { method?: string; body?: string; headers?: Record<string, string> },
-    ) => {
-      console.log("[SignedFetch] IPC handler called with URL:", url)
-      if (!validateSender(event)) {
-        console.log("[SignedFetch] Unauthorized sender")
-        return { ok: false, status: 403, data: null, error: "Unauthorized sender" }
-      }
-      console.log("[SignedFetch] Sender validated OK")
-
-      if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
-        console.warn(`[LocalOnly] Blocked signedFetch: ${url}`)
-        return blockedOfficialCloudResponse("signedFetch", url)
-      }
-
-      const token = await getAuthManager().getValidToken()
-      console.log("[SignedFetch] Token:", token ? "present" : "missing", "URL:", url)
-      if (!token) {
-        return { ok: false, status: 401, data: null, error: "Not authenticated" }
-      }
-
-      try {
-        const response = await fetch(url, {
-          method: options?.method || "GET",
-          body: options?.body,
-          headers: {
-            ...options?.headers,
-            "X-Desktop-Token": token,
-            "Content-Type": "application/json",
-          },
-        })
-
-        const data = await response.json().catch(() => null)
-        console.log("[SignedFetch] Response:", response.status, response.ok ? "OK" : "FAILED")
-
-        return {
-          ok: response.ok,
-          status: response.status,
-          data,
-          error: response.ok ? null : `Request failed: ${response.status}`,
-        }
-      } catch (error) {
-        console.log("[SignedFetch] Error:", error)
-        return {
-          ok: false,
-          status: 0,
-          data: null,
-          error: error instanceof Error ? error.message : "Network error",
-        }
-      }
-    },
-  )
-
-  // Streaming fetch - for SSE responses (chat streaming)
-  // Uses a unique stream ID to match chunks with the right request
-  ipcMain.handle(
-    "api:stream-fetch",
-    async (
-      event,
-      streamId: string,
-      url: string,
-      options?: { method?: string; body?: string; headers?: Record<string, string> },
-    ) => {
-      console.log("[StreamFetch] Starting stream:", streamId, url)
-      if (!validateSender(event)) {
-        console.log("[StreamFetch] Unauthorized sender")
-        return { ok: false, status: 403, error: "Unauthorized sender" }
-      }
-
-      if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
-        console.warn(`[LocalOnly] Blocked streamFetch: ${url}`)
-        return { ok: false, status: 451, error: LOCAL_ONLY_BLOCKED_MESSAGE }
-      }
-
-      const token = await getAuthManager().getValidToken()
-      if (!token) {
-        return { ok: false, status: 401, error: "Not authenticated" }
-      }
-
-      try {
-        const response = await fetch(url, {
-          method: options?.method || "POST",
-          body: options?.body,
-          headers: {
-            ...options?.headers,
-            "X-Desktop-Token": token,
-            "Content-Type": "application/json",
-          },
-        })
-
-        console.log("[StreamFetch] Response:", response.status, response.ok)
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "Unknown error")
-          return { ok: false, status: response.status, error: errorText }
-        }
-
-        // Stream the response body back to renderer
-        const reader = response.body?.getReader()
-        if (!reader) {
-          return { ok: false, status: 500, error: "No response body" }
-        }
-
-        // Send chunks asynchronously
-        ;(async () => {
-          try {
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) {
-                event.sender.send(`stream:${streamId}:done`)
-                break
-              }
-              // Send chunk to renderer
-              event.sender.send(`stream:${streamId}:chunk`, value)
-            }
-          } catch (err) {
-            console.error("[StreamFetch] Stream error:", err)
-            event.sender.send(`stream:${streamId}:error`, err instanceof Error ? err.message : "Stream error")
-          }
-        })()
-
-        return { ok: true, status: response.status }
-      } catch (error) {
-        console.error("[StreamFetch] Fetch error:", error)
-        return {
-          ok: false,
-          status: 0,
-          error: error instanceof Error ? error.message : "Network error",
-        }
-      }
-    },
-  )
 
   // Register git watcher IPC handlers
   registerGitWatcherIPC()
@@ -599,33 +401,6 @@ function loadAppInWindow(
       hash: hashParams.toString(),
     })
   }
-}
-
-/**
- * Show login page in a specific window
- */
-function showLoginPageInWindow(window: BrowserWindow): void {
-  console.log("[Main] Showing login page in window", window.id)
-
-  // In dev mode, login.html is in src/renderer, not out/renderer
-  if (process.env.ELECTRON_RENDERER_URL) {
-    // Dev mode: load from source directory
-    const loginPath = join(app.getAppPath(), "src/renderer/login.html")
-    console.log("[Main] Loading login from:", loginPath)
-    window.loadFile(loginPath)
-  } else {
-    // Production: load from built output
-    window.loadFile(join(__dirname, "../renderer/login.html"))
-  }
-}
-
-/**
- * Show login page in the focused window (or first window)
- */
-export function showLoginPage(): void {
-  const win = windowManager.getFocused() || windowManager.getAll()[0]
-  if (!win) return
-  showLoginPageInWindow(win)
 }
 
 // Singleton IPC handler (prevents duplicate handlers on macOS window recreation)
@@ -844,8 +619,8 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     // windowManager handles cleanup via 'closed' event listener
   })
 
-  // Load the local app shell. Authentication is optional for open-source local
-  // usage; hosted-only actions can request login inside the app when needed.
+  // Load the local app shell. Account authentication is no longer required for
+  // local-first usage.
   const authManager = getAuthManager()
 
   console.log("[Main] ========== AUTH CHECK ==========")

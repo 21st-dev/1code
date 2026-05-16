@@ -54,11 +54,6 @@ export interface DesktopApi {
   getUser: () => Promise<DesktopUser | null>
   isAuthenticated: () => Promise<boolean>
   logout: () => Promise<void>
-  startAuthFlow: () => Promise<void>
-  submitAuthCode: (code: string) => Promise<void>
-  updateUser: (updates: { name?: string }) => Promise<DesktopUser | null>
-  onAuthSuccess: (callback: (user: any) => void) => () => void
-  onAuthError: (callback: (error: string) => void) => () => void
 
   // Multi-window
   newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<{ blocked: boolean } | void>

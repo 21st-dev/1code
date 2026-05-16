@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, session } from "electron"
+import { app, BrowserWindow, dialog, Menu, nativeImage } from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
@@ -23,18 +23,18 @@ import {
   getAllWindows,
   setIsQuitting,
 } from "./windows/main"
-import { windowManager } from "./windows/window-manager"
 
 import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
 
 const APP_NAME = "Agent Code for Me"
 const APP_COPYRIGHT = "Copyright © 2026 Agent Code for Me"
-const HOSTED_API_BASE_URL = import.meta.env.MAIN_VITE_API_URL || ""
 const APP_HOMEPAGE_URL = "https://github.com/lupanpan1030/agent-code-for-me"
 
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app
 const PROTOCOL = IS_DEV ? "agent-code-for-me-dev" : "agent-code-for-me"
+
+app.setName(IS_DEV ? `${APP_NAME} Dev` : APP_NAME)
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
@@ -49,20 +49,6 @@ if (IS_DEV) {
 // under heavy multi-chat workloads. Must be set before app readiness/window creation.
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=8192")
 
-// URL configuration (exported for optional hosted/internal builds)
-export function getBaseUrl(): string {
-  return HOSTED_API_BASE_URL
-}
-
-export function getAppUrl(): string | null {
-  return (
-    process.env.ELECTRON_RENDERER_URL ||
-    (isLocalOnlyMode() || !HOSTED_API_BASE_URL
-      ? null
-      : `${HOSTED_API_BASE_URL}/agents`)
-  )
-}
-
 // Auth manager singleton (use the one from auth-manager module)
 let authManager: AuthManager
 
@@ -71,94 +57,12 @@ export function getAuthManager(): AuthManager {
   return getAuthManagerFromModule() || authManager
 }
 
-// Handle auth code from deep link (exported for IPC handlers)
-export async function handleAuthCode(code: string): Promise<void> {
-  console.log("[Auth] Handling auth code:", code.slice(0, 8) + "...")
-
-  try {
-    const authData = await authManager.exchangeCode(code)
-    console.log("[Auth] Success for user:", authData.user.email)
-
-    // Set desktop token cookie using persist:main partition
-    const ses = session.fromPartition("persist:main")
-    try {
-      // First remove any existing cookie to avoid HttpOnly conflict
-      await ses.cookies.remove(getBaseUrl(), "x-desktop-token")
-      await ses.cookies.set({
-        url: getBaseUrl(),
-        name: "x-desktop-token",
-        value: authData.token,
-        expirationDate: Math.floor(
-          new Date(authData.expiresAt).getTime() / 1000,
-        ),
-        httpOnly: false,
-        secure: getBaseUrl().startsWith("https"),
-        sameSite: "lax" as const,
-      })
-      console.log("[Auth] Desktop token cookie set")
-    } catch (cookieError) {
-      // Cookie setting is optional - auth data is already saved to disk
-      console.warn("[Auth] Cookie set failed (non-critical):", cookieError)
-    }
-
-    // Notify all windows and reload them to show app
-    const windows = getAllWindows()
-    for (const win of windows) {
-      try {
-        if (win.isDestroyed()) continue
-        win.webContents.send("auth:success", authData.user)
-
-        // Use stable window ID (main, window-2, etc.) instead of Electron's numeric ID
-        const stableId = windowManager.getStableId(win)
-
-        if (process.env.ELECTRON_RENDERER_URL) {
-          // Pass window ID via query param for dev mode
-          const url = new URL(process.env.ELECTRON_RENDERER_URL)
-          url.searchParams.set("windowId", stableId)
-          win.loadURL(url.toString())
-        } else {
-          // Pass window ID via hash for production
-          win.loadFile(join(__dirname, "../renderer/index.html"), {
-            hash: `windowId=${stableId}`,
-          })
-        }
-      } catch (error) {
-        // Window may have been destroyed during iteration
-        console.warn("[Auth] Failed to reload window:", error)
-      }
-    }
-    // Focus the first window
-    windows[0]?.focus()
-  } catch (error) {
-    console.error("[Auth] Exchange failed:", error)
-    // Broadcast auth error to all windows (not just focused)
-    for (const win of getAllWindows()) {
-      try {
-        if (!win.isDestroyed()) {
-          win.webContents.send("auth:error", (error as Error).message)
-        }
-      } catch {
-        // Window destroyed during iteration
-      }
-    }
-  }
-}
-
 // Handle deep link
 function handleDeepLink(url: string): void {
   console.log("[DeepLink] Received:", url)
 
   try {
     const parsed = new URL(url)
-
-    // Handle auth callback: agent-code-for-me://auth?code=xxx
-    if (parsed.pathname === "/auth" || parsed.host === "auth") {
-      const code = parsed.searchParams.get("code")
-      if (code) {
-        handleAuthCode(code)
-        return
-      }
-    }
 
     // Handle MCP OAuth callback: agent-code-for-me://mcp-oauth?code=xxx&state=yyy
     if (parsed.pathname === "/mcp-oauth" || parsed.host === "mcp-oauth") {
@@ -259,85 +163,7 @@ const authCallbackServer = createServer((req, res) => {
       return
     }
 
-    if (url.pathname === "/auth/callback") {
-      const code = url.searchParams.get("code")
-      console.log(
-        "[Auth Server] Received callback with code:",
-        code?.slice(0, 8) + "...",
-      )
-
-      if (code) {
-        // Handle the auth code
-        handleAuthCode(code)
-
-        // Send success response and close the browser tab
-        res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>Agent Code for Me - Authentication</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root {
-      --bg: #09090b;
-      --text: #fafafa;
-      --text-muted: #71717a;
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #ffffff;
-        --text: #09090b;
-        --text-muted: #71717a;
-      }
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-    }
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-    .logo {
-      width: 24px;
-      height: 24px;
-      margin-bottom: 8px;
-    }
-    h1 {
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 4px;
-    }
-    p {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    ${AUTH_PAGE_LOGO_SVG}
-    <h1>Authentication successful</h1>
-    <p>You can close this tab</p>
-  </div>
-  <script>setTimeout(() => window.close(), 1000)</script>
-</body>
-</html>`)
-      } else {
-        res.writeHead(400, { "Content-Type": "text/plain" })
-        res.end("Missing code parameter")
-      }
-    } else if (url.pathname === "/callback") {
+    if (url.pathname === "/callback") {
       // Handle MCP OAuth callback
       const code = url.searchParams.get("code")
       const state = url.searchParams.get("state")
@@ -549,12 +375,6 @@ if (gotTheLock) {
 
   // App ready
   app.whenReady().then(async () => {
-    // Set dev mode app name (userData path was already set before requestSingleInstanceLock)
-    // if (IS_DEV) {
-    //   app.name = "Agent Code for Me Dev"
-    // }
-
-
     // Register protocol handler (must be after app is ready)
     initialRegistration = registerProtocol()
 
@@ -871,28 +691,6 @@ if (gotTheLock) {
     startAuthCallbackServer()
 
     console.log("[Analytics] Hosted telemetry removed from local-first build")
-
-    // Set up callback to update cookie when token is refreshed
-    authManager.setOnTokenRefresh(async (authData) => {
-      console.log("[Auth] Token refreshed, updating cookie...")
-      const ses = session.fromPartition("persist:main")
-      try {
-        await ses.cookies.set({
-          url: getBaseUrl(),
-          name: "x-desktop-token",
-          value: authData.token,
-          expirationDate: Math.floor(
-            new Date(authData.expiresAt).getTime() / 1000,
-          ),
-          httpOnly: false,
-          secure: getBaseUrl().startsWith("https"),
-          sameSite: "lax" as const,
-        })
-        console.log("[Auth] Desktop token cookie updated after refresh")
-      } catch (err) {
-        console.error("[Auth] Failed to update cookie:", err)
-      }
-    })
 
     // Initialize database
     try {

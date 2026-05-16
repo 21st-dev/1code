@@ -3,7 +3,6 @@ import { ChevronLeft } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
   EyeOpenFilledIcon,
-  ProfileIconFilled,
   SlidersFilledIcon,
 } from "../../icons"
 import {
@@ -39,11 +38,6 @@ const MAIN_TABS: SettingsTabDefinition[] = [
     id: "preferences" as SettingsTab,
     labelKey: "settings.sidebar.preferences",
     icon: SlidersFilledIcon,
-  },
-  {
-    id: "profile" as SettingsTab,
-    labelKey: "settings.sidebar.account",
-    icon: ProfileIconFilled,
   },
   {
     id: "appearance" as SettingsTab,
