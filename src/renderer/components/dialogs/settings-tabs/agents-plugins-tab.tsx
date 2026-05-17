@@ -86,6 +86,7 @@ function getRuntimeLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["
 
 function getRuntimeFilterLabel(filter: RuntimeFilter, t: ReturnType<typeof useI18n>["t"]): string {
   if (filter === "all") return t("settings.plugins.runtimeAll")
+  if (filter === "claude") return "Claude"
   return getRuntimeLabel(filter, t)
 }
 
@@ -961,11 +962,12 @@ export function AgentsPluginsTab() {
                   type="button"
                   onClick={() => setRuntimeFilter(filter)}
                   className={cn(
-                    "h-6 rounded-md px-1.5 text-[11px] font-medium transition-colors",
+                    "h-6 min-w-0 overflow-hidden truncate whitespace-nowrap rounded-md px-1.5 text-[11px] font-medium leading-none transition-colors",
                     runtimeFilter === filter
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   )}
+                  title={filter === "all" ? undefined : getRuntimeLabel(filter, t)}
                 >
                   {getRuntimeFilterLabel(filter, t)}
                 </button>
