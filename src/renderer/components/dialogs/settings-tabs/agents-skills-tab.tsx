@@ -49,6 +49,148 @@ interface UnifiedItem {
   }
 }
 
+type SkillsViewMode = "skills" | "commands"
+
+interface ItemGroup {
+  id: string
+  label: string
+  items: UnifiedItem[]
+}
+
+function getSourceLabel(source: UnifiedItem["source"], t: ReturnType<typeof useI18n>["t"]) {
+  if (source === "registry") return t("common.registry")
+  if (source === "plugin") return t("common.plugin")
+  if (source === "project") return t("common.project")
+  return t("common.user")
+}
+
+function getItemStatusLabel(item: UnifiedItem, t: ReturnType<typeof useI18n>["t"]) {
+  if (item.kind === "command") return t("settings.skills.statusCommand")
+  if (item.source === "plugin") return t("common.plugin")
+  if (item.source === "project") return t("common.project")
+
+  switch (item.registry?.status) {
+    case "not-installed":
+      return t("settings.skills.statusAvailable")
+    case "update-available":
+      return t("settings.skills.statusUpdateAvailable")
+    case "modified":
+      return t("settings.skills.statusModified")
+    case "user-owned":
+      return t("settings.skills.statusUserOwned")
+    case "installed":
+      return t("settings.skills.statusInstalled")
+    default:
+      return item.kind === "registry-skill"
+        ? t("settings.skills.statusAvailable")
+        : t("settings.skills.statusInstalled")
+  }
+}
+
+function getItemStatusClass(item: UnifiedItem) {
+  if (item.kind === "command") return "bg-orange-500/10 text-orange-500"
+  if (item.source === "plugin") return "bg-violet-500/10 text-violet-500"
+  if (item.source === "project") return "bg-blue-500/10 text-blue-500"
+
+  switch (item.registry?.status) {
+    case "not-installed":
+      return "bg-muted text-muted-foreground"
+    case "update-available":
+    case "modified":
+      return "bg-amber-500/10 text-amber-500"
+    case "user-owned":
+      return "bg-sky-500/10 text-sky-500"
+    case "installed":
+      return "bg-emerald-500/10 text-emerald-500"
+    default:
+      return item.kind === "registry-skill"
+        ? "bg-muted text-muted-foreground"
+        : "bg-emerald-500/10 text-emerald-500"
+  }
+}
+
+function isEditableItem(item: UnifiedItem) {
+  return item.source !== "plugin" && item.kind !== "registry-skill"
+}
+
+function RegistryActionButtons({
+  item,
+  onRegistryInstall,
+  onRegistryRollback,
+  isRegistryActionPending,
+}: {
+  item: UnifiedItem
+  onRegistryInstall?: (item: UnifiedItem, force?: boolean) => void
+  onRegistryRollback?: (item: UnifiedItem) => void
+  isRegistryActionPending?: boolean
+}) {
+  const { t } = useI18n()
+  const registryStatus = item.registry?.status
+
+  if (!item.registry) return null
+
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {["not-installed", "user-owned"].includes(registryStatus || "") && onRegistryInstall && (
+        <Button
+          size="sm"
+          variant={registryStatus === "user-owned" ? "outline" : "default"}
+          onClick={() => {
+            const force = registryStatus === "user-owned"
+              ? window.confirm(
+                  t("settings.skills.confirmReplaceUserSkill", {
+                    id: item.registry?.id || "",
+                  }),
+                )
+              : false
+            if (registryStatus === "user-owned" && !force) return
+            onRegistryInstall(item, force)
+          }}
+          disabled={isRegistryActionPending}
+        >
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          {registryStatus === "user-owned"
+            ? t("settings.skills.restore")
+            : t("settings.skills.install")}
+        </Button>
+      )}
+      {["update-available", "modified"].includes(registryStatus || "") && onRegistryInstall && (
+        <Button
+          size="sm"
+          onClick={() => {
+            const force = registryStatus === "modified"
+              ? window.confirm(
+                  t("settings.skills.confirmReplaceLocalChanges", {
+                    id: item.registry?.id || "",
+                  }),
+                )
+              : false
+            if (registryStatus === "modified" && !force) return
+            onRegistryInstall(item, force)
+          }}
+          disabled={isRegistryActionPending}
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          {registryStatus === "modified"
+            ? t("settings.skills.restore")
+            : t("settings.skills.update")}
+        </Button>
+      )}
+      {item.registry.hasRollback && onRegistryRollback && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onRegistryRollback(item)}
+          disabled={isRegistryActionPending}
+        >
+          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+          {t("settings.skills.rollBack")}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 // --- Detail Panel (Editable) ---
 function ItemDetail({
   item,
@@ -72,9 +214,7 @@ function ItemDetail({
   const [content, setContent] = useState(item.content)
   const [viewMode, setViewMode] = useState<"rendered" | "editor">("rendered")
 
-  const isRegistryItem = item.source === "registry" || item.kind === "registry-skill"
-  const isReadOnly = item.source === "plugin" || isRegistryItem
-  const registryStatus = item.registry?.status
+  const isReadOnly = !isEditableItem(item)
 
   // Reset local state when item changes
   useEffect(() => {
@@ -116,35 +256,34 @@ function ItemDetail({
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-5">
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-semibold text-foreground truncate">{item.name}</h3>
               <span className={cn(
                 "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
-                item.kind === "command"
-                  ? "bg-orange-500/10 text-orange-500"
-                  : item.source === "registry"
-                    ? "bg-emerald-500/10 text-emerald-500"
-                    : "bg-blue-500/10 text-blue-500"
+                getItemStatusClass(item),
               )}>
-                {item.kind === "command" ? "Command" : item.source === "registry" ? "Registry" : "Skill"}
+                {getItemStatusLabel(item, t)}
               </span>
-              {registryStatus && (
-                <span className={cn(
-                  "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
-                  registryStatus === "installed"
-                    ? "bg-emerald-500/10 text-emerald-500"
-                    : registryStatus === "not-installed"
-                      ? "bg-muted text-muted-foreground"
-                      : "bg-amber-500/10 text-amber-500"
-                )}>
-                  {registryStatus}
-                </span>
-              )}
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                {getSourceLabel(item.source, t)}
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{item.path}</p>
+            <div className="mt-2 inline-flex items-center rounded-md border border-border bg-muted/40 px-2.5 py-1">
+              <code className="text-xs text-foreground">
+                {item.kind === "command" ? `/${item.name}` : `@${item.name}`}
+              </code>
+            </div>
           </div>
+          {item.registry && (
+            <RegistryActionButtons
+              item={item}
+              onRegistryInstall={onRegistryInstall}
+              onRegistryRollback={onRegistryRollback}
+              isRegistryActionPending={isRegistryActionPending}
+            />
+          )}
           {!isReadOnly && hasChanges && (
             <Button size="sm" onClick={handleSave} disabled={isSaving}>
               {isSaving ? t("common.saving") : t("common.save")}
@@ -177,16 +316,6 @@ function ItemDetail({
           )}
         </div>
 
-        {/* Usage */}
-        <div className="space-y-1.5">
-          <Label>{t("settings.skills.usage")}</Label>
-          <div className="px-3 py-2 text-sm bg-muted/50 border border-border rounded-lg">
-            <code className="text-xs text-foreground">
-              {item.kind === "command" ? `/${item.name}` : `@${item.name}`}
-            </code>
-          </div>
-        </div>
-
         {item.registry && (
           <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
             <div className="flex items-center justify-between gap-3">
@@ -201,64 +330,6 @@ function ItemDetail({
                     : ""}
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {["not-installed", "user-owned"].includes(registryStatus || "") && onRegistryInstall && (
-                  <Button
-                    size="sm"
-                    variant={registryStatus === "user-owned" ? "outline" : "default"}
-                    onClick={() => {
-                      const force = registryStatus === "user-owned"
-                        ? window.confirm(
-                            t("settings.skills.confirmReplaceUserSkill", {
-                              id: item.registry?.id || "",
-                            }),
-                          )
-                        : false
-                      if (registryStatus === "user-owned" && !force) return
-                      onRegistryInstall(item, force)
-                    }}
-                    disabled={isRegistryActionPending}
-                  >
-                    <Download className="h-3.5 w-3.5 mr-1.5" />
-                    {registryStatus === "user-owned"
-                      ? t("settings.skills.restore")
-                      : t("settings.skills.install")}
-                  </Button>
-                )}
-                {["update-available", "modified"].includes(registryStatus || "") && onRegistryInstall && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      const force = registryStatus === "modified"
-                        ? window.confirm(
-                            t("settings.skills.confirmReplaceLocalChanges", {
-                              id: item.registry?.id || "",
-                            }),
-                          )
-                        : false
-                      if (registryStatus === "modified" && !force) return
-                      onRegistryInstall(item, force)
-                    }}
-                    disabled={isRegistryActionPending}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    {registryStatus === "modified"
-                      ? t("settings.skills.restore")
-                      : t("settings.skills.update")}
-                  </Button>
-                )}
-                {item.registry.hasRollback && onRegistryRollback && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onRegistryRollback(item)}
-                    disabled={isRegistryActionPending}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                    {t("settings.skills.rollBack")}
-                  </Button>
-                )}
-              </div>
             </div>
             {item.registry.statusMessage && (
               <div className="flex items-start gap-2 text-[11px] text-amber-500">
@@ -268,6 +339,20 @@ function ItemDetail({
             )}
           </div>
         )}
+
+        <div className="space-y-1.5">
+          <Label>{t("settings.skills.source")}</Label>
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {getSourceLabel(item.source, t)}
+              </span>
+              <span className="text-xs text-muted-foreground font-mono truncate">
+                {item.path}
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* Instructions */}
         <div className="space-y-1.5">
@@ -505,6 +590,8 @@ function SidebarListItem({
   isSelected: boolean
   onSelect: (id: string) => void
 }) {
+  const { t } = useI18n()
+
   return (
     <button
       data-item-id={item.id}
@@ -527,7 +614,13 @@ function SidebarListItem({
         )}>
           {item.kind === "command" ? "/" : "@"}
         </span>
-        <span className="text-sm truncate">{item.name}</span>
+        <span className="text-sm truncate flex-1">{item.name}</span>
+        <span className={cn(
+          "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
+          getItemStatusClass(item),
+        )}>
+          {getItemStatusLabel(item, t)}
+        </span>
       </div>
       {item.description && (
         <div className="text-[11px] text-muted-foreground truncate mt-0.5 pl-[18px]">
@@ -543,6 +636,7 @@ export function AgentsSkillsTab() {
   const { t } = useI18n()
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [activeView, setActiveView] = useState<SkillsViewMode>("skills")
   const [showAddForm, setShowAddForm] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -600,24 +694,45 @@ export function AgentsSkillsTab() {
   // Build unified items
   const allItems = useMemo<UnifiedItem[]>(() => {
     const registryById = new Map(registrySkills.map((skill) => [skill.id, skill]))
-    const skillItems: UnifiedItem[] = skills.map((s) => ({
-      id: `skill:${s.source}:${s.registry?.id || s.name}`,
-      kind: "skill" as const,
-      name: s.name,
-      description: s.description,
-      source: s.source,
-      pluginName: s.pluginName,
-      path: s.path,
-      content: s.content,
-      registry: s.registry
-        ? {
-            ...s.registry,
-            statusMessage: registryById.get(s.registry.id)?.statusMessage,
-          }
-        : undefined,
-    }))
+    const toRegistryMeta = (registryId?: string) => {
+      if (!registryId) return undefined
+      const registry = registryById.get(registryId)
+      if (!registry) return undefined
+      return {
+        id: registry.id,
+        status: registry.status,
+        version: registry.version,
+        installedVersion: registry.installedVersion,
+        registryId: registry.registryId,
+        hasRollback: registry.hasRollback,
+        statusMessage: registry.statusMessage,
+      }
+    }
+
+    const skillItems: UnifiedItem[] = skills.map((s) => {
+      const registryCandidate = s.registry
+        ? registryById.get(s.registry.id)
+        : registryById.get(s.name)
+      const linkedRegistry = s.registry
+        ? toRegistryMeta(s.registry.id)
+        : registryCandidate && registryCandidate.status !== "not-installed"
+          ? toRegistryMeta(registryCandidate.id)
+          : undefined
+
+      return {
+        id: `skill:${s.source}:${s.pluginName || ""}:${linkedRegistry?.id || s.name}`,
+        kind: "skill" as const,
+        name: s.name,
+        description: s.description,
+        source: s.source,
+        pluginName: s.pluginName,
+        path: s.path,
+        content: s.content,
+        registry: linkedRegistry,
+      }
+    })
     const cmdItems: UnifiedItem[] = commands.map((c) => ({
-      id: `cmd:${c.source}:${c.name}`,
+      id: `cmd:${c.source}:${c.pluginName || ""}:${c.name}`,
       kind: "command" as const,
       name: c.name,
       description: c.description,
@@ -672,19 +787,69 @@ export function AgentsSkillsTab() {
     )
   }, [allItems, searchQuery])
 
-  // Group by source
-  const userItems = filteredItems.filter((i) => i.source === "user")
-  const projectItems = filteredItems.filter((i) => i.source === "project")
-  const registryItems = filteredItems.filter((i) => i.source === "registry")
-  const pluginItems = filteredItems.filter((i) => i.source === "plugin")
+  const visibleGroups = useMemo<ItemGroup[]>(() => {
+    if (activeView === "commands") {
+      const commandItems = filteredItems.filter((item) => item.kind === "command")
+      return [
+        {
+          id: "user-commands",
+          label: t("common.user"),
+          items: commandItems.filter((item) => item.source === "user"),
+        },
+        {
+          id: "project-commands",
+          label: t("common.project"),
+          items: commandItems.filter((item) => item.source === "project"),
+        },
+        {
+          id: "plugin-commands",
+          label: t("common.plugin"),
+          items: commandItems.filter((item) => item.source === "plugin"),
+        },
+      ].filter((group) => group.items.length > 0)
+    }
 
-  const allItemIds = useMemo(
-    () => [...registryItems, ...userItems, ...projectItems, ...pluginItems].map((i) => i.id),
-    [registryItems, userItems, projectItems, pluginItems]
+    const skillItems = filteredItems.filter((item) => item.kind !== "command")
+    return [
+      {
+        id: "installed",
+        label: t("settings.skills.groupInstalled"),
+        items: skillItems.filter(
+          (item) =>
+            item.kind !== "registry-skill" &&
+            (item.source === "user" || item.source === "registry"),
+        ),
+      },
+      {
+        id: "available",
+        label: t("settings.skills.groupAvailable"),
+        items: skillItems.filter((item) => item.kind === "registry-skill"),
+      },
+      {
+        id: "project",
+        label: t("common.project"),
+        items: skillItems.filter((item) => item.source === "project"),
+      },
+      {
+        id: "plugin",
+        label: t("common.plugin"),
+        items: skillItems.filter((item) => item.source === "plugin"),
+      },
+    ].filter((group) => group.items.length > 0)
+  }, [activeView, filteredItems, t])
+
+  const visibleItems = useMemo(
+    () => visibleGroups.flatMap((group) => group.items),
+    [visibleGroups],
+  )
+
+  const visibleItemIds = useMemo(
+    () => visibleItems.map((i) => i.id),
+    [visibleItems],
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
-    items: allItemIds,
+    items: visibleItemIds,
     selectedItem: selectedItemId,
     onSelect: setSelectedItemId,
   })
@@ -693,9 +858,15 @@ export function AgentsSkillsTab() {
 
   // Auto-select first item when data loads
   useEffect(() => {
-    if (selectedItemId || isLoading || allItems.length === 0) return
-    setSelectedItemId(allItems[0]!.id)
-  }, [allItems, selectedItemId, isLoading])
+    if (isLoading) return
+    if (visibleItemIds.length === 0) {
+      if (selectedItemId) setSelectedItemId(null)
+      return
+    }
+    if (!selectedItemId || !visibleItemIds.includes(selectedItemId)) {
+      setSelectedItemId(visibleItemIds[0]!)
+    }
+  }, [visibleItemIds, selectedItemId, isLoading])
 
   const handleCreate = useCallback(async (data: {
     name: string; description: string; content: string; source: "user" | "project"; kind: "skill" | "command"
@@ -712,7 +883,7 @@ export function AgentsSkillsTab() {
         toast.success(t("settings.skills.toast.skillCreated"), { description: result.name })
         setShowAddForm(false)
         await refetchAll()
-        setSelectedItemId(`skill:${data.source}:${result.name}`)
+        setSelectedItemId(`skill:${data.source}::${result.name}`)
       } else {
         const result = await createCommandMutation.mutateAsync({
           name: data.name,
@@ -724,7 +895,7 @@ export function AgentsSkillsTab() {
         toast.success(t("settings.skills.toast.commandCreated"), { description: result.name })
         setShowAddForm(false)
         await refetchAll()
-        setSelectedItemId(`cmd:${data.source}:${result.name}`)
+        setSelectedItemId(`cmd:${data.source}::${result.name}`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.skills.toast.failedToCreate")
@@ -806,7 +977,7 @@ export function AgentsSkillsTab() {
       })
       toast.success(t("settings.skills.toast.registrySynced"), { description: result.displayName })
       await refetchAll()
-      setSelectedItemId(`skill:registry:${result.id}`)
+      setSelectedItemId(`skill:registry::${result.id}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.skills.toast.failedToSyncRegistry")
       toast.error(t("settings.skills.toast.failedToSyncRegistry"), { description: message })
@@ -841,7 +1012,14 @@ export function AgentsSkillsTab() {
   const isDeleting = deleteSkillMutation.isPending || deleteCommandMutation.isPending
   const isRegistryActionPending =
     installRegistrySkillMutation.isPending || rollbackRegistrySkillMutation.isPending
-  const totalCount = allItems.length
+  const totalCount = visibleItems.length
+  const hasSearch = searchQuery.trim().length > 0
+  const emptyTitle = activeView === "commands"
+    ? t("settings.skills.noCommands")
+    : t("settings.skills.noSkills")
+  const emptyHint = activeView === "commands"
+    ? t("settings.skills.commandsEmptyHint")
+    : t("settings.skills.emptyHint")
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -885,17 +1063,54 @@ export function AgentsSkillsTab() {
               <Plus className="h-4 w-4" />
             </button>
           </div>
+          <div className="px-2 pt-2 flex-shrink-0">
+            <div className="grid grid-cols-2 rounded-lg bg-muted p-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveView("skills")}
+                className={cn(
+                  "h-6 rounded-md text-xs font-medium transition-colors cursor-pointer",
+                  activeView === "skills"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("settings.skills.viewSkills")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView("commands")}
+                className={cn(
+                  "h-6 rounded-md text-xs font-medium transition-colors cursor-pointer",
+                  activeView === "commands"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("settings.skills.viewCommands")}
+              </button>
+            </div>
+          </div>
           {/* Item list */}
           <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
               </div>
+            ) : hasSearch && totalCount === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.skills.noResults")}
+                </p>
+              </div>
             ) : totalCount === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <SkillIcon className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">
-                  {t("settings.skills.noSkillsOrCommands")}
+                  {emptyTitle}
+                </p>
+                <p className="text-[11px] text-muted-foreground/70 mb-2">
+                  {emptyHint}
                 </p>
                 <Button
                   variant="outline"
@@ -907,22 +1122,15 @@ export function AgentsSkillsTab() {
                   {t("common.create")}
                 </Button>
               </div>
-            ) : filteredItems.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <p className="text-xs text-muted-foreground">
-                  {t("settings.skills.noResults")}
-                </p>
-              </div>
             ) : (
               <div className="space-y-3">
-                {/* Registry */}
-                {registryItems.length > 0 && (
-                  <div>
+                {visibleGroups.map((group) => (
+                  <div key={group.id}>
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      {t("common.registry")}
+                      {group.label}
                     </p>
                     <div className="space-y-0.5">
-                      {registryItems.map((item) => (
+                      {group.items.map((item) => (
                         <SidebarListItem
                           key={item.id}
                           item={item}
@@ -932,64 +1140,7 @@ export function AgentsSkillsTab() {
                       ))}
                     </div>
                   </div>
-                )}
-
-                {/* User */}
-                {userItems.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      {t("common.user")}
-                    </p>
-                    <div className="space-y-0.5">
-                      {userItems.map((item) => (
-                        <SidebarListItem
-                          key={item.id}
-                          item={item}
-                          isSelected={selectedItemId === item.id}
-                          onSelect={setSelectedItemId}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Project */}
-                {projectItems.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      {t("common.project")}
-                    </p>
-                    <div className="space-y-0.5">
-                      {projectItems.map((item) => (
-                        <SidebarListItem
-                          key={item.id}
-                          item={item}
-                          isSelected={selectedItemId === item.id}
-                          onSelect={setSelectedItemId}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Plugin */}
-                {pluginItems.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      {t("common.plugin")}
-                    </p>
-                    <div className="space-y-0.5">
-                      {pluginItems.map((item) => (
-                        <SidebarListItem
-                          key={item.id}
-                          item={item}
-                          isSelected={selectedItemId === item.id}
-                          onSelect={setSelectedItemId}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
             )}
 
@@ -1011,7 +1162,7 @@ export function AgentsSkillsTab() {
           <ItemDetail
             item={selectedItem}
             onSave={(data) => handleSave(selectedItem, data)}
-            onDelete={!["plugin", "registry"].includes(selectedItem.source) ? () => setDeletingItem(selectedItem) : undefined}
+            onDelete={isEditableItem(selectedItem) ? () => setDeletingItem(selectedItem) : undefined}
             onRegistryInstall={handleRegistryInstall}
             onRegistryRollback={handleRegistryRollback}
             isSaving={isSaving}
@@ -1023,18 +1174,23 @@ export function AgentsSkillsTab() {
             <p className="text-sm text-muted-foreground">
               {totalCount > 0
                 ? t("settings.skills.selectToView")
-                : t("settings.skills.noneFound")}
+                : emptyTitle}
             </p>
             {totalCount === 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setShowAddForm(true)}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                {t("settings.skills.createFirst")}
-              </Button>
+              <>
+                <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+                  {emptyHint}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setShowAddForm(true)}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  {t("settings.skills.createFirst")}
+                </Button>
+              </>
             )}
           </div>
         )}
