@@ -2,7 +2,11 @@ import { eq } from "drizzle-orm"
 import { createHash, randomBytes, randomUUID } from "node:crypto"
 import { z } from "zod"
 import { getClaudeShellEnvironment } from "../../claude"
-import { getExistingClaudeCredentials } from "../../claude-token"
+import {
+  CLAUDE_CODE_OAUTH_CLIENT_ID,
+  CLAUDE_CODE_TOKEN_URL,
+  getExistingClaudeCredentials,
+} from "../../claude-token"
 import {
   type ClaudeCodeCredentialMetadata,
   getClaudeCodeCredentialMetadata,
@@ -38,9 +42,7 @@ type ClaudeCodeLocalLoginSession = {
 }
 
 const localLoginSessions = new Map<string, ClaudeCodeLocalLoginSession>()
-const CLAUDE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 const CLAUDE_AI_AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
-const CLAUDE_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
 const CLAUDE_MANUAL_REDIRECT_URL =
   "https://platform.claude.com/oauth/code/callback"
 const CLAUDE_OAUTH_SCOPES = [
@@ -131,7 +133,7 @@ function buildClaudeCodeAuthUrl({
 }): string {
   const authUrl = new URL(CLAUDE_AI_AUTHORIZE_URL)
   authUrl.searchParams.set("code", "true")
-  authUrl.searchParams.set("client_id", CLAUDE_OAUTH_CLIENT_ID)
+  authUrl.searchParams.set("client_id", CLAUDE_CODE_OAUTH_CLIENT_ID)
   authUrl.searchParams.set("response_type", "code")
   authUrl.searchParams.set("redirect_uri", CLAUDE_MANUAL_REDIRECT_URL)
   authUrl.searchParams.set("scope", CLAUDE_OAUTH_SCOPES.join(" "))
@@ -164,7 +166,7 @@ async function exchangeClaudeCodeAuthCode({
   state: string
   codeVerifier: string
 }) {
-  const response = await fetch(CLAUDE_TOKEN_URL, {
+  const response = await fetch(CLAUDE_CODE_TOKEN_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -173,7 +175,7 @@ async function exchangeClaudeCodeAuthCode({
       grant_type: "authorization_code",
       code: authorizationCode,
       redirect_uri: CLAUDE_MANUAL_REDIRECT_URL,
-      client_id: CLAUDE_OAUTH_CLIENT_ID,
+      client_id: CLAUDE_CODE_OAUTH_CLIENT_ID,
       code_verifier: codeVerifier,
       state,
     }),

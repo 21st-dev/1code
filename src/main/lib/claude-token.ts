@@ -28,6 +28,9 @@ export type ClaudeOAuthCredentialSource =
   | "linux_pass"
   | "credentials_file";
 
+export const CLAUDE_CODE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+export const CLAUDE_CODE_TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
+
 /**
  * Read Claude OAuth credentials from system credential store
  * Dispatches to platform-specific implementation
@@ -203,23 +206,21 @@ export function getExistingClaudeToken(): string | null {
 
 /**
  * Refresh Claude OAuth token using refresh token
- * Uses the Anthropic API token endpoint
+ * Uses the same first-party Claude Code OAuth client as the local login flow.
  */
 export async function refreshClaudeToken(refreshToken: string): Promise<{
   accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
 }> {
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: 'claude-desktop',
-  });
-
-  const response = await fetch('https://api.anthropic.com/v1/oauth/token', {
+  const response = await fetch(CLAUDE_CODE_TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: CLAUDE_CODE_OAUTH_CLIENT_ID,
+    }),
   });
 
   if (!response.ok) {
