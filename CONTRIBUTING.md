@@ -18,6 +18,22 @@ bun run claude:download
 bun run codex:download
 ```
 
+## Windows Packaging
+
+Build Windows x64 packages on a Windows machine or the `Package Windows` GitHub Actions workflow. This app includes native Electron dependencies such as SQLite and PTY support, so macOS cross-packaging can fail when those modules need Windows-native rebuilds.
+
+For local Windows packaging:
+
+```bash
+bun install
+node scripts/download-claude-binary.mjs --version=2.1.143 --platform win32-x64
+node scripts/download-codex-binary.mjs --version=0.130.0 --platform win32-x64
+bun run build
+bun run package:win -- --x64
+```
+
+Unsigned Windows builds are suitable for limited internal testing, but Windows SmartScreen may warn users. Public distribution should use a proper code-signing certificate.
+
 ## Local-Only Boundary
 
 This repository runs in **Local-only mode by default**. Hosted upstream product surfaces are removed or isolated from the default local-first build, and the Local-only guard remains as defense-in-depth against accidental upstream calls.
