@@ -16,10 +16,11 @@ import { IconSpinner } from "../../../components/ui/icons"
 import type { SlashCommandOption, SlashTriggerPayload } from "./types"
 import {
   filterBuiltinCommands,
-  BUILTIN_SLASH_COMMANDS,
 } from "./builtin-commands"
 import type { AgentMode } from "../atoms"
 import { useI18n } from "../../../lib/i18n"
+
+const MODE_COMMAND_NAMES = new Set(["plan", "agent"])
 
 interface AgentsSlashCommandProps {
   isOpen: boolean
@@ -126,16 +127,10 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
 
   // Combine builtin and repository commands, filtered by search
   const options: SlashCommandOption[] = useMemo(() => {
-    let builtinFiltered = filterBuiltinCommands(debouncedSearchText)
-
-    // Hide /plan when already in Plan mode, hide /agent when already in Agent mode
-    if (mode !== undefined) {
-      builtinFiltered = builtinFiltered.filter((cmd) => {
-        if (mode === "plan" && cmd.name === "plan") return false
-        if (mode === "agent" && cmd.name === "agent") return false
-        return true
-      })
-    }
+    // Plan/Agent mode switching lives in the input mode selector, not the slash command list.
+    let builtinFiltered = filterBuiltinCommands(debouncedSearchText).filter(
+      (cmd) => !MODE_COMMAND_NAMES.has(cmd.name),
+    )
 
     // Filter out disabled commands
     if (disabledCommands?.length) {
