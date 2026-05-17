@@ -1,9 +1,9 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
-import matter from "gray-matter"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { resolveDirentType } from "../../fs/dirent"
+import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import { getEnabledPlugins } from "./claude-settings"
 import {
   CUSTOM_AGENT_MODEL_VALUES,
@@ -48,7 +48,7 @@ export function parseAgentMd(
   filename: string
 ): Partial<ParsedAgent> {
   try {
-    const { data, content: body } = matter(content)
+    const { data, content: body } = parseMarkdownFrontmatter(content)
 
     // Parse tools - can be comma-separated string or array
     let tools: string[] | undefined

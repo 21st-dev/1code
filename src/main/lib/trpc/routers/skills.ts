@@ -3,9 +3,9 @@ import { router, publicProcedure } from "../index"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
-import matter from "gray-matter"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { isDirentDirectory } from "../../fs/dirent"
+import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import { getEnabledPlugins } from "./claude-settings"
 import {
   installRegistrySkill,
@@ -41,7 +41,7 @@ export interface FileSkill {
  */
 function parseSkillMd(rawContent: string): { name?: string; description?: string; content: string } {
   try {
-    const { data, content } = matter(rawContent)
+    const { data, content } = parseMarkdownFrontmatter(rawContent)
     return {
       name: typeof data.name === "string" ? data.name : undefined,
       description: typeof data.description === "string" ? data.description : undefined,

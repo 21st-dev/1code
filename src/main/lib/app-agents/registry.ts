@@ -1,6 +1,6 @@
-import matter from "gray-matter"
 import { asc, eq } from "drizzle-orm"
 import { appAgents, getDatabase } from "../db"
+import { parseMarkdownFrontmatter } from "../markdown/frontmatter"
 import {
   normalizeAppAgentName,
   serializeToolList,
@@ -246,7 +246,7 @@ export async function getRegistryAppAgent(
     throw new Error("Registry App Agent file is too large")
   }
 
-  const parsed = matter(raw)
+  const parsed = parseMarkdownFrontmatter(raw)
   const name = normalizeAppAgentName(
     typeof parsed.data.name === "string" ? parsed.data.name : entry.name,
   )
