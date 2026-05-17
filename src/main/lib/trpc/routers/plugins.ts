@@ -4,10 +4,12 @@ import * as path from "path"
 import { resolveDirentType } from "../../fs/dirent"
 import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import {
-  discoverInstalledPlugins,
+  discoverAllRuntimePlugins,
+  discoverPluginSources,
   getPluginComponentPaths,
-  discoverPluginMcpServers,
   clearPluginCache,
+  type PluginSourceInfo,
+  type PluginRuntime,
 } from "../../plugins"
 import { getEnabledPlugins } from "./claude-settings"
 
@@ -17,16 +19,19 @@ export interface PluginComponent {
 }
 
 export interface PluginWithComponents {
+  runtime: PluginRuntime
   name: string
   version: string
   description?: string
   path: string
+  installRoot: string
   source: string // e.g., "ccsetup:ccsetup"
   marketplace: string
   category?: string
   homepage?: string
   tags?: string[]
   isDisabled: boolean
+  canToggle: boolean
   components: {
     commands: PluginComponent[]
     skills: PluginComponent[]
@@ -172,50 +177,82 @@ async function scanPluginAgents(dir: string): Promise<PluginComponent[]> {
   return components
 }
 
+/**
+ * Scan a plugin .mcp.json file and return server names.
+ */
+async function scanPluginMcpServers(mcpJsonPath: string): Promise<string[]> {
+  try {
+    await fs.access(mcpJsonPath)
+  } catch {
+    return []
+  }
+
+  try {
+    const content = await fs.readFile(mcpJsonPath, "utf-8")
+    const parsed = JSON.parse(content) as Record<string, unknown>
+    const serversObj =
+      parsed.mcpServers &&
+      typeof parsed.mcpServers === "object" &&
+      !Array.isArray(parsed.mcpServers)
+        ? (parsed.mcpServers as Record<string, unknown>)
+        : parsed
+
+    return Object.entries(serversObj)
+      .filter(([, config]) => config && typeof config === "object" && !Array.isArray(config))
+      .map(([name]) => name)
+  } catch {
+    return []
+  }
+}
+
 export const pluginsRouter = router({
   /**
-   * List all installed plugins with their components and disabled status
+   * List local/cache plugin sources by runtime.
+   */
+  sources: publicProcedure.query(async (): Promise<PluginSourceInfo[]> => {
+    return discoverPluginSources()
+  }),
+
+  /**
+   * List all installed runtime plugins with their components and disabled status.
    */
   list: publicProcedure.query(async (): Promise<PluginWithComponents[]> => {
-    const [installedPlugins, enabledPlugins, mcpConfigs] = await Promise.all([
-      discoverInstalledPlugins(),
+    const [installedPlugins, enabledPlugins] = await Promise.all([
+      discoverAllRuntimePlugins(),
       getEnabledPlugins(),
-      discoverPluginMcpServers(),
     ])
-
-    // Build a map of plugin source -> MCP server names
-    const pluginMcpMap = new Map<string, string[]>()
-    for (const config of mcpConfigs) {
-      pluginMcpMap.set(config.pluginSource, Object.keys(config.mcpServers))
-    }
 
     // Scan components for each plugin in parallel
     const pluginsWithComponents = await Promise.all(
       installedPlugins.map(async (plugin) => {
         const paths = getPluginComponentPaths(plugin)
 
-        const [commands, skills, agents] = await Promise.all([
+        const [commands, skills, agents, mcpServers] = await Promise.all([
           scanPluginCommands(paths.commands),
           scanPluginSkills(paths.skills),
           scanPluginAgents(paths.agents),
+          scanPluginMcpServers(paths.mcpServers),
         ])
 
         return {
+          runtime: plugin.runtime,
           name: plugin.name,
           version: plugin.version,
           description: plugin.description,
           path: plugin.path,
+          installRoot: plugin.installRoot,
           source: plugin.source,
           marketplace: plugin.marketplace,
           category: plugin.category,
           homepage: plugin.homepage,
           tags: plugin.tags,
-          isDisabled: !enabledPlugins.includes(plugin.source),
+          isDisabled: plugin.runtime === "claude" ? !enabledPlugins.includes(plugin.source) : false,
+          canToggle: plugin.runtime === "claude",
           components: {
             commands,
             skills,
             agents,
-            mcpServers: pluginMcpMap.get(plugin.source) || [],
+            mcpServers,
           },
         }
       })
