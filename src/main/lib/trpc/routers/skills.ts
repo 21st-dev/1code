@@ -9,6 +9,7 @@ import { isDirentDirectory } from "../../fs/dirent"
 import { getEnabledPlugins } from "./claude-settings"
 import {
   installRegistrySkill,
+  listRegistryCollections,
   listRegistrySkills,
   rollbackRegistrySkill,
   type RegistrySkillStatus,
@@ -250,6 +251,21 @@ export const skillsRouter = router({
       return listRegistrySkills({
         checkRemote: input?.checkRemote,
         runtime: input?.runtime,
+      })
+    }),
+
+  /**
+   * List browse-only external skill collections.
+   */
+  registryCollections: publicProcedure
+    .input(
+      z.object({
+        checkRemote: z.boolean().optional(),
+      }).optional(),
+    )
+    .query(async ({ input }) => {
+      return listRegistryCollections({
+        checkRemote: input?.checkRemote,
       })
     }),
 

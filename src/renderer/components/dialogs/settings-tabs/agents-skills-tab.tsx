@@ -5,7 +5,7 @@ import { selectedProjectAtom, settingsSkillsSidebarWidthAtom } from "../../../fe
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { AlertTriangle, Download, PackageSearch, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
+import { AlertTriangle, Download, ExternalLink, PackageSearch, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { SkillIcon, MarkdownIcon, CodeIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -30,7 +30,7 @@ import { toast } from "sonner"
 // --- Unified Item Type ---
 interface UnifiedItem {
   id: string
-  kind: "skill" | "command" | "registry-skill"
+  kind: "skill" | "command" | "registry-skill" | "registry-collection"
   name: string
   description: string
   source: "user" | "project" | "plugin" | "registry"
@@ -48,13 +48,22 @@ interface UnifiedItem {
     statusMessage?: string
     runtimes?: Partial<Record<SkillRuntime, RegistryRuntimeState>>
   }
+  collection?: {
+    id: string
+    registryId: string
+    sourceUrl: string
+    installHint?: string
+    recommendedAction?: string
+    runtimes?: SkillRuntime[]
+    license?: string
+  }
 }
 
 type SkillsViewMode = "skills" | "commands"
-type SkillFilter = "all" | "installed" | "available" | "updates"
+type SkillFilter = "all" | "installed" | "available" | "collections" | "updates"
 type SkillRuntime = "claude" | "codex"
 
-const SKILL_FILTERS: SkillFilter[] = ["all", "installed", "available", "updates"]
+const SKILL_FILTERS: SkillFilter[] = ["all", "installed", "available", "collections", "updates"]
 const SKILL_RUNTIMES: SkillRuntime[] = ["claude", "codex"]
 
 interface RegistryRuntimeState {
@@ -81,6 +90,7 @@ function getSourceLabel(source: UnifiedItem["source"], t: ReturnType<typeof useI
 
 function getItemStatusLabel(item: UnifiedItem, t: ReturnType<typeof useI18n>["t"]) {
   if (item.kind === "command") return t("settings.skills.statusCommand")
+  if (item.kind === "registry-collection") return t("settings.skills.statusCollection")
   if (item.source === "plugin") return t("common.plugin")
   if (item.source === "project") return t("common.project")
 
@@ -104,6 +114,7 @@ function getItemStatusLabel(item: UnifiedItem, t: ReturnType<typeof useI18n>["t"
 
 function getItemStatusClass(item: UnifiedItem) {
   if (item.kind === "command") return "bg-orange-500/10 text-orange-500"
+  if (item.kind === "registry-collection") return "bg-violet-500/10 text-violet-500"
   if (item.source === "plugin") return "bg-violet-500/10 text-violet-500"
   if (item.source === "project") return "bg-blue-500/10 text-blue-500"
 
@@ -125,7 +136,7 @@ function getItemStatusClass(item: UnifiedItem) {
 }
 
 function isEditableItem(item: UnifiedItem) {
-  return item.source !== "plugin" && item.kind !== "registry-skill"
+  return item.source !== "plugin" && item.kind !== "registry-skill" && item.kind !== "registry-collection"
 }
 
 function getRuntimeLabel(runtime: SkillRuntime, t: ReturnType<typeof useI18n>["t"]) {
@@ -179,30 +190,40 @@ function getRuntimeStatusClass(status?: string) {
 }
 
 function isRegistryAvailableItem(item: UnifiedItem) {
+  if (item.kind === "registry-collection") return false
   if (!item.registry) return false
   return getRegistryRuntimeStates(item).some((state) => isAvailableRuntimeStatus(state.status))
 }
 
 function isRegistryInstalledItem(item: UnifiedItem) {
+  if (item.kind === "registry-collection") return false
   if (!item.registry) return false
   return getRegistryRuntimeStates(item).some((state) => isInstalledRuntimeStatus(state.status))
 }
 
 function isRegistryUpdateItem(item: UnifiedItem) {
+  if (item.kind === "registry-collection") return false
   if (!item.registry) return false
   return getRegistryRuntimeStates(item).some((state) => isUpdateRuntimeStatus(state.status))
 }
 
 function matchesSkillFilter(item: UnifiedItem, filter: SkillFilter) {
   if (filter === "all") return true
-  if (filter === "installed") return item.kind !== "registry-skill" || isRegistryInstalledItem(item)
+  if (filter === "installed") {
+    return (
+      item.kind !== "registry-skill" &&
+      item.kind !== "registry-collection"
+    ) || isRegistryInstalledItem(item)
+  }
   if (filter === "available") return isRegistryAvailableItem(item)
+  if (filter === "collections") return item.kind === "registry-collection"
   return isRegistryUpdateItem(item)
 }
 
 function getSkillFilterLabel(filter: SkillFilter, t: ReturnType<typeof useI18n>["t"]) {
   if (filter === "installed") return t("settings.skills.filterInstalled")
   if (filter === "available") return t("settings.skills.filterAvailable")
+  if (filter === "collections") return t("settings.skills.filterCollections")
   if (filter === "updates") return t("settings.skills.filterUpdates")
   return t("settings.skills.filterAll")
 }
@@ -389,7 +410,11 @@ function ItemDetail({
             </div>
             <div className="mt-2 inline-flex items-center rounded-md border border-border bg-muted/40 px-2.5 py-1">
               <code className="text-xs text-foreground">
-                {item.kind === "command" ? `/${item.name}` : `@${item.name}`}
+                {item.kind === "command"
+                  ? `/${item.name}`
+                  : item.kind === "registry-collection"
+                    ? item.name
+                    : `@${item.name}`}
               </code>
             </div>
           </div>
@@ -487,6 +512,54 @@ function ItemDetail({
               <div className="flex items-start gap-2 text-[11px] text-amber-500">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                 <span>{item.registry.statusMessage}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {item.collection && (
+          <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">
+                  {t("settings.skills.externalCollection")}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {item.collection.recommendedAction || t("settings.skills.externalCollectionHint")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => {
+                  void window.desktopApi.openExternal(item.collection!.sourceUrl)
+                }}
+              >
+                <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                {t("settings.skills.openSource")}
+              </Button>
+            </div>
+            {item.collection.runtimes && item.collection.runtimes.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {item.collection.runtimes.map((runtime) => (
+                  <span
+                    key={runtime}
+                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground"
+                  >
+                    {getRuntimeLabel(runtime, t)}
+                  </span>
+                ))}
+              </div>
+            )}
+            {item.collection.installHint && (
+              <div className="rounded-md border border-border bg-background/60 px-2.5 py-2">
+                <p className="text-[11px] font-medium text-foreground">
+                  {t("settings.skills.installGuidance")}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground whitespace-pre-wrap">
+                  {item.collection.installHint}
+                </p>
               </div>
             )}
           </div>
@@ -760,11 +833,13 @@ function SidebarListItem({
           "text-[10px] font-medium shrink-0 w-3 text-center",
           item.kind === "command"
             ? "text-orange-500/70"
+            : item.kind === "registry-collection"
+              ? "text-violet-500/70"
             : item.source === "registry"
               ? "text-emerald-500/70"
               : "text-blue-500/70"
         )}>
-          {item.kind === "command" ? "/" : "@"}
+          {item.kind === "command" ? "/" : item.kind === "registry-collection" ? "#" : "@"}
         </span>
         <span className="text-sm truncate flex-1">{item.name}</span>
         <span className={cn(
@@ -795,6 +870,21 @@ function SidebarListItem({
               </span>
             )
           })}
+        </div>
+      )}
+      {item.collection && (
+        <div className="mt-1 flex items-center gap-1 pl-[18px]">
+          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            {t("settings.skills.external")}
+          </span>
+          {item.collection.runtimes?.map((runtime) => (
+            <span
+              key={runtime}
+              className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground"
+            >
+              {getRuntimeLabel(runtime, t)}
+            </span>
+          ))}
         </div>
       )}
     </button>
@@ -849,7 +939,13 @@ export function AgentsSkillsTab() {
     refetch: refetchCodexRegistry,
   } = trpc.skills.registryList.useQuery({ runtime: "codex" })
 
-  const isLoadingRegistry = isLoadingClaudeRegistry || isLoadingCodexRegistry
+  const {
+    data: registryCollections = [],
+    isLoading: isLoadingRegistryCollections,
+    refetch: refetchRegistryCollections,
+  } = trpc.skills.registryCollections.useQuery()
+
+  const isLoadingRegistry = isLoadingClaudeRegistry || isLoadingCodexRegistry || isLoadingRegistryCollections
   const isLoading = isLoadingSkills || isLoadingCommands || isLoadingRegistry
 
   const refetchAll = useCallback(async () => {
@@ -858,8 +954,9 @@ export function AgentsSkillsTab() {
       refetchCommands(),
       refetchClaudeRegistry(),
       refetchCodexRegistry(),
+      refetchRegistryCollections(),
     ])
-  }, [refetchSkills, refetchCommands, refetchClaudeRegistry, refetchCodexRegistry])
+  }, [refetchSkills, refetchCommands, refetchClaudeRegistry, refetchCodexRegistry, refetchRegistryCollections])
 
   // Delete confirmation dialog state
   const [deletingItem, setDeletingItem] = useState<UnifiedItem | null>(null)
@@ -991,8 +1088,39 @@ export function AgentsSkillsTab() {
         },
       }))
 
-    return [...skillItems, ...cmdItems, ...registryItems]
-  }, [skills, commands, claudeRegistrySkills, codexRegistrySkills, t])
+    const collectionItems: UnifiedItem[] = registryCollections.map((collection) => ({
+      id: `collection:${collection.id}`,
+      kind: "registry-collection" as const,
+      name: collection.displayName || collection.id,
+      description: collection.description,
+      source: "registry" as const,
+      path: collection.sourceUrl,
+      content: [
+        `# ${collection.displayName || collection.id}`,
+        "",
+        collection.description || t("settings.skills.noDescriptionSentence"),
+        "",
+        collection.recommendedAction
+          ? `**${t("settings.skills.recommendation")}**: ${collection.recommendedAction}`
+          : "",
+        collection.installHint
+          ? `**${t("settings.skills.installGuidance")}**: ${collection.installHint}`
+          : "",
+        `${t("settings.skills.source")}: ${collection.sourceUrl}`,
+      ].filter(Boolean).join("\n\n"),
+      collection: {
+        id: collection.id,
+        registryId: collection.registryId,
+        sourceUrl: collection.sourceUrl,
+        installHint: collection.installHint,
+        recommendedAction: collection.recommendedAction,
+        runtimes: collection.runtimes,
+        license: collection.license,
+      },
+    }))
+
+    return [...skillItems, ...cmdItems, ...registryItems, ...collectionItems]
+  }, [skills, commands, claudeRegistrySkills, codexRegistrySkills, registryCollections, t])
 
   // Filter by search
   const filteredItems = useMemo(() => {
@@ -1044,6 +1172,7 @@ export function AgentsSkillsTab() {
           (item) =>
             (
               item.kind !== "registry-skill" &&
+              item.kind !== "registry-collection" &&
               (item.source === "user" || item.source === "registry")
             ) ||
             isRegistryInstalledItem(item),
@@ -1053,8 +1182,14 @@ export function AgentsSkillsTab() {
         id: "available",
         label: t("settings.skills.groupAvailable"),
         items: skillItems.filter(
-          (item) => item.kind === "registry-skill" && !isRegistryInstalledItem(item),
+          (item) =>
+            item.kind === "registry-skill" && !isRegistryInstalledItem(item),
         ),
+      },
+      {
+        id: "collections",
+        label: t("settings.skills.groupCollections"),
+        items: skillItems.filter((item) => item.kind === "registry-collection"),
       },
       {
         id: "project",
@@ -1085,6 +1220,7 @@ export function AgentsSkillsTab() {
       all: skillItems.length,
       installed: skillItems.filter((item) => matchesSkillFilter(item, "installed")).length,
       available: skillItems.filter((item) => matchesSkillFilter(item, "available")).length,
+      collections: skillItems.filter((item) => matchesSkillFilter(item, "collections")).length,
       updates: skillItems.filter((item) => matchesSkillFilter(item, "updates")).length,
     }
   }, [allItems])
@@ -1291,21 +1427,21 @@ export function AgentsSkillsTab() {
 
   const handleCheckRegistry = useCallback(async () => {
     try {
-      await Promise.all([refetchClaudeRegistry(), refetchCodexRegistry()])
+      await Promise.all([refetchClaudeRegistry(), refetchCodexRegistry(), refetchRegistryCollections()])
       toast.success(t("settings.skills.toast.registryChecked"))
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.skills.toast.failedToCheckRegistry")
       toast.error(t("settings.skills.toast.failedToCheckRegistry"), { description: message })
     }
-  }, [refetchClaudeRegistry, refetchCodexRegistry, t])
+  }, [refetchClaudeRegistry, refetchCodexRegistry, refetchRegistryCollections, t])
 
   const handleBrowseRegistry = useCallback(() => {
     setShowAddForm(false)
     setSearchQuery("")
     setActiveView("skills")
     setActiveSkillFilter("available")
-    void Promise.all([refetchClaudeRegistry(), refetchCodexRegistry()])
-  }, [refetchClaudeRegistry, refetchCodexRegistry])
+    void Promise.all([refetchClaudeRegistry(), refetchCodexRegistry(), refetchRegistryCollections()])
+  }, [refetchClaudeRegistry, refetchCodexRegistry, refetchRegistryCollections])
 
   const isSaving = updateSkillMutation.isPending || updateCommandMutation.isPending
   const isCreating = createSkillMutation.isPending || createCommandMutation.isPending
@@ -1322,7 +1458,9 @@ export function AgentsSkillsTab() {
         ? t("settings.skills.noSkillUpdates")
         : activeSkillFilter === "installed"
           ? t("settings.skills.noInstalledSkills")
-          : t("settings.skills.noSkills")
+          : activeSkillFilter === "collections"
+            ? t("settings.skills.noExternalCollections")
+            : t("settings.skills.noSkills")
   const emptyHint = activeView === "commands"
     ? t("settings.skills.commandsEmptyHint")
     : activeSkillFilter === "available"
@@ -1331,7 +1469,9 @@ export function AgentsSkillsTab() {
         ? t("settings.skills.skillUpdatesHint")
         : activeSkillFilter === "installed"
           ? t("settings.skills.installedSkillsHint")
-          : t("settings.skills.emptyHint")
+          : activeSkillFilter === "collections"
+            ? t("settings.skills.externalCollectionsHint")
+            : t("settings.skills.emptyHint")
 
   return (
     <div className="flex h-full overflow-hidden">

@@ -34,6 +34,7 @@ export interface SkillRegistryManifest {
   registryId: string
   generatedAt: string
   skills: RegistrySkillManifestEntry[]
+  collections?: RegistryCollectionManifestEntry[]
 }
 
 export interface RegistrySkillManifestEntry {
@@ -45,6 +46,19 @@ export interface RegistrySkillManifestEntry {
   sha256: string
   compatibility?: {
     minAppVersion?: string
+    runtimes?: string[]
+  }
+  license?: string
+}
+
+export interface RegistryCollectionManifestEntry {
+  id: string
+  displayName: string
+  description: string
+  sourceUrl: string
+  installHint?: string
+  recommendedAction?: string
+  compatibility?: {
     runtimes?: string[]
   }
   license?: string
@@ -90,6 +104,19 @@ export interface RegistrySkillView {
   lastBackupPath?: string
   hasRollback: boolean
   statusMessage?: string
+}
+
+export interface RegistryCollectionView {
+  id: string
+  displayName: string
+  description: string
+  registryId: string
+  registrySource: "bundled" | "remote"
+  sourceUrl: string
+  installHint?: string
+  recommendedAction?: string
+  runtimes?: SkillRuntime[]
+  license?: string
 }
 
 export interface InstallRegistrySkillInput {
@@ -246,6 +273,17 @@ function validateManifest(manifest: SkillRegistryManifest): SkillRegistryManifes
     }
   }
 
+  for (const collection of manifest.collections ?? []) {
+    assertValidSkillId(collection.id)
+    if (!collection.displayName || !collection.sourceUrl) {
+      throw new Error(`Invalid registry collection entry: ${collection.id}`)
+    }
+    const sourceUrl = new URL(collection.sourceUrl)
+    if (sourceUrl.protocol !== "https:") {
+      throw new Error(`Invalid registry collection source URL: ${collection.id}`)
+    }
+  }
+
   return manifest
 }
 
@@ -284,6 +322,33 @@ function mergeRegistries(
   if (remote) {
     for (const skill of remote.skills) {
       merged.set(skill.id, { ...skill, registryId: remote.registryId, registrySource: "remote" })
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => a.id.localeCompare(b.id))
+}
+
+function mergeRegistryCollections(
+  bundled: SkillRegistryManifest,
+  remote: SkillRegistryManifest | null,
+): Array<RegistryCollectionManifestEntry & { registryId: string; registrySource: "bundled" | "remote" }> {
+  const merged = new Map<string, RegistryCollectionManifestEntry & { registryId: string; registrySource: "bundled" | "remote" }>()
+
+  for (const collection of bundled.collections ?? []) {
+    merged.set(collection.id, {
+      ...collection,
+      registryId: bundled.registryId,
+      registrySource: "bundled",
+    })
+  }
+
+  if (remote) {
+    for (const collection of remote.collections ?? []) {
+      merged.set(collection.id, {
+        ...collection,
+        registryId: remote.registryId,
+        registrySource: "remote",
+      })
     }
   }
 
@@ -381,6 +446,29 @@ export async function listRegistrySkills(options?: { checkRemote?: boolean; runt
   const entries = mergeRegistries(bundled, remote)
 
   return Promise.all(entries.map((skill) => readSkillStatus(skill, state, now, runtime)))
+}
+
+export async function listRegistryCollections(options?: { checkRemote?: boolean }): Promise<RegistryCollectionView[]> {
+  const [bundled, remote] = await Promise.all([
+    loadBundledRegistryManifest(),
+    options?.checkRemote ? fetchRemoteRegistryManifest() : Promise.resolve(null),
+  ])
+  const collections = mergeRegistryCollections(bundled, remote)
+
+  return collections.map((collection) => ({
+    id: collection.id,
+    displayName: collection.displayName || collection.id,
+    description: collection.description || "",
+    registryId: collection.registryId,
+    registrySource: collection.registrySource,
+    sourceUrl: collection.sourceUrl,
+    installHint: collection.installHint,
+    recommendedAction: collection.recommendedAction,
+    runtimes: collection.compatibility?.runtimes?.filter((runtime): runtime is SkillRuntime =>
+      runtime === "claude" || runtime === "codex",
+    ),
+    license: collection.license,
+  }))
 }
 
 async function getRegistryEntry(

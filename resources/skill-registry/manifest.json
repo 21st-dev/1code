@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "registryId": "agent-code-for-me-core-skills",
-  "generatedAt": "2026-05-15T00:00:00.000Z",
+  "generatedAt": "2026-05-17T13:20:01.000Z",
   "skills": [
     {
       "id": "changelog-generator",
@@ -16,6 +16,37 @@
           "claude"
         ]
       }
+    },
+    {
+      "id": "find-skills",
+      "displayName": "find-skills",
+      "version": "1.0.0",
+      "description": "Find, compare, and recommend agent skills to install or use. Use when discovering useful skills, comparing skill collections, or choosing a small high-value shortlist.",
+      "source": "skills/find-skills",
+      "sha256": "9cce43cc9a19538ed44988f81456813146530413bd27736cf355b2b93986c6b8",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude",
+          "codex"
+        ]
+      }
+    },
+    {
+      "id": "frontend-design",
+      "displayName": "frontend-design",
+      "version": "1.0.0",
+      "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use when building web components, pages, dashboards, React components, HTML/CSS layouts, or polishing web UI.",
+      "source": "skills/frontend-design",
+      "sha256": "537c1df9d0c694ecf9139a911f9ad0bd111a7ebc173a55457568459e543fe75b",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude",
+          "codex"
+        ]
+      },
+      "license": "Complete terms in LICENSE.txt"
     },
     {
       "id": "mcp-builder",
@@ -105,6 +136,21 @@
       }
     },
     {
+      "id": "skill-creator",
+      "displayName": "skill-creator",
+      "version": "1.0.0",
+      "description": "Create new skills or improve existing SKILL.md packages. Use when turning repeated workflows into reusable skills, drafting skills, or refining trigger descriptions.",
+      "source": "skills/skill-creator",
+      "sha256": "d152c5dd093dbae8ebd380eda3edc4827ef91f35a34c736b0a851279d1a702d1",
+      "compatibility": {
+        "minAppVersion": "0.0.72",
+        "runtimes": [
+          "claude",
+          "codex"
+        ]
+      }
+    },
+    {
       "id": "subagent-workflow",
       "displayName": "subagent-workflow",
       "version": "1.0.0",
@@ -159,6 +205,52 @@
           "claude"
         ]
       }
+    }
+  ],
+  "collections": [
+    {
+      "id": "gstack",
+      "displayName": "gstack",
+      "description": "Advanced Claude-focused workflow pack with repo mode, local analytics, routing, and shipping workflows. Treat as experimental until reviewed.",
+      "sourceUrl": "https://github.com/garrytan/gstack",
+      "installHint": "Review the repository and its scripts before installing. It writes under ~/.gstack and includes optional telemetry prompts.",
+      "recommendedAction": "Show as an advanced external source only; do not one-click install from this registry.",
+      "compatibility": {
+        "runtimes": [
+          "claude"
+        ]
+      },
+      "license": "See upstream repository"
+    },
+    {
+      "id": "mattpocock-skills",
+      "displayName": "mattpocock/skills",
+      "description": "Engineering workflow skill collection for alignment, TDD, diagnosis, handoffs, PRD/issue generation, and architecture improvement.",
+      "sourceUrl": "https://github.com/mattpocock/skills",
+      "installHint": "Use the upstream selector and cherry-pick individual skills instead of installing the whole collection by default.",
+      "recommendedAction": "Start with diagnose, tdd, handoff, or improve-codebase-architecture if they match the current project workflow.",
+      "compatibility": {
+        "runtimes": [
+          "claude",
+          "codex"
+        ]
+      },
+      "license": "MIT"
+    },
+    {
+      "id": "superpowers",
+      "displayName": "superpowers",
+      "description": "Full agentic software-development methodology and plugin ecosystem with planning, TDD, worktrees, review, and subagent workflows.",
+      "sourceUrl": "https://github.com/obra/superpowers",
+      "installHint": "Install through the official plugin marketplace for the target runtime when you want the full methodology.",
+      "recommendedAction": "Keep as an advanced external workflow pack, not a normal registry skill.",
+      "compatibility": {
+        "runtimes": [
+          "claude",
+          "codex"
+        ]
+      },
+      "license": "MIT"
     }
   ]
 }
