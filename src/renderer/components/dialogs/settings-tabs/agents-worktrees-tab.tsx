@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
+import { useI18n } from "../../../lib/i18n"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -36,6 +37,7 @@ function useIsNarrowScreen(): boolean {
 }
 
 export function AgentsWorktreesTab() {
+  const { t } = useI18n()
   const isNarrowScreen = useIsNarrowScreen()
 
   // Get projects list
@@ -54,11 +56,11 @@ export function AgentsWorktreesTab() {
   // Save mutation
   const saveMutation = trpc.worktreeConfig.save.useMutation({
     onSuccess: () => {
-      toast.success("Worktree config saved")
+      toast.success(t("settings.worktrees.toast.saved"))
       refetchConfig()
     },
     onError: (err) => {
-      toast.error(`Failed to save: ${err.message}`)
+      toast.error(t("settings.worktrees.toast.failedToSave", { message: err.message }))
     },
   })
 
@@ -186,9 +188,11 @@ export function AgentsWorktreesTab() {
       {/* Header */}
       {!isNarrowScreen && (
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">
-          <h3 className="text-sm font-semibold text-foreground">Worktrees</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("settings.worktrees.title")}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            Configure setup commands that run when a new worktree is created
+            {t("settings.worktrees.subtitle")}
           </p>
         </div>
       )}
@@ -196,15 +200,19 @@ export function AgentsWorktreesTab() {
       {/* Project Selection */}
       <div className="space-y-2">
         <div className="pb-2">
-          <h4 className="text-sm font-medium text-foreground">Project</h4>
+          <h4 className="text-sm font-medium text-foreground">
+            {t("common.project")}
+          </h4>
         </div>
 
         <div className="bg-background rounded-lg border border-border overflow-hidden">
           <div className="p-4 flex items-center justify-between gap-6">
             <div className="flex-1">
-              <Label className="text-sm font-medium">Select project</Label>
+              <Label className="text-sm font-medium">
+                {t("settings.worktrees.selectProject")}
+              </Label>
               <p className="text-xs text-muted-foreground">
-                Choose which project to configure
+                {t("settings.worktrees.selectProjectDescription")}
               </p>
             </div>
             <div className="flex-shrink-0 w-64">
@@ -214,7 +222,7 @@ export function AgentsWorktreesTab() {
               >
                 <SelectTrigger className="w-full">
                   <span className="text-sm truncate">
-                    {selectedProject?.name ?? "Select..."}
+                    {selectedProject?.name ?? t("settings.worktrees.selectPlaceholder")}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -236,11 +244,11 @@ export function AgentsWorktreesTab() {
           <div className="space-y-2">
             <div className="pb-2">
               <h4 className="text-sm font-medium text-foreground">
-                Config Location
+                {t("settings.worktrees.configLocation")}
               </h4>
               {configData?.path && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Using: {configData.path}
+                  {t("settings.worktrees.usingPath", { path: configData.path })}
                 </p>
               )}
             </div>
@@ -248,9 +256,11 @@ export function AgentsWorktreesTab() {
             <div className="bg-background rounded-lg border border-border overflow-hidden">
               <div className="p-4 flex items-center justify-between gap-6">
                 <div className="flex-1">
-                  <Label className="text-sm font-medium">Save to</Label>
+                  <Label className="text-sm font-medium">
+                    {t("settings.worktrees.saveTo")}
+                  </Label>
                   <p className="text-xs text-muted-foreground">
-                    Where to save the configuration file
+                    {t("settings.worktrees.saveToDescription")}
                   </p>
                 </div>
                 <div className="flex-shrink-0 w-auto min-w-56 max-w-80">
@@ -286,10 +296,10 @@ export function AgentsWorktreesTab() {
             <div className="pb-2 flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-medium text-foreground">
-                  Setup Commands
+                  {t("settings.worktrees.setupCommands")}
                 </h4>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Commands run in the worktree after creation
+                  {t("settings.worktrees.setupCommandsDescription")}
                 </p>
               </div>
               <Button
@@ -311,16 +321,20 @@ export function AgentsWorktreesTab() {
                 disabled={!selectedProjectId || createChatMutation.isPending}
               >
                 <AIPenIcon className="h-3.5 w-3.5" />
-                Fill with AI
+                {t("settings.projects.fillWithAI")}
               </Button>
             </div>
 
             <div className="bg-background rounded-lg border border-border overflow-hidden">
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">All Platforms</Label>
+                  <Label className="text-sm font-medium">
+                    {t("settings.worktrees.allPlatforms")}
+                  </Label>
                   <span className="text-xs text-muted-foreground">
-                    use <code className="font-mono bg-muted px-1 py-0.5 rounded">$ROOT_WORKTREE_PATH</code> for main repo path
+                    {t("settings.worktrees.useRootPathPrefix")}{" "}
+                    <code className="font-mono bg-muted px-1 py-0.5 rounded">$ROOT_WORKTREE_PATH</code>{" "}
+                    {t("settings.worktrees.useRootPathSuffix")}
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -354,7 +368,7 @@ export function AgentsWorktreesTab() {
                   onClick={() => addCommand(commands, setCommands)}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Add command
+                  {t("settings.projects.addCommand")}
                 </Button>
               </div>
 
@@ -365,7 +379,7 @@ export function AgentsWorktreesTab() {
                   className="w-full p-3 flex items-center justify-between text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                   onClick={() => setShowPlatformSpecific(!showPlatformSpecific)}
                 >
-                  <span>Platform-specific overrides</span>
+                  <span>{t("settings.projects.addPlatformOverrides")}</span>
                   <ChevronDown
                     className={`h-4 w-4 transition-transform ${
                       showPlatformSpecific ? "rotate-180" : ""
@@ -382,7 +396,7 @@ export function AgentsWorktreesTab() {
                       </span>
                       {unixCommands.length === 0 ? (
                         <p className="text-xs text-muted-foreground/60 italic">
-                          Falls back to "All Platforms"
+                          {t("settings.worktrees.fallsBackAllPlatforms")}
                         </p>
                       ) : (
                         <div className="space-y-2">
@@ -422,7 +436,7 @@ export function AgentsWorktreesTab() {
                         onClick={() => addCommand(unixCommands, setUnixCommands)}
                       >
                         <Plus className="h-3 w-3" />
-                        Add
+                        {t("common.add")}
                       </Button>
                     </div>
 
@@ -433,7 +447,7 @@ export function AgentsWorktreesTab() {
                       </span>
                       {windowsCommands.length === 0 ? (
                         <p className="text-xs text-muted-foreground/60 italic">
-                          Falls back to "All Platforms"
+                          {t("settings.worktrees.fallsBackAllPlatforms")}
                         </p>
                       ) : (
                         <div className="space-y-2">
@@ -479,7 +493,7 @@ export function AgentsWorktreesTab() {
                         }
                       >
                         <Plus className="h-3 w-3" />
-                        Add
+                        {t("common.add")}
                       </Button>
                     </div>
                   </div>
@@ -492,7 +506,7 @@ export function AgentsWorktreesTab() {
                   onClick={handleSave}
                   disabled={saveMutation.isPending}
                 >
-                  {saveMutation.isPending ? "Saving..." : "Save"}
+                  {saveMutation.isPending ? t("common.saving") : t("common.save")}
                 </Button>
               </div>
             </div>

@@ -223,7 +223,7 @@ export function ClaudeLoginModal({
         </AlertDialogDescription>
         <AlertDialogCancel className="absolute right-4 top-4 h-6 w-6 p-0 border-0 bg-transparent hover:bg-muted rounded-sm opacity-70 hover:opacity-100">
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{t("common.close")}</span>
         </AlertDialogCancel>
 
         <div className="space-y-8">

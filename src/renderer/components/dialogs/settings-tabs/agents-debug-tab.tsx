@@ -3,6 +3,7 @@ import { useAtom } from "jotai"
 import { Button } from "../../ui/button"
 import { Switch } from "../../ui/switch"
 import { trpc } from "../../../lib/trpc"
+import { useI18n } from "../../../lib/i18n"
 import { toast } from "sonner"
 import { Copy, FolderOpen, RefreshCw, Terminal, Check, Scan, WifiOff, FileJson } from "lucide-react"
 import { showMessageJsonAtom } from "../../../features/agents/atoms"
@@ -58,6 +59,7 @@ function unloadReactScan(): void {
 }
 
 export function AgentsDebugTab() {
+  const { t } = useI18n()
   const [copiedPath, setCopiedPath] = useState(false)
   const [copiedInfo, setCopiedInfo] = useState(false)
   const [reactScanEnabled, setReactScanEnabled] = useState(false)
@@ -78,10 +80,10 @@ export function AgentsDebugTab() {
   const setOfflineSimulationMutation = trpc.debug.setOfflineSimulation.useMutation({
     onSuccess: (data) => {
       refetchOfflineSimulation()
-      toast.success(data.enabled ? "Offline simulation enabled" : "Offline simulation disabled", {
+      toast.success(data.enabled ? t("settings.debug.toast.offlineEnabled") : t("settings.debug.toast.offlineDisabled"), {
         description: data.enabled
-          ? "App will behave as if offline"
-          : "Network detection restored to normal"
+          ? t("settings.debug.toast.offlineEnabledDescription")
+          : t("settings.debug.toast.offlineDisabledDescription")
       })
     },
     onError: (error) => toast.error(error.message),
@@ -95,7 +97,7 @@ export function AgentsDebugTab() {
   // Mutations
   const clearChatsMutation = trpc.debug.clearChats.useMutation({
     onSuccess: () => {
-      toast.success("All chats cleared")
+      toast.success(t("settings.debug.toast.allChatsCleared"))
       refetchDb()
     },
     onError: (error) => toast.error(error.message),
@@ -103,7 +105,7 @@ export function AgentsDebugTab() {
 
   const clearAllDataMutation = trpc.debug.clearAllData.useMutation({
     onSuccess: () => {
-      toast.success("All data cleared. Reloading...")
+      toast.success(t("settings.debug.toast.allDataCleared"))
       setTimeout(() => window.location.reload(), 500)
     },
     onError: (error) => toast.error(error.message),
@@ -111,7 +113,7 @@ export function AgentsDebugTab() {
 
   const logoutMutation = trpc.debug.logout.useMutation({
     onSuccess: () => {
-      toast.success("Logged out. Reloading...")
+      toast.success(t("settings.debug.toast.loggedOut"))
       setTimeout(() => window.location.reload(), 500)
     },
     onError: (error) => toast.error(error.message),
@@ -137,7 +139,7 @@ export function AgentsDebugTab() {
     }
     await navigator.clipboard.writeText(JSON.stringify(info, null, 2))
     setCopiedInfo(true)
-    toast.success("Debug info copied to clipboard")
+    toast.success(t("settings.debug.toast.debugInfoCopied"))
     setTimeout(() => setCopiedInfo(false), 2000)
   }
 
@@ -154,19 +156,19 @@ export function AgentsDebugTab() {
         await loadReactScan()
         localStorage.setItem(REACT_SCAN_STORAGE_KEY, "true")
         setReactScanEnabled(true)
-        toast.success("React Scan enabled", {
-          description: "Reload the page to see re-render highlights",
+        toast.success(t("settings.debug.toast.reactScanEnabled"), {
+          description: t("settings.debug.toast.reactScanEnabledDescription"),
         })
       } else {
         unloadReactScan()
         localStorage.removeItem(REACT_SCAN_STORAGE_KEY)
         setReactScanEnabled(false)
-        toast.success("React Scan disabled", {
-          description: "Reload the page to fully remove it",
+        toast.success(t("settings.debug.toast.reactScanDisabled"), {
+          description: t("settings.debug.toast.reactScanDisabledDescription"),
         })
       }
     } catch (error) {
-      toast.error("Failed to toggle React Scan")
+      toast.error(t("settings.debug.toast.failedToToggleReactScan"))
       console.error(error)
     } finally {
       setReactScanLoading(false)
@@ -189,9 +191,9 @@ export function AgentsDebugTab() {
       {/* Header - hidden on narrow screens since it's in the navigation bar */}
       {!isNarrowScreen && (
         <div>
-          <h3 className="text-lg font-semibold mb-1">Debug</h3>
+          <h3 className="text-lg font-semibold mb-1">{t("settings.debug.title")}</h3>
           <p className="text-sm text-muted-foreground">
-            System information and developer tools
+            {t("settings.debug.subtitle")}
           </p>
         </div>
       )}
@@ -199,23 +201,23 @@ export function AgentsDebugTab() {
       {/* System Info */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          System Info
+          {t("settings.debug.systemInfo")}
         </h4>
         <div className="rounded-lg border bg-muted/30 divide-y">
-          <InfoRow label="Version" value={systemInfo?.version} isLoading={isLoading} />
+          <InfoRow label={t("settings.debug.version")} value={systemInfo?.version} isLoading={isLoading} />
           <InfoRow
-            label="Platform"
+            label={t("settings.debug.platform")}
             value={systemInfo ? `${systemInfo.platform} (${systemInfo.arch})` : undefined}
             isLoading={isLoading}
           />
           <InfoRow
-            label="Dev Mode"
-            value={systemInfo?.isDev ? "Yes" : "No"}
+            label={t("settings.debug.devMode")}
+            value={systemInfo?.isDev ? t("settings.debug.yes") : t("settings.debug.no")}
             isLoading={isLoading}
           />
           <InfoRow
-            label="Protocol"
-            value={systemInfo?.protocolRegistered ? "Registered" : "Not registered"}
+            label={t("settings.debug.protocol")}
+            value={systemInfo?.protocolRegistered ? t("settings.debug.registered") : t("settings.debug.notRegistered")}
             isLoading={isLoading}
             status={systemInfo?.protocolRegistered ? "success" : "warning"}
           />
@@ -246,12 +248,12 @@ export function AgentsDebugTab() {
       {/* DB Stats */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Database
+          {t("settings.debug.database")}
         </h4>
         <div className="rounded-lg border bg-muted/30 divide-y">
-          <InfoRow label="Projects" value={dbStats?.projects?.toString()} isLoading={isLoading} />
-          <InfoRow label="Chats" value={dbStats?.chats?.toString()} isLoading={isLoading} />
-          <InfoRow label="Sub-chats" value={dbStats?.subChats?.toString()} isLoading={isLoading} />
+          <InfoRow label={t("settings.debug.projects")} value={dbStats?.projects?.toString()} isLoading={isLoading} />
+          <InfoRow label={t("settings.debug.chats")} value={dbStats?.chats?.toString()} isLoading={isLoading} />
+          <InfoRow label={t("settings.debug.subChats")} value={dbStats?.subChats?.toString()} isLoading={isLoading} />
         </div>
       </div>
 
@@ -259,7 +261,7 @@ export function AgentsDebugTab() {
       {isDev && (
         <div className="space-y-3">
           <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Developer Tools
+            {t("settings.debug.developerTools")}
           </h4>
           <div className="rounded-lg border bg-muted/30 divide-y">
             <div className="flex items-center justify-between p-3">
@@ -268,7 +270,7 @@ export function AgentsDebugTab() {
                 <div>
                   <span className="text-sm">React Scan</span>
                   <p className="text-xs text-muted-foreground">
-                    Highlight component re-renders
+                    {t("settings.debug.reactScanDescription")}
                   </p>
                 </div>
               </div>
@@ -282,9 +284,9 @@ export function AgentsDebugTab() {
               <div className="flex items-center gap-2">
                 <WifiOff className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <span className="text-sm">Simulate Offline</span>
+                  <span className="text-sm">{t("settings.debug.simulateOffline")}</span>
                   <p className="text-xs text-muted-foreground">
-                    Test offline mode without disconnecting
+                    {t("settings.debug.simulateOfflineDescription")}
                   </p>
                 </div>
               </div>
@@ -300,9 +302,9 @@ export function AgentsDebugTab() {
               <div className="flex items-center gap-2">
                 <FileJson className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <span className="text-sm">Show Message JSON</span>
+                  <span className="text-sm">{t("settings.debug.showMessageJson")}</span>
                   <p className="text-xs text-muted-foreground">
-                    Display raw JSON below each message in chat
+                    {t("settings.debug.showMessageJsonDescription")}
                   </p>
                 </div>
               </div>
@@ -318,7 +320,7 @@ export function AgentsDebugTab() {
       {/* Quick Actions */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Quick Actions
+          {t("settings.debug.quickActions")}
         </h4>
         <div className="grid grid-cols-2 gap-2">
           <Button
@@ -328,7 +330,7 @@ export function AgentsDebugTab() {
             disabled={openFolderMutation.isPending}
           >
             <FolderOpen className="h-4 w-4 mr-2" />
-            Open userData
+            {t("settings.debug.openUserData")}
           </Button>
           <Button variant="outline" size="sm" onClick={handleOpenDevTools}>
             <Terminal className="h-4 w-4 mr-2" />
@@ -340,7 +342,7 @@ export function AgentsDebugTab() {
             onClick={() => window.location.reload()}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Reload
+            {t("settings.debug.reload")}
           </Button>
           <Button
             variant="outline"
@@ -353,7 +355,7 @@ export function AgentsDebugTab() {
             ) : (
               <Copy className="h-4 w-4 mr-2" />
             )}
-            Copy Info
+            {t("settings.debug.copyInfo")}
           </Button>
         </div>
       </div>
@@ -361,18 +363,18 @@ export function AgentsDebugTab() {
       {/* Toast Testing */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Toast Testing
+          {t("settings.debug.toastTesting")}
         </h4>
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() =>
-              toast.info("Cancelation sent", {
-                description: "Sent to John Smith",
+              toast.info(t("settings.debug.sampleCancelationSent"), {
+                description: t("settings.debug.sampleSentTo"),
                 action: {
-                  label: "Undo",
-                  onClick: () => toast("Undone!"),
+                  label: t("settings.debug.sampleUndo"),
+                  onClick: () => toast(t("settings.debug.sampleUndone")),
                 },
               })
             }
@@ -382,21 +384,21 @@ export function AgentsDebugTab() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => toast.success("Success!", { description: "Operation completed" })}
+            onClick={() => toast.success(t("settings.debug.sampleSuccess"), { description: t("settings.debug.sampleOperationCompleted") })}
           >
             Success
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => toast.error("Error", { description: "Something went wrong" })}
+            onClick={() => toast.error(t("settings.debug.sampleError"), { description: t("settings.debug.sampleSomethingWentWrong") })}
           >
             Error
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => toast("Default toast", { description: "This is a description" })}
+            onClick={() => toast(t("settings.debug.sampleDefaultToast"), { description: t("settings.debug.sampleDescription") })}
           >
             Default
           </Button>
@@ -404,7 +406,7 @@ export function AgentsDebugTab() {
             variant="outline"
             size="sm"
             onClick={() => {
-              const id = toast.loading("Loading...", { description: "Please wait" })
+              const id = toast.loading(t("common.loading"), { description: t("settings.debug.samplePleaseWait") })
               setTimeout(() => toast.dismiss(id), 3000)
             }}
           >
@@ -414,9 +416,9 @@ export function AgentsDebugTab() {
             variant="outline"
             size="sm"
             onClick={() => {
-              const id = toast.loading("Processing...")
+              const id = toast.loading(t("settings.debug.sampleProcessing"))
               setTimeout(() => {
-                toast.success("Done!", { id })
+                toast.success(t("settings.debug.sampleDone"), { id })
               }, 2000)
             }}
           >
@@ -428,32 +430,32 @@ export function AgentsDebugTab() {
       {/* Data Management */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Data Management
+          {t("settings.debug.dataManagement")}
         </h4>
         <div className="grid grid-cols-3 gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              if (confirm("Clear all chats? Projects will be kept.")) {
+              if (confirm(t("settings.debug.confirmClearChats"))) {
                 clearChatsMutation.mutate()
               }
             }}
             disabled={clearChatsMutation.isPending}
           >
-            {clearChatsMutation.isPending ? "..." : "Clear Chats"}
+            {clearChatsMutation.isPending ? "..." : t("settings.debug.clearChats")}
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              if (confirm("Logout? You will need to sign in again.")) {
+              if (confirm(t("settings.debug.confirmLogout"))) {
                 logoutMutation.mutate()
               }
             }}
             disabled={logoutMutation.isPending}
           >
-            {logoutMutation.isPending ? "..." : "Logout"}
+            {logoutMutation.isPending ? "..." : t("settings.debug.logout")}
           </Button>
           <Button
             variant="destructive"
@@ -461,7 +463,7 @@ export function AgentsDebugTab() {
             onClick={() => {
               if (
                 confirm(
-                  "Reset everything? This will clear all data and log you out.",
+                  t("settings.debug.confirmResetAll"),
                 )
               ) {
                 clearAllDataMutation.mutate()
@@ -469,7 +471,7 @@ export function AgentsDebugTab() {
             }}
             disabled={clearAllDataMutation.isPending}
           >
-            {clearAllDataMutation.isPending ? "..." : "Reset All"}
+            {clearAllDataMutation.isPending ? "..." : t("settings.debug.resetAll")}
           </Button>
         </div>
       </div>

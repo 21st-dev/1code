@@ -11,6 +11,7 @@ import {
 } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import { Button } from "../../ui/button"
 import { LoadingDot, OriginalMCPIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
@@ -119,6 +120,7 @@ function McpServerDetail({
   isToggleable?: boolean
   isToggling?: boolean
 }) {
+  const { t } = useI18n()
   const { tools, needsAuth } = server
   const hasTools = tools.length > 0
   const isConnected = server.status === "connected"
@@ -135,21 +137,27 @@ function McpServerDetail({
             <h3 className="text-sm font-semibold text-foreground truncate">{server.name}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               {isDisabled
-                ? "Disabled"
+                ? t("settings.mcp.disabled")
                 : isConnected
-                  ? (hideToolsCount ? "Connected" : (hasTools ? `${tools.length} tool${tools.length !== 1 ? "s" : ""}` : "No tools"))
+                  ? (hideToolsCount
+                      ? t("common.connected")
+                      : (hasTools
+                          ? tools.length === 1
+                            ? t("settings.mcp.oneTool")
+                            : t("settings.mcp.toolCount", { count: tools.length })
+                          : t("settings.mcp.noTools")))
                   : getStatusText(server.status)}
               {server.serverInfo?.version && ` \u00B7 v${server.serverInfo.version}`}
             </p>
           </div>
           {needsAuth && onAuth && (
             <Button variant="secondary" size="sm" className="h-7 px-3 text-xs" onClick={onAuth}>
-              {isConnected ? "Reconnect" : "Authenticate"}
+              {isConnected ? t("settings.mcp.reconnect") : t("settings.mcp.authenticate")}
             </Button>
           )}
           {onLogout && (
             <Button variant="outline" size="sm" className="h-7 px-3 text-xs" onClick={onLogout}>
-              Logout
+              {t("settings.mcp.logout")}
             </Button>
           )}
           {isEditable && onDelete && (
@@ -158,8 +166,8 @@ function McpServerDetail({
               size="sm"
               className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
               onClick={onDelete}
-              aria-label="Delete server"
-              title="Delete server"
+              aria-label={t("settings.mcp.deleteServer")}
+              title={t("settings.mcp.deleteServer")}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -170,9 +178,11 @@ function McpServerDetail({
         {isToggleable && onToggleEnabled && (
           <div className="flex items-center justify-between">
             <div>
-              <h5 className="text-xs font-medium text-foreground">Enabled</h5>
+              <h5 className="text-xs font-medium text-foreground">
+                {t("settings.mcp.enabled")}
+              </h5>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Disable to prevent this server from connecting
+                {t("settings.mcp.disableDescription")}
               </p>
             </div>
             <Switch
@@ -185,11 +195,15 @@ function McpServerDetail({
 
         {/* Connection Section */}
         <div>
-          <h5 className="text-xs font-medium text-foreground mb-2">Connection</h5>
+          <h5 className="text-xs font-medium text-foreground mb-2">
+            {t("settings.mcp.connection")}
+          </h5>
           <div className="rounded-md border border-border bg-background overflow-hidden">
             <div className="divide-y divide-border">
               <div className="flex gap-3 px-3 py-2">
-                <span className="text-xs text-muted-foreground w-16 shrink-0">Type</span>
+                <span className="text-xs text-muted-foreground w-16 shrink-0">
+                  {t("settings.mcp.type")}
+                </span>
                 <span className="text-xs text-foreground font-mono select-text">{connection.type}</span>
               </div>
               {connection.url && (
@@ -200,13 +214,17 @@ function McpServerDetail({
               )}
               {connection.command && (
                 <div className="flex gap-3 px-3 py-2">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">Command</span>
+                  <span className="text-xs text-muted-foreground w-16 shrink-0">
+                    {t("settings.mcp.command")}
+                  </span>
                   <span className="text-xs text-foreground font-mono break-all select-text">{connection.command}</span>
                 </div>
               )}
               {connection.args && connection.args.length > 0 && (
                 <div className="flex gap-3 px-3 py-2">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">Args</span>
+                  <span className="text-xs text-muted-foreground w-16 shrink-0">
+                    {t("settings.mcp.args")}
+                  </span>
                   <span className="text-xs text-foreground font-mono break-all select-text">{connection.args.join(" ")}</span>
                 </div>
               )}
@@ -229,7 +247,9 @@ function McpServerDetail({
         {/* Error Section */}
         {server.error && (
           <div>
-            <h5 className="text-xs font-medium text-red-500 mb-2">Error</h5>
+            <h5 className="text-xs font-medium text-red-500 mb-2">
+              {t("settings.mcp.error")}
+            </h5>
             <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2">
               <p className="text-xs text-red-400 font-mono break-all select-text">{server.error}</p>
             </div>
@@ -240,7 +260,9 @@ function McpServerDetail({
         {hasTools && (
           <div>
             <h5 className="text-xs font-medium text-foreground mb-3">
-              {hideToolsCount ? "Tools" : `Tools (${tools.length})`}
+              {hideToolsCount
+                ? t("settings.mcp.tools")
+                : t("settings.mcp.toolsWithCount", { count: tools.length })}
             </h5>
             <div className="grid gap-2">
               {tools.map((tool, i) => {
@@ -280,6 +302,7 @@ function CreateMcpServerForm({
   projectPath?: string
   projectName?: string
 }) {
+  const { t } = useI18n()
   const addClaudeServerMutation = trpc.claude.addMcpServer.useMutation()
   const addCodexServerMutation = trpc.codex.addMcpServer.useMutation()
   const [provider, setProvider] = useState<McpProvider>(defaultProvider)
@@ -323,11 +346,11 @@ function CreateMcpServerForm({
           ...(effectiveScope === "project" && projectPath ? { projectPath } : {}),
         })
       }
-      toast.success(`"${name.trim()}" is added, refreshing...`)
+      toast.success(t("settings.mcp.toast.added", { name: name.trim() }))
       onCreated()
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to add server"
-      toast.error("Failed to add", { description: message })
+      const message = error instanceof Error ? error.message : t("settings.mcp.toast.failedToAddServer")
+      toast.error(t("settings.mcp.toast.failedToAdd"), { description: message })
     }
   }
 
@@ -335,17 +358,21 @@ function CreateMcpServerForm({
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">New MCP Server</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("settings.mcp.newServer")}
+          </h3>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              {t("common.cancel")}
+            </Button>
             <Button size="sm" onClick={handleSubmit} disabled={!canSave || isSaving}>
-              {isSaving ? "Adding..." : "Add"}
+              {isSaving ? t("settings.mcp.adding") : t("common.add")}
             </Button>
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Provider</Label>
+          <Label>{t("settings.mcp.provider")}</Label>
           <Select
             value={provider}
             onValueChange={(v) => {
@@ -367,7 +394,7 @@ function CreateMcpServerForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Name</Label>
+          <Label>{t("settings.mcp.name")}</Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -377,7 +404,7 @@ function CreateMcpServerForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Transport</Label>
+          <Label>{t("settings.mcp.transport")}</Label>
           <Select value={type} onValueChange={(v) => setType(v as "stdio" | "http")}>
             <SelectTrigger>
               <SelectValue />
@@ -392,7 +419,7 @@ function CreateMcpServerForm({
         {type === "stdio" ? (
           <>
             <div className="space-y-1.5">
-              <Label>Command</Label>
+              <Label>{t("settings.mcp.command")}</Label>
               <Input
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
@@ -401,14 +428,16 @@ function CreateMcpServerForm({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Arguments</Label>
+              <Label>{t("settings.mcp.arguments")}</Label>
               <Input
                 value={args}
                 onChange={(e) => setArgs(e.target.value)}
                 placeholder="-m mcp_server --port 3000"
                 className="font-mono"
               />
-              <p className="text-[11px] text-muted-foreground">Space-separated arguments</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("settings.mcp.argumentsHint")}
+              </p>
             </div>
           </>
         ) : (
@@ -425,26 +454,34 @@ function CreateMcpServerForm({
 
         {provider === "codex" ? (
           <div className="space-y-1.5">
-            <Label>Scope</Label>
+            <Label>{t("settings.mcp.scope")}</Label>
             <Select value="global" disabled>
               <SelectTrigger disabled>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="global">Global (~/.codex/config.toml)</SelectItem>
+                <SelectItem value="global">
+                  {t("settings.mcp.scopeCodexGlobal")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
         ) : hasProject && (
           <div className="space-y-1.5">
-            <Label>Scope</Label>
+            <Label>{t("settings.mcp.scope")}</Label>
             <Select value={scope} onValueChange={(v) => setScope(v as "global" | "project")}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="global">Global (~/.claude.json)</SelectItem>
-                <SelectItem value="project">{projectName ? `Project: ${projectName}` : "Project"}</SelectItem>
+                <SelectItem value="global">
+                  {t("settings.mcp.scopeClaudeGlobal")}
+                </SelectItem>
+                <SelectItem value="project">
+                  {projectName
+                    ? t("settings.mcp.scopeProjectNamed", { project: projectName })
+                    : t("common.project")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -456,6 +493,7 @@ function CreateMcpServerForm({
 
 // --- Main Component ---
 export function AgentsMcpTab() {
+  const { t } = useI18n()
   const lastSelectedAgentId = useAtomValue(lastSelectedAgentIdAtom)
   const defaultAddProvider: McpProvider =
     lastSelectedAgentId === "codex" ? "codex" : "claude-code"
@@ -631,11 +669,11 @@ export function AgentsMcpTab() {
           ])
         }
         if (!silent) {
-          toast.success("Refreshed MCP servers")
+          toast.success(t("settings.mcp.toast.refreshed"))
         }
       } catch {
         if (!silent) {
-          toast.error("Failed to refresh MCP servers")
+          toast.error(t("settings.mcp.toast.failedToRefresh"))
         }
       }
     },
@@ -644,6 +682,7 @@ export function AgentsMcpTab() {
       claudeMcpQuery,
       refreshCodexMcpMutation,
       refreshClaudeMcpMutation,
+      t,
     ],
   )
 
@@ -665,15 +704,15 @@ export function AgentsMcpTab() {
           })
 
       if (result.success) {
-        toast.success(`"${serverName}" is authenticated, refreshing...`)
+        toast.success(t("settings.mcp.toast.authenticated", { name: serverName }))
         // Plugin servers get promoted to Global after OAuth — update selection
           setSelectedServerKey(`${provider}:Global:${serverName}`)
         await handleRefresh(true, provider)
       } else {
-        toast.error(result.error || "Authentication failed")
+        toast.error(result.error || t("settings.mcp.toast.authenticationFailed"))
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Authentication failed"
+      const message = error instanceof Error ? error.message : t("settings.mcp.toast.authenticationFailed")
       toast.error(message)
     }
   }
@@ -688,13 +727,13 @@ export function AgentsMcpTab() {
         ...(projectPath ? { projectPath } : {}),
       })
       if (result.success) {
-        toast.success(`"${serverName}" is logged out, refreshing...`)
+        toast.success(t("settings.mcp.toast.loggedOut", { name: serverName }))
         await handleRefresh(true, "codex")
       } else {
-        toast.error(result.error || "Logout failed")
+        toast.error(result.error || t("settings.mcp.toast.logoutFailed"))
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Logout failed"
+      const message = error instanceof Error ? error.message : t("settings.mcp.toast.logoutFailed")
       toast.error(message)
     }
   }
@@ -710,12 +749,12 @@ export function AgentsMcpTab() {
       })
       toast.success(
         enabled
-          ? `"${item.server.name}" is enabled, refreshing...`
-          : `"${item.server.name}" is disabled, refreshing...`,
+          ? t("settings.mcp.toast.enabled", { name: item.server.name })
+          : t("settings.mcp.toast.disabled", { name: item.server.name }),
       )
       await handleRefresh(true, "claude-code")
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to toggle server"
+      const message = error instanceof Error ? error.message : t("settings.mcp.toast.failedToToggle")
       toast.error(message)
     }
   }
@@ -735,12 +774,12 @@ export function AgentsMcpTab() {
           projectPath: deletingServer.projectPath ?? undefined,
         })
       }
-      toast.success(`"${deletingServer.server.name}" is removed, refreshing...`)
+      toast.success(t("settings.mcp.toast.removed", { name: deletingServer.server.name }))
       setDeletingServer(null)
       setSelectedServerKey(null)
       await handleRefresh(true)
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to remove server"
+      const message = error instanceof Error ? error.message : t("settings.mcp.toast.failedToRemove")
       toast.error(message)
     }
   }
@@ -789,7 +828,7 @@ export function AgentsMcpTab() {
           <div className="px-2 pt-2 flex-shrink-0 flex items-center">
             <input
               ref={searchInputRef}
-              placeholder="Search servers..."
+              placeholder={t("settings.mcp.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
@@ -798,15 +837,15 @@ export function AgentsMcpTab() {
             <button
               onClick={() => { setShowAddForm(true); setSelectedServerKey(null) }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-              title="Add MCP server"
+              title={t("settings.mcp.addServer")}
             >
               <Plus className="h-4 w-4" />
             </button>
             <button
               onClick={() => { void handleRefresh() }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-              title="Refresh MCP servers"
-              aria-label="Refresh MCP servers"
+              title={t("settings.mcp.refreshServers")}
+              aria-label={t("settings.mcp.refreshServers")}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", isRefreshingConfig && "animate-spin")} />
             </button>
@@ -820,7 +859,9 @@ export function AgentsMcpTab() {
             ) : totalServers === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <OriginalMCPIcon className="h-8 w-8 text-border mb-3" />
-                <p className="text-sm text-muted-foreground mb-1">No servers</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  {t("settings.mcp.noServers")}
+                </p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -828,12 +869,14 @@ export function AgentsMcpTab() {
                   onClick={() => setShowAddForm(true)}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Add server
+                  {t("settings.mcp.addServer")}
                 </Button>
               </div>
             ) : filteredListedServers.length === 0 ? (
               <div className="flex items-center justify-center py-8">
-                <p className="text-xs text-muted-foreground">No results found</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.mcp.noResults")}
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -887,9 +930,13 @@ export function AgentsMcpTab() {
                                 {server.status !== "pending" && (
                                   <span className="flex-shrink-0">
                                     {isDisabled
-                                      ? "Disabled"
+                                      ? t("settings.mcp.disabled")
                                       : server.status === "connected"
-                                        ? (hideToolsCount ? "Connected" : `${server.tools.length} tool${server.tools.length !== 1 ? "s" : ""}`)
+                                        ? (hideToolsCount
+                                            ? t("common.connected")
+                                            : server.tools.length === 1
+                                              ? t("settings.mcp.oneTool")
+                                              : t("settings.mcp.toolCount", { count: server.tools.length }))
                                         : getStatusText(server.status)}
                                   </span>
                                 )}
@@ -964,8 +1011,8 @@ export function AgentsMcpTab() {
             <OriginalMCPIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
               {totalServers > 0
-                ? "Select a server to view details"
-                : "No MCP servers configured"}
+                ? t("settings.mcp.selectToView")
+                : t("settings.mcp.noneConfigured")}
             </p>
             {totalServers === 0 && (
               <Button
@@ -975,7 +1022,7 @@ export function AgentsMcpTab() {
                 onClick={() => setShowAddForm(true)}
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Add your first server
+                {t("settings.mcp.addFirstServer")}
               </Button>
             )}
           </div>

@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai"
 import { selectedProjectAtom, settingsAgentsSidebarWidthAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import { Plus } from "lucide-react"
 import { CustomAgentIconFilled } from "../../ui/icons"
 import { Input } from "../../ui/input"
@@ -35,6 +36,7 @@ function AgentDetail({
   onSave: (data: { description: string; prompt: string; model?: "sonnet" | "opus" | "haiku" | "inherit" }) => void
   isSaving: boolean
 }) {
+  const { t } = useI18n()
   const [description, setDescription] = useState(agent.description)
   const [prompt, setPrompt] = useState(agent.prompt)
   const [model, setModel] = useState<string>(agent.model || "inherit")
@@ -106,31 +108,33 @@ function AgentDetail({
           </div>
           {hasChanges && (
             <Button size="sm" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save"}
+              {isSaving ? t("common.saving") : t("common.save")}
             </Button>
           )}
         </div>
 
         {/* Description */}
         <div className="space-y-1.5">
-          <Label>Description</Label>
+          <Label>{t("settings.customAgents.description")}</Label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onBlur={handleBlur}
-            placeholder="Agent description..."
+            placeholder={t("settings.customAgents.descriptionPlaceholder")}
           />
         </div>
 
         {/* Model */}
         <div className="space-y-1.5">
-          <Label>Model</Label>
+          <Label>{t("settings.customAgents.model")}</Label>
           <Select value={model} onValueChange={handleModelChange}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="inherit">Inherit from parent</SelectItem>
+              <SelectItem value="inherit">
+                {t("settings.customAgents.inheritFromParent")}
+              </SelectItem>
               <SelectItem value="sonnet">Sonnet 4.6</SelectItem>
               <SelectItem value="opus">Opus 4.7</SelectItem>
               <SelectItem value="haiku">Haiku 4.5</SelectItem>
@@ -141,7 +145,7 @@ function AgentDetail({
         {/* Tools (read-only) */}
         {agent.tools && agent.tools.length > 0 && (
           <div className="space-y-1.5">
-            <Label>Allowed Tools</Label>
+            <Label>{t("settings.customAgents.allowedTools")}</Label>
             <div className="flex flex-wrap gap-1">
               {agent.tools.map((tool) => (
                 <span
@@ -158,7 +162,7 @@ function AgentDetail({
         {/* Disallowed Tools (read-only) */}
         {agent.disallowedTools && agent.disallowedTools.length > 0 && (
           <div className="space-y-1.5">
-            <Label>Disallowed Tools</Label>
+            <Label>{t("settings.customAgents.disallowedTools")}</Label>
             <div className="flex flex-wrap gap-1">
               {agent.disallowedTools.map((tool) => (
                 <span
@@ -174,14 +178,14 @@ function AgentDetail({
 
         {/* System Prompt */}
         <div className="space-y-1.5">
-          <Label>System Prompt</Label>
+          <Label>{t("settings.customAgents.systemPrompt")}</Label>
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onBlur={handleBlur}
             rows={16}
             className="font-mono resize-y"
-            placeholder="System prompt for this agent..."
+            placeholder={t("settings.customAgents.systemPromptPlaceholder")}
           />
         </div>
       </div>
@@ -201,6 +205,7 @@ function CreateAgentForm({
   isSaving: boolean
   hasProject: boolean
 }) {
+  const { t } = useI18n()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [prompt, setPrompt] = useState("")
@@ -213,43 +218,51 @@ function CreateAgentForm({
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">New Agent</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("settings.customAgents.newAgent")}
+          </h3>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              {t("common.cancel")}
+            </Button>
             <Button size="sm" onClick={() => onCreated({ name, description, prompt, model, source })} disabled={!canSave || isSaving}>
-              {isSaving ? "Creating..." : "Create"}
+              {isSaving ? t("common.creating") : t("common.create")}
             </Button>
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Name</Label>
+          <Label>{t("settings.customAgents.name")}</Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="my-agent"
             autoFocus
           />
-          <p className="text-[11px] text-muted-foreground">Lowercase letters, numbers, and hyphens</p>
+          <p className="text-[11px] text-muted-foreground">
+            {t("settings.customAgents.nameHint")}
+          </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Description</Label>
+          <Label>{t("settings.customAgents.description")}</Label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="What this agent does..."
+            placeholder={t("settings.customAgents.whatAgentDoes")}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label>Model</Label>
+          <Label>{t("settings.customAgents.model")}</Label>
           <Select value={model} onValueChange={setModel}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="inherit">Inherit from parent</SelectItem>
+              <SelectItem value="inherit">
+                {t("settings.customAgents.inheritFromParent")}
+              </SelectItem>
               <SelectItem value="sonnet">Sonnet 4.6</SelectItem>
               <SelectItem value="opus">Opus 4.7</SelectItem>
               <SelectItem value="haiku">Haiku 4.5</SelectItem>
@@ -259,27 +272,31 @@ function CreateAgentForm({
 
         {hasProject && (
           <div className="space-y-1.5">
-            <Label>Scope</Label>
+            <Label>{t("settings.customAgents.scope")}</Label>
             <Select value={source} onValueChange={(v) => setSource(v as "user" | "project")}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">User (~/.claude/agents/)</SelectItem>
-                <SelectItem value="project">Project (.claude/agents/)</SelectItem>
+                <SelectItem value="user">
+                  {t("settings.customAgents.scopeUser")}
+                </SelectItem>
+                <SelectItem value="project">
+                  {t("settings.customAgents.scopeProject")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
         )}
 
         <div className="space-y-1.5">
-          <Label>System Prompt</Label>
+          <Label>{t("settings.customAgents.systemPrompt")}</Label>
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={12}
             className="font-mono resize-y"
-            placeholder="You are a specialized agent that..."
+            placeholder={t("settings.customAgents.newSystemPromptPlaceholder")}
           />
         </div>
       </div>
@@ -289,6 +306,7 @@ function CreateAgentForm({
 
 // --- Main Component ---
 export function AgentsCustomAgentsTab() {
+  const { t } = useI18n()
   const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
@@ -328,15 +346,15 @@ export function AgentsCustomAgentsTab() {
         source: data.source,
         cwd: selectedProject?.path,
       })
-      toast.success("Agent created", { description: result.name })
+      toast.success(t("settings.customAgents.toast.created"), { description: result.name })
       setShowAddForm(false)
       await refetch()
       setSelectedAgentName(result.name)
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create"
-      toast.error("Failed to create", { description: message })
+      const message = error instanceof Error ? error.message : t("settings.customAgents.toast.failedToCreate")
+      toast.error(t("settings.customAgents.toast.failedToCreate"), { description: message })
     }
-  }, [createMutation, selectedProject?.path, refetch])
+  }, [createMutation, selectedProject?.path, refetch, t])
 
   const filteredAgents = useMemo(() => {
     if (!searchQuery.trim()) return agents
@@ -374,7 +392,7 @@ export function AgentsCustomAgentsTab() {
 	  ) => {
 	    try {
 	      if (agent.source === "plugin") {
-	        toast.error("Plugin agents are read-only", { description: agent.name })
+	        toast.error(t("settings.customAgents.toast.pluginReadOnly"), { description: agent.name })
 	        return
 	      }
 	      await updateMutation.mutateAsync({
@@ -388,13 +406,13 @@ export function AgentsCustomAgentsTab() {
 	        source: agent.source,
         cwd: selectedProject?.path,
       })
-      toast.success("Agent saved", { description: agent.name })
+      toast.success(t("settings.customAgents.toast.saved"), { description: agent.name })
       await refetch()
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save"
-      toast.error("Failed to save", { description: message })
+      const message = error instanceof Error ? error.message : t("settings.customAgents.toast.failedToSave")
+      toast.error(t("settings.customAgents.toast.failedToSave"), { description: message })
     }
-  }, [updateMutation, selectedProject?.path, refetch])
+  }, [updateMutation, selectedProject?.path, refetch, t])
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -416,7 +434,7 @@ export function AgentsCustomAgentsTab() {
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
               ref={searchInputRef}
-              placeholder="Search agents..."
+              placeholder={t("settings.customAgents.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
@@ -425,7 +443,7 @@ export function AgentsCustomAgentsTab() {
             <button
               onClick={() => { setShowAddForm(true); setSelectedAgentName(null) }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-              title="Create new agent"
+              title={t("settings.customAgents.createNewAgent")}
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -434,12 +452,14 @@ export function AgentsCustomAgentsTab() {
           <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-xs text-muted-foreground">Loading...</p>
+                <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
               </div>
             ) : agents.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <CustomAgentIconFilled className="h-8 w-8 text-border mb-3" />
-                <p className="text-sm text-muted-foreground mb-1">No agents</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  {t("settings.customAgents.noAgents")}
+                </p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -447,12 +467,14 @@ export function AgentsCustomAgentsTab() {
                   onClick={() => setShowAddForm(true)}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Create agent
+                  {t("settings.customAgents.createAgent")}
                 </Button>
               </div>
             ) : filteredAgents.length === 0 ? (
               <div className="flex items-center justify-center py-8">
-                <p className="text-xs text-muted-foreground">No results found</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.customAgents.noResults")}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -460,7 +482,7 @@ export function AgentsCustomAgentsTab() {
                 {userAgents.length > 0 && (
                   <div>
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      User
+                      {t("common.user")}
                     </p>
                     <div className="space-y-0.5">
                       {userAgents.map((agent) => {
@@ -503,7 +525,7 @@ export function AgentsCustomAgentsTab() {
                 {projectAgents.length > 0 && (
                   <div>
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      Project
+                      {t("common.project")}
                     </p>
                     <div className="space-y-0.5">
                       {projectAgents.map((agent) => {
@@ -568,8 +590,8 @@ export function AgentsCustomAgentsTab() {
             <CustomAgentIconFilled className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
               {agents.length > 0
-                ? "Select an agent to view details"
-                : "No custom agents found"}
+                ? t("settings.customAgents.selectToView")
+                : t("settings.customAgents.noneFound")}
             </p>
             {agents.length === 0 && (
               <Button
@@ -579,7 +601,7 @@ export function AgentsCustomAgentsTab() {
                 onClick={() => setShowAddForm(true)}
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Create your first agent
+                {t("settings.customAgents.createFirstAgent")}
               </Button>
             )}
           </div>

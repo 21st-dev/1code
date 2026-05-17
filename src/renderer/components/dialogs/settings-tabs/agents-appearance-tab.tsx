@@ -4,6 +4,7 @@ import { IconSpinner } from "../../../icons"
 import { useAtom, useSetAtom } from "jotai"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import {
   selectedFullThemeIdAtom,
   fullThemeDataAtom,
@@ -128,6 +129,7 @@ function ThemePreviewBox({
 }
 
 export function AgentsAppearanceTab() {
+  const { t } = useI18n()
   const { resolvedTheme, setTheme: setNextTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const isNarrowScreen = useIsNarrowScreen()
@@ -382,9 +384,11 @@ export function AgentsAppearanceTab() {
       {/* Header - hidden on narrow screens since it's in the navigation bar */}
       {!isNarrowScreen && (
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">
-          <h3 className="text-sm font-semibold text-foreground">Appearance</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("settings.appearance.title")}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            Customize the look and feel of the interface
+            {t("settings.appearance.subtitle")}
           </p>
         </div>
       )}
@@ -395,10 +399,10 @@ export function AgentsAppearanceTab() {
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Interface theme
+              {t("settings.appearance.interfaceTheme")}
             </span>
             <span className="text-xs text-muted-foreground">
-              Select or customize your interface color scheme
+              {t("settings.appearance.interfaceThemeDescription")}
             </span>
           </div>
 
@@ -417,13 +421,15 @@ export function AgentsAppearanceTab() {
                           : (systemLightTheme ?? null)
                       }
                     />
-                    <span className="text-xs truncate">System preference</span>
+                    <span className="text-xs truncate">
+                      {t("settings.appearance.systemPreference")}
+                    </span>
                   </>
                 ) : (
                   <>
                     <ThemePreviewBox theme={currentTheme} />
                     <span className="text-xs truncate">
-                      {currentTheme?.name || "Select"}
+                      {currentTheme?.name || t("settings.appearance.select")}
                     </span>
                   </>
                 )}
@@ -441,7 +447,9 @@ export function AgentsAppearanceTab() {
                     }
                     size="sm"
                   />
-                  <span className="truncate">System preference</span>
+                  <span className="truncate">
+                    {t("settings.appearance.systemPreference")}
+                  </span>
                 </div>
               </SelectItem>
 
@@ -471,7 +479,7 @@ export function AgentsAppearanceTab() {
                   <SelectSeparator />
                   <SelectGroup>
                     <SelectLabel className="text-xs text-muted-foreground px-2">
-                      From editors
+                      {t("settings.appearance.fromEditors")}
                     </SelectLabel>
                     {importedThemes.map((theme) => (
                       <SelectItem key={theme.id} value={theme.id}>
@@ -491,7 +499,7 @@ export function AgentsAppearanceTab() {
                   <SelectSeparator />
                   <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
                     <IconSpinner className="h-3 w-3" />
-                    <span>Loading themes from editors...</span>
+                    <span>{t("settings.appearance.loadingThemes")}</span>
                   </div>
                 </>
               )}
@@ -516,10 +524,10 @@ export function AgentsAppearanceTab() {
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm font-medium text-foreground">
-                    Light
+                    {t("settings.appearance.light")}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Theme to use for light system appearance
+                    {t("settings.appearance.lightDescription")}
                   </span>
                 </div>
 
@@ -531,7 +539,7 @@ export function AgentsAppearanceTab() {
                     <div className="flex items-center gap-2 min-w-0 -ml-[3px]">
                       <ThemePreviewBox theme={systemLightTheme || null} />
                       <span className="text-xs truncate">
-                        {systemLightTheme?.name || "Select"}
+                        {systemLightTheme?.name || t("settings.appearance.select")}
                       </span>
                     </div>
                   </SelectTrigger>
@@ -552,10 +560,10 @@ export function AgentsAppearanceTab() {
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm font-medium text-foreground">
-                    Dark
+                    {t("settings.appearance.dark")}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Theme to use for dark system appearance
+                    {t("settings.appearance.darkDescription")}
                   </span>
                 </div>
 
@@ -567,7 +575,7 @@ export function AgentsAppearanceTab() {
                     <div className="flex items-center gap-2 min-w-0 -ml-[3px]">
                       <ThemePreviewBox theme={systemDarkTheme || null} />
                       <span className="text-xs truncate">
-                        {systemDarkTheme?.name || "Select"}
+                        {systemDarkTheme?.name || t("settings.appearance.select")}
                       </span>
                     </div>
                   </SelectTrigger>
@@ -594,10 +602,10 @@ export function AgentsAppearanceTab() {
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Workspace icon
+              {t("settings.appearance.workspaceIcon")}
             </span>
             <span className="text-xs text-muted-foreground">
-              Show project icon in the sidebar workspace list
+              {t("settings.appearance.workspaceIconDescription")}
             </span>
           </div>
           <Switch
@@ -608,10 +616,10 @@ export function AgentsAppearanceTab() {
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Always expand to-do list
+              {t("settings.appearance.alwaysExpandTodoList")}
             </span>
             <span className="text-xs text-muted-foreground">
-              Show the full to-do list instead of compact view
+              {t("settings.appearance.alwaysExpandTodoListDescription")}
             </span>
           </div>
           <Switch

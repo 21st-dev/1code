@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue, useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
+import { useI18n } from "../../../lib/i18n"
 import { Button, buttonVariants } from "../../ui/button"
 import { Input } from "../../ui/input"
 import { Plus, Trash2, FolderOpen } from "lucide-react"
@@ -39,6 +40,7 @@ import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms
 
 // --- Detail Panel ---
 function ProjectDetail({ projectId }: { projectId: string }) {
+  const { t } = useI18n()
   // Get config for selected project
   const { data: configData, refetch: refetchConfig } =
     trpc.worktreeConfig.get.useQuery(
@@ -49,7 +51,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   // Save mutation (auto-save, no toast on success — only on error)
   const saveMutation = trpc.worktreeConfig.save.useMutation({
     onError: (err) => {
-      toast.error(`Failed to save: ${err.message}`)
+      toast.error(t("settings.projects.toast.failedToSave", { message: err.message }))
     },
   })
 
@@ -77,17 +79,17 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   const renameMutation = trpc.projects.rename.useMutation({
     onSuccess: () => {
       refetchProject()
-      toast.success("Project renamed")
+      toast.success(t("settings.projects.toast.renamed"))
     },
     onError: (err) => {
-      toast.error(`Failed to rename: ${err.message}`)
+      toast.error(t("settings.projects.toast.failedToRename", { message: err.message }))
     },
   })
 
   // Delete project mutation
   const deleteMutation = trpc.projects.delete.useMutation({
     onSuccess: () => {
-      toast.success("Project removed from list")
+      toast.success(t("settings.projects.toast.removed"))
       setSelectedProject((current) => {
         if (current?.id === projectId) {
           return null
@@ -96,7 +98,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       })
     },
     onError: (err) => {
-      toast.error(`Failed to delete project: ${err.message}`)
+      toast.error(t("settings.projects.toast.failedToDelete", { message: err.message }))
     },
   })
 
@@ -106,10 +108,10 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       if (!data) return // User cancelled file picker
       invalidateProjectIcon(projectId)
       refetchProject()
-      toast.success("Icon updated")
+      toast.success(t("settings.projects.toast.iconUpdated"))
     },
     onError: (err) => {
-      toast.error(`Failed to upload icon: ${err.message}`)
+      toast.error(t("settings.projects.toast.failedToUploadIcon", { message: err.message }))
     },
   })
 
@@ -117,7 +119,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     onSuccess: () => {
       invalidateProjectIcon(projectId)
       refetchProject()
-      toast.success("Icon removed")
+      toast.success(t("settings.projects.toast.iconRemoved"))
     },
   })
 
@@ -293,7 +295,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
         onClick={() => addCommand(list, setter)}
       >
         <Plus className="h-3.5 w-3.5" />
-        Add command
+        {t("settings.projects.addCommand")}
       </button>
     </div>
   )
@@ -304,13 +306,19 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
         {/* ── General ── */}
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-2">General</h4>
+          <h4 className="text-sm font-medium text-foreground mb-2">
+            {t("settings.projects.general")}
+          </h4>
           <div className="bg-background rounded-lg border border-border overflow-hidden">
             {/* Name */}
             <div className="flex items-center justify-between p-4">
               <div className="flex-1">
-                <span className="text-sm font-medium text-foreground">Name</span>
-                <p className="text-sm text-muted-foreground">Display name for this project</p>
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.name")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.displayNameDescription")}
+                </p>
               </div>
               <div className="flex-shrink-0 w-80">
                 <Input
@@ -318,7 +326,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   onChange={(e) => setProjectName(e.target.value)}
                   onBlur={handleNameBlur}
                   className="w-full"
-                  placeholder="Project name"
+                  placeholder={t("settings.projects.projectNamePlaceholder")}
                 />
               </div>
             </div>
@@ -326,15 +334,19 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {/* Icon */}
             <div className="flex items-center justify-between p-4 border-t border-border">
               <div className="flex-1">
-                <span className="text-sm font-medium text-foreground">Icon</span>
-                <p className="text-sm text-muted-foreground">Project avatar in sidebar</p>
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.icon")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.iconDescription")}
+                </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   type="button"
                   className="relative h-10 w-10 rounded-lg border border-border overflow-hidden flex items-center justify-center cursor-pointer bg-muted group/icon"
                   onClick={() => uploadIconMutation.mutate({ id: projectId })}
-                  title="Click to change icon"
+                  title={t("settings.projects.changeIcon")}
                 >
                   {iconSrc ? (
                     <img
@@ -356,7 +368,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                     className="text-muted-foreground hover:text-foreground"
                     onClick={() => removeIconMutation.mutate({ id: projectId })}
                   >
-                    Reset
+                    {t("common.reset")}
                   </Button>
                 )}
               </div>
@@ -365,7 +377,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {/* Path */}
             <div className="flex items-center justify-between p-4 border-t border-border">
               <div className="flex-1 min-w-0 mr-4">
-                <span className="text-sm font-medium text-foreground">Path</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.path")}
+                </span>
                 <p className="text-sm text-muted-foreground truncate">{project?.path || "—"}</p>
               </div>
               <Button
@@ -384,7 +398,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {project?.gitOwner && project?.gitRepo && (
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-foreground">Repository</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {t("settings.projects.repository")}
+                  </span>
                   <p className="text-sm text-muted-foreground">
                     {project.gitOwner}/{project.gitRepo}
                   </p>
@@ -412,12 +428,18 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
         {/* ── Config ── */}
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-2">Config</h4>
+          <h4 className="text-sm font-medium text-foreground mb-2">
+            {t("settings.projects.config")}
+          </h4>
           <div className="bg-background rounded-lg border border-border overflow-hidden">
             <div className="flex items-center justify-between p-4">
               <div className="flex-1">
-                <span className="text-sm font-medium text-foreground">Config file</span>
-                <p className="text-sm text-muted-foreground">Where worktree setup is stored</p>
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.configFile")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.configFileDescription")}
+                </p>
               </div>
               <Select
                 value={saveTarget}
@@ -445,7 +467,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
         {/* ── Worktree ── */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-foreground">Worktree</h4>
+            <h4 className="text-sm font-medium text-foreground">
+              {t("settings.projects.worktree")}
+            </h4>
             <Button
               variant="ghost"
               size="sm"
@@ -465,28 +489,30 @@ function ProjectDetail({ projectId }: { projectId: string }) {
               disabled={!projectId || createChatMutation.isPending}
             >
               <AIPenIcon className="h-3.5 w-3.5" />
-              Fill with AI
+              {t("settings.projects.fillWithAI")}
             </Button>
           </div>
           <div className="bg-background rounded-lg border border-border overflow-hidden">
             {/* Setup commands */}
             <div className="p-4 space-y-3">
               <div>
-                <span className="text-sm font-medium text-foreground">Setup Commands</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.setupCommands")}
+                </span>
                 <p className="text-sm text-muted-foreground">
-                  Run after worktree creation.{" "}
+                  {t("settings.projects.setupCommandsDescription")}{" "}
                   <button
                     type="button"
                     className="font-mono text-xs bg-muted px-1 py-0.5 rounded hover:text-foreground transition-colors cursor-pointer"
                     onClick={() => {
                       navigator.clipboard.writeText("$ROOT_WORKTREE_PATH")
-                      toast.success("Copied to clipboard")
+                      toast.success(t("settings.projects.toast.copied"))
                     }}
-                    title="Click to copy"
+                    title={t("settings.projects.clickToCopy")}
                   >
                     $ROOT_WORKTREE_PATH
                   </button>
-                  {" "}for main repo.
+                  {" "}{t("settings.projects.forMainRepo")}
                 </p>
               </div>
               {renderCommandList(commands, setCommands, "bun install && cp $ROOT_WORKTREE_PATH/.env .env")}
@@ -498,7 +524,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground">macOS / Linux</span>
                   {unixCommands.length === 0 && (
-                    <span className="text-sm text-muted-foreground">Falls back to commands above</span>
+                    <span className="text-sm text-muted-foreground">
+                      {t("settings.projects.fallsBack")}
+                    </span>
                   )}
                 </div>
                 {renderCommandList(unixCommands, setUnixCommands, "brew install deps", true)}
@@ -511,7 +539,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground">Windows</span>
                   {windowsCommands.length === 0 && (
-                    <span className="text-sm text-muted-foreground">Falls back to commands above</span>
+                    <span className="text-sm text-muted-foreground">
+                      {t("settings.projects.fallsBack")}
+                    </span>
                   )}
                 </div>
                 {renderCommandList(windowsCommands, setWindowsCommands, "npm ci", true)}
@@ -527,7 +557,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   onClick={() => setShowPlatformSpecific(true)}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Add platform-specific overrides
+                  {t("settings.projects.addPlatformOverrides")}
                 </button>
               </div>
             )}
@@ -536,13 +566,17 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
         {/* ── Danger Zone ── */}
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-2">Danger Zone</h4>
+          <h4 className="text-sm font-medium text-foreground mb-2">
+            {t("settings.projects.dangerZone")}
+          </h4>
           <div className="bg-background rounded-lg border border-border overflow-hidden">
           <div className="flex items-center justify-between p-4">
             <div className="flex-1">
-              <span className="text-sm font-medium text-foreground">Remove Project</span>
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.projects.removeProject")}
+              </span>
               <p className="text-sm text-muted-foreground">
-                Remove from your list. Files on disk will not be deleted.
+                {t("settings.projects.removeDescription")}
               </p>
             </div>
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -553,24 +587,28 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   className="gap-1.5 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Remove
+                  {t("common.remove")}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Remove Project?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {t("settings.projects.removeProjectTitle")}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will remove &quot;{project?.name}&quot; from your project list. Your files will not be deleted.
+                    {t("settings.projects.removeProjectConfirm", {
+                      name: project?.name || "",
+                    })}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => deleteMutation.mutate({ id: projectId })}
                     disabled={deleteMutation.isPending}
                     className={buttonVariants({ variant: "destructive" })}
                   >
-                    {deleteMutation.isPending ? "Removing..." : "Remove"}
+                    {deleteMutation.isPending ? t("settings.projects.removing") : t("common.remove")}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -585,6 +623,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
 // --- Main Two-Panel Component ---
 export function AgentsProjectsTab() {
+  const { t } = useI18n()
   const selectedProject = useAtomValue(selectedProjectAtom)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -672,7 +711,7 @@ export function AgentsProjectsTab() {
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
               ref={searchInputRef}
-              placeholder="Search projects..."
+              placeholder={t("settings.projects.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
@@ -681,7 +720,7 @@ export function AgentsProjectsTab() {
             <button
               onClick={() => openFolderMutation.mutate()}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-              title="Add project folder"
+              title={t("settings.projects.addProjectFolder")}
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -696,17 +735,21 @@ export function AgentsProjectsTab() {
             ) : !projects || projects.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <FolderFilledIcon className="h-8 w-8 text-border mb-3" />
-                <p className="text-sm text-muted-foreground mb-1">No projects</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  {t("settings.projects.noProjects")}
+                </p>
                 <button
                   onClick={() => openFolderMutation.mutate()}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
-                  Add your first project
+                  {t("settings.projects.addFirstProject")}
                 </button>
               </div>
             ) : filteredProjects.length === 0 ? (
               <div className="flex items-center justify-center py-8">
-                <p className="text-xs text-muted-foreground">No results found</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.projects.noResults")}
+                </p>
               </div>
             ) : (
               <div className="space-y-0.5">
@@ -748,8 +791,8 @@ export function AgentsProjectsTab() {
             <FolderFilledIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
               {projects && projects.length > 0
-                ? "Select a project to view settings"
-                : "No projects added yet"}
+                ? t("settings.projects.selectToView")
+                : t("settings.projects.noneAdded")}
             </p>
           </div>
         )}

@@ -5,6 +5,7 @@ import { settingsPluginsSidebarWidthAtom } from "../../../features/agents/atoms"
 import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import { Terminal, ChevronRight, Loader2 } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
@@ -67,6 +68,7 @@ function PluginDetail({
   onMcpAuth: (serverName: string) => void
   isAuthenticating: boolean
 }) {
+  const { t } = useI18n()
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
@@ -85,7 +87,7 @@ function PluginDetail({
                     "text-sm font-medium",
                     plugin.isDisabled ? "text-muted-foreground" : "text-emerald-500"
                   )}>
-                    {plugin.isDisabled ? "Disabled" : "Active"}
+                    {plugin.isDisabled ? t("common.disabled") : t("common.active")}
                   </span>
                 </div>
                 <Switch
@@ -108,22 +110,22 @@ function PluginDetail({
         {/* Info */}
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label>Version</Label>
+            <Label>{t("settings.plugins.version")}</Label>
             <p className="text-sm text-foreground font-mono">{plugin.version}</p>
           </div>
           <div className="space-y-1.5">
-            <Label>Source</Label>
+            <Label>{t("settings.plugins.source")}</Label>
             <p className="text-sm text-foreground font-mono">{plugin.source}</p>
           </div>
           {plugin.homepage && (
             <div className="space-y-1.5">
-              <Label>Homepage</Label>
+              <Label>{t("settings.plugins.homepage")}</Label>
               <a href={plugin.homepage} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 hover:underline break-all">{plugin.homepage}</a>
             </div>
           )}
           {plugin.tags && plugin.tags.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Tags</Label>
+              <Label>{t("settings.plugins.tags")}</Label>
               <div className="flex flex-wrap gap-1">
                 {plugin.tags.map((tag) => (
                   <span key={tag} className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{tag}</span>
@@ -234,10 +236,12 @@ function PluginDetail({
                         disabled={isAuthenticating}
                         onClick={() => onMcpAuth(serverName)}
                       >
-                        {isAuthenticating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sign in"}
+                        {isAuthenticating ? <Loader2 className="h-3 w-3 animate-spin" /> : t("settings.plugins.signIn")}
                       </Button>
                     ) : isConnected ? (
-                      <span className="text-[11px] text-emerald-500 shrink-0">Connected</span>
+                      <span className="text-[11px] text-emerald-500 shrink-0">
+                        {t("common.connected")}
+                      </span>
                     ) : serverStatus ? (
                       <span className="text-[11px] text-muted-foreground shrink-0">{serverStatus.status}</span>
                     ) : null}
@@ -287,6 +291,7 @@ function PluginListItem({
 
 // --- Main Component ---
 export function AgentsPluginsTab() {
+  const { t } = useI18n()
   const [selectedPluginSource, setSelectedPluginSource] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -333,15 +338,15 @@ export function AgentsPluginsTab() {
         projectPath: "__global__",
       })
       if (result.success) {
-        toast.success(`${serverName} authenticated`)
+        toast.success(t("settings.plugins.toast.authenticated", { name: serverName }))
         await refetchMcp()
       } else {
-        toast.error(result.error || "Authentication failed")
+        toast.error(result.error || t("settings.mcp.toast.authenticationFailed"))
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Authentication failed")
+      toast.error(error instanceof Error ? error.message : t("settings.mcp.toast.authenticationFailed"))
     }
-  }, [startOAuthMutation, refetchMcp])
+  }, [startOAuthMutation, refetchMcp, t])
 
   const setPluginEnabledMutation = trpc.claudeSettings.setPluginEnabled.useMutation()
 
@@ -427,15 +432,15 @@ export function AgentsPluginsTab() {
         }
       }
 
-      toast.success(enabled ? "Plugin enabled" : "Plugin disabled", {
+      toast.success(enabled ? t("settings.plugins.toast.enabled") : t("settings.plugins.toast.disabled"), {
         description: formatPluginName(plugin.name),
       })
       await refetch()
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update plugin"
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [setPluginEnabledMutation, approveAllMutation, revokeAllMutation, refetch])
+  }, [setPluginEnabledMutation, approveAllMutation, revokeAllMutation, refetch, t])
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -457,7 +462,7 @@ export function AgentsPluginsTab() {
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
               ref={searchInputRef}
-              placeholder="Search plugins..."
+              placeholder={t("settings.plugins.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
@@ -468,19 +473,23 @@ export function AgentsPluginsTab() {
           <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-xs text-muted-foreground">Loading...</p>
+                <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
               </div>
             ) : plugins.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <PluginFilledIcon className="h-8 w-8 text-border mb-3" />
-                <p className="text-sm text-muted-foreground mb-1">No plugins</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  {t("settings.plugins.noPlugins")}
+                </p>
                 <p className="text-[11px] text-muted-foreground/70">
-                  Install plugins to ~/.claude/plugins/
+                  {t("settings.plugins.installHint")}
                 </p>
               </div>
             ) : filteredPlugins.length === 0 ? (
               <div className="flex items-center justify-center py-8">
-                <p className="text-xs text-muted-foreground">No results found</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.plugins.noResults")}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -488,7 +497,7 @@ export function AgentsPluginsTab() {
                 {enabledPlugins.length > 0 && (
                   <div>
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      Enabled
+                      {t("settings.plugins.enabled")}
                     </p>
                     <div className="space-y-0.5">
                       {enabledPlugins.map((plugin) => (
@@ -544,12 +553,12 @@ export function AgentsPluginsTab() {
             <PluginFilledIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
               {plugins.length > 0
-                ? "Select a plugin to view details"
-                : "No plugins installed"}
+                ? t("settings.plugins.selectToView")
+                : t("settings.plugins.noneInstalled")}
             </p>
             {plugins.length === 0 && (
               <p className="text-xs text-muted-foreground/70 mt-2">
-                Install plugins to ~/.claude/plugins/marketplaces/
+                {t("settings.plugins.installMarketplaceHint")}
               </p>
             )}
           </div>

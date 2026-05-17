@@ -5,6 +5,7 @@ import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtom, useAtomValue } from "jotai"
 import { RotateCcw, Settings2 } from "lucide-react"
 import { cn } from "../../../lib/utils"
+import { useI18n, type TranslationKey } from "../../../lib/i18n"
 import { CmdIcon, OptionIcon, ShiftIcon, ControlIcon } from "../../ui/icons"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { settingsKeyboardSidebarWidthAtom } from "../../../features/agents/atoms"
@@ -21,7 +22,6 @@ import {
   isCustomHotkey,
   detectConflicts,
   normalizeHotkey,
-  CATEGORY_LABELS,
   getShortcutAction,
   type ShortcutAction,
   type ShortcutActionId,
@@ -29,6 +29,64 @@ import {
   type CustomHotkeysConfig,
 } from "../../../lib/hotkeys"
 import { useHotkeyRecorder } from "../../../lib/hotkeys/use-hotkey-recorder"
+
+type Translate = ReturnType<typeof useI18n>["t"]
+
+const SHORTCUT_ACTION_LABEL_KEYS = {
+  "show-shortcuts": "settings.keyboard.actions.showShortcuts",
+  "open-settings": "settings.keyboard.actions.settings",
+  "toggle-sidebar": "settings.keyboard.actions.toggleSidebar",
+  "undo-archive": "settings.keyboard.actions.undoArchive",
+  "toggle-details": "settings.keyboard.actions.viewDetails",
+  "new-workspace": "settings.keyboard.actions.newWorkspace",
+  "search-workspaces": "settings.keyboard.actions.searchWorkspaces",
+  "archive-workspace": "settings.keyboard.actions.archiveCurrentWorkspace",
+  "quick-switch-workspaces": "settings.keyboard.actions.quickSwitchWorkspaces",
+  "open-kanban": "settings.keyboard.actions.openKanbanBoard",
+  "new-agent": "settings.keyboard.actions.createNewAgent",
+  "new-agent-split": "settings.keyboard.actions.newAgentSplit",
+  "search-chats": "settings.keyboard.actions.searchChats",
+  "search-in-chat": "settings.keyboard.actions.searchTextInCurrentChat",
+  "archive-agent": "settings.keyboard.actions.archiveCurrentAgent",
+  "quick-switch-agents": "settings.keyboard.actions.quickSwitchAgents",
+  "prev-agent": "settings.keyboard.actions.previousAgent",
+  "next-agent": "settings.keyboard.actions.nextAgent",
+  "focus-input": "settings.keyboard.actions.focusInput",
+  "toggle-focus": "settings.keyboard.actions.toggleFocus",
+  "stop-generation": "settings.keyboard.actions.stopGeneration",
+  "switch-model": "settings.keyboard.actions.switchModel",
+  "toggle-terminal": "settings.keyboard.actions.toggleTerminal",
+  "open-diff": "settings.keyboard.actions.openDiff",
+  "create-pr": "settings.keyboard.actions.createPr",
+  "file-search": "settings.keyboard.actions.goToFile",
+  "voice-input": "settings.keyboard.actions.voiceInput",
+  "open-in-editor": "settings.keyboard.actions.openInEditor",
+  "open-file-in-editor": "settings.keyboard.actions.openFileInEditor",
+} satisfies Record<ShortcutActionId, TranslationKey>
+
+const SHORTCUT_CATEGORY_LABEL_KEYS = {
+  general: "settings.keyboard.categories.general",
+  workspaces: "settings.keyboard.categories.workspaces",
+  agents: "settings.keyboard.categories.agents",
+} satisfies Record<ShortcutCategory, TranslationKey>
+
+function getShortcutLabel(t: Translate, action: ShortcutAction) {
+  return t(SHORTCUT_ACTION_LABEL_KEYS[action.id])
+}
+
+function getShortcutCategoryLabel(t: Translate, category: ShortcutCategory) {
+  return t(SHORTCUT_CATEGORY_LABEL_KEYS[category])
+}
+
+function getShortcutDescription(t: Translate, action: ShortcutAction) {
+  if (action.isDynamic) {
+    return t("settings.keyboard.ctrlTabPreferenceDescription")
+  }
+
+  return t("settings.keyboard.categoryShortcut", {
+    category: getShortcutCategoryLabel(t, action.category),
+  })
+}
 
 /**
  * Display a single key in a keyboard shortcut
@@ -127,6 +185,7 @@ function ShortcutListItem({
   onClick: () => void
   ctrlTabTarget: "workspaces" | "agents"
 }) {
+  const { t } = useI18n()
   const isCustom = isCustomHotkey(action.id, config)
   let currentHotkey = getResolvedHotkey(action.id, config)
 
@@ -155,7 +214,7 @@ function ShortcutListItem({
       )}
     >
       <span className="text-sm truncate">
-        {action.label}
+        {getShortcutLabel(t, action)}
       </span>
       <div className="flex items-center gap-0.5 ml-2 flex-shrink-0">
         {keys.map((key, index) => (
@@ -190,6 +249,7 @@ function ShortcutDetailPanel({
   ctrlTabTarget: "workspaces" | "agents"
   conflictMessage: string | null
 }) {
+  const { t } = useI18n()
   const isCustom = isCustomHotkey(action.id, config)
   let currentHotkey = getResolvedHotkey(action.id, config)
   const recorderButtonRef = useRef<HTMLButtonElement>(null)
@@ -230,9 +290,11 @@ function ShortcutDetailPanel({
   return (
     <div className="flex flex-col items-center justify-center h-full p-8">
       {/* Title */}
-      <h3 className="text-base font-medium text-foreground mb-1">{action.label}</h3>
+      <h3 className="text-base font-medium text-foreground mb-1">
+        {getShortcutLabel(t, action)}
+      </h3>
       <p className="text-sm text-muted-foreground mb-8">
-        {action.isDynamic ? action.dynamicDescription : `${CATEGORY_LABELS[action.category]} shortcut`}
+        {getShortcutDescription(t, action)}
       </p>
 
       {/* Hotkey display / recorder */}
@@ -263,7 +325,7 @@ function ShortcutDetailPanel({
             }
             return (
               <span className="text-sm text-muted-foreground animate-pulse">
-                Press keys...
+                {t("settings.keyboard.pressKeys")}
               </span>
             )
           }
@@ -277,7 +339,11 @@ function ShortcutDetailPanel({
               </div>
             )
           }
-          return <span className="text-sm text-muted-foreground">Not set</span>
+          return (
+            <span className="text-sm text-muted-foreground">
+              {t("settings.keyboard.notSet")}
+            </span>
+          )
         })()}
       </button>
 
@@ -297,7 +363,7 @@ function ShortcutDetailPanel({
             className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground bg-secondary/50 hover:bg-secondary border border-border rounded-lg transition-colors"
           >
             <RotateCcw className="h-3 w-3" />
-            <span>Reset to</span>
+            <span>{t("settings.keyboard.resetTo")}</span>
             <div className="flex items-center gap-0.5">
               {defaultKeys.map((key, index) => (
                 <ShortcutKey key={index} keyName={key} size="sm" />
@@ -306,7 +372,7 @@ function ShortcutDetailPanel({
           </button>
         ) : (
           <p className="text-xs text-muted-foreground text-center">
-            Click to record a new shortcut
+            {t("settings.keyboard.clickToRecord")}
           </p>
         )}
       </div>
@@ -318,11 +384,13 @@ function ShortcutDetailPanel({
  * Empty state when no shortcut is selected
  */
 function EmptyDetailPanel() {
+  const { t } = useI18n()
+
   return (
     <div className="flex flex-col items-center justify-center h-full p-8 text-center">
       <Settings2 className="h-10 w-10 text-muted-foreground/20 mb-3" />
       <p className="text-sm text-muted-foreground">
-        Select a shortcut to customize
+        {t("settings.keyboard.selectShortcut")}
       </p>
     </div>
   )
@@ -332,6 +400,7 @@ function EmptyDetailPanel() {
  * Main keyboard settings tab component
  */
 export function AgentsKeyboardTab() {
+  const { t } = useI18n()
   const [customHotkeys, setCustomHotkeys] = useAtom(customHotkeysAtom)
   const [ctrlTabTarget] = useAtom(ctrlTabTargetAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
@@ -388,11 +457,11 @@ export function AgentsKeyboardTab() {
     }
     for (const category of Object.keys(shortcutsByCategory) as ShortcutCategory[]) {
       result[category] = shortcutsByCategory[category].filter(action =>
-        action.label.toLowerCase().includes(query)
+        getShortcutLabel(t, action).toLowerCase().includes(query)
       )
     }
     return result
-  }, [shortcutsByCategory, searchQuery])
+  }, [shortcutsByCategory, searchQuery, t])
 
   // Flat list of all action IDs for keyboard navigation
   const allActionIds = useMemo(
@@ -453,7 +522,11 @@ export function AgentsKeyboardTab() {
     const conflictingAction = checkConflict(hotkey, selectedActionId)
     if (conflictingAction) {
       // Show conflict message and don't save
-      setConflictMessage(`"${conflictingAction.label}" already uses this shortcut`)
+      setConflictMessage(
+        t("settings.keyboard.shortcutConflict", {
+          action: getShortcutLabel(t, conflictingAction),
+        }),
+      )
       setIsRecording(false)
 
       // Clear message after 2 seconds
@@ -476,7 +549,7 @@ export function AgentsKeyboardTab() {
     setTimeout(() => {
       setIsRecording(false)
     }, 50)
-  }, [selectedActionId, setCustomHotkeys, checkConflict])
+  }, [selectedActionId, setCustomHotkeys, checkConflict, t])
 
   // Reset selected hotkey to default
   const handleReset = useCallback(() => {
@@ -521,7 +594,7 @@ export function AgentsKeyboardTab() {
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search shortcuts..."
+              placeholder={t("settings.keyboard.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
@@ -532,7 +605,7 @@ export function AgentsKeyboardTab() {
           <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {totalShortcuts === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                No shortcuts found
+                {t("settings.keyboard.noShortcutsFound")}
               </div>
             ) : (
               <div className="space-y-3">
@@ -542,7 +615,7 @@ export function AgentsKeyboardTab() {
                   return (
                     <div key={category}>
                       <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                        {CATEGORY_LABELS[category]}
+                        {getShortcutCategoryLabel(t, category)}
                       </p>
                       <div className="space-y-0.5">
                         {actions.map((action) => (
@@ -576,7 +649,7 @@ export function AgentsKeyboardTab() {
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <RotateCcw className="h-3 w-3" />
-                Reset all to defaults
+                {t("settings.keyboard.resetAllToDefaults")}
               </button>
             </div>
           )}
