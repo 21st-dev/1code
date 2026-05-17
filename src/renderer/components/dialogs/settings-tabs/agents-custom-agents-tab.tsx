@@ -2,18 +2,49 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue } from "jotai"
 import { selectedProjectAtom, settingsAgentsSidebarWidthAtom } from "../../../features/agents/atoms"
+import { CLAUDE_MODELS } from "../../../features/agents/lib/models"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Plus } from "lucide-react"
+import { Copy, FileText, FolderOpen, Plus, RotateCcw, Trash2 } from "lucide-react"
 import { CustomAgentIconFilled } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select"
 import { Textarea } from "../../ui/textarea"
 import { Button } from "../../ui/button"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
+import { ToolSelector } from "./tool-selector"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import { toast } from "sonner"
+import {
+  isCustomAgentModelId,
+  type CustomAgentModel as AgentModel,
+} from "../../../../shared/custom-agent-models"
+
+type WritableAgentSource = "user" | "project"
+type ToolMode = "all" | "allowlist" | "denylist"
+type ClaudeModel = (typeof CLAUDE_MODELS)[number]
+type CustomAgentModelOption = ClaudeModel & { id: Exclude<AgentModel, "inherit"> }
+
+const CUSTOM_AGENT_MODEL_OPTIONS = CLAUDE_MODELS.filter(
+  (model): model is CustomAgentModelOption => isCustomAgentModelId(model.id),
+)
 
 interface FileAgent {
   name: string
@@ -21,10 +52,23 @@ interface FileAgent {
   prompt: string
   tools?: string[]
   disallowedTools?: string[]
-  model?: "sonnet" | "opus" | "haiku" | "inherit"
+  model?: AgentModel
   source: "user" | "project" | "plugin"
   pluginName?: string
   path: string
+}
+
+type AgentFormData = {
+  description: string
+  prompt: string
+  model?: AgentModel
+  tools?: string[]
+  disallowedTools?: string[]
+}
+
+function arraysEqual(a: string[] = [], b: string[] = []) {
+  if (a.length !== b.length) return false
+  return a.every((item, index) => item === b[index])
 }
 
 function getAgentId(agent: FileAgent) {
@@ -37,20 +81,120 @@ function getAgentSourceLabel(source: FileAgent["source"], t: ReturnType<typeof u
   return t("common.user")
 }
 
+function getToolMode(agent: Pick<FileAgent, "tools" | "disallowedTools">): ToolMode {
+  if (agent.tools && agent.tools.length > 0) return "allowlist"
+  if (agent.disallowedTools && agent.disallowedTools.length > 0) return "denylist"
+  return "all"
+}
+
+function getSelectedTools(agent: Pick<FileAgent, "tools" | "disallowedTools">) {
+  if (agent.tools && agent.tools.length > 0) return agent.tools
+  if (agent.disallowedTools && agent.disallowedTools.length > 0) return agent.disallowedTools
+  return []
+}
+
+function buildToolPayload(toolMode: ToolMode, selectedTools: string[]) {
+  return {
+    tools: toolMode === "allowlist" ? selectedTools : undefined,
+    disallowedTools: toolMode === "denylist" ? selectedTools : undefined,
+  }
+}
+
+function getSourceHintKey(source: FileAgent["source"]) {
+  if (source === "plugin") return "settings.customAgents.sourceHintPlugin" as const
+  if (source === "project") return "settings.customAgents.sourceHintProject" as const
+  return "settings.customAgents.sourceHintUser" as const
+}
+
+function formatClaudeModelLabel(model: Pick<ClaudeModel, "name" | "version">) {
+  return `${model.name} ${model.version}`
+}
+
+function getAgentModelLabel(model?: AgentModel) {
+  if (!model || model === "inherit") return null
+  const option = CUSTOM_AGENT_MODEL_OPTIONS.find((item) => item.id === model)
+  return option ? formatClaudeModelLabel(option) : model
+}
+
+function AgentModelSelectItems({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
+  return (
+    <>
+      <SelectItem value="inherit">
+        {t("settings.customAgents.inheritFromParent")}
+      </SelectItem>
+      {CUSTOM_AGENT_MODEL_OPTIONS.map((model) => (
+        <SelectItem key={model.id} value={model.id}>
+          {formatClaudeModelLabel(model)}
+        </SelectItem>
+      ))}
+    </>
+  )
+}
+
+function AgentModelBadge({ model }: { model?: AgentModel }) {
+  const label = getAgentModelLabel(model)
+  if (!label) return null
+
+  return (
+    <span className="text-[10px] text-muted-foreground shrink-0">
+      {label}
+    </span>
+  )
+}
+
+function slugifyAgentName(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+}
+
+function createDuplicateName(name: string, targetSource: WritableAgentSource, agents: FileAgent[]) {
+  const base = slugifyAgentName(name) || "agent"
+  const existingNames = new Set(
+    agents
+      .filter((agent) => agent.source === targetSource)
+      .map((agent) => slugifyAgentName(agent.name)),
+  )
+
+  if (!existingNames.has(base)) return base
+
+  let index = 2
+  let candidate = `${base}-copy`
+  while (existingNames.has(candidate)) {
+    candidate = `${base}-copy-${index}`
+    index += 1
+  }
+  return candidate
+}
+
 // --- Detail Panel (Editable) ---
 function AgentDetail({
   agent,
   onSave,
+  onDelete,
+  onDuplicate,
+  onOpenFile,
+  onRevealInFinder,
   isSaving,
+  isDeleting,
+  isDuplicating,
+  hasProject,
 }: {
   agent: FileAgent
-  onSave: (data: { description: string; prompt: string; model?: "sonnet" | "opus" | "haiku" | "inherit" }) => void
+  onSave: (data: AgentFormData) => void
+  onDelete: () => void
+  onDuplicate: (targetSource: WritableAgentSource) => void
+  onOpenFile: () => void
+  onRevealInFinder: () => void
   isSaving: boolean
+  isDeleting: boolean
+  isDuplicating: boolean
+  hasProject: boolean
 }) {
   const { t } = useI18n()
   const [description, setDescription] = useState(agent.description)
   const [prompt, setPrompt] = useState(agent.prompt)
   const [model, setModel] = useState<string>(agent.model || "inherit")
+  const [toolMode, setToolMode] = useState<ToolMode>(getToolMode(agent))
+  const [selectedTools, setSelectedTools] = useState<string[]>(getSelectedTools(agent))
   const isReadOnly = agent.source === "plugin"
 
   // Reset local state when agent changes
@@ -58,79 +202,113 @@ function AgentDetail({
     setDescription(agent.description)
     setPrompt(agent.prompt)
     setModel(agent.model || "inherit")
-  }, [agent.name, agent.description, agent.prompt, agent.model])
+    setToolMode(getToolMode(agent))
+    setSelectedTools(getSelectedTools(agent))
+  }, [agent.name, agent.description, agent.prompt, agent.model, agent.tools, agent.disallowedTools])
 
+  const toolPayload = useMemo(
+    () => buildToolPayload(toolMode, selectedTools),
+    [toolMode, selectedTools],
+  )
   const hasChanges =
     description !== agent.description ||
     prompt !== agent.prompt ||
-    model !== (agent.model || "inherit")
+    model !== (agent.model || "inherit") ||
+    !arraysEqual(toolPayload.tools, agent.tools) ||
+    !arraysEqual(toolPayload.disallowedTools, agent.disallowedTools)
+  const canSave = !isReadOnly && description.trim().length > 0 && prompt.trim().length > 0
 
   const handleSave = useCallback(() => {
-    if (isReadOnly) return
-    if (
-      description !== agent.description ||
-      prompt !== agent.prompt ||
-      model !== (agent.model || "inherit")
-    ) {
-      onSave({
-        description,
-        prompt,
-        model: model as FileAgent["model"],
-      })
-    }
-  }, [description, prompt, model, agent.description, agent.prompt, agent.model, onSave, isReadOnly])
+    if (!canSave || !hasChanges) return
+    onSave({
+      description,
+      prompt,
+      model: model as AgentModel,
+      ...toolPayload,
+    })
+  }, [canSave, hasChanges, description, prompt, model, toolPayload, onSave])
 
-  const handleBlur = useCallback(() => {
-    if (isReadOnly) return
-    if (
-      description !== agent.description ||
-      prompt !== agent.prompt ||
-      model !== (agent.model || "inherit")
-    ) {
-      onSave({
-        description,
-        prompt,
-        model: model as FileAgent["model"],
-      })
-    }
-  }, [description, prompt, model, agent.description, agent.prompt, agent.model, onSave, isReadOnly])
-
-  const handleModelChange = useCallback((value: string) => {
-    if (isReadOnly) return
-    setModel(value)
-    // Auto-save with new model value
-    if (
-      description !== agent.description ||
-      prompt !== agent.prompt ||
-      value !== (agent.model || "inherit")
-    ) {
-      onSave({
-        description,
-        prompt,
-        model: value as FileAgent["model"],
-      })
-    }
-  }, [description, prompt, agent.description, agent.prompt, agent.model, onSave, isReadOnly])
+  const handleReset = useCallback(() => {
+    setDescription(agent.description)
+    setPrompt(agent.prompt)
+    setModel(agent.model || "inherit")
+    setToolMode(getToolMode(agent))
+    setSelectedTools(getSelectedTools(agent))
+  }, [agent])
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-5">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground truncate">{agent.name}</h3>
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
-                {getAgentSourceLabel(agent.source, t)}
-              </span>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-foreground truncate">{agent.name}</h3>
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                  {getAgentSourceLabel(agent.source, t)}
+                </span>
+                {hasChanges && !isReadOnly && (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                    {t("settings.customAgents.unsaved")}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">{agent.path}</p>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{agent.path}</p>
+            <div className="flex items-center gap-2 shrink-0">
+              {!isReadOnly && hasChanges && (
+                <Button variant="ghost" size="sm" onClick={handleReset} disabled={isSaving}>
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  {t("settings.customAgents.discardChanges")}
+                </Button>
+              )}
+              {!isReadOnly && (
+                <Button size="sm" onClick={handleSave} disabled={!hasChanges || !canSave || isSaving}>
+                  {isSaving ? t("common.saving") : t("common.save")}
+                </Button>
+              )}
+            </div>
           </div>
-          {!isReadOnly && hasChanges && (
-            <Button size="sm" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? t("common.saving") : t("common.save")}
+
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {t(getSourceHintKey(agent.source))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onOpenFile}>
+              <FileText className="mr-1.5 h-3.5 w-3.5" />
+              {t("settings.customAgents.openFile")}
             </Button>
-          )}
+            <Button variant="outline" size="sm" onClick={onRevealInFinder}>
+              <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+              {t("settings.customAgents.revealInFinder")}
+            </Button>
+            {isReadOnly && (
+              <Button variant="outline" size="sm" onClick={() => onDuplicate("user")} disabled={isDuplicating}>
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
+                {t("settings.customAgents.duplicateToUser")}
+              </Button>
+            )}
+            {isReadOnly && hasProject && (
+              <Button variant="outline" size="sm" onClick={() => onDuplicate("project")} disabled={isDuplicating}>
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
+                {t("settings.customAgents.duplicateToProject")}
+              </Button>
+            )}
+            {!isReadOnly && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                {isDeleting ? t("common.deleting") : t("common.delete")}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Description */}
@@ -139,63 +317,83 @@ function AgentDetail({
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            onBlur={handleBlur}
             readOnly={isReadOnly}
             placeholder={t("settings.customAgents.descriptionPlaceholder")}
           />
+          {!description.trim() && !isReadOnly && (
+            <p className="text-[11px] text-destructive">
+              {t("settings.customAgents.requiredField")}
+            </p>
+          )}
         </div>
 
         {/* Model */}
         <div className="space-y-1.5">
           <Label>{t("settings.customAgents.model")}</Label>
-          <Select value={model} onValueChange={handleModelChange} disabled={isReadOnly}>
+          <Select value={model} onValueChange={setModel} disabled={isReadOnly}>
             <SelectTrigger disabled={isReadOnly}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="inherit">
-                {t("settings.customAgents.inheritFromParent")}
-              </SelectItem>
-              <SelectItem value="sonnet">Sonnet 4.6</SelectItem>
-              <SelectItem value="opus">Opus 4.7</SelectItem>
-              <SelectItem value="haiku">Haiku 4.5</SelectItem>
+              <AgentModelSelectItems t={t} />
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.customAgents.modelScopeHint")}
+          </p>
         </div>
 
-        {/* Tools (read-only) */}
-        {agent.tools && agent.tools.length > 0 && (
-          <div className="space-y-1.5">
-            <Label>{t("settings.customAgents.allowedTools")}</Label>
+        {/* Tools */}
+        <div className="space-y-3">
+          <Label>{t("settings.customAgents.tools")}</Label>
+          <div className="flex flex-wrap gap-2">
+            {(["all", "allowlist", "denylist"] as const).map((mode) => (
+              <Button
+                key={mode}
+                type="button"
+                variant={toolMode === mode ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => {
+                  if (isReadOnly) return
+                  setToolMode(mode)
+                  if (mode === "all") setSelectedTools([])
+                }}
+                disabled={isReadOnly}
+              >
+                {mode === "all" && t("settings.customAgents.allTools")}
+                {mode === "allowlist" && t("settings.customAgents.onlySelected")}
+                {mode === "denylist" && t("settings.customAgents.exceptSelected")}
+              </Button>
+            ))}
+          </div>
+          {toolMode === "all" ? (
+            <p className="text-xs text-muted-foreground">
+              {t("settings.customAgents.allToolsHint")}
+            </p>
+          ) : isReadOnly ? (
             <div className="flex flex-wrap gap-1">
-              {agent.tools.map((tool) => (
+              {selectedTools.map((tool) => (
                 <span
                   key={tool}
-                  className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground font-mono"
+                  className={cn(
+                    "px-1.5 py-0.5 text-[10px] font-medium rounded font-mono",
+                    toolMode === "denylist"
+                      ? "bg-red-500/10 text-red-500"
+                      : "bg-muted text-muted-foreground",
+                  )}
                 >
                   {tool}
                 </span>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Disallowed Tools (read-only) */}
-        {agent.disallowedTools && agent.disallowedTools.length > 0 && (
-          <div className="space-y-1.5">
-            <Label>{t("settings.customAgents.disallowedTools")}</Label>
-            <div className="flex flex-wrap gap-1">
-              {agent.disallowedTools.map((tool) => (
-                <span
-                  key={tool}
-                  className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/10 text-red-500 font-mono"
-                >
-                  {tool}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+          ) : (
+            <ToolSelector
+              selectedTools={selectedTools}
+              onChange={setSelectedTools}
+              mode={toolMode}
+            />
+          )}
+        </div>
 
         {/* System Prompt */}
         <div className="space-y-1.5">
@@ -203,12 +401,16 @@ function AgentDetail({
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            onBlur={handleBlur}
             readOnly={isReadOnly}
             rows={16}
             className="font-mono resize-y"
             placeholder={t("settings.customAgents.systemPromptPlaceholder")}
           />
+          {!prompt.trim() && !isReadOnly && (
+            <p className="text-[11px] text-destructive">
+              {t("settings.customAgents.requiredField")}
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -222,7 +424,7 @@ function CreateAgentForm({
   isSaving,
   hasProject,
 }: {
-  onCreated: (data: { name: string; description: string; prompt: string; model?: string; source: "user" | "project" }) => void
+  onCreated: (data: { name: string; source: WritableAgentSource } & AgentFormData) => void
   onCancel: () => void
   isSaving: boolean
   hasProject: boolean
@@ -232,9 +434,18 @@ function CreateAgentForm({
   const [description, setDescription] = useState("")
   const [prompt, setPrompt] = useState("")
   const [model, setModel] = useState("inherit")
-  const [source, setSource] = useState<"user" | "project">("user")
+  const [source, setSource] = useState<WritableAgentSource>("user")
+  const [toolMode, setToolMode] = useState<ToolMode>("all")
+  const [selectedTools, setSelectedTools] = useState<string[]>([])
+  const toolPayload = useMemo(
+    () => buildToolPayload(toolMode, selectedTools),
+    [toolMode, selectedTools],
+  )
 
-  const canSave = name.trim().length > 0
+  const canSave =
+    name.trim().length > 0 &&
+    description.trim().length > 0 &&
+    prompt.trim().length > 0
 
   return (
     <div className="h-full overflow-y-auto">
@@ -247,14 +458,27 @@ function CreateAgentForm({
             <Button variant="ghost" size="sm" onClick={onCancel}>
               {t("common.cancel")}
             </Button>
-            <Button size="sm" onClick={() => onCreated({ name, description, prompt, model, source })} disabled={!canSave || isSaving}>
+            <Button
+              size="sm"
+              onClick={() => onCreated({
+                name,
+                description,
+                prompt,
+                model: model as AgentModel,
+                source,
+                ...toolPayload,
+              })}
+              disabled={!canSave || isSaving}
+            >
               {isSaving ? t("common.creating") : t("common.create")}
             </Button>
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <Label>{t("settings.customAgents.name")}</Label>
+          <Label>
+            {t("settings.customAgents.name")} <span className="text-destructive">*</span>
+          </Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -267,7 +491,9 @@ function CreateAgentForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label>{t("settings.customAgents.description")}</Label>
+          <Label>
+            {t("settings.customAgents.description")} <span className="text-destructive">*</span>
+          </Label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -282,20 +508,18 @@ function CreateAgentForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="inherit">
-                {t("settings.customAgents.inheritFromParent")}
-              </SelectItem>
-              <SelectItem value="sonnet">Sonnet 4.6</SelectItem>
-              <SelectItem value="opus">Opus 4.7</SelectItem>
-              <SelectItem value="haiku">Haiku 4.5</SelectItem>
+              <AgentModelSelectItems t={t} />
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.customAgents.modelScopeHint")}
+          </p>
         </div>
 
         {hasProject && (
           <div className="space-y-1.5">
             <Label>{t("settings.customAgents.scope")}</Label>
-            <Select value={source} onValueChange={(v) => setSource(v as "user" | "project")}>
+            <Select value={source} onValueChange={(v) => setSource(v as WritableAgentSource)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -308,11 +532,51 @@ function CreateAgentForm({
                 </SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {t(source === "project"
+                ? "settings.customAgents.sourceHintProject"
+                : "settings.customAgents.sourceHintUser")}
+            </p>
           </div>
         )}
 
+        <div className="space-y-3">
+          <Label>{t("settings.customAgents.tools")}</Label>
+          <div className="flex flex-wrap gap-2">
+            {(["all", "allowlist", "denylist"] as const).map((mode) => (
+              <Button
+                key={mode}
+                type="button"
+                variant={toolMode === mode ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setToolMode(mode)
+                  if (mode === "all") setSelectedTools([])
+                }}
+              >
+                {mode === "all" && t("settings.customAgents.allTools")}
+                {mode === "allowlist" && t("settings.customAgents.onlySelected")}
+                {mode === "denylist" && t("settings.customAgents.exceptSelected")}
+              </Button>
+            ))}
+          </div>
+          {toolMode === "all" ? (
+            <p className="text-xs text-muted-foreground">
+              {t("settings.customAgents.allToolsHint")}
+            </p>
+          ) : (
+            <ToolSelector
+              selectedTools={selectedTools}
+              onChange={setSelectedTools}
+              mode={toolMode}
+            />
+          )}
+        </div>
+
         <div className="space-y-1.5">
-          <Label>{t("settings.customAgents.systemPrompt")}</Label>
+          <Label>
+            {t("settings.customAgents.systemPrompt")} <span className="text-destructive">*</span>
+          </Label>
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -332,6 +596,7 @@ export function AgentsCustomAgentsTab() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
+  const [deletingAgent, setDeletingAgent] = useState<FileAgent | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Focus search on "/" hotkey
@@ -355,16 +620,32 @@ export function AgentsCustomAgentsTab() {
 
   const updateMutation = trpc.agents.update.useMutation()
   const createMutation = trpc.agents.create.useMutation()
+  const duplicateMutation = trpc.agents.create.useMutation()
+  const deleteMutation = trpc.agents.delete.useMutation()
+  const openFileMutation = trpc.external.openFileInEditor.useMutation()
+  const revealInFinderMutation = trpc.external.openInFinder.useMutation()
 
-  const handleCreate = useCallback(async (data: {
-    name: string; description: string; prompt: string; model?: string; source: "user" | "project"
-  }) => {
+  const resolveAgentPath = useCallback((agent: FileAgent) => {
+    if (
+      agent.source === "project" &&
+      selectedProject?.path &&
+      !agent.path.startsWith("/") &&
+      !agent.path.startsWith("~")
+    ) {
+      return `${selectedProject.path}/${agent.path}`
+    }
+    return agent.path
+  }, [selectedProject?.path])
+
+  const handleCreate = useCallback(async (data: { name: string; source: WritableAgentSource } & AgentFormData) => {
     try {
       const result = await createMutation.mutateAsync({
         name: data.name,
         description: data.description,
         prompt: data.prompt,
-        model: (data.model && data.model !== "inherit" ? data.model : undefined) as FileAgent["model"],
+        model: data.model && data.model !== "inherit" ? data.model : undefined,
+        tools: data.tools,
+        disallowedTools: data.disallowedTools,
         source: data.source,
         cwd: selectedProject?.path,
       })
@@ -377,6 +658,50 @@ export function AgentsCustomAgentsTab() {
       toast.error(t("settings.customAgents.toast.failedToCreate"), { description: message })
     }
   }, [createMutation, selectedProject?.path, refetch, t])
+
+  const handleOpenFile = useCallback(async (agent: FileAgent) => {
+    try {
+      await openFileMutation.mutateAsync({
+        path: resolveAgentPath(agent),
+        cwd: selectedProject?.path,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.customAgents.toast.failedToOpenFile")
+      toast.error(t("settings.customAgents.toast.failedToOpenFile"), { description: message })
+    }
+  }, [openFileMutation, resolveAgentPath, selectedProject?.path, t])
+
+  const handleRevealInFinder = useCallback(async (agent: FileAgent) => {
+    try {
+      await revealInFinderMutation.mutateAsync(resolveAgentPath(agent))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.customAgents.toast.failedToReveal")
+      toast.error(t("settings.customAgents.toast.failedToReveal"), { description: message })
+    }
+  }, [revealInFinderMutation, resolveAgentPath, t])
+
+  const handleDuplicate = useCallback(async (agent: FileAgent, targetSource: WritableAgentSource) => {
+    try {
+      const name = createDuplicateName(agent.name, targetSource, agents)
+      const result = await duplicateMutation.mutateAsync({
+        name,
+        description: agent.description,
+        prompt: agent.prompt,
+        model: agent.model && agent.model !== "inherit" ? agent.model : undefined,
+        tools: agent.tools,
+        disallowedTools: agent.disallowedTools,
+        source: targetSource,
+        cwd: selectedProject?.path,
+      })
+      toast.success(t("settings.customAgents.toast.duplicated"), { description: result.name })
+      setShowAddForm(false)
+      await refetch()
+      setSelectedAgentId(`${result.source}::${result.name}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.customAgents.toast.failedToDuplicate")
+      toast.error(t("settings.customAgents.toast.failedToDuplicate"), { description: message })
+    }
+  }, [agents, duplicateMutation, selectedProject?.path, refetch, t])
 
   const filteredAgents = useMemo(() => {
     if (!searchQuery.trim()) return agents
@@ -411,22 +736,22 @@ export function AgentsCustomAgentsTab() {
 
   const handleSave = useCallback(async (
     agent: FileAgent,
-    data: { description: string; prompt: string; model?: FileAgent["model"] },
-	  ) => {
-	    try {
-	      if (agent.source === "plugin") {
-	        toast.error(t("settings.customAgents.toast.pluginReadOnly"), { description: agent.name })
-	        return
-	      }
-	      await updateMutation.mutateAsync({
+    data: AgentFormData,
+  ) => {
+    try {
+      if (agent.source === "plugin") {
+        toast.error(t("settings.customAgents.toast.pluginReadOnly"), { description: agent.name })
+        return
+      }
+      await updateMutation.mutateAsync({
         originalName: agent.name,
         name: agent.name,
         description: data.description,
         prompt: data.prompt,
         model: data.model,
-        tools: agent.tools,
-        disallowedTools: agent.disallowedTools,
-	        source: agent.source,
+        tools: data.tools,
+        disallowedTools: data.disallowedTools,
+        source: agent.source,
         cwd: selectedProject?.path,
       })
       toast.success(t("settings.customAgents.toast.saved"), { description: agent.name })
@@ -437,21 +762,40 @@ export function AgentsCustomAgentsTab() {
     }
   }, [updateMutation, selectedProject?.path, refetch, t])
 
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deletingAgent || deletingAgent.source === "plugin") return
+    try {
+      await deleteMutation.mutateAsync({
+        name: deletingAgent.name,
+        source: deletingAgent.source,
+        cwd: selectedProject?.path,
+      })
+      toast.success(t("settings.customAgents.toast.deleted"), { description: deletingAgent.name })
+      setDeletingAgent(null)
+      setSelectedAgentId(null)
+      await refetch()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.customAgents.toast.failedToDelete")
+      toast.error(t("settings.customAgents.toast.failedToDelete"), { description: message })
+    }
+  }, [deleteMutation, deletingAgent, selectedProject?.path, refetch, t])
+
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Left sidebar - agent list */}
-      <ResizableSidebar
-        isOpen={true}
-        onClose={() => {}}
-        widthAtom={settingsAgentsSidebarWidthAtom}
-        minWidth={200}
-        maxWidth={400}
-        side="left"
-        animationDuration={0}
-        initialWidth={240}
-        exitWidth={240}
-        disableClickToClose={true}
-      >
+    <>
+      <div className="flex h-full overflow-hidden">
+        {/* Left sidebar - agent list */}
+        <ResizableSidebar
+          isOpen={true}
+          onClose={() => {}}
+          widthAtom={settingsAgentsSidebarWidthAtom}
+          minWidth={200}
+          maxWidth={400}
+          side="left"
+          animationDuration={0}
+          initialWidth={240}
+          exitWidth={240}
+          disableClickToClose={true}
+        >
         <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
           {/* Search + Add */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
@@ -530,11 +874,7 @@ export function AgentsCustomAgentsTab() {
                               <span className="text-sm truncate flex-1">
                                 {agent.name}
                               </span>
-                              {agent.model && agent.model !== "inherit" && (
-                                <span className="text-[10px] text-muted-foreground shrink-0">
-                                  {agent.model}
-                                </span>
-                              )}
+                              <AgentModelBadge model={agent.model} />
                             </div>
                             {agent.description && (
                               <div className="text-[11px] text-muted-foreground truncate mt-0.5">
@@ -574,11 +914,7 @@ export function AgentsCustomAgentsTab() {
                               <span className="text-sm truncate flex-1">
                                 {agent.name}
                               </span>
-                              {agent.model && agent.model !== "inherit" && (
-                                <span className="text-[10px] text-muted-foreground shrink-0">
-                                  {agent.model}
-                                </span>
-                              )}
+                              <AgentModelBadge model={agent.model} />
                             </div>
                             {agent.description && (
                               <div className="text-[11px] text-muted-foreground truncate mt-0.5">
@@ -618,11 +954,7 @@ export function AgentsCustomAgentsTab() {
                               <span className="text-sm truncate flex-1">
                                 {agent.name}
                               </span>
-                              {agent.model && agent.model !== "inherit" && (
-                                <span className="text-[10px] text-muted-foreground shrink-0">
-                                  {agent.model}
-                                </span>
-                              )}
+                              <AgentModelBadge model={agent.model} />
                             </div>
                             {agent.description && (
                               <div className="text-[11px] text-muted-foreground truncate mt-0.5">
@@ -640,10 +972,10 @@ export function AgentsCustomAgentsTab() {
 
           </div>
         </div>
-      </ResizableSidebar>
+        </ResizableSidebar>
 
-      {/* Right content - detail panel */}
-      <div className="flex-1 min-w-0 h-full overflow-hidden">
+        {/* Right content - detail panel */}
+        <div className="flex-1 min-w-0 h-full overflow-hidden">
         {showAddForm ? (
           <CreateAgentForm
             onCreated={handleCreate}
@@ -655,7 +987,14 @@ export function AgentsCustomAgentsTab() {
           <AgentDetail
             agent={selectedAgent}
             onSave={(data) => handleSave(selectedAgent, data)}
+            onDelete={() => setDeletingAgent(selectedAgent)}
+            onDuplicate={(targetSource) => handleDuplicate(selectedAgent, targetSource)}
+            onOpenFile={() => handleOpenFile(selectedAgent)}
+            onRevealInFinder={() => handleRevealInFinder(selectedAgent)}
             isSaving={updateMutation.isPending}
+            isDeleting={deleteMutation.isPending}
+            isDuplicating={duplicateMutation.isPending}
+            hasProject={!!selectedProject?.path}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -683,7 +1022,37 @@ export function AgentsCustomAgentsTab() {
             )}
           </div>
         )}
+        </div>
       </div>
-    </div>
+      <AlertDialog open={!!deletingAgent} onOpenChange={(open) => !open && setDeletingAgent(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("settings.customAgents.confirmDeleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("settings.customAgents.confirmDeleteDescription", {
+                name: deletingAgent?.name ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault()
+                void handleConfirmDelete()
+              }}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending
+                ? t("common.deleting")
+                : t("settings.customAgents.confirmDeleteAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

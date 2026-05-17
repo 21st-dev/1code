@@ -7,11 +7,14 @@ import {
   parseAgentMd,
   generateAgentMd,
   scanAgentsDirectory,
-  VALID_AGENT_MODELS,
+  type AgentModel,
   type FileAgent,
 } from "./agent-utils"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { getEnabledPlugins } from "./claude-settings"
+import { isCustomAgentModel } from "../../../../shared/custom-agent-models"
+
+const agentModelSchema = z.custom<AgentModel>(isCustomAgentModel)
 
 // Shared procedure for listing agents
 const listAgentsProcedure = publicProcedure
@@ -149,7 +152,7 @@ export const agentsRouter = router({
         prompt: z.string(),
         tools: z.array(z.string()).optional(),
         disallowedTools: z.array(z.string()).optional(),
-        model: z.enum(VALID_AGENT_MODELS).optional(),
+        model: agentModelSchema.optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
       })
@@ -218,7 +221,7 @@ export const agentsRouter = router({
         prompt: z.string(),
         tools: z.array(z.string()).optional(),
         disallowedTools: z.array(z.string()).optional(),
-        model: z.enum(VALID_AGENT_MODELS).optional(),
+        model: agentModelSchema.optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
       })

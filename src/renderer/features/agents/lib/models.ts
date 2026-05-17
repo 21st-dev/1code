@@ -1,61 +1,12 @@
-export type ModelInfo = {
-  summaryKey: string
-  bestForKey: string
-  tokenNoteKey?: string
-  contextWindow: string
-  maxOutput: string
-  pricing: string
-  cachedInput?: string
-  latencyKey: string
-}
+import type { ClaudeModelInfo } from "../../../../shared/custom-agent-models"
 
-export const CLAUDE_MODELS = [
-  {
-    id: "opus",
-    name: "Opus",
-    version: "4.7",
-    info: {
-      summaryKey: "agent.model.info.summary.claudeOpus47",
-      bestForKey: "agent.model.info.bestFor.claudeOpus47",
-      tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
-      contextWindow: "1M",
-      maxOutput: "128K",
-      pricing: "$5 in / $25 out per 1M",
-      cachedInput: "$0.50 / 1M",
-      latencyKey: "agent.model.info.latency.moderate",
-    } satisfies ModelInfo,
-  },
-  {
-    id: "sonnet",
-    name: "Sonnet",
-    version: "4.6",
-    info: {
-      summaryKey: "agent.model.info.summary.claudeSonnet46",
-      bestForKey: "agent.model.info.bestFor.claudeSonnet46",
-      tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
-      contextWindow: "1M",
-      maxOutput: "64K",
-      pricing: "$3 in / $15 out per 1M",
-      cachedInput: "$0.30 / 1M",
-      latencyKey: "agent.model.info.latency.fast",
-    } satisfies ModelInfo,
-  },
-  {
-    id: "haiku",
-    name: "Haiku",
-    version: "4.5",
-    info: {
-      summaryKey: "agent.model.info.summary.claudeHaiku45",
-      bestForKey: "agent.model.info.bestFor.claudeHaiku45",
-      tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
-      contextWindow: "200K",
-      maxOutput: "64K",
-      pricing: "$1 in / $5 out per 1M",
-      cachedInput: "$0.10 / 1M",
-      latencyKey: "agent.model.info.latency.fastest",
-    } satisfies ModelInfo,
-  },
-]
+export {
+  CLAUDE_MODELS,
+  type ClaudeModel,
+  type ClaudeModelInfo,
+} from "../../../../shared/custom-agent-models"
+
+export type ModelInfo = ClaudeModelInfo
 
 export type CodexThinkingLevel = "low" | "medium" | "high" | "xhigh"
 

@@ -1,33 +1,42 @@
 import { cn } from "../../../lib/utils"
+import { useI18n, type TranslationKey } from "../../../lib/i18n"
 
 export const AVAILABLE_TOOLS = [
   // File Operations
-  { id: "Read", name: "Read File", category: "file", description: "Read file contents" },
-  { id: "Write", name: "Write File", category: "file", description: "Create or overwrite files" },
-  { id: "Edit", name: "Edit File", category: "file", description: "Make precise edits" },
-  { id: "Glob", name: "Glob Pattern", category: "file", description: "Find files by pattern" },
-  { id: "Grep", name: "Search Content", category: "file", description: "Search in file contents" },
-  { id: "NotebookEdit", name: "Notebook Edit", category: "file", description: "Edit Jupyter notebooks" },
+  { id: "Read", nameKey: "settings.toolSelector.tools.read.name", category: "file", descriptionKey: "settings.toolSelector.tools.read.description" },
+  { id: "Write", nameKey: "settings.toolSelector.tools.write.name", category: "file", descriptionKey: "settings.toolSelector.tools.write.description" },
+  { id: "Edit", nameKey: "settings.toolSelector.tools.edit.name", category: "file", descriptionKey: "settings.toolSelector.tools.edit.description" },
+  { id: "Glob", nameKey: "settings.toolSelector.tools.glob.name", category: "file", descriptionKey: "settings.toolSelector.tools.glob.description" },
+  { id: "Grep", nameKey: "settings.toolSelector.tools.grep.name", category: "file", descriptionKey: "settings.toolSelector.tools.grep.description" },
+  { id: "NotebookEdit", nameKey: "settings.toolSelector.tools.notebookEdit.name", category: "file", descriptionKey: "settings.toolSelector.tools.notebookEdit.description" },
 
   // System
-  { id: "Bash", name: "Bash Commands", category: "system", description: "Execute shell commands" },
-  { id: "Task", name: "Launch Subagent", category: "system", description: "Launch specialized agents" },
+  { id: "Bash", nameKey: "settings.toolSelector.tools.bash.name", category: "system", descriptionKey: "settings.toolSelector.tools.bash.description" },
+  { id: "Task", nameKey: "settings.toolSelector.tools.task.name", category: "system", descriptionKey: "settings.toolSelector.tools.task.description" },
 
   // Web
-  { id: "WebSearch", name: "Web Search", category: "web", description: "Search the internet" },
-  { id: "WebFetch", name: "Fetch URL", category: "web", description: "Fetch webpage content" },
+  { id: "WebSearch", nameKey: "settings.toolSelector.tools.webSearch.name", category: "web", descriptionKey: "settings.toolSelector.tools.webSearch.description" },
+  { id: "WebFetch", nameKey: "settings.toolSelector.tools.webFetch.name", category: "web", descriptionKey: "settings.toolSelector.tools.webFetch.description" },
 
   // Planning & Interaction
-  { id: "TodoWrite", name: "Todo List", category: "planning", description: "Manage task list" },
-  { id: "AskUserQuestion", name: "Ask User", category: "planning", description: "Ask clarifying questions" },
-]
+  { id: "TodoWrite", nameKey: "settings.toolSelector.tools.todoWrite.name", category: "planning", descriptionKey: "settings.toolSelector.tools.todoWrite.description" },
+  { id: "AskUserQuestion", nameKey: "settings.toolSelector.tools.askUserQuestion.name", category: "planning", descriptionKey: "settings.toolSelector.tools.askUserQuestion.description" },
+] satisfies Array<{
+  id: string
+  nameKey: TranslationKey
+  category: string
+  descriptionKey: TranslationKey
+}>
 
 const CATEGORIES = [
-  { id: "file", name: "File Operations" },
-  { id: "system", name: "System" },
-  { id: "web", name: "Web" },
-  { id: "planning", name: "Planning" },
-]
+  { id: "file", nameKey: "settings.toolSelector.categories.file" },
+  { id: "system", nameKey: "settings.toolSelector.categories.system" },
+  { id: "web", nameKey: "settings.toolSelector.categories.web" },
+  { id: "planning", nameKey: "settings.toolSelector.categories.planning" },
+] satisfies Array<{
+  id: string
+  nameKey: TranslationKey
+}>
 
 interface ToolSelectorProps {
   selectedTools: string[]
@@ -36,6 +45,8 @@ interface ToolSelectorProps {
 }
 
 export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProps) {
+  const { t } = useI18n()
+
   const handleToggle = (toolId: string) => {
     if (selectedTools.includes(toolId)) {
       onChange(selectedTools.filter((t) => t !== toolId))
@@ -61,7 +72,7 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
           onClick={handleSelectAll}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          Select all
+          {t("settings.toolSelector.selectAll")}
         </button>
         <span className="text-muted-foreground">·</span>
         <button
@@ -69,11 +80,11 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
           onClick={handleSelectNone}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          Clear
+          {t("settings.toolSelector.clear")}
         </button>
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground">
-          {selectedTools.length} selected
+          {t("settings.toolSelector.selectedCount", { count: selectedTools.length })}
         </span>
       </div>
 
@@ -86,7 +97,7 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
           return (
             <div key={category.id} className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                {category.name}
+                {t(category.nameKey)}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {categoryTools.map((tool) => {
@@ -133,10 +144,10 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-medium text-foreground truncate">
-                          {tool.name}
+                          {t(tool.nameKey)}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate">
-                          {tool.description}
+                          {t(tool.descriptionKey)}
                         </div>
                       </div>
                     </button>
@@ -151,8 +162,8 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
       {/* Hint */}
       <p className="text-xs text-muted-foreground">
         {mode === "allowlist"
-          ? "Agent will ONLY have access to selected tools"
-          : "Agent will have access to ALL tools EXCEPT selected ones"}
+          ? t("settings.toolSelector.allowlistHint")
+          : t("settings.toolSelector.denylistHint")}
       </p>
     </div>
   )

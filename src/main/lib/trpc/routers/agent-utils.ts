@@ -5,10 +5,14 @@ import matter from "gray-matter"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { resolveDirentType } from "../../fs/dirent"
 import { getEnabledPlugins } from "./claude-settings"
+import {
+  CUSTOM_AGENT_MODEL_VALUES,
+  isCustomAgentModel,
+  type CustomAgentModel,
+} from "../../../../shared/custom-agent-models"
 
-// Valid model values for agents
-export const VALID_AGENT_MODELS = ["sonnet", "opus", "haiku", "inherit"] as const
-export type AgentModel = (typeof VALID_AGENT_MODELS)[number]
+export const VALID_AGENT_MODELS = CUSTOM_AGENT_MODEL_VALUES
+export type AgentModel = CustomAgentModel
 
 // Agent definition parsed from markdown file
 export interface ParsedAgent {
@@ -69,10 +73,7 @@ export function parseAgentMd(
     }
 
     // Validate model
-    const model =
-      data.model && VALID_AGENT_MODELS.includes(data.model)
-        ? (data.model as AgentModel)
-        : undefined
+    const model = isCustomAgentModel(data.model) ? data.model : undefined
 
     return {
       name:
