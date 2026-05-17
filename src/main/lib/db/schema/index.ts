@@ -161,6 +161,25 @@ export const localApiProviderConfigs = sqliteTable("local_api_provider_configs",
   ),
 })
 
+// ============ APP AGENTS ============
+// Runtime-neutral app-managed agent profiles.
+export const appAgents = sqliteTable("app_agents", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull().unique(),
+  description: text("description").notNull(),
+  prompt: text("prompt").notNull(),
+  tools: text("tools"),
+  disallowedTools: text("disallowed_tools"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -177,3 +196,5 @@ export type ClaudeProviderConfig = typeof claudeProviderConfig.$inferSelect
 export type NewClaudeProviderConfig = typeof claudeProviderConfig.$inferInsert
 export type LocalApiProviderConfig = typeof localApiProviderConfigs.$inferSelect
 export type NewLocalApiProviderConfig = typeof localApiProviderConfigs.$inferInsert
+export type AppAgent = typeof appAgents.$inferSelect
+export type NewAppAgent = typeof appAgents.$inferInsert

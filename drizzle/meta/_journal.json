@@ -71,6 +71,13 @@
       "when": 1778777211635,
       "tag": "0009_unique_molly_hayes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1779029039673,
+      "tag": "0010_young_dragon_lord",
+      "breakpoints": true
     }
   ]
 }

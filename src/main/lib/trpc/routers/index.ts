@@ -15,6 +15,7 @@ import { filesRouter } from "./files"
 import { debugRouter } from "./debug"
 import { skillsRouter } from "./skills"
 import { agentsRouter } from "./agents"
+import { appAgentsRouter } from "./app-agents"
 import { worktreeConfigRouter } from "./worktree-config"
 import { commandsRouter } from "./commands"
 import { voiceRouter } from "./voice"
@@ -44,6 +45,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     debug: debugRouter,
     skills: skillsRouter,
     agents: agentsRouter,
+    appAgents: appAgentsRouter,
     worktreeConfig: worktreeConfigRouter,
     commands: commandsRouter,
     voice: voiceRouter,
