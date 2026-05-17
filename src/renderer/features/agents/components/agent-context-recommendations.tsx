@@ -15,7 +15,7 @@ type Recommendation = {
   kind: RecommendationKind
   name: string
   description: string
-  source?: "user" | "project" | "plugin" | "registry"
+  source?: "user" | "project" | "plugin" | "registry" | "app"
   mention: FileMentionOption
   score: number
 }
@@ -212,8 +212,8 @@ export const AgentContextRecommendations = memo(function AgentContextRecommendat
       staleTime: 5 * 60 * 1000,
     },
   )
-  const { data: agents = [] } = trpc.agents.listEnabled.useQuery(
-    projectPath ? { cwd: projectPath } : undefined,
+  const { data: agents = [] } = trpc.appAgents.list.useQuery(
+    undefined,
     {
       enabled: shouldQuery,
       staleTime: 5 * 60 * 1000,
@@ -260,7 +260,6 @@ export const AgentContextRecommendations = memo(function AgentContextRecommendat
           type: "agent" as const,
           description: agent.description,
           tools: agent.tools,
-          model: agent.model,
           source: agent.source,
         },
       })),

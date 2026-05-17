@@ -50,15 +50,15 @@ import {
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { discoverPluginMcpServers } from "../../plugins"
 import { publicProcedure, router } from "../index"
-import { buildAgentsOption } from "./agent-utils"
+import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import {
   getApprovedPluginMcpServers,
   getEnabledPlugins,
 } from "./claude-settings"
 
 /**
- * Parse @[agent:name], @[skill:name], and @[tool:servername] mentions from prompt text
- * Returns the cleaned prompt and lists of mentioned agents/skills/MCP servers
+ * Parse @[agent:name], @[skill:name], and @[tool:servername] mentions from prompt text.
+ * Agent mentions are resolved as App Agents before the request is sent.
  *
  * File mention formats:
  * - @[file:local:relative/path] - file inside project (relative path)
@@ -998,22 +998,12 @@ export const claudeRouter = router({
             // Capture stderr from Claude process for debugging
             const stderrLines: string[] = []
 
-            // Parse mentions from prompt (agents, skills, files, folders)
+            // Parse mentions from prompt (App Agents, skills, files, folders)
             const { cleanedPrompt, agentMentions, skillMentions } =
               parseMentions(input.prompt)
 
-            // Build agents option for SDK (proper registration via options.agents)
-            const agentsOption = await buildAgentsOption(
-              agentMentions,
-              input.cwd,
-            )
-
-            // Log if agents were mentioned
             if (agentMentions.length > 0) {
-              console.log(
-                `[claude] Registering agents via SDK:`,
-                Object.keys(agentsOption),
-              )
+              console.log(`[claude] App Agents mentioned:`, agentMentions)
             }
 
             // Log if skills were mentioned
@@ -1021,16 +1011,23 @@ export const claudeRouter = router({
               console.log(`[claude] Skills mentioned:`, skillMentions)
             }
 
-            // Build final prompt with skill instructions if needed
-            let finalPrompt = cleanedPrompt
+            const appAgentPrompt = await preparePromptWithAppAgents(
+              cleanedPrompt,
+              agentMentions,
+            )
+            if (appAgentPrompt.missingAppAgents.length > 0) {
+              console.warn(
+                `[claude] Missing App Agents:`,
+                appAgentPrompt.missingAppAgents,
+              )
+            }
+
+            // Build final prompt with App Agent and skill instructions if needed
+            let finalPrompt = appAgentPrompt.prompt
 
             // Handle empty prompt when only mentions are present
             if (!finalPrompt.trim()) {
-              if (agentMentions.length > 0 && skillMentions.length > 0) {
-                finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) and invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
-              } else if (agentMentions.length > 0) {
-                finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) for this task.`
-              } else if (skillMentions.length > 0) {
+              if (skillMentions.length > 0) {
                 finalPrompt = `Invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
               }
             } else if (skillMentions.length > 0) {
@@ -1704,11 +1701,6 @@ ${prompt}
                 abortController, // Must be inside options!
                 cwd: input.cwd,
                 systemPrompt: systemPromptConfig,
-                // Register mentioned agents with SDK via options.agents (skip for Ollama - not supported)
-                ...(!isUsingOllama &&
-                  Object.keys(agentsOption).length > 0 && {
-                    agents: agentsOption,
-                  }),
                 // Pass filtered MCP servers (only working/unknown ones, skip failed/needs-auth)
                 ...(mcpServersFiltered &&
                   Object.keys(mcpServersFiltered).length > 0 && {

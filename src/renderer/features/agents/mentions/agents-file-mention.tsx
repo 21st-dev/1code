@@ -721,9 +721,9 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     },
   )
 
-  // Fetch custom agents from filesystem (cached for 5 minutes)
-  const { data: customAgents = [], isFetching: isFetchingAgents } = trpc.agents.listEnabled.useQuery(
-    projectPath ? { cwd: projectPath } : undefined,
+  // Fetch App Agents from local app storage (cached for 5 minutes)
+  const { data: appAgents = [], isFetching: isFetchingAgents } = trpc.appAgents.list.useQuery(
+    undefined,
     {
       enabled: isOpen,
       staleTime: 5 * 60 * 1000, // 5 minutes - agents don't change frequently
@@ -859,11 +859,11 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       }))
   }, [skills, debouncedSearchText])
 
-  // Convert custom agents to mention options
+  // Convert App Agents to mention options
   const agentOptions: FileMentionOption[] = useMemo(() => {
     const searchLower = debouncedSearchText.toLowerCase()
 
-    return customAgents
+    return appAgents
       .filter(agent =>
         // Multi-word search: all words must match in name OR description
         matchesMultiWordSearch(agent.name, searchLower) ||
@@ -879,10 +879,9 @@ export const AgentsFileMention = memo(function AgentsFileMention({
         // Extended data for rich tooltip
         description: agent.description,
         tools: agent.tools,
-        model: agent.model,
         source: agent.source,
       }))
-  }, [customAgents, debouncedSearchText])
+  }, [appAgents, debouncedSearchText])
 
   // Convert MCP servers to mention options (show servers, not individual tools)
   const allToolOptions: FileMentionOption[] = useMemo(() => {
@@ -915,7 +914,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   // Check if we have skills, agents, or tools
   // Use base data (not search-filtered) for stable category display
   const hasSkills = skills.length > 0
-  const hasAgents = customAgents.length > 0
+  const hasAgents = appAgents.length > 0
   const hasTools = allToolOptions.length > 0
   const hasOnlyFiles = !hasSkills && !hasAgents && !hasTools
 

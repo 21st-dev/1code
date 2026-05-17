@@ -7,7 +7,7 @@
 
 export { filesProvider, type FileData } from "./files-provider"
 export { skillsProvider, type SkillData } from "./skills-provider"
-export { agentsProvider, type AgentData, type AgentModel } from "./agents-provider"
+export { agentsProvider, type AgentData } from "./agents-provider"
 export { toolsProvider, type ToolData, type ToolsSearchContext } from "./tools-provider"
 
 // Re-export types

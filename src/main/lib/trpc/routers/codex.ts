@@ -14,6 +14,7 @@ import {
   normalizeCodexAssistantMessage,
   normalizeCodexStreamChunk,
 } from "../../../../shared/codex-tool-normalizer"
+import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
@@ -1841,12 +1842,29 @@ export const codexRouter = router({
               return usagePromise
             }
 
+            const appAgentPrompt = await preparePromptWithAppAgents(input.prompt)
+            if (appAgentPrompt.appAgentMentions.length > 0) {
+              console.log(
+                `[codex] App Agents mentioned:`,
+                appAgentPrompt.appAgentMentions,
+              )
+            }
+            if (appAgentPrompt.missingAppAgents.length > 0) {
+              console.warn(
+                `[codex] Missing App Agents:`,
+                appAgentPrompt.missingAppAgents,
+              )
+            }
+
             const result = streamText({
               model: provider.languageModel(selectedModelId),
               messages: [
                 {
                   role: "user",
-                  content: buildModelMessageContent(input.prompt, input.images),
+                  content: buildModelMessageContent(
+                    appAgentPrompt.prompt,
+                    input.images,
+                  ),
                 },
               ],
               tools: provider.tools,

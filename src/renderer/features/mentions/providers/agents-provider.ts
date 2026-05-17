@@ -1,8 +1,8 @@
 /**
  * Agents Mention Provider
  *
- * Wraps the existing tRPC agents.listEnabled endpoint as a mention provider.
- * Provides agent search with descriptions, tools, and model info.
+ * Wraps the appAgents endpoint as a mention provider.
+ * Provides App Agent search with descriptions and tool guidance.
  */
 
 import { trpcClient } from "../../../lib/trpc"
@@ -16,11 +16,6 @@ import {
 } from "../types"
 
 /**
- * Valid model values for agents
- */
-export type AgentModel = "sonnet" | "opus" | "haiku" | "inherit"
-
-/**
  * Data payload for agent mentions
  */
 export interface AgentData {
@@ -29,8 +24,7 @@ export interface AgentData {
   prompt: string
   tools?: string[]
   disallowedTools?: string[]
-  model?: AgentModel
-  source: "user" | "project" | "plugin"
+  source: "app"
   path: string
 }
 
@@ -60,10 +54,8 @@ export const agentsProvider = createMentionProvider<AgentData>({
     }
 
     try {
-      // Use tRPC to list agents
-      const agents = await trpcClient.agents.listEnabled.query({
-        cwd: context.projectPath,
-      })
+      // Use tRPC to list App Agents
+      const agents = await trpcClient.appAgents.list.query()
 
       // Map to MentionItem format
       let items: MentionItem<AgentData>[] = agents.map((agent) => ({
@@ -77,12 +69,10 @@ export const agentsProvider = createMentionProvider<AgentData>({
           prompt: agent.prompt,
           tools: agent.tools,
           disallowedTools: agent.disallowedTools,
-          model: agent.model as AgentModel | undefined,
           source: agent.source,
           path: agent.path,
         },
-        // Project agents have higher priority
-        priority: agent.source === "project" ? 10 : 0,
+        priority: 0,
         keywords: agent.tools, // Also search by tool names
         metadata: {
           type: "agent" as const,
@@ -143,8 +133,8 @@ export const agentsProvider = createMentionProvider<AgentData>({
           name,
           description: "",
           prompt: "",
-          source: "user", // Default, will be resolved
-          path: "",
+          source: "app",
+          path: "App Agents",
         },
         metadata: {
           type: "agent",

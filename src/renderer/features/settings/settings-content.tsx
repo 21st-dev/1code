@@ -6,8 +6,8 @@ import {
 } from "../../lib/atoms"
 import { desktopViewAtom } from "../agents/atoms"
 import { AgentsAppearanceTab } from "../../components/dialogs/settings-tabs/agents-appearance-tab"
+import { AgentsAppAgentsTab } from "../../components/dialogs/settings-tabs/agents-app-agents-tab"
 import { AgentsBetaTab } from "../../components/dialogs/settings-tabs/agents-beta-tab"
-import { AgentsCustomAgentsTab } from "../../components/dialogs/settings-tabs/agents-custom-agents-tab"
 import { AgentsDebugTab } from "../../components/dialogs/settings-tabs/agents-debug-tab"
 import { AgentsKeyboardTab } from "../../components/dialogs/settings-tabs/agents-keyboard-tab"
 import { AgentsMcpTab } from "../../components/dialogs/settings-tabs/agents-mcp-tab"
@@ -51,7 +51,7 @@ export function SettingsContent() {
       case "skills":
         return <AgentsSkillsTab />
       case "agents":
-        return <AgentsCustomAgentsTab />
+        return <AgentsAppAgentsTab />
       case "mcp":
         return <AgentsMcpTab />
       case "plugins":
