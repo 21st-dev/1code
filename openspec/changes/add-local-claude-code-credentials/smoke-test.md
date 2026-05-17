@@ -33,7 +33,7 @@ The login/import-and-send path should be manually verified from the UI because i
 1. Open Settings > Models.
 2. Click `Connect` under Anthropic Accounts.
 3. If local Claude Code credentials already exist, confirm the app imports them without opening hosted 21st auth.
-4. If no local credentials exist, confirm the app launches bundled `claude auth login`, opens Anthropic's official browser login URL, then imports the resulting local credentials after the CLI succeeds.
+4. If no local credentials exist, confirm the app opens Anthropic's official Claude Code OAuth login URL, accepts the returned authentication code, exchanges it locally, and imports the resulting local credentials.
 5. Confirm the account row shows refreshable or non-refreshable local credential status.
 6. Open a local repo chat.
 7. Send a read-only prompt such as `Read AGENTS.md and summarize the repo instructions.`

@@ -28,4 +28,4 @@
 - [x] 5.3 Run `bun run build`.
 - [x] 5.4 Run `git diff --check`.
 - [x] 5.5 Smoke-test local startup without hosted overrides and confirm no official upstream hosted startup calls occur.
-- [ ] 5.6 Smoke-test one local provider/Claude/Codex workflow to confirm user-owned external providers remain available.
+- [x] 5.6 Smoke-test one local provider/Claude/Codex workflow to confirm user-owned external providers remain available. Covered with bundled Codex `0.130.0`: `codex login status` reported `Logged in using ChatGPT`, then a read-only `codex exec --ephemeral --sandbox read-only` run read `AGENTS.md` and returned the expected OpenSpec instruction summary without modifying files.
