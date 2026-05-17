@@ -370,6 +370,16 @@ export const en = {
   "settings.skills.browseRegistry": "Browse Registry",
   "settings.skills.browseRegistryHint":
     "Show registry skills that can be installed locally",
+  "settings.skills.runtimeClaude": "Claude",
+  "settings.skills.runtimeCodex": "Codex",
+  "settings.skills.installRuntime": "Install {runtime}",
+  "settings.skills.updateRuntime": "Update {runtime}",
+  "settings.skills.restoreRuntime": "Restore {runtime}",
+  "settings.skills.rollBackRuntime": "Roll back {runtime}",
+  "settings.skills.installBoth": "Install Both",
+  "settings.skills.confirmInstallBoth":
+    'Install "{id}" for both Claude and Codex? Existing local changes in either runtime will be backed up and replaced.',
+  "settings.skills.syncedBoth": "{id} synced for Claude and Codex",
   "settings.skills.filterAll": "All",
   "settings.skills.filterInstalled": "Installed",
   "settings.skills.filterAvailable": "Available",
@@ -2111,6 +2121,16 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.browseRegistry": "浏览 Registry",
   "settings.skills.browseRegistryHint":
     "显示可以安装到本地的 registry skills",
+  "settings.skills.runtimeClaude": "Claude",
+  "settings.skills.runtimeCodex": "Codex",
+  "settings.skills.installRuntime": "安装到 {runtime}",
+  "settings.skills.updateRuntime": "更新 {runtime}",
+  "settings.skills.restoreRuntime": "恢复 {runtime}",
+  "settings.skills.rollBackRuntime": "回滚 {runtime}",
+  "settings.skills.installBoth": "安装到 Both",
+  "settings.skills.confirmInstallBoth":
+    '要把 "{id}" 同时安装到 Claude 和 Codex 吗？任一 runtime 里的本地修改都会先备份再替换。',
+  "settings.skills.syncedBoth": "{id} 已同步到 Claude 和 Codex",
   "settings.skills.filterAll": "全部",
   "settings.skills.filterInstalled": "已安装",
   "settings.skills.filterAvailable": "可安装",

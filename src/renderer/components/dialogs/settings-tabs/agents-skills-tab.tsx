@@ -46,13 +46,25 @@ interface UnifiedItem {
     registryId: string
     hasRollback: boolean
     statusMessage?: string
+    runtimes?: Partial<Record<SkillRuntime, RegistryRuntimeState>>
   }
 }
 
 type SkillsViewMode = "skills" | "commands"
 type SkillFilter = "all" | "installed" | "available" | "updates"
+type SkillRuntime = "claude" | "codex"
 
 const SKILL_FILTERS: SkillFilter[] = ["all", "installed", "available", "updates"]
+const SKILL_RUNTIMES: SkillRuntime[] = ["claude", "codex"]
+
+interface RegistryRuntimeState {
+  status: string
+  version: string
+  installedVersion?: string
+  registryId: string
+  hasRollback: boolean
+  statusMessage?: string
+}
 
 interface ItemGroup {
   id: string
@@ -116,23 +128,74 @@ function isEditableItem(item: UnifiedItem) {
   return item.source !== "plugin" && item.kind !== "registry-skill"
 }
 
+function getRuntimeLabel(runtime: SkillRuntime, t: ReturnType<typeof useI18n>["t"]) {
+  return runtime === "codex" ? t("settings.skills.runtimeCodex") : t("settings.skills.runtimeClaude")
+}
+
+function getRegistryRuntimeState(item: UnifiedItem, runtime: SkillRuntime) {
+  const runtimeState = item.registry?.runtimes?.[runtime]
+  if (runtimeState) return runtimeState
+  if (runtime === "claude" && item.registry) {
+    return {
+      status: item.registry.status,
+      version: item.registry.version,
+      installedVersion: item.registry.installedVersion,
+      registryId: item.registry.registryId,
+      hasRollback: item.registry.hasRollback,
+      statusMessage: item.registry.statusMessage,
+    }
+  }
+  return undefined
+}
+
+function getRegistryRuntimeStates(item: UnifiedItem) {
+  return SKILL_RUNTIMES
+    .map((runtime) => getRegistryRuntimeState(item, runtime))
+    .filter((state): state is RegistryRuntimeState => !!state)
+}
+
+function isInstalledRuntimeStatus(status?: string) {
+  return ["installed", "modified", "update-available"].includes(status || "")
+}
+
+function isAvailableRuntimeStatus(status?: string) {
+  return ["not-installed", "user-owned"].includes(status || "")
+}
+
+function isUpdateRuntimeStatus(status?: string) {
+  return ["update-available", "modified", "missing-source", "integrity-error"].includes(status || "")
+}
+
+function isRuntimeActionable(status?: string) {
+  return ["not-installed", "user-owned", "update-available", "modified"].includes(status || "")
+}
+
+function getRuntimeStatusClass(status?: string) {
+  if (status === "installed") return "bg-emerald-500/10 text-emerald-500"
+  if (status === "update-available" || status === "modified") return "bg-amber-500/10 text-amber-500"
+  if (status === "user-owned") return "bg-sky-500/10 text-sky-500"
+  if (status === "missing-source" || status === "integrity-error") return "bg-destructive/10 text-destructive"
+  return "bg-muted text-muted-foreground"
+}
+
 function isRegistryAvailableItem(item: UnifiedItem) {
-  const status = item.registry?.status
-  return (
-    (item.kind === "registry-skill" && !["missing-source", "integrity-error"].includes(status || "")) ||
-    status === "user-owned"
-  )
+  if (!item.registry) return false
+  return getRegistryRuntimeStates(item).some((state) => isAvailableRuntimeStatus(state.status))
+}
+
+function isRegistryInstalledItem(item: UnifiedItem) {
+  if (!item.registry) return false
+  return getRegistryRuntimeStates(item).some((state) => isInstalledRuntimeStatus(state.status))
 }
 
 function isRegistryUpdateItem(item: UnifiedItem) {
-  return ["update-available", "modified", "missing-source", "integrity-error"].includes(
-    item.registry?.status || "",
-  )
+  if (!item.registry) return false
+  return getRegistryRuntimeStates(item).some((state) => isUpdateRuntimeStatus(state.status))
 }
 
 function matchesSkillFilter(item: UnifiedItem, filter: SkillFilter) {
   if (filter === "all") return true
-  if (filter === "installed") return item.kind !== "registry-skill"
+  if (filter === "installed") return item.kind !== "registry-skill" || isRegistryInstalledItem(item)
   if (filter === "available") return isRegistryAvailableItem(item)
   return isRegistryUpdateItem(item)
 }
@@ -147,77 +210,98 @@ function getSkillFilterLabel(filter: SkillFilter, t: ReturnType<typeof useI18n>[
 function RegistryActionButtons({
   item,
   onRegistryInstall,
+  onRegistryInstallBoth,
   onRegistryRollback,
   isRegistryActionPending,
 }: {
   item: UnifiedItem
-  onRegistryInstall?: (item: UnifiedItem, force?: boolean) => void
-  onRegistryRollback?: (item: UnifiedItem) => void
+  onRegistryInstall?: (item: UnifiedItem, runtime: SkillRuntime, force?: boolean) => void
+  onRegistryInstallBoth?: (item: UnifiedItem) => void
+  onRegistryRollback?: (item: UnifiedItem, runtime: SkillRuntime) => void
   isRegistryActionPending?: boolean
 }) {
   const { t } = useI18n()
-  const registryStatus = item.registry?.status
 
   if (!item.registry) return null
 
+  const actionableRuntimes = SKILL_RUNTIMES.filter((runtime) =>
+    isRuntimeActionable(getRegistryRuntimeState(item, runtime)?.status),
+  )
+
   return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      {["not-installed", "user-owned"].includes(registryStatus || "") && onRegistryInstall && (
-        <Button
-          size="sm"
-          variant={registryStatus === "user-owned" ? "outline" : "default"}
-          onClick={() => {
-            const force = registryStatus === "user-owned"
-              ? window.confirm(
-                  t("settings.skills.confirmReplaceUserSkill", {
-                    id: item.registry?.id || "",
-                  }),
-                )
-              : false
-            if (registryStatus === "user-owned" && !force) return
-            onRegistryInstall(item, force)
-          }}
-          disabled={isRegistryActionPending}
-        >
-          <Download className="h-3.5 w-3.5 mr-1.5" />
-          {registryStatus === "user-owned"
-            ? t("settings.skills.restore")
-            : t("settings.skills.install")}
-        </Button>
-      )}
-      {["update-available", "modified"].includes(registryStatus || "") && onRegistryInstall && (
-        <Button
-          size="sm"
-          onClick={() => {
-            const force = registryStatus === "modified"
-              ? window.confirm(
-                  t("settings.skills.confirmReplaceLocalChanges", {
-                    id: item.registry?.id || "",
-                  }),
-                )
-              : false
-            if (registryStatus === "modified" && !force) return
-            onRegistryInstall(item, force)
-          }}
-          disabled={isRegistryActionPending}
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-          {registryStatus === "modified"
-            ? t("settings.skills.restore")
-            : t("settings.skills.update")}
-        </Button>
-      )}
-      {item.registry.hasRollback && onRegistryRollback && (
+    <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+      {actionableRuntimes.length === 2 && onRegistryInstallBoth && (
         <Button
           size="sm"
           variant="outline"
-          onClick={() => onRegistryRollback(item)}
+          onClick={() => onRegistryInstallBoth(item)}
           disabled={isRegistryActionPending}
         >
-          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-          {t("settings.skills.rollBack")}
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          {t("settings.skills.installBoth")}
         </Button>
       )}
+      {SKILL_RUNTIMES.map((runtime) => {
+        const runtimeState = getRegistryRuntimeState(item, runtime)
+        const status = runtimeState?.status
+        if (!isRuntimeActionable(status) || !onRegistryInstall) return null
+
+        const needsForce = status === "user-owned" || status === "modified"
+        const runtimeLabel = getRuntimeLabel(runtime, t)
+        const actionLabel =
+          status === "update-available"
+            ? t("settings.skills.updateRuntime", { runtime: runtimeLabel })
+            : status === "modified" || status === "user-owned"
+              ? t("settings.skills.restoreRuntime", { runtime: runtimeLabel })
+              : t("settings.skills.installRuntime", { runtime: runtimeLabel })
+
+        return (
+          <Button
+            key={runtime}
+            size="sm"
+            variant={runtime === "claude" ? "default" : "outline"}
+            onClick={() => {
+              const force = needsForce
+                ? window.confirm(
+                    status === "modified"
+                      ? t("settings.skills.confirmReplaceLocalChanges", {
+                          id: item.registry?.id || "",
+                        })
+                      : t("settings.skills.confirmReplaceUserSkill", {
+                          id: item.registry?.id || "",
+                        }),
+                  )
+                : false
+              if (needsForce && !force) return
+              onRegistryInstall(item, runtime, force)
+            }}
+            disabled={isRegistryActionPending}
+          >
+            {status === "update-available" || status === "modified" ? (
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            ) : (
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            {actionLabel}
+          </Button>
+        )
+      })}
+      {SKILL_RUNTIMES.map((runtime) => {
+        const runtimeState = getRegistryRuntimeState(item, runtime)
+        if (!runtimeState?.hasRollback || !onRegistryRollback) return null
+        return (
+          <Button
+            key={`${runtime}-rollback`}
+            size="sm"
+            variant="outline"
+            onClick={() => onRegistryRollback(item, runtime)}
+            disabled={isRegistryActionPending}
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+            {t("settings.skills.rollBackRuntime", { runtime: getRuntimeLabel(runtime, t) })}
+          </Button>
+        )
+      })}
     </div>
   )
 }
@@ -228,6 +312,7 @@ function ItemDetail({
   onSave,
   onDelete,
   onRegistryInstall,
+  onRegistryInstallBoth,
   onRegistryRollback,
   isSaving,
   isRegistryActionPending,
@@ -235,8 +320,9 @@ function ItemDetail({
   item: UnifiedItem
   onSave: (data: { description: string; content: string }) => void
   onDelete?: () => void
-  onRegistryInstall?: (item: UnifiedItem, force?: boolean) => void
-  onRegistryRollback?: (item: UnifiedItem) => void
+  onRegistryInstall?: (item: UnifiedItem, runtime: SkillRuntime, force?: boolean) => void
+  onRegistryInstallBoth?: (item: UnifiedItem) => void
+  onRegistryRollback?: (item: UnifiedItem, runtime: SkillRuntime) => void
   isSaving: boolean
   isRegistryActionPending?: boolean
 }) {
@@ -311,6 +397,7 @@ function ItemDetail({
             <RegistryActionButtons
               item={item}
               onRegistryInstall={onRegistryInstall}
+              onRegistryInstallBoth={onRegistryInstallBoth}
               onRegistryRollback={onRegistryRollback}
               isRegistryActionPending={isRegistryActionPending}
             />
@@ -361,6 +448,40 @@ function ItemDetail({
                     : ""}
                 </p>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {SKILL_RUNTIMES.map((runtime) => {
+                const runtimeState = getRegistryRuntimeState(item, runtime)
+                return (
+                  <div
+                    key={runtime}
+                    className="rounded-md border border-border bg-background/60 px-2.5 py-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-foreground">
+                        {getRuntimeLabel(runtime, t)}
+                      </span>
+                      <span className={cn(
+                        "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
+                        getRuntimeStatusClass(runtimeState?.status),
+                      )}>
+                        {runtimeState
+                          ? getItemStatusLabel({
+                              ...item,
+                              registry: {
+                                ...item.registry!,
+                                status: runtimeState.status,
+                              },
+                            }, t)
+                          : t("settings.skills.statusAvailable")}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      {runtime === "codex" ? "~/.codex/skills" : "~/.claude/skills"}
+                    </p>
+                  </div>
+                )
+              })}
             </div>
             {item.registry.statusMessage && (
               <div className="flex items-start gap-2 text-[11px] text-amber-500">
@@ -658,6 +779,24 @@ function SidebarListItem({
           {item.description}
         </div>
       )}
+      {item.registry && (
+        <div className="mt-1 flex items-center gap-1 pl-[18px]">
+          {SKILL_RUNTIMES.map((runtime) => {
+            const runtimeState = getRegistryRuntimeState(item, runtime)
+            return (
+              <span
+                key={runtime}
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                  getRuntimeStatusClass(runtimeState?.status),
+                )}
+              >
+                {getRuntimeLabel(runtime, t)}
+              </span>
+            )
+          })}
+        </div>
+      )}
     </button>
   )
 }
@@ -699,16 +838,28 @@ export function AgentsSkillsTab() {
   )
 
   const {
-    data: registrySkills = [],
-    isLoading: isLoadingRegistry,
-    refetch: refetchRegistry,
-  } = trpc.skills.registryList.useQuery()
+    data: claudeRegistrySkills = [],
+    isLoading: isLoadingClaudeRegistry,
+    refetch: refetchClaudeRegistry,
+  } = trpc.skills.registryList.useQuery({ runtime: "claude" })
 
+  const {
+    data: codexRegistrySkills = [],
+    isLoading: isLoadingCodexRegistry,
+    refetch: refetchCodexRegistry,
+  } = trpc.skills.registryList.useQuery({ runtime: "codex" })
+
+  const isLoadingRegistry = isLoadingClaudeRegistry || isLoadingCodexRegistry
   const isLoading = isLoadingSkills || isLoadingCommands || isLoadingRegistry
 
   const refetchAll = useCallback(async () => {
-    await Promise.all([refetchSkills(), refetchCommands(), refetchRegistry()])
-  }, [refetchSkills, refetchCommands, refetchRegistry])
+    await Promise.all([
+      refetchSkills(),
+      refetchCommands(),
+      refetchClaudeRegistry(),
+      refetchCodexRegistry(),
+    ])
+  }, [refetchSkills, refetchCommands, refetchClaudeRegistry, refetchCodexRegistry])
 
   // Delete confirmation dialog state
   const [deletingItem, setDeletingItem] = useState<UnifiedItem | null>(null)
@@ -725,13 +876,21 @@ export function AgentsSkillsTab() {
 
   // Build unified items
   const allItems = useMemo<UnifiedItem[]>(() => {
-    const registryById = new Map(registrySkills.map((skill) => [skill.id, skill]))
-    const toRegistryMeta = (registryId?: string) => {
-      if (!registryId) return undefined
-      const registry = registryById.get(registryId)
+    const claudeRegistryById = new Map(claudeRegistrySkills.map((skill) => [skill.id, skill]))
+    const codexRegistryById = new Map(codexRegistrySkills.map((skill) => [skill.id, skill]))
+    const registryIds = new Set([
+      ...claudeRegistrySkills.map((skill) => skill.id),
+      ...codexRegistrySkills.map((skill) => skill.id),
+    ])
+    const registryCatalog = Array.from(registryIds)
+      .map((id) => claudeRegistryById.get(id) || codexRegistryById.get(id))
+      .filter((skill): skill is NonNullable<typeof skill> => !!skill)
+
+    const toRuntimeMeta = (
+      registry: (typeof claudeRegistrySkills)[number] | (typeof codexRegistrySkills)[number] | undefined,
+    ): RegistryRuntimeState | undefined => {
       if (!registry) return undefined
       return {
-        id: registry.id,
         status: registry.status,
         version: registry.version,
         installedVersion: registry.installedVersion,
@@ -741,10 +900,31 @@ export function AgentsSkillsTab() {
       }
     }
 
+    const toRegistryMeta = (registryId?: string) => {
+      if (!registryId) return undefined
+      const registry = claudeRegistryById.get(registryId) || codexRegistryById.get(registryId)
+      if (!registry) return undefined
+      const claudeRuntime = toRuntimeMeta(claudeRegistryById.get(registryId))
+      const codexRuntime = toRuntimeMeta(codexRegistryById.get(registryId))
+      return {
+        id: registry.id,
+        status: claudeRuntime?.status || registry.status,
+        version: registry.version,
+        installedVersion: claudeRuntime?.installedVersion || registry.installedVersion,
+        registryId: registry.registryId,
+        hasRollback: !!claudeRuntime?.hasRollback,
+        statusMessage: claudeRuntime?.statusMessage || registry.statusMessage,
+        runtimes: {
+          claude: claudeRuntime,
+          codex: codexRuntime,
+        },
+      }
+    }
+
     const skillItems: UnifiedItem[] = skills.map((s) => {
       const registryCandidate = s.registry
-        ? registryById.get(s.registry.id)
-        : registryById.get(s.name)
+        ? claudeRegistryById.get(s.registry.id) || codexRegistryById.get(s.registry.id)
+        : claudeRegistryById.get(s.name) || codexRegistryById.get(s.name)
       const linkedRegistry = s.registry
         ? toRegistryMeta(s.registry.id)
         : registryCandidate && registryCandidate.status !== "not-installed"
@@ -779,7 +959,7 @@ export function AgentsSkillsTab() {
         .map((item) => item.registry?.id)
         .filter((id): id is string => !!id),
     )
-    const registryItems: UnifiedItem[] = registrySkills
+    const registryItems: UnifiedItem[] = registryCatalog
       .filter((skill) => !installedRegistryIds.has(skill.id))
       .map((skill) => ({
         id: `registry:${skill.id}`,
@@ -798,17 +978,21 @@ export function AgentsSkillsTab() {
         ].join("\n"),
         registry: {
           id: skill.id,
-          status: skill.status,
+          status: claudeRegistryById.get(skill.id)?.status || skill.status,
           version: skill.version,
-          installedVersion: skill.installedVersion,
+          installedVersion: claudeRegistryById.get(skill.id)?.installedVersion || skill.installedVersion,
           registryId: skill.registryId,
-          hasRollback: skill.hasRollback,
-          statusMessage: skill.statusMessage,
+          hasRollback: !!claudeRegistryById.get(skill.id)?.hasRollback,
+          statusMessage: claudeRegistryById.get(skill.id)?.statusMessage || skill.statusMessage,
+          runtimes: {
+            claude: toRuntimeMeta(claudeRegistryById.get(skill.id)),
+            codex: toRuntimeMeta(codexRegistryById.get(skill.id)),
+          },
         },
       }))
 
     return [...skillItems, ...cmdItems, ...registryItems]
-  }, [skills, commands, registrySkills, t])
+  }, [skills, commands, claudeRegistrySkills, codexRegistrySkills, t])
 
   // Filter by search
   const filteredItems = useMemo(() => {
@@ -858,14 +1042,19 @@ export function AgentsSkillsTab() {
         label: t("settings.skills.groupInstalled"),
         items: skillItems.filter(
           (item) =>
-            item.kind !== "registry-skill" &&
-            (item.source === "user" || item.source === "registry"),
+            (
+              item.kind !== "registry-skill" &&
+              (item.source === "user" || item.source === "registry")
+            ) ||
+            isRegistryInstalledItem(item),
         ),
       },
       {
         id: "available",
         label: t("settings.skills.groupAvailable"),
-        items: skillItems.filter((item) => item.kind === "registry-skill"),
+        items: skillItems.filter(
+          (item) => item.kind === "registry-skill" && !isRegistryInstalledItem(item),
+        ),
       },
       {
         id: "project",
@@ -1020,27 +1209,78 @@ export function AgentsSkillsTab() {
     }
   }, [deletingItem, deleteSkillMutation, deleteCommandMutation, selectedProject?.path, refetchAll, t])
 
-  const handleRegistryInstall = useCallback(async (item: UnifiedItem, force?: boolean) => {
+  const handleRegistryInstall = useCallback(async (
+    item: UnifiedItem,
+    runtime: SkillRuntime,
+    force?: boolean,
+  ) => {
     if (!item.registry?.id) return
     try {
       const result = await installRegistrySkillMutation.mutateAsync({
         id: item.registry.id,
+        runtime,
         force,
       })
-      toast.success(t("settings.skills.toast.registrySynced"), { description: result.displayName })
+      toast.success(t("settings.skills.toast.registrySynced"), {
+        description: `${result.displayName} · ${getRuntimeLabel(runtime, t)}`,
+      })
       await refetchAll()
-      setSelectedItemId(`skill:registry::${result.id}`)
+      setSelectedItemId(runtime === "claude" ? `skill:registry::${result.id}` : item.id)
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.skills.toast.failedToSyncRegistry")
       toast.error(t("settings.skills.toast.failedToSyncRegistry"), { description: message })
     }
   }, [installRegistrySkillMutation, refetchAll, t])
 
-  const handleRegistryRollback = useCallback(async (item: UnifiedItem) => {
+  const handleRegistryInstallBoth = useCallback(async (item: UnifiedItem) => {
+    if (!item.registry?.id) return
+
+    const needsForce = SKILL_RUNTIMES.some((runtime) => {
+      const status = getRegistryRuntimeState(item, runtime)?.status
+      return status === "user-owned" || status === "modified"
+    })
+    const actionableRuntimes = SKILL_RUNTIMES.filter((runtime) =>
+      isRuntimeActionable(getRegistryRuntimeState(item, runtime)?.status),
+    )
+
+    if (needsForce) {
+      const confirmed = window.confirm(
+        t("settings.skills.confirmInstallBoth", {
+          id: item.registry.id,
+        }),
+      )
+      if (!confirmed) return
+    }
+
+    try {
+      await Promise.all(actionableRuntimes.map((runtime) =>
+        installRegistrySkillMutation.mutateAsync({
+          id: item.registry!.id,
+          runtime,
+          force: needsForce,
+        }),
+      ))
+      toast.success(t("settings.skills.toast.registrySynced"), {
+        description: t("settings.skills.syncedBoth", { id: item.registry.id }),
+      })
+      await refetchAll()
+      setSelectedItemId(`skill:registry::${item.registry.id}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.skills.toast.failedToSyncRegistry")
+      toast.error(t("settings.skills.toast.failedToSyncRegistry"), { description: message })
+    }
+  }, [installRegistrySkillMutation, refetchAll, t])
+
+  const handleRegistryRollback = useCallback(async (item: UnifiedItem, runtime: SkillRuntime) => {
     if (!item.registry?.id) return
     try {
-      await rollbackRegistrySkillMutation.mutateAsync({ id: item.registry.id })
-      toast.success(t("settings.skills.toast.registryRolledBack"), { description: item.registry.id })
+      await rollbackRegistrySkillMutation.mutateAsync({
+        id: item.registry.id,
+        runtime,
+      })
+      toast.success(t("settings.skills.toast.registryRolledBack"), {
+        description: `${item.registry.id} · ${getRuntimeLabel(runtime, t)}`,
+      })
       await refetchAll()
       setSelectedItemId(null)
     } catch (error) {
@@ -1051,21 +1291,21 @@ export function AgentsSkillsTab() {
 
   const handleCheckRegistry = useCallback(async () => {
     try {
-      await refetchRegistry()
+      await Promise.all([refetchClaudeRegistry(), refetchCodexRegistry()])
       toast.success(t("settings.skills.toast.registryChecked"))
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.skills.toast.failedToCheckRegistry")
       toast.error(t("settings.skills.toast.failedToCheckRegistry"), { description: message })
     }
-  }, [refetchRegistry, t])
+  }, [refetchClaudeRegistry, refetchCodexRegistry, t])
 
   const handleBrowseRegistry = useCallback(() => {
     setShowAddForm(false)
     setSearchQuery("")
     setActiveView("skills")
     setActiveSkillFilter("available")
-    void refetchRegistry()
-  }, [refetchRegistry])
+    void Promise.all([refetchClaudeRegistry(), refetchCodexRegistry()])
+  }, [refetchClaudeRegistry, refetchCodexRegistry])
 
   const isSaving = updateSkillMutation.isPending || updateCommandMutation.isPending
   const isCreating = createSkillMutation.isPending || createCommandMutation.isPending
@@ -1282,6 +1522,7 @@ export function AgentsSkillsTab() {
             onSave={(data) => handleSave(selectedItem, data)}
             onDelete={isEditableItem(selectedItem) ? () => setDeletingItem(selectedItem) : undefined}
             onRegistryInstall={handleRegistryInstall}
+            onRegistryInstallBoth={handleRegistryInstallBoth}
             onRegistryRollback={handleRegistryRollback}
             isSaving={isSaving}
             isRegistryActionPending={isRegistryActionPending}
