@@ -492,9 +492,6 @@ export const en = {
   "settings.skills.source": "Source",
   "settings.skills.viewSkills": "Skills",
   "settings.skills.viewCommands": "Commands",
-  "settings.skills.browseRegistry": "Browse Registry",
-  "settings.skills.browseRegistryHint":
-    "Show registry skills and external collections",
   "settings.skills.runtimeClaude": "Claude",
   "settings.skills.runtimeCodex": "Codex",
   "settings.skills.installRuntime": "Install {runtime}",
@@ -2458,9 +2455,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.source": "来源",
   "settings.skills.viewSkills": "Skills",
   "settings.skills.viewCommands": "Commands",
-  "settings.skills.browseRegistry": "浏览 Registry",
-  "settings.skills.browseRegistryHint":
-    "显示 registry skills 和外部集合",
   "settings.skills.runtimeClaude": "Claude",
   "settings.skills.runtimeCodex": "Codex",
   "settings.skills.installRuntime": "安装到 {runtime}",

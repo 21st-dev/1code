@@ -5,7 +5,7 @@ import { selectedProjectAtom, settingsSkillsSidebarWidthAtom } from "../../../fe
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { AlertTriangle, Download, ExternalLink, PackageSearch, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
+import { AlertTriangle, Download, ExternalLink, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { SkillIcon, MarkdownIcon, CodeIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -1435,14 +1435,6 @@ export function AgentsSkillsTab() {
     }
   }, [refetchClaudeRegistry, refetchCodexRegistry, refetchRegistryCollections, t])
 
-  const handleBrowseRegistry = useCallback(() => {
-    setShowAddForm(false)
-    setSearchQuery("")
-    setActiveView("skills")
-    setActiveSkillFilter("available")
-    void Promise.all([refetchClaudeRegistry(), refetchCodexRegistry(), refetchRegistryCollections()])
-  }, [refetchClaudeRegistry, refetchCodexRegistry, refetchRegistryCollections])
-
   const isSaving = updateSkillMutation.isPending || updateCommandMutation.isPending
   const isCreating = createSkillMutation.isPending || createCommandMutation.isPending
   const isDeleting = deleteSkillMutation.isPending || deleteCommandMutation.isPending
@@ -1516,28 +1508,6 @@ export function AgentsSkillsTab() {
             </button>
           </div>
           <div className="px-2 pt-2 flex-shrink-0">
-            <button
-              type="button"
-              onClick={handleBrowseRegistry}
-              className={cn(
-                "h-8 w-full rounded-lg border px-2.5 text-xs font-medium transition-colors cursor-pointer flex items-center gap-2",
-                activeView === "skills" && activeSkillFilter === "available"
-                  ? "border-foreground/15 bg-foreground/5 text-foreground"
-                  : "border-border bg-muted/30 text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-              )}
-              title={t("settings.skills.browseRegistryHint")}
-              aria-label={t("settings.skills.browseRegistry")}
-            >
-              <PackageSearch className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate flex-1 text-left">
-                {t("settings.skills.browseRegistry")}
-              </span>
-              <span className="rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {skillFilterCounts.available}
-              </span>
-            </button>
-          </div>
-          <div className="px-2 pt-2 flex-shrink-0">
             <div className="grid grid-cols-2 rounded-lg bg-muted p-0.5">
               <button
                 type="button"
@@ -1567,20 +1537,21 @@ export function AgentsSkillsTab() {
           </div>
           {activeView === "skills" && (
             <div className="px-2 pt-2 flex-shrink-0">
-              <div className="flex gap-1 overflow-x-auto pb-0.5">
+              <div className="flex flex-wrap gap-1">
                 {SKILL_FILTERS.map((filter) => (
                   <button
                     key={filter}
                     type="button"
                     onClick={() => setActiveSkillFilter(filter)}
                     className={cn(
-                      "h-6 shrink-0 rounded-md px-2 text-[11px] font-medium transition-colors cursor-pointer",
+                      "h-6 min-w-0 rounded-md px-2 text-[11px] font-medium transition-colors cursor-pointer",
                       activeSkillFilter === filter
                         ? "bg-foreground/10 text-foreground"
                         : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
                     )}
+                    title={getSkillFilterLabel(filter, t)}
                   >
-                    {getSkillFilterLabel(filter, t)}
+                    <span>{getSkillFilterLabel(filter, t)}</span>
                     <span className="ml-1 text-[10px] text-muted-foreground/70">
                       {skillFilterCounts[filter]}
                     </span>
