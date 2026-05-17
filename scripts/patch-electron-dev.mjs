@@ -11,6 +11,12 @@ const electronApp = join(root, "node_modules/electron/dist/Electron.app")
 const plistPath = join(electronApp, "Contents/Info.plist")
 const icnsSource = join(root, "build/icon.icns")
 const icnsDest = join(electronApp, "Contents/Resources/electron.icns")
+const appName = "Agent Code for Me"
+const bundleIdentifier = "io.github.lupanpan1030.agentcodeforme.dev"
+
+function setPlistValue(key, value) {
+  execSync(`/usr/libexec/PlistBuddy -c "Set :${key} ${value}" "${plistPath}"`)
+}
 
 if (process.platform !== "darwin") {
   process.exit(0)
@@ -18,9 +24,12 @@ if (process.platform !== "darwin") {
 
 if (existsSync(plistPath)) {
   try {
-    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleName Agent Code for Me" "${plistPath}"`)
-    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Agent Code for Me" "${plistPath}"`)
-    console.log("[patch-electron-dev] Updated Info.plist: name -> Agent Code for Me")
+    setPlistValue("CFBundleName", appName)
+    setPlistValue("CFBundleDisplayName", appName)
+    setPlistValue("CFBundleIdentifier", bundleIdentifier)
+    console.log(
+      `[patch-electron-dev] Updated Info.plist: name -> ${appName}, bundle id -> ${bundleIdentifier}`,
+    )
   } catch (e) {
     console.warn("[patch-electron-dev] Failed to update Info.plist:", e.message)
   }
