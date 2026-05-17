@@ -1,7 +1,7 @@
 "use client"
 
-import { Brain, ChevronRight, Zap } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Brain, ChevronRight, Info, Zap } from "lucide-react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
 import {
@@ -23,8 +23,8 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
-import { useI18n } from "../../../lib/i18n"
-import type { CodexThinkingLevel } from "../lib/models"
+import { useI18n, type TranslationKey } from "../../../lib/i18n"
+import type { CodexThinkingLevel, ModelInfo } from "../lib/models"
 import { formatCodexThinkingLabel } from "../lib/models"
 
 const CROSS_PROVIDER_DIALOG_DISMISSED_KEY = "agent-model-selector:skip-cross-provider-dialog"
@@ -41,12 +41,14 @@ type ClaudeModelOption = {
   id: string
   name: string
   version: string
+  info?: ModelInfo
 }
 
 type CodexModelOption = {
   id: string
   name: string
   thinkings: CodexThinkingLevel[]
+  info?: ModelInfo
 }
 
 interface AgentModelSelectorProps {
@@ -89,6 +91,13 @@ type FlatModelItem =
   | { type: "codex"; model: CodexModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
   | { type: "custom" }
+
+type ActiveModelInfo = {
+  info: ModelInfo
+  modelLabel: string
+  top: number
+  left: number
+}
 
 function CodexThinkingSubMenu({
   thinkings,
@@ -322,6 +331,141 @@ function CrossProviderConfirmDialog({
   )
 }
 
+function ModelInfoButton({
+  info,
+  modelLabel,
+  onShow,
+  onHide,
+}: {
+  info: ModelInfo
+  modelLabel: string
+  onShow: (info: ModelInfo, modelLabel: string, anchor: HTMLElement) => void
+  onHide: (modelLabel: string) => void
+}) {
+  const { t } = useI18n()
+
+  const stopSelection = (event: React.SyntheticEvent) => {
+    event.stopPropagation()
+  }
+
+  const show = (
+    event: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>,
+  ) => {
+    stopSelection(event)
+    onShow(info, modelLabel, event.currentTarget)
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={t("agent.model.info.aria", { model: modelLabel })}
+      onPointerDown={stopSelection}
+      onMouseDown={(event) => {
+        event.preventDefault()
+        stopSelection(event)
+      }}
+      onMouseEnter={show}
+      onFocus={show}
+      onMouseLeave={() => onHide(modelLabel)}
+      onBlur={() => onHide(modelLabel)}
+      onClick={stopSelection}
+      onKeyDown={stopSelection}
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground"
+    >
+      <Info className="h-3.5 w-3.5" />
+    </button>
+  )
+}
+
+function ModelInfoPanel({
+  activeInfo,
+}: {
+  activeInfo: ActiveModelInfo
+}) {
+  const { t } = useI18n()
+  const translate = (key: string) => t(key as TranslationKey)
+  const { info, modelLabel, top, left } = activeInfo
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [panelTop, setPanelTop] = useState(top)
+  const [panelMaxHeight, setPanelMaxHeight] = useState<number | undefined>()
+
+  const rows = [
+    [t("agent.model.info.context"), info.contextWindow],
+    [t("agent.model.info.maxOutput"), info.maxOutput],
+    [t("agent.model.info.pricing"), info.pricing],
+    ...(info.cachedInput
+      ? [[t("agent.model.info.cachedInput"), info.cachedInput]]
+      : []),
+    [t("agent.model.info.latency"), translate(info.latencyKey)],
+  ]
+
+  useLayoutEffect(() => {
+    const gap = 8
+
+    const updatePosition = () => {
+      const viewportHeight = window.innerHeight
+      const maxAvailableHeight = Math.max(180, viewportHeight - gap * 2)
+      const measuredHeight = panelRef.current?.scrollHeight ?? maxAvailableHeight
+      const panelHeight = Math.min(measuredHeight, maxAvailableHeight)
+      const nextTop = Math.min(
+        Math.max(gap, top),
+        Math.max(gap, viewportHeight - panelHeight - gap),
+      )
+
+      setPanelTop(nextTop)
+      setPanelMaxHeight(Math.max(180, viewportHeight - nextTop - gap))
+    }
+
+    updatePosition()
+    window.addEventListener("resize", updatePosition)
+    return () => window.removeEventListener("resize", updatePosition)
+  }, [info, modelLabel, top])
+
+  return (
+    <div
+      ref={panelRef}
+      className="fixed z-[70] flex w-80 max-w-[320px] pointer-events-none flex-col items-start gap-2 overflow-y-auto rounded-md border border-border bg-popover p-3 text-left text-popover-foreground shadow-lg dark"
+      style={{ top: panelTop, left, maxHeight: panelMaxHeight }}
+    >
+      <div className="space-y-1">
+        <div className="text-sm font-medium text-popover-foreground">
+          {modelLabel}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {translate(info.summaryKey)}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="min-w-0 text-popover-foreground">{value}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-1 border-t border-border/60 pt-2">
+        <div className="text-[11px] font-medium uppercase text-muted-foreground">
+          {t("agent.model.info.bestFor")}
+        </div>
+        <p className="text-xs text-popover-foreground">
+          {translate(info.bestForKey)}
+        </p>
+      </div>
+
+      {info.tokenNoteKey && (
+        <div className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+          <span className="font-medium">
+            {t("agent.model.info.tokenNote")}:{" "}
+          </span>
+          {translate(info.tokenNoteKey)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AgentModelSelector({
   open,
   onOpenChange,
@@ -340,6 +484,7 @@ export function AgentModelSelector({
   const [search, setSearch] = useState("")
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [pendingProvider, setPendingProvider] = useState<AgentProviderId | null>(null)
+  const [activeModelInfo, setActiveModelInfo] = useState<ActiveModelInfo | null>(null)
 
   const canSelectProvider = (provider: AgentProviderId) =>
     allowProviderSwitch || selectedAgentId === provider
@@ -398,10 +543,39 @@ export function AgentModelSelector({
       onOpenChange(nextOpen)
       if (!nextOpen) {
         setSearch("")
+        setActiveModelInfo(null)
       }
     },
     [onOpenChange],
   )
+
+  const showModelInfo = useCallback(
+    (info: ModelInfo, modelLabel: string, anchor: HTMLElement) => {
+      const rect = anchor.getBoundingClientRect()
+      const panelWidth = 320
+      const panelMinHeight = 220
+      const gap = 8
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const left =
+        rect.right + gap + panelWidth <= viewportWidth - gap
+          ? rect.right + gap
+          : Math.max(gap, rect.left - panelWidth - gap)
+      const top = Math.min(
+        Math.max(gap, rect.top - gap),
+        Math.max(gap, viewportHeight - panelMinHeight - gap),
+      )
+
+      setActiveModelInfo({ info, modelLabel, top, left })
+    },
+    [],
+  )
+
+  const hideModelInfo = useCallback((modelLabel: string) => {
+    setActiveModelInfo((current) =>
+      current?.modelLabel === modelLabel ? null : current,
+    )
+  }, [])
 
   const triggerIcon =
     selectedAgentId === "claude-code" &&
@@ -532,6 +706,17 @@ export function AgentModelSelector({
     }
   }
 
+  const getItemInfo = (item: FlatModelItem): ModelInfo | null => {
+    switch (item.type) {
+      case "claude":
+      case "codex":
+        return item.model.info ?? null
+      case "ollama":
+      case "custom":
+        return null
+    }
+  }
+
   const getItemKey = (item: FlatModelItem): string => {
     switch (item.type) {
       case "claude":
@@ -610,13 +795,18 @@ export function AgentModelSelector({
             )
           })()}
 
-          <CommandList className="max-h-[300px] overflow-y-auto">
+          <CommandList
+            className="max-h-[300px] overflow-y-auto"
+            onScroll={() => setActiveModelInfo(null)}
+          >
             {filteredModels.length > 0 ? (
               <CommandGroup>
                 {filteredModels.map((item) => {
                   const selected = isItemSelected(item)
                   const disabled = isItemDisabled(item)
                   const crossProvider = isItemCrossProvider(item)
+                  const label = getItemLabel(item)
+                  const info = getItemInfo(item)
                   return (
                     <CommandItem
                       key={getItemKey(item)}
@@ -626,7 +816,17 @@ export function AgentModelSelector({
                       className={cn("gap-2", crossProvider && "opacity-60")}
                     >
                       {getItemIcon(item)}
-                      <span className="truncate flex-1">{getItemLabel(item)}</span>
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <span className="min-w-0 truncate">{label}</span>
+                        {info && (
+                          <ModelInfoButton
+                            info={info}
+                            modelLabel={label}
+                            onShow={showModelInfo}
+                            onHide={hideModelInfo}
+                          />
+                        )}
+                      </div>
                       {crossProvider && (
                         <span className="text-[10px] text-muted-foreground shrink-0">
                           {t("agent.model.newChat")}
@@ -657,9 +857,16 @@ export function AgentModelSelector({
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               </button>
             </div>
-          )}
-        </Command>
+        )}
+      </Command>
       </PopoverContent>
+
+      {activeModelInfo &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <ModelInfoPanel activeInfo={activeModelInfo} />,
+          document.body,
+        )}
 
       <CrossProviderConfirmDialog
         isOpen={confirmDialogOpen}

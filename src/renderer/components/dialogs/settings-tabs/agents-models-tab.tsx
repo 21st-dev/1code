@@ -1114,7 +1114,7 @@ export function AgentsModelsTab() {
                     onBlur={() => handleBlurSave()}
                     disabled={saveProviderConfigMutation.isPending}
                     className="w-full"
-                    placeholder="claude-3-7-sonnet-20250219"
+                    placeholder="claude-sonnet-4-6"
                   />
                 </div>
               </div>

@@ -768,7 +768,7 @@ export function normalizeCodexApiKey(apiKey: string): string | null {
 // Models are shown by default; only hidden models are stored
 export const hiddenModelsAtom = atomWithStorage<string[]>(
   "preferences:hidden-models-v4",
-  ["gpt-5.1-codex-max", "gpt-5.1-codex-mini"],
+  [],
   undefined,
   { getOnInit: true },
 )

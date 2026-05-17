@@ -603,6 +603,59 @@ export const en = {
   "agent.model.searchPlaceholder": "Search models...",
   "agent.model.noModelsFound": "No models found.",
   "agent.model.addModels": "Add Models",
+  "agent.model.info.aria": "Show model details for {model}",
+  "agent.model.info.context": "Context",
+  "agent.model.info.maxOutput": "Max output",
+  "agent.model.info.pricing": "API rate",
+  "agent.model.info.cachedInput": "Cached input",
+  "agent.model.info.latency": "Latency",
+  "agent.model.info.bestFor": "Best for",
+  "agent.model.info.tokenNote": "Token note",
+  "agent.model.info.latency.moderate": "Moderate",
+  "agent.model.info.latency.fast": "Fast",
+  "agent.model.info.latency.fastest": "Fastest",
+  "agent.model.info.latency.medium": "Medium",
+  "agent.model.info.latency.nearInstant": "Near-instant",
+  "agent.model.info.summary.claudeOpus47":
+    "Most capable Claude model for complex reasoning and agentic coding.",
+  "agent.model.info.summary.claudeSonnet46":
+    "Best balance of speed and intelligence in the current Claude lineup.",
+  "agent.model.info.summary.claudeHaiku45":
+    "Fastest Claude model with near-frontier capability.",
+  "agent.model.info.summary.gpt55":
+    "OpenAI's newest frontier model for complex coding and professional work.",
+  "agent.model.info.summary.gpt54":
+    "Frontier coding model with stronger reasoning, tool use, and agentic workflows.",
+  "agent.model.info.summary.gpt54Mini":
+    "Efficient mini model for responsive coding tasks and subagents.",
+  "agent.model.info.summary.gpt53CodexSpark":
+    "Text-only research preview optimized for near-instant coding iteration.",
+  "agent.model.info.summary.gpt53Codex":
+    "Specialized Codex model for complex software engineering.",
+  "agent.model.info.bestFor.claudeOpus47":
+    "Hard refactors, deep debugging, architecture review, and long agent runs.",
+  "agent.model.info.bestFor.claudeSonnet46":
+    "Daily coding, multi-file edits, planning, and high-quality agent work.",
+  "agent.model.info.bestFor.claudeHaiku45":
+    "Quick edits, classification, short reviews, and cheap parallel subtasks.",
+  "agent.model.info.bestFor.gpt55":
+    "Complex coding, computer use, research, and demanding professional workflows.",
+  "agent.model.info.bestFor.gpt54":
+    "Professional coding work when you want strong reasoning at lower cost than GPT-5.5.",
+  "agent.model.info.bestFor.gpt54Mini":
+    "High-volume lighter coding tasks, subagents, and lower-latency interactions.",
+  "agent.model.info.bestFor.gpt53CodexSpark":
+    "Realtime coding iteration for ChatGPT Pro users.",
+  "agent.model.info.bestFor.gpt53Codex":
+    "Large coding tasks that benefit from a dedicated Codex model.",
+  "agent.model.info.note.claudeCodeBilling":
+    "Shown prices are Claude API reference rates; Claude Code subscriptions may apply separate usage limits.",
+  "agent.model.info.note.openaiLongContext":
+    "Very long prompts over 272K input tokens can use premium long-context pricing.",
+  "agent.model.info.note.codexThinking":
+    "Higher thinking levels can improve reasoning but usually increase latency and output/reasoning tokens.",
+  "agent.model.info.note.sparkPricing":
+    "Research preview for ChatGPT Pro; public API pricing and token limits are not listed.",
   "agent.sandbox.failedSetup": "Failed to set up sandbox",
   "agent.sandbox.cloning": "Cloning...",
   "agent.sandbox.planning": "Planning...",
@@ -1556,6 +1609,59 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.model.searchPlaceholder": "搜索 models...",
   "agent.model.noModelsFound": "没有找到 model。",
   "agent.model.addModels": "添加 Models",
+  "agent.model.info.aria": "查看 {model} 的 model 信息",
+  "agent.model.info.context": "Context",
+  "agent.model.info.maxOutput": "最大输出",
+  "agent.model.info.pricing": "API 价格",
+  "agent.model.info.cachedInput": "缓存输入",
+  "agent.model.info.latency": "速度",
+  "agent.model.info.bestFor": "适合",
+  "agent.model.info.tokenNote": "Token 提示",
+  "agent.model.info.latency.moderate": "中等",
+  "agent.model.info.latency.fast": "快",
+  "agent.model.info.latency.fastest": "最快",
+  "agent.model.info.latency.medium": "中等",
+  "agent.model.info.latency.nearInstant": "接近实时",
+  "agent.model.info.summary.claudeOpus47":
+    "Claude 里最强的复杂推理和 agentic coding 模型。",
+  "agent.model.info.summary.claudeSonnet46":
+    "当前 Claude 系列里速度和智能最均衡的模型。",
+  "agent.model.info.summary.claudeHaiku45":
+    "最快的 Claude 模型，能力接近前沿模型。",
+  "agent.model.info.summary.gpt55":
+    "OpenAI 最新 frontier model，适合复杂 coding 和专业工作。",
+  "agent.model.info.summary.gpt54":
+    "面向专业 coding 的 frontier model，推理、工具使用和 agent workflow 更强。",
+  "agent.model.info.summary.gpt54Mini":
+    "更高效的 mini model，适合响应快的 coding 任务和 subagents。",
+  "agent.model.info.summary.gpt53CodexSpark":
+    "Text-only research preview，优化接近实时的 coding iteration。",
+  "agent.model.info.summary.gpt53Codex":
+    "专门面向复杂软件工程的 Codex model。",
+  "agent.model.info.bestFor.claudeOpus47":
+    "困难重构、深度 debug、架构 review、长时间 agent 任务。",
+  "agent.model.info.bestFor.claudeSonnet46":
+    "日常 coding、多文件修改、规划和高质量 agent 工作。",
+  "agent.model.info.bestFor.claudeHaiku45":
+    "快速修改、分类、短 review、低成本并行子任务。",
+  "agent.model.info.bestFor.gpt55":
+    "复杂 coding、computer use、研究和高要求专业 workflow。",
+  "agent.model.info.bestFor.gpt54":
+    "需要强推理但想比 GPT-5.5 更省的专业 coding 工作。",
+  "agent.model.info.bestFor.gpt54Mini":
+    "高频轻量 coding、subagents 和低延迟交互。",
+  "agent.model.info.bestFor.gpt53CodexSpark":
+    "ChatGPT Pro 用户的实时 coding iteration。",
+  "agent.model.info.bestFor.gpt53Codex":
+    "需要专用 Codex model 的大型 coding 任务。",
+  "agent.model.info.note.claudeCodeBilling":
+    "这里显示的是 Claude API 参考价格；Claude Code 订阅可能有单独 usage limits。",
+  "agent.model.info.note.openaiLongContext":
+    "超过 272K input tokens 的超长 prompt 可能触发 long-context 溢价。",
+  "agent.model.info.note.codexThinking":
+    "更高 thinking level 通常推理更强，但会增加延迟和 output/reasoning tokens。",
+  "agent.model.info.note.sparkPricing":
+    "ChatGPT Pro research preview；官方未列出公开 API 价格和 token limits。",
   "agent.sandbox.failedSetup": "Sandbox 设置失败",
   "agent.sandbox.cloning": "Clone 中...",
   "agent.sandbox.planning": "Planning...",

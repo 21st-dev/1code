@@ -78,6 +78,7 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  isCodexApiKeySupportedModel,
   type CodexThinkingLevel,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
@@ -517,7 +518,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const codexUiModels = useMemo(
     () => {
       let models = hasAppCodexApiKey
-        ? CODEX_MODELS.filter((model) => model.id !== "gpt-5.3-codex")
+        ? CODEX_MODELS.filter((model) => isCodexApiKeySupportedModel(model.id))
         : CODEX_MODELS
       return models.filter((model) => !hiddenModels.includes(model.id))
     },

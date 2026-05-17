@@ -1,33 +1,149 @@
+export type ModelInfo = {
+  summaryKey: string
+  bestForKey: string
+  tokenNoteKey?: string
+  contextWindow: string
+  maxOutput: string
+  pricing: string
+  cachedInput?: string
+  latencyKey: string
+}
+
 export const CLAUDE_MODELS = [
-  { id: "opus", name: "Opus", version: "4.6" },
-  { id: "sonnet", name: "Sonnet", version: "4.6" },
-  { id: "haiku", name: "Haiku", version: "4.5" },
+  {
+    id: "opus",
+    name: "Opus",
+    version: "4.7",
+    info: {
+      summaryKey: "agent.model.info.summary.claudeOpus47",
+      bestForKey: "agent.model.info.bestFor.claudeOpus47",
+      tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
+      contextWindow: "1M",
+      maxOutput: "128K",
+      pricing: "$5 in / $25 out per 1M",
+      cachedInput: "$0.50 / 1M",
+      latencyKey: "agent.model.info.latency.moderate",
+    } satisfies ModelInfo,
+  },
+  {
+    id: "sonnet",
+    name: "Sonnet",
+    version: "4.6",
+    info: {
+      summaryKey: "agent.model.info.summary.claudeSonnet46",
+      bestForKey: "agent.model.info.bestFor.claudeSonnet46",
+      tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
+      contextWindow: "1M",
+      maxOutput: "64K",
+      pricing: "$3 in / $15 out per 1M",
+      cachedInput: "$0.30 / 1M",
+      latencyKey: "agent.model.info.latency.fast",
+    } satisfies ModelInfo,
+  },
+  {
+    id: "haiku",
+    name: "Haiku",
+    version: "4.5",
+    info: {
+      summaryKey: "agent.model.info.summary.claudeHaiku45",
+      bestForKey: "agent.model.info.bestFor.claudeHaiku45",
+      tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
+      contextWindow: "200K",
+      maxOutput: "64K",
+      pricing: "$1 in / $5 out per 1M",
+      cachedInput: "$0.10 / 1M",
+      latencyKey: "agent.model.info.latency.fastest",
+    } satisfies ModelInfo,
+  },
 ]
 
 export type CodexThinkingLevel = "low" | "medium" | "high" | "xhigh"
 
 export const CODEX_MODELS = [
   {
+    id: "gpt-5.5",
+    name: "GPT-5.5",
+    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
+    info: {
+      summaryKey: "agent.model.info.summary.gpt55",
+      bestForKey: "agent.model.info.bestFor.gpt55",
+      tokenNoteKey: "agent.model.info.note.openaiLongContext",
+      contextWindow: "1.05M",
+      maxOutput: "128K",
+      pricing: "$5 in / $30 out per 1M",
+      cachedInput: "$0.50 / 1M",
+      latencyKey: "agent.model.info.latency.fast",
+    } satisfies ModelInfo,
+  },
+  {
+    id: "gpt-5.4",
+    name: "GPT-5.4",
+    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
+    info: {
+      summaryKey: "agent.model.info.summary.gpt54",
+      bestForKey: "agent.model.info.bestFor.gpt54",
+      tokenNoteKey: "agent.model.info.note.openaiLongContext",
+      contextWindow: "1.05M",
+      maxOutput: "128K",
+      pricing: "$2.50 in / $15 out per 1M",
+      cachedInput: "$0.25 / 1M",
+      latencyKey: "agent.model.info.latency.medium",
+    } satisfies ModelInfo,
+  },
+  {
+    id: "gpt-5.4-mini",
+    name: "GPT-5.4 Mini",
+    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
+    info: {
+      summaryKey: "agent.model.info.summary.gpt54Mini",
+      bestForKey: "agent.model.info.bestFor.gpt54Mini",
+      tokenNoteKey: "agent.model.info.note.codexThinking",
+      contextWindow: "400K",
+      maxOutput: "128K",
+      pricing: "$0.75 in / $4.50 out per 1M",
+      cachedInput: "$0.075 / 1M",
+      latencyKey: "agent.model.info.latency.fast",
+    } satisfies ModelInfo,
+  },
+  {
+    id: "gpt-5.3-codex-spark",
+    name: "GPT-5.3-Codex Spark",
+    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
+    info: {
+      summaryKey: "agent.model.info.summary.gpt53CodexSpark",
+      bestForKey: "agent.model.info.bestFor.gpt53CodexSpark",
+      tokenNoteKey: "agent.model.info.note.sparkPricing",
+      contextWindow: "Preview",
+      maxOutput: "Preview",
+      pricing: "ChatGPT Pro credits",
+      latencyKey: "agent.model.info.latency.nearInstant",
+    } satisfies ModelInfo,
+  },
+  {
     id: "gpt-5.3-codex",
-    name: "Codex 5.3",
+    name: "GPT-5.3-Codex",
     thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-  },
-  {
-    id: "gpt-5.2-codex",
-    name: "Codex 5.2",
-    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-  },
-  {
-    id: "gpt-5.1-codex-max",
-    name: "Codex 5.1 Max",
-    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-  },
-  {
-    id: "gpt-5.1-codex-mini",
-    name: "Codex 5.1 Mini",
-    thinkings: ["medium", "high"] as CodexThinkingLevel[],
+    info: {
+      summaryKey: "agent.model.info.summary.gpt53Codex",
+      bestForKey: "agent.model.info.bestFor.gpt53Codex",
+      tokenNoteKey: "agent.model.info.note.codexThinking",
+      contextWindow: "400K",
+      maxOutput: "128K",
+      pricing: "$1.75 in / $14 out per 1M",
+      cachedInput: "$0.175 / 1M",
+      latencyKey: "agent.model.info.latency.medium",
+    } satisfies ModelInfo,
   },
 ]
+
+const CODEX_CHATGPT_AUTH_ONLY_MODEL_IDS = new Set([
+  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+])
+
+export function isCodexApiKeySupportedModel(modelId: string): boolean {
+  return !CODEX_CHATGPT_AUTH_ONLY_MODEL_IDS.has(modelId)
+}
 
 export function formatCodexThinkingLabel(thinking: CodexThinkingLevel): string {
   if (thinking === "xhigh") return "Extra High"
