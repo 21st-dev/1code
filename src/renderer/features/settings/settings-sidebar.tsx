@@ -32,8 +32,7 @@ const isDevelopment = import.meta.env.DEV
 // Clicks required to unlock devtools in production
 const DEVTOOLS_UNLOCK_CLICKS = 5
 
-// General settings tabs
-const MAIN_TABS: SettingsTabDefinition[] = [
+const GENERAL_TABS: SettingsTabDefinition[] = [
   {
     id: "preferences" as SettingsTab,
     labelKey: "settings.sidebar.preferences",
@@ -49,15 +48,9 @@ const MAIN_TABS: SettingsTabDefinition[] = [
     labelKey: "settings.sidebar.keyboard",
     icon: KeyboardFilledIcon,
   },
-  {
-    id: "beta" as SettingsTab,
-    labelKey: "settings.sidebar.beta",
-    icon: FlaskFilledIcon,
-  },
 ]
 
-// Advanced tabs (base - without Debug)
-const ADVANCED_TABS_BASE: SettingsTabDefinition[] = [
+const WORKSPACE_TABS: SettingsTabDefinition[] = [
   {
     id: "projects" as SettingsTab,
     labelKey: "settings.sidebar.projects",
@@ -68,6 +61,9 @@ const ADVANCED_TABS_BASE: SettingsTabDefinition[] = [
     labelKey: "settings.sidebar.models",
     icon: BrainFilledIcon,
   },
+]
+
+const AGENT_CAPABILITY_TABS: SettingsTabDefinition[] = [
   {
     id: "skills" as SettingsTab,
     labelKey: "settings.sidebar.skills",
@@ -90,6 +86,14 @@ const ADVANCED_TABS_BASE: SettingsTabDefinition[] = [
   },
 ]
 
+const ADVANCED_TABS_BASE: SettingsTabDefinition[] = [
+  {
+    id: "beta" as SettingsTab,
+    labelKey: "settings.sidebar.beta",
+    icon: FlaskFilledIcon,
+  },
+]
+
 // Debug tab definition
 const DEBUG_TAB: SettingsTabDefinition = {
   id: "debug" as SettingsTab,
@@ -101,6 +105,11 @@ type SettingsTabDefinition = {
   id: SettingsTab
   labelKey: TranslationKey
   icon: React.ComponentType<{ className?: string }> | any
+}
+
+type SettingsTabGroup = {
+  labelKey: TranslationKey
+  tabs: SettingsTabDefinition[]
 }
 
 interface TabButtonProps {
@@ -136,6 +145,43 @@ function TabButton({ tab, isActive, onClick }: TabButtonProps) {
   )
 }
 
+interface TabSectionProps {
+  group: SettingsTabGroup
+  activeTab: SettingsTab
+  onTabClick: (tabId: SettingsTab) => void
+  showDivider?: boolean
+}
+
+function TabSection({
+  group,
+  activeTab,
+  onTabClick,
+  showDivider = false,
+}: TabSectionProps) {
+  const { t } = useI18n()
+
+  return (
+    <div
+      className={cn(
+        "space-y-1",
+        showDivider && "border-t border-border/50 pt-3",
+      )}
+    >
+      <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+        {t(group.labelKey)}
+      </div>
+      {group.tabs.map((tab) => (
+        <TabButton
+          key={tab.id}
+          tab={tab}
+          isActive={activeTab === tab.id}
+          onClick={() => onTabClick(tab.id)}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function SettingsSidebar() {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useAtom(agentsSettingsDialogActiveTabAtom)
@@ -157,9 +203,29 @@ export function SettingsSidebar() {
   // Show debug tab if in development OR if devtools are unlocked
   const showDebugTab = isDevelopment || devToolsUnlocked
 
-  const mainTabs = useMemo(() => {
-    if (showDebugTab) return [...MAIN_TABS, DEBUG_TAB]
-    return MAIN_TABS
+  const tabGroups = useMemo<SettingsTabGroup[]>(() => {
+    const advancedTabs = showDebugTab
+      ? [...ADVANCED_TABS_BASE, DEBUG_TAB]
+      : ADVANCED_TABS_BASE
+
+    return [
+      {
+        labelKey: "settings.sidebar.group.general",
+        tabs: GENERAL_TABS,
+      },
+      {
+        labelKey: "settings.sidebar.group.workspace",
+        tabs: WORKSPACE_TABS,
+      },
+      {
+        labelKey: "settings.sidebar.group.agentCapabilities",
+        tabs: AGENT_CAPABILITY_TABS,
+      },
+      {
+        labelKey: "settings.sidebar.group.advanced",
+        tabs: advancedTabs,
+      },
+    ]
   }, [showDebugTab])
 
   const handleTabClick = (tabId: SettingsTab) => {
@@ -199,34 +265,16 @@ export function SettingsSidebar() {
       </div>
 
       {/* Tab list */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent px-2 pb-4 space-y-4">
-        {/* Main Tabs */}
-        <div className="space-y-1">
-          {mainTabs.map((tab) => (
-            <TabButton
-              key={tab.id}
-              tab={tab}
-              isActive={activeTab === tab.id}
-              onClick={() => handleTabClick(tab.id)}
-            />
-          ))}
-        </div>
-
-        {/* Separator */}
-        <div className="border-t border-border/50 mx-2" />
-
-        {/* Advanced Tabs */}
-        <div className="space-y-1">
-          {ADVANCED_TABS_BASE.map((tab) => (
-            <TabButton
-              key={tab.id}
-              tab={tab}
-              isActive={activeTab === tab.id}
-              onClick={() => handleTabClick(tab.id)}
-            />
-          ))}
-        </div>
-
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent px-2 pb-4 space-y-3">
+        {tabGroups.map((group, index) => (
+          <TabSection
+            key={group.labelKey}
+            group={group}
+            activeTab={activeTab}
+            onTabClick={handleTabClick}
+            showDivider={index > 0}
+          />
+        ))}
       </div>
     </div>
   )
