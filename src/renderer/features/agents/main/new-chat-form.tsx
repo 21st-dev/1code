@@ -225,6 +225,12 @@ export function NewChatForm({
   const toggleMode = useCallback(() => {
     setAgentMode(getNextMode)
   }, [])
+  const modeLabel = agentMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")
+  const modePlaceholder =
+    agentMode === "plan"
+      ? t("chat.placeholder.planMode")
+      : t("chat.placeholder.agentMode")
+  const modeSelectorTitle = t("chat.mode.selectorTooltip")
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
@@ -1590,7 +1596,7 @@ export function NewChatForm({
                       onContentChange={handleContentChange}
                       onSubmit={handleSend}
                       onShiftTab={toggleMode}
-                      placeholder={t("chat.placeholder.default")}
+                      placeholder={modePlaceholder}
                       className={cn(
                         "bg-transparent max-h-[240px] overflow-y-auto p-1",
                         isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
@@ -1618,13 +1624,20 @@ export function NewChatForm({
                           }
                         }}
                       >
-                        <DropdownMenuTrigger className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
+                        <DropdownMenuTrigger
+                          aria-label={modeSelectorTitle}
+                          title={modeSelectorTitle}
+                          className="flex max-w-[132px] items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        >
                           {agentMode === "plan" ? (
-                            <PlanIcon className="h-3.5 w-3.5" />
+                            <PlanIcon className="h-3.5 w-3.5 shrink-0" />
                           ) : (
-                            <AgentIcon className="h-3.5 w-3.5" />
+                            <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                           )}
-                          <span>{agentMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")}</span>
+                          <span className="hidden sm:inline text-muted-foreground/80">
+                            {t("chat.mode.selectorLabel")}:
+                          </span>
+                          <span className="truncate">{modeLabel}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent

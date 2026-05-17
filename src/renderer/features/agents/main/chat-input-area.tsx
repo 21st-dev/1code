@@ -707,6 +707,13 @@ export const ChatInputArea = memo(function ChatInputArea({
   const toggleMode = useCallback(() => {
     updateMode(getNextMode(subChatMode))
   }, [subChatMode, updateMode])
+  const modeLabel = subChatMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")
+  const modePlaceholder = isStreaming
+    ? t("chat.placeholder.queue")
+    : subChatMode === "plan"
+      ? t("chat.placeholder.planMode")
+      : t("chat.placeholder.agentMode")
+  const modeSelectorTitle = t("chat.mode.selectorTooltip")
 
   // Voice input state
   const {
@@ -1416,7 +1423,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onSubmit={stableEditorSubmit}
                   onForceSubmit={stableForceSend}
                   onShiftTab={toggleMode}
-                  placeholder={isStreaming ? t("chat.placeholder.queue") : t("chat.placeholder.default")}
+                  placeholder={modePlaceholder}
                   className={cn(
                     "bg-transparent max-h-[200px] overflow-y-auto p-1",
                     isMobile && "min-h-[56px]",
@@ -1444,13 +1451,21 @@ export const ChatInputArea = memo(function ChatInputArea({
                     }}
                   >
                     <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
+                      <button
+                        type="button"
+                        aria-label={modeSelectorTitle}
+                        title={modeSelectorTitle}
+                        className="flex max-w-[132px] items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                      >
                         {subChatMode === "plan" ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span className="truncate">{subChatMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")}</span>
+                        <span className="hidden sm:inline text-muted-foreground/80">
+                          {t("chat.mode.selectorLabel")}:
+                        </span>
+                        <span className="truncate">{modeLabel}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
