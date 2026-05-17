@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Kbd } from "./kbd"
+import { useI18n } from "../../lib/i18n"
 
 interface ResizableBottomPanelProps {
   isOpen: boolean
@@ -35,6 +36,7 @@ export function ResizableBottomPanel({
   className = "",
   style,
 }: ResizableBottomPanelProps) {
+  const { t } = useI18n()
   const [panelHeight, setPanelHeight] = useAtom(heightAtom)
 
   const hasOpenedOnce = useRef(false)
@@ -333,20 +335,20 @@ export function ResizableBottomPanel({
                         }}
                       >
                         <div className="flex items-center gap-1 text-xs">
-                          <span>Close</span>
+                          <span>{t("common.close")}</span>
                           <span className="text-muted-foreground inline-flex items-center gap-1">
-                            <span>Click</span>
+                            <span>{t("common.click")}</span>
                             {closeHotkey && (
                               <>
-                                <span>or</span>
+                                <span>{t("common.or")}</span>
                                 <Kbd>{closeHotkey}</Kbd>
                               </>
                             )}
                           </span>
                         </div>
                         <div className="flex items-center gap-1 text-xs">
-                          <span>Resize</span>
-                          <span className="text-muted-foreground">Drag</span>
+                          <span>{t("common.resize")}</span>
+                          <span className="text-muted-foreground">{t("common.drag")}</span>
                         </div>
                       </div>
                     </motion.div>

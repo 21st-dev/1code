@@ -3,6 +3,7 @@ import { useTheme } from "next-themes"
 import { Copy, Check, Download, AlertTriangle, RotateCcw, Maximize2, X, ZoomIn, ZoomOut, RotateCcw as ResetZoom } from "lucide-react"
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch"
 import { cn } from "../lib/utils"
+import { useI18n } from "../lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -132,6 +133,7 @@ const getMermaidConfig = (isDark: boolean): Record<string, unknown> => ({
 
 // Zoom controls component for the fullscreen viewer
 function ZoomControls() {
+  const { t } = useI18n()
   const { zoomIn, zoomOut, resetTransform } = useControls()
 
   return (
@@ -140,7 +142,7 @@ function ZoomControls() {
         onClick={() => zoomOut()}
         className="p-1.5 rounded-full hover:bg-white/10 transition-colors text-white"
         type="button"
-        aria-label="Zoom out (-)"
+        aria-label={t("mermaid.zoomOut")}
       >
         <ZoomOut className="size-5" />
       </button>
@@ -148,7 +150,7 @@ function ZoomControls() {
         onClick={() => zoomIn()}
         className="p-1.5 rounded-full hover:bg-white/10 transition-colors text-white"
         type="button"
-        aria-label="Zoom in (+)"
+        aria-label={t("mermaid.zoomIn")}
       >
         <ZoomIn className="size-5" />
       </button>
@@ -157,7 +159,7 @@ function ZoomControls() {
         onClick={() => resetTransform()}
         className="p-1.5 rounded-full hover:bg-white/10 transition-colors text-white"
         type="button"
-        aria-label="Reset zoom (0)"
+        aria-label={t("mermaid.resetZoom")}
       >
         <ResetZoom className="size-5" />
       </button>
@@ -176,10 +178,14 @@ const finishedStreamingBlocks = new Set<string>()
 
 // Streaming placeholder - simple static text, no spinner
 const StreamingPlaceholder = memo(function StreamingPlaceholder() {
+  const { t } = useI18n()
+
   return (
     <div className="relative mt-2 mb-4 rounded-[10px] bg-muted/50 overflow-hidden">
       <div className="p-4 min-h-[60px] flex items-center justify-center">
-        <span className="text-muted-foreground text-sm">Creating diagram...</span>
+        <span className="text-muted-foreground text-sm">
+          {t("mermaid.creating")}
+        </span>
       </div>
     </div>
   )
@@ -191,6 +197,7 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
 }: {
   code: string
 }) {
+  const { t } = useI18n()
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
   const [renderState, setRenderState] = useState<RenderState>(() => {
@@ -387,7 +394,7 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
             onClick={handleCopy}
             tabIndex={-1}
             className="p-1"
-            title={copied ? "Copied!" : "Copy code"}
+            title={copied ? t("mermaid.copied") : t("mermaid.copyCode")}
           >
             <div className="relative w-3.5 h-3.5">
               <Copy
@@ -410,7 +417,7 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
                 onClick={handleDownload}
                 tabIndex={-1}
                 className="p-1"
-                title="Download SVG"
+                title={t("mermaid.downloadSvg")}
               >
                 <Download className="w-3 h-3 text-muted-foreground hover:text-foreground transition-colors" />
               </button>
@@ -418,7 +425,7 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
                 onClick={openFullscreen}
                 tabIndex={-1}
                 className="p-1"
-                title="View fullscreen"
+                title={t("mermaid.viewFullscreen")}
               >
                 <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground transition-colors" />
               </button>
@@ -430,14 +437,14 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
         <div className="p-4 min-h-[60px] flex items-center justify-center">
           {renderState.status === "idle" && (
             <div className="text-muted-foreground text-sm">
-              Waiting for diagram...
+              {t("mermaid.waiting")}
             </div>
           )}
 
           {(renderState.status === "loading" || renderState.status === "parsing") && (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              <span>Creating diagram...</span>
+              <span>{t("mermaid.creating")}</span>
             </div>
           )}
 
@@ -464,12 +471,12 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md bg-muted hover:bg-accent transition-colors"
                 >
                   <RotateCcw className="h-3 w-3" />
-                  Retry
+                  {t("common.retry")}
                 </button>
               </div>
               <details className="mt-3">
                 <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                  Show diagram code
+                  {t("mermaid.showDiagramCode")}
                 </summary>
                 <pre className="mt-2 p-2 rounded bg-muted text-xs overflow-x-auto whitespace-pre-wrap break-words font-mono">
                   {code}
@@ -489,7 +496,7 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
             onPointerDownOutside={(e) => e.preventDefault()}
           >
             <VisuallyHidden.Root>
-              <DialogTitle>Mermaid Diagram Viewer</DialogTitle>
+              <DialogTitle>{t("mermaid.viewerTitle")}</DialogTitle>
             </VisuallyHidden.Root>
 
             {/* Close button */}
@@ -497,7 +504,7 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
               onClick={closeFullscreen}
               className="absolute top-4 right-4 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-20"
               type="button"
-              aria-label="Close fullscreen (Esc)"
+              aria-label={t("mermaid.closeFullscreen")}
             >
               <X className="size-6" />
             </button>

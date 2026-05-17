@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal, flushSync } from "react-dom"
 import { Kbd } from "./kbd"
+import { useI18n } from "../../lib/i18n"
 
 interface ResizableSidebarProps {
   isOpen: boolean
@@ -52,6 +53,7 @@ export function ResizableSidebar({
   showResizeTooltip = false,
   style,
 }: ResizableSidebarProps) {
+  const { t } = useI18n()
   const [sidebarWidth, setSidebarWidth] = useAtom(widthAtom)
 
   // Track if this is the first open to avoid initial animation when already open
@@ -522,12 +524,12 @@ export function ResizableSidebar({
                       >
                         {!disableClickToClose && (
                           <div className="flex items-center gap-1 text-xs">
-                            <span>Close</span>
+                            <span>{t("common.close")}</span>
                             <span className="text-muted-foreground inline-flex items-center gap-1">
-                              <span>Click</span>
+                              <span>{t("common.click")}</span>
                               {closeHotkey && (
                                 <>
-                                  <span>or</span>
+                                  <span>{t("common.or")}</span>
                                   <Kbd>{closeHotkey}</Kbd>
                                 </>
                               )}
@@ -535,8 +537,8 @@ export function ResizableSidebar({
                           </div>
                         )}
                         <div className="flex items-center gap-1 text-xs">
-                          <span>Resize</span>
-                          <span className="text-muted-foreground">Drag</span>
+                          <span>{t("common.resize")}</span>
+                          <span className="text-muted-foreground">{t("common.drag")}</span>
                         </div>
                       </div>
                     </motion.div>

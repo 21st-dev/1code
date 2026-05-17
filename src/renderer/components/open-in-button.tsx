@@ -2,6 +2,7 @@ import type { ExternalApp } from "../../shared/external-apps";
 import { useAtom } from "jotai";
 import { useCallback, useEffect } from "react";
 import { preferredEditorAtom } from "../lib/atoms";
+import { useI18n } from "../lib/i18n";
 import { trpc } from "../lib/trpc";
 import { Button } from "./ui/button";
 import {
@@ -97,6 +98,7 @@ export interface OpenInButtonProps {
 }
 
 export function OpenInButton({ path, label }: OpenInButtonProps) {
+	const { t } = useI18n();
 	const [lastUsedApp, setLastUsedApp] = useAtom(preferredEditorAtom);
 	const openInAppMutation = trpc.external.openInApp.useMutation();
 	const copyPathMutation = trpc.external.copyPath.useMutation();
@@ -157,7 +159,7 @@ export function OpenInButton({ path, label }: OpenInButtonProps) {
 						className={label ? "rounded-l-none focus:z-10 gap-1" : "gap-1 focus:z-10"}
 						disabled={!path}
 					>
-						<span>Open</span>
+						<span>{t("common.open")}</span>
 						<ChevronDown className="size-3" />
 					</Button>
 				</DropdownMenuTrigger>
@@ -215,7 +217,7 @@ export function OpenInButton({ path, label }: OpenInButtonProps) {
 					>
 						<div className="flex items-center gap-2">
 							<Copy className="size-4" />
-							<span>Copy path</span>
+							<span>{t("changes.copyPath")}</span>
 						</div>
 						<span className="text-xs text-muted-foreground">⇧⌘C</span>
 					</DropdownMenuItem>

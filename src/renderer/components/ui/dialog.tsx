@@ -5,6 +5,7 @@ import { Cross2Icon } from "@radix-ui/react-icons"
 import * as React from "react"
 
 import { cn } from "../../lib/utils"
+import { useI18n } from "../../lib/i18n"
 
 const Dialog = DialogPrimitive.Root
 
@@ -42,34 +43,38 @@ const DialogContent = React.forwardRef<
   (
     { className, children, showCloseButton = true, onOverlayClick, ...props },
     ref,
-  ) => (
-    <DialogPortal>
-      <DialogPrimitive.Overlay
-        className={cn(
-          "fixed inset-0 z-50 bg-black/20",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        )}
-        onClick={onOverlayClick}
-      />
-      <DialogPrimitive.Content
-        ref={ref}
-        data-canvas-dialog
-        className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-[600px] max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[16px] mx-auto",
-          className,
-        )}
-        {...props}
-      >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-            <Cross2Icon className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Content>
-    </DialogPortal>
-  ),
+  ) => {
+    const { t } = useI18n()
+
+    return (
+      <DialogPortal>
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-50 bg-black/20",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          )}
+          onClick={onOverlayClick}
+        />
+        <DialogPrimitive.Content
+          ref={ref}
+          data-canvas-dialog
+          className={cn(
+            "fixed left-[50%] top-[50%] z-50 grid w-[600px] max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[16px] mx-auto",
+            className,
+          )}
+          {...props}
+        >
+          {children}
+          {showCloseButton && (
+            <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+              <Cross2Icon className="h-4 w-4" />
+              <span className="sr-only">{t("common.close")}</span>
+            </DialogPrimitive.Close>
+          )}
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    )
+  },
 )
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
@@ -107,34 +112,38 @@ const CanvasDialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     showCloseButton?: boolean
   }
->(({ className, children, showCloseButton = true, ...props }, ref) => (
-  <DialogPortal>
-    <DialogPrimitive.Overlay
-      className={cn(
-        "fixed inset-0 z-50 bg-black/50",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      )}
-    />
-    <DialogPrimitive.Content
-      ref={ref}
-      data-canvas-dialog
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 w-[420px] max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] rounded-xl bg-tl-background border border-border shadow-2xl overflow-hidden",
-        "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close className="absolute right-3 top-3 h-6 w-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10">
-          <Cross2Icon className="h-3.5 w-3.5" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
-      )}
-    </DialogPrimitive.Content>
-  </DialogPortal>
-))
+>(({ className, children, showCloseButton = true, ...props }, ref) => {
+  const { t } = useI18n()
+
+  return (
+    <DialogPortal>
+      <DialogPrimitive.Overlay
+        className={cn(
+          "fixed inset-0 z-50 bg-black/50",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        )}
+      />
+      <DialogPrimitive.Content
+        ref={ref}
+        data-canvas-dialog
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 w-[420px] max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] rounded-xl bg-tl-background border border-border shadow-2xl overflow-hidden",
+          "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+        {showCloseButton && (
+          <DialogPrimitive.Close className="absolute right-3 top-3 h-6 w-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10">
+            <Cross2Icon className="h-3.5 w-3.5" />
+            <span className="sr-only">{t("common.close")}</span>
+          </DialogPrimitive.Close>
+        )}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  )
+})
 CanvasDialogContent.displayName = "CanvasDialogContent"
 
 // Canvas dialog header (no border, just padding)

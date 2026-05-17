@@ -7,6 +7,7 @@ import {
 	DropdownMenuTrigger,
 } from "./dropdown-menu";
 import { cn } from "../../lib/utils";
+import { useI18n } from "../../lib/i18n";
 
 export interface SplitButtonProps extends Omit<ButtonProps, "children"> {
 	/** Main button label */
@@ -36,6 +37,8 @@ export function SplitButton({
 	className,
 	...props
 }: SplitButtonProps) {
+	const { t } = useI18n();
+
 	// If no dropdown content, render just the button
 	if (!showDropdown || !dropdownContent) {
 		return (
@@ -85,7 +88,7 @@ export function SplitButton({
 						size="icon"
 						disabled={disabled}
 						className="rounded-l-none focus:z-10 h-7 w-7"
-						aria-label="More options"
+						aria-label={t("common.moreOptions")}
 					>
 						<ChevronDown className="size-3.5" />
 					</Button>

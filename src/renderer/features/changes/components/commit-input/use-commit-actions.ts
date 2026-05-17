@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai";
 import { toast } from "sonner";
 import { trpc } from "../../../../lib/trpc";
 import { selectedOllamaModelAtom } from "../../../../lib/atoms";
+import { useI18n } from "../../../../lib/i18n";
 
 interface CommitActionInput {
 	message?: string;
@@ -25,6 +26,7 @@ export function useCommitActions({
 	onCommitSuccess,
 	onMessageGenerated,
 }: UseCommitActionsOptions) {
+	const { t } = useI18n();
 	const [isGenerating, setIsGenerating] = useState(false);
 	const queryClient = useQueryClient();
 	const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom);
@@ -36,8 +38,10 @@ export function useCommitActions({
 	}, [queryClient, onRefresh, onCommitSuccess]);
 
 	const handleError = useCallback((error: { message?: string }) => {
-		toast.error(`Commit failed: ${error.message ?? "Unknown error"}`);
-	}, []);
+		toast.error(t("changes.toast.commitFailed", {
+			message: error.message ?? t("changes.toast.unknownError"),
+		}));
+	}, [t]);
 
 	// AI commit message generation
 	const generateCommitMutation = trpc.chats.generateCommitMessage.useMutation();
@@ -51,7 +55,7 @@ export function useCommitActions({
 	const commit = useCallback(
 		async ({ message, filePaths }: CommitActionInput): Promise<boolean> => {
 			if (!worktreePath) {
-				toast.error("Worktree path is required");
+				toast.error(t("changes.toast.worktreePathRequired"));
 				return false;
 			}
 
@@ -72,7 +76,7 @@ export function useCommitActions({
 					onMessageGenerated?.(result.message);
 				} catch (error) {
 					console.error("[CommitActions] Failed to generate message:", error);
-					toast.error("Failed to generate commit message");
+					toast.error(t("changes.toast.failedGenerateCommitMessage"));
 					return false;
 				} finally {
 					setIsGenerating(false);
@@ -80,7 +84,7 @@ export function useCommitActions({
 			}
 
 			if (!commitMessage) {
-				toast.error("Please enter a commit message");
+				toast.error(t("changes.toast.enterCommitMessage"));
 				return false;
 			}
 
@@ -111,6 +115,7 @@ export function useCommitActions({
 			commitMutation,
 			handleSuccess,
 			handleError,
+			t,
 		],
 	);
 
