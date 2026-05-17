@@ -12,7 +12,10 @@ import {
   listRegistrySkills,
   rollbackRegistrySkill,
   type RegistrySkillStatus,
+  type SkillRuntime,
 } from "../../skills/registry"
+
+const skillRuntimeSchema = z.enum(["claude", "codex"]) satisfies z.ZodType<SkillRuntime>
 
 export interface FileSkill {
   name: string
@@ -237,9 +240,17 @@ export const skillsRouter = router({
    * List bundled/remote registry skills and install/update status.
    */
   registryList: publicProcedure
-    .input(z.object({ checkRemote: z.boolean().optional() }).optional())
+    .input(
+      z.object({
+        checkRemote: z.boolean().optional(),
+        runtime: skillRuntimeSchema.optional(),
+      }).optional(),
+    )
     .query(async ({ input }) => {
-      return listRegistrySkills({ checkRemote: input?.checkRemote })
+      return listRegistrySkills({
+        checkRemote: input?.checkRemote,
+        runtime: input?.runtime,
+      })
     }),
 
   /**
@@ -249,6 +260,7 @@ export const skillsRouter = router({
     .input(
       z.object({
         id: z.string(),
+        runtime: skillRuntimeSchema.optional(),
         force: z.boolean().optional(),
       }),
     )
@@ -260,7 +272,12 @@ export const skillsRouter = router({
    * Roll back the most recent registry install/update for a skill.
    */
   registryRollback: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        id: z.string(),
+        runtime: skillRuntimeSchema.optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       return rollbackRegistrySkill(input)
     }),

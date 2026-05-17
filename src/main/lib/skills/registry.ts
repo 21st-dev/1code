@@ -10,6 +10,8 @@ const STATE_VERSION = 1
 const DEFAULT_REMOTE_REGISTRY_URL = process.env.ONECODE_SKILL_REGISTRY_URL
 const SKIP_NAMES = new Set([".DS_Store", ".git", "__pycache__"])
 
+export type SkillRuntime = "claude" | "codex"
+
 function getElectronApp(): Electron.App | undefined {
   const electronModule = electron as unknown as {
     app?: Electron.App
@@ -76,6 +78,7 @@ export interface RegistrySkillView {
   description: string
   registryId: string
   registrySource: "bundled" | "remote"
+  runtime: SkillRuntime
   source: string
   sha256: string
   status: RegistrySkillStatus
@@ -91,11 +94,13 @@ export interface RegistrySkillView {
 
 export interface InstallRegistrySkillInput {
   id: string
+  runtime?: SkillRuntime
   force?: boolean
 }
 
 export interface RollbackRegistrySkillInput {
   id: string
+  runtime?: SkillRuntime
 }
 
 function assertValidSkillId(id: string): void {
@@ -116,16 +121,24 @@ function getClaudeRoot(): string {
   return path.join(os.homedir(), ".claude")
 }
 
-function getSkillsRoot(): string {
-  return path.join(getClaudeRoot(), "skills")
+function getCodexRoot(): string {
+  return path.join(os.homedir(), ".codex")
 }
 
-function getStatePath(): string {
-  return path.join(getClaudeRoot(), "skill-registry-state.json")
+function getRuntimeRoot(runtime: SkillRuntime): string {
+  return runtime === "codex" ? getCodexRoot() : getClaudeRoot()
 }
 
-function getBackupRoot(): string {
-  return path.join(getClaudeRoot(), "skill-registry-backups")
+function getSkillsRoot(runtime: SkillRuntime = "claude"): string {
+  return path.join(getRuntimeRoot(runtime), "skills")
+}
+
+function getStatePath(runtime: SkillRuntime = "claude"): string {
+  return path.join(getRuntimeRoot(runtime), "skill-registry-state.json")
+}
+
+function getBackupRoot(runtime: SkillRuntime = "claude"): string {
+  return path.join(getRuntimeRoot(runtime), "skill-registry-backups")
 }
 
 function normalizeRelativePath(filePath: string): string {
@@ -148,9 +161,9 @@ async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
   await fs.rename(tmpPath, filePath)
 }
 
-async function readState(): Promise<SkillRegistryState> {
+async function readState(runtime: SkillRuntime = "claude"): Promise<SkillRegistryState> {
   try {
-    const state = await readJsonFile<SkillRegistryState>(getStatePath())
+    const state = await readJsonFile<SkillRegistryState>(getStatePath(runtime))
     if (state.schemaVersion !== STATE_VERSION || !state.installed) {
       return { schemaVersion: STATE_VERSION, installed: {} }
     }
@@ -160,8 +173,8 @@ async function readState(): Promise<SkillRegistryState> {
   }
 }
 
-async function writeState(state: SkillRegistryState): Promise<void> {
-  await writeJsonAtomic(getStatePath(), state)
+async function writeState(state: SkillRegistryState, runtime: SkillRuntime = "claude"): Promise<void> {
+  await writeJsonAtomic(getStatePath(runtime), state)
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -277,9 +290,9 @@ function mergeRegistries(
   return Array.from(merged.values()).sort((a, b) => a.id.localeCompare(b.id))
 }
 
-function getInstallPath(id: string): string {
+function getInstallPath(id: string, runtime: SkillRuntime = "claude"): string {
   assertValidSkillId(id)
-  return path.join(getSkillsRoot(), id)
+  return path.join(getSkillsRoot(runtime), id)
 }
 
 function resolveBundledSourceDir(source: string): string {
@@ -295,8 +308,9 @@ async function readSkillStatus(
   skill: RegistrySkillManifestEntry & { registryId: string; registrySource: "bundled" | "remote" },
   state: SkillRegistryState,
   now: string,
+  runtime: SkillRuntime,
 ): Promise<RegistrySkillView> {
-  const installPath = getInstallPath(skill.id)
+  const installPath = getInstallPath(skill.id, runtime)
   const installed = state.installed[skill.id]
   const currentHash = await hashSkillDirectory(installPath)
 
@@ -341,6 +355,7 @@ async function readSkillStatus(
     description: skill.description || "",
     registryId: skill.registryId,
     registrySource: skill.registrySource,
+    runtime,
     source: skill.source,
     sha256: skill.sha256,
     status,
@@ -355,16 +370,17 @@ async function readSkillStatus(
   }
 }
 
-export async function listRegistrySkills(options?: { checkRemote?: boolean }): Promise<RegistrySkillView[]> {
+export async function listRegistrySkills(options?: { checkRemote?: boolean; runtime?: SkillRuntime }): Promise<RegistrySkillView[]> {
+  const runtime = options?.runtime ?? "claude"
   const now = new Date().toISOString()
   const [bundled, state] = await Promise.all([
     loadBundledRegistryManifest(),
-    readState(),
+    readState(runtime),
   ])
   const remote = options?.checkRemote ? await fetchRemoteRegistryManifest() : null
   const entries = mergeRegistries(bundled, remote)
 
-  return Promise.all(entries.map((skill) => readSkillStatus(skill, state, now)))
+  return Promise.all(entries.map((skill) => readSkillStatus(skill, state, now, runtime)))
 }
 
 async function getRegistryEntry(
@@ -403,11 +419,16 @@ function copyFilter(source: string): boolean {
   return !SKIP_NAMES.has(path.basename(source))
 }
 
-async function backupExistingSkill(id: string, targetDir: string, previousState?: InstalledSkillState): Promise<InstalledSkillState["lastBackup"] | undefined> {
+async function backupExistingSkill(
+  id: string,
+  targetDir: string,
+  runtime: SkillRuntime,
+  previousState?: InstalledSkillState,
+): Promise<InstalledSkillState["lastBackup"] | undefined> {
   if (!(await pathExists(targetDir))) return undefined
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-  const backupDir = path.join(getBackupRoot(), id, timestamp)
+  const backupDir = path.join(getBackupRoot(runtime), id, timestamp)
   await fs.mkdir(path.dirname(backupDir), { recursive: true })
   await fs.rm(backupDir, { recursive: true, force: true })
   await fs.cp(targetDir, backupDir, {
@@ -430,15 +451,15 @@ async function backupExistingSkill(id: string, targetDir: string, previousState?
 }
 
 export async function installRegistrySkill(input: InstallRegistrySkillInput): Promise<RegistrySkillView> {
-  const { id, force = false } = input
+  const { id, runtime = "claude", force = false } = input
   const skill = await getRegistryEntry(id)
   if (skill.registrySource !== "bundled") {
     throw new Error("Remote registry package install is not enabled yet")
   }
 
   const sourceDir = await validateBundledPackage(skill)
-  const state = await readState()
-  const targetDir = getInstallPath(id)
+  const state = await readState(runtime)
+  const targetDir = getInstallPath(id, runtime)
   const previousState = state.installed[id]
   const currentHash = await hashSkillDirectory(targetDir)
 
@@ -449,7 +470,7 @@ export async function installRegistrySkill(input: InstallRegistrySkillInput): Pr
     throw new Error(`Skill "${id}" was modified locally. Confirm restore before replacing it.`)
   }
 
-  const lastBackup = await backupExistingSkill(id, targetDir, previousState)
+  const lastBackup = await backupExistingSkill(id, targetDir, runtime, previousState)
   await fs.rm(targetDir, { recursive: true, force: true })
   await fs.mkdir(path.dirname(targetDir), { recursive: true })
   await fs.cp(sourceDir, targetDir, {
@@ -470,29 +491,29 @@ export async function installRegistrySkill(input: InstallRegistrySkillInput): Pr
     sourceType: skill.registrySource,
     lastBackup,
   }
-  await writeState(state)
+  await writeState(state, runtime)
 
-  return (await listRegistrySkills()).find((item) => item.id === id)!
+  return (await listRegistrySkills({ runtime })).find((item) => item.id === id)!
 }
 
 export async function rollbackRegistrySkill(input: RollbackRegistrySkillInput): Promise<RegistrySkillView | null> {
-  const { id } = input
+  const { id, runtime = "claude" } = input
   assertValidSkillId(id)
 
-  const state = await readState()
+  const state = await readState(runtime)
   const installed = state.installed[id]
   const backup = installed?.lastBackup
   if (!installed || !backup?.path || !(await pathExists(backup.path))) {
     throw new Error(`No registry backup available for "${id}"`)
   }
 
-  const backupRoot = path.join(getBackupRoot(), id)
+  const backupRoot = path.join(getBackupRoot(runtime), id)
   const backupPath = path.resolve(backup.path)
   if (!isPathInside(backupRoot, backupPath)) {
     throw new Error("Invalid registry backup path")
   }
 
-  const targetDir = getInstallPath(id)
+  const targetDir = getInstallPath(id, runtime)
   await fs.rm(targetDir, { recursive: true, force: true })
   await fs.mkdir(path.dirname(targetDir), { recursive: true })
   await fs.cp(backupPath, targetDir, {
@@ -510,8 +531,8 @@ export async function rollbackRegistrySkill(input: RollbackRegistrySkillInput): 
     delete state.installed[id]
   }
 
-  await writeState(state)
-  return (await listRegistrySkills()).find((item) => item.id === id) ?? null
+  await writeState(state, runtime)
+  return (await listRegistrySkills({ runtime })).find((item) => item.id === id) ?? null
 }
 
 export async function getRegistryMetadataForSkillId(id: string): Promise<{
