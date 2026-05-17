@@ -666,15 +666,34 @@ export const en = {
   "settings.projects.noneAdded": "No projects added yet",
 
   "settings.mcp.disabled": "Disabled",
+  "settings.mcp.failed": "Failed",
+  "settings.mcp.needsAuth": "Needs auth",
+  "settings.mcp.pendingApproval": "Pending approval",
+  "settings.mcp.status": "Status",
+  "settings.mcp.source": "Source",
+  "settings.mcp.pageTitle": "MCP Servers",
+  "settings.mcp.pageDescription":
+    "Tool connections that Agents can call. Manage connectivity, auth, exposed tools, and diagnostics here.",
+  "settings.mcp.toolConnection": "Agent tool connection",
+  "settings.mcp.refresh": "Refresh",
+  "settings.mcp.refreshTools": "Refresh tools",
+  "settings.mcp.copyValue": "Copy value",
+  "settings.mcp.copied": "Copied",
   "settings.mcp.oneTool": "1 tool",
   "settings.mcp.toolCount": "{count} tools",
   "settings.mcp.noTools": "No tools",
+  "settings.mcp.noToolsTitle": "No tools exposed",
+  "settings.mcp.noToolsDescription":
+    "This server is reachable, but it did not return tools. It may expose resources or prompts only, or it may need a refresh after startup.",
   "settings.mcp.emptyHint":
-    "Add local command or HTTP MCP servers for Claude Code and Codex.",
+    "MCP servers are the tool connection layer for Agents. Add a local command or HTTP server for Claude Code and Codex.",
   "settings.mcp.reconnect": "Reconnect",
   "settings.mcp.authenticate": "Authenticate",
   "settings.mcp.logout": "Logout",
   "settings.mcp.deleteServer": "Delete server",
+  "settings.mcp.dangerZone": "Danger Zone",
+  "settings.mcp.dangerZoneDescription":
+    "Remove this MCP server configuration from the selected scope.",
   "settings.mcp.enabled": "Enabled",
   "settings.mcp.disableDescription":
     "Disable to prevent this server from connecting",
@@ -691,6 +710,8 @@ export const en = {
   "settings.mcp.toast.failedToAddServer": "Failed to add server",
   "settings.mcp.toast.failedToAdd": "Failed to add",
   "settings.mcp.newServer": "New MCP Server",
+  "settings.mcp.createDescription":
+    "Add a local command or HTTP server that exposes tools to Agents.",
   "settings.mcp.adding": "Adding...",
   "settings.mcp.provider": "Provider",
   "settings.mcp.name": "Name",
@@ -775,27 +796,84 @@ export const en = {
     'Falls back to "All Platforms"',
 
   "settings.plugins.version": "Version",
+  "settings.plugins.runtime": "Runtime",
+  "settings.plugins.runtimeAll": "All",
+  "settings.plugins.runtimeClaude": "Claude Code",
+  "settings.plugins.runtimeCodex": "Codex",
+  "settings.plugins.viewInstalled": "Installed",
+  "settings.plugins.viewSources": "Sources",
   "settings.plugins.capabilities": "Capabilities",
   "settings.plugins.capabilityCount": "{count} capabilities",
   "settings.plugins.packageHint":
     "Plugins are capability packages. Enabled plugins can expose commands, skills, agents, and MCP servers.",
+  "settings.plugins.claudePackageHint":
+    "Claude Code plugins are runtime packages. Enabling them exposes their commands, skills, agents, and MCP servers to Claude Code only.",
+  "settings.plugins.codexPackageHint":
+    "Codex plugins are installed Codex runtime packages. They are shown here for visibility; 1Code does not control their enablement yet.",
   "settings.plugins.source": "Source",
+  "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
   "settings.plugins.tags": "Tags",
   "settings.plugins.signIn": "Sign in",
+  "settings.plugins.approveMcpServers": "Approve MCP",
+  "settings.plugins.mcpApprovalHint":
+    "MCP servers from Claude plugins require explicit approval before they become active tool connections.",
+  "settings.plugins.codexMcpHint":
+    "Codex plugin MCP declarations are shown as package metadata here.",
+  "settings.plugins.declared": "Declared",
+  "settings.plugins.pendingApproval": "Pending approval",
+  "settings.plugins.installed": "Installed",
+  "settings.plugins.readOnly": "Read-only",
+  "settings.plugins.refresh": "Refresh",
   "settings.plugins.toast.authenticated": "{name} authenticated",
   "settings.plugins.toast.enabled": "Plugin enabled",
   "settings.plugins.toast.disabled": "Plugin disabled",
+  "settings.plugins.toast.mcpApproved": "Plugin MCP servers approved",
   "settings.plugins.toast.failedToUpdate": "Failed to update plugin",
   "settings.plugins.searchPlaceholder": "Search plugins...",
+  "settings.plugins.searchSourcesPlaceholder": "Search sources...",
   "settings.plugins.noPlugins": "No plugins",
-  "settings.plugins.installHint": "Install plugins to ~/.claude/plugins/",
+  "settings.plugins.noSources": "No plugin sources",
+  "settings.plugins.installHint": "Claude plugins live in ~/.claude/plugins/marketplaces/. Codex plugins live in ~/.codex/plugins/cache/.",
   "settings.plugins.noResults": "No results found",
+  "settings.plugins.runtimeEmptyTitle": "No {runtime} plugins",
+  "settings.plugins.sourceRuntimeEmptyTitle": "No {runtime} sources",
+  "settings.plugins.claudeInstallHint":
+    "Install Claude plugins to ~/.claude/plugins/marketplaces/.",
+  "settings.plugins.codexInstallHint":
+    "Codex plugins are discovered from ~/.codex/plugins/cache/.",
   "settings.plugins.enabled": "Enabled",
   "settings.plugins.selectToView": "Select a plugin to view details",
   "settings.plugins.noneInstalled": "No plugins installed",
+  "settings.plugins.emptyDescription":
+    "Plugins are runtime-specific packages. Claude Code and Codex use separate formats and install locations.",
+  "settings.plugins.runtimeDescription":
+    "Use the runtime filter to inspect which package owns each command, skill, agent, or MCP server.",
   "settings.plugins.installMarketplaceHint":
     "Install plugins to ~/.claude/plugins/marketplaces/",
+  "settings.plugins.sources": "Sources",
+  "settings.plugins.selectSourceToView": "Select a source to view details",
+  "settings.plugins.sourcesDescription":
+    "Plugin sources show where each runtime discovers local or cached packages.",
+  "settings.plugins.sourcesEmptyDescription":
+    "Sources are discovered from local Claude marketplaces and the Codex plugin cache.",
+  "settings.plugins.sourcesReadOnlyHint":
+    "This view is read-only. Install and update flows are intentionally kept outside this browser for now.",
+  "settings.plugins.sourcePluginCount": "{count} plugins",
+  "settings.plugins.sourcePluginCountLabel": "Plugins",
+  "settings.plugins.sourceKind": "Source Type",
+  "settings.plugins.sourceKindLocalMarketplace": "Local Marketplace",
+  "settings.plugins.sourceKindCache": "Cache",
+  "settings.plugins.sourceTrust": "Trust",
+  "settings.plugins.sourceTrustOfficial": "Official",
+  "settings.plugins.sourceTrustLocal": "Local",
+  "settings.plugins.sourceTrustExternal": "External",
+  "settings.plugins.sourceStatus": "Status",
+  "settings.plugins.sourceStatusAvailable": "Available",
+  "settings.plugins.sourceStatusEmpty": "Empty",
+  "settings.plugins.sourceStatusMissing": "Missing",
+  "settings.plugins.sourcePath": "Path",
+  "settings.plugins.sourceInstallHint": "Install Hint",
 
   "settings.beta.title": "Beta Features",
   "settings.beta.subtitle":
@@ -2554,15 +2632,34 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.projects.noneAdded": "还没有添加 projects",
 
   "settings.mcp.disabled": "已禁用",
+  "settings.mcp.failed": "失败",
+  "settings.mcp.needsAuth": "需要授权",
+  "settings.mcp.pendingApproval": "等待批准",
+  "settings.mcp.status": "状态",
+  "settings.mcp.source": "来源",
+  "settings.mcp.pageTitle": "MCP Servers",
+  "settings.mcp.pageDescription":
+    "Agent 可调用的工具连接。这里管理连接、授权、Tools 和诊断状态。",
+  "settings.mcp.toolConnection": "Agent 工具连接",
+  "settings.mcp.refresh": "刷新",
+  "settings.mcp.refreshTools": "刷新 tools",
+  "settings.mcp.copyValue": "复制值",
+  "settings.mcp.copied": "已复制",
   "settings.mcp.oneTool": "1 个 tool",
   "settings.mcp.toolCount": "{count} 个 tools",
   "settings.mcp.noTools": "没有 tools",
+  "settings.mcp.noToolsTitle": "没有暴露 tools",
+  "settings.mcp.noToolsDescription":
+    "这个 server 已可连接，但当前没有返回 tools。它可能只提供 resources 或 prompts，或者启动后需要刷新。",
   "settings.mcp.emptyHint":
-    "为 Claude Code 和 Codex 添加本地 command 或 HTTP MCP server。",
+    "MCP servers 是 Agent 的工具连接层。可以为 Claude Code 和 Codex 添加本地 command 或 HTTP server。",
   "settings.mcp.reconnect": "重新连接",
   "settings.mcp.authenticate": "授权",
   "settings.mcp.logout": "退出登录",
   "settings.mcp.deleteServer": "删除 server",
+  "settings.mcp.dangerZone": "危险区",
+  "settings.mcp.dangerZoneDescription":
+    "从当前 scope 移除这个 MCP server 配置。",
   "settings.mcp.enabled": "已启用",
   "settings.mcp.disableDescription":
     "禁用后这个 server 不会连接",
@@ -2579,6 +2676,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.toast.failedToAddServer": "添加 server 失败",
   "settings.mcp.toast.failedToAdd": "添加失败",
   "settings.mcp.newServer": "新建 MCP Server",
+  "settings.mcp.createDescription":
+    "添加一个向 Agent 暴露 tools 的本地 command 或 HTTP server。",
   "settings.mcp.adding": "添加中...",
   "settings.mcp.provider": "Provider",
   "settings.mcp.name": "名称",
@@ -2663,27 +2762,84 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     '回退使用 "All Platforms"',
 
   "settings.plugins.version": "Version",
+  "settings.plugins.runtime": "Runtime",
+  "settings.plugins.runtimeAll": "全部",
+  "settings.plugins.runtimeClaude": "Claude Code",
+  "settings.plugins.runtimeCodex": "Codex",
+  "settings.plugins.viewInstalled": "已安装",
+  "settings.plugins.viewSources": "Sources",
   "settings.plugins.capabilities": "Capabilities",
   "settings.plugins.capabilityCount": "{count} 个能力",
   "settings.plugins.packageHint":
     "Plugins 是能力包。启用后可以提供 commands、skills、agents 和 MCP servers。",
+  "settings.plugins.claudePackageHint":
+    "Claude Code plugins 是 Claude runtime 的能力包。启用后只会影响 Claude Code。",
+  "settings.plugins.codexPackageHint":
+    "Codex plugins 是已安装的 Codex runtime 包。这里先做可见性展示，1Code 还不控制它们的启用状态。",
   "settings.plugins.source": "Source",
+  "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
   "settings.plugins.tags": "Tags",
   "settings.plugins.signIn": "登录",
+  "settings.plugins.approveMcpServers": "批准 MCP",
+  "settings.plugins.mcpApprovalHint":
+    "Claude plugin 暴露的 MCP servers 需要明确批准后，才会成为可用的工具连接。",
+  "settings.plugins.codexMcpHint":
+    "Codex plugin 的 MCP 声明在这里作为包元数据展示。",
+  "settings.plugins.declared": "已声明",
+  "settings.plugins.pendingApproval": "等待批准",
+  "settings.plugins.installed": "已安装",
+  "settings.plugins.readOnly": "只读",
+  "settings.plugins.refresh": "刷新",
   "settings.plugins.toast.authenticated": "{name} 已授权",
   "settings.plugins.toast.enabled": "Plugin 已启用",
   "settings.plugins.toast.disabled": "Plugin 已禁用",
+  "settings.plugins.toast.mcpApproved": "Plugin MCP servers 已批准",
   "settings.plugins.toast.failedToUpdate": "更新 plugin 失败",
   "settings.plugins.searchPlaceholder": "搜索 plugins...",
+  "settings.plugins.searchSourcesPlaceholder": "搜索 sources...",
   "settings.plugins.noPlugins": "没有 plugins",
-  "settings.plugins.installHint": "安装 plugins 到 ~/.claude/plugins/",
+  "settings.plugins.noSources": "没有 plugin sources",
+  "settings.plugins.installHint": "Claude plugins 位于 ~/.claude/plugins/marketplaces/，Codex plugins 位于 ~/.codex/plugins/cache/。",
   "settings.plugins.noResults": "没有找到结果",
+  "settings.plugins.runtimeEmptyTitle": "没有 {runtime} plugins",
+  "settings.plugins.sourceRuntimeEmptyTitle": "没有 {runtime} sources",
+  "settings.plugins.claudeInstallHint":
+    "把 Claude plugins 安装到 ~/.claude/plugins/marketplaces/。",
+  "settings.plugins.codexInstallHint":
+    "Codex plugins 会从 ~/.codex/plugins/cache/ 发现。",
   "settings.plugins.enabled": "已启用",
   "settings.plugins.selectToView": "选择一个 plugin 查看详情",
   "settings.plugins.noneInstalled": "还没有安装 plugins",
+  "settings.plugins.emptyDescription":
+    "Plugins 是按 runtime 分开的能力包。Claude Code 和 Codex 使用不同格式和不同安装位置。",
+  "settings.plugins.runtimeDescription":
+    "可以用 runtime 过滤器确认每个 command、skill、agent 或 MCP server 属于哪个包。",
   "settings.plugins.installMarketplaceHint":
     "安装 plugins 到 ~/.claude/plugins/marketplaces/",
+  "settings.plugins.sources": "Sources",
+  "settings.plugins.selectSourceToView": "选择一个 source 查看详情",
+  "settings.plugins.sourcesDescription":
+    "Plugin sources 用来说明每个 runtime 从哪里发现本地或缓存的 packages。",
+  "settings.plugins.sourcesEmptyDescription":
+    "Sources 会从本地 Claude marketplaces 和 Codex plugin cache 中发现。",
+  "settings.plugins.sourcesReadOnlyHint":
+    "这个视图是只读的。安装和更新流程先不放进这个 browser。",
+  "settings.plugins.sourcePluginCount": "{count} 个 plugins",
+  "settings.plugins.sourcePluginCountLabel": "Plugins",
+  "settings.plugins.sourceKind": "Source 类型",
+  "settings.plugins.sourceKindLocalMarketplace": "本地 Marketplace",
+  "settings.plugins.sourceKindCache": "Cache",
+  "settings.plugins.sourceTrust": "Trust",
+  "settings.plugins.sourceTrustOfficial": "Official",
+  "settings.plugins.sourceTrustLocal": "Local",
+  "settings.plugins.sourceTrustExternal": "External",
+  "settings.plugins.sourceStatus": "Status",
+  "settings.plugins.sourceStatusAvailable": "可用",
+  "settings.plugins.sourceStatusEmpty": "空",
+  "settings.plugins.sourceStatusMissing": "不存在",
+  "settings.plugins.sourcePath": "Path",
+  "settings.plugins.sourceInstallHint": "安装提示",
 
   "settings.beta.title": "Beta 功能",
   "settings.beta.subtitle":

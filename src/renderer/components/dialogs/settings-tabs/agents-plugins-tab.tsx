@@ -6,7 +6,7 @@ import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../li
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2 } from "lucide-react"
+import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
 import { Label } from "../../ui/label"
@@ -26,17 +26,27 @@ interface PluginComponent {
   description?: string
 }
 
+type PluginRuntime = "claude" | "codex"
+type RuntimeFilter = "all" | PluginRuntime
+type PluginViewMode = "installed" | "sources"
+type PluginSourceKind = "local-marketplace" | "cache"
+type PluginSourceTrust = "official" | "local" | "external"
+type PluginSourceStatus = "available" | "empty" | "missing"
+
 interface PluginData {
+  runtime: PluginRuntime
   name: string
   version: string
   description?: string
   path: string
+  installRoot: string
   source: string
   marketplace: string
   category?: string
   homepage?: string
   tags?: string[]
   isDisabled: boolean
+  canToggle: boolean
   components: {
     commands: PluginComponent[]
     skills: PluginComponent[]
@@ -45,9 +55,94 @@ interface PluginData {
   }
 }
 
+interface PluginSourceData {
+  id: string
+  runtime: PluginRuntime
+  name: string
+  description: string
+  kind: PluginSourceKind
+  trust: PluginSourceTrust
+  status: PluginSourceStatus
+  path: string
+  pluginCount: number
+  installHint: string
+  homepage?: string
+}
+
 interface McpServerStatus {
   status: string
   needsAuth: boolean
+}
+
+function getPluginKey(plugin: Pick<PluginData, "runtime" | "source">): string {
+  return `${plugin.runtime}:${plugin.source}`
+}
+
+function getRuntimeLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
+  return runtime === "claude"
+    ? t("settings.plugins.runtimeClaude")
+    : t("settings.plugins.runtimeCodex")
+}
+
+function getRuntimeFilterLabel(filter: RuntimeFilter, t: ReturnType<typeof useI18n>["t"]): string {
+  if (filter === "all") return t("settings.plugins.runtimeAll")
+  return getRuntimeLabel(filter, t)
+}
+
+function getPluginStatusLabel(plugin: PluginData, t: ReturnType<typeof useI18n>["t"]): string {
+  if (!plugin.canToggle) return t("settings.plugins.installed")
+  return plugin.isDisabled ? t("common.disabled") : t("common.active")
+}
+
+const RUNTIME_FILTERS: RuntimeFilter[] = ["all", "claude", "codex"]
+const VIEW_MODES: PluginViewMode[] = ["installed", "sources"]
+
+function getViewModeLabel(viewMode: PluginViewMode, t: ReturnType<typeof useI18n>["t"]): string {
+  return viewMode === "installed"
+    ? t("settings.plugins.viewInstalled")
+    : t("settings.plugins.viewSources")
+}
+
+function getSourceKindLabel(kind: PluginSourceKind, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (kind) {
+    case "local-marketplace":
+      return t("settings.plugins.sourceKindLocalMarketplace")
+    case "cache":
+      return t("settings.plugins.sourceKindCache")
+  }
+}
+
+function getSourceTrustLabel(trust: PluginSourceTrust, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (trust) {
+    case "official":
+      return t("settings.plugins.sourceTrustOfficial")
+    case "local":
+      return t("settings.plugins.sourceTrustLocal")
+    case "external":
+      return t("settings.plugins.sourceTrustExternal")
+  }
+}
+
+function getSourceStatusLabel(status: PluginSourceStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "available":
+      return t("settings.plugins.sourceStatusAvailable")
+    case "empty":
+      return t("settings.plugins.sourceStatusEmpty")
+    case "missing":
+      return t("settings.plugins.sourceStatusMissing")
+  }
+}
+
+function getSourceStatusClass(status: PluginSourceStatus): string {
+  switch (status) {
+    case "available":
+      return "text-emerald-500"
+    case "empty":
+      return "text-amber-500"
+    case "missing":
+      return "text-muted-foreground"
+  }
 }
 
 // --- Detail Panel ---
@@ -55,6 +150,8 @@ function PluginDetail({
   plugin,
   onToggleEnabled,
   isTogglingEnabled,
+  onApproveMcpServers,
+  isApprovingMcpServers,
   onNavigateToTab,
   mcpServerStatuses,
   onMcpAuth,
@@ -63,6 +160,8 @@ function PluginDetail({
   plugin: PluginData
   onToggleEnabled: (enabled: boolean) => void
   isTogglingEnabled: boolean
+  onApproveMcpServers?: () => void
+  isApprovingMcpServers?: boolean
   onNavigateToTab: (tab: SettingsTab) => void
   mcpServerStatuses: Record<string, McpServerStatus>
   onMcpAuth: (serverName: string) => void
@@ -74,6 +173,14 @@ function PluginDetail({
     plugin.components.skills.length +
     plugin.components.agents.length +
     plugin.components.mcpServers.length
+  const statusLabel = getPluginStatusLabel(plugin, t)
+  const runtimeLabel = getRuntimeLabel(plugin.runtime, t)
+  const canApproveMcp =
+    plugin.runtime === "claude" &&
+    !plugin.isDisabled &&
+    plugin.components.mcpServers.length > 0 &&
+    !!onApproveMcpServers
+  const canNavigateCapabilities = plugin.runtime === "claude" && !plugin.isDisabled
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -87,20 +194,26 @@ function PluginDetail({
                 <div className="flex items-center gap-1.5">
                   <span className={cn(
                     "inline-block h-1.5 w-1.5 rounded-full",
-                    plugin.isDisabled ? "bg-muted-foreground/40" : "bg-emerald-500"
+                    plugin.canToggle && plugin.isDisabled ? "bg-muted-foreground/40" : "bg-emerald-500"
                   )} />
                   <span className={cn(
                     "text-sm font-medium",
-                    plugin.isDisabled ? "text-muted-foreground" : "text-emerald-500"
+                    plugin.canToggle && plugin.isDisabled ? "text-muted-foreground" : "text-emerald-500"
                   )}>
-                    {plugin.isDisabled ? t("common.disabled") : t("common.active")}
+                    {statusLabel}
                   </span>
                 </div>
-                <Switch
-                  checked={!plugin.isDisabled}
-                  onCheckedChange={onToggleEnabled}
-                  disabled={isTogglingEnabled}
-                />
+                {plugin.canToggle ? (
+                  <Switch
+                    checked={!plugin.isDisabled}
+                    onCheckedChange={onToggleEnabled}
+                    disabled={isTogglingEnabled}
+                  />
+                ) : (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {t("settings.plugins.readOnly")}
+                  </span>
+                )}
               </div>
             </div>
             {plugin.category && (
@@ -113,159 +226,226 @@ function PluginDetail({
             <p className="text-sm text-muted-foreground">{plugin.description}</p>
           )}
           <p className="text-xs text-muted-foreground/70">
-            {t("settings.plugins.packageHint")}
+            {plugin.runtime === "claude"
+              ? t("settings.plugins.claudePackageHint")
+              : t("settings.plugins.codexPackageHint")}
           </p>
 
-        {/* Info */}
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>{t("settings.plugins.capabilities")}</Label>
-            <p className="text-sm text-foreground">
-              {t("settings.plugins.capabilityCount", { count: componentCount })}
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("settings.plugins.version")}</Label>
-            <p className="text-sm text-foreground font-mono">{plugin.version}</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("settings.plugins.source")}</Label>
-            <p className="text-sm text-foreground font-mono">{plugin.source}</p>
-          </div>
-          {plugin.homepage && (
+          {/* Info */}
+          <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>{t("settings.plugins.homepage")}</Label>
-              <a href={plugin.homepage} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 hover:underline break-all">{plugin.homepage}</a>
+              <Label>{t("settings.plugins.runtime")}</Label>
+              <p className="text-sm text-foreground">{runtimeLabel}</p>
             </div>
-          )}
-          {plugin.tags && plugin.tags.length > 0 && (
             <div className="space-y-1.5">
-              <Label>{t("settings.plugins.tags")}</Label>
-              <div className="flex flex-wrap gap-1">
-                {plugin.tags.map((tag) => (
-                  <span key={tag} className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{tag}</span>
+              <Label>{t("settings.plugins.capabilities")}</Label>
+              <p className="text-sm text-foreground">
+                {t("settings.plugins.capabilityCount", { count: componentCount })}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.version")}</Label>
+              <p className="text-sm text-foreground font-mono">{plugin.version}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.source")}</Label>
+              <p className="text-sm text-foreground font-mono">{plugin.source}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.path")}</Label>
+              <p className="text-sm text-foreground font-mono break-all">{plugin.path}</p>
+            </div>
+            {plugin.homepage && (
+              <div className="space-y-1.5">
+                <Label>{t("settings.plugins.homepage")}</Label>
+                <a href={plugin.homepage} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 hover:underline break-all">{plugin.homepage}</a>
+              </div>
+            )}
+            {plugin.tags && plugin.tags.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>{t("settings.plugins.tags")}</Label>
+                <div className="flex flex-wrap gap-1">
+                  {plugin.tags.map((tag) => (
+                    <span key={tag} className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Components — clickable when the runtime exposes them to shared tabs */}
+          {plugin.components.commands.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Commands ({plugin.components.commands.length})</Label>
+              <div className="space-y-1">
+                {plugin.components.commands.map((cmd) => (
+                  <button
+                    key={cmd.name}
+                    disabled={!canNavigateCapabilities}
+                    onClick={() => canNavigateCapabilities && onNavigateToTab("skills")}
+                    className={cn(
+                      "w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 transition-colors text-left group",
+                      canNavigateCapabilities
+                        ? "hover:bg-foreground/5 cursor-pointer"
+                        : "cursor-default opacity-75"
+                    )}
+                  >
+                    <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-mono font-medium text-foreground">/{cmd.name}</p>
+                      {cmd.description && (
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{cmd.description}</p>
+                      )}
+                    </div>
+                    {canNavigateCapabilities && (
+                      <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </button>
                 ))}
               </div>
             </div>
           )}
-        </div>
 
-        {/* Components — clickable, navigate to respective tabs */}
-        {plugin.components.commands.length > 0 && (
-          <div className="space-y-1.5">
-            <Label>Commands ({plugin.components.commands.length})</Label>
-            <div className="space-y-1">
-              {plugin.components.commands.map((cmd) => (
-                <button
-                  key={cmd.name}
-                  onClick={() => onNavigateToTab("skills")}
-                  className="w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 hover:bg-foreground/5 transition-colors cursor-pointer text-left group"
-                >
-                  <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-mono font-medium text-foreground">/{cmd.name}</p>
-                    {cmd.description && (
-                      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{cmd.description}</p>
+          {plugin.components.skills.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Skills ({plugin.components.skills.length})</Label>
+              <div className="space-y-1">
+                {plugin.components.skills.map((skill) => (
+                  <button
+                    key={skill.name}
+                    disabled={!canNavigateCapabilities}
+                    onClick={() => canNavigateCapabilities && onNavigateToTab("skills")}
+                    className={cn(
+                      "w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 transition-colors text-left group",
+                      canNavigateCapabilities
+                        ? "hover:bg-foreground/5 cursor-pointer"
+                        : "cursor-default opacity-75"
                     )}
-                  </div>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {plugin.components.skills.length > 0 && (
-          <div className="space-y-1.5">
-            <Label>Skills ({plugin.components.skills.length})</Label>
-            <div className="space-y-1">
-              {plugin.components.skills.map((skill) => (
-                <button
-                  key={skill.name}
-                  onClick={() => onNavigateToTab("skills")}
-                  className="w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 hover:bg-foreground/5 transition-colors cursor-pointer text-left group"
-                >
-                  <SkillIconFilled className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-mono font-medium text-foreground">{skill.name}</p>
-                    {skill.description && (
-                      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{skill.description}</p>
-                    )}
-                  </div>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {plugin.components.agents.length > 0 && (
-          <div className="space-y-1.5">
-            <Label>Agents ({plugin.components.agents.length})</Label>
-            <div className="space-y-1">
-              {plugin.components.agents.map((agent) => (
-                <button
-                  key={agent.name}
-                  onClick={() => onNavigateToTab("agents")}
-                  className="w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 hover:bg-foreground/5 transition-colors cursor-pointer text-left group"
-                >
-                  <CustomAgentIconFilled className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-mono font-medium text-foreground">{agent.name}</p>
-                    {agent.description && (
-                      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{agent.description}</p>
-                    )}
-                  </div>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {plugin.components.mcpServers.length > 0 && (
-          <div className="space-y-1.5">
-            <Label>MCP Servers ({plugin.components.mcpServers.length})</Label>
-            <div className="space-y-1">
-              {plugin.components.mcpServers.map((serverName) => {
-                const serverStatus = mcpServerStatuses[serverName]
-                const needsAuth = serverStatus?.needsAuth
-                const isConnected = serverStatus?.status === "connected"
-                return (
-                  <div
-                    key={serverName}
-                    className="w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 group"
                   >
-                    <OriginalMCPIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <button
-                      onClick={() => onNavigateToTab("mcp")}
-                      className="min-w-0 flex-1 text-left hover:underline"
-                    >
-                      <p className="text-xs font-mono font-medium text-foreground">{serverName}</p>
-                    </button>
-                    {needsAuth ? (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="h-6 px-2 text-[11px] shrink-0"
-                        disabled={isAuthenticating}
-                        onClick={() => onMcpAuth(serverName)}
-                      >
-                        {isAuthenticating ? <Loader2 className="h-3 w-3 animate-spin" /> : t("settings.plugins.signIn")}
-                      </Button>
-                    ) : isConnected ? (
-                      <span className="text-[11px] text-emerald-500 shrink-0">
-                        {t("common.connected")}
-                      </span>
-                    ) : serverStatus ? (
-                      <span className="text-[11px] text-muted-foreground shrink-0">{serverStatus.status}</span>
-                    ) : null}
-                  </div>
-                )
-              })}
+                    <SkillIconFilled className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-mono font-medium text-foreground">{skill.name}</p>
+                      {skill.description && (
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{skill.description}</p>
+                      )}
+                    </div>
+                    {canNavigateCapabilities && (
+                      <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {plugin.components.agents.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Agents ({plugin.components.agents.length})</Label>
+              <div className="space-y-1">
+                {plugin.components.agents.map((agent) => (
+                  <button
+                    key={agent.name}
+                    disabled={!canNavigateCapabilities}
+                    onClick={() => canNavigateCapabilities && onNavigateToTab("agents")}
+                    className={cn(
+                      "w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 transition-colors text-left group",
+                      canNavigateCapabilities
+                        ? "hover:bg-foreground/5 cursor-pointer"
+                        : "cursor-default opacity-75"
+                    )}
+                  >
+                    <CustomAgentIconFilled className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-mono font-medium text-foreground">{agent.name}</p>
+                      {agent.description && (
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{agent.description}</p>
+                      )}
+                    </div>
+                    {canNavigateCapabilities && (
+                      <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {plugin.components.mcpServers.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <Label>MCP Servers ({plugin.components.mcpServers.length})</Label>
+                {canApproveMcp && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[11px] shrink-0"
+                    disabled={isApprovingMcpServers}
+                    onClick={onApproveMcpServers}
+                  >
+                    {isApprovingMcpServers ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-3 w-3 mr-1.5" />
+                        {t("settings.plugins.approveMcpServers")}
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                {plugin.runtime === "claude"
+                  ? t("settings.plugins.mcpApprovalHint")
+                  : t("settings.plugins.codexMcpHint")}
+              </p>
+              <div className="space-y-1">
+                {plugin.components.mcpServers.map((serverName) => {
+                  const serverStatus = mcpServerStatuses[serverName]
+                  const needsAuth = serverStatus?.needsAuth
+                  const isConnected = serverStatus?.status === "connected"
+                  return (
+                    <div
+                      key={serverName}
+                      className="w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 group"
+                    >
+                      <OriginalMCPIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                      <button
+                        disabled={!canNavigateCapabilities}
+                        onClick={() => canNavigateCapabilities && onNavigateToTab("mcp")}
+                        className={cn(
+                          "min-w-0 flex-1 text-left",
+                          canNavigateCapabilities && "hover:underline"
+                        )}
+                      >
+                        <p className="text-xs font-mono font-medium text-foreground">{serverName}</p>
+                      </button>
+                      {needsAuth ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-6 px-2 text-[11px] shrink-0"
+                          disabled={isAuthenticating}
+                          onClick={() => onMcpAuth(serverName)}
+                        >
+                          {isAuthenticating ? <Loader2 className="h-3 w-3 animate-spin" /> : t("settings.plugins.signIn")}
+                        </Button>
+                      ) : isConnected ? (
+                        <span className="text-[11px] text-emerald-500 shrink-0">
+                          {t("common.connected")}
+                        </span>
+                      ) : serverStatus ? (
+                        <span className="text-[11px] text-muted-foreground shrink-0">{serverStatus.status}</span>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground shrink-0">
+                          {plugin.runtime === "codex" ? t("settings.plugins.declared") : t("settings.plugins.pendingApproval")}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
         </div>
       </div>
@@ -281,7 +461,7 @@ function PluginListItem({
 }: {
   plugin: PluginData
   isSelected: boolean
-  onSelect: (source: string) => void
+  onSelect: (key: string) => void
 }) {
   const { t } = useI18n()
   const componentCount =
@@ -292,8 +472,8 @@ function PluginListItem({
 
   return (
     <button
-      data-item-id={plugin.source}
-      onClick={() => onSelect(plugin.source)}
+      data-item-id={getPluginKey(plugin)}
+      onClick={() => onSelect(getPluginKey(plugin))}
       className={cn(
         "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
         isSelected
@@ -301,7 +481,12 @@ function PluginListItem({
           : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
       )}
     >
-      <div className="text-sm leading-tight truncate">{formatPluginName(plugin.name)}</div>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div className="text-sm leading-tight truncate">{formatPluginName(plugin.name)}</div>
+        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
+          {plugin.runtime === "claude" ? "Claude" : "Codex"}
+        </span>
+      </div>
       {plugin.description && (
         <div className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
           {plugin.description}
@@ -313,20 +498,151 @@ function PluginListItem({
         </span>
         <span className={cn(
           "shrink-0",
-          plugin.isDisabled ? "text-muted-foreground/60" : "text-emerald-500/80",
+          plugin.canToggle && plugin.isDisabled ? "text-muted-foreground/60" : "text-emerald-500/80",
         )}>
-          {plugin.isDisabled ? t("common.disabled") : t("common.active")}
+          {getPluginStatusLabel(plugin, t)}
         </span>
       </div>
     </button>
   )
 }
 
+function PluginSourceListItem({
+  source,
+  isSelected,
+  onSelect,
+}: {
+  source: PluginSourceData
+  isSelected: boolean
+  onSelect: (id: string) => void
+}) {
+  const { t } = useI18n()
+  return (
+    <button
+      data-item-id={source.id}
+      onClick={() => onSelect(source.id)}
+      className={cn(
+        "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+        isSelected
+          ? "bg-foreground/5 text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+      )}
+    >
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div className="text-sm leading-tight truncate">{source.name}</div>
+        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
+          {source.runtime === "claude" ? "Claude" : "Codex"}
+        </span>
+      </div>
+      <div className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
+        {source.path}
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
+        <span className="truncate">
+          {t("settings.plugins.sourcePluginCount", { count: source.pluginCount })}
+        </span>
+        <span className={cn("shrink-0", getSourceStatusClass(source.status))}>
+          {getSourceStatusLabel(source.status, t)}
+        </span>
+      </div>
+    </button>
+  )
+}
+
+function PluginSourceDetail({
+  source,
+  onRefresh,
+  isRefreshing,
+}: {
+  source: PluginSourceData
+  onRefresh: () => void
+  isRefreshing: boolean
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto p-6 space-y-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-foreground">{source.name}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {getRuntimeLabel(source.runtime, t)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs shrink-0"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+              {t("settings.plugins.refresh")}
+            </Button>
+          </div>
+
+          <p className="text-sm text-muted-foreground">{source.description}</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.sourceStatus")}</Label>
+              <p className={cn("text-sm font-medium", getSourceStatusClass(source.status))}>
+                {getSourceStatusLabel(source.status, t)}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.sourcePluginCountLabel")}</Label>
+              <p className="text-sm text-foreground">
+                {t("settings.plugins.sourcePluginCount", { count: source.pluginCount })}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.sourceKind")}</Label>
+              <p className="text-sm text-foreground">{getSourceKindLabel(source.kind, t)}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.sourceTrust")}</Label>
+              <p className="text-sm text-foreground">{getSourceTrustLabel(source.trust, t)}</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("settings.plugins.sourcePath")}</Label>
+            <p className="text-sm text-foreground font-mono break-all">{source.path}</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("settings.plugins.sourceInstallHint")}</Label>
+            <p className="text-sm text-muted-foreground">{source.installHint}</p>
+          </div>
+
+          {source.homepage && (
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.homepage")}</Label>
+              <a href={source.homepage} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 hover:underline break-all">
+                {source.homepage}
+              </a>
+            </div>
+          )}
+
+          <p className="text-xs leading-relaxed text-muted-foreground/70">
+            {t("settings.plugins.sourcesReadOnlyHint")}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Main Component ---
 export function AgentsPluginsTab() {
   const { t } = useI18n()
-  const [selectedPluginSource, setSelectedPluginSource] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<PluginViewMode>("installed")
+  const [selectedPluginKey, setSelectedPluginKey] = useState<string | null>(null)
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all")
   const searchInputRef = useRef<HTMLInputElement>(null)
   const setActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
 
@@ -345,6 +661,9 @@ export function AgentsPluginsTab() {
   }, [])
 
   const { data: plugins = [], isLoading, refetch } = trpc.plugins.list.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
+  const { data: pluginSources = [], isLoading: isLoadingSources, refetch: refetchSources } = trpc.plugins.sources.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
 
@@ -382,16 +701,22 @@ export function AgentsPluginsTab() {
   }, [startOAuthMutation, refetchMcp, t])
 
   const setPluginEnabledMutation = trpc.claudeSettings.setPluginEnabled.useMutation()
+  const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
 
   const filteredPlugins = useMemo(() => {
-    if (!searchQuery.trim()) return plugins
+    const runtimeFiltered = runtimeFilter === "all"
+      ? plugins
+      : plugins.filter((plugin) => plugin.runtime === runtimeFilter)
+
+    if (!searchQuery.trim()) return runtimeFiltered
     const q = searchQuery.toLowerCase()
     // Normalize query: match both "pyright lsp" and "pyright-lsp"
     const qNoDashes = q.replace(/-/g, " ")
     const qWithDashes = q.replace(/ /g, "-")
-    return plugins.filter((p) => {
+    return runtimeFiltered.filter((p) => {
       const name = p.name.toLowerCase()
       if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (p.runtime.includes(q)) return true
       if (p.source.toLowerCase().includes(q)) return true
       if (p.marketplace.toLowerCase().includes(q)) return true
       if (p.description?.toLowerCase().includes(q)) return true
@@ -402,44 +727,128 @@ export function AgentsPluginsTab() {
       if (p.components.mcpServers.some((s) => s.toLowerCase().includes(q))) return true
       return false
     })
-  }, [plugins, searchQuery])
+  }, [plugins, runtimeFilter, searchQuery])
 
-  const enabledPlugins = filteredPlugins.filter((p) => !p.isDisabled)
-  const disabledPlugins = filteredPlugins.filter((p) => p.isDisabled)
+  const pluginGroups = useMemo(() => {
+    const groups: Array<{ id: string; label: string; plugins: PluginData[] }> = []
+    const claudePlugins = filteredPlugins.filter((plugin) => plugin.runtime === "claude")
+    const codexPlugins = filteredPlugins.filter((plugin) => plugin.runtime === "codex")
+    const claudeEnabled = claudePlugins.filter((plugin) => !plugin.isDisabled)
+    const claudeDisabled = claudePlugins.filter((plugin) => plugin.isDisabled)
 
-  // Group disabled plugins by marketplace
-  const marketplaceGroups = useMemo(() => {
-    const groups = new Map<string, PluginData[]>()
-    for (const plugin of disabledPlugins) {
-      const existing = groups.get(plugin.marketplace) || []
-      existing.push(plugin)
-      groups.set(plugin.marketplace, existing)
+    if (claudeEnabled.length > 0) {
+      groups.push({
+        id: "claude-enabled",
+        label: `${getRuntimeLabel("claude", t)} · ${t("settings.plugins.enabled")}`,
+        plugins: claudeEnabled,
+      })
     }
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [disabledPlugins])
 
-  const allPluginSources = useMemo(
-    () => [
-      ...enabledPlugins.map((p) => p.source),
-      ...marketplaceGroups.flatMap(([, plugins]) => plugins.map((p) => p.source)),
-    ],
-    [enabledPlugins, marketplaceGroups]
+    const addMarketplaceGroups = (runtime: PluginRuntime, runtimePlugins: PluginData[]) => {
+      const byMarketplace = new Map<string, PluginData[]>()
+      for (const plugin of runtimePlugins) {
+        const existing = byMarketplace.get(plugin.marketplace) || []
+        existing.push(plugin)
+        byMarketplace.set(plugin.marketplace, existing)
+      }
+      for (const [marketplace, marketplacePlugins] of Array.from(byMarketplace.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+        groups.push({
+          id: `${runtime}-${marketplace}`,
+          label: `${getRuntimeLabel(runtime, t)} · ${marketplace}`,
+          plugins: marketplacePlugins,
+        })
+      }
+    }
+
+    addMarketplaceGroups("claude", claudeDisabled)
+    addMarketplaceGroups("codex", codexPlugins)
+
+    return groups
+  }, [filteredPlugins, t])
+
+  const filteredSources = useMemo(() => {
+    const runtimeFiltered = runtimeFilter === "all"
+      ? pluginSources
+      : pluginSources.filter((source) => source.runtime === runtimeFilter)
+
+    if (!searchQuery.trim()) return runtimeFiltered
+    const q = searchQuery.toLowerCase()
+    const qNoDashes = q.replace(/-/g, " ")
+    const qWithDashes = q.replace(/ /g, "-")
+    return runtimeFiltered.filter((source) => {
+      const name = source.name.toLowerCase()
+      if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (source.runtime.includes(q)) return true
+      if (source.kind.includes(q)) return true
+      if (source.trust.includes(q)) return true
+      if (source.status.includes(q)) return true
+      if (source.description.toLowerCase().includes(q)) return true
+      if (source.path.toLowerCase().includes(q)) return true
+      if (source.installHint.toLowerCase().includes(q)) return true
+      return false
+    })
+  }, [pluginSources, runtimeFilter, searchQuery])
+
+  const sourceGroups = useMemo(() => {
+    const groups: Array<{ id: string; label: string; sources: PluginSourceData[] }> = []
+    for (const runtime of ["claude", "codex"] as const) {
+      const runtimeSources = filteredSources.filter((source) => source.runtime === runtime)
+      if (runtimeSources.length === 0) continue
+      groups.push({
+        id: runtime,
+        label: `${getRuntimeLabel(runtime, t)} · ${t("settings.plugins.sources")}`,
+        sources: runtimeSources,
+      })
+    }
+    return groups
+  }, [filteredSources, t])
+
+  const allPluginKeys = useMemo(
+    () => pluginGroups.flatMap((group) => group.plugins.map(getPluginKey)),
+    [pluginGroups]
+  )
+  const allSourceIds = useMemo(
+    () => sourceGroups.flatMap((group) => group.sources.map((source) => source.id)),
+    [sourceGroups]
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
-    items: allPluginSources,
-    selectedItem: selectedPluginSource,
-    onSelect: setSelectedPluginSource,
+    items: viewMode === "installed" ? allPluginKeys : allSourceIds,
+    selectedItem: viewMode === "installed" ? selectedPluginKey : selectedSourceId,
+    onSelect: (id) => {
+      if (viewMode === "installed") {
+        setSelectedPluginKey(id)
+      } else {
+        setSelectedSourceId(id)
+      }
+    },
   })
 
-  const selectedPlugin = plugins.find((p) => p.source === selectedPluginSource) || null
+  const selectedPlugin = plugins.find((p) => getPluginKey(p) === selectedPluginKey) || null
+  const selectedSource = pluginSources.find((source) => source.id === selectedSourceId) || null
 
   // Auto-select first plugin in display order (enabled first, then marketplace)
   useEffect(() => {
-    if (selectedPluginSource || isLoading || plugins.length === 0) return
-    const first = enabledPlugins[0] || marketplaceGroups[0]?.[1]?.[0]
-    if (first) setSelectedPluginSource(first.source)
-  }, [plugins, selectedPluginSource, isLoading, enabledPlugins, marketplaceGroups])
+    if (viewMode !== "installed") return
+    if (selectedPlugin && filteredPlugins.includes(selectedPlugin)) return
+    if (isLoading || filteredPlugins.length === 0) {
+      if (selectedPluginKey && filteredPlugins.length === 0) setSelectedPluginKey(null)
+      return
+    }
+    const first = pluginGroups[0]?.plugins[0]
+    setSelectedPluginKey(first ? getPluginKey(first) : null)
+  }, [filteredPlugins, isLoading, pluginGroups, selectedPlugin, selectedPluginKey, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== "sources") return
+    if (selectedSource && filteredSources.includes(selectedSource)) return
+    if (isLoadingSources || filteredSources.length === 0) {
+      if (selectedSourceId && filteredSources.length === 0) setSelectedSourceId(null)
+      return
+    }
+    const first = sourceGroups[0]?.sources[0]
+    setSelectedSourceId(first?.id ?? null)
+  }, [filteredSources, isLoadingSources, selectedSource, selectedSourceId, sourceGroups, viewMode])
 
   const approveAllMutation = trpc.claudeSettings.approveAllPluginMcpServers.useMutation()
   const revokeAllMutation = trpc.claudeSettings.revokeAllPluginMcpServers.useMutation()
@@ -451,29 +860,50 @@ export function AgentsPluginsTab() {
         enabled,
       })
 
-      // Auto-approve/revoke MCP servers with the plugin
-      if (plugin.components.mcpServers.length > 0) {
-        if (enabled) {
-          await approveAllMutation.mutateAsync({
-            pluginSource: plugin.source,
-            serverNames: plugin.components.mcpServers,
-          })
-        } else {
-          await revokeAllMutation.mutateAsync({
-            pluginSource: plugin.source,
-          })
-        }
+      if (!enabled && plugin.components.mcpServers.length > 0) {
+        await revokeAllMutation.mutateAsync({
+          pluginSource: plugin.source,
+        })
       }
 
       toast.success(enabled ? t("settings.plugins.toast.enabled") : t("settings.plugins.toast.disabled"), {
         description: formatPluginName(plugin.name),
       })
-      await refetch()
+      await Promise.all([refetch(), refetchMcp()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [setPluginEnabledMutation, approveAllMutation, revokeAllMutation, refetch, t])
+  }, [setPluginEnabledMutation, revokeAllMutation, refetch, refetchMcp, t])
+
+  const handleApproveMcpServers = useCallback(async (plugin: PluginData) => {
+    if (plugin.runtime !== "claude" || plugin.components.mcpServers.length === 0) return
+    try {
+      await approveAllMutation.mutateAsync({
+        pluginSource: plugin.source,
+        serverNames: plugin.components.mcpServers,
+      })
+      toast.success(t("settings.plugins.toast.mcpApproved"), {
+        description: formatPluginName(plugin.name),
+      })
+      await refetchMcp()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [approveAllMutation, refetchMcp, t])
+
+  const handleRefreshPlugins = useCallback(async () => {
+    try {
+      await clearPluginCacheMutation.mutateAsync()
+      await Promise.all([refetch(), refetchSources()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [clearPluginCacheMutation, refetch, refetchSources, t])
+
+  const isRefreshingPlugins = isLoading || isLoadingSources || clearPluginCacheMutation.isPending
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -491,73 +921,150 @@ export function AgentsPluginsTab() {
         disableClickToClose={true}
       >
         <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
+          <div className="px-2 pt-2 flex-shrink-0">
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-0.5">
+              {VIEW_MODES.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className={cn(
+                    "h-6 rounded-md px-1.5 text-[11px] font-medium transition-colors",
+                    viewMode === mode
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {getViewModeLabel(mode, t)}
+                </button>
+              ))}
+            </div>
+          </div>
           {/* Search */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
               ref={searchInputRef}
-              placeholder={t("settings.plugins.searchPlaceholder")}
+              placeholder={viewMode === "installed"
+                ? t("settings.plugins.searchPlaceholder")
+                : t("settings.plugins.searchSourcesPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
           </div>
-          {/* Plugin list */}
+          <div className="px-2 pt-2 flex-shrink-0">
+            <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-0.5">
+              {RUNTIME_FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setRuntimeFilter(filter)}
+                  className={cn(
+                    "h-6 rounded-md px-1.5 text-[11px] font-medium transition-colors",
+                    runtimeFilter === filter
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {getRuntimeFilterLabel(filter, t)}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Plugin/source list */}
           <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
-            {isLoading ? (
+            {viewMode === "installed" ? (
+              isLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                </div>
+              ) : plugins.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                  <PluginFilledIcon className="h-8 w-8 text-border mb-3" />
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {t("settings.plugins.noPlugins")}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/70">
+                    {t("settings.plugins.installHint")}
+                  </p>
+                </div>
+              ) : filteredPlugins.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                  <p className="text-xs font-medium text-foreground">
+                    {searchQuery.trim()
+                      ? t("settings.plugins.noResults")
+                      : t("settings.plugins.runtimeEmptyTitle", {
+                          runtime: getRuntimeFilterLabel(runtimeFilter, t),
+                        })}
+                  </p>
+                  {!searchQuery.trim() && (
+                    <p className="text-[11px] text-muted-foreground/70 mt-1">
+                      {runtimeFilter === "codex"
+                        ? t("settings.plugins.codexInstallHint")
+                        : t("settings.plugins.claudeInstallHint")}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pluginGroups.map((group) => (
+                    <div key={group.id}>
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
+                        {group.label}
+                      </p>
+                      <div className="space-y-0.5">
+                        {group.plugins.map((plugin) => (
+                          <PluginListItem
+                            key={getPluginKey(plugin)}
+                            plugin={plugin}
+                            isSelected={selectedPluginKey === getPluginKey(plugin)}
+                            onSelect={setSelectedPluginKey}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : isLoadingSources ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
               </div>
-            ) : plugins.length === 0 ? (
+            ) : pluginSources.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <PluginFilledIcon className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">
-                  {t("settings.plugins.noPlugins")}
+                  {t("settings.plugins.noSources")}
                 </p>
                 <p className="text-[11px] text-muted-foreground/70">
-                  {t("settings.plugins.installHint")}
+                  {t("settings.plugins.sourcesEmptyDescription")}
                 </p>
               </div>
-            ) : filteredPlugins.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <p className="text-xs text-muted-foreground">
-                  {t("settings.plugins.noResults")}
+            ) : filteredSources.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                <p className="text-xs font-medium text-foreground">
+                  {searchQuery.trim()
+                    ? t("settings.plugins.noResults")
+                    : t("settings.plugins.sourceRuntimeEmptyTitle", {
+                        runtime: getRuntimeFilterLabel(runtimeFilter, t),
+                      })}
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Enabled Plugins */}
-                {enabledPlugins.length > 0 && (
-                  <div>
+                {sourceGroups.map((group) => (
+                  <div key={group.id}>
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      {t("settings.plugins.enabled")}
+                      {group.label}
                     </p>
                     <div className="space-y-0.5">
-                      {enabledPlugins.map((plugin) => (
-                        <PluginListItem
-                          key={plugin.source}
-                          plugin={plugin}
-                          isSelected={selectedPluginSource === plugin.source}
-                          onSelect={setSelectedPluginSource}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Marketplace groups (disabled plugins) */}
-                {marketplaceGroups.map(([marketplace, groupPlugins]) => (
-                  <div key={marketplace}>
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
-                      {marketplace}
-                    </p>
-                    <div className="space-y-0.5">
-                      {groupPlugins.map((plugin) => (
-                        <PluginListItem
-                          key={plugin.source}
-                          plugin={plugin}
-                          isSelected={selectedPluginSource === plugin.source}
-                          onSelect={setSelectedPluginSource}
+                      {group.sources.map((source) => (
+                        <PluginSourceListItem
+                          key={source.id}
+                          source={source}
+                          isSelected={selectedSourceId === source.id}
+                          onSelect={setSelectedSourceId}
                         />
                       ))}
                     </div>
@@ -571,29 +1078,73 @@ export function AgentsPluginsTab() {
 
       {/* Right content - detail panel */}
       <div className="flex-1 min-w-0 h-full overflow-hidden">
-        {selectedPlugin ? (
-          <PluginDetail
-            plugin={selectedPlugin}
-            onToggleEnabled={(enabled) => handleToggleEnabled(selectedPlugin, enabled)}
-            isTogglingEnabled={setPluginEnabledMutation.isPending}
-            onNavigateToTab={setActiveTab}
-            mcpServerStatuses={mcpServerStatuses}
-            onMcpAuth={handleMcpAuth}
-            isAuthenticating={startOAuthMutation.isPending}
+        {viewMode === "installed" ? (
+          selectedPlugin ? (
+            <PluginDetail
+              plugin={selectedPlugin}
+              onToggleEnabled={(enabled) => handleToggleEnabled(selectedPlugin, enabled)}
+              isTogglingEnabled={setPluginEnabledMutation.isPending}
+              onApproveMcpServers={() => handleApproveMcpServers(selectedPlugin)}
+              isApprovingMcpServers={approveAllMutation.isPending}
+              onNavigateToTab={setActiveTab}
+              mcpServerStatuses={mcpServerStatuses}
+              onMcpAuth={handleMcpAuth}
+              isAuthenticating={startOAuthMutation.isPending}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <PluginFilledIcon className="h-12 w-12 text-border mb-4" />
+              <p className="text-sm font-medium text-foreground">
+                {plugins.length > 0
+                  ? t("settings.plugins.selectToView")
+                  : t("settings.plugins.noneInstalled")}
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+                {plugins.length === 0
+                  ? t("settings.plugins.emptyDescription")
+                  : t("settings.plugins.runtimeDescription")}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 h-7 px-2 text-xs"
+                onClick={() => { void handleRefreshPlugins() }}
+                disabled={isRefreshingPlugins}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+                {t("settings.plugins.refresh")}
+              </Button>
+            </div>
+          )
+        ) : selectedSource ? (
+          <PluginSourceDetail
+            source={selectedSource}
+            onRefresh={() => { void handleRefreshPlugins() }}
+            isRefreshing={isRefreshingPlugins}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <PluginFilledIcon className="h-12 w-12 text-border mb-4" />
-            <p className="text-sm text-muted-foreground">
-              {plugins.length > 0
-                ? t("settings.plugins.selectToView")
-                : t("settings.plugins.noneInstalled")}
+            <p className="text-sm font-medium text-foreground">
+              {pluginSources.length > 0
+                ? t("settings.plugins.selectSourceToView")
+                : t("settings.plugins.noSources")}
             </p>
-            {plugins.length === 0 && (
-              <p className="text-xs text-muted-foreground/70 mt-2">
-                {t("settings.plugins.installMarketplaceHint")}
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+              {pluginSources.length === 0
+                ? t("settings.plugins.sourcesEmptyDescription")
+                : t("settings.plugins.sourcesDescription")}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4 h-7 px-2 text-xs"
+              onClick={() => { void handleRefreshPlugins() }}
+              disabled={isRefreshingPlugins}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+              {t("settings.plugins.refresh")}
+            </Button>
           </div>
         )}
       </div>
