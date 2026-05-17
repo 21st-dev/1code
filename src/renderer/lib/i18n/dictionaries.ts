@@ -367,6 +367,13 @@ export const en = {
   "settings.skills.source": "Source",
   "settings.skills.viewSkills": "Skills",
   "settings.skills.viewCommands": "Commands",
+  "settings.skills.browseRegistry": "Browse Registry",
+  "settings.skills.browseRegistryHint":
+    "Show registry skills that can be installed locally",
+  "settings.skills.filterAll": "All",
+  "settings.skills.filterInstalled": "Installed",
+  "settings.skills.filterAvailable": "Available",
+  "settings.skills.filterUpdates": "Updates",
   "settings.skills.groupInstalled": "Installed",
   "settings.skills.groupAvailable": "Available",
   "settings.skills.statusInstalled": "Installed",
@@ -435,10 +442,19 @@ export const en = {
   "settings.skills.noSkillsOrCommands": "No skills or commands",
   "settings.skills.noSkills": "No skills",
   "settings.skills.noCommands": "No commands",
+  "settings.skills.noAvailableSkills": "No available skills",
+  "settings.skills.noInstalledSkills": "No installed skills",
+  "settings.skills.noSkillUpdates": "No updates",
   "settings.skills.emptyHint":
     "Scans user skills, project skills, registry skills, commands, and enabled plugins.",
   "settings.skills.commandsEmptyHint":
     "Commands are slash shortcuts from user, project, or enabled plugin command folders.",
+  "settings.skills.availableSkillsHint":
+    "Registry skills that can be installed locally will appear here.",
+  "settings.skills.installedSkillsHint":
+    "Shows user, project, plugin, and registry-installed skills.",
+  "settings.skills.skillUpdatesHint":
+    "Registry-managed skills with updates or local changes will appear here.",
   "settings.skills.noResults": "No results found",
   "settings.skills.selectToView": "Select an item to view details",
   "settings.skills.noneFound": "No skills or commands found",
@@ -2092,6 +2108,13 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.source": "来源",
   "settings.skills.viewSkills": "Skills",
   "settings.skills.viewCommands": "Commands",
+  "settings.skills.browseRegistry": "浏览 Registry",
+  "settings.skills.browseRegistryHint":
+    "显示可以安装到本地的 registry skills",
+  "settings.skills.filterAll": "全部",
+  "settings.skills.filterInstalled": "已安装",
+  "settings.skills.filterAvailable": "可安装",
+  "settings.skills.filterUpdates": "可更新",
   "settings.skills.groupInstalled": "已安装",
   "settings.skills.groupAvailable": "可安装",
   "settings.skills.statusInstalled": "已安装",
@@ -2160,10 +2183,19 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.noSkillsOrCommands": "没有 skills 或 commands",
   "settings.skills.noSkills": "没有 skills",
   "settings.skills.noCommands": "没有 commands",
+  "settings.skills.noAvailableSkills": "没有可安装 skills",
+  "settings.skills.noInstalledSkills": "没有已安装 skills",
+  "settings.skills.noSkillUpdates": "没有可更新内容",
   "settings.skills.emptyHint":
     "会扫描 user skills、project skills、registry skills、commands 和已启用 plugins。",
   "settings.skills.commandsEmptyHint":
     "Commands 是来自 user、project 或已启用 plugin command 文件夹的 slash 快捷指令。",
+  "settings.skills.availableSkillsHint":
+    "可以安装到本地的 registry skills 会显示在这里。",
+  "settings.skills.installedSkillsHint":
+    "显示 user、project、plugin 和 registry 已安装的 skills。",
+  "settings.skills.skillUpdatesHint":
+    "有更新或本地修改的 registry-managed skills 会显示在这里。",
   "settings.skills.noResults": "没有找到结果",
   "settings.skills.selectToView": "选择一项查看详情",
   "settings.skills.noneFound": "没有找到 skills 或 commands",

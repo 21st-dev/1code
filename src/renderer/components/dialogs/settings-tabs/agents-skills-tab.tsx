@@ -5,7 +5,7 @@ import { selectedProjectAtom, settingsSkillsSidebarWidthAtom } from "../../../fe
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { AlertTriangle, Download, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
+import { AlertTriangle, Download, PackageSearch, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { SkillIcon, MarkdownIcon, CodeIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -50,6 +50,9 @@ interface UnifiedItem {
 }
 
 type SkillsViewMode = "skills" | "commands"
+type SkillFilter = "all" | "installed" | "available" | "updates"
+
+const SKILL_FILTERS: SkillFilter[] = ["all", "installed", "available", "updates"]
 
 interface ItemGroup {
   id: string
@@ -111,6 +114,34 @@ function getItemStatusClass(item: UnifiedItem) {
 
 function isEditableItem(item: UnifiedItem) {
   return item.source !== "plugin" && item.kind !== "registry-skill"
+}
+
+function isRegistryAvailableItem(item: UnifiedItem) {
+  const status = item.registry?.status
+  return (
+    (item.kind === "registry-skill" && !["missing-source", "integrity-error"].includes(status || "")) ||
+    status === "user-owned"
+  )
+}
+
+function isRegistryUpdateItem(item: UnifiedItem) {
+  return ["update-available", "modified", "missing-source", "integrity-error"].includes(
+    item.registry?.status || "",
+  )
+}
+
+function matchesSkillFilter(item: UnifiedItem, filter: SkillFilter) {
+  if (filter === "all") return true
+  if (filter === "installed") return item.kind !== "registry-skill"
+  if (filter === "available") return isRegistryAvailableItem(item)
+  return isRegistryUpdateItem(item)
+}
+
+function getSkillFilterLabel(filter: SkillFilter, t: ReturnType<typeof useI18n>["t"]) {
+  if (filter === "installed") return t("settings.skills.filterInstalled")
+  if (filter === "available") return t("settings.skills.filterAvailable")
+  if (filter === "updates") return t("settings.skills.filterUpdates")
+  return t("settings.skills.filterAll")
 }
 
 function RegistryActionButtons({
@@ -637,6 +668,7 @@ export function AgentsSkillsTab() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [activeView, setActiveView] = useState<SkillsViewMode>("skills")
+  const [activeSkillFilter, setActiveSkillFilter] = useState<SkillFilter>("all")
   const [showAddForm, setShowAddForm] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -810,6 +842,16 @@ export function AgentsSkillsTab() {
     }
 
     const skillItems = filteredItems.filter((item) => item.kind !== "command")
+    if (activeSkillFilter !== "all") {
+      return [
+        {
+          id: `skills-${activeSkillFilter}`,
+          label: getSkillFilterLabel(activeSkillFilter, t),
+          items: skillItems.filter((item) => matchesSkillFilter(item, activeSkillFilter)),
+        },
+      ].filter((group) => group.items.length > 0)
+    }
+
     return [
       {
         id: "installed",
@@ -836,7 +878,7 @@ export function AgentsSkillsTab() {
         items: skillItems.filter((item) => item.source === "plugin"),
       },
     ].filter((group) => group.items.length > 0)
-  }, [activeView, filteredItems, t])
+  }, [activeView, activeSkillFilter, filteredItems, t])
 
   const visibleItems = useMemo(
     () => visibleGroups.flatMap((group) => group.items),
@@ -847,6 +889,16 @@ export function AgentsSkillsTab() {
     () => visibleItems.map((i) => i.id),
     [visibleItems],
   )
+
+  const skillFilterCounts = useMemo<Record<SkillFilter, number>>(() => {
+    const skillItems = allItems.filter((item) => item.kind !== "command")
+    return {
+      all: skillItems.length,
+      installed: skillItems.filter((item) => matchesSkillFilter(item, "installed")).length,
+      available: skillItems.filter((item) => matchesSkillFilter(item, "available")).length,
+      updates: skillItems.filter((item) => matchesSkillFilter(item, "updates")).length,
+    }
+  }, [allItems])
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
     items: visibleItemIds,
@@ -1007,6 +1059,14 @@ export function AgentsSkillsTab() {
     }
   }, [refetchRegistry, t])
 
+  const handleBrowseRegistry = useCallback(() => {
+    setShowAddForm(false)
+    setSearchQuery("")
+    setActiveView("skills")
+    setActiveSkillFilter("available")
+    void refetchRegistry()
+  }, [refetchRegistry])
+
   const isSaving = updateSkillMutation.isPending || updateCommandMutation.isPending
   const isCreating = createSkillMutation.isPending || createCommandMutation.isPending
   const isDeleting = deleteSkillMutation.isPending || deleteCommandMutation.isPending
@@ -1016,10 +1076,22 @@ export function AgentsSkillsTab() {
   const hasSearch = searchQuery.trim().length > 0
   const emptyTitle = activeView === "commands"
     ? t("settings.skills.noCommands")
-    : t("settings.skills.noSkills")
+    : activeSkillFilter === "available"
+      ? t("settings.skills.noAvailableSkills")
+      : activeSkillFilter === "updates"
+        ? t("settings.skills.noSkillUpdates")
+        : activeSkillFilter === "installed"
+          ? t("settings.skills.noInstalledSkills")
+          : t("settings.skills.noSkills")
   const emptyHint = activeView === "commands"
     ? t("settings.skills.commandsEmptyHint")
-    : t("settings.skills.emptyHint")
+    : activeSkillFilter === "available"
+      ? t("settings.skills.availableSkillsHint")
+      : activeSkillFilter === "updates"
+        ? t("settings.skills.skillUpdatesHint")
+        : activeSkillFilter === "installed"
+          ? t("settings.skills.installedSkillsHint")
+          : t("settings.skills.emptyHint")
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -1064,6 +1136,28 @@ export function AgentsSkillsTab() {
             </button>
           </div>
           <div className="px-2 pt-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleBrowseRegistry}
+              className={cn(
+                "h-8 w-full rounded-lg border px-2.5 text-xs font-medium transition-colors cursor-pointer flex items-center gap-2",
+                activeView === "skills" && activeSkillFilter === "available"
+                  ? "border-foreground/15 bg-foreground/5 text-foreground"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+              )}
+              title={t("settings.skills.browseRegistryHint")}
+              aria-label={t("settings.skills.browseRegistry")}
+            >
+              <PackageSearch className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate flex-1 text-left">
+                {t("settings.skills.browseRegistry")}
+              </span>
+              <span className="rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {skillFilterCounts.available}
+              </span>
+            </button>
+          </div>
+          <div className="px-2 pt-2 flex-shrink-0">
             <div className="grid grid-cols-2 rounded-lg bg-muted p-0.5">
               <button
                 type="button"
@@ -1091,6 +1185,30 @@ export function AgentsSkillsTab() {
               </button>
             </div>
           </div>
+          {activeView === "skills" && (
+            <div className="px-2 pt-2 flex-shrink-0">
+              <div className="flex gap-1 overflow-x-auto pb-0.5">
+                {SKILL_FILTERS.map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setActiveSkillFilter(filter)}
+                    className={cn(
+                      "h-6 shrink-0 rounded-md px-2 text-[11px] font-medium transition-colors cursor-pointer",
+                      activeSkillFilter === filter
+                        ? "bg-foreground/10 text-foreground"
+                        : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                    )}
+                  >
+                    {getSkillFilterLabel(filter, t)}
+                    <span className="ml-1 text-[10px] text-muted-foreground/70">
+                      {skillFilterCounts[filter]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Item list */}
           <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoading ? (
