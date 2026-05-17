@@ -1,7 +1,9 @@
 import { trpcClient } from "../../../lib/trpc"
 import { toast } from "sonner"
+import { en, type TranslationKey } from "../../../lib/i18n/dictionaries"
 
 const MAX_HISTORY_CHARS = 50_000
+type Translate = (key: TranslationKey, values?: Record<string, string | number>) => string
 
 /**
  * Format chat messages as concise markdown for attaching as context to a new sub-chat.
@@ -52,13 +54,23 @@ interface ExportOptions {
   chatId: string
   subChatId?: string
   format: ExportFormat
+  t?: Translate
+}
+
+function translate(t: Translate | undefined, key: TranslationKey, values?: Record<string, string | number>) {
+  if (t) return t(key, values)
+
+  return (en[key] || key).replace(/\{(\w+)\}/g, (match, name) => {
+    const value = values?.[name]
+    return value === undefined ? match : String(value)
+  })
 }
 
 /**
  * Export a chat or sub-chat to a file.
  * Shows download dialog to save the exported content.
  */
-export async function exportChat({ chatId, subChatId, format }: ExportOptions): Promise<void> {
+export async function exportChat({ chatId, subChatId, format, t }: ExportOptions): Promise<void> {
   try {
     const exportData = await trpcClient.chats.exportChat.query({
       chatId,
@@ -76,13 +88,15 @@ export async function exportChat({ chatId, subChatId, format }: ExportOptions): 
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
 
-    toast.success("Export complete", {
-      description: `Saved as ${exportData.filename}`,
+    toast.success(translate(t, "agent.export.complete"), {
+      description: translate(t, "agent.export.savedAs", {
+        filename: exportData.filename,
+      }),
     })
   } catch (error) {
     console.error("[exportChat] Error:", error)
-    toast.error("Export failed", {
-      description: error instanceof Error ? error.message : "Unable to export chat",
+    toast.error(translate(t, "agent.export.failed"), {
+      description: error instanceof Error ? error.message : translate(t, "agent.export.unableToExport"),
     })
   }
 }
@@ -90,7 +104,7 @@ export async function exportChat({ chatId, subChatId, format }: ExportOptions): 
 /**
  * Copy chat or sub-chat content to clipboard.
  */
-export async function copyChat({ chatId, subChatId, format }: ExportOptions): Promise<void> {
+export async function copyChat({ chatId, subChatId, format, t }: ExportOptions): Promise<void> {
   try {
     const exportData = await trpcClient.chats.exportChat.query({
       chatId,
@@ -105,15 +119,15 @@ export async function copyChat({ chatId, subChatId, format }: ExportOptions): Pr
       if (window.desktopApi?.clipboardWrite) {
         await window.desktopApi.clipboardWrite(exportData.content)
       } else {
-        throw new Error("Clipboard not available")
+        throw new Error(translate(t, "agent.export.clipboardUnavailable"))
       }
     }
 
-    toast.success("Copied to clipboard")
+    toast.success(translate(t, "agent.export.copiedToClipboard"))
   } catch (error) {
     console.error("[copyChat] Error:", error)
-    toast.error("Copy failed", {
-      description: error instanceof Error ? error.message : "Unable to copy chat",
+    toast.error(translate(t, "agent.export.copyFailed"), {
+      description: error instanceof Error ? error.message : translate(t, "agent.export.unableToCopy"),
     })
   }
 }

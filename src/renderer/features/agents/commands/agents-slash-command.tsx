@@ -19,6 +19,7 @@ import {
   BUILTIN_SLASH_COMMANDS,
 } from "./builtin-commands"
 import type { AgentMode } from "../atoms"
+import { useI18n } from "../../../lib/i18n"
 
 interface AgentsSlashCommandProps {
   isOpen: boolean
@@ -42,6 +43,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   mode,
   disabledCommands,
 }: AgentsSlashCommandProps) {
+  const { t } = useI18n()
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const placementRef = useRef<"above" | "below" | null>(null)
@@ -71,12 +73,12 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       id: `custom:${cmd.source}:${cmd.name}`,
       name: cmd.name,
       command: `/${cmd.name}`,
-      description: cmd.description || `Custom command from ${cmd.source}`,
+      description: cmd.description || t("agent.slash.customCommandFrom", { source: cmd.source }),
       category: "repository" as const,
       path: cmd.path,
       argumentHint: cmd.argumentHint,
     }))
-  }, [fileCommands])
+  }, [fileCommands, t])
 
   // State for loading command content
   const [isLoadingContent, setIsLoadingContent] = useState(false)
@@ -399,7 +401,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       {isLoading && (
         <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 text-xs text-muted-foreground">
           <IconSpinner className="h-3.5 w-3.5" />
-          <span>Loading commands...</span>
+          <span>{t("agent.slash.loadingCommands")}</span>
         </div>
       )}
 
@@ -407,8 +409,8 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       {!isLoading && options.length === 0 && (
         <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
           {debouncedSearchText
-            ? `No commands matching "${debouncedSearchText}"`
-            : "No commands available"}
+            ? t("agent.slash.noCommandsMatching", { query: debouncedSearchText })
+            : t("agent.slash.noCommandsAvailable")}
         </div>
       )}
     </div>,

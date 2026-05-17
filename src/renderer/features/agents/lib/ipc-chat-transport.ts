@@ -13,6 +13,7 @@ import {
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
+import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
   askUserQuestionResultsAtom,
   compactingSubChatsAtom,
@@ -24,6 +25,18 @@ import {
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
+
+function tr(key: TranslationKey, values?: Record<string, string | number>) {
+  const useZh =
+    typeof navigator !== "undefined" &&
+    (navigator.language || navigator.languages?.[0] || "").toLowerCase().startsWith("zh")
+  const template = (useZh ? zhCN[key] : en[key]) || en[key] || key
+
+  return template.replace(/\{(\w+)\}/g, (match, name) => {
+    const value = values?.[name]
+    return value === undefined ? match : String(value)
+  })
+}
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -347,8 +360,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle retry notification - show friendly toast instead of scary error
               if (chunk.type === "retry-notification") {
-                toast.info("Retrying request", {
-                  description: chunk.message || "Request was unsuccessful, trying again...",
+                toast.info(tr("agent.transport.retryingRequest"), {
+                  description: chunk.message || tr("agent.transport.requestRetrying"),
                   duration: 4000,
                 })
                 return // don't enqueue retry-notification as a stream chunk
@@ -386,7 +399,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
                 // Show toast based on error category
                 const config = ERROR_TOAST_CONFIG[category]
-                const title = config?.title || "Claude error"
+                const title = config?.title || tr("agent.transport.claudeError")
                 // For auth/API key failures, prefer original backend error to aid debugging
                 const preferOriginalError =
                   category === "AUTH_FAILURE" ||
@@ -394,8 +407,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   category === "INVALID_API_KEY"
                 // Use config description if set, otherwise fall back to errorText
                 const rawDescription = preferOriginalError
-                  ? chunk.errorText || config?.description || "An unexpected error occurred"
-                  : config?.description || chunk.errorText || "An unexpected error occurred"
+                  ? chunk.errorText || config?.description || tr("agent.transport.unexpectedError")
+                  : config?.description || chunk.errorText || tr("agent.transport.unexpectedError")
                 // Truncate long descriptions for toast (keep first 300 chars)
                 const description = rawDescription.length > 300
                   ? rawDescription.slice(0, 300) + "..."
@@ -405,10 +418,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   description,
                   duration: 12000,
                   action: {
-                    label: "Copy Error",
+                    label: tr("agent.transport.copyError"),
                     onClick: () => {
                       navigator.clipboard.writeText(errorDetails)
-                      toast.success("Error details copied to clipboard")
+                      toast.success(tr("agent.transport.errorDetailsCopied"))
                     },
                   },
                 })

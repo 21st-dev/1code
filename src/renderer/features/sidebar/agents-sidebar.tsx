@@ -718,23 +718,23 @@ const AgentChatItem = React.memo(function AgentChatItem({
             <ContextMenuSub>
               <ContextMenuSubTrigger>{t("sidebar.exportWorkspace")}</ContextMenuSubTrigger>
               <ContextMenuSubContent sideOffset={6} alignOffset={-4}>
-                <ContextMenuItem onClick={() => exportChat({ chatId, format: "markdown" })}>
+                <ContextMenuItem onClick={() => exportChat({ chatId, format: "markdown", t })}>
                   {t("sidebar.downloadAsMarkdown")}
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => exportChat({ chatId, format: "json" })}>
+                <ContextMenuItem onClick={() => exportChat({ chatId, format: "json", t })}>
                   {t("sidebar.downloadAsJson")}
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => exportChat({ chatId, format: "text" })}>
+                <ContextMenuItem onClick={() => exportChat({ chatId, format: "text", t })}>
                   {t("sidebar.downloadAsText")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => copyChat({ chatId, format: "markdown" })}>
+                <ContextMenuItem onClick={() => copyChat({ chatId, format: "markdown", t })}>
                   {t("sidebar.copyAsMarkdown")}
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => copyChat({ chatId, format: "json" })}>
+                <ContextMenuItem onClick={() => copyChat({ chatId, format: "json", t })}>
                   {t("sidebar.copyAsJson")}
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => copyChat({ chatId, format: "text" })}>
+                <ContextMenuItem onClick={() => copyChat({ chatId, format: "text", t })}>
                   {t("sidebar.copyAsText")}
                 </ContextMenuItem>
               </ContextMenuSubContent>

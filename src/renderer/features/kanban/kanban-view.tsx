@@ -2,6 +2,7 @@ import { useCallback, useMemo, useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { toast } from "sonner"
 import { trpc } from "../../lib/trpc"
+import { useI18n } from "../../lib/i18n"
 import { getWindowId } from "../../contexts/WindowContext"
 import {
   selectedAgentChatIdAtom,
@@ -32,6 +33,7 @@ import { AgentsHeaderControls } from "../agents/ui/agents-header-controls"
 const OPEN_SUB_CHATS_CHANGE_EVENT = "open-sub-chats-change"
 
 export function KanbanView() {
+  const { t } = useI18n()
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
@@ -335,7 +337,7 @@ export function KanbanView() {
       utils.chats.list.invalidate()
     },
     onError: () => {
-      toast.error("Failed to rename workspace")
+      toast.error(t("sidebar.toast.failedRenameWorkspace"))
     },
   })
 
@@ -356,10 +358,10 @@ export function KanbanView() {
   const archiveChatMutation = trpc.chats.archive.useMutation({
     onSuccess: () => {
       utils.chats.list.invalidate()
-      toast.success("Workspace archived")
+      toast.success(t("sidebar.toast.workspaceArchived"))
     },
     onError: () => {
-      toast.error("Failed to archive workspace")
+      toast.error(t("sidebar.toast.failedArchiveWorkspace"))
     },
   })
 
@@ -404,18 +406,18 @@ export function KanbanView() {
   // Copy branch name to clipboard
   const handleCopyBranch = useCallback((branch: string) => {
     navigator.clipboard.writeText(branch)
-    toast.success("Branch name copied", { description: branch })
-  }, [])
+    toast.success(t("sidebar.toast.branchNameCopied"), { description: branch })
+  }, [t])
 
   // Export chat handler
   const handleExportChat = useCallback((params: { chatId: string; format: "markdown" | "json" | "text" }) => {
-    exportChat(params)
-  }, [])
+    exportChat({ ...params, t })
+  }, [t])
 
   // Copy chat handler
   const handleCopyChat = useCallback((params: { chatId: string; format: "markdown" | "json" | "text" }) => {
-    copyChat(params)
-  }, [])
+    copyChat({ ...params, t })
+  }, [t])
 
   return (
     <div className="flex flex-col h-full w-full bg-background">

@@ -86,11 +86,11 @@ import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-su
 import { SearchCombobox } from "../../components/ui/search-combobox"
 import { SubChatContextMenu } from "../agents/ui/sub-chat-context-menu"
 import { formatTimeAgo } from "../agents/utils/format-time-ago"
-import { pluralize } from "../agents/utils/pluralize"
 import { useHotkeys } from "react-hotkeys-hook"
 import { useSubChatDraftsCache, getSubChatDraftKey } from "../agents/lib/drafts"
 import { Checkbox } from "../../components/ui/checkbox"
 import { TypewriterText } from "../../components/ui/typewriter-text"
+import { useI18n } from "../../lib/i18n"
 
 // Isolated Search History Popover for sidebar - prevents parent re-renders when popover opens/closes
 interface SidebarSearchHistoryPopoverProps {
@@ -110,6 +110,7 @@ const SidebarSearchHistoryPopover = memo(function SidebarSearchHistoryPopover({
   allSubChatsLength,
   onSelect,
 }: SidebarSearchHistoryPopoverProps) {
+  const { t } = useI18n()
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
   const handleSelect = useCallback((subChat: SubChatMeta) => {
@@ -143,14 +144,14 @@ const SidebarSearchHistoryPopover = memo(function SidebarSearchHistoryPopover({
           )}
         </div>
         <span className="text-sm truncate flex-1">
-          {subChat.name || "New Chat"}
+          {subChat.name || t("chat.defaultTitle")}
         </span>
         <span className="text-sm text-muted-foreground whitespace-nowrap">
           {timeAgo}
         </span>
       </div>
     )
-  }, [loadingSubChats, subChatUnseenChanges, pendingQuestionsMap])
+  }, [loadingSubChats, subChatUnseenChanges, pendingQuestionsMap, t])
 
   return (
     <SearchCombobox
@@ -158,9 +159,9 @@ const SidebarSearchHistoryPopover = memo(function SidebarSearchHistoryPopover({
       onOpenChange={setIsHistoryOpen}
       items={sortedSubChats}
       onSelect={handleSelect}
-      placeholder="Search chats..."
-      emptyMessage="No results"
-      getItemValue={(subChat) => `${subChat.name || "New Chat"} ${subChat.id}`}
+      placeholder={t("agent.chat.searchChats")}
+      emptyMessage={t("agent.chat.noResults")}
+      getItemValue={(subChat) => `${subChat.name || t("chat.defaultTitle")} ${subChat.id}`}
       renderItem={renderItem}
       side="bottom"
       align="end"
@@ -180,7 +181,7 @@ const SidebarSearchHistoryPopover = memo(function SidebarSearchHistoryPopover({
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Chat history</TooltipContent>
+          <TooltipContent side="bottom">{t("agent.chat.history")}</TooltipContent>
         </Tooltip>
       }
     />
@@ -204,6 +205,7 @@ export function AgentsSubChatsSidebar({
   isLoading = false,
   agentName,
 }: AgentsSubChatsSidebarProps) {
+  const { t } = useI18n()
   // Use shallow comparison to prevent re-renders when arrays have same content
   const {
     activeSubChatId,
@@ -658,9 +660,9 @@ export function AgentsSubChatsSidebar({
     // Note: store is updated optimistically in handleRenameSave, no need for onSuccess
     onError: (error) => {
       if (error.data?.code === "NOT_FOUND") {
-        toast.error("Send a message first before renaming this chat")
+        toast.error(t("agent.chat.toast.sendMessageBeforeRenaming"))
       } else {
-        toast.error("Failed to rename chat")
+        toast.error(t("agent.chat.toast.failedRenameChat"))
       }
     },
   })
@@ -701,7 +703,7 @@ export function AgentsSubChatsSidebar({
         // Rollback on error
         useAgentSubChatStore
           .getState()
-          .updateSubChatName(subChatId, oldName || "New Chat")
+          .updateSubChatName(subChatId, oldName || t("chat.defaultTitle"))
       } finally {
         setRenameLoading(false)
         setRenamingSubChat(null)
@@ -717,7 +719,7 @@ export function AgentsSubChatsSidebar({
 
     const newSubChat = await trpcClient.chats.createSubChat.mutate({
       chatId: parentChatId,
-      name: "New Chat",
+      name: t("chat.defaultTitle"),
       mode: defaultAgentMode,
     })
     const newId = newSubChat.id
@@ -731,7 +733,7 @@ export function AgentsSubChatsSidebar({
     // Add to allSubChats with placeholder name
     store.addToAllSubChats({
       id: newId,
-      name: "New Chat",
+      name: t("chat.defaultTitle"),
       created_at: new Date().toISOString(),
       mode: defaultAgentMode,
     })
@@ -1031,12 +1033,12 @@ export function AgentsSubChatsSidebar({
             onClick={onClose}
             tabIndex={-1}
             className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-            aria-label="Close sidebar"
+            aria-label={t("sidebar.close")}
           >
             <IconDoubleChevronLeft className="h-4 w-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Close chats pane</TooltipContent>
+        <TooltipContent side="bottom">{t("agent.chat.closeChatsPane")}</TooltipContent>
       </Tooltip>
     </div>
   )
@@ -1092,7 +1094,7 @@ export function AgentsSubChatsSidebar({
                       onClick={onBackToChats}
                       tabIndex={-1}
                       className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
-                      aria-label="Toggle agents sidebar"
+                      aria-label={t("agent.chat.toggleChatsSidebar")}
                       style={{
                         // @ts-expect-error - WebKit-specific property
                         WebkitAppRegion: "no-drag",
@@ -1101,7 +1103,7 @@ export function AgentsSubChatsSidebar({
                       <AlignJustify className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Open chats sidebar</TooltipContent>
+                  <TooltipContent>{t("agent.chat.openChatsSidebar")}</TooltipContent>
                 </Tooltip>
               )}
               <div className="flex-1" />
@@ -1125,7 +1127,7 @@ export function AgentsSubChatsSidebar({
           >
             <Input
               ref={searchInputRef}
-              placeholder="Search chats..."
+              placeholder={t("agent.chat.searchChats")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -1185,11 +1187,11 @@ export function AgentsSubChatsSidebar({
                   size="sm"
                   className="h-7 px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg"
                 >
-                  <span className="text-sm font-medium">New Chat</span>
+                  <span className="text-sm font-medium">{t("chat.defaultTitle")}</span>
                 </Button>
               </TooltipTrigger>
             <TooltipContent side="right">
-              Create a new chat
+              {t("agent.chat.createNewChat")}
               {newAgentHotkey && <Kbd>{newAgentHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
@@ -1245,7 +1247,7 @@ export function AgentsSubChatsSidebar({
                         )}
                       >
                         <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                          Pinned Chats
+                          {t("agent.chat.pinnedChats")}
                         </h3>
                       </div>
                       <div className="list-none p-0 m-0 mb-3">
@@ -1330,7 +1332,7 @@ export function AgentsSubChatsSidebar({
                                     hoveredChatIndexRef.current = globalIndex
                                     handleSubChatMouseEnter(
                                       subChat.id,
-                                      subChat.name || "New Chat",
+                                      subChat.name || t("chat.defaultTitle"),
                                       e.currentTarget,
                                     )
                                   }}
@@ -1430,7 +1432,7 @@ export function AgentsSubChatsSidebar({
                                         >
                                           <TypewriterText
                                             text={subChat.name || ""}
-                                            placeholder="New Chat"
+                                            placeholder={t("chat.defaultTitle")}
                                             id={subChat.id}
                                             isJustCreated={justCreatedIds.has(subChat.id)}
                                             showPlaceholder={true}
@@ -1444,7 +1446,7 @@ export function AgentsSubChatsSidebar({
                                             }}
                                             tabIndex={-1}
                                             className="flex-shrink-0 text-muted-foreground hover:text-foreground active:text-foreground transition-[opacity,transform,color] duration-150 ease-out opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto active:scale-[0.97]"
-                                            aria-label="Archive agent"
+                                            aria-label={t("agent.chat.archiveAgent")}
                                           >
                                             <ArchiveIcon className="h-3.5 w-3.5" />
                                           </button>
@@ -1453,7 +1455,7 @@ export function AgentsSubChatsSidebar({
                                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 min-w-0">
                                         {draftText ? (
                                           <span className="truncate flex-1 min-w-0">
-                                            <span className="text-blue-500">Draft:</span>{" "}
+                                            <span className="text-blue-500">{t("sidebar.draft")}:</span>{" "}
                                             {draftText}
                                           </span>
                                         ) : (
@@ -1462,8 +1464,8 @@ export function AgentsSubChatsSidebar({
                                               <>
                                                 {stats.fileCount}{" "}
                                                 {stats.fileCount === 1
-                                                  ? "file"
-                                                  : "files"}
+                                                  ? t("agent.status.file")
+                                                  : t("agent.status.files")}
                                               </>
                                             ) : null}
                                           </span>
@@ -1500,15 +1502,14 @@ export function AgentsSubChatsSidebar({
                                         }
                                       >
                                         {areAllSelectedPinned
-                                          ? `Unpin ${selectedSubChatIds.size} ${pluralize(selectedSubChatIds.size, "chat")}`
-                                          : `Pin ${selectedSubChatIds.size} ${pluralize(selectedSubChatIds.size, "chat")}`}
+                                          ? t("agent.chat.unpinSelectedChats", { count: selectedSubChatIds.size })
+                                          : t("agent.chat.pinSelectedChats", { count: selectedSubChatIds.size })}
                                       </ContextMenuItem>
                                       <ContextMenuSeparator />
                                     </>
                                   )}
                                   <ContextMenuItem onClick={handleBulkArchive}>
-                                    Archive {selectedSubChatIds.size}{" "}
-                                    {pluralize(selectedSubChatIds.size, "chat")}
+                                    {t("agent.chat.archiveSelectedChats", { count: selectedSubChatIds.size })}
                                   </ContextMenuItem>
                                 </ContextMenuContent>
                               ) : (
@@ -1549,7 +1550,7 @@ export function AgentsSubChatsSidebar({
                         )}
                       >
                         <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                          {pinnedChats.length > 0 ? "Recent chats" : "Chats"}
+                          {pinnedChats.length > 0 ? t("agent.chat.recentChats") : t("agent.chat.chats")}
                         </h3>
                       </div>
                       <div className="list-none p-0 m-0">
@@ -1634,7 +1635,7 @@ export function AgentsSubChatsSidebar({
                                     hoveredChatIndexRef.current = globalIndex
                                     handleSubChatMouseEnter(
                                       subChat.id,
-                                      subChat.name || "New Chat",
+                                      subChat.name || t("chat.defaultTitle"),
                                       e.currentTarget,
                                     )
                                   }}
@@ -1734,7 +1735,7 @@ export function AgentsSubChatsSidebar({
                                         >
                                           <TypewriterText
                                             text={subChat.name || ""}
-                                            placeholder="New Chat"
+                                            placeholder={t("chat.defaultTitle")}
                                             id={subChat.id}
                                             isJustCreated={justCreatedIds.has(subChat.id)}
                                             showPlaceholder={true}
@@ -1748,7 +1749,7 @@ export function AgentsSubChatsSidebar({
                                             }}
                                             tabIndex={-1}
                                             className="flex-shrink-0 text-muted-foreground hover:text-foreground active:text-foreground transition-[opacity,transform,color] duration-150 ease-out opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto active:scale-[0.97]"
-                                            aria-label="Archive agent"
+                                            aria-label={t("agent.chat.archiveAgent")}
                                           >
                                             <ArchiveIcon className="h-3.5 w-3.5" />
                                           </button>
@@ -1757,7 +1758,7 @@ export function AgentsSubChatsSidebar({
                                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 min-w-0">
                                         {draftText ? (
                                           <span className="truncate flex-1 min-w-0">
-                                            <span className="text-blue-500">Draft:</span>{" "}
+                                            <span className="text-blue-500">{t("sidebar.draft")}:</span>{" "}
                                             {draftText}
                                           </span>
                                         ) : (
@@ -1766,8 +1767,8 @@ export function AgentsSubChatsSidebar({
                                               <>
                                                 {stats.fileCount}{" "}
                                                 {stats.fileCount === 1
-                                                  ? "file"
-                                                  : "files"}
+                                                  ? t("agent.status.file")
+                                                  : t("agent.status.files")}
                                               </>
                                             ) : null}
                                           </span>
@@ -1804,15 +1805,14 @@ export function AgentsSubChatsSidebar({
                                         }
                                       >
                                         {areAllSelectedPinned
-                                          ? `Unpin ${selectedSubChatIds.size} ${pluralize(selectedSubChatIds.size, "chat")}`
-                                          : `Pin ${selectedSubChatIds.size} ${pluralize(selectedSubChatIds.size, "chat")}`}
+                                          ? t("agent.chat.unpinSelectedChats", { count: selectedSubChatIds.size })
+                                          : t("agent.chat.pinSelectedChats", { count: selectedSubChatIds.size })}
                                       </ContextMenuItem>
                                       <ContextMenuSeparator />
                                     </>
                                   )}
                                   <ContextMenuItem onClick={handleBulkArchive}>
-                                    Archive {selectedSubChatIds.size}{" "}
-                                    {pluralize(selectedSubChatIds.size, "chat")}
+                                    {t("agent.chat.archiveSelectedChats", { count: selectedSubChatIds.size })}
                                   </ContextMenuItem>
                                 </ContextMenuContent>
                               ) : (
@@ -1846,9 +1846,9 @@ export function AgentsSubChatsSidebar({
               ) : searchQuery.trim() ? (
                 <div className="flex items-center justify-center h-full text-sm text-muted-foreground p-4 text-center">
                   <div>
-                    <p className="mb-1">No results</p>
+                    <p className="mb-1">{t("agent.chat.noResults")}</p>
                     <p className="text-xs text-muted-foreground/60">
-                      Try a different search term
+                      {t("agent.chat.tryDifferentSearch")}
                     </p>
                   </div>
                 </div>
@@ -1875,13 +1875,13 @@ export function AgentsSubChatsSidebar({
           >
             <div className="flex items-center justify-between px-1">
               <span className="text-xs text-muted-foreground">
-                {selectedSubChatsCount} selected
+                {t("sidebar.selected", { count: selectedSubChatsCount })}
               </span>
               <button
                 onClick={clearSubChatSelection}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
 
@@ -1893,7 +1893,7 @@ export function AgentsSubChatsSidebar({
                 className="flex-1 h-8 gap-1.5 text-xs rounded-lg"
               >
                 <ArchiveIcon className="h-3.5 w-3.5" />
-                Archive
+                {t("sidebar.archive")}
               </Button>
             </div>
           </motion.div>
@@ -1924,22 +1924,22 @@ export function AgentsSubChatsSidebar({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive agent</AlertDialogTitle>
+            <AlertDialogTitle>{t("agent.chat.archiveAgent")}</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogDescription className="px-5 pb-5">
-            Do you want to archive agent{" "}
+            {t("agent.chat.archiveAgentConfirmPrefix")}{" "}
             <span className="font-medium text-foreground">
-              {agentName || subChatToArchive?.name || "this agent"}
+              {agentName || subChatToArchive?.name || t("agent.chat.thisAgent")}
             </span>
-            ? You can restore it from history later.
+            {t("agent.chat.archiveAgentConfirmSuffix")}
           </AlertDialogDescription>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmArchiveAgent}
               autoFocus
             >
-              Archive
+              {t("sidebar.archive")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

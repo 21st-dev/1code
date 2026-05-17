@@ -3,6 +3,7 @@
 import { cn } from "../../../lib/utils"
 import { Monitor, Smartphone } from "lucide-react"
 import { motion } from "motion/react"
+import { useI18n } from "../../../lib/i18n"
 
 interface ViewportToggleProps {
   value: "desktop" | "mobile"
@@ -15,6 +16,8 @@ export function ViewportToggle({
   onChange,
   className,
 }: ViewportToggleProps) {
+  const { t } = useI18n()
+
   return (
     <motion.div
       layout
@@ -55,7 +58,7 @@ export function ViewportToggle({
               onChange("desktop")
             }
           }}
-          aria-label="Desktop viewport"
+          aria-label={t("agent.viewport.desktop")}
           aria-pressed={value === "desktop"}
           className={cn(
             "relative z-[2] px-2 flex-1 flex items-center justify-center transition-colors duration-200 rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 text-muted-foreground",
@@ -76,7 +79,7 @@ export function ViewportToggle({
               onChange("mobile")
             }
           }}
-          aria-label="Mobile viewport"
+          aria-label={t("agent.viewport.mobile")}
           aria-pressed={value === "mobile"}
           className={cn(
             "relative z-[2] px-2 flex-1 flex items-center justify-center transition-colors duration-200 rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 text-muted-foreground",
@@ -88,4 +91,3 @@ export function ViewportToggle({
     </motion.div>
   )
 }
-

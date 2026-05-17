@@ -810,17 +810,17 @@ export const ChatInputArea = memo(function ChatInputArea({
         editorRef.current?.setValue(newValue)
         editorRef.current?.focus()
       } else {
-        toast.info("No speech detected")
+        toast.info(t("agent.voice.noSpeechDetected"))
       }
     } catch (err) {
       console.error("[VoiceInput] Transcription failed:", err)
-      toast.error("Voice transcription failed")
+      toast.error(t("agent.voice.transcriptionFailed"))
     } finally {
       if (voiceMountedRef.current) {
         setIsTranscribing(false)
       }
     }
-  }, [isVoiceRecording, stopVoiceRecording, transcribeMutation, editorRef])
+  }, [isVoiceRecording, stopVoiceRecording, transcribeMutation, editorRef, t])
 
   const handleVoiceMouseLeave = useCallback(() => {
     if (isVoiceRecording) {

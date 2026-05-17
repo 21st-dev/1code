@@ -51,6 +51,7 @@ import { toast } from "sonner"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { SubChatContextMenu } from "./sub-chat-context-menu"
 import { formatTimeAgo } from "../utils/format-time-ago"
+import { useI18n } from "../../../lib/i18n"
 
 interface DiffStats {
   fileCount: number
@@ -84,6 +85,7 @@ const SearchHistoryPopover = memo(forwardRef<SearchHistoryPopoverRef, SearchHist
   allSubChatsLength,
   onSelect,
 }, ref) {
+  const { t } = useI18n()
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
   // Expose open function to parent
@@ -121,14 +123,14 @@ const SearchHistoryPopover = memo(forwardRef<SearchHistoryPopoverRef, SearchHist
           )}
         </div>
         <span className="text-sm truncate flex-1">
-          {subChat.name || "New Chat"}
+          {subChat.name || t("chat.defaultTitle")}
         </span>
         <span className="text-sm text-muted-foreground whitespace-nowrap">
           {timeAgo}
         </span>
       </div>
     )
-  }, [loadingSubChats, subChatUnseenChanges, pendingQuestionsMap, pendingPlanApprovals])
+  }, [loadingSubChats, subChatUnseenChanges, pendingQuestionsMap, pendingPlanApprovals, t])
 
   return (
     <SearchCombobox
@@ -136,9 +138,9 @@ const SearchHistoryPopover = memo(forwardRef<SearchHistoryPopoverRef, SearchHist
       onOpenChange={setIsHistoryOpen}
       items={sortedSubChats}
       onSelect={onSelect}
-      placeholder="Search chats..."
-      emptyMessage="No results"
-      getItemValue={(subChat) => `${subChat.name || "New Chat"} ${subChat.id}`}
+      placeholder={t("agent.chat.searchChats")}
+      emptyMessage={t("agent.chat.noResults")}
+      getItemValue={(subChat) => `${subChat.name || t("chat.defaultTitle")} ${subChat.id}`}
       renderItem={renderItem}
       trigger={
         <Tooltip>
@@ -155,7 +157,7 @@ const SearchHistoryPopover = memo(forwardRef<SearchHistoryPopoverRef, SearchHist
             </PopoverTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            Search chats
+            {t("agent.chat.searchChats")}
             <Kbd>/</Kbd>
           </TooltipContent>
         </Tooltip>
@@ -191,6 +193,7 @@ export function SubChatSelector({
   isTerminalOpen = false,
   chatId,
 }: SubChatSelectorProps) {
+  const { t } = useI18n()
   // Use shallow comparison to prevent re-renders when arrays have same content
   const {
     activeSubChatId,
@@ -390,9 +393,9 @@ export function SubChatSelector({
     onError: (error) => {
       // Show helpful error message (like Canvas)
       if (error.data?.code === "NOT_FOUND") {
-        toast.error("Send a message first before renaming this chat")
+        toast.error(t("agent.chat.toast.sendMessageBeforeRenaming"))
       } else {
-        toast.error("Failed to rename chat")
+        toast.error(t("agent.chat.toast.failedRenameChat"))
       }
     },
   })
@@ -638,14 +641,14 @@ export function SubChatSelector({
           size="icon"
           onClick={onBackToChats}
           className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
-          aria-label="Back to chats"
+          aria-label={t("agent.chat.backToChats")}
           style={{
             // @ts-expect-error - WebKit-specific property
             WebkitAppRegion: "no-drag",
           }}
         >
           <AlignJustify className="h-4 w-4" />
-          <span className="sr-only">Back to chats</span>
+          <span className="sr-only">{t("agent.chat.backToChats")}</span>
         </Button>
       )}
 
@@ -666,7 +669,7 @@ export function SubChatSelector({
               <IconOpenSidebarRight className="h-4 w-4 scale-x-[-1]" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Open chats pane</TooltipContent>
+          <TooltipContent side="bottom">{t("agent.chat.openChatsPane")}</TooltipContent>
         </Tooltip>
       )}
 
@@ -973,11 +976,11 @@ export function SubChatSelector({
                 className="h-6 w-6 p-0 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center hover:bg-foreground/10"
               >
                 <DiffIcon className="h-4 w-4" />
-                <span className="sr-only">Open diff</span>
+                <span className="sr-only">{t("changes.viewDiff")}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <span>View changes</span>
+              <span>{t("changes.title")}</span>
               {openDiffHotkey && <Kbd>{openDiffHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
@@ -1002,11 +1005,11 @@ export function SubChatSelector({
                 className="h-6 w-6 p-0 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center hover:bg-foreground/10"
               >
                 <TerminalSquare className="h-4 w-4" />
-                <span className="sr-only">Open terminal</span>
+                <span className="sr-only">{t("agent.chat.openTerminal")}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <span>Open terminal</span>
+              <span>{t("agent.chat.openTerminal")}</span>
               {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
@@ -1029,7 +1032,7 @@ export function SubChatSelector({
             className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 flex items-center justify-center"
           >
             <DiffIcon className="h-4 w-4" />
-            <span className="sr-only">Open diff</span>
+            <span className="sr-only">{t("changes.viewDiff")}</span>
           </Button>
         </div>
       )}

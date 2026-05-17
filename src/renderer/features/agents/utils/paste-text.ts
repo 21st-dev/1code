@@ -1,4 +1,5 @@
 import { toast } from "sonner"
+import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 
 // Threshold for auto-converting large pasted text to a file (5KB)
 // Text larger than this will be saved as a file attachment instead of pasted inline
@@ -12,6 +13,18 @@ const MAX_PASTE_LENGTH = 10_000
 
 // Threshold for showing "very large" warning (1MB+)
 const VERY_LARGE_THRESHOLD = 1_000_000
+
+function t(key: TranslationKey, values?: Record<string, string | number>) {
+  const useZh =
+    typeof navigator !== "undefined" &&
+    (navigator.language || navigator.languages?.[0] || "").toLowerCase().startsWith("zh")
+  const template = (useZh ? zhCN[key] : en[key]) || en[key] || key
+
+  return template.replace(/\{(\w+)\}/g, (match, name) => {
+    const value = values?.[name]
+    return value === undefined ? match : String(value)
+  })
+}
 
 // Callback type for adding large pasted text as a file
 export type AddPastedTextFn = (text: string) => Promise<void>
@@ -41,19 +54,19 @@ export function insertTextAtCursor(text: string, editableElement: Element): void
 
     if (availableSpace === 0) {
       // No space left at all
-      toast.warning("Cannot paste: input is full", {
-        description: "Please clear some text or attach content as a file instead.",
+      toast.warning(t("agent.paste.inputFull"), {
+        description: t("agent.paste.inputFullDescription"),
       })
       return
     } else if (text.length > VERY_LARGE_THRESHOLD) {
       const originalMB = (text.length / 1_000_000).toFixed(1)
-      toast.warning(`Text truncated`, {
-        description: `Original text was ${originalMB}MB. Please attach as a file instead.`,
+      toast.warning(t("agent.paste.textTruncated"), {
+        description: t("agent.paste.originalTextMb", { size: originalMB }),
       })
     } else {
       const truncatedKB = Math.round(effectiveLimit / 1024)
-      toast.warning(`Text truncated to ${truncatedKB}KB`, {
-        description: `Original text was ${originalKB}KB. Consider attaching as a file instead.`,
+      toast.warning(t("agent.paste.textTruncatedToKb", { size: truncatedKB }), {
+        description: t("agent.paste.originalTextKb", { size: originalKB }),
       })
     }
   }

@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
+import { useI18n } from "../../../lib/i18n"
 
 interface AgentsRenameSubChatDialogProps {
   isOpen: boolean
@@ -24,6 +25,7 @@ export function AgentsRenameSubChatDialog({
   currentName,
   isLoading = false,
 }: AgentsRenameSubChatDialogProps) {
+  const { t } = useI18n()
   const [mounted, setMounted] = useState(false)
   const [name, setName] = useState(currentName)
   const [isSaving, setIsSaving] = useState(false)
@@ -132,7 +134,7 @@ export function AgentsRenameSubChatDialog({
               <div className="bg-background rounded-2xl border shadow-2xl overflow-hidden" data-canvas-dialog>
                 <div className="p-6">
                   <h2 className="text-xl font-semibold mb-4">
-                    Rename agent
+                    {t("agent.chat.renameChat")}
                   </h2>
 
                   {/* Input */}
@@ -140,7 +142,7 @@ export function AgentsRenameSubChatDialog({
                     ref={inputRef}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Chat name"
+                    placeholder={t("agent.chat.chatName")}
                     className="w-full h-11 text-sm"
                     disabled={isSaving || isLoading}
                   />
@@ -154,7 +156,7 @@ export function AgentsRenameSubChatDialog({
                     disabled={isSaving || isLoading}
                     className="rounded-md"
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     onClick={handleSave}
@@ -162,7 +164,7 @@ export function AgentsRenameSubChatDialog({
                     disabled={!name.trim() || name.trim() === currentName || isSaving || isLoading}
                     className="rounded-md"
                   >
-                    {isSaving || isLoading ? "Saving..." : "Save"}
+                    {isSaving || isLoading ? t("common.saving") : t("common.save")}
                   </Button>
                 </div>
               </div>
@@ -174,4 +176,3 @@ export function AgentsRenameSubChatDialog({
     portalTarget,
   )
 }
-

@@ -71,6 +71,7 @@ import {
 import { useFileChangeListener, useGitWatcher } from "../../../lib/hooks/use-file-change-listener"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
+import { useI18n } from "../../../lib/i18n"
 import { appStore } from "../../../lib/jotai-store"
 import { api } from "../../../lib/mock-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
@@ -788,6 +789,7 @@ const ScrollToBottomButton = memo(function ScrollToBottomButton({
   isActive?: boolean
   isSplitPane?: boolean
 }) {
+  const { t } = useI18n()
   const [isVisible, setIsVisible] = useState(false)
   const shouldMonitor = isActive || isSplitPane
 
@@ -871,13 +873,13 @@ const ScrollToBottomButton = memo(function ScrollToBottomButton({
                 // Narrow screen (container <= 48rem): button lifts above the input
                 bottom: "clamp(0.75rem, (48rem - var(--chat-container-width, 0px)) * 1000, calc(var(--chat-input-height, 4rem) + 1rem))",
               }}
-              aria-label="Scroll to bottom"
+              aria-label={t("agent.chat.scrollToBottom")}
             >
               <ArrowDown className="h-4 w-4 text-muted-foreground" />
             </motion.button>
           </TooltipTrigger>
           <TooltipContent side="top">
-            Scroll to bottom
+            {t("agent.chat.scrollToBottom")}
             <span className="inline-flex items-center gap-0.5">
               <Kbd>⌘</Kbd>
               <Kbd>
@@ -1124,6 +1126,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
   onDiscardSuccess,
   subChats = [],
 }: Omit<DiffSidebarContentProps, 'selectedFilePath' | 'onFileSelect' | 'onCommitSuccess' | 'initialSubChatFilter' | 'onSelectNextFile'>) {
+  const { t } = useI18n()
   // Get values from context instead of props
   const {
     selectedFilePath,
@@ -1311,11 +1314,11 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
             {selectedCommit && (
               !commitFiles ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                  Loading files...
+                  {t("details.files.loading")}
                 </div>
               ) : commitFiles.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                  No files changed in this commit
+                  {t("changes.history.noFilesChanged")}
                 </div>
               ) : (
                 <>
@@ -1328,7 +1331,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(selectedCommit.hash)
-                          toast.success('Copied SHA to clipboard')
+                          toast.success(t("changes.history.copiedSha"))
                         }}
                         className="text-xs font-mono text-muted-foreground hover:text-foreground underline cursor-pointer shrink-0"
                       >
@@ -1341,12 +1344,14 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
                       </div>
                     )}
                     <div className="text-xs text-muted-foreground">
-                      {selectedCommit.author} • {selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : 'Unknown date'}
+                      {selectedCommit.author} • {selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : t("changes.history.unknownDate")}
                     </div>
                   </div>
 
                   <div className="px-2 py-1.5 text-xs text-muted-foreground font-medium bg-muted/30 border-b border-border/50">
-                    Files in commit ({commitFiles.length})
+                    {t("changes.history.filesInCommit", {
+                      count: commitFiles.length,
+                    })}
                   </div>
                   {commitFiles.map((file) => (
                     <CommitFileItem
@@ -1438,11 +1443,11 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
           {selectedCommit && (
             !commitFiles ? (
               <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                Loading files...
+                {t("details.files.loading")}
               </div>
             ) : commitFiles.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                No files changed in this commit
+                {t("changes.history.noFilesChanged")}
               </div>
             ) : (
               <>
@@ -1455,7 +1460,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(selectedCommit.hash)
-                        toast.success('Copied SHA to clipboard')
+                        toast.success(t("changes.history.copiedSha"))
                       }}
                       className="text-xs font-mono text-muted-foreground hover:text-foreground underline cursor-pointer shrink-0"
                     >
@@ -1468,12 +1473,14 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">
-                    {selectedCommit.author} • {selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : 'Unknown date'}
+                    {selectedCommit.author} • {selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : t("changes.history.unknownDate")}
                   </div>
                 </div>
 
                 <div className="px-2 py-1.5 text-xs text-muted-foreground font-medium bg-muted/30 border-b border-border/50">
-                  Files in commit ({commitFiles.length})
+                  {t("changes.history.filesInCommit", {
+                    count: commitFiles.length,
+                  })}
                 </div>
                 {commitFiles.map((file) => (
                   <CommitFileItem
@@ -1946,6 +1953,7 @@ const ChatViewInner = memo(function ChatViewInner({
   workspaceBranch?: string | null
   workspaceRepoName?: string | null
 }) {
+  const { t } = useI18n()
   const hasTriggeredRenameRef = useRef(false)
   const hasTriggeredAutoGenerateRef = useRef(false)
   const isVisiblePane = isActive || isSplitPane
@@ -2139,9 +2147,9 @@ const ChatViewInner = memo(function ChatViewInner({
   const renameSubChatMutation = api.agents.renameSubChat.useMutation({
     onError: (error) => {
       if (error.data?.code === "NOT_FOUND") {
-        toast.error("Send a message first before renaming this chat")
+        toast.error(t("agent.chat.toast.sendMessageBeforeRenaming"))
       } else {
-        toast.error("Failed to rename chat")
+        toast.error(t("agent.chat.toast.failedRenameChat"))
       }
     },
   })
@@ -2168,10 +2176,10 @@ const ChatViewInner = memo(function ChatViewInner({
         // Revert on error (toast shown by mutation onError)
         useAgentSubChatStore
           .getState()
-          .updateSubChatName(subChatId, subChatNameRef.current || "New Chat")
+          .updateSubChatName(subChatId, subChatNameRef.current || t("chat.defaultTitle"))
       }
     },
-    [subChatId],
+    [subChatId, t],
   )
 
   // Plan mode state (per-subChat using atomFamily)
@@ -2566,20 +2574,22 @@ const ChatViewInner = memo(function ChatViewInner({
     if (isStreamingRef.current) {
       const item = createQueueItem(generateQueueId(), message)
       addToQueue(subChatId, item)
-      toast.success("Reply queued", { description: "Will be sent when current response completes" })
+      toast.success(t("agent.chat.toast.replyQueued"), {
+        description: t("agent.chat.toast.replyQueuedDescription"),
+      })
     } else {
       // Send directly
       sendMessageRef.current({
         role: "user",
         parts: [{ type: "text", text: message }],
       })
-      toast.success("Reply sent")
+      toast.success(t("agent.chat.toast.replySent"))
     }
 
     // Clear state and selection
     setQuickCommentState(null)
     window.getSelection()?.removeAllRanges()
-  }, [addToQueue, subChatId])
+  }, [addToQueue, subChatId, t])
 
   // Handler for quick comment cancel
   const handleQuickCommentCancel = useCallback(() => {
@@ -2895,7 +2905,7 @@ const ChatViewInner = memo(function ChatViewInner({
       Object.entries(answers)
         .map(([question, answer]) => `${question}: ${answer}`)
         .join("\n"),
-    [],
+    [t],
   )
 
   const clearInputAndDraft = useCallback(() => {
@@ -3109,7 +3119,7 @@ const ChatViewInner = memo(function ChatViewInner({
         })
       } catch (error) {
         console.error("[plan-approval] Failed to respond:", error)
-        toast.error("Failed to send plan approval. Please try again.")
+        toast.error(t("agent.chat.toast.failedPlanApproval"))
       } finally {
         setPlanApprovalPending((prev) => {
           const next = { ...prev }
@@ -3250,18 +3260,18 @@ const ChatViewInner = memo(function ChatViewInner({
   const handleRollback = useCallback(
     async (userMsg: (typeof messages)[0]) => {
       if (isRollingBack) {
-        toast.error("Rollback already in progress")
+        toast.error(t("agent.chat.toast.rollbackInProgress"))
         return
       }
       if (isStreaming) {
-        toast.error("Cannot rollback while streaming")
+        toast.error(t("agent.chat.toast.cannotRollbackStreaming"))
         return
       }
 
       // Find the index of this user message
       const userMsgIndex = messages.findIndex((m) => m.id === userMsg.id)
       if (userMsgIndex === -1) {
-        toast.error("Cannot rollback: message not found")
+        toast.error(t("agent.chat.toast.rollbackMessageNotFound"))
         return
       }
 
@@ -3272,7 +3282,7 @@ const ChatViewInner = memo(function ChatViewInner({
       )
 
       if (!sdkUuid) {
-        toast.error("Cannot rollback: this turn is not rollbackable")
+        toast.error(t("agent.chat.toast.turnNotRollbackable"))
         return
       }
 
@@ -3391,7 +3401,9 @@ const ChatViewInner = memo(function ChatViewInner({
         })
 
         if (!result.success) {
-          toast.error(`Failed to rollback: ${result.error}`)
+          toast.error(t("agent.chat.toast.failedRollbackWithMessage", {
+            message: result.error,
+          }))
           setIsRollingBack(false)
           return
         }
@@ -3420,7 +3432,7 @@ const ChatViewInner = memo(function ChatViewInner({
         editorRef.current?.focus()
       } catch (error) {
         console.error("[handleRollback] Error:", error)
-        toast.error("Failed to rollback")
+        toast.error(t("agent.chat.toast.failedRollback"))
       } finally {
         setIsRollingBack(false)
       }
@@ -3437,6 +3449,7 @@ const ChatViewInner = memo(function ChatViewInner({
       setTextContextsFromDraft,
       setDiffTextContextsFromDraft,
       setPastedTextsFromDraft,
+      t,
     ],
   )
 
@@ -3503,12 +3516,12 @@ const ChatViewInner = memo(function ChatViewInner({
         store.setActiveSubChat(newSubChat.id)
       } catch (error) {
         console.error("[handleForkFromMessage] Error:", error)
-        toast.error("Failed to fork conversation")
+        toast.error(t("agent.chat.toast.failedForkConversation"))
       } finally {
         isForkingRef.current = false
       }
     },
-    [isStreaming, subChatId, parentChatId, utils],
+    [isStreaming, subChatId, parentChatId, utils, t],
   )
 
   // Sync local isRollingBack state to global atom (prevents multiple rollbacks across chats)
@@ -4528,7 +4541,7 @@ const ChatViewInner = memo(function ChatViewInner({
         // 3. Create new sub-chat
         const newSubChat = await trpcClient.chats.createSubChat.mutate({
           chatId: parentChatId,
-          name: "New Chat",
+          name: t("chat.defaultTitle"),
           mode: subChatMode,
         })
 
@@ -4578,12 +4591,12 @@ const ChatViewInner = memo(function ChatViewInner({
         onProviderChange?.(newId, targetProvider)
       } catch (error) {
         console.error("[handleContinueWithProvider] Error:", error)
-        toast.error("Failed to continue with provider")
+        toast.error(t("agent.chat.toast.failedContinueProvider"))
       } finally {
         isContinuingRef.current = false
       }
     },
-    [isStreaming, messages, subChatId, parentChatId, subChatMode, onProviderChange],
+    [isStreaming, messages, subChatId, parentChatId, subChatMode, onProviderChange, t],
   )
   const stableHandleContinueWithProvider = useStableCallback(handleContinueWithProvider)
 
@@ -4623,7 +4636,7 @@ const ChatViewInner = memo(function ChatViewInner({
         >
           <ChatTitleEditor
             name={subChatName}
-            placeholder="New Chat"
+            placeholder={t("chat.defaultTitle")}
             onSave={handleRenameSubChat}
             isMobile={false}
             chatId={subChatId}
@@ -4834,6 +4847,7 @@ export function ChatView({
   onOpenTerminal?: () => void
   hideHeader?: boolean
 }) {
+  const { t } = useI18n()
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
 
   // Get active sub-chat ID from store for mode tracking (reactive)
@@ -5483,44 +5497,44 @@ export function ChatView({
   // Direct PR creation mutation (push branch and open GitHub)
   const createPrMutation = trpc.changes.createPR.useMutation({
     onSuccess: () => {
-      toast.success("Opening GitHub to create PR...", { position: "top-center" })
+      toast.success(t("agent.chat.toast.openingGitHubCreatePr"), { position: "top-center" })
       refetchGitStatus()
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to create PR", { position: "top-center" })
+      toast.error(error.message || t("agent.chat.toast.failedCreatePr"), { position: "top-center" })
     },
   })
 
   // Sync from main mutation (for resolving merge conflicts)
   const mergeFromDefaultMutation = trpc.changes.mergeFromDefault.useMutation({
     onSuccess: () => {
-      toast.success("Branch synced with main. You can now merge the PR.", { position: "top-center" })
+      toast.success(t("agent.chat.toast.branchSyncedWithMain"), { position: "top-center" })
       // Invalidate PR status to refresh mergeability
       trpcUtils.chats.getPrStatus.invalidate({ chatId })
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to sync with main", { position: "top-center" })
+      toast.error(error.message || t("agent.chat.toast.failedSyncWithMain"), { position: "top-center" })
     },
   })
 
   const mergePrMutation = trpc.chats.mergePr.useMutation({
     onSuccess: () => {
-      toast.success("PR merged successfully!", { position: "top-center" })
+      toast.success(t("agent.chat.toast.prMerged"), { position: "top-center" })
       // Invalidate PR status to update button state
       trpcUtils.chats.getPrStatus.invalidate({ chatId })
     },
     onError: (error) => {
-      const errorMsg = error.message || "Failed to merge PR"
+      const errorMsg = error.message || t("agent.chat.toast.failedMergePr")
 
       // Check if it's a merge conflict error
       if (errorMsg.includes("MERGE_CONFLICT")) {
         toast.error(
-          "PR has merge conflicts. Sync with main to resolve.",
+          t("agent.chat.toast.prMergeConflicts"),
           {
             position: "top-center",
             duration: 8000,
             action: worktreePath ? {
-              label: "Sync with Main",
+              label: t("agent.chat.syncWithMain"),
               onClick: () => {
                 mergeFromDefaultMutation.mutate({ worktreePath, useRebase: false })
               },
@@ -5792,7 +5806,7 @@ export function ChatView({
   // Handle Create PR (Direct) - pushes branch and opens GitHub compare URL
   const handleCreatePrDirect = useCallback(async () => {
     if (!worktreePath) {
-      toast.error("No workspace path available", { position: "top-center" })
+      toast.error(t("changes.noWorktreePath"), { position: "top-center" })
       return
     }
 
@@ -5802,14 +5816,14 @@ export function ChatView({
     } finally {
       setIsCreatingPr(false)
     }
-  }, [worktreePath, createPrMutation])
+  }, [worktreePath, createPrMutation, t])
 
   // Handle Create PR with AI - sends a message to Claude to create the PR
   const setPendingPrMessage = useSetAtom(pendingPrMessageAtom)
 
   const handleCreatePr = useCallback(async () => {
     if (!chatId) {
-      toast.error("Chat ID is required", { position: "top-center" })
+      toast.error(t("agent.chat.toast.chatIdRequired"), { position: "top-center" })
       return
     }
 
@@ -5817,7 +5831,7 @@ export function ChatView({
     try {
       const activeSubChatId = useAgentSubChatStore.getState().activeSubChatId
       if (!activeSubChatId) {
-        toast.error("No active chat available", { position: "top-center" })
+        toast.error(t("agent.chat.toast.noActiveChat"), { position: "top-center" })
         setIsCreatingPr(false)
         return
       }
@@ -5830,7 +5844,7 @@ export function ChatView({
       // Get PR context from backend
       const context = await trpcClient.chats.getPrContext.query({ chatId })
       if (!context) {
-        toast.error("Could not get git context", { position: "top-center" })
+        toast.error(t("agent.chat.toast.couldNotGetGitContext"), { position: "top-center" })
         setIsCreatingPr(false)
         return
       }
@@ -5841,19 +5855,19 @@ export function ChatView({
       // Don't reset isCreatingPr here - it will be reset after message is sent
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to prepare PR request",
+        error instanceof Error ? error.message : t("agent.chat.toast.failedPreparePrRequest"),
         { position: "top-center" },
       )
       setIsCreatingPr(false)
     }
-  }, [chatId, setPendingPrMessage, setIsCreatingPr])
+  }, [chatId, setPendingPrMessage, setIsCreatingPr, t])
 
   // Handle Commit to existing PR - sends a message to Claude to commit and push
   // selectedPaths parameter is optional - if provided, only those files will be mentioned
   const [isCommittingToPr, setIsCommittingToPr] = useState(false)
   const handleCommitToPr = useCallback(async (_selectedPaths?: string[]) => {
     if (!chatId) {
-      toast.error("Chat ID is required", { position: "top-center" })
+      toast.error(t("agent.chat.toast.chatIdRequired"), { position: "top-center" })
       return
     }
 
@@ -5861,7 +5875,7 @@ export function ChatView({
       setIsCommittingToPr(true)
       const activeSubChatId = useAgentSubChatStore.getState().activeSubChatId
       if (!activeSubChatId) {
-        toast.error("No active chat available", { position: "top-center" })
+        toast.error(t("agent.chat.toast.noActiveChat"), { position: "top-center" })
         setIsCommittingToPr(false)
         return
       }
@@ -5873,7 +5887,7 @@ export function ChatView({
 
       const context = await trpcClient.chats.getPrContext.query({ chatId })
       if (!context) {
-        toast.error("Could not get git context", { position: "top-center" })
+        toast.error(t("agent.chat.toast.couldNotGetGitContext"), { position: "top-center" })
         return
       }
 
@@ -5881,20 +5895,20 @@ export function ChatView({
       setPendingPrMessage({ message, subChatId: activeSubChatId })
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to prepare commit request",
+        error instanceof Error ? error.message : t("agent.chat.toast.failedPrepareCommitRequest"),
         { position: "top-center" },
       )
     } finally {
       setIsCommittingToPr(false)
     }
-  }, [chatId, setPendingPrMessage, setIsCommittingToPr])
+  }, [chatId, setPendingPrMessage, setIsCommittingToPr, t])
 
   // Handle Review - sends a message to Claude to review the diff
   const setPendingReviewMessage = useSetAtom(pendingReviewMessageAtom)
 
   const handleReview = useCallback(async () => {
     if (!chatId) {
-      toast.error("Chat ID is required", { position: "top-center" })
+      toast.error(t("agent.chat.toast.chatIdRequired"), { position: "top-center" })
       return
     }
 
@@ -5903,7 +5917,7 @@ export function ChatView({
       // Get PR context from backend
       const context = await trpcClient.chats.getPrContext.query({ chatId })
       if (!context) {
-        toast.error("Could not get git context", { position: "top-center" })
+        toast.error(t("agent.chat.toast.couldNotGetGitContext"), { position: "top-center" })
         return
       }
 
@@ -5919,13 +5933,13 @@ export function ChatView({
       }
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to start review",
+        error instanceof Error ? error.message : t("agent.chat.toast.failedStartReview"),
         { position: "top-center" },
       )
     } finally {
       setIsReviewing(false)
     }
-  }, [chatId, activeSubChatId, setPendingReviewMessage, setFilteredSubChatId])
+  }, [chatId, activeSubChatId, setPendingReviewMessage, setFilteredSubChatId, t])
 
   // Handle Fix Conflicts - sends a message to Claude to sync with main and fix merge conflicts
   const setPendingConflictResolutionMessage = useSetAtom(pendingConflictResolutionMessageAtom)
@@ -7263,13 +7277,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                               size="icon"
                               onClick={() => setIsDetailsSidebarOpen(true)}
                               className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
-                              aria-label="View details"
+                              aria-label={t("details.details")}
                             >
                               <IconOpenSidebarRight className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom">
-                            View details
+                            {t("details.details")}
                             {toggleDetailsHotkey && <Kbd>{toggleDetailsHotkey}</Kbd>}
                           </TooltipContent>
                         </Tooltip>
@@ -7284,13 +7298,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                               size="icon"
                               onClick={() => setIsTerminalSidebarOpen(true)}
                               className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
-                              aria-label="Open terminal"
+                              aria-label={t("agent.chat.openTerminal")}
                             >
                               <TerminalSquare className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom">
-                            Open terminal
+                            {t("agent.chat.openTerminal")}
                             {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
                           </TooltipContent>
                         </Tooltip>
@@ -7306,14 +7320,14 @@ Make sure to preserve all functionality from both branches when resolving confli
                         onClick={stableHandleRestoreWorkspace}
                         disabled={restoreWorkspaceMutation.isPending}
                         className="h-6 px-2 gap-1.5 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2 flex items-center"
-                        aria-label="Restore workspace"
+                        aria-label={t("agent.chat.restoreWorkspace")}
                       >
                         <UnarchiveIcon className="h-4 w-4" />
-                        <span className="text-xs">Restore</span>
+                        <span className="text-xs">{t("agent.chat.restore")}</span>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
-                      Restore workspace
+                      {t("agent.chat.restoreWorkspace")}
                       <Kbd>⇧⌘E</Kbd>
                     </TooltipContent>
                   </Tooltip>
@@ -7510,7 +7524,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       maxHeight={200}
                     >
                       <div className="p-1 text-muted-foreground text-sm">
-                        Plan, @ for context, / for commands
+                        {t("chat.placeholder.default")}
                       </div>
                       <PromptInputActions className="w-full">
                         <div className="flex items-center gap-0.5 flex-1 min-w-0">
@@ -7520,7 +7534,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                             className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground rounded-md cursor-not-allowed"
                           >
                             <AgentIcon className="h-3.5 w-3.5" />
-                            <span>Agent</span>
+                            <span>{t("chat.mode.agent")}</span>
                             <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                           </button>
 
@@ -7532,7 +7546,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
                             <span>
                               {hasCustomClaudeConfig ? (
-                                "Custom Model"
+                                t("agent.model.customModel")
                               ) : (
                                 <>
                                   Sonnet{" "}

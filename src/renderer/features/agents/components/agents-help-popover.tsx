@@ -12,6 +12,7 @@ import { ArrowUpRight, Github } from "lucide-react"
 import { KeyboardIcon } from "../../../components/ui/icons"
 import { useSetAtom } from "jotai"
 import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
 
 interface AgentsHelpPopoverProps {
   children: React.ReactNode
@@ -26,6 +27,7 @@ export function AgentsHelpPopover({
   onOpenChange: controlledOnOpenChange,
   isMobile = false,
 }: AgentsHelpPopoverProps) {
+  const { t } = useI18n()
   const [internalOpen, setInternalOpen] = useState(false)
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
@@ -53,7 +55,7 @@ export function AgentsHelpPopover({
       <DropdownMenuContent side="top" align="start" className="w-56">
         <DropdownMenuItem onClick={handleCommunityClick} className="gap-2">
           <Github className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span className="flex-1">Repository</span>
+          <span className="flex-1">{t("sidebar.repository")}</span>
         </DropdownMenuItem>
 
         {!isMobile && (
@@ -62,13 +64,13 @@ export function AgentsHelpPopover({
             className="gap-2"
           >
             <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="flex-1">Shortcuts</span>
+            <span className="flex-1">{t("sidebar.shortcuts")}</span>
           </DropdownMenuItem>
         )}
 
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleChangelogClick} className="gap-2">
-          <span className="flex-1">Releases</span>
+          <span className="flex-1">{t("sidebar.releases")}</span>
           <ArrowUpRight className="h-3 w-3 text-muted-foreground shrink-0" />
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -10,6 +10,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
 } from "../../../components/ui/context-menu"
+import { useI18n } from "../../../lib/i18n"
 
 interface ImageData {
   id: string
@@ -38,6 +39,7 @@ export function AgentImageItem({
   allImages,
   imageIndex = 0,
 }: AgentImageItemProps) {
+  const { t } = useI18n()
   const [isHovered, setIsHovered] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -180,7 +182,7 @@ export function AgentImageItem({
             <IconSpinner className="size-4 text-muted-foreground" />
           </div>
         ) : hasError ? (
-          <div className="w-full h-full flex items-center justify-center bg-muted/50 rounded border border-destructive/20" title="Failed to load image">
+          <div className="w-full h-full flex items-center justify-center bg-muted/50 rounded border border-destructive/20" title={t("agent.image.failedLoad")}>
             <ImageOff className="size-4 text-destructive/50" />
           </div>
         ) : url ? (
@@ -227,7 +229,7 @@ export function AgentImageItem({
             onClick={closeFullscreen}
             className="absolute top-4 right-4 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
             type="button"
-            aria-label="Close fullscreen (Esc)"
+            aria-label={t("mermaid.closeFullscreen")}
           >
             <X className="size-6" />
           </button>
@@ -238,7 +240,7 @@ export function AgentImageItem({
               onClick={goToPrevious}
               className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
               type="button"
-              aria-label="Previous image (←)"
+              aria-label={t("agent.image.previous")}
             >
               <ChevronLeft className="size-8" />
             </button>
@@ -257,11 +259,11 @@ export function AgentImageItem({
             <ContextMenuContent>
               <ContextMenuItem onClick={handleCopyImage}>
                 <Copy className="size-4 mr-2" />
-                Copy Image
+                {t("agent.image.copy")}
               </ContextMenuItem>
               <ContextMenuItem onClick={handleSaveImage}>
                 <Download className="size-4 mr-2" />
-                Save Image
+                {t("agent.image.save")}
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -272,7 +274,7 @@ export function AgentImageItem({
               onClick={goToNext}
               className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
               type="button"
-              aria-label="Next image (→)"
+              aria-label={t("agent.image.next")}
             >
               <ChevronRight className="size-8" />
             </button>

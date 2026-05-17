@@ -20,6 +20,7 @@ import { useAtomValue } from "jotai"
 import type { FileMentionOption } from "./agents-mentions-editor"
 import { MENTION_PREFIXES } from "./agents-mentions-editor"
 import { sessionInfoAtom } from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
 import {
   FilesIcon,
   IconSpinner,
@@ -117,14 +118,6 @@ interface AgentsFileMentionProps {
   showingAgentsList?: boolean
   showingToolsList?: boolean
 }
-
-// Category navigation options (shown on root view)
-const CATEGORY_OPTIONS: FileMentionOption[] = [
-  { id: "files", label: "Files & Folders", type: "category", path: "", repository: "" },
-  { id: "skills", label: "Skills", type: "category", path: "", repository: "" },
-  { id: "agents", label: "Agents", type: "category", path: "", repository: "" },
-  { id: "tools", label: "MCP", type: "category", path: "", repository: "" },
-]
 
 // Known file extensions with icons
 const KNOWN_FILE_ICON_EXTENSIONS = new Set([
@@ -708,6 +701,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   showingAgentsList = false,
   showingToolsList = false,
 }: AgentsFileMentionProps) {
+  const { t } = useI18n()
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const placementRef = useRef<"above" | "below" | null>(null)
@@ -925,19 +919,30 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   const hasTools = allToolOptions.length > 0
   const hasOnlyFiles = !hasSkills && !hasAgents && !hasTools
 
+  // Category navigation options (shown on root view)
+  const categoryOptions: FileMentionOption[] = useMemo(
+    () => [
+      { id: "files", label: t("agent.mention.filesAndFolders"), type: "category", path: "", repository: "" },
+      { id: "skills", label: t("agent.mention.skills"), type: "category", path: "", repository: "" },
+      { id: "agents", label: t("agent.mention.agents"), type: "category", path: "", repository: "" },
+      { id: "tools", label: "MCP", type: "category", path: "", repository: "" },
+    ],
+    [t],
+  )
+
   // Determine if we're in a subpage view (or showing files directly when no skills/agents/tools)
   const isInSubpage = showingFilesList || showingSkillsList || showingAgentsList || showingToolsList || hasOnlyFiles
 
   // Filter category options based on available data
   const availableCategoryOptions = useMemo(() => {
-    return CATEGORY_OPTIONS.filter(category => {
+    return categoryOptions.filter(category => {
       if (category.id === "files") return true // Always show files
       if (category.id === "skills") return hasSkills
       if (category.id === "agents") return hasAgents
       if (category.id === "tools") return hasTools
       return true
     })
-  }, [hasSkills, hasAgents, hasTools])
+  }, [categoryOptions, hasSkills, hasAgents, hasTools])
 
   // Combined options for keyboard navigation
   // Subpage views show only that category's items
@@ -1192,14 +1197,14 @@ export const AgentsFileMention = memo(function AgentsFileMention({
         {isLoading && options.length === 0 && (
           <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 text-xs text-muted-foreground">
             <IconSpinner className="h-3.5 w-3.5" />
-            <span>Loading files...</span>
+            <span>{t("details.files.loading")}</span>
           </div>
         )}
 
         {/* Error state */}
         {error && (
           <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
-            Error loading files
+            {t("agent.mention.errorLoadingFiles")}
           </div>
         )}
 
@@ -1207,8 +1212,8 @@ export const AgentsFileMention = memo(function AgentsFileMention({
         {!isLoading && !isFetching && !error && options.length === 0 && (
           <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
             {debouncedSearchText
-              ? `No files matching "${debouncedSearchText}"`
-              : "No files found"}
+              ? t("agent.mention.noFilesMatching", { query: debouncedSearchText })
+              : t("agent.mention.noFilesFound")}
           </div>
         )}
 
@@ -1221,11 +1226,11 @@ export const AgentsFileMention = memo(function AgentsFileMention({
                 {(isInSubpage || debouncedSearchText) && (
                   <div className="px-2.5 py-1.5 mx-1 text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                     <span>
-                      {(showingFilesList || hasOnlyFiles) ? "Files & Folders" :
-                       showingSkillsList ? "Skills" :
-                       showingAgentsList ? "Agents" :
-                       showingToolsList ? "MCP Servers" :
-                       "Results"}
+                      {(showingFilesList || hasOnlyFiles) ? t("agent.mention.filesAndFolders") :
+                       showingSkillsList ? t("agent.mention.skills") :
+                       showingAgentsList ? t("agent.mention.agents") :
+                       showingToolsList ? t("agent.mention.mcpServers") :
+                       t("agent.mention.results")}
                     </span>
                     {isFetching && !isLoading && (
                       <IconSpinner className="h-2.5 w-2.5" />

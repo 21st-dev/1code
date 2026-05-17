@@ -75,6 +75,7 @@ import {
 // import { useIsHydrated } from "@/hooks/use-is-hydrated"
 const useIsHydrated = () => true // Desktop is always hydrated
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 import { api } from "../../../lib/mock-api"
 import { trpcClient } from "../../../lib/trpc"
 export type DiffViewMode = "unified" | "split"
@@ -538,6 +539,7 @@ const FileDiffCard = memo(function FileDiffCard({
   showViewed = true,
   chatId,
 }: FileDiffCardProps) {
+  const { t } = useI18n()
   const diffCardRef = useRef<HTMLDivElement>(null)
   const isLargeDiff = file.additions + file.deletions >= LARGE_DIFF_LINE_THRESHOLD
 
@@ -632,13 +634,13 @@ const FileDiffCard = memo(function FileDiffCard({
   const handleCopyPath = async () => {
     if (absolutePath) {
       await navigator.clipboard.writeText(absolutePath)
-      toast.success("Copied to clipboard", { description: absolutePath })
+      toast.success(t("agent.export.copiedToClipboard"), { description: absolutePath })
     }
   }
 
   const handleCopyRelativePath = async () => {
     await navigator.clipboard.writeText(displayPath)
-    toast.success("Copied to clipboard", { description: displayPath })
+    toast.success(t("agent.export.copiedToClipboard"), { description: displayPath })
   }
 
   const handleRevealInFinder = () => {
@@ -833,11 +835,11 @@ const FileDiffCard = memo(function FileDiffCard({
                   )}>
                     {isViewed && <Check className="size-3" strokeWidth={2.5} />}
                   </div>
-                  <span>Viewed</span>
+                  <span>{t("changes.diff.viewed")}</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                {isViewed ? "Mark as unviewed" : "Mark as viewed"}
+                {isViewed ? t("changes.markUnviewed") : t("changes.markViewed")}
                 <Kbd>V</Kbd>
               </TooltipContent>
             </Tooltip>
@@ -883,7 +885,7 @@ const FileDiffCard = memo(function FileDiffCard({
               onClick={() => onToggleViewed(file.key, file.diffText)}
               className="text-xs justify-between"
             >
-              {isViewed ? "Mark as unviewed" : "Mark as viewed"}
+              {isViewed ? t("changes.markUnviewed") : t("changes.markViewed")}
               <Kbd>V</Kbd>
             </ContextMenuItem>
             {onDiscardFile && !isDeletedFile && (
@@ -1061,6 +1063,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     },
     ref,
   ) {
+    const { t } = useI18n()
     const { resolvedTheme } = useTheme()
     const isHydrated = useIsHydrated()
 
@@ -1278,11 +1281,13 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         } else {
           await trpcClient.changes.discardChanges.mutate({ worktreePath, filePath: discardFilePath })
         }
-        toast.success("Changes discarded")
+        toast.success(t("changes.toast.discarded"))
         // Refresh the diff
         handleRefresh()
       } catch (error) {
-        toast.error(`Failed to discard: ${error instanceof Error ? error.message : "Unknown error"}`)
+        toast.error(t("changes.toast.failedDiscard", {
+          message: error instanceof Error ? error.message : t("changes.toast.unknownError"),
+        }))
       } finally {
         setDiscardFilePath(null)
       }
@@ -1944,7 +1949,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                 className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
               >
                 <IconChatBubble className="h-4 w-4" />
-                <span className="sr-only">Back to chat</span>
+                <span className="sr-only">{t("terminal.backToChat")}</span>
               </Button>
 
               {/* Stats - centered */}
@@ -1980,14 +1985,14 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                 <button
                   onClick={() => setDiffMode("split")}
                   className="relative z-[2] px-1.5 flex items-center justify-center transition-colors duration-200 rounded text-muted-foreground"
-                  title="Split view"
+                  title={t("changes.diff.splitView")}
                 >
                   <Columns2 className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => setDiffMode("unified")}
                   className="relative z-[2] px-1.5 flex items-center justify-center transition-colors duration-200 rounded text-muted-foreground"
-                  title="Unified view"
+                  title={t("changes.diff.unifiedView")}
                 >
                   <Rows2 className="h-3.5 w-3.5" />
                 </button>

@@ -11,6 +11,7 @@ import {
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
+import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
   pendingAuthRetryMessageAtom,
   subChatCodexModelIdAtomFamily,
@@ -21,6 +22,18 @@ import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
 
 type UIMessageChunk = any
+
+function tr(key: TranslationKey, values?: Record<string, string | number>) {
+  const useZh =
+    typeof navigator !== "undefined" &&
+    (navigator.language || navigator.languages?.[0] || "").toLowerCase().startsWith("zh")
+  const template = (useZh ? zhCN[key] : en[key]) || en[key] || key
+
+  return template.replace(/\{(\w+)\}/g, (match, name) => {
+    const value = values?.[name]
+    return value === undefined ? match : String(value)
+  })
+}
 
 type ACPChatTransportConfig = {
   chatId: string
@@ -210,10 +223,10 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                   if (!credentials.hasAny) {
                     appStore.set(codexLoginModalOpenAtom, true)
                   } else if (!shouldAutoRetryOnce) {
-                    toast.error("Codex authentication failed", {
+                    toast.error(tr("agent.transport.codexAuthFailed"), {
                       description: credentials.hasApiKey
-                        ? "Saved Codex API key was rejected. Update it in Settings."
-                        : "Saved Codex subscription auth failed. Reconnect subscription in Settings.",
+                        ? tr("agent.transport.codexApiKeyRejected")
+                        : tr("agent.transport.codexSubscriptionAuthFailed"),
                     })
                   }
                 })()
@@ -230,8 +243,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               }
 
               if (chunk.type === "error") {
-                toast.error("Codex error", {
-                  description: chunk.errorText || "An unexpected Codex error occurred.",
+                toast.error(tr("agent.transport.codexError"), {
+                  description: chunk.errorText || tr("agent.transport.unexpectedCodexError"),
                 })
               }
 
@@ -251,7 +264,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               }
             },
             onError: (error: Error) => {
-              toast.error("Codex request failed", {
+              toast.error(tr("agent.transport.codexRequestFailed"), {
                 description: error.message,
               })
               controller.error(error)

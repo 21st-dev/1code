@@ -14,12 +14,15 @@ import type { SubChatMeta } from "../stores/sub-chat-store"
 import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { exportChat, copyChat, type ExportFormat } from "../lib/export-chat"
 import { toast } from "sonner"
+import { useI18n, type TranslationKey } from "../../../lib/i18n"
 
-const openInNewWindow = async (chatId: string, subChatId: string) => {
+type Translate = (key: TranslationKey, values?: Record<string, string | number>) => string
+
+const openInNewWindow = async (chatId: string, subChatId: string, t: Translate) => {
   const result = await window.desktopApi?.newWindow({ chatId, subChatId })
   if (result?.blocked) {
-    toast.info("This workspace is already open in another window", {
-      description: "Switching to the existing window.",
+    toast.info(t("sidebar.workspaceAlreadyOpen"), {
+      description: t("sidebar.switchingToExistingWindow"),
       duration: 3000,
     })
   }
@@ -95,67 +98,68 @@ export function SubChatContextMenu({
   onRemoveFromSplit,
   splitPaneCount = 0,
 }: SubChatContextMenuProps) {
+  const { t } = useI18n()
   const closeTabShortcut = useCloseTabShortcut()
 
   const handleExport = useCallback((format: ExportFormat) => {
     if (!chatId) return
-    exportChat({ chatId, subChatId: subChat.id, format })
-  }, [chatId, subChat.id])
+    exportChat({ chatId, subChatId: subChat.id, format, t })
+  }, [chatId, subChat.id, t])
 
   const handleCopy = useCallback((format: ExportFormat) => {
     if (!chatId) return
-    copyChat({ chatId, subChatId: subChat.id, format })
-  }, [chatId, subChat.id])
+    copyChat({ chatId, subChatId: subChat.id, format, t })
+  }, [chatId, subChat.id, t])
 
   return (
     <ContextMenuContent className="w-48">
       <ContextMenuItem onClick={() => onTogglePin(subChat.id)}>
-        {isPinned ? "Unpin chat" : "Pin chat"}
+        {isPinned ? t("agent.chat.unpinChat") : t("agent.chat.pinChat")}
       </ContextMenuItem>
       <ContextMenuItem onClick={() => onRename(subChat)}>
-        Rename chat
+        {t("agent.chat.renameChat")}
       </ContextMenuItem>
       {chatId && (
         <ContextMenuSub>
-          <ContextMenuSubTrigger>Export chat</ContextMenuSubTrigger>
+          <ContextMenuSubTrigger>{t("agent.chat.exportChat")}</ContextMenuSubTrigger>
           <ContextMenuSubContent sideOffset={6} alignOffset={-4}>
             <ContextMenuItem onClick={() => handleExport("markdown")}>
-              Download as Markdown
+              {t("sidebar.downloadAsMarkdown")}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => handleExport("json")}>
-              Download as JSON
+              {t("sidebar.downloadAsJson")}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => handleExport("text")}>
-              Download as Text
+              {t("sidebar.downloadAsText")}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleCopy("markdown")}>
-              Copy as Markdown
+              {t("sidebar.copyAsMarkdown")}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => handleCopy("json")}>
-              Copy as JSON
+              {t("sidebar.copyAsJson")}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => handleCopy("text")}>
-              Copy as Text
+              {t("sidebar.copyAsText")}
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
       )}
       {isDesktopApp() && chatId && (
-        <ContextMenuItem onClick={() => openInNewWindow(chatId, subChat.id)}>
-          Open in new window
+        <ContextMenuItem onClick={() => openInNewWindow(chatId, subChat.id, t)}>
+          {t("sidebar.openInNewWindow")}
         </ContextMenuItem>
       )}
       {isSplitTab ? (
         <>
           {splitPaneCount > 2 && onRemoveFromSplit && (
             <ContextMenuItem onClick={() => onRemoveFromSplit(subChat.id)}>
-              Remove from split
+              {t("agent.chat.removeFromSplit")}
             </ContextMenuItem>
           )}
           {onCloseSplit && (
             <ContextMenuItem onClick={onCloseSplit}>
-              Separate chats
+              {t("agent.chat.separateChats")}
             </ContextMenuItem>
           )}
         </>
@@ -164,7 +168,7 @@ export function SubChatContextMenu({
           onClick={() => onOpenInSplit(subChat.id)}
           disabled={isActiveTab || isOnlyChat || splitPaneCount >= 4}
         >
-          Add as split
+          {t("agent.chat.addAsSplit")}
         </ContextMenuItem>
       ) : null}
       <ContextMenuSeparator />
@@ -176,20 +180,20 @@ export function SubChatContextMenu({
             className="justify-between"
             disabled={isOnlyChat}
           >
-            Close chat
+            {t("agent.chat.closeChat")}
             {!isOnlyChat && <Kbd>{closeTabShortcut}</Kbd>}
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => onCloseOtherTabs?.(subChat.id)}
             disabled={!canCloseOtherTabs}
           >
-            Close other chats
+            {t("agent.chat.closeOtherChats")}
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => onCloseTabsToRight?.(subChat.id, visualIndex)}
             disabled={!hasTabsToRight}
           >
-            Close chats to the right
+            {t("agent.chat.closeChatsToRight")}
           </ContextMenuItem>
         </>
       ) : (
@@ -199,7 +203,7 @@ export function SubChatContextMenu({
             className="justify-between"
             disabled={isOnlyChat}
           >
-            Archive chat
+            {t("agent.chat.archiveChat")}
             {!isOnlyChat && <Kbd>{closeTabShortcut}</Kbd>}
           </ContextMenuItem>
           <ContextMenuItem
@@ -209,13 +213,13 @@ export function SubChatContextMenu({
               currentIndex >= (totalCount || 0) - 1
             }
           >
-            Archive chats below
+            {t("agent.chat.archiveChatsBelow")}
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => onArchiveOthers(subChat.id)}
             disabled={isOnlyChat}
           >
-            Archive other chats
+            {t("agent.chat.archiveOtherChats")}
           </ContextMenuItem>
         </>
       )}

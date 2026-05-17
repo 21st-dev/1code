@@ -21,6 +21,7 @@ import {
 import { PopoverTrigger } from "../../../components/ui/popover"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { formatTimeAgo } from "../utils/format-time-ago"
+import { useI18n } from "../../../lib/i18n"
 
 interface DiffStats {
   fileCount: number
@@ -55,6 +56,7 @@ export function MobileChatHeader({
   isArchived = false,
   onRestore,
 }: MobileChatHeaderProps) {
+  const { t } = useI18n()
   const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
   const allSubChats = useAgentSubChatStore((state) => state.allSubChats)
   const loadingSubChatsAtomValue = useAtomValue(loadingSubChatsAtom)
@@ -115,7 +117,7 @@ export function MobileChatHeader({
           size="icon"
           onClick={onBackToChats}
           className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
-          aria-label="All projects"
+          aria-label={t("agent.chat.allProjects")}
           style={{
             // @ts-expect-error - WebKit-specific property
             WebkitAppRegion: "no-drag",
@@ -131,13 +133,13 @@ export function MobileChatHeader({
         onOpenChange={setIsHistoryOpen}
         items={sortedSubChats}
         onSelect={handleSelectFromHistory}
-        placeholder="Search chats..."
-        emptyMessage="No results"
+        placeholder={t("agent.chat.searchChats")}
+        emptyMessage={t("agent.chat.noResults")}
         align="start"
         side="bottom"
         sideOffset={8}
         getItemValue={(subChat) =>
-          `${subChat.name || "New Chat"} ${subChat.id}`
+          `${subChat.name || t("chat.defaultTitle")} ${subChat.id}`
         }
         renderItem={(subChat) => {
           const timeAgo = formatTimeAgo(
@@ -152,7 +154,7 @@ export function MobileChatHeader({
               )}
             >
               <span className="text-sm truncate">
-                {subChat.name || "New Chat"}
+                {subChat.name || t("chat.defaultTitle")}
               </span>
               <span className="text-sm text-muted-foreground whitespace-nowrap">
                 {timeAgo}
@@ -187,7 +189,7 @@ export function MobileChatHeader({
 
               {/* Name */}
               <span className="truncate text-left">
-                {activeSubChat?.name || "New Chat"}
+                {activeSubChat?.name || t("chat.defaultTitle")}
               </span>
 
               {/* Chevron */}
@@ -260,7 +262,7 @@ export function MobileChatHeader({
             className="h-7 px-2 gap-1.5 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md flex items-center"
           >
             <IconTextUndo className="h-4 w-4" />
-            <span className="text-xs">Restore</span>
+            <span className="text-xs">{t("agent.chat.restore")}</span>
           </Button>
         )}
       </div>

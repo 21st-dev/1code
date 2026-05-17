@@ -5,6 +5,7 @@ import {
   codexApiKeyAtom,
   normalizeCodexApiKey,
 } from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
 import { trpc, trpcClient } from "../../../lib/trpc"
 
 export type CodexAuthMethod = "chatgpt" | "api_key"
@@ -53,6 +54,7 @@ function isConnectedForMethod(params: {
 }
 
 export function useCodexLoginFlow() {
+  const { t } = useI18n()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [state, setState] = useState<CodexLoginFlowState>("idle")
   const [url, setUrl] = useState<string | null>(null)
@@ -114,7 +116,7 @@ export function useCodexLoginFlow() {
             setError(null)
             if (successToastSessionRef.current !== verificationKey) {
               successToastSessionRef.current = verificationKey
-              toast.success("Codex connected successfully", { duration: 10000 })
+              toast.success(t("onboarding.codex.connectedSuccessfully"), { duration: 10000 })
             }
             return
           }
@@ -130,21 +132,21 @@ export function useCodexLoginFlow() {
       const message = lastVerifyError
         ? toErrorMessage(
             lastVerifyError,
-            "Failed to verify Codex login status. Please retry.",
+            t("onboarding.codex.failedVerifyLogin"),
           )
-        : "Codex login completed, but credentials were not detected. Please retry."
+        : t("onboarding.codex.credentialsNotDetected")
 
       setState("error")
       setError(message)
       notifyError(message)
     },
-    [method, notifyError, trpcUtils],
+    [method, notifyError, trpcUtils, t],
   )
 
   const saveApiKey = useCallback(async () => {
     const normalized = normalizeCodexApiKey(apiKeyInput)
     if (!normalized) {
-      const message = "Invalid API key format. Key should start with 'sk-'"
+      const message = t("toast.models.invalidCodexApiKey")
       setState("error")
       setError(message)
       notifyError(message)
@@ -154,13 +156,13 @@ export function useCodexLoginFlow() {
     setStoredApiKey(normalized)
     setSessionId(null)
     setUrl(null)
-    setOutput("Using app-managed API key")
+    setOutput(t("onboarding.codex.usingAppManagedApiKey"))
     setError(null)
     setState("success")
     await trpcUtils.codex.getIntegration.invalidate()
-    toast.success("Codex API key saved", { duration: 10000 })
+    toast.success(t("toast.models.codexApiKeySaved"), { duration: 10000 })
     return true
-  }, [apiKeyInput, notifyError, setStoredApiKey, trpcUtils])
+  }, [apiKeyInput, notifyError, setStoredApiKey, trpcUtils, t])
 
   const start = useCallback(async () => {
     if (method === "api_key") {
@@ -232,7 +234,7 @@ export function useCodexLoginFlow() {
       setUrl(session.url || null)
       setOutput(session.output || "")
       setError(session.error || null)
-      toast.info("Waiting for Codex sign-in in your browser")
+      toast.info(t("onboarding.codex.waitingForBrowser"))
     } catch (startError) {
       if (wasCancelled()) {
         return
@@ -240,7 +242,7 @@ export function useCodexLoginFlow() {
 
       const message = toErrorMessage(
         startError,
-        "Failed to start Codex login. Please try again.",
+        t("onboarding.codex.failedStartLogin"),
       )
       setState("error")
       setError(message)
@@ -257,6 +259,7 @@ export function useCodexLoginFlow() {
     notifyError,
     saveApiKey,
     startLoginMutation,
+    t,
     trpcUtils,
   ])
 

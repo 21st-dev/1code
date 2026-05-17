@@ -22,6 +22,7 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 
 // GitHub avatar with loading placeholder
 function GitHubAvatar({
@@ -115,6 +116,7 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
   onRestore,
   setRef,
 }: ArchiveChatItemProps) {
+  const { t } = useI18n()
   const branch = chat.branch
   const project = chat.projectId ? projectsMap.get(chat.projectId) : null
   const gitOwner = chat.gitOwner || project?.gitOwner
@@ -176,14 +178,14 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
             <span className="truncate block text-sm leading-tight flex-1">
               {chat.name || (
                 <span className="text-muted-foreground/50">
-                  New workspace
+                  {t("sidebar.workspacePlaceholder")}
                 </span>
               )}
             </span>
             <button
               onClick={handleRestore}
               className="flex-shrink-0 text-muted-foreground hover:text-foreground active:text-foreground transition-[color,transform] duration-150 ease-out active:scale-[0.97]"
-              aria-label="Restore chat"
+              aria-label={t("agent.chat.restore")}
             >
               <UnarchiveIcon className="h-3 w-3" />
             </button>
@@ -217,6 +219,7 @@ interface ArchivePopoverProps {
 }
 
 export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchivePopoverProps) {
+  const { t } = useI18n()
   const [open, setOpen] = useAtom(archivePopoverOpenAtom)
   const [searchQuery, setSearchQuery] = useAtom(archiveSearchQueryAtom)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -431,7 +434,7 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
             <SearchIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <Input
               ref={searchInputRef}
-              placeholder="Search..."
+              placeholder={t("agent.search.placeholder")}
               value={searchQuery}
               onChange={handleSearchChange}
               className="h-auto p-0 border-0 bg-transparent text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
