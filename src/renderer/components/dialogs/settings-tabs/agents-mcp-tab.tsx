@@ -1,8 +1,8 @@
 "use client"
 
 import { useAtomValue } from "jotai"
-import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Check, Copy, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import {
   lastSelectedAgentIdAtom,
@@ -72,16 +72,56 @@ export function McpStatusDot({
 function getConnectionInfo(config: Record<string, unknown>) {
   const url = config.url as string | undefined
   const command = config.command as string | undefined
-  const args = config.args as string[] | undefined
-  const env = config.env as Record<string, string> | undefined
+  const args = getStringArray(config.args)
+  const env = getRecordKeys(config.env)
+  const envVars = getStringArray(config.envVars)
+  const headers = getRecordKeys(config.headers)
+  const envHttpHeaders = getRecordKeys(config.envHttpHeaders)
+  const bearerTokenEnvVar =
+    typeof config.bearerTokenEnvVar === "string" ? config.bearerTokenEnvVar : undefined
+  const cwd = typeof config.cwd === "string" ? config.cwd : undefined
+  const transportType =
+    typeof config.transportType === "string" ? config.transportType : undefined
 
   if (url) {
-    return { type: "HTTP (SSE)" as const, url, command: undefined, args: undefined, env: undefined }
+    return {
+      type: transportType || "HTTP (SSE)",
+      url,
+      command: undefined,
+      args: undefined,
+      cwd: undefined,
+      envKeys: [],
+      headerKeys: uniqueStrings([
+        ...headers,
+        ...envHttpHeaders,
+        ...(bearerTokenEnvVar ? [`Authorization (${bearerTokenEnvVar})`] : []),
+      ]),
+    }
   }
   if (command) {
-    return { type: "stdio" as const, url: undefined, command, args, env }
+    return {
+      type: transportType || "stdio",
+      url: undefined,
+      command,
+      args: args.length > 0 ? args : undefined,
+      cwd,
+      envKeys: uniqueStrings([...env, ...envVars]),
+      headerKeys: [],
+    }
   }
-  return { type: "unknown" as const, url: undefined, command: undefined, args: undefined, env: undefined }
+  return {
+    type: transportType || "unknown",
+    url: undefined,
+    command: undefined,
+    args: args.length > 0 ? args : undefined,
+    cwd,
+    envKeys: uniqueStrings([...env, ...envVars]),
+    headerKeys: uniqueStrings([
+      ...headers,
+      ...envHttpHeaders,
+      ...(bearerTokenEnvVar ? [`Authorization (${bearerTokenEnvVar})`] : []),
+    ]),
+  }
 }
 
 function isCodexHttpServer(provider: McpProvider, server: McpServer): boolean {
@@ -98,27 +138,140 @@ function isServerDisabled(server: McpServer): boolean {
   return config.disabled === true || config.enabled === false
 }
 
+function getRecordKeys(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return []
+  return Object.keys(value as Record<string, unknown>)
+}
+
+function getStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))]
+}
+
+function getConfigSource(
+  provider: McpProvider,
+  groupName: string,
+  projectPath: string | null,
+): string {
+  if (groupName.toLowerCase().startsWith("plugin:")) return groupName
+  if (provider === "codex") {
+    return projectPath ? "Codex project config" : "~/.codex/config.toml"
+  }
+  if (projectPath) {
+    return `${projectPath}/.mcp.json / Claude project config`
+  }
+  return "~/.claude.json / ~/.claude/mcp.json"
+}
+
+function CopyValueButton({ value }: { value: string }) {
+  const { t } = useI18n()
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1200)
+    } catch {
+      toast.error(t("terminal.failedCopy"))
+    }
+  }, [t, value])
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="h-6 w-6 shrink-0 rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/5 inline-flex items-center justify-center transition-colors"
+      title={copied ? t("settings.mcp.copied") : t("settings.mcp.copyValue")}
+      aria-label={copied ? t("settings.mcp.copied") : t("settings.mcp.copyValue")}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2">
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-xs text-foreground" title={value}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function ConnectionRow({
+  label,
+  value,
+  copyValue,
+  mono = true,
+  children,
+}: {
+  label: string
+  value?: string
+  copyValue?: string
+  mono?: boolean
+  children?: ReactNode
+}) {
+  const effectiveCopyValue = copyValue ?? value
+
+  return (
+    <div className="flex gap-3 px-3 py-2.5">
+      <span className="w-20 shrink-0 text-xs text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          {children ?? (
+            <span
+              className={cn(
+                "block text-xs text-foreground break-all select-text",
+                mono && "font-mono",
+              )}
+            >
+              {value}
+            </span>
+          )}
+        </div>
+        {effectiveCopyValue && <CopyValueButton value={effectiveCopyValue} />}
+      </div>
+    </div>
+  )
+}
+
 // --- Detail Panel ---
 function McpServerDetail({
   provider,
+  groupName,
+  projectPath,
   server,
   onAuth,
   onLogout,
+  onRefresh,
   onDelete,
   onToggleEnabled,
   isEditable,
   isToggleable,
   isToggling,
+  isRefreshing,
 }: {
   provider: McpProvider
+  groupName: string
+  projectPath: string | null
   server: McpServer
   onAuth?: () => void
   onLogout?: () => void
+  onRefresh?: () => void
   onDelete?: () => void
   onToggleEnabled?: (enabled: boolean) => void
   isEditable?: boolean
   isToggleable?: boolean
   isToggling?: boolean
+  isRefreshing?: boolean
 }) {
   const { t } = useI18n()
   const { tools, needsAuth } = server
@@ -127,29 +280,67 @@ function McpServerDetail({
   const isDisabled = isServerDisabled(server)
   const connection = getConnectionInfo(server.config)
   const hideToolsCount = isCodexHttpServer(provider, server)
+  const source = getConfigSource(provider, groupName, projectPath)
+  const isPluginSource = groupName.toLowerCase().startsWith("plugin:")
+  const providerLabel = provider === "codex" ? "Codex" : "Claude Code"
+  const scopeLabel = isPluginSource
+    ? t("common.plugin")
+    : projectPath
+      ? t("common.project")
+      : t("settings.mcp.global")
+  const statusLabel = isDisabled
+    ? t("settings.mcp.disabled")
+    : isConnected
+      ? t("common.connected")
+      : server.status === "failed"
+        ? t("settings.mcp.failed")
+        : server.status === "needs-auth"
+          ? t("settings.mcp.needsAuth")
+          : server.status === "pending"
+            ? t("common.connecting")
+            : server.status === "pending-approval"
+              ? t("settings.mcp.pendingApproval")
+              : getStatusText(server.status)
+  const toolsSummary = hideToolsCount
+    ? t("settings.mcp.tools")
+    : hasTools
+      ? tools.length === 1
+        ? t("settings.mcp.oneTool")
+        : t("settings.mcp.toolCount", { count: tools.length })
+      : t("settings.mcp.noTools")
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-2xl mx-auto p-6 space-y-6">
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
+          <div className="mt-1">
+            <McpStatusDot status={server.status} disabled={isDisabled} />
+          </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-foreground truncate">{server.name}</h3>
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="text-sm font-semibold text-foreground truncate">{server.name}</h3>
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {t("settings.mcp.toolConnection")}
+              </span>
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {isDisabled
-                ? t("settings.mcp.disabled")
-                : isConnected
-                  ? (hideToolsCount
-                      ? t("common.connected")
-                      : (hasTools
-                          ? tools.length === 1
-                            ? t("settings.mcp.oneTool")
-                            : t("settings.mcp.toolCount", { count: tools.length })
-                          : t("settings.mcp.noTools")))
-                  : getStatusText(server.status)}
+              {statusLabel} · {toolsSummary}
               {server.serverInfo?.version && ` \u00B7 v${server.serverInfo.version}`}
             </p>
           </div>
+          {onRefresh && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+              {t("settings.mcp.refresh")}
+            </Button>
+          )}
           {needsAuth && onAuth && (
             <Button variant="secondary" size="sm" className="h-7 px-3 text-xs" onClick={onAuth}>
               {isConnected ? t("settings.mcp.reconnect") : t("settings.mcp.authenticate")}
@@ -160,18 +351,13 @@ function McpServerDetail({
               {t("settings.mcp.logout")}
             </Button>
           )}
-          {isEditable && onDelete && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-              onClick={onDelete}
-              aria-label={t("settings.mcp.deleteServer")}
-              title={t("settings.mcp.deleteServer")}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <SummaryItem label={t("settings.mcp.status")} value={statusLabel} />
+          <SummaryItem label={t("settings.mcp.provider")} value={providerLabel} />
+          <SummaryItem label={t("settings.mcp.scope")} value={scopeLabel} />
+          <SummaryItem label={t("settings.mcp.source")} value={source} />
         </div>
 
         {/* Enable/Disable Toggle */}
@@ -200,49 +386,85 @@ function McpServerDetail({
           </h5>
           <div className="rounded-md border border-border bg-background overflow-hidden">
             <div className="divide-y divide-border">
-              <div className="flex gap-3 px-3 py-2">
-                <span className="text-xs text-muted-foreground w-16 shrink-0">
-                  {t("settings.mcp.type")}
-                </span>
-                <span className="text-xs text-foreground font-mono select-text">{connection.type}</span>
-              </div>
+              <ConnectionRow label={t("settings.mcp.type")} value={connection.type} />
               {connection.url && (
-                <div className="flex gap-3 px-3 py-2">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">URL</span>
-                  <span className="text-xs text-foreground font-mono break-all select-text">{connection.url}</span>
-                </div>
+                <ConnectionRow label="URL" value={connection.url} />
               )}
               {connection.command && (
-                <div className="flex gap-3 px-3 py-2">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">
-                    {t("settings.mcp.command")}
-                  </span>
-                  <span className="text-xs text-foreground font-mono break-all select-text">{connection.command}</span>
-                </div>
+                <ConnectionRow label={t("settings.mcp.command")} value={connection.command} />
               )}
               {connection.args && connection.args.length > 0 && (
-                <div className="flex gap-3 px-3 py-2">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">
-                    {t("settings.mcp.args")}
-                  </span>
-                  <span className="text-xs text-foreground font-mono break-all select-text">{connection.args.join(" ")}</span>
-                </div>
-              )}
-              {connection.env && Object.keys(connection.env).length > 0 && (
-                <div className="flex gap-3 px-3 py-2">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">Env</span>
+                <ConnectionRow
+                  label={t("settings.mcp.args")}
+                  copyValue={connection.args.join(" ")}
+                >
                   <div className="flex flex-wrap gap-1">
-                    {Object.keys(connection.env).map((key) => (
+                    {connection.args.map((arg) => (
+                      <span
+                        key={arg}
+                        className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text break-all"
+                      >
+                        {arg}
+                      </span>
+                    ))}
+                  </div>
+                </ConnectionRow>
+              )}
+              {connection.cwd && (
+                <ConnectionRow label="Cwd" value={connection.cwd} />
+              )}
+              {connection.envKeys.length > 0 && (
+                <ConnectionRow label="Env" copyValue={connection.envKeys.join(", ")}>
+                  <div className="flex flex-wrap gap-1">
+                    {connection.envKeys.map((key) => (
                       <span key={key} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text">
                         {key}
                       </span>
                     ))}
                   </div>
-                </div>
+                </ConnectionRow>
+              )}
+              {connection.headerKeys.length > 0 && (
+                <ConnectionRow label="Headers" copyValue={connection.headerKeys.join(", ")}>
+                  <div className="flex flex-wrap gap-1">
+                    {connection.headerKeys.map((key) => (
+                      <span key={key} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text">
+                        {key}
+                      </span>
+                    ))}
+                  </div>
+                </ConnectionRow>
               )}
             </div>
           </div>
         </div>
+
+        {isConnected && !hasTools && !hideToolsCount && (
+          <div className="rounded-md border border-border bg-muted/20 px-3.5 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h5 className="text-xs font-medium text-foreground">
+                  {t("settings.mcp.noToolsTitle")}
+                </h5>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {t("settings.mcp.noToolsDescription")}
+                </p>
+              </div>
+              {onRefresh && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+                  {t("settings.mcp.refreshTools")}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Error Section */}
         {server.error && (
@@ -277,6 +499,34 @@ function McpServerDetail({
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {isEditable && onDelete && (
+          <div className="pt-2 border-t border-border">
+            <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3.5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h5 className="text-xs font-medium text-red-500">
+                    {t("settings.mcp.dangerZone")}
+                  </h5>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {t("settings.mcp.dangerZoneDescription")}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                  onClick={onDelete}
+                  aria-label={t("settings.mcp.deleteServer")}
+                  title={t("settings.mcp.deleteServer")}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  {t("settings.mcp.deleteServer")}
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -357,10 +607,15 @@ function CreateMcpServerForm({
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">
-            {t("settings.mcp.newServer")}
-          </h3>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("settings.mcp.newServer")}
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settings.mcp.createDescription")}
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onCancel}>
               {t("common.cancel")}
@@ -972,6 +1227,8 @@ export function AgentsMcpTab() {
         ) : selectedServer ? (
           <McpServerDetail
             provider={selectedServer.provider}
+            groupName={selectedServer.groupName}
+            projectPath={selectedServer.projectPath}
             server={selectedServer.server}
             onAuth={() =>
               handleAuth(
@@ -985,6 +1242,7 @@ export function AgentsMcpTab() {
                 ? () => handleCodexAuthLogout(selectedServer.server.name, selectedServer.projectPath)
                 : undefined
             }
+            onRefresh={() => { void handleRefresh(false, selectedServer.provider) }}
             onDelete={
               isEditableServer(selectedServer)
                 ? () =>
@@ -1004,6 +1262,7 @@ export function AgentsMcpTab() {
             isEditable={isEditableServer(selectedServer)}
             isToggleable={isToggleableServer(selectedServer)}
             isToggling={updateMutation.isPending}
+            isRefreshing={isRefreshingConfig}
           />
         ) : isLoadingConfig ? (
           <div className="flex items-center justify-center h-full">
@@ -1012,7 +1271,13 @@ export function AgentsMcpTab() {
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <OriginalMCPIcon className="h-12 w-12 text-border mb-4" />
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm font-medium text-foreground">
+              {t("settings.mcp.pageTitle")}
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+              {t("settings.mcp.pageDescription")}
+            </p>
+            <p className="text-xs text-muted-foreground mt-3">
               {totalServers > 0
                 ? t("settings.mcp.selectToView")
                 : t("settings.mcp.noneConfigured")}
