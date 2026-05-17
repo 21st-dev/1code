@@ -9,9 +9,6 @@ const useRouter = () => ({
   push: (_href: string, _opts?: unknown) => {},
   replace: (_href: string, _opts?: unknown) => {},
 })
-// Desktop: mock Clerk hooks
-const useUser = () => ({ user: null })
-const useClerk = () => ({ signOut: async (_opts?: unknown) => {} })
 import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
@@ -25,10 +22,6 @@ import {
 } from "../atoms"
 import {
   selectedTeamIdAtom,
-  billingMethodAtom,
-  anthropicOnboardingCompletedAtom,
-  apiKeyOnboardingCompletedAtom,
-  codexOnboardingCompletedAtom,
   agentsQuickSwitchOpenAtom,
   agentsQuickSwitchSelectedIndexAtom,
   subChatsQuickSwitchOpenAtom,
@@ -55,9 +48,6 @@ import { useShallow } from "zustand/react/shallow"
 import { motion, AnimatePresence } from "motion/react"
 // import { ResizableSidebar } from "@/app/(alpha)/canvas/[id]/{components}/resizable-sidebar"
 import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
-// import { useClerk, useUser } from "@clerk/nextjs"
-// import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
-const useCombinedAuth = () => ({ userId: null }) // Desktop mock
 import { Button } from "../../../components/ui/button"
 import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
@@ -74,12 +64,6 @@ export function AgentsContent() {
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
-  const setBillingMethod = useSetAtom(billingMethodAtom)
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom,
-  )
-  const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
-  const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
   const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
@@ -104,10 +88,6 @@ export function AgentsContent() {
   const newChatFormKeyRef = useRef(0)
   const isMobile = useIsMobile()
   const [isHydrated, setIsHydrated] = useState(false)
-  const { userId } = useCombinedAuth()
-  const { user } = useUser()
-  const { signOut } = useClerk()
-
   // Quick-switch dialog state - Agents (Opt+Ctrl+Tab)
   const [quickSwitchOpen, setQuickSwitchOpen] = useAtom(
     agentsQuickSwitchOpenAtom,
@@ -729,22 +709,6 @@ export function AgentsContent() {
 
   // Note: Cmd+E archive hotkey is handled in AgentsSidebar to share undo stack
 
-  const handleSignOut = async () => {
-    setBillingMethod(null)
-    setAnthropicOnboardingCompleted(false)
-    setApiKeyOnboardingCompleted(false)
-    setCodexOnboardingCompleted(false)
-
-    // Check if running in Electron desktop app
-    if (typeof window !== "undefined" && window.desktopApi) {
-      // Use desktop logout which clears the token and shows login page
-      await window.desktopApi.logout()
-    } else {
-      // Web: use Clerk sign out
-      await signOut({ redirectUrl: window.location.pathname })
-    }
-  }
-
   // Check if sub-chats data is loaded (use separate selectors to avoid object creation)
   const subChatsStoreChatId = useAgentSubChatStore((state) => state.chatId)
   const subChatsCount = useAgentSubChatStore(
@@ -814,9 +778,6 @@ export function AgentsContent() {
         ) : mobileViewMode === "chats" ? (
           // Chats List Mode (default) - uses AgentsSidebar in fullscreen
           <AgentsSidebar
-            userId={userId}
-            clerkUser={user}
-            onSignOut={handleSignOut}
             onToggleSidebar={() => {}}
             isMobileFullscreen={true}
             onChatSelect={() => setMobileViewMode("chat")}

@@ -10,7 +10,6 @@ import { useI18n } from "../../lib/i18n"
 import { useSetAtom, useAtom, useAtomValue } from "jotai"
 import {
   autoAdvanceTargetAtom,
-  createTeamDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
   agentsSidebarOpenAtom,
   agentsHelpPopoverOpenAtom,
@@ -29,24 +28,13 @@ import {
 } from "../../lib/atoms"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3 } from "lucide-react"
+import { MoreHorizontal, Columns3 } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
-// import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
-const useCombinedAuth = () => ({ userId: null, isLoaded: true })
-// import { AuthDialog } from "@/components/auth/auth-dialog"
-const AuthDialog = (_props: { open: boolean; onOpenChange: (open: boolean) => void }) => null
 // Desktop: archive is handled inline, not via hook
 import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
 import { ConfirmArchiveDialog } from "../../components/confirm-archive-dialog"
 import { trpc } from "../../lib/trpc"
 import { toast } from "sonner"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "../../components/ui/dropdown-menu"
 import {
   Tooltip,
   TooltipContent,
@@ -67,7 +55,6 @@ import {
   IconDoubleChevronLeft,
   SettingsIcon,
   PlusIcon,
-  ProfileIcon,
   PublisherStudioIcon,
   SearchIcon,
   GitHubLogo,
@@ -1007,10 +994,6 @@ const ChatListSection = React.memo(function ChatListSection({
 }, chatListSectionPropsAreEqual)
 
 interface AgentsSidebarProps {
-  userId?: string | null | undefined
-  clerkUser?: any
-  desktopUser?: { id: string; email: string; name?: string | null } | null
-  onSignOut?: () => void
   onToggleSidebar?: () => void
   isMobileFullscreen?: boolean
   onChatSelect?: () => void
@@ -1124,19 +1107,12 @@ const ArchiveSection = memo(function ArchiveSection({ archivedChatsCount }: Arch
   )
 })
 
-// Isolated Sidebar Header - contains dropdown, traffic lights, close button
-// Subscribes to dropdown state internally to prevent sidebar re-renders
+// Isolated Sidebar Header - contains app identity, traffic lights, close button
 interface SidebarHeaderProps {
   isDesktop: boolean
   isFullscreen: boolean | null
   isMobileFullscreen: boolean
-  userId: string | null | undefined
-  desktopUser: { id: string; email: string; name?: string | null } | null
-  onSignOut: () => void
   onToggleSidebar?: () => void
-  setSettingsDialogOpen: (open: boolean) => void
-  setSettingsActiveTab: (tab: SettingsTab) => void
-  setShowAuthDialog: (open: boolean) => void
   handleSidebarMouseEnter: React.MouseEventHandler<HTMLElement>
   handleSidebarMouseLeave: React.MouseEventHandler<HTMLElement>
   closeButtonRef: React.RefObject<HTMLDivElement | null>
@@ -1146,18 +1122,11 @@ const SidebarHeader = memo(function SidebarHeader({
   isDesktop,
   isFullscreen,
   isMobileFullscreen,
-  userId,
-  desktopUser,
-  onSignOut,
   onToggleSidebar,
-  setSettingsDialogOpen,
-  setSettingsActiveTab,
-  setShowAuthDialog,
   handleSidebarMouseEnter,
   handleSidebarMouseLeave,
   closeButtonRef,
 }: SidebarHeaderProps) {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
   const toggleSidebarHotkey = useResolvedHotkeyDisplay("toggle-sidebar")
   const { t } = useI18n()
@@ -1196,7 +1165,7 @@ const SidebarHeader = memo(function SidebarHeader({
             "top-2",
           )}
           style={{
-            opacity: isDropdownOpen ? 1 : 0,
+            opacity: 0,
             // @ts-expect-error - WebKit-specific property
             WebkitAppRegion: "no-drag",
           }}
@@ -1225,135 +1194,23 @@ const SidebarHeader = memo(function SidebarHeader({
       {/* Spacer for macOS traffic lights */}
       <TrafficLightSpacer isFullscreen={isFullscreen} isDesktop={isDesktop} />
 
-      {/* Account dropdown - below traffic lights */}
+      {/* App identity - below traffic lights */}
       <div className="px-2 pt-2 pb-2">
         <div className="flex items-center gap-1">
-          <div className="flex-1 min-w-0">
-            <DropdownMenu
-              open={isDropdownOpen}
-              onOpenChange={setIsDropdownOpen}
-            >
-              <DropdownMenuTrigger asChild>
-                <ButtonCustom
-                  variant="ghost"
-                  className="h-6 px-1.5 justify-start hover:bg-foreground/10 rounded-md group/team-button max-w-full"
-                  suppressHydrationWarning
-                >
-                  <div className="flex items-center gap-1.5 min-w-0 max-w-full">
-                    <div className="flex items-center justify-center flex-shrink-0">
-                      <Logo className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <div className="text-sm font-medium text-foreground truncate">
-                        Agent Code for Me
-                      </div>
-                    </div>
-                    {showOfflineFeatures && (
-                      <div className="flex-shrink-0">
-                        <NetworkStatus />
-                      </div>
-                    )}
-                    <ChevronDown
-                      className={cn(
-                        "h-3 text-muted-foreground flex-shrink-0 overflow-hidden",
-                        isDropdownOpen
-                          ? "opacity-100 w-3"
-                          : "opacity-0 w-0 group-hover/team-button:opacity-100 group-hover/team-button:w-3",
-                      )}
-                    />
-                  </div>
-                </ButtonCustom>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-52 pt-0"
-                sideOffset={8}
-              >
-                {userId ? (
-                  <>
-                    {/* Project section at the top */}
-                    <div className="relative rounded-t-xl border-b overflow-hidden">
-                      <div className="absolute inset-0 bg-popover brightness-110" />
-                      <div className="relative pl-2 pt-1.5 pb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-8 h-8 rounded flex items-center justify-center bg-background flex-shrink-0 overflow-hidden">
-                            <Logo className="w-4 h-4" />
-                          </div>
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <div className="font-medium text-sm text-foreground truncate">
-                              {desktopUser?.name || t("sidebar.userFallback")}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {desktopUser?.email}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <DropdownMenuSeparator />
-
-                    {/* Log out */}
-                    <div className="">
-                      <DropdownMenuItem
-                        className="gap-2"
-                        onSelect={() => onSignOut()}
-                      >
-                        <svg
-                          className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <polyline
-                            points="16,17 21,12 16,7"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <line
-                            x1="21"
-                            y1="12"
-                            x2="9"
-                            y2="12"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        {t("sidebar.logout")}
-                      </DropdownMenuItem>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Login for unauthenticated users */}
-                    <div className="">
-                      <DropdownMenuItem
-                        className="gap-2"
-                        onSelect={() => {
-                          setIsDropdownOpen(false)
-                          setShowAuthDialog(true)
-                        }}
-                      >
-                        <ProfileIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        {t("sidebar.login")}
-                      </DropdownMenuItem>
-                    </div>
-
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="flex h-6 flex-1 min-w-0 max-w-full items-center gap-1.5 rounded-md px-1.5">
+            <div className="flex items-center justify-center flex-shrink-0">
+              <Logo className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <div className="text-sm font-medium text-foreground truncate">
+                Agent Code for Me
+              </div>
+            </div>
+            {showOfflineFeatures && (
+              <div className="flex-shrink-0">
+                <NetworkStatus />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1415,14 +1272,6 @@ const HelpSection = memo(function HelpSection({ isMobile }: HelpSectionProps) {
 })
 
 export function AgentsSidebar({
-  userId = "demo-user-id",
-  clerkUser = null,
-  desktopUser = {
-    id: "demo-user-id",
-    email: "demo@example.com",
-    name: "Demo User",
-  },
-  onSignOut = () => {},
   onToggleSidebar,
   isMobileFullscreen = false,
   onChatSelect,
@@ -1517,10 +1366,6 @@ export function AgentsSidebar({
       setDesktopViewForSettings(null)
     }
   }, [setDesktopViewForSettings, setSidebarOpenForSettings])
-  const { isLoaded: isAuthLoaded } = useCombinedAuth()
-  const [showAuthDialog, setShowAuthDialog] = useState(false)
-  const setCreateTeamDialogOpen = useSetAtom(createTeamDialogOpenAtom)
-
   // Debug mode for testing first-time user experience
   const debugMode = useAtomValue(agentsDebugModeAtom)
 
@@ -1947,9 +1792,6 @@ export function AgentsSidebar({
       clearChatSelection()
     }
   }, [selectedChatIds, clearChatSelection])
-
-  // Get clerk username
-  const clerkUsername = clerkUser?.username
 
   // Filter and separate pinned/unpinned agents
   const { pinnedAgents, unpinnedAgents, filteredChats } = useMemo(() => {
@@ -2584,18 +2426,12 @@ export function AgentsSidebar({
       data-mobile-fullscreen={isMobileFullscreen || undefined}
       data-sidebar-content
     >
-      {/* Header area - isolated component to prevent re-renders when dropdown opens */}
+      {/* Header area - isolated component to prevent sidebar re-renders */}
       <SidebarHeader
         isDesktop={isDesktop}
         isFullscreen={isFullscreen}
         isMobileFullscreen={isMobileFullscreen}
-        userId={userId}
-        desktopUser={desktopUser}
-        onSignOut={onSignOut}
         onToggleSidebar={onToggleSidebar}
-        setSettingsDialogOpen={setSettingsDialogOpen}
-        setSettingsActiveTab={setSettingsActiveTab}
-        setShowAuthDialog={setShowAuthDialog}
         handleSidebarMouseEnter={handleSidebarMouseEnter}
         handleSidebarMouseLeave={handleSidebarMouseLeave}
         closeButtonRef={closeButtonRef}
@@ -2960,9 +2796,6 @@ export function AgentsSidebar({
           />,
           document.body,
         )}
-
-      {/* Auth Dialog */}
-      <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
 
       {/* Rename Dialog */}
       <AgentsRenameSubChatDialog

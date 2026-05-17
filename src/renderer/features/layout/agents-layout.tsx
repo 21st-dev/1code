@@ -9,13 +9,9 @@ import {
   agentsSidebarWidthAtom,
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
-  apiKeyOnboardingCompletedAtom,
-  billingMethodAtom,
   claudeLoginModalConfigAtom,
-  codexOnboardingCompletedAtom,
   isDesktopAtom,
   isFullscreenAtom,
-  anthropicOnboardingCompletedAtom,
   customHotkeysAtom,
   betaKanbanEnabledAtom,
 } from "../../lib/atoms"
@@ -98,12 +94,6 @@ export function AgentsLayout() {
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom
-  )
-  const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
-  const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
-  const setBillingMethod = useSetAtom(billingMethodAtom)
   const claudeLoginModalConfig = useAtomValue(claudeLoginModalConfigAtom)
 
   // Fetch projects to validate selectedProject exists
@@ -159,26 +149,6 @@ export function AgentsLayout() {
 
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
 
-  // Desktop user state
-  const [desktopUser, setDesktopUser] = useState<{
-    id: string
-    email: string
-    name: string | null
-    imageUrl: string | null
-    username: string | null
-  } | null>(null)
-
-  // Fetch desktop user on mount
-  useEffect(() => {
-    async function fetchUser() {
-      if (window.desktopApi?.getUser) {
-        const user = await window.desktopApi.getUser()
-        setDesktopUser(user)
-      }
-    }
-    fetchUser()
-  }, [])
-
   // Track if this is the initial load - skip auto-open on first load to respect saved state
   const isInitialLoadRef = useRef(true)
 
@@ -233,27 +203,6 @@ export function AgentsLayout() {
 
     return unsubscribe
   }, [projects, setSelectedProject, setSettingsActiveTab, setSettingsDialogOpen])
-
-  // Handle sign out
-  const handleSignOut = useCallback(async () => {
-    // Reset onboarding/provider selection state on logout.
-    setSelectedProject(null)
-    setSelectedChatId(null)
-    setBillingMethod(null)
-    setAnthropicOnboardingCompleted(false)
-    setApiKeyOnboardingCompleted(false)
-    setCodexOnboardingCompleted(false)
-    if (window.desktopApi?.logout) {
-      await window.desktopApi.logout()
-    }
-  }, [
-    setSelectedProject,
-    setSelectedChatId,
-    setBillingMethod,
-    setAnthropicOnboardingCompleted,
-    setApiKeyOnboardingCompleted,
-    setCodexOnboardingCompleted,
-  ])
 
   // Clear sub-chat store when no chat is selected
   useEffect(() => {
@@ -321,11 +270,7 @@ export function AgentsLayout() {
           {isSettingsView ? (
             <SettingsSidebar />
           ) : (
-            <AgentsSidebar
-              desktopUser={desktopUser}
-              onSignOut={handleSignOut}
-              onToggleSidebar={handleCloseSidebar}
-            />
+            <AgentsSidebar onToggleSidebar={handleCloseSidebar} />
           )}
         </ResizableSidebar>
 
