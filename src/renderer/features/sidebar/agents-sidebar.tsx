@@ -29,7 +29,7 @@ import {
 } from "../../lib/atoms"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3, Github } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Columns3 } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null, isLoaded: true })
@@ -45,9 +45,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuSeparator,
 } from "../../components/ui/dropdown-menu"
 import {
@@ -79,7 +76,6 @@ import {
   TrashIcon,
   QuestionCircleIcon,
   QuestionIcon,
-  KeyboardIcon,
   TicketIcon,
 } from "../../components/ui/icons"
 import { Logo } from "../../components/ui/logo"
@@ -1229,7 +1225,7 @@ const SidebarHeader = memo(function SidebarHeader({
       {/* Spacer for macOS traffic lights */}
       <TrafficLightSpacer isFullscreen={isFullscreen} isDesktop={isDesktop} />
 
-      {/* Team dropdown - below traffic lights */}
+      {/* Account dropdown - below traffic lights */}
       <div className="px-2 pt-2 pb-2">
         <div className="flex items-center gap-1">
           <div className="flex-1 min-w-0">
@@ -1295,59 +1291,6 @@ const SidebarHeader = memo(function SidebarHeader({
                       </div>
                     </div>
 
-                    {/* Settings */}
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onSelect={() => {
-                        setIsDropdownOpen(false)
-                        setSettingsActiveTab("preferences")
-                        setSettingsDialogOpen(true)
-                      }}
-                    >
-                      <SettingsIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                      {t("common.settings")}
-                    </DropdownMenuItem>
-
-                    {/* Help Submenu */}
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="gap-2">
-                        <QuestionCircleIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <span className="flex-1">{t("sidebar.help")}</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent
-                        className="w-36"
-                        sideOffset={6}
-                        alignOffset={-4}
-                      >
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            window.open(
-                              "https://github.com/lupanpan1030/agent-code-for-me",
-                              "_blank",
-                            )
-                            setIsDropdownOpen(false)
-                          }}
-                          className="gap-2"
-                        >
-                          <Github className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">{t("sidebar.repository")}</span>
-                        </DropdownMenuItem>
-                        {!isMobileFullscreen && (
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setIsDropdownOpen(false)
-                              setSettingsActiveTab("keyboard")
-                              setSettingsDialogOpen(true)
-                            }}
-                            className="gap-2"
-                          >
-                            <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1">{t("sidebar.shortcuts")}</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-
                     <DropdownMenuSeparator />
 
                     {/* Log out */}
@@ -1407,47 +1350,6 @@ const SidebarHeader = memo(function SidebarHeader({
                       </DropdownMenuItem>
                     </div>
 
-                    <DropdownMenuSeparator />
-
-                    {/* Help Submenu */}
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="gap-2">
-                        <QuestionCircleIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <span className="flex-1">{t("sidebar.help")}</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent
-                        className="w-36"
-                        sideOffset={6}
-                        alignOffset={-4}
-                      >
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            window.open(
-                              "https://github.com/lupanpan1030/agent-code-for-me",
-                              "_blank",
-                            )
-                            setIsDropdownOpen(false)
-                          }}
-                          className="gap-2"
-                        >
-                          <Github className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1">{t("sidebar.repository")}</span>
-                        </DropdownMenuItem>
-                        {!isMobileFullscreen && (
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setIsDropdownOpen(false)
-                              setSettingsActiveTab("keyboard")
-                              setSettingsDialogOpen(true)
-                            }}
-                            className="gap-2"
-                          >
-                            <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1">{t("sidebar.shortcuts")}</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
                   </>
                 )}
               </DropdownMenuContent>
