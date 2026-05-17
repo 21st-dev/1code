@@ -862,6 +862,9 @@ export function AgentsMcpTab() {
                 <p className="text-sm text-muted-foreground mb-1">
                   {t("settings.mcp.noServers")}
                 </p>
+                <p className="text-[11px] text-muted-foreground/70 mb-2">
+                  {t("settings.mcp.emptyHint")}
+                </p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1015,15 +1018,20 @@ export function AgentsMcpTab() {
                 : t("settings.mcp.noneConfigured")}
             </p>
             {totalServers === 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setShowAddForm(true)}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                {t("settings.mcp.addFirstServer")}
-              </Button>
+              <>
+                <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+                  {t("settings.mcp.emptyHint")}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setShowAddForm(true)}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  {t("settings.mcp.addFirstServer")}
+                </Button>
+              </>
             )}
           </div>
         )}

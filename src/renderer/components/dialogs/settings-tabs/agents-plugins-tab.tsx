@@ -69,6 +69,12 @@ function PluginDetail({
   isAuthenticating: boolean
 }) {
   const { t } = useI18n()
+  const componentCount =
+    plugin.components.commands.length +
+    plugin.components.skills.length +
+    plugin.components.agents.length +
+    plugin.components.mcpServers.length
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
@@ -106,9 +112,18 @@ function PluginDetail({
           {plugin.description && (
             <p className="text-sm text-muted-foreground">{plugin.description}</p>
           )}
+          <p className="text-xs text-muted-foreground/70">
+            {t("settings.plugins.packageHint")}
+          </p>
 
         {/* Info */}
         <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>{t("settings.plugins.capabilities")}</Label>
+            <p className="text-sm text-foreground">
+              {t("settings.plugins.capabilityCount", { count: componentCount })}
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label>{t("settings.plugins.version")}</Label>
             <p className="text-sm text-foreground font-mono">{plugin.version}</p>
@@ -268,6 +283,13 @@ function PluginListItem({
   isSelected: boolean
   onSelect: (source: string) => void
 }) {
+  const { t } = useI18n()
+  const componentCount =
+    plugin.components.commands.length +
+    plugin.components.skills.length +
+    plugin.components.agents.length +
+    plugin.components.mcpServers.length
+
   return (
     <button
       data-item-id={plugin.source}
@@ -285,6 +307,17 @@ function PluginListItem({
           {plugin.description}
         </div>
       )}
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
+        <span className="truncate">
+          {t("settings.plugins.capabilityCount", { count: componentCount })}
+        </span>
+        <span className={cn(
+          "shrink-0",
+          plugin.isDisabled ? "text-muted-foreground/60" : "text-emerald-500/80",
+        )}>
+          {plugin.isDisabled ? t("common.disabled") : t("common.active")}
+        </span>
+      </div>
     </button>
   )
 }

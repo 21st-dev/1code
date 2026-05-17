@@ -23,7 +23,18 @@ interface FileAgent {
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
   source: "user" | "project" | "plugin"
+  pluginName?: string
   path: string
+}
+
+function getAgentId(agent: FileAgent) {
+  return `${agent.source}:${agent.pluginName || ""}:${agent.name}`
+}
+
+function getAgentSourceLabel(source: FileAgent["source"], t: ReturnType<typeof useI18n>["t"]) {
+  if (source === "plugin") return t("common.plugin")
+  if (source === "project") return t("common.project")
+  return t("common.user")
 }
 
 // --- Detail Panel (Editable) ---
@@ -40,6 +51,7 @@ function AgentDetail({
   const [description, setDescription] = useState(agent.description)
   const [prompt, setPrompt] = useState(agent.prompt)
   const [model, setModel] = useState<string>(agent.model || "inherit")
+  const isReadOnly = agent.source === "plugin"
 
   // Reset local state when agent changes
   useEffect(() => {
@@ -54,6 +66,7 @@ function AgentDetail({
     model !== (agent.model || "inherit")
 
   const handleSave = useCallback(() => {
+    if (isReadOnly) return
     if (
       description !== agent.description ||
       prompt !== agent.prompt ||
@@ -65,9 +78,10 @@ function AgentDetail({
         model: model as FileAgent["model"],
       })
     }
-  }, [description, prompt, model, agent.description, agent.prompt, agent.model, onSave])
+  }, [description, prompt, model, agent.description, agent.prompt, agent.model, onSave, isReadOnly])
 
   const handleBlur = useCallback(() => {
+    if (isReadOnly) return
     if (
       description !== agent.description ||
       prompt !== agent.prompt ||
@@ -79,9 +93,10 @@ function AgentDetail({
         model: model as FileAgent["model"],
       })
     }
-  }, [description, prompt, model, agent.description, agent.prompt, agent.model, onSave])
+  }, [description, prompt, model, agent.description, agent.prompt, agent.model, onSave, isReadOnly])
 
   const handleModelChange = useCallback((value: string) => {
+    if (isReadOnly) return
     setModel(value)
     // Auto-save with new model value
     if (
@@ -95,7 +110,7 @@ function AgentDetail({
         model: value as FileAgent["model"],
       })
     }
-  }, [description, prompt, agent.description, agent.prompt, agent.model, onSave])
+  }, [description, prompt, agent.description, agent.prompt, agent.model, onSave, isReadOnly])
 
   return (
     <div className="h-full overflow-y-auto">
@@ -103,10 +118,15 @@ function AgentDetail({
         {/* Header */}
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-foreground truncate">{agent.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground truncate">{agent.name}</h3>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                {getAgentSourceLabel(agent.source, t)}
+              </span>
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">{agent.path}</p>
           </div>
-          {hasChanges && (
+          {!isReadOnly && hasChanges && (
             <Button size="sm" onClick={handleSave} disabled={isSaving}>
               {isSaving ? t("common.saving") : t("common.save")}
             </Button>
@@ -120,6 +140,7 @@ function AgentDetail({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onBlur={handleBlur}
+            readOnly={isReadOnly}
             placeholder={t("settings.customAgents.descriptionPlaceholder")}
           />
         </div>
@@ -127,8 +148,8 @@ function AgentDetail({
         {/* Model */}
         <div className="space-y-1.5">
           <Label>{t("settings.customAgents.model")}</Label>
-          <Select value={model} onValueChange={handleModelChange}>
-            <SelectTrigger>
+          <Select value={model} onValueChange={handleModelChange} disabled={isReadOnly}>
+            <SelectTrigger disabled={isReadOnly}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -183,6 +204,7 @@ function AgentDetail({
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onBlur={handleBlur}
+            readOnly={isReadOnly}
             rows={16}
             className="font-mono resize-y"
             placeholder={t("settings.customAgents.systemPromptPlaceholder")}
@@ -307,7 +329,7 @@ function CreateAgentForm({
 // --- Main Component ---
 export function AgentsCustomAgentsTab() {
   const { t } = useI18n()
-  const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -349,7 +371,7 @@ export function AgentsCustomAgentsTab() {
       toast.success(t("settings.customAgents.toast.created"), { description: result.name })
       setShowAddForm(false)
       await refetch()
-      setSelectedAgentName(result.name)
+      setSelectedAgentId(`${result.source}::${result.name}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.customAgents.toast.failedToCreate")
       toast.error(t("settings.customAgents.toast.failedToCreate"), { description: message })
@@ -366,25 +388,26 @@ export function AgentsCustomAgentsTab() {
 
   const userAgents = filteredAgents.filter((a) => a.source === "user")
   const projectAgents = filteredAgents.filter((a) => a.source === "project")
+  const pluginAgents = filteredAgents.filter((a) => a.source === "plugin")
 
-  const allAgentNames = useMemo(
-    () => [...userAgents, ...projectAgents].map((a) => a.name),
-    [userAgents, projectAgents]
+  const allAgentIds = useMemo(
+    () => [...userAgents, ...projectAgents, ...pluginAgents].map(getAgentId),
+    [userAgents, projectAgents, pluginAgents]
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
-    items: allAgentNames,
-    selectedItem: selectedAgentName,
-    onSelect: setSelectedAgentName,
+    items: allAgentIds,
+    selectedItem: selectedAgentId,
+    onSelect: setSelectedAgentId,
   })
 
-  const selectedAgent = agents.find((a) => a.name === selectedAgentName) || null
+  const selectedAgent = agents.find((a) => getAgentId(a) === selectedAgentId) || null
 
   // Auto-select first agent when data loads
   useEffect(() => {
-    if (selectedAgentName || isLoading || agents.length === 0) return
-    setSelectedAgentName(agents[0]!.name)
-  }, [agents, selectedAgentName, isLoading])
+    if (selectedAgentId || isLoading || agents.length === 0) return
+    setSelectedAgentId(getAgentId(agents[0]!))
+  }, [agents, selectedAgentId, isLoading])
 
   const handleSave = useCallback(async (
     agent: FileAgent,
@@ -441,7 +464,7 @@ export function AgentsCustomAgentsTab() {
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
             <button
-              onClick={() => { setShowAddForm(true); setSelectedAgentName(null) }}
+              onClick={() => { setShowAddForm(true); setSelectedAgentId(null) }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
               title={t("settings.customAgents.createNewAgent")}
             >
@@ -459,6 +482,9 @@ export function AgentsCustomAgentsTab() {
                 <CustomAgentIconFilled className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">
                   {t("settings.customAgents.noAgents")}
+                </p>
+                <p className="text-[11px] text-muted-foreground/70 mb-2">
+                  {t("settings.customAgents.emptyHint")}
                 </p>
                 <Button
                   variant="outline"
@@ -486,12 +512,13 @@ export function AgentsCustomAgentsTab() {
                     </p>
                     <div className="space-y-0.5">
                       {userAgents.map((agent) => {
-                        const isSelected = selectedAgentName === agent.name
+                        const agentId = getAgentId(agent)
+                        const isSelected = selectedAgentId === agentId
                         return (
                           <button
-                            key={agent.name}
-                            data-item-id={agent.name}
-                            onClick={() => setSelectedAgentName(agent.name)}
+                            key={agentId}
+                            data-item-id={agentId}
+                            onClick={() => setSelectedAgentId(agentId)}
                             className={cn(
                               "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
@@ -529,12 +556,57 @@ export function AgentsCustomAgentsTab() {
                     </p>
                     <div className="space-y-0.5">
                       {projectAgents.map((agent) => {
-                        const isSelected = selectedAgentName === agent.name
+                        const agentId = getAgentId(agent)
+                        const isSelected = selectedAgentId === agentId
                         return (
                           <button
-                            key={agent.name}
-                            data-item-id={agent.name}
-                            onClick={() => setSelectedAgentName(agent.name)}
+                            key={agentId}
+                            data-item-id={agentId}
+                            onClick={() => setSelectedAgentId(agentId)}
+                            className={cn(
+                              "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+                              isSelected
+                                ? "bg-foreground/5 text-foreground"
+                                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm truncate flex-1">
+                                {agent.name}
+                              </span>
+                              {agent.model && agent.model !== "inherit" && (
+                                <span className="text-[10px] text-muted-foreground shrink-0">
+                                  {agent.model}
+                                </span>
+                              )}
+                            </div>
+                            {agent.description && (
+                              <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                {agent.description}
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Plugin Agents */}
+                {pluginAgents.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
+                      {t("common.plugin")}
+                    </p>
+                    <div className="space-y-0.5">
+                      {pluginAgents.map((agent) => {
+                        const agentId = getAgentId(agent)
+                        const isSelected = selectedAgentId === agentId
+                        return (
+                          <button
+                            key={agentId}
+                            data-item-id={agentId}
+                            onClick={() => setSelectedAgentId(agentId)}
                             className={cn(
                               "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
@@ -594,15 +666,20 @@ export function AgentsCustomAgentsTab() {
                 : t("settings.customAgents.noneFound")}
             </p>
             {agents.length === 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setShowAddForm(true)}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                {t("settings.customAgents.createFirstAgent")}
-              </Button>
+              <>
+                <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+                  {t("settings.customAgents.emptyHint")}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setShowAddForm(true)}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  {t("settings.customAgents.createFirstAgent")}
+                </Button>
+              </>
             )}
           </div>
         )}
