@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, type ChangeEvent } from "react"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue, useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { useI18n } from "../../../lib/i18n"
 import { Button, buttonVariants } from "../../ui/button"
 import { Input } from "../../ui/input"
-import { Plus, Trash2, FolderOpen } from "lucide-react"
+import { Textarea } from "../../ui/textarea"
+import { Info, Plus, Trash2, FolderOpen } from "lucide-react"
 import { AIPenIcon, ExternalLinkIcon, FolderFilledIcon, ImageIcon } from "../../ui/icons"
 import { invalidateProjectIcon, useProjectIcon } from "../../../lib/hooks/use-project-icon"
 import { ProjectIcon } from "../../ui/project-icon"
@@ -27,6 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../ui/alert-dialog"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip"
 import { toast } from "sonner"
 import { COMMAND_PROMPTS } from "../../../features/agents/commands"
 import {
@@ -37,6 +39,53 @@ import {
 import { cn } from "../../../lib/utils"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms"
+
+function CommandTextarea({
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  ariaLabel,
+}: {
+  value: string
+  onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void
+  onBlur: () => void
+  placeholder: string
+  ariaLabel: string
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const resize = useCallback(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    textarea.style.height = "auto"
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 128)}px`
+    textarea.style.overflowY = textarea.scrollHeight > 128 ? "auto" : "hidden"
+  }, [])
+
+  useEffect(() => {
+    resize()
+  }, [value, resize])
+
+  return (
+    <Textarea
+      ref={textareaRef}
+      value={value}
+      onChange={onChange}
+      onInput={resize}
+      onFocus={resize}
+      onBlur={onBlur}
+      rows={1}
+      placeholder={placeholder}
+      title={value || placeholder}
+      aria-label={ariaLabel}
+      spellCheck={false}
+      wrap="soft"
+      className="min-h-10 flex-1 resize-none overflow-hidden py-2 font-mono text-[13px] leading-5"
+    />
+  )
+}
 
 // --- Detail Panel ---
 function ProjectDetail({ projectId }: { projectId: string }) {
@@ -147,7 +196,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   }, [projectName, projectId, renameMutation])
 
   // Local state
-  const [saveTarget, setSaveTarget] = useState<"cursor" | "1code">("1code")
+  const [saveTarget, setSaveTarget] = useState<"locus" | "cursor" | "1code">("locus")
   const [commands, setCommands] = useState<string[]>([""])
   const [unixCommands, setUnixCommands] = useState<string[]>([])
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
@@ -160,7 +209,12 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   // Sync from server data
   useEffect(() => {
     if (configData) {
-      const newSaveTarget = configData.source === "cursor" ? "cursor" : "1code"
+      const newSaveTarget =
+        configData.source === "cursor"
+          ? "cursor"
+          : configData.source === "1code"
+            ? "1code"
+            : "locus"
       setSaveTarget(newSaveTarget)
 
       let newCommands: string[] = [""]
@@ -250,8 +304,35 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     setter([...list, ""])
   }
 
-
   const cursorExists = configData?.available?.cursor?.exists ?? false
+  const legacyOnecodeExists = configData?.available?.onecode?.exists ?? false
+  const selectedConfigPath =
+    saveTarget === "locus"
+      ? ".locus/worktree.json"
+      : saveTarget === "cursor"
+        ? ".cursor/worktrees.json"
+        : ".1code/worktree.json"
+  const selectedConfigLabel =
+    saveTarget === "locus"
+      ? t("settings.projects.configFileAppDefaultLabel")
+      : saveTarget === "cursor"
+        ? t("settings.projects.configFileCursorLabel")
+        : t("settings.projects.configFileLegacyOnecodeLabel")
+  const currentConfigState = JSON.stringify({
+    commands,
+    unixCommands,
+    windowsCommands,
+    saveTarget,
+  })
+  const hasUnsavedConfigChanges =
+    configReadyRef.current && currentConfigState !== savedConfigRef.current
+  const saveStatusLabel = saveMutation.isPending
+    ? t("settings.projects.saveStatusSaving")
+    : hasUnsavedConfigChanges
+      ? t("settings.projects.saveStatusUnsaved")
+      : saveMutation.isError
+        ? t("settings.projects.saveStatusFailed")
+        : t("settings.projects.saveStatusSavedTo", { target: selectedConfigLabel })
 
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
 
@@ -270,19 +351,27 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   ) => (
     <div className="space-y-2">
       {list.map((cmd, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <Input
+        <div key={i} className="group flex min-w-0 items-start gap-2">
+          <div className="flex h-10 w-7 shrink-0 items-center justify-center rounded-md bg-muted/70 font-mono text-[11px] text-muted-foreground">
+            {i + 1}
+          </div>
+          <CommandTextarea
             value={cmd}
             onChange={(e) => updateCommand(i, e.target.value, list, setter)}
             onBlur={doSave}
             placeholder={placeholder}
-            className="flex-1 font-mono text-sm"
+            ariaLabel={t("settings.projects.commandInputAriaLabel", {
+              index: i + 1,
+            })}
           />
           {(allowEmpty || list.length > 1) && (
             <button
               type="button"
-              className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive transition-colors"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
               onClick={() => removeCommand(i, list, setter, allowEmpty)}
+              aria-label={t("settings.projects.removeCommand", {
+                index: i + 1,
+              })}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -426,14 +515,73 @@ function ProjectDetail({ projectId }: { projectId: string }) {
           </div>
         </div>
 
-        {/* ── Config ── */}
+        {/* ── Worktree Setup ── */}
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-2">
-            {t("settings.projects.config")}
-          </h4>
+          <div className="mb-3 space-y-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-sm font-medium text-foreground">
+                  {t("settings.projects.worktreeSetup")}
+                </h4>
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      aria-label={t("settings.projects.worktreeHelpLabel")}
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    className="max-w-80 text-left leading-relaxed"
+                  >
+                    {t("settings.projects.worktreeHelpBody")}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {t("settings.projects.worktreeSetupDescription")}
+              </p>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+              <span
+                className={cn(
+                  "min-w-0 max-w-full truncate text-sm text-muted-foreground",
+                  saveMutation.isError && "text-destructive",
+                )}
+                title={`${saveStatusLabel} (${selectedConfigPath})`}
+              >
+                {saveStatusLabel}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => {
+                  const prompt = COMMAND_PROMPTS["worktree-setup"]
+                  if (prompt && projectId) {
+                    createChatMutation.mutate({
+                      projectId,
+                      name: "Worktree Setup",
+                      initialMessageParts: [{ type: "text", text: prompt }],
+                      useWorktree: false,
+                      mode: "agent",
+                    })
+                  }
+                }}
+                disabled={!projectId || createChatMutation.isPending}
+              >
+                <AIPenIcon className="h-3.5 w-3.5" />
+                {t("settings.projects.fillWithAI")}
+              </Button>
+            </div>
+          </div>
           <div className="bg-background rounded-lg border border-border overflow-hidden">
-            <div className="flex items-center justify-between p-4">
-              <div className="flex-1">
+            {/* Config file */}
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4">
+              <div className="min-w-0 flex-1">
                 <span className="text-sm font-medium text-foreground">
                   {t("settings.projects.configFile")}
                 </span>
@@ -444,57 +592,53 @@ function ProjectDetail({ projectId }: { projectId: string }) {
               <Select
                 value={saveTarget}
                 onValueChange={(v) => {
-                  setSaveTarget(v as "cursor" | "1code")
+                  setSaveTarget(v as "locus" | "cursor" | "1code")
                   pendingSaveRef.current = true
                 }}
               >
-                <SelectTrigger className="w-auto px-3">
-                  <span className="text-sm font-mono">
-                    {saveTarget === "cursor" ? ".cursor/worktrees.json" : ".1code/worktree.json"}
+                <SelectTrigger className="w-auto max-w-72 px-3">
+                  <span className="truncate text-sm">
+                    {selectedConfigLabel}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1code">.1code/worktree.json</SelectItem>
+                  <SelectItem value="locus">
+                    <span>{t("settings.projects.configFileAppDefaultLabel")}</span>
+                    <span
+                      data-desc
+                      className="font-mono text-xs text-muted-foreground"
+                    >
+                      .locus/worktree.json
+                    </span>
+                  </SelectItem>
                   {cursorExists && (
-                    <SelectItem value="cursor">.cursor/worktrees.json</SelectItem>
+                    <SelectItem value="cursor">
+                      <span>{t("settings.projects.configFileCursorLabel")}</span>
+                      <span
+                        data-desc
+                        className="font-mono text-xs text-muted-foreground"
+                      >
+                        .cursor/worktrees.json
+                      </span>
+                    </SelectItem>
+                  )}
+                  {(legacyOnecodeExists || saveTarget === "1code") && (
+                    <SelectItem value="1code">
+                      <span>{t("settings.projects.configFileLegacyOnecodeLabel")}</span>
+                      <span
+                        data-desc
+                        className="font-mono text-xs text-muted-foreground"
+                      >
+                        .1code/worktree.json
+                      </span>
+                    </SelectItem>
                   )}
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </div>
 
-        {/* ── Worktree ── */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-foreground">
-              {t("settings.projects.worktree")}
-            </h4>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 shrink-0"
-              onClick={() => {
-                const prompt = COMMAND_PROMPTS["worktree-setup"]
-                if (prompt && projectId) {
-                  createChatMutation.mutate({
-                    projectId,
-                    name: "Worktree Setup",
-                    initialMessageParts: [{ type: "text", text: prompt }],
-                    useWorktree: false,
-                    mode: "agent",
-                  })
-                }
-              }}
-              disabled={!projectId || createChatMutation.isPending}
-            >
-              <AIPenIcon className="h-3.5 w-3.5" />
-              {t("settings.projects.fillWithAI")}
-            </Button>
-          </div>
-          <div className="bg-background rounded-lg border border-border overflow-hidden">
             {/* Setup commands */}
-            <div className="p-4 space-y-3">
+            <div className="space-y-3 border-t border-border p-4">
               <div>
                 <span className="text-sm font-medium text-foreground">
                   {t("settings.projects.setupCommands")}
@@ -565,7 +709,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
         </div>
 
         {/* ── Danger Zone ── */}
-        <div>
+        <div className="pt-2">
           <h4 className="text-sm font-medium text-foreground mb-2">
             {t("settings.projects.dangerZone")}
           </h4>

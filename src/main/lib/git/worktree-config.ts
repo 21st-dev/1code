@@ -11,7 +11,7 @@ export interface WorktreeConfig {
   "setup-worktree"?: string[] | string
 }
 
-export type WorktreeConfigSource = "custom" | "cursor" | "1code" | null
+export type WorktreeConfigSource = "custom" | "locus" | "cursor" | "1code" | null
 
 export interface DetectedWorktreeConfig {
   config: WorktreeConfig | null
@@ -20,6 +20,7 @@ export interface DetectedWorktreeConfig {
 }
 
 const CURSOR_CONFIG_PATH = ".cursor/worktrees.json"
+const LOCUS_CONFIG_PATH = ".locus/worktree.json"
 const ONECODE_CONFIG_PATH = ".1code/worktree.json"
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -42,7 +43,7 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
 
 /**
  * Detect worktree config for a project
- * Priority: custom path > .cursor/worktrees.json > .1code/worktree.json
+ * Priority: custom path > .locus/worktree.json > .cursor/worktrees.json > .1code/worktree.json
  */
 export async function detectWorktreeConfig(
   projectPath: string,
@@ -59,7 +60,16 @@ export async function detectWorktreeConfig(
     }
   }
 
-  // 2. Check .cursor/worktrees.json
+  // 2. Check .locus/worktree.json
+  const locusPath = join(projectPath, LOCUS_CONFIG_PATH)
+  if (await fileExists(locusPath)) {
+    const config = await readJsonFile<WorktreeConfig>(locusPath)
+    if (config) {
+      return { config, path: locusPath, source: "locus" }
+    }
+  }
+
+  // 3. Check .cursor/worktrees.json
   const cursorPath = join(projectPath, CURSOR_CONFIG_PATH)
   if (await fileExists(cursorPath)) {
     const config = await readJsonFile<WorktreeConfig>(cursorPath)
@@ -68,7 +78,7 @@ export async function detectWorktreeConfig(
     }
   }
 
-  // 3. Check .1code/worktree.json
+  // 4. Check legacy .1code/worktree.json
   const onecodePath = join(projectPath, ONECODE_CONFIG_PATH)
   if (await fileExists(onecodePath)) {
     const config = await readJsonFile<WorktreeConfig>(onecodePath)
@@ -87,13 +97,19 @@ export async function detectWorktreeConfig(
 export async function getAvailableConfigPaths(
   projectPath: string,
 ): Promise<{
+  locus: { exists: boolean; path: string }
   cursor: { exists: boolean; path: string }
   onecode: { exists: boolean; path: string }
 }> {
+  const locusPath = join(projectPath, LOCUS_CONFIG_PATH)
   const cursorPath = join(projectPath, CURSOR_CONFIG_PATH)
   const onecodePath = join(projectPath, ONECODE_CONFIG_PATH)
 
   return {
+    locus: {
+      exists: await fileExists(locusPath),
+      path: locusPath,
+    },
     cursor: {
       exists: await fileExists(cursorPath),
       path: cursorPath,
@@ -112,11 +128,13 @@ export async function getAvailableConfigPaths(
 export async function saveWorktreeConfig(
   projectPath: string,
   config: WorktreeConfig,
-  target: "cursor" | "1code" | string = "1code",
+  target: "locus" | "cursor" | "1code" | string = "locus",
 ): Promise<{ success: boolean; path: string; error?: string }> {
   let targetPath: string
 
-  if (target === "cursor") {
+  if (target === "locus") {
+    targetPath = join(projectPath, LOCUS_CONFIG_PATH)
+  } else if (target === "cursor") {
     targetPath = join(projectPath, CURSOR_CONFIG_PATH)
   } else if (target === "1code") {
     targetPath = join(projectPath, ONECODE_CONFIG_PATH)
@@ -147,18 +165,31 @@ export async function saveWorktreeConfig(
  * Get setup commands for current platform
  */
 export function getSetupCommands(config: WorktreeConfig): string[] | string | null {
-  // Generic setup-worktree takes priority (cross-platform)
-  if (config["setup-worktree"]) {
-    return config["setup-worktree"]
+  const platformCommands =
+    process.platform === "win32"
+      ? config["setup-worktree-windows"]
+      : config["setup-worktree-unix"]
+
+  if (hasSetupCommands(platformCommands)) {
+    return platformCommands
   }
 
-  // Fall back to platform-specific commands
-  if (process.platform === "win32") {
-    return config["setup-worktree-windows"] ?? null
+  const genericCommands = config["setup-worktree"]
+  if (hasSetupCommands(genericCommands)) {
+    return genericCommands
   }
 
-  // Unix (darwin, linux)
-  return config["setup-worktree-unix"] ?? null
+  return null
+}
+
+function hasSetupCommands(
+  commands: string[] | string | undefined,
+): commands is string[] | string {
+  if (Array.isArray(commands)) {
+    return commands.some((cmd) => cmd.trim().length > 0)
+  }
+
+  return typeof commands === "string" && commands.trim().length > 0
 }
 
 export interface WorktreeSetupResult {

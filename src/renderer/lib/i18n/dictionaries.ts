@@ -632,20 +632,33 @@ export const en = {
   "settings.projects.changeIcon": "Click to change icon",
   "settings.projects.path": "Path",
   "settings.projects.repository": "Repository",
-  "settings.projects.config": "Config",
-  "settings.projects.configFile": "Config file",
+  "settings.projects.configFile": "Save location",
   "settings.projects.configFileDescription":
-    "Where worktree setup is stored",
-  "settings.projects.worktree": "Worktree",
-  "settings.projects.fillWithAI": "Fill with AI",
-  "settings.projects.setupCommands": "Setup Commands",
+    "Stored automatically. You usually do not need to edit this file by hand.",
+  "settings.projects.configFileAppDefaultLabel": "Locus default config",
+  "settings.projects.configFileCursorLabel": "Cursor worktree config",
+  "settings.projects.configFileLegacyOnecodeLabel": "Legacy 1Code config",
+  "settings.projects.worktreeSetup": "Agent worktree setup",
+  "settings.projects.worktreeSetupDescription":
+    "Runs after the app creates a temporary worktree for an agent, so the new workspace can install dependencies, copy .env, or prepare local config.",
+  "settings.projects.worktreeHelpLabel": "How agent worktrees work",
+  "settings.projects.worktreeHelpBody":
+    "The app creates a separate git worktree for each agent so agents do not edit the same files at the same time. These commands run inside the new worktree after it is created.",
+  "settings.projects.fillWithAI": "Generate setup commands with AI",
+  "settings.projects.saveStatusSaving": "Saving...",
+  "settings.projects.saveStatusUnsaved": "Unsaved changes",
+  "settings.projects.saveStatusFailed": "Save failed",
+  "settings.projects.saveStatusSavedTo": "Saved to {target}",
+  "settings.projects.setupCommands": "Initialization commands",
   "settings.projects.setupCommandsDescription":
-    "Run after worktree creation.",
+    "Run automatically after each agent worktree is created.",
+  "settings.projects.commandInputAriaLabel": "Setup command {index}",
+  "settings.projects.removeCommand": "Remove command {index}",
   "settings.projects.clickToCopy": "Click to copy",
   "settings.projects.forMainRepo": "for main repo.",
-  "settings.projects.fallsBack": "Falls back to commands above",
+  "settings.projects.fallsBack": "Uses initialization commands above",
   "settings.projects.addPlatformOverrides":
-    "Add platform-specific overrides",
+    "Add platform-specific commands",
   "settings.projects.dangerZone": "Danger Zone",
   "settings.projects.removeProject": "Remove Project",
   "settings.projects.removeDescription":
@@ -769,29 +782,6 @@ export const en = {
   "settings.mcp.setBearerToken": "Set bearer token...",
   "settings.mcp.set": "Set",
 
-  "settings.worktrees.toast.saved": "Worktree config saved",
-  "settings.worktrees.toast.failedToSave": "Failed to save: {message}",
-  "settings.worktrees.title": "Worktrees",
-  "settings.worktrees.subtitle":
-    "Configure setup commands that run when a new worktree is created",
-  "settings.worktrees.selectProject": "Select project",
-  "settings.worktrees.selectProjectDescription":
-    "Choose which project to configure",
-  "settings.worktrees.selectPlaceholder": "Select...",
-  "settings.worktrees.configLocation": "Config Location",
-  "settings.worktrees.usingPath": "Using: {path}",
-  "settings.worktrees.saveTo": "Save to",
-  "settings.worktrees.saveToDescription":
-    "Where to save the configuration file",
-  "settings.worktrees.setupCommands": "Setup Commands",
-  "settings.worktrees.setupCommandsDescription":
-    "Commands run in the worktree after creation",
-  "settings.worktrees.allPlatforms": "All Platforms",
-  "settings.worktrees.useRootPathPrefix": "use",
-  "settings.worktrees.useRootPathSuffix": "for main repo path",
-  "settings.worktrees.fallsBackAllPlatforms":
-    'Falls back to "All Platforms"',
-
   "settings.plugins.version": "Version",
   "settings.plugins.runtime": "Runtime",
   "settings.plugins.runtimeAll": "All",
@@ -806,7 +796,7 @@ export const en = {
   "settings.plugins.claudePackageHint":
     "Claude Code plugins are runtime packages. Enabling them exposes their commands, skills, agents, and MCP servers to Claude Code only.",
   "settings.plugins.codexPackageHint":
-    "Codex plugins are installed Codex runtime packages. They are shown here for visibility; 1Code does not control their enablement yet.",
+    "Codex plugins are installed Codex runtime packages. They are shown here for visibility; this app does not control their enablement yet.",
   "settings.plugins.source": "Source",
   "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
@@ -2584,7 +2574,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "上传 icon 失败：{message}",
   "settings.projects.toast.iconRemoved": "Icon 已移除",
   "settings.projects.toast.copied": "已复制到剪贴板",
-  "settings.projects.addCommand": "添加 command",
+  "settings.projects.addCommand": "添加命令",
   "settings.projects.general": "通用",
   "settings.projects.name": "名称",
   "settings.projects.displayNameDescription":
@@ -2595,20 +2585,33 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.projects.changeIcon": "点击更换 icon",
   "settings.projects.path": "Path",
   "settings.projects.repository": "Repository",
-  "settings.projects.config": "Config",
-  "settings.projects.configFile": "Config file",
+  "settings.projects.configFile": "保存位置",
   "settings.projects.configFileDescription":
-    "Worktree setup 的保存位置",
-  "settings.projects.worktree": "Worktree",
-  "settings.projects.fillWithAI": "用 AI 填充",
-  "settings.projects.setupCommands": "Setup Commands",
+    "自动保存。通常不需要手动打开这个文件。",
+  "settings.projects.configFileAppDefaultLabel": "Locus 默认配置",
+  "settings.projects.configFileCursorLabel": "Cursor worktree 配置",
+  "settings.projects.configFileLegacyOnecodeLabel": "旧版 1Code 配置",
+  "settings.projects.worktreeSetup": "Agent worktree 初始化",
+  "settings.projects.worktreeSetupDescription":
+    "当应用为 agent 创建临时 worktree 后自动运行，用来安装依赖、复制 .env 或准备本地配置。",
+  "settings.projects.worktreeHelpLabel": "了解 agent worktree 怎么用",
+  "settings.projects.worktreeHelpBody":
+    "应用会为每个 agent 创建独立的 git worktree，避免多个 agent 同时改同一份文件。这里的命令会在新 worktree 创建完成后，在那个 worktree 里自动运行。",
+  "settings.projects.fillWithAI": "让 AI 生成初始化命令",
+  "settings.projects.saveStatusSaving": "保存中...",
+  "settings.projects.saveStatusUnsaved": "未保存修改",
+  "settings.projects.saveStatusFailed": "保存失败",
+  "settings.projects.saveStatusSavedTo": "已保存到 {target}",
+  "settings.projects.setupCommands": "初始化命令",
   "settings.projects.setupCommandsDescription":
-    "Worktree 创建后运行。",
+    "每次创建 agent worktree 后自动运行。",
+  "settings.projects.commandInputAriaLabel": "Setup command {index}",
+  "settings.projects.removeCommand": "移除 command {index}",
   "settings.projects.clickToCopy": "点击复制",
   "settings.projects.forMainRepo": "表示 main repo。",
-  "settings.projects.fallsBack": "回退使用上方 commands",
+  "settings.projects.fallsBack": "使用上方初始化命令",
   "settings.projects.addPlatformOverrides":
-    "添加平台专用 overrides",
+    "添加平台专用命令",
   "settings.projects.dangerZone": "Danger Zone",
   "settings.projects.removeProject": "移除 Project",
   "settings.projects.removeDescription":
@@ -2732,29 +2735,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.setBearerToken": "设置 bearer token...",
   "settings.mcp.set": "设置",
 
-  "settings.worktrees.toast.saved": "Worktree config 已保存",
-  "settings.worktrees.toast.failedToSave": "保存失败：{message}",
-  "settings.worktrees.title": "Worktrees",
-  "settings.worktrees.subtitle":
-    "配置新建 worktree 后要运行的 setup commands",
-  "settings.worktrees.selectProject": "选择 project",
-  "settings.worktrees.selectProjectDescription":
-    "选择要配置的 project",
-  "settings.worktrees.selectPlaceholder": "选择...",
-  "settings.worktrees.configLocation": "Config 位置",
-  "settings.worktrees.usingPath": "使用中：{path}",
-  "settings.worktrees.saveTo": "保存到",
-  "settings.worktrees.saveToDescription":
-    "配置文件的保存位置",
-  "settings.worktrees.setupCommands": "Setup Commands",
-  "settings.worktrees.setupCommandsDescription":
-    "Worktree 创建后运行的 commands",
-  "settings.worktrees.allPlatforms": "All Platforms",
-  "settings.worktrees.useRootPathPrefix": "使用",
-  "settings.worktrees.useRootPathSuffix": "表示 main repo 路径",
-  "settings.worktrees.fallsBackAllPlatforms":
-    '回退使用 "All Platforms"',
-
   "settings.plugins.version": "Version",
   "settings.plugins.runtime": "Runtime",
   "settings.plugins.runtimeAll": "全部",
@@ -2769,7 +2749,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.claudePackageHint":
     "Claude Code plugins 是 Claude runtime 的能力包。启用后只会影响 Claude Code。",
   "settings.plugins.codexPackageHint":
-    "Codex plugins 是已安装的 Codex runtime 包。这里先做可见性展示，1Code 还不控制它们的启用状态。",
+    "Codex plugins 是已安装的 Codex runtime 包。这里先做可见性展示，应用还不控制它们的启用状态。",
   "settings.plugins.source": "Source",
   "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",

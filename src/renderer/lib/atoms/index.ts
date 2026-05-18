@@ -179,7 +179,6 @@ export type SettingsTab =
   | "agents"
   | "mcp"
   | "plugins"
-  | "worktrees"
   | "projects"
   | "debug"
   | "beta"
