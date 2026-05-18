@@ -56,7 +56,15 @@ bun run release:smoke:mac
 
 This verifies the DMG, mounts it, copies `Locus.app` into a temporary install location, and reports code-signing/notarization status. Pass `--launch` to request a launch check; unsigned or ad-hoc builds may be blocked by Gatekeeper. Finish the UI smoke manually by launching the DMG-installed app, selecting a real repository, confirming the selected repo is visible before agent actions, and checking Claude Code and Codex status in Settings.
 
-Current repo config does not define a macOS notarization step. Internal macOS builds may be unsigned or ad-hoc signed. Public macOS distribution must use a Developer ID Application certificate, hardened runtime, and notarization/stapling. Public Windows distribution must use a code-signing certificate.
+Distribution policy for the current phase:
+
+- The source repository may be opened before signing infrastructure is ready.
+- Source builds do not require Apple Developer ID, notarization, or Windows code signing.
+- Desktop artifacts shared through GitHub Releases before signing is configured must be labeled as unsigned pre-release/test builds.
+- Internal macOS builds may be unsigned or ad-hoc signed, and internal Windows builds may be unsigned.
+- Broad public installer distribution should wait for macOS Developer ID signing, hardened runtime, notarization/stapling, and Windows code signing.
+
+Current repo config does not define a macOS notarization step.
 
 ## Local-Only Boundary
 
