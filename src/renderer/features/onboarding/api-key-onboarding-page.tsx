@@ -2,13 +2,14 @@
 
 import { useAtomValue, useSetAtom } from "jotai"
 import { useState, useEffect } from "react"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Info } from "lucide-react"
 
 import { IconSpinner, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
 import { Input } from "../../components/ui/input"
 import { LanguageSwitcher } from "../../components/language-switcher"
 import { Label } from "../../components/ui/label"
 import { Logo } from "../../components/ui/logo"
+import { Switch } from "../../components/ui/switch"
 import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
@@ -32,6 +33,8 @@ export function ApiKeyOnboardingPage() {
   const trpcUtils = trpc.useUtils()
   const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
   const saveProviderConfig = trpc.claudeProviderConfig.save.useMutation()
+  const saveLocalApiProviderConfig =
+    trpc.localApiProviderConfig.save.useMutation()
 
   const isCustomModel = billingMethod === "custom-model"
 
@@ -45,6 +48,7 @@ export function ApiKeyOnboardingPage() {
   const [baseUrl, setBaseUrl] = useState("")
   const [authMode, setAuthMode] =
     useState<ClaudeProviderAuthMode>("auth_token")
+  const [useForUtilityApis, setUseForUtilityApis] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Sync non-secret metadata from secure provider config.
@@ -85,7 +89,7 @@ export function ApiKeyOnboardingPage() {
   }
 
   // Submit for custom model mode (all three fields)
-  const submitCustomModel = () => {
+  const submitCustomModel = async () => {
     const trimmedModel = model.trim()
     const trimmedToken = token.trim()
     const trimmedBaseUrl = baseUrl.trim()
@@ -94,21 +98,37 @@ export function ApiKeyOnboardingPage() {
 
     setIsSubmitting(true)
 
-    saveProviderConfig.mutate(
-      {
+    try {
+      await saveProviderConfig.mutateAsync({
         model: trimmedModel,
         token: trimmedToken,
         baseUrl: trimmedBaseUrl,
         authMode,
-      },
-      {
-        onSuccess: async () => {
-          await trpcUtils.claudeProviderConfig.get.invalidate()
-          setApiKeyOnboardingCompleted(true)
-        },
-        onSettled: () => setIsSubmitting(false),
-      },
-    )
+      })
+
+      if (useForUtilityApis) {
+        await Promise.all([
+          saveLocalApiProviderConfig.mutateAsync({
+            purpose: "sub_chat_title",
+            model: trimmedModel,
+            token: trimmedToken,
+            baseUrl: trimmedBaseUrl,
+          }),
+          saveLocalApiProviderConfig.mutateAsync({
+            purpose: "commit_message",
+            model: trimmedModel,
+            token: trimmedToken,
+            baseUrl: trimmedBaseUrl,
+          }),
+        ])
+        await trpcUtils.localApiProviderConfig.get.invalidate()
+      }
+
+      await trpcUtils.claudeProviderConfig.get.invalidate()
+      setApiKeyOnboardingCompleted(true)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -247,6 +267,34 @@ export function ApiKeyOnboardingPage() {
           </div>
         </div>
 
+        <div className="flex gap-2 rounded-lg border border-border bg-muted/40 p-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-foreground">
+              {t("onboarding.customModel.runtimeNoticeTitle")}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t("onboarding.customModel.runtimeNoticeBody")}
+            </p>
+            <div className="flex items-start justify-between gap-3 border-t border-border/70 pt-2">
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-foreground">
+                  {t("onboarding.customModel.utilityApisTitle")}
+                </p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t("onboarding.customModel.utilityApisBody")}
+                </p>
+              </div>
+              <Switch
+                checked={useForUtilityApis}
+                onCheckedChange={setUseForUtilityApis}
+                aria-label={t("onboarding.customModel.utilityApisTitle")}
+                className="mt-0.5"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Form Fields */}
         <div className="space-y-4">
           {/* Model Name */}
@@ -332,7 +380,7 @@ export function ApiKeyOnboardingPage() {
 
         {/* Continue Button */}
         <button
-          onClick={submitCustomModel}
+          onClick={() => void submitCustomModel()}
           disabled={!canSubmitCustomModel || isSubmitting}
           className={cn(
             "w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center",

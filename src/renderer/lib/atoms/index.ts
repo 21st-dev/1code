@@ -733,6 +733,14 @@ export const codexOnboardingCompletedAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Whether the user deferred selecting a repository during first-run onboarding.
+export const repoOnboardingSkippedAtom = atomWithStorage<boolean>(
+  "onboarding:repo-skipped",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
 export type CodexOnboardingAuthMethod = "chatgpt" | "api_key"
 
 // Preferred/last successful Codex auth method

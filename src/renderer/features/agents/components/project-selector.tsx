@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { useAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import {
   Popover,
   PopoverContent,
@@ -24,12 +24,14 @@ import { Button } from "../../../components/ui/button"
 import { IconChevronDown, CheckIcon, FolderPlusIcon, GitHubIcon } from "../../../components/ui/icons"
 import { ProjectIcon } from "../../../components/ui/project-icon"
 import { trpc } from "../../../lib/trpc"
+import { repoOnboardingSkippedAtom } from "../../../lib/atoms"
 import { selectedProjectAtom } from "../atoms"
 import { useI18n } from "../../../lib/i18n"
 
 export function ProjectSelector() {
   const { t } = useI18n()
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+  const setRepoOnboardingSkipped = useSetAtom(repoOnboardingSkippedAtom)
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [githubDialogOpen, setGithubDialogOpen] = useState(false)
@@ -82,6 +84,7 @@ export function ProjectSelector() {
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
+        setRepoOnboardingSkipped(false)
       }
     },
   })
@@ -114,6 +117,7 @@ export function ProjectSelector() {
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
+        setRepoOnboardingSkipped(false)
         setGithubDialogOpen(false)
         setGithubUrl("")
       }
@@ -146,6 +150,7 @@ export function ProjectSelector() {
         gitOwner: project.gitOwner,
         gitRepo: project.gitRepo,
       })
+      setRepoOnboardingSkipped(false)
       setOpen(false)
     }
   }

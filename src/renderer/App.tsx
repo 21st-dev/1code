@@ -23,6 +23,7 @@ import {
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
   normalizeCustomClaudeConfig,
+  repoOnboardingSkippedAtom,
 } from "./lib/atoms"
 import { I18nProvider } from "./lib/i18n"
 import { appStore } from "./lib/jotai-store"
@@ -62,6 +63,7 @@ function AppContent() {
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
+  const repoOnboardingSkipped = useAtomValue(repoOnboardingSkippedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
@@ -122,19 +124,19 @@ function AppContent() {
     if (!isLocalOnlyResolved || !isLocalOnly) return
     if (
       billingMethod === "claude-subscription" &&
-      !claudeCodeIntegration?.isConnected
+      anthropicOnboardingCompleted &&
+      claudeCodeIntegration &&
+      !claudeCodeIntegration.isConnected
     ) {
-      setBillingMethod(null)
       setAnthropicOnboardingCompleted(false)
     }
   }, [
     anthropicOnboardingCompleted,
     billingMethod,
-    claudeCodeIntegration?.isConnected,
+    claudeCodeIntegration,
     isLocalOnly,
     isLocalOnlyResolved,
     setAnthropicOnboardingCompleted,
-    setBillingMethod,
   ])
 
   // Auto-skip onboarding if user has existing CLI config (API key or proxy)
@@ -226,9 +228,9 @@ function AppContent() {
   // 2. Claude subscription selected but not completed -> AnthropicOnboardingPage
   // 3. Codex selected but not completed -> CodexOnboardingPage
   // 4. API key or custom model selected but not completed -> ApiKeyOnboardingPage
-  // 5. No valid project selected -> SelectRepoPage
+  // 5. No valid project selected and repository onboarding not deferred -> SelectRepoPage
   // 6. Otherwise -> AgentsLayout
-  if (!billingMethod || (isLocalOnly && billingMethod === "claude-subscription")) {
+  if (!billingMethod) {
     return <BillingMethodPage />
   }
 
@@ -251,7 +253,7 @@ function AppContent() {
     return <ApiKeyOnboardingPage />
   }
 
-  if (!validatedProject && !isLoadingProjects) {
+  if (!validatedProject && !isLoadingProjects && !repoOnboardingSkipped) {
     return <SelectRepoPage />
   }
 

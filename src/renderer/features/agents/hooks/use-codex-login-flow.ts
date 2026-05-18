@@ -185,7 +185,30 @@ export function useCodexLoginFlow() {
     verifyingSessionRef.current = null
     lastErrorToastRef.current = null
 
-      // Skip launching `codex login` when already connected.
+    try {
+      const runtimeStatus = await trpcClient.codex.getRuntimeStatus.query()
+      if (!runtimeStatus.ok) {
+        const failedRuntime = runtimeStatus.loginCli.ok
+          ? runtimeStatus.acp
+          : runtimeStatus.loginCli
+        const message = `${t("onboarding.runtime.codexMissing")} ${failedRuntime.hint}`
+        setState("error")
+        setError(message)
+        notifyError(message)
+        return
+      }
+    } catch (runtimeError) {
+      const message = toErrorMessage(
+        runtimeError,
+        t("onboarding.runtime.codexMissing"),
+      )
+      setState("error")
+      setError(message)
+      notifyError(message)
+      return
+    }
+
+    // Skip launching `codex login` when already connected.
     try {
       const integration = await trpcClient.codex.getIntegration.query()
       if (

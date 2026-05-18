@@ -2,7 +2,7 @@
 
 import { useSetAtom } from "jotai"
 import { Check } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import {
   ClaudeCodeIcon,
@@ -17,7 +17,6 @@ import {
   type BillingMethod,
 } from "../../lib/atoms"
 import { useI18n } from "../../lib/i18n"
-import { useLocalOnlyModeState } from "../../lib/hooks/use-local-only-mode"
 import { cn } from "../../lib/utils"
 
 type BillingOptionGroup = "claude-code" | "codex"
@@ -81,8 +80,6 @@ export function BillingMethodPage() {
   const { t } = useI18n()
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
-  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
-    useLocalOnlyModeState()
   const [selectedGroup, setSelectedGroup] =
     useState<BillingOptionGroup>("claude-code")
   const [selectedOptionId, setSelectedOptionId] =
@@ -90,25 +87,14 @@ export function BillingMethodPage() {
 
   const visibleOptions = useMemo(
     () =>
-      billingOptions.filter(
-        (option) =>
-          option.group === selectedGroup &&
-          (!isLocalOnly || option.id !== "claude-subscription"),
-      ),
-    [isLocalOnly, selectedGroup],
+      billingOptions.filter((option) => option.group === selectedGroup),
+    [selectedGroup],
   )
 
   const selectedOption = useMemo(() => {
     const found = visibleOptions.find((option) => option.id === selectedOptionId)
     return found || visibleOptions[0] || billingOptions[0]
   }, [selectedOptionId, visibleOptions])
-
-  useEffect(() => {
-    if (!isLocalOnlyResolved || !isLocalOnly) return
-    if (selectedOptionId === "claude-subscription") {
-      setSelectedOptionId("api-key")
-    }
-  }, [isLocalOnly, isLocalOnlyResolved, selectedOptionId])
 
   const handleContinue = () => {
     if (
@@ -123,10 +109,14 @@ export function BillingMethodPage() {
   }
 
   const getOptionTitle = (option: BillingOption) => {
-    if (option.id === "codex-subscription") {
-      return t("onboarding.billing.codexSubscription.title")
+    switch (option.id) {
+      case "claude-subscription":
+        return t("onboarding.billing.claudeSubscription.title")
+      case "codex-subscription":
+        return t("onboarding.billing.codexSubscription.title")
+      default:
+        return option.title
     }
-    return option.title
   }
 
   const getOptionSubtitle = (option: BillingOption) => {
@@ -172,7 +162,7 @@ export function BillingMethodPage() {
             type="button"
             onClick={() => {
               setSelectedGroup("claude-code")
-              setSelectedOptionId(isLocalOnly ? "api-key" : "claude-subscription")
+              setSelectedOptionId("claude-subscription")
             }}
             className={cn(
               "h-8 flex-1 rounded-full text-sm font-medium transition-colors",

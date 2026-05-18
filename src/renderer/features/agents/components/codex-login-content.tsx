@@ -1,11 +1,15 @@
 "use client"
 
+import { AlertTriangle, CheckCircle2 } from "lucide-react"
+
 import { Button } from "../../../components/ui/button"
-import { CodexIcon } from "../../../components/ui/icons"
+import { CodexIcon, IconSpinner } from "../../../components/ui/icons"
 import { Input } from "../../../components/ui/input"
 import { Logo } from "../../../components/ui/logo"
 import { useI18n } from "../../../lib/i18n"
 import type { CodexAuthMethod, CodexLoginFlowState } from "../hooks/use-codex-login-flow"
+
+type RuntimeState = "checking" | "ready" | "missing"
 
 type CodexLoginContentProps = {
   state: CodexLoginFlowState
@@ -16,6 +20,8 @@ type CodexLoginContentProps = {
   isOpeningUrl: boolean
   showConnectButton?: boolean
   isConnecting?: boolean
+  runtimeState?: RuntimeState
+  runtimeHint?: string | null
   onConnect?: () => void
   onOpenUrl: () => void
   onRetry: () => void
@@ -32,6 +38,8 @@ export function CodexLoginContent({
   isOpeningUrl,
   showConnectButton = false,
   isConnecting = false,
+  runtimeState,
+  runtimeHint,
   onConnect,
   onOpenUrl,
   onRetry,
@@ -86,6 +94,40 @@ export function CodexLoginContent({
           )}
         </div>
       </div>
+
+      {!isApiKeyMode && runtimeState && (
+        <div
+          className={
+            runtimeState === "missing"
+              ? "rounded-lg border border-destructive/20 bg-destructive/10 p-3"
+              : "rounded-lg border border-border bg-muted/40 p-3"
+          }
+        >
+          <div className="flex gap-2">
+            {runtimeState === "checking" ? (
+              <IconSpinner className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            ) : runtimeState === "missing" ? (
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            ) : (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-foreground">
+                {runtimeState === "checking"
+                  ? t("onboarding.runtime.checking")
+                  : runtimeState === "missing"
+                    ? t("onboarding.runtime.codexMissing")
+                    : t("onboarding.runtime.codexReady")}
+              </p>
+              {runtimeState === "missing" && runtimeHint && (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {runtimeHint}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showFooter && (
         <div className={isApiKeyMode ? "space-y-4" : "space-y-6"}>

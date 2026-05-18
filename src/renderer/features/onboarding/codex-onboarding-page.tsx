@@ -11,6 +11,7 @@ import {
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
 } from "../../lib/atoms"
+import { trpc } from "../../lib/trpc"
 
 export function CodexOnboardingPage() {
   const billingMethod = useAtomValue(billingMethodAtom)
@@ -18,10 +19,17 @@ export function CodexOnboardingPage() {
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
   const didAutoStartRef = useRef(false)
+  const runtimeStatusQuery = trpc.codex.getRuntimeStatus.useQuery()
   const onboardingMethod = useMemo(() => {
     if (billingMethod === "codex-api-key") return "api_key"
     return "chatgpt"
   }, [billingMethod])
+  const runtimeStatus = runtimeStatusQuery.data
+  const runtimeUnavailable =
+    runtimeStatusQuery.isFetched && runtimeStatus?.ok !== true
+  const failedRuntime = runtimeStatus?.loginCli.ok
+    ? runtimeStatus.acp
+    : runtimeStatus?.loginCli
 
   const {
     state,
@@ -48,6 +56,10 @@ export function CodexOnboardingPage() {
       return
     }
 
+    if (runtimeStatusQuery.isLoading || runtimeUnavailable) {
+      return
+    }
+
     // Wait until flow state reflects selected onboarding method to avoid
     // triggering OAuth from the default "chatgpt" value on first render.
     if (method !== onboardingMethod) {
@@ -60,7 +72,13 @@ export function CodexOnboardingPage() {
 
     didAutoStartRef.current = true
     void start()
-  }, [method, onboardingMethod, start])
+  }, [
+    method,
+    onboardingMethod,
+    runtimeStatusQuery.isLoading,
+    runtimeUnavailable,
+    start,
+  ])
 
   useEffect(() => {
     if (state === "success") {
@@ -101,6 +119,16 @@ export function CodexOnboardingPage() {
           url={url}
           isOpeningUrl={isOpeningUrl}
           isConnecting={isRunning || isOpeningUrl}
+          runtimeState={
+            onboardingMethod === "chatgpt"
+              ? runtimeStatusQuery.isLoading
+                ? "checking"
+                : runtimeUnavailable
+                  ? "missing"
+                  : "ready"
+              : undefined
+          }
+          runtimeHint={failedRuntime?.hint ?? null}
           onOpenUrl={() => {
             void openUrl()
           }}

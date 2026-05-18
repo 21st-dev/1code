@@ -55,6 +55,7 @@ import {
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
+  repoOnboardingSkippedAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -249,6 +250,7 @@ export function NewChatForm({
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
+  const setRepoOnboardingSkipped = useSetAtom(repoOnboardingSkippedAtom)
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false)
 
   // Worktree config banner state
@@ -982,6 +984,7 @@ export function NewChatForm({
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
+        setRepoOnboardingSkipped(false)
       }
     },
   })

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import { ChevronLeft } from "lucide-react"
 
 import { IconSpinner, GitHubIcon } from "../../components/ui/icons"
@@ -11,10 +11,12 @@ import { Input } from "../../components/ui/input"
 import { trpc } from "../../lib/trpc"
 import { selectedProjectAtom } from "../agents/atoms"
 import { useI18n } from "../../lib/i18n"
+import { repoOnboardingSkippedAtom } from "../../lib/atoms"
 
 export function SelectRepoPage() {
   const { t } = useI18n()
   const [, setSelectedProject] = useAtom(selectedProjectAtom)
+  const setRepoOnboardingSkipped = useSetAtom(repoOnboardingSkippedAtom)
   const [showClonePage, setShowClonePage] = useState(false)
   const [githubUrl, setGithubUrl] = useState("")
 
@@ -50,6 +52,7 @@ export function SelectRepoPage() {
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
+        setRepoOnboardingSkipped(false)
       }
     },
   })
@@ -82,6 +85,7 @@ export function SelectRepoPage() {
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
+        setRepoOnboardingSkipped(false)
         setShowClonePage(false)
         setGithubUrl("")
       }
@@ -101,6 +105,10 @@ export function SelectRepoPage() {
     if (cloneFromGitHub.isPending) return
     setShowClonePage(false)
     setGithubUrl("")
+  }
+
+  const handleSkip = () => {
+    setRepoOnboardingSkipped(true)
   }
 
   // Clone from GitHub page
@@ -228,6 +236,13 @@ export function SelectRepoPage() {
             ) : (
               t("onboarding.repo.cloneTitle")
             )}
+          </button>
+          <button
+            type="button"
+            onClick={handleSkip}
+            className="w-full h-8 px-4 text-sm font-medium text-muted-foreground rounded-lg transition-[background-color,color,transform] duration-150 hover:bg-muted/60 hover:text-foreground active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+          >
+            {t("onboarding.repo.skip")}
           </button>
         </div>
       </div>

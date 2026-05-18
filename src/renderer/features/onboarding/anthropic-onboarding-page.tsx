@@ -1,7 +1,7 @@
 "use client"
 
 import { useSetAtom } from "jotai"
-import { ChevronLeft } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronLeft } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { LanguageSwitcher } from "../../components/language-switcher"
@@ -47,9 +47,15 @@ export function AnthropicOnboardingPage() {
 
   const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
   const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
+  const runtimeStatusQuery = trpc.claudeCode.getRuntimeStatus.useQuery()
   const existingCredential = existingTokenQuery.data
+  const runtimeStatus = runtimeStatusQuery.data
+  const runtimeReady = runtimeStatus?.executable.ok === true
+  const runtimeUnavailable =
+    runtimeStatusQuery.isFetched && runtimeStatus?.executable.ok !== true
   const hasExistingToken = Boolean(existingCredential?.hasCredentials)
   const checkedExistingToken = !existingTokenQuery.isLoading
+  const checkedRuntime = !runtimeStatusQuery.isLoading
   const shouldOfferExistingToken =
     checkedExistingToken && hasExistingToken && !ignoredExistingToken
   const existingCredentialDescription = existingCredential?.hasRefreshToken
@@ -64,13 +70,13 @@ export function AnthropicOnboardingPage() {
   }
 
   const handleConnectClick = async () => {
-    if (isLocalLoginRunning) return
+    if (isLocalLoginRunning || runtimeUnavailable) return
     setFlowState({ step: "idle" })
     await startLocalLogin()
   }
 
   const handleUseExistingToken = async () => {
-    if (!hasExistingToken || isUsingExistingToken) return
+    if (!hasExistingToken || isUsingExistingToken || !runtimeReady) return
 
     setIsUsingExistingToken(true)
     setExistingTokenError(null)
@@ -102,7 +108,9 @@ export function AnthropicOnboardingPage() {
     if (
       didAutoStartRef.current ||
       !checkedExistingToken ||
+      !checkedRuntime ||
       shouldOfferExistingToken ||
+      runtimeUnavailable ||
       flowState.step !== "idle"
     ) {
       return
@@ -110,7 +118,13 @@ export function AnthropicOnboardingPage() {
 
     didAutoStartRef.current = true
     void handleConnectClick()
-  }, [checkedExistingToken, flowState.step, shouldOfferExistingToken])
+  }, [
+    checkedExistingToken,
+    checkedRuntime,
+    flowState.step,
+    runtimeUnavailable,
+    shouldOfferExistingToken,
+  ])
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
@@ -149,6 +163,38 @@ export function AnthropicOnboardingPage() {
         </div>
 
         <div className="space-y-6 flex flex-col items-center">
+          <div
+            className={
+              runtimeUnavailable
+                ? "w-full rounded-lg border border-destructive/20 bg-destructive/10 p-3"
+                : "w-full rounded-lg border border-border bg-muted/40 p-3"
+            }
+          >
+            <div className="flex gap-2">
+              {runtimeStatusQuery.isLoading ? (
+                <IconSpinner className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              ) : runtimeUnavailable ? (
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              ) : (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              )}
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-foreground">
+                  {runtimeStatusQuery.isLoading
+                    ? t("onboarding.runtime.checking")
+                    : runtimeUnavailable
+                      ? t("onboarding.runtime.claudeMissing")
+                      : t("onboarding.runtime.claudeReady")}
+                </p>
+                {runtimeUnavailable && runtimeStatus?.executable.hint && (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {runtimeStatus.executable.hint}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {shouldOfferExistingToken && flowState.step === "idle" && (
             <div className="space-y-4 w-full">
               <div className="p-4 bg-muted/50 border border-border rounded-lg">
@@ -169,14 +215,14 @@ export function AnthropicOnboardingPage() {
               <div className="flex w-full gap-2">
                 <button
                   onClick={handleRejectExistingToken}
-                  disabled={isUsingExistingToken}
+                  disabled={isUsingExistingToken || !runtimeReady}
                   className="h-8 px-3 flex-1 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   {t("onboarding.claude.authWithAnthropic")}
                 </button>
                 <button
                   onClick={handleUseExistingToken}
-                  disabled={isUsingExistingToken}
+                  disabled={isUsingExistingToken || !runtimeReady}
                   className="h-8 px-3 flex-1 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   {isUsingExistingToken ? (
@@ -243,7 +289,7 @@ export function AnthropicOnboardingPage() {
             !hasError && (
               <button
                 onClick={handleConnectClick}
-                disabled={isLocalLoginRunning}
+                disabled={isLocalLoginRunning || !runtimeReady}
                 className="h-8 px-4 min-w-[85px] bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {isLocalLoginRunning ? (
