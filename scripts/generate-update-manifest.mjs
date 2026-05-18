@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * Generate update manifest files for electron-updater
+ * Generate manual GitHub Releases manifest files.
  *
- * This script generates `latest-mac.yml` (for arm64) and `latest-mac-x64.yml` files
- * that electron-updater uses to check for and download updates.
+ * Locus does not initialize electron-updater in the default local-first build.
+ * These manifests are release attachment metadata for humans/manual checks, not
+ * an automatic update feed.
  *
  * Usage:
  *   node scripts/generate-update-manifest.mjs
+ *   node scripts/generate-update-manifest.mjs --release-dir ./release
  *
- * The script expects electron-builder ZIP files to exist in the release/ directory:
+ * The script accepts current friend-build names and electron-builder defaults:
+ *   - Locus-{version}-arm64-friend.zip
  *   - Locus-{version}-arm64-mac.zip
+ *   - Locus-{version}-friend.zip
  *   - Locus-{version}-mac.zip
- *
- * Run this after `npm run dist` to generate the manifest files.
  */
 
 import { createHash } from "crypto"
@@ -24,11 +26,22 @@ import { fileURLToPath } from "url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
+function readArg(name) {
+  const assignment = process.argv.find((arg) => arg.startsWith(`${name}=`))
+  if (assignment) {
+    return assignment.slice(name.length + 1)
+  }
+
+  const index = process.argv.indexOf(name)
+  if (index !== -1 && process.argv[index + 1]) {
+    return process.argv[index + 1]
+  }
+
+  return null
+}
+
 // Parse --channel argument (default: "latest")
-const channelArgIndex = process.argv.indexOf("--channel")
-const channel = channelArgIndex !== -1 && process.argv[channelArgIndex + 1]
-  ? process.argv[channelArgIndex + 1]
-  : "latest"
+const channel = readArg("--channel") ?? "latest"
 
 if (channel !== "latest" && channel !== "beta") {
   console.error(`Invalid channel: "${channel}". Must be "latest" or "beta".`)
@@ -39,9 +52,9 @@ if (channel !== "latest" && channel !== "beta") {
 const packageJson = JSON.parse(
   readFileSync(join(__dirname, "../package.json"), "utf-8")
 )
-const version = process.env.VERSION || packageJson.version
+const version = readArg("--version") ?? process.env.VERSION ?? packageJson.version
 
-const releaseDir = join(__dirname, "../release")
+const releaseDir = readArg("--release-dir") ?? join(__dirname, "../release")
 
 /**
  * Calculate SHA512 hash of a file and return base64 encoded string
@@ -59,40 +72,73 @@ function getFileSize(filePath) {
 }
 
 /**
- * Find file matching pattern and extension in release directory
+ * Find file matching one of the candidate patterns and extension in release directory
  */
-function findReleaseFile(pattern, ext = ".zip") {
+function findReleaseFile(patterns, ext = ".zip") {
   if (!existsSync(releaseDir)) {
     console.error(`Release directory not found: ${releaseDir}`)
     process.exit(1)
   }
 
   const files = readdirSync(releaseDir)
-  const match = files.find((f) => f.includes(pattern) && f.endsWith(ext))
-  return match ? join(releaseDir, match) : null
+  const candidates = Array.isArray(patterns) ? patterns : [patterns]
+
+  for (const pattern of candidates) {
+    const match = files.find((f) => f.includes(pattern) && f.endsWith(ext))
+    if (match) {
+      return {
+        path: join(releaseDir, match),
+        matchedPattern: pattern,
+      }
+    }
+  }
+
+  return null
+}
+
+function formatPatterns(patterns) {
+  return patterns.map((pattern) => `"${pattern}"`).join(", ")
+}
+
+function getMacArtifactPatterns(arch) {
+  if (arch === "arm64") {
+    return [
+      `${version}-arm64-friend`,
+      `${version}-arm64-mac`,
+      `${version}-arm64`,
+    ]
+  }
+
+  return [
+    `${version}-x64-friend`,
+    `${version}-x64-mac`,
+    `${version}-mac`,
+    `${version}-friend`,
+  ]
 }
 
 /**
  * Generate manifest for a specific architecture
  */
 function generateManifest(arch) {
-  // electron-builder names files differently:
-  // arm64: Locus-{version}-arm64-mac.zip
-  // x64: Locus-{version}-mac.zip
-  const pattern = arch === "arm64" ? `${version}-arm64-mac` : `${version}-mac`
-  const zipPath = findReleaseFile(pattern, ".zip")
+  const patterns = getMacArtifactPatterns(arch)
+  const zipMatch = findReleaseFile(patterns, ".zip")
 
-  if (!zipPath) {
-    console.warn(`Warning: ZIP file not found for pattern: ${pattern}`)
+  if (!zipMatch) {
+    console.warn(
+      `Warning: ZIP file not found for ${arch}; tried ${formatPatterns(patterns)}`
+    )
     console.warn(`Skipping ${arch} manifest generation`)
     return null
   }
 
+  const zipPath = zipMatch.path
   const zipName = basename(zipPath)
   const sha512 = calculateSha512(zipPath)
   const size = getFileSize(zipPath)
 
-  // electron-updater manifest format
+  // Keep the YAML shape compatible with release metadata tools, but do not wire
+  // it to automatic installation in the app.
   const manifest = {
     version,
     files: [
@@ -107,9 +153,8 @@ function generateManifest(arch) {
     releaseDate: new Date().toISOString(),
   }
 
-  // Manifest file names expected by electron-updater:
-  // For stable (latest): latest-mac.yml / latest-mac-x64.yml
-  // For beta: beta-mac.yml / beta-mac-x64.yml
+  // Stable channel: latest-mac.yml / latest-mac-x64.yml
+  // Beta channel: beta-mac.yml / beta-mac-x64.yml
   const prefix = channel === "beta" ? "beta" : "latest"
   const manifestFileName =
     arch === "arm64" ? `${prefix}-mac.yml` : `${prefix}-mac-x64.yml`
@@ -122,15 +167,17 @@ function generateManifest(arch) {
   console.log(`Generated ${manifestFileName}:`)
   console.log(`  Version: ${version}`)
   console.log(`  File: ${zipName}`)
+  console.log(`  Matched: ${zipMatch.matchedPattern}`)
   console.log(`  Size: ${formatBytes(size)}`)
   console.log(`  SHA512: ${sha512.substring(0, 20)}...`)
   console.log()
 
+  const dmgMatch = findReleaseFile(patterns, ".dmg")
+
   return {
     manifestPath,
     artifactName: zipName,
-    manualDownloadPattern:
-      arch === "arm64" ? `*${version}-arm64.dmg` : `*${version}.dmg`,
+    manualDownloadName: dmgMatch ? basename(dmgMatch.path) : null,
   }
 }
 
@@ -183,14 +230,15 @@ function formatBytes(bytes) {
  * Generate manifest for Linux AppImage
  */
 function generateLinuxManifest() {
-  const appImagePath = findReleaseFile(`${version}`, ".AppImage")
+  const appImageMatch = findReleaseFile(`${version}`, ".AppImage")
 
-  if (!appImagePath) {
+  if (!appImageMatch) {
     console.warn(`Warning: AppImage file not found for version: ${version}`)
     console.warn(`Skipping Linux manifest generation`)
     return null
   }
 
+  const appImagePath = appImageMatch.path
   const appImageName = basename(appImagePath)
   const sha512 = calculateSha512(appImagePath)
   const size = getFileSize(appImagePath)
@@ -231,7 +279,7 @@ function generateLinuxManifest() {
 
 // Main execution
 console.log("=".repeat(50))
-console.log("Generating electron-updater manifests")
+console.log("Generating manual GitHub Releases manifests")
 console.log("=".repeat(50))
 console.log(`Version: ${version}`)
 console.log(`Channel: ${channel}`)
@@ -253,20 +301,25 @@ console.log("Manifest generation complete!")
 console.log()
 const prefix = channel === "beta" ? "beta" : "latest"
 console.log("Next steps:")
-console.log("1. Upload the following files to your configured update feed:")
+console.log("1. Attach the following files to the GitHub Release:")
 if (arm64Manifest) {
   console.log(`   - ${prefix}-mac.yml`)
   console.log(`   - ${arm64Manifest.artifactName}`)
-  console.log(`   - ${arm64Manifest.manualDownloadPattern} (manual download, if built)`)
+  if (arm64Manifest.manualDownloadName) {
+    console.log(`   - ${arm64Manifest.manualDownloadName}`)
+  }
 }
 if (x64Manifest) {
   console.log(`   - ${prefix}-mac-x64.yml`)
   console.log(`   - ${x64Manifest.artifactName}`)
-  console.log(`   - ${x64Manifest.manualDownloadPattern} (manual download, if built)`)
+  if (x64Manifest.manualDownloadName) {
+    console.log(`   - ${x64Manifest.manualDownloadName}`)
+  }
 }
 if (linuxManifest) {
   console.log(`   - ${prefix}-linux.yml`)
   console.log(`   - ${linuxManifest.artifactName}`)
 }
-console.log("2. Publish release notes wherever you host Locus releases")
+console.log("2. Publish release notes on GitHub Releases")
+console.log("3. Keep installation/download steps user-initiated")
 console.log("=".repeat(50))
