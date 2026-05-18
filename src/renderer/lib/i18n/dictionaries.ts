@@ -45,6 +45,7 @@ export const en = {
 
   "onboarding.billing.title": "Connect AI Provider",
   "onboarding.billing.subtitle": "Choose how you'd like to connect your provider.",
+  "onboarding.billing.claudeSubscription.title": "Claude Code OAuth",
   "onboarding.billing.claudeSubscription.subtitle":
     "Use your Claude subscription for unlimited access.",
   "onboarding.billing.anthropicApiKey.subtitle":
@@ -61,7 +62,13 @@ export const en = {
   "onboarding.apiKey.subtitle": "Get your API key from",
   "onboarding.apiKey.hint": "Your API key starts with sk-ant-",
   "onboarding.customModel.title": "Configure Custom Model",
-  "onboarding.customModel.subtitle": "Enter your custom model configuration",
+  "onboarding.customModel.subtitle": "Configure a Claude-compatible provider",
+  "onboarding.customModel.runtimeNoticeTitle": "Claude Code runtime",
+  "onboarding.customModel.runtimeNoticeBody":
+    "This still uses Claude Code tools, MCP, skills, and project context. Model requests are sent to the Claude-compatible Base URL you configure.",
+  "onboarding.customModel.utilityApisTitle": "Use for helper APIs",
+  "onboarding.customModel.utilityApisBody":
+    "Optional: also save this provider for sub-chat titles and commit messages. Enable only if this Base URL supports OpenAI-compatible /chat/completions.",
   "onboarding.customModel.modelName": "Model name",
   "onboarding.customModel.modelHint": "Model identifier for API requests",
   "onboarding.customModel.apiToken": "API token",
@@ -76,6 +83,7 @@ export const en = {
   "onboarding.repo.cloneSubtitle": "Enter a repository URL or owner/repo",
   "onboarding.repo.cloneExample":
     "Example: facebook/react or https://github.com/facebook/react",
+  "onboarding.repo.skip": "Choose later",
 
   "onboarding.claude.title": "Connect Claude Code",
   "onboarding.claude.subtitle":
@@ -88,7 +96,7 @@ export const en = {
   "onboarding.claude.localCredentialsReady":
     "Local Claude Code credentials are available on this machine.",
   "onboarding.claude.localOnlyLoginPrompt":
-    "Local-only mode uses the Claude Code CLI on this machine. Sign in with Claude Code to open Anthropic's official login page, then credentials will be imported locally.",
+    "Local-only mode uses this app's local Claude Code runtime. Sign in with Claude Code to open Anthropic's official login page, then credentials will be imported locally.",
   "onboarding.claude.waitingForLocalLogin":
     "Waiting for Claude Code sign-in in your browser...",
   "onboarding.claude.signInWithClaudeCode": "Sign in with Claude Code",
@@ -107,6 +115,15 @@ export const en = {
   "onboarding.claude.openedAuthTab":
     "A new tab has opened for authentication.",
   "onboarding.claude.didntOpen": "Didn't open? Click here",
+  "onboarding.runtime.checking": "Checking local runtime...",
+  "onboarding.runtime.claudeReady":
+    "Claude Code runtime is ready. A global claude command is not required.",
+  "onboarding.runtime.claudeMissing":
+    "Claude Code runtime is missing or not executable. Claude Code agent runs will fail until this is fixed.",
+  "onboarding.runtime.codexReady":
+    "Codex runtime is ready. A global codex command is not required.",
+  "onboarding.runtime.codexMissing":
+    "Codex runtime is missing or not executable. Fix the bundled runtime before signing in.",
 
   "onboarding.codex.title": "Connect OpenAI Codex",
   "onboarding.codex.apiKeySubtitle": "Connect with your API key",
@@ -2012,6 +2029,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
 
   "onboarding.billing.title": "连接 AI Provider",
   "onboarding.billing.subtitle": "选择你想使用的 Provider 连接方式。",
+  "onboarding.billing.claudeSubscription.title": "Claude Code OAuth",
   "onboarding.billing.claudeSubscription.subtitle":
     "使用你的 Claude 订阅，获得更充足的使用额度。",
   "onboarding.billing.anthropicApiKey.subtitle":
@@ -2028,7 +2046,13 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.apiKey.subtitle": "从这里获取你的 API Key：",
   "onboarding.apiKey.hint": "你的 API Key 应以 sk-ant- 开头",
   "onboarding.customModel.title": "配置 Custom Model",
-  "onboarding.customModel.subtitle": "输入你的自定义 Model 配置",
+  "onboarding.customModel.subtitle": "配置 Claude-compatible Provider",
+  "onboarding.customModel.runtimeNoticeTitle": "Claude Code runtime",
+  "onboarding.customModel.runtimeNoticeBody":
+    "这里仍使用 Claude Code 的 tools、MCP、skills 和项目上下文；模型请求会发送到你配置的 Claude-compatible Base URL。",
+  "onboarding.customModel.utilityApisTitle": "同时用于辅助 API",
+  "onboarding.customModel.utilityApisBody":
+    "可选：同时保存给 sub-chat 标题和 commit message。只有当这个 Base URL 支持 OpenAI-compatible /chat/completions 时才打开。",
   "onboarding.customModel.modelName": "Model name",
   "onboarding.customModel.modelHint": "API 请求使用的 Model 标识",
   "onboarding.customModel.apiToken": "API token",
@@ -2043,6 +2067,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.repo.cloneSubtitle": "输入 repository URL 或 owner/repo",
   "onboarding.repo.cloneExample":
     "示例：facebook/react 或 https://github.com/facebook/react",
+  "onboarding.repo.skip": "稍后选择 repository",
 
   "onboarding.claude.title": "连接 Claude Code",
   "onboarding.claude.subtitle": "连接你的 Claude Code 订阅后开始使用",
@@ -2053,7 +2078,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.localCredentialsReady":
     "这台设备上已发现本地 Claude Code 凭证。",
   "onboarding.claude.localOnlyLoginPrompt":
-    "Local-only 模式会使用这台设备上的 Claude Code CLI。点击后会打开 Anthropic 官方登录页，完成后自动导入本地凭证。",
+    "Local-only 模式会使用这个 app 的本地 Claude Code runtime。点击后会打开 Anthropic 官方登录页，完成后自动导入本地凭证。",
   "onboarding.claude.waitingForLocalLogin":
     "正在等待浏览器里的 Claude Code 登录完成...",
   "onboarding.claude.signInWithClaudeCode": "使用 Claude Code 登录",
@@ -2071,6 +2096,15 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "已提交 authentication code，正在等待 Claude Code 完成登录...",
   "onboarding.claude.openedAuthTab": "已打开新的浏览器标签用于授权。",
   "onboarding.claude.didntOpen": "没有打开？点击这里",
+  "onboarding.runtime.checking": "正在检查本地 runtime...",
+  "onboarding.runtime.claudeReady":
+    "Claude Code runtime 已就绪，不需要额外全局安装 claude command。",
+  "onboarding.runtime.claudeMissing":
+    "Claude Code runtime 缺失或不可执行。修复前 Claude Code Agent 无法正常运行。",
+  "onboarding.runtime.codexReady":
+    "Codex runtime 已就绪，不需要额外全局安装 codex command。",
+  "onboarding.runtime.codexMissing":
+    "Codex runtime 缺失或不可执行。请先修复 bundled runtime，再登录。",
 
   "onboarding.codex.title": "连接 OpenAI Codex",
   "onboarding.codex.apiKeySubtitle": "使用你的 API Key 连接",
