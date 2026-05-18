@@ -24,6 +24,7 @@ import {
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
 import { useI18n, type TranslationKey } from "../../../lib/i18n"
+import type { ClaudeModelSource } from "../atoms"
 import type { CodexThinkingLevel, ModelInfo } from "../lib/models"
 import { formatCodexThinkingLabel } from "../lib/models"
 
@@ -66,6 +67,8 @@ interface AgentModelSelectorProps {
     models: ClaudeModelOption[]
     selectedModelId?: string
     onSelectModel: (modelId: string) => void
+    selectedModelSource: ClaudeModelSource
+    onSelectModelSource: (source: ClaudeModelSource) => void
     hasCustomModelConfig: boolean
     isOffline: boolean
     ollamaModels: string[]
@@ -91,6 +94,8 @@ type FlatModelItem =
   | { type: "codex"; model: CodexModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
   | { type: "custom" }
+
+type ModelGroupId = "custom" | "claude" | "codex" | "ollama"
 
 type ActiveModelInfo = {
   info: ModelInfo
@@ -488,6 +493,8 @@ export function AgentModelSelector({
 
   const canSelectProvider = (provider: AgentProviderId) =>
     allowProviderSwitch || selectedAgentId === provider
+  const selectedClaudeModelSource =
+    claude.hasCustomModelConfig ? claude.selectedModelSource : "claude-oauth"
 
   // Build flat list of all models (show all regardless of connection status)
   const allModels = useMemo<FlatModelItem[]>(() => {
@@ -501,9 +508,10 @@ export function AgentModelSelector({
           isRecommended: m === claude.recommendedOllamaModel,
         })
       }
-    } else if (claude.hasCustomModelConfig) {
-      items.push({ type: "custom" })
     } else {
+      if (claude.hasCustomModelConfig) {
+        items.push({ type: "custom" })
+      }
       for (const m of claude.models) {
         items.push({ type: "claude", model: m })
       }
@@ -533,10 +541,56 @@ export function AgentModelSelector({
         case "ollama":
           return item.modelName.toLowerCase().includes(q)
         case "custom":
-          return t("agent.model.customModel").toLowerCase().includes(q)
+          return (
+            t("agent.model.customProvider").toLowerCase().includes(q) ||
+            t("agent.model.customModel").toLowerCase().includes(q)
+          )
       }
     })
   }, [allModels, search, t])
+
+  const getItemGroup = useCallback((item: FlatModelItem): ModelGroupId => {
+    switch (item.type) {
+      case "custom":
+        return "custom"
+      case "claude":
+        return "claude"
+      case "codex":
+        return "codex"
+      case "ollama":
+        return "ollama"
+    }
+  }, [])
+
+  const getGroupHeading = useCallback((group: ModelGroupId): string => {
+    switch (group) {
+      case "custom":
+        return t("agent.model.group.customProvider")
+      case "claude":
+        return t("agent.model.group.claudeCodeOAuth")
+      case "codex":
+        return "Codex"
+      case "ollama":
+        return t("agent.model.group.local")
+    }
+  }, [t])
+
+  const groupedFilteredModels = useMemo(() => {
+    const groups: Record<ModelGroupId, FlatModelItem[]> = {
+      custom: [],
+      claude: [],
+      codex: [],
+      ollama: [],
+    }
+
+    for (const item of filteredModels) {
+      groups[getItemGroup(item)].push(item)
+    }
+
+    return (["custom", "claude", "codex", "ollama"] as ModelGroupId[])
+      .map((id) => ({ id, heading: getGroupHeading(id), items: groups[id] }))
+      .filter((group) => group.items.length > 0)
+  }, [filteredModels, getGroupHeading, getItemGroup])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -591,13 +645,20 @@ export function AgentModelSelector({
   const isItemSelected = (item: FlatModelItem): boolean => {
     switch (item.type) {
       case "claude":
-        return selectedAgentId === "claude-code" && claude.selectedModelId === item.model.id
+        return (
+          selectedAgentId === "claude-code" &&
+          selectedClaudeModelSource === "claude-oauth" &&
+          claude.selectedModelId === item.model.id
+        )
       case "codex":
         return selectedAgentId === "codex" && codex.selectedModelId === item.model.id
       case "ollama":
         return selectedAgentId === "claude-code" && claude.selectedOllamaModel === item.modelName
       case "custom":
-        return selectedAgentId === "claude-code"
+        return (
+          selectedAgentId === "claude-code" &&
+          selectedClaudeModelSource === "custom-provider"
+        )
     }
   }
 
@@ -660,6 +721,7 @@ export function AgentModelSelector({
       case "claude":
         if (!canSelectProvider("claude-code")) return
         onSelectedAgentIdChange("claude-code")
+        claude.onSelectModelSource("claude-oauth")
         claude.onSelectModel(item.model.id)
         break
       case "codex":
@@ -675,6 +737,7 @@ export function AgentModelSelector({
       case "custom":
         if (!canSelectProvider("claude-code")) return
         onSelectedAgentIdChange("claude-code")
+        claude.onSelectModelSource("custom-provider")
         break
     }
     handleOpenChange(false)
@@ -702,7 +765,7 @@ export function AgentModelSelector({
       case "ollama":
         return item.modelName + (item.isRecommended ? ` ${t("agent.model.recommendedSuffix")}` : "")
       case "custom":
-        return t("agent.model.customModel")
+        return t("agent.model.customProvider")
     }
   }
 
@@ -759,7 +822,7 @@ export function AgentModelSelector({
           {/* Claude thinking toggle */}
           {selectedAgentId === "claude-code" &&
             !claude.isOffline &&
-            !claude.hasCustomModelConfig && (
+            selectedClaudeModelSource === "claude-oauth" && (
             <>
               <div
                 className="flex items-center justify-between min-h-[32px] py-[5px] px-1.5 mx-1"
@@ -799,46 +862,48 @@ export function AgentModelSelector({
             className="max-h-[300px] overflow-y-auto"
             onScroll={() => setActiveModelInfo(null)}
           >
-            {filteredModels.length > 0 ? (
-              <CommandGroup>
-                {filteredModels.map((item) => {
-                  const selected = isItemSelected(item)
-                  const disabled = isItemDisabled(item)
-                  const crossProvider = isItemCrossProvider(item)
-                  const label = getItemLabel(item)
-                  const info = getItemInfo(item)
-                  return (
-                    <CommandItem
-                      key={getItemKey(item)}
-                      value={getItemKey(item)}
-                      onSelect={() => handleItemClick(item)}
-                      disabled={disabled}
-                      className={cn("gap-2", crossProvider && "opacity-60")}
-                    >
-                      {getItemIcon(item)}
-                      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                        <span className="min-w-0 truncate">{label}</span>
-                        {info && (
-                          <ModelInfoButton
-                            info={info}
-                            modelLabel={label}
-                            onShow={showModelInfo}
-                            onHide={hideModelInfo}
-                          />
+            {groupedFilteredModels.length > 0 ? (
+              groupedFilteredModels.map((group) => (
+                <CommandGroup key={group.id} heading={group.heading}>
+                  {group.items.map((item) => {
+                    const selected = isItemSelected(item)
+                    const disabled = isItemDisabled(item)
+                    const crossProvider = isItemCrossProvider(item)
+                    const label = getItemLabel(item)
+                    const info = getItemInfo(item)
+                    return (
+                      <CommandItem
+                        key={getItemKey(item)}
+                        value={getItemKey(item)}
+                        onSelect={() => handleItemClick(item)}
+                        disabled={disabled}
+                        className={cn("gap-2", crossProvider && "opacity-60")}
+                      >
+                        {getItemIcon(item)}
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <span className="min-w-0 truncate">{label}</span>
+                          {info && (
+                            <ModelInfoButton
+                              info={info}
+                              modelLabel={label}
+                              onShow={showModelInfo}
+                              onHide={hideModelInfo}
+                            />
+                          )}
+                        </div>
+                        {crossProvider && (
+                          <span className="text-[10px] text-muted-foreground shrink-0">
+                            {t("agent.model.newChat")}
+                          </span>
                         )}
-                      </div>
-                      {crossProvider && (
-                        <span className="text-[10px] text-muted-foreground shrink-0">
-                          {t("agent.model.newChat")}
-                        </span>
-                      )}
-                      {selected && (
-                        <CheckIcon className="h-4 w-4 shrink-0" />
-                      )}
-                    </CommandItem>
-                  )
-                })}
-              </CommandGroup>
+                        {selected && (
+                          <CheckIcon className="h-4 w-4 shrink-0" />
+                        )}
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              ))
             ) : (
               <CommandEmpty>{t("agent.model.noModelsFound")}</CommandEmpty>
             )}

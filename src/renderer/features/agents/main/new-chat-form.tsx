@@ -33,6 +33,7 @@ import {
   lastSelectedAgentIdAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedClaudeModelSourceAtom,
   lastSelectedBranchesAtom,
   lastSelectedModelIdAtom,
   lastSelectedWorkModeAtom,
@@ -236,6 +237,17 @@ export function NewChatForm({
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
+  const [selectedClaudeModelSource, setSelectedClaudeModelSource] = useAtom(
+    lastSelectedClaudeModelSourceAtom,
+  )
+  const effectiveClaudeModelSource =
+    selectedClaudeModelSource === "auto"
+      ? hasCustomClaudeConfig
+        ? "custom-provider"
+        : "claude-oauth"
+      : hasCustomClaudeConfig
+        ? selectedClaudeModelSource
+        : "claude-oauth"
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
@@ -397,8 +409,13 @@ export function NewChatForm({
     if (selectedAgent.id === "codex") {
       return `${selectedCodexModel.id}/${selectedCodexThinking}`
     }
+    if (effectiveClaudeModelSource === "custom-provider") {
+      return providerConfigData?.config?.model ?? "custom-provider"
+    }
     return selectedModel?.id ?? "opus"
   }, [
+    effectiveClaudeModelSource,
+    providerConfigData?.config?.model,
     selectedAgent.id,
     selectedCodexModel.id,
     selectedCodexThinking,
@@ -418,8 +435,8 @@ export function NewChatForm({
       return currentOllamaModel || "Ollama"
     }
 
-    if (hasCustomClaudeConfig) {
-      return "Custom Model"
+    if (effectiveClaudeModelSource === "custom-provider") {
+      return t("agent.model.customProvider")
     }
 
     if (!selectedModel) {
@@ -433,8 +450,19 @@ export function NewChatForm({
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
-    hasCustomClaudeConfig,
+    effectiveClaudeModelSource,
     selectedModel,
+    t,
+  ])
+
+  useEffect(() => {
+    if (hasCustomClaudeConfig) return
+    if (selectedClaudeModelSource !== "custom-provider") return
+    setSelectedClaudeModelSource("claude-oauth")
+  }, [
+    hasCustomClaudeConfig,
+    selectedClaudeModelSource,
+    setSelectedClaudeModelSource,
   ])
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
@@ -1815,6 +1843,8 @@ export function NewChatForm({
                               setSelectedModel(model)
                               setLastSelectedModelId(model.id)
                             },
+                            selectedModelSource: effectiveClaudeModelSource,
+                            onSelectModelSource: setSelectedClaudeModelSource,
                             hasCustomModelConfig: hasCustomClaudeConfig,
                             isOffline: availableModels.isOffline && availableModels.hasOllama,
                             ollamaModels: availableModels.ollamaModels,

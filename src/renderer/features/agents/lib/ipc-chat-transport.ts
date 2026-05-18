@@ -21,6 +21,7 @@ import {
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
   pendingUserQuestionsAtom,
+  subChatClaudeModelSourceAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
@@ -181,6 +182,11 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     // Read model selection dynamically per sub-chat (so split panes stay independent)
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))
     const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
+    const selectedModelSource = appStore.get(
+      subChatClaudeModelSourceAtomFamily(this.config.subChatId),
+    )
+    const modelSource =
+      selectedModelSource === "auto" ? undefined : selectedModelSource
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
@@ -212,6 +218,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
             sessionId,
+            ...(modelSource && { modelSource }),
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
             ...(selectedOllamaModel && { selectedOllamaModel }),

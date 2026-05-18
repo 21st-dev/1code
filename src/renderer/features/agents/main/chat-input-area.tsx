@@ -56,7 +56,9 @@ import { useI18n } from "../../../lib/i18n"
 import {
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedClaudeModelSourceAtom,
   lastSelectedModelIdAtom,
+  subChatClaudeModelSourceAtomFamily,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
   subChatModelIdAtomFamily,
@@ -478,7 +480,17 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] = useAtom(
     subChatCodexThinkingAtom,
   )
+  const subChatClaudeModelSourceAtom = useMemo(
+    () => subChatClaudeModelSourceAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedClaudeModelSource, setSelectedClaudeModelSource] = useAtom(
+    subChatClaudeModelSourceAtom,
+  )
   const setLastSelectedModelId = useSetAtom(lastSelectedModelIdAtom)
+  const setLastSelectedClaudeModelSource = useSetAtom(
+    lastSelectedClaudeModelSourceAtom,
+  )
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
@@ -584,11 +596,31 @@ export const ChatInputArea = memo(function ChatInputArea({
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
+  const effectiveClaudeModelSource =
+    selectedClaudeModelSource === "auto"
+      ? hasCustomClaudeConfig
+        ? "custom-provider"
+        : "claude-oauth"
+      : hasCustomClaudeConfig
+        ? selectedClaudeModelSource
+        : "claude-oauth"
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||
     apiKeyOnboardingCompleted ||
     hasCustomClaudeConfig
+
+  useEffect(() => {
+    if (hasCustomClaudeConfig) return
+    if (selectedClaudeModelSource !== "custom-provider") return
+    setSelectedClaudeModelSource("claude-oauth")
+    setLastSelectedClaudeModelSource("claude-oauth")
+  }, [
+    hasCustomClaudeConfig,
+    selectedClaudeModelSource,
+    setLastSelectedClaudeModelSource,
+    setSelectedClaudeModelSource,
+  ])
 
   // Determine current Ollama model (selected or recommended)
   const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
@@ -612,8 +644,8 @@ export const ChatInputArea = memo(function ChatInputArea({
       return currentOllamaModel || "Ollama"
     }
 
-    if (hasCustomClaudeConfig) {
-      return "Custom Model"
+    if (effectiveClaudeModelSource === "custom-provider") {
+      return t("agent.model.customProvider")
     }
 
     if (!selectedModel) {
@@ -627,8 +659,9 @@ export const ChatInputArea = memo(function ChatInputArea({
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
-    hasCustomClaudeConfig,
+    effectiveClaudeModelSource,
     selectedModel,
+    t,
   ])
   const canSwitchProvider =
     messageTokenData.messageCount === 0 && !isStreaming
@@ -758,17 +791,13 @@ export const ChatInputArea = memo(function ChatInputArea({
       if (e.metaKey && e.key === "/") {
         e.preventDefault()
         e.stopPropagation()
-        const shouldBlockForCustomClaude =
-          provider === "claude-code" && hasCustomClaudeConfig
-        if (!shouldBlockForCustomClaude) {
-          setIsModelDropdownOpen(true)
-        }
+        setIsModelDropdownOpen(true)
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [hasCustomClaudeConfig, provider, isActive])
+  }, [isActive])
 
   // Voice input handlers
   const handleVoiceMouseDown = useCallback(async () => {
@@ -1639,6 +1668,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setSelectedModel(model)
                           setSelectedSubChatModelId(model.id)
                           setLastSelectedModelId(model.id)
+                        },
+                        selectedModelSource: effectiveClaudeModelSource,
+                        onSelectModelSource: (source) => {
+                          setSelectedClaudeModelSource(source)
+                          setLastSelectedClaudeModelSource(source)
                         },
                         hasCustomModelConfig: hasCustomClaudeConfig,
                         isOffline: availableModels.isOffline && availableModels.hasOllama,

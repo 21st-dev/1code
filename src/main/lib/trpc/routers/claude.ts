@@ -726,6 +726,7 @@ export const claudeRouter = router({
         mode: z.enum(["plan", "agent"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
+        modelSource: z.enum(["claude-oauth", "custom-provider"]).optional(),
         customConfig: z
           .object({
             model: z.string().min(1),
@@ -901,12 +902,30 @@ export const claudeRouter = router({
                 .run()
             }
 
-            const secureProviderConfig = getActiveClaudeProviderConfig()
             const legacyProviderConfig = input.customConfig
               ? normalizeRuntimeProviderConfig(input.customConfig)
               : undefined
-            const providerConfig =
-              secureProviderConfig || legacyProviderConfig
+            let providerConfig: ClaudeProviderRuntimeConfig | undefined
+
+            if (input.modelSource === "custom-provider") {
+              providerConfig =
+                getActiveClaudeProviderConfig() || legacyProviderConfig
+
+              if (!providerConfig) {
+                emitError(
+                  new Error("Custom provider is not configured"),
+                  "Custom provider unavailable",
+                )
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return
+              }
+            } else if (!input.modelSource) {
+              // Backward compatibility for older renderer calls that predate
+              // explicit model-source selection.
+              providerConfig =
+                getActiveClaudeProviderConfig() || legacyProviderConfig
+            }
 
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
             // Only check if offline mode is enabled in settings. When a custom

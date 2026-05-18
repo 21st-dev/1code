@@ -112,6 +112,16 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
+export type ClaudeModelSource = "auto" | "claude-oauth" | "custom-provider"
+
+export const lastSelectedClaudeModelSourceAtom =
+  atomWithStorage<ClaudeModelSource>(
+    "agents:lastSelectedClaudeModelSource",
+    "auto",
+    undefined,
+    { getOnInit: true },
+  )
+
 export const lastSelectedCodexModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedCodexModelId",
   "gpt-5.5",
@@ -151,6 +161,39 @@ export const subChatModelIdAtomFamily = atomFamily((subChatId: string) =>
       const current = get(subChatModelIdsStorageAtom)
       if (current[subChatId] === newModelId) return
       set(subChatModelIdsStorageAtom, { ...current, [subChatId]: newModelId })
+    },
+  ),
+)
+
+const subChatClaudeModelSourcesStorageAtom = atomWithStorage<
+  Record<string, ClaudeModelSource>
+>(
+  "agents:subChatClaudeModelSources",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatClaudeModelSourceAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedClaudeModelSourceAtom)
+      return (
+        get(subChatClaudeModelSourcesStorageAtom)[subChatId] ??
+        get(lastSelectedClaudeModelSourceAtom)
+      )
+    },
+    (get, set, newModelSource: ClaudeModelSource) => {
+      if (!subChatId) {
+        set(lastSelectedClaudeModelSourceAtom, newModelSource)
+        return
+      }
+      const current = get(subChatClaudeModelSourcesStorageAtom)
+      if (current[subChatId] === newModelSource) return
+      set(subChatClaudeModelSourcesStorageAtom, {
+        ...current,
+        [subChatId]: newModelSource,
+      })
     },
   ),
 )
