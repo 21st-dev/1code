@@ -96,6 +96,26 @@ Hosted analytics and error tracking are not included in the default local-first 
 3. Run `bun run ts:check`, `bun run build`, and `git diff --check` before submitting.
 4. Use OpenSpec for new capabilities, breaking changes, architecture shifts, or security-sensitive changes.
 
+## Phase Completion Checklist
+
+Before treating a phase as complete:
+
+```bash
+bunx openspec validate --all --strict --no-interactive
+bun run test
+bun run ts:check
+bun run build
+git diff --check
+```
+
+Also confirm the phase-specific product boundary:
+
+- Local-only startup does not contact upstream hosted auth, sandbox, telemetry, updater, automations, or inbox surfaces.
+- Claude Code and Codex status surfaces still reflect local credentials/providers.
+- Repository onboarding does not allow agent actions without a confirmed local project.
+- Settings panels report loading, empty, and error states without adding new cloud entrypoints.
+- Release artifacts are manual GitHub Releases assets unless a future approved updater proposal changes that.
+
 ## License
 
 Apache License 2.0.
