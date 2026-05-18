@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown, MoreHorizontal, Plus, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   agentsLoginModalOpenAtom,
@@ -9,6 +9,7 @@ import {
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
+  modelsSettingsTargetAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   openaiApiKeyAtom,
@@ -513,6 +514,10 @@ export function AgentsModelsTab() {
   const [model, setModel] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
   const [token, setToken] = useState("")
+  const helperApisSectionRef = useRef<HTMLDivElement | null>(null)
+  const [modelsSettingsTarget, setModelsSettingsTarget] = useAtom(
+    modelsSettingsTargetAtom,
+  )
   const [authMode, setAuthMode] =
     useState<ClaudeProviderAuthMode>("auth_token")
   const setClaudeLoginModalConfig = useSetAtom(claudeLoginModalConfigAtom)
@@ -559,6 +564,20 @@ export function AgentsModelsTab() {
   useEffect(() => {
     setCodexApiKey(storedCodexApiKey)
   }, [storedCodexApiKey])
+
+  useEffect(() => {
+    if (modelsSettingsTarget !== "helper-apis") return
+
+    const timeoutId = window.setTimeout(() => {
+      helperApisSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+      setModelsSettingsTarget(null)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [modelsSettingsTarget, setModelsSettingsTarget])
 
   const handleBlurSave = useCallback((nextAuthMode: ClaudeProviderAuthMode = authMode) => {
     const trimmedModel = model.trim()
@@ -970,6 +989,43 @@ export function AgentsModelsTab() {
         </div>
       </div>
 
+      <div ref={helperApisSectionRef} className="space-y-3 scroll-mt-6">
+        <div className="pb-1">
+          <h4 className="text-sm font-medium text-foreground">
+            {t("settings.models.helperApis.title")}
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.models.helperApis.description")}
+          </p>
+        </div>
+
+        <LocalApiProviderSettingsSection
+          purpose="sub_chat_title"
+          titleKey="settings.models.subChatTitle.title"
+          descriptionKey="settings.models.subChatTitle.description"
+          modelHintKey="settings.models.subChatTitle.modelHint"
+          tokenHintKey="settings.models.subChatTitle.tokenHint"
+          baseUrlHintKey="settings.models.subChatTitle.baseUrlHint"
+          savedToastKey="toast.models.subChatTitleSettingsSaved"
+          resetToastKey="toast.models.subChatTitleSettingsReset"
+          failedSaveToastKey="toast.models.failedToSaveSubChatTitleSettings"
+          failedResetToastKey="toast.models.failedToResetSubChatTitleSettings"
+        />
+
+        <LocalApiProviderSettingsSection
+          purpose="commit_message"
+          titleKey="settings.models.commitMessage.title"
+          descriptionKey="settings.models.commitMessage.description"
+          modelHintKey="settings.models.commitMessage.modelHint"
+          tokenHintKey="settings.models.commitMessage.tokenHint"
+          baseUrlHintKey="settings.models.commitMessage.baseUrlHint"
+          savedToastKey="toast.models.commitMessageSettingsSaved"
+          resetToastKey="toast.models.commitMessageSettingsReset"
+          failedSaveToastKey="toast.models.failedToSaveCommitMessageSettings"
+          failedResetToastKey="toast.models.failedToResetCommitMessageSettings"
+        />
+      </div>
+
       {/* ===== API Keys Section (Collapsible) ===== */}
       <Collapsible open={isApiKeysOpen} onOpenChange={setIsApiKeysOpen}>
         <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors">
@@ -1052,32 +1108,6 @@ export function AgentsModelsTab() {
               </div>
             </div>
           </div>
-
-          <LocalApiProviderSettingsSection
-            purpose="sub_chat_title"
-            titleKey="settings.models.subChatTitle.title"
-            descriptionKey="settings.models.subChatTitle.description"
-            modelHintKey="settings.models.subChatTitle.modelHint"
-            tokenHintKey="settings.models.subChatTitle.tokenHint"
-            baseUrlHintKey="settings.models.subChatTitle.baseUrlHint"
-            savedToastKey="toast.models.subChatTitleSettingsSaved"
-            resetToastKey="toast.models.subChatTitleSettingsReset"
-            failedSaveToastKey="toast.models.failedToSaveSubChatTitleSettings"
-            failedResetToastKey="toast.models.failedToResetSubChatTitleSettings"
-          />
-
-          <LocalApiProviderSettingsSection
-            purpose="commit_message"
-            titleKey="settings.models.commitMessage.title"
-            descriptionKey="settings.models.commitMessage.description"
-            modelHintKey="settings.models.commitMessage.modelHint"
-            tokenHintKey="settings.models.commitMessage.tokenHint"
-            baseUrlHintKey="settings.models.commitMessage.baseUrlHint"
-            savedToastKey="toast.models.commitMessageSettingsSaved"
-            resetToastKey="toast.models.commitMessageSettingsReset"
-            failedSaveToastKey="toast.models.failedToSaveCommitMessageSettings"
-            failedResetToastKey="toast.models.failedToResetCommitMessageSettings"
-          />
 
           {/* Override Model */}
           <div className="space-y-2">

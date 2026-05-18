@@ -10,6 +10,7 @@ import { Logo } from "../../components/ui/logo"
 import {
   anthropicOnboardingCompletedAtom,
   billingMethodAtom,
+  helperApisSetupPromptPendingAtom,
 } from "../../lib/atoms"
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
@@ -42,6 +43,9 @@ export function AnthropicOnboardingPage() {
   } = useClaudeCodeLoginFlow()
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom,
+  )
+  const setHelperApisSetupPromptPending = useSetAtom(
+    helperApisSetupPromptPendingAtom,
   )
   const setBillingMethod = useSetAtom(billingMethodAtom)
 
@@ -83,6 +87,7 @@ export function AnthropicOnboardingPage() {
 
     try {
       await importSystemTokenMutation.mutateAsync()
+      setHelperApisSetupPromptPending(true)
       setAnthropicOnboardingCompleted(true)
     } catch (err) {
       setExistingTokenError(
@@ -100,9 +105,14 @@ export function AnthropicOnboardingPage() {
 
   useEffect(() => {
     if (localLoginState === "success") {
+      setHelperApisSetupPromptPending(true)
       setAnthropicOnboardingCompleted(true)
     }
-  }, [localLoginState, setAnthropicOnboardingCompleted])
+  }, [
+    localLoginState,
+    setAnthropicOnboardingCompleted,
+    setHelperApisSetupPromptPending,
+  ])
 
   useEffect(() => {
     if (

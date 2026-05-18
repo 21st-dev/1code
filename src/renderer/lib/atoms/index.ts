@@ -184,12 +184,28 @@ export type SettingsTab =
   | "beta"
   | "keyboard"
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("preferences")
+export type ModelsSettingsTarget = "helper-apis" | null
+export const modelsSettingsTargetAtom = atom<ModelsSettingsTarget>(null)
 // Derived atom: maps settings open/close to desktopView navigation
 export const agentsSettingsDialogOpenAtom = atom(
   (get) => get(_desktopViewAtom) === "settings",
   (_get, set, open: boolean) => {
     set(_desktopViewAtom, open ? "settings" : null)
   }
+)
+
+export const helperApisSetupPromptPendingAtom = atomWithStorage<boolean>(
+  "settings:helper-apis-setup-prompt-pending",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+export const helperApisSetupPromptDismissedAtom = atomWithStorage<boolean>(
+  "settings:helper-apis-setup-prompt-dismissed",
+  false,
+  undefined,
+  { getOnInit: true },
 )
 
 export type ClaudeProviderAuthMode = "api_key" | "auth_token"

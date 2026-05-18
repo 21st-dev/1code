@@ -11,6 +11,7 @@ import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
+  helperApisSetupPromptPendingAtom,
   type SettingsTab,
 } from "../../lib/atoms"
 import { appStore } from "../../lib/jotai-store"
@@ -44,6 +45,9 @@ export function ClaudeLoginModal({
   const [open, setOpen] = useAtom(agentsLoginModalOpenAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom,
+  )
+  const setHelperApisSetupPromptPending = useSetAtom(
+    helperApisSetupPromptPendingAtom,
   )
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
@@ -105,6 +109,7 @@ export function ClaudeLoginModal({
 
   const handleAuthSuccess = useCallback(() => {
     triggerAuthRetry()
+    setHelperApisSetupPromptPending(true)
     setAnthropicOnboardingCompleted(true)
     setOpen(false)
     void Promise.allSettled([
@@ -114,6 +119,7 @@ export function ClaudeLoginModal({
     ])
   }, [
     setAnthropicOnboardingCompleted,
+    setHelperApisSetupPromptPending,
     setOpen,
     triggerAuthRetry,
     trpcUtils,

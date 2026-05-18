@@ -10,11 +10,15 @@ import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
   claudeLoginModalConfigAtom,
+  helperApisSetupPromptDismissedAtom,
+  helperApisSetupPromptPendingAtom,
   isDesktopAtom,
   isFullscreenAtom,
+  modelsSettingsTargetAtom,
   customHotkeysAtom,
   betaKanbanEnabledAtom,
 } from "../../lib/atoms"
+import { useI18n } from "../../lib/i18n"
 import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom, desktopViewAtom, fileSearchDialogOpenAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
@@ -46,6 +50,7 @@ const SIDEBAR_CLOSE_HOTKEY = "⌘\\"
 export function AgentsLayout() {
   // No useHydrateAtoms - desktop doesn't need SSR, atomWithStorage handles persistence
   const isMobile = useIsMobile()
+  const { t } = useI18n()
 
   // Global desktop/fullscreen state - initialized here at root level
   const [isDesktop, setIsDesktop] = useAtom(isDesktopAtom)
@@ -86,6 +91,13 @@ export function AgentsLayout() {
   const [sidebarWidth, setSidebarWidth] = useAtom(agentsSidebarWidthAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
+  const setModelsSettingsTarget = useSetAtom(modelsSettingsTargetAtom)
+  const [helperApisPromptPending, setHelperApisPromptPending] = useAtom(
+    helperApisSetupPromptPendingAtom,
+  )
+  const [helperApisPromptDismissed, setHelperApisPromptDismissed] = useAtom(
+    helperApisSetupPromptDismissedAtom,
+  )
   const desktopView = useAtomValue(desktopViewAtom)
   const setFileSearchDialogOpen = useSetAtom(fileSearchDialogOpenAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
@@ -99,6 +111,10 @@ export function AgentsLayout() {
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
+  const { data: subChatTitleProviderData } =
+    trpc.localApiProviderConfig.get.useQuery({ purpose: "sub_chat_title" })
+  const { data: commitMessageProviderData } =
+    trpc.localApiProviderConfig.get.useQuery({ purpose: "commit_message" })
 
   // Validated project - only valid if exists in DB
   // While loading, trust localStorage value to prevent clearing on app restart
@@ -111,6 +127,59 @@ export function AgentsLayout() {
     const exists = projects.some((p) => p.id === selectedProject.id)
     return exists ? selectedProject : null
   }, [selectedProject, projects, isLoadingProjects])
+
+  const openHelperApisSettings = useCallback(() => {
+    setSettingsActiveTab("models")
+    setModelsSettingsTarget("helper-apis")
+    setSettingsDialogOpen(true)
+    setSidebarOpen(true)
+  }, [
+    setModelsSettingsTarget,
+    setSettingsActiveTab,
+    setSettingsDialogOpen,
+    setSidebarOpen,
+  ])
+
+  const helperApisProviderStateKnown =
+    subChatTitleProviderData !== undefined &&
+    commitMessageProviderData !== undefined
+  const helperApisFullyConfigured = Boolean(
+    subChatTitleProviderData?.config?.hasToken &&
+      commitMessageProviderData?.config?.hasToken,
+  )
+
+  useEffect(() => {
+    if (!helperApisPromptPending) return
+
+    if (helperApisPromptDismissed) {
+      setHelperApisPromptPending(false)
+      return
+    }
+
+    if (!helperApisProviderStateKnown) return
+
+    setHelperApisPromptPending(false)
+    if (helperApisFullyConfigured) return
+
+    setHelperApisPromptDismissed(true)
+    toast.info(t("toast.models.helperApisPrompt.title"), {
+      description: t("toast.models.helperApisPrompt.description"),
+      duration: 12000,
+      action: {
+        label: t("toast.models.helperApisPrompt.action"),
+        onClick: openHelperApisSettings,
+      },
+    })
+  }, [
+    helperApisFullyConfigured,
+    helperApisPromptDismissed,
+    helperApisPromptPending,
+    helperApisProviderStateKnown,
+    openHelperApisSettings,
+    setHelperApisPromptDismissed,
+    setHelperApisPromptPending,
+    t,
+  ])
 
   // Clear invalid project from storage (only after loading completes)
   useEffect(() => {
