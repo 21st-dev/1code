@@ -144,11 +144,8 @@ export function AgentsContent() {
     }
   }, [activeSubChatName])
 
-  // Fetch teams for header
-  const { data: teams } = api.teams.getUserTeams.useQuery(undefined, {
-    enabled: !!selectedTeamId,
-  })
-  const selectedTeam = teams?.find((t: any) => t.id === selectedTeamId) as any
+  const selectedTeamName: string | undefined = undefined
+  const selectedTeamImageUrl: string | undefined = undefined
 
   // Fetch agent chats for keyboard navigation and mobile view
   const { data: agentChats } = api.agents.getAgentChats.useQuery(
@@ -809,8 +806,8 @@ export function AgentsContent() {
                 chatId={selectedChatId}
                 isSidebarOpen={false}
                 onToggleSidebar={() => {}}
-                selectedTeamName={selectedTeam?.name}
-                selectedTeamImageUrl={selectedTeam?.image_url}
+                selectedTeamName={selectedTeamName}
+                selectedTeamImageUrl={selectedTeamImageUrl}
                 isMobileFullscreen={true}
                 onBackToChats={() => {
                   setMobileViewMode("chats")
@@ -890,8 +887,8 @@ export function AgentsContent() {
                 chatId={selectedChatId}
                 isSidebarOpen={sidebarOpen}
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-                selectedTeamName={selectedTeam?.name}
-                selectedTeamImageUrl={selectedTeam?.image_url}
+                selectedTeamName={selectedTeamName}
+                selectedTeamImageUrl={selectedTeamImageUrl}
               />
             </div>
           ) : selectedDraftId || showNewChatForm ? (

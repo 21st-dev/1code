@@ -1,7 +1,6 @@
 "use client"
 
 import { cn } from "../../../lib/utils"
-import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
 import { keepPreviousData } from "@tanstack/react-query"
 import {
@@ -109,8 +108,8 @@ interface AgentsFileMentionProps {
   position: { top: number; left: number }
   teamId?: string
   repository?: string
-  branch?: string // For fetching files from specific branch via GitHub API
-  projectPath?: string // For fetching files from local project directory (desktop)
+  branch?: string // Legacy repository metadata; local desktop search uses projectPath.
+  projectPath?: string // For fetching files from local project directory.
   changedFiles?: ChangedFile[] // Files changed in current sub-chat (shown at top)
   // Subpage navigation state
   showingFilesList?: boolean
@@ -691,9 +690,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   onSelect,
   searchText,
   position,
-  teamId,
   repository,
-  branch,
   projectPath,
   changedFiles = [],
   showingFilesList = false,
@@ -746,27 +743,22 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     return words[0] || ""
   }, [debouncedSearchText])
 
-  // Fetch files from local project search or repository metadata.
+  // Fetch files from local project search.
   const {
     data: fileResults = [],
     isLoading,
     isFetching,
     error,
-  } = api.github.searchFiles.useQuery(
+  } = trpc.files.search.useQuery(
     {
-      teamId: teamId!,
-      repository: repository!,
+      projectPath: projectPath || "",
       query: apiSearchQuery,
       limit: 50,
-      branch: branch, // Pass branch for GitHub API fetch
-      projectPath: projectPath, // For local project file search (desktop)
     },
     {
-      // Enable if we have projectPath (desktop) OR teamId with repository/branch metadata.
-      enabled: isOpen && (!!projectPath || (!!teamId && (!!repository || !!branch))),
+      enabled: isOpen && !!projectPath,
       staleTime: 5000,
       refetchOnWindowFocus: false,
-      // Keep showing previous results while fetching new ones
       placeholderData: keepPreviousData,
     },
   )

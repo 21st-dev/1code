@@ -5,7 +5,7 @@
 
 import { useMemo } from "react"
 import { normalizeCodexToolPart } from "../../shared/codex-tool-normalizer"
-import { trpc, trpcClient } from "./trpc"
+import { trpc } from "./trpc"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFn = (...args: any[]) => any
@@ -429,14 +429,6 @@ export const api = {
           setData: () => {},
         },
       },
-      github: {
-        getSlashCommandContent: {
-          fetch: async (_args?: AnyObj) => ({ content: "" }),
-        },
-        searchFiles: {
-          cancel: async () => utils.files.search.cancel(),
-        },
-      },
       user: {
         getProfile: {
           invalidate: async () => {},
@@ -453,17 +445,6 @@ export const api = {
     }
   },
   // Stubs for features not needed in desktop
-  teams: {
-    getUserTeams: { useQuery: (_args?: unknown, _opts?: unknown) => ({ data: [], isLoading: false }) },
-    getTeam: { useQuery: () => ({ data: null, isLoading: false }) },
-    updateTeam: {
-      useMutation: () => ({
-        mutate: () => {},
-        mutateAsync: async () => ({}),
-        isPending: false,
-      }),
-    },
-  },
   repositorySandboxes: {
     getRepositoriesWithStatus: {
       useQuery: () => ({
@@ -496,75 +477,6 @@ export const api = {
       useMutation: () => ({
         mutate: () => {},
         mutateAsync: async () => ({}),
-        isPending: false,
-      }),
-    },
-  },
-  github: {
-    getBranches: {
-      useQuery: () => ({
-        data: { branches: [] },
-        isLoading: false,
-        refetch: async () => ({ data: { branches: [] } }),
-      }),
-    },
-    searchFiles: {
-      useQuery: (
-        args?: {
-          teamId?: string
-          repository?: string
-          query?: string
-          limit?: number
-          branch?: string
-          projectPath?: string
-        },
-        opts?: AnyObj,
-      ) => {
-        // Use real tRPC to search local files
-        const result = trpc.files.search.useQuery(
-          {
-            projectPath: args?.projectPath || "",
-            query: args?.query || "",
-            limit: args?.limit || 50,
-          },
-          {
-            enabled: !!args?.projectPath && opts?.enabled !== false,
-            staleTime: opts?.staleTime ?? 5000,
-            refetchOnWindowFocus: opts?.refetchOnWindowFocus ?? false,
-            placeholderData: opts?.placeholderData,
-          },
-        )
-        return {
-          data: result.data ?? [],
-          isLoading: result.isLoading,
-          isFetching: result.isFetching,
-          error: result.error,
-        }
-      },
-    },
-    getSlashCommands: { useQuery: () => ({ data: [], isLoading: false }) },
-    getUserInstallations: { useQuery: () => ({ data: [], isLoading: false }) },
-    getGithubConnection: {
-      useQuery: () => ({ data: { isConnected: false }, isLoading: false }),
-    },
-    connectGithub: {
-      useMutation: () => ({
-        mutate: () => {},
-        mutateAsync: async () => ({}),
-        isPending: false,
-      }),
-    },
-    disconnectGithub: {
-      useMutation: () => ({
-        mutate: () => {},
-        mutateAsync: async () => ({}),
-        isPending: false,
-      }),
-    },
-    createBranch: {
-      useMutation: () => ({
-        mutate: () => {},
-        mutateAsync: async () => ({ branch: "" }),
         isPending: false,
       }),
     },
