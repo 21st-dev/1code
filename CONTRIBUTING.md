@@ -59,7 +59,7 @@ User-configured providers, Ollama, local projects, Git, and GitHub operations re
 | Inbox / automations | Removed from default build | Upstream only |
 | Remote sandbox / Open Locally import | Hidden from default build | Upstream only |
 | Background agents | Removed from default build | Upstream only |
-| Auto-updates | Removed from default build | Upstream only |
+| Auto-updates | No automatic install; manual GitHub Releases check only | Upstream only |
 
 ## Analytics & Telemetry
 

@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Info } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
   EyeOpenFilledIcon,
@@ -47,6 +47,11 @@ const GENERAL_TABS: SettingsTabDefinition[] = [
     id: "keyboard" as SettingsTab,
     labelKey: "settings.sidebar.keyboard",
     icon: KeyboardFilledIcon,
+  },
+  {
+    id: "about" as SettingsTab,
+    labelKey: "settings.sidebar.about",
+    icon: Info,
   },
 ]
 

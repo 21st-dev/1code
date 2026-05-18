@@ -20,6 +20,7 @@ import { worktreeConfigRouter } from "./worktree-config"
 import { commandsRouter } from "./commands"
 import { voiceRouter } from "./voice"
 import { pluginsRouter } from "./plugins"
+import { appUpdatesRouter } from "./app-updates"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -50,6 +51,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     commands: commandsRouter,
     voice: voiceRouter,
     plugins: pluginsRouter,
+    appUpdates: appUpdatesRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

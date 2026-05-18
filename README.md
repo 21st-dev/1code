@@ -55,7 +55,7 @@ bun run package:win
 bun run package:linux
 ```
 
-Auto-update publishing is not part of the default local-first build. If this fork later needs app updates, add a fork-owned update proposal and feed instead of reusing upstream hosted update paths.
+Automatic update installation is not part of the default local-first build. Locus may offer a manual Settings > About check against this fork's GitHub Releases page, but downloads and installation stay user-initiated. If this fork later needs full app updates, add a fork-owned update proposal and feed instead of reusing upstream hosted update paths.
 
 ## Notes
 

@@ -183,6 +183,7 @@ export type SettingsTab =
   | "debug"
   | "beta"
   | "keyboard"
+  | "about"
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("preferences")
 export type ModelsSettingsTarget = "helper-apis" | null
 export const modelsSettingsTargetAtom = atom<ModelsSettingsTarget>(null)
