@@ -40,7 +40,7 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: agent-code-for-me-windows-x64
+          name: locus-windows-x64
           path: |
             release/*.exe
             release/*.blockmap
