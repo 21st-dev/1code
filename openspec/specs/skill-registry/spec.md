@@ -16,17 +16,27 @@ The system SHALL provide a registry catalog for reusable global skills that is i
 - **THEN** registry skill listing and bundled install still work
 
 ### Requirement: Explicit Skill Installation
-The system SHALL require explicit user action before installing or updating registry-managed skills.
+The system SHALL require explicit user action before installing or updating registry-managed skills, and SHALL allow the user to choose Claude Code, Codex, or both as install targets when a registry skill supports multiple runtimes.
 
 #### Scenario: Update check finds newer skill
 - **WHEN** a registry update check finds a newer skill version
-- **THEN** the app shows the update as available
-- **AND** the app does not modify the installed skill until the user chooses Update
+- **THEN** the app shows the update as available for the affected runtime
+- **AND** the app does not modify the installed skill until the user chooses Update for that runtime
 
-#### Scenario: User installs bundled skill
-- **WHEN** the user chooses Install for a bundled registry skill
-- **THEN** the app installs the skill into the global skills directory
-- **AND** records installed state including registry id, version, and content hash
+#### Scenario: User installs bundled skill for Claude Code
+- **WHEN** the user chooses Install for Claude for a bundled registry skill
+- **THEN** the app installs the skill into the Claude global skills directory
+- **AND** records Claude runtime installed state including registry id, version, and content hash
+
+#### Scenario: User installs bundled skill for Codex
+- **WHEN** the user chooses Install for Codex for a bundled registry skill
+- **THEN** the app installs the skill into the Codex global skills directory
+- **AND** records Codex runtime installed state including registry id, version, and content hash
+
+#### Scenario: User installs bundled skill for both runtimes
+- **WHEN** the user chooses Install for Both for a bundled registry skill
+- **THEN** the app installs the skill into both Claude and Codex global skills directories
+- **AND** each runtime records independent installed state and backup metadata
 
 ### Requirement: Verified Skill Packages
 The system SHALL verify registry skill package integrity before installation.
@@ -54,9 +64,19 @@ The system SHALL protect user-owned and locally modified skills from silent over
 - **AND** does not overwrite it during registry update
 
 ### Requirement: Source Labels
-The system SHALL distinguish skill sources in the Skills UI.
+The system SHALL distinguish skill sources and runtime install targets in the Skills UI.
 
 #### Scenario: User views Skills settings
 - **WHEN** the user opens the Skills settings tab
 - **THEN** each skill shows whether it comes from User, Project, Plugin, or Registry
 - **AND** registry-managed skills show install/update status when available
+- **AND** registry-managed skills show Claude and Codex runtime state separately
+
+### Requirement: External Skill Collections
+The system SHALL allow the bundled skill registry to list external skill collections that are browse-only and not treated as verified installable skill packages.
+
+#### Scenario: User views an external collection
+- **WHEN** the user opens Settings > Skills and browses the registry
+- **THEN** the app may show external collections alongside installable registry skills
+- **AND** each external collection shows its source link and install guidance
+- **AND** the app does not show install, update, restore, or rollback actions for that collection
