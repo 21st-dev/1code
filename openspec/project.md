@@ -33,7 +33,9 @@
 - **Claude Integration**: Dynamic import of `@anthropic-ai/claude-code` SDK with two modes: "plan" (read-only) and "agent" (full permissions)
 
 ### Testing Strategy
-[Testing approach not yet established - to be defined]
+- Minimal Bun test suite under `tests/`
+- `bun run test` for targeted behavioral checks
+- `bun run ts:check` and `bun run build` before release handoff
 
 ### Git Workflow
 - Main branch: `main`
@@ -49,10 +51,11 @@
 ## Important Constraints
 - Local-first: All data stored locally in SQLite (`{userData}/data/agents.db`)
 - Auth via OAuth with encrypted credential storage (safeStorage)
-- macOS notarization required for releases
+- macOS notarization required for public releases
+- Internal macOS/Windows test builds may be unsigned or ad-hoc signed if the limitation is documented for testers
 - Dev vs Production use separate userData paths and protocols
 
 ## External Dependencies
 - **Claude Code SDK**: `@anthropic-ai/claude-code` for AI interactions
-- **Update Feed**: Optional fork-owned update feed configured with `MAIN_VITE_UPDATE_FEED_URL`
+- **Manual Release Check**: Optional fork-owned GitHub Releases latest endpoint configured with `LOCUS_RELEASES_REPO` or `MAIN_VITE_RELEASES_REPO`
 - **OAuth Provider**: Optional hosted authentication flow configured with `MAIN_VITE_API_URL`

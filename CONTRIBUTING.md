@@ -34,6 +34,30 @@ bun run package:win -- --x64
 
 Unsigned Windows builds are suitable for limited internal testing, but Windows SmartScreen may warn users. Public distribution should use a proper code-signing certificate.
 
+The GitHub Actions artifact is named `locus-windows-x64`.
+
+## Release Hygiene
+
+Locus does not use `electron-updater` or an automatic hosted update feed in the default local-first build. Settings > About performs a manual GitHub Releases check only; users must choose whether to open the release page, download an artifact, and install it.
+
+Generate release attachment metadata after packaging:
+
+```bash
+bun run release:manifest
+```
+
+The manifest generator accepts the current friend-build macOS artifacts, such as `Locus-0.0.72-arm64-friend.zip`, and electron-builder default ZIP names. Attach the generated manifest and release artifacts to GitHub Releases manually.
+
+Run the macOS DMG smoke helper before sharing a build:
+
+```bash
+bun run release:smoke:mac
+```
+
+This verifies the DMG, mounts it, copies `Locus.app` into a temporary install location, and reports code-signing/notarization status. Finish the UI smoke manually by launching the DMG-installed app, selecting a real repository, confirming the selected repo is visible before agent actions, and checking Claude Code and Codex status in Settings.
+
+Current repo config does not define a macOS notarization step. Internal macOS builds may be unsigned or ad-hoc signed. Public macOS distribution must use a Developer ID Application certificate, hardened runtime, and notarization/stapling. Public Windows distribution must use a code-signing certificate.
+
 ## Local-Only Boundary
 
 This repository runs in **Local-only mode by default**. Hosted upstream product surfaces are removed or isolated from the default local-first build, and the Local-only guard remains as defense-in-depth against accidental upstream calls.

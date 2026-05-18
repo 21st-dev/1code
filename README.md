@@ -55,7 +55,16 @@ bun run package:win
 bun run package:linux
 ```
 
-Automatic update installation is not part of the default local-first build. Locus may offer a manual Settings > About check against this fork's GitHub Releases page, but downloads and installation stay user-initiated. If this fork later needs full app updates, add a fork-owned update proposal and feed instead of reusing upstream hosted update paths.
+For a local release pass:
+
+```bash
+bun run release:manifest
+bun run release:smoke:mac
+```
+
+Automatic update installation is not part of the default local-first build. Locus offers only a manual Settings > About check against this fork's GitHub Releases page, and downloads plus installation stay user-initiated. `release:manifest` generates GitHub Release attachment metadata for current `*-friend.zip` artifacts and electron-builder default ZIP names; it is not an updater feed.
+
+Current repo config does not define a macOS notarization step. Local/internal macOS and Windows packages may be unsigned or ad-hoc signed, but public distribution must add macOS Developer ID signing plus notarization/stapling, and Windows code signing, before asking external users to install the app.
 
 ## Notes
 
