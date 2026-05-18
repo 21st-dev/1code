@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
 import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
-import { isLocalOnlyMode } from "./lib/local-only"
+import { isLocalOnlyMode, openExternalUrl } from "./lib/local-only"
 import { closeDatabase, initDatabase } from "./lib/db"
 import {
   getLaunchDirectory,
@@ -669,8 +669,7 @@ if (gotTheLock) {
                   {
                     label: "Learn More",
                     click: async () => {
-                      const { shell } = await import("electron")
-                      await shell.openExternal(APP_HOMEPAGE_URL)
+                      await openExternalUrl("open app homepage", APP_HOMEPAGE_URL)
                     },
                   },
                 ]

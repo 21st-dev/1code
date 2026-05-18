@@ -4,6 +4,7 @@ import * as fs from "fs/promises"
 import * as fssync from "fs"
 import * as os from "os"
 import * as path from "path"
+import { assertOfficialCloudAllowed } from "../local-only"
 
 const SKILL_ID_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 const STATE_VERSION = 1
@@ -301,6 +302,7 @@ async function fetchRemoteRegistryManifest(): Promise<SkillRegistryManifest | nu
     throw new Error("Remote skill registry must use HTTPS in packaged builds")
   }
 
+  assertOfficialCloudAllowed("fetch remote skill registry", url.toString())
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`Remote skill registry check failed: ${response.status}`)

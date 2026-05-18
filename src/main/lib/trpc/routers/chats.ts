@@ -23,6 +23,7 @@ import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
+import { assertOfficialCloudAllowed } from "../../local-only"
 import { checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
@@ -337,6 +338,7 @@ async function generateChatNameWithConfiguredProvider(
   }
 
   try {
+    assertOfficialCloudAllowed("generate chat title with configured provider", config.apiUrl)
     const response = await fetch(config.apiUrl, {
       method: "POST",
       headers: {
@@ -395,6 +397,7 @@ async function generateCommitMessageWithConfiguredProvider(
   )
 
   try {
+    assertOfficialCloudAllowed("generate commit message with configured provider", config.apiUrl)
     const response = await fetch(config.apiUrl, {
       method: "POST",
       signal: controller.signal,

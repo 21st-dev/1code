@@ -1,7 +1,7 @@
-import { shell } from "electron";
 import simpleGit from "simple-git";
 import { z } from "zod";
 import { publicProcedure, router } from "../trpc";
+import { openExternalUrl } from "../local-only";
 import { isUpstreamMissingError } from "./git-utils";
 import { assertRegisteredWorktree } from "./security";
 import { fetchGitHubPRStatus } from "./github";
@@ -608,11 +608,11 @@ export const createGitOperationsRouter = () => {
 							throw new Error("Could not determine GitHub repository URL");
 						}
 
-						const repo = repoMatch[1].replace(/\.git$/, "");
-						const url = `https://github.com/${repo}/compare/${branch}?expand=1`;
+							const repo = repoMatch[1].replace(/\.git$/, "");
+							const url = `https://github.com/${repo}/compare/${branch}?expand=1`;
 
-						await shell.openExternal(url);
-						await git.fetch();
+							await openExternalUrl("open GitHub compare URL", url);
+							await git.fetch();
 						invalidateGitStateCaches(input.worktreePath);
 
 						return { success: true, url };

@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { BrowserWindow, shell } from 'electron';
+import { BrowserWindow } from 'electron';
 import {
   getMcpServerConfig,
   GLOBAL_MCP_PATH,
@@ -13,6 +13,7 @@ import { getClaudeShellEnvironment } from './claude/env';
 import { CraftOAuth, fetchOAuthMetadata, getMcpBaseUrl, type OAuthMetadata, type OAuthTokens } from './oauth';
 import { discoverPluginMcpServers } from './plugins';
 import { bringToFront } from './window';
+import { assertOfficialCloudAllowed, openExternalUrl } from './local-only';
 
 
 /**
@@ -29,6 +30,8 @@ export async function fetchMcpTools(
   serverUrl: string,
   headers?: Record<string, string>
 ): Promise<McpToolInfo[]> {
+  assertOfficialCloudAllowed('connect MCP server', serverUrl);
+
   let client: Client | null = null;
   let transport: StreamableHTTPClientTransport | null = null;
 
@@ -221,8 +224,10 @@ export async function startMcpOAuth(
 
   // 2. Use CraftOAuth for OAuth logic
   const redirectUri = getMcpOAuthRedirectUri();
+  const mcpBaseUrl = getMcpBaseUrl(serverConfig.url);
+  assertOfficialCloudAllowed('start MCP OAuth', mcpBaseUrl);
   const oauth = new CraftOAuth(
-    { mcpBaseUrl: getMcpBaseUrl(serverConfig.url), redirectUri },
+    { mcpBaseUrl, redirectUri },
     { onStatus: (msg) => console.log(`[MCP OAuth] ${msg}`), onError: (err) => console.error(`[MCP OAuth] ${err}`) }
   );
 
@@ -257,8 +262,14 @@ export async function startMcpOAuth(
       timeoutId,
     });
 
-    // Open browser
-    shell.openExternal(authUrl);
+    void openExternalUrl('open MCP OAuth authorization URL', authUrl).catch((error) => {
+      clearTimeout(timeoutId);
+      pendingOAuthFlows.delete(state);
+      resolve({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   });
 }
 
@@ -285,8 +296,10 @@ export async function handleMcpOAuthCallback(code: string, state: string): Promi
     }
 
     // 2. Use CraftOAuth to exchange code for tokens
+    const mcpBaseUrl = getMcpBaseUrl(serverUrl);
+    assertOfficialCloudAllowed('complete MCP OAuth', mcpBaseUrl);
     const oauth = new CraftOAuth(
-      { mcpBaseUrl: getMcpBaseUrl(serverUrl), redirectUri: pending.redirectUri },
+      { mcpBaseUrl, redirectUri: pending.redirectUri },
       { onStatus: () => {}, onError: () => {} }
     );
 
@@ -370,8 +383,10 @@ export async function refreshMcpToken(
     }
 
     // Use CraftOAuth to refresh the token
+    const mcpBaseUrl = getMcpBaseUrl(serverConfig.url);
+    assertOfficialCloudAllowed('refresh MCP OAuth', mcpBaseUrl);
     const craftOAuth = new CraftOAuth(
-      { mcpBaseUrl: getMcpBaseUrl(serverConfig.url) },
+      { mcpBaseUrl },
       { onStatus: () => {}, onError: () => {} }
     );
 
@@ -501,6 +516,7 @@ export async function fetchMcpOAuthMetadata(
     }
 
     const baseUrl = getMcpBaseUrl(serverConfig.url);
+    assertOfficialCloudAllowed('fetch MCP OAuth metadata', baseUrl);
     const metadata = await fetchOAuthMetadata(baseUrl);
     return metadata ?? undefined;
   } catch {

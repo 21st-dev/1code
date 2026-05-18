@@ -1,7 +1,6 @@
 import {
   BrowserWindow,
   Notification,
-  shell,
   nativeTheme,
   ipcMain,
   app,
@@ -19,7 +18,7 @@ import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/rou
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
-import { isLocalOnlyMode, isOfficialCloudUrl } from "../lib/local-only"
+import { isLocalOnlyMode, LocalOnlyBlockedError, openExternalUrl } from "../lib/local-only"
 
 const APP_NAME = "Locus"
 
@@ -281,12 +280,16 @@ function registerIpcHandlers(): void {
   })
 
   // Shell
-  ipcMain.handle("shell:open-external", (_event, url: string) => {
-    if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
-      console.warn(`[LocalOnly] Blocked external URL: ${url}`)
-      return
+  ipcMain.handle("shell:open-external", async (_event, url: string) => {
+    try {
+      await openExternalUrl("open external URL", url)
+    } catch (error) {
+      if (error instanceof LocalOnlyBlockedError) {
+        console.warn(`[LocalOnly] Blocked external URL: ${url}`)
+        return
+      }
+      throw error
     }
-    return shell.openExternal(url)
   })
 
   // Clipboard
@@ -572,11 +575,13 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
 
   // Handle external links
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isLocalOnlyMode() && isOfficialCloudUrl(url)) {
-      console.warn(`[LocalOnly] Blocked window.open URL: ${url}`)
-      return { action: "deny" }
-    }
-    shell.openExternal(url)
+    openExternalUrl("open external window", url).catch((error) => {
+      console.warn(
+        error instanceof LocalOnlyBlockedError
+          ? `[LocalOnly] Blocked window.open URL: ${url}`
+          : `[Shell] Failed to open external URL: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    })
     return { action: "deny" }
   })
 

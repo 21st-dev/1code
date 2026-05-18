@@ -7,7 +7,7 @@ import * as os from "os"
 import path from "path"
 import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
-import { isLocalOnlyMode } from "../../local-only"
+import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import {
   buildClaudeEnv,
   checkOfflineFallback,
@@ -972,6 +972,19 @@ export const claudeRouter = router({
               ? normalizeRuntimeProviderConfig(offlineResult.config)
               : providerConfig
             const isUsingOllama = offlineResult.isUsingOllama
+            if (finalCustomConfig?.baseUrl) {
+              try {
+                assertOfficialCloudAllowed(
+                  "use Claude provider endpoint",
+                  finalCustomConfig.baseUrl,
+                )
+              } catch (providerError) {
+                emitError(providerError, "Provider endpoint blocked")
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return
+              }
+            }
 
             // Track connection method for analytics
             let connectionMethod = "claude-subscription" // default (Claude Code OAuth)

@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
-import { shell } from 'electron';
 import { createServer, type Server } from 'http';
 import { URL } from 'url';
+import { assertOfficialCloudAllowed, openExternalUrl } from './local-only';
 
 export interface OAuthMetadata {
   authorization_endpoint: string;
@@ -17,6 +17,7 @@ export async function fetchOAuthMetadata(mcpBaseUrl: string): Promise<OAuthMetad
   try {
     const origin = new URL(mcpBaseUrl).origin;
     const metadataUrl = `${origin}/.well-known/oauth-authorization-server`;
+    assertOfficialCloudAllowed('fetch MCP OAuth metadata', metadataUrl);
     const response = await fetch(metadataUrl);
     if (response.ok) {
       return await response.json() as OAuthMetadata;
@@ -526,6 +527,7 @@ export class CraftOAuth {
     registration_endpoint?: string;
   }> {
     const metadataUrl = `${this.config.mcpBaseUrl}/.well-known/oauth-authorization-server`;
+    assertOfficialCloudAllowed('fetch MCP OAuth metadata', metadataUrl);
 
     const response = await fetch(metadataUrl);
     if (!response.ok) {
@@ -545,6 +547,7 @@ export class CraftOAuth {
     client_secret?: string;
   }> {
     const redirectUri = this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
+    assertOfficialCloudAllowed('register MCP OAuth client', registrationEndpoint);
 
     const response = await fetch(registrationEndpoint, {
       method: 'POST',
@@ -616,6 +619,7 @@ export class CraftOAuth {
       params.set('client_secret', clientSecret);
     }
 
+    assertOfficialCloudAllowed('exchange MCP OAuth token', tokenEndpoint);
     const response = await fetch(tokenEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -655,6 +659,7 @@ export class CraftOAuth {
       client_id: clientId,
     });
 
+    assertOfficialCloudAllowed('refresh MCP OAuth token', metadata.token_endpoint);
     const response = await fetch(metadata.token_endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -686,6 +691,7 @@ export class CraftOAuth {
     this.callbacks.onStatus('Checking if authentication is required...');
 
     try {
+      assertOfficialCloudAllowed('check MCP OAuth metadata', metadataUrl);
       const response = await fetch(metadataUrl);
       if (response.ok) {
         this.callbacks.onStatus('OAuth required - server has OAuth metadata');
@@ -740,6 +746,8 @@ export class CraftOAuth {
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('code_challenge', pkce.challenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
+    assertOfficialCloudAllowed('open MCP OAuth authorization URL', authUrl.toString());
+    assertOfficialCloudAllowed('exchange MCP OAuth token', metadata.token_endpoint);
 
     // Start local server to receive callback
     this.callbacks.onStatus(`Starting callback server on port ${CALLBACK_PORT}...`);
@@ -747,7 +755,12 @@ export class CraftOAuth {
 
     // Open browser for authorization
     this.callbacks.onStatus('Opening browser for authorization...');
-    await shell.openExternal(authUrl.toString());
+    try {
+      await openExternalUrl('open MCP OAuth authorization URL', authUrl.toString());
+    } catch (error) {
+      this.stopServer();
+      throw error;
+    }
 
     // Wait for the authorization code
     this.callbacks.onStatus('Waiting for you to authorize in browser...');
@@ -806,6 +819,8 @@ export class CraftOAuth {
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('code_challenge', pkce.challenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
+    assertOfficialCloudAllowed('open MCP OAuth authorization URL', authUrl.toString());
+    assertOfficialCloudAllowed('exchange MCP OAuth token', metadata.token_endpoint);
 
     return {
       authUrl: authUrl.toString(),
