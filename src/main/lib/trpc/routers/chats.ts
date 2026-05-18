@@ -81,6 +81,20 @@ type LocalChatCompletionProviderConfig = {
 }
 
 const COMMIT_MESSAGE_PROVIDER_TIMEOUT_MS = 15_000
+const PROVIDER_ERROR_DETAIL_MAX_LENGTH = 500
+
+type ChatCompletionRequestBody = {
+  model: string
+  messages: Array<{
+    role: "system" | "user"
+    content: string
+  }>
+  temperature: number
+  max_tokens: number
+  thinking?: {
+    type: "disabled"
+  }
+}
 
 function cleanGeneratedChatName(value: unknown): string | null {
   if (typeof value !== "string") return null
@@ -118,6 +132,48 @@ function getLocalChatCompletionProviderConfig(
   }
 }
 
+function isDeepSeekChatCompletionProvider(
+  config: LocalChatCompletionProviderConfig,
+): boolean {
+  const apiUrl = config.apiUrl.toLowerCase()
+
+  return apiUrl.includes("api.deepseek.com")
+}
+
+function buildUtilityChatCompletionBody(
+  config: LocalChatCompletionProviderConfig,
+  body: Omit<ChatCompletionRequestBody, "thinking">,
+): ChatCompletionRequestBody {
+  if (!isDeepSeekChatCompletionProvider(config)) {
+    return body
+  }
+
+  return {
+    ...body,
+    // DeepSeek V4 enables thinking by default. Utility calls need short plain
+    // content, not a reasoning stream that can consume the whole token budget.
+    thinking: { type: "disabled" },
+  }
+}
+
+async function logProviderRequestFailure(
+  label: string,
+  response: Response,
+): Promise<void> {
+  let detail = ""
+  try {
+    detail = await response.text()
+  } catch {
+    // Ignore body read failures; the status code is still useful.
+  }
+
+  console.error(
+    `[${label}] Provider request failed:`,
+    response.status,
+    detail.slice(0, PROVIDER_ERROR_DETAIL_MAX_LENGTH),
+  )
+}
+
 /**
  * Generate chat title using the Settings-configured OpenAI-compatible provider.
  * This is only used after local Ollama has been tried.
@@ -137,26 +193,28 @@ async function generateChatNameWithConfiguredProvider(
         Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Generate a very short 2-5 word coding chat title in the same language as the user. Return only the title.",
-          },
-          {
-            role: "user",
-            content: userMessage.slice(0, 500),
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 30,
-      }),
+      body: JSON.stringify(
+        buildUtilityChatCompletionBody(config, {
+          model: config.model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Generate a very short 2-5 word coding chat title in the same language as the user. Return only the title.",
+            },
+            {
+              role: "user",
+              content: userMessage.slice(0, 500),
+            },
+          ],
+          temperature: 0.3,
+          max_tokens: 80,
+        }),
+      ),
     })
 
     if (!response.ok) {
-      console.error("[ChatTitle] Provider request failed:", response.status)
+      await logProviderRequestFailure("ChatTitle", response)
       return null
     }
 
@@ -194,33 +252,35 @@ async function generateCommitMessageWithConfiguredProvider(
         Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You write concise Conventional Commit subject lines from code diffs. Return only the subject line.",
-          },
-          {
-            role: "user",
-            content: buildCommitMessagePrompt(
-              diff,
-              fileSummary,
-              fileCount,
-              additions,
-              deletions,
-              10_000,
-            ),
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 50,
-      }),
+      body: JSON.stringify(
+        buildUtilityChatCompletionBody(config, {
+          model: config.model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You write concise Conventional Commit subject lines from code diffs. Return only the subject line.",
+            },
+            {
+              role: "user",
+              content: buildCommitMessagePrompt(
+                diff,
+                fileSummary,
+                fileCount,
+                additions,
+                deletions,
+                10_000,
+              ),
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: 80,
+        }),
+      ),
     })
 
     if (!response.ok) {
-      console.error("[CommitMessage] Provider request failed:", response.status)
+      await logProviderRequestFailure("CommitMessage", response)
       return null
     }
 
