@@ -5,8 +5,14 @@ import {
   isTokenExpired,
   refreshClaudeToken,
   type ClaudeOAuthCredential,
-  type ClaudeOAuthCredentialSource,
 } from "./claude-token"
+import {
+  createClaudeCodeCredentialEnvelope,
+  parseClaudeCodeCredentialPayload,
+  type ClaudeCodeCredentialEnvelope,
+  type ClaudeCodeCredentialStorageFormat,
+  type StoredClaudeCodeCredential,
+} from "../../shared/claude-code-credential-envelope"
 import {
   anthropicAccounts,
   anthropicSettings,
@@ -15,19 +21,8 @@ import {
 } from "./db"
 import { createId } from "./db/utils"
 
-export type ClaudeCodeCredentialStorageFormat = "envelope" | "legacy_plain_token"
-
-export type ClaudeCodeCredentialEnvelope = {
-  version: 1
-  kind: "claude_code_oauth"
-  accessToken: string
-  refreshToken?: string
-  expiresAt?: number
-  scopes?: string[]
-  source?: ClaudeOAuthCredentialSource | "hosted_oauth" | "manual" | "legacy_db"
-  importedAt: string
-  updatedAt: string
-}
+export { createClaudeCodeCredentialEnvelope, parseClaudeCodeCredentialPayload }
+export type { ClaudeCodeCredentialEnvelope, ClaudeCodeCredentialStorageFormat }
 
 export type ClaudeCodeCredentialMetadata = {
   isConnected: boolean
@@ -44,11 +39,6 @@ export type ClaudeCodeCredentialMetadata = {
   importedAt: string | null
   updatedAt: string | null
   encryptionAvailable: boolean
-}
-
-type StoredClaudeCodeCredential = {
-  envelope: ClaudeCodeCredentialEnvelope
-  storageFormat: ClaudeCodeCredentialStorageFormat
 }
 
 type ActiveCredentialRow = {
@@ -76,75 +66,6 @@ function decryptSecret(encrypted: string): string {
 
 function toIsoString(value: Date | null | undefined): string | null {
   return value?.toISOString() ?? null
-}
-
-function normalizeSource(
-  source: ClaudeOAuthCredentialSource | "hosted_oauth" | "manual" | "legacy_db" | undefined,
-): ClaudeCodeCredentialEnvelope["source"] {
-  return source ?? "manual"
-}
-
-export function createClaudeCodeCredentialEnvelope(
-  credential: ClaudeOAuthCredential,
-  source?: ClaudeCodeCredentialEnvelope["source"],
-  previous?: ClaudeCodeCredentialEnvelope,
-): ClaudeCodeCredentialEnvelope {
-  const now = new Date().toISOString()
-
-  return {
-    version: 1,
-    kind: "claude_code_oauth",
-    accessToken: credential.accessToken,
-    ...(credential.refreshToken && { refreshToken: credential.refreshToken }),
-    ...(credential.expiresAt && { expiresAt: credential.expiresAt }),
-    ...(credential.scopes && { scopes: credential.scopes }),
-    source: normalizeSource(source ?? credential.source),
-    importedAt: previous?.importedAt ?? now,
-    updatedAt: now,
-  }
-}
-
-function isEnvelope(value: unknown): value is ClaudeCodeCredentialEnvelope {
-  if (!value || typeof value !== "object") return false
-
-  const candidate = value as Partial<ClaudeCodeCredentialEnvelope>
-  return (
-    candidate.version === 1 &&
-    candidate.kind === "claude_code_oauth" &&
-    typeof candidate.accessToken === "string" &&
-    candidate.accessToken.trim().length > 0
-  )
-}
-
-export function parseClaudeCodeCredentialPayload(
-  payload: string,
-): StoredClaudeCodeCredential | null {
-  const trimmed = payload.trim()
-  if (!trimmed) return null
-
-  try {
-    const parsed = JSON.parse(trimmed)
-    if (isEnvelope(parsed)) {
-      return {
-        envelope: parsed,
-        storageFormat: "envelope",
-      }
-    }
-  } catch {
-    // Legacy rows decrypt to a bare access token string.
-  }
-
-  return {
-    envelope: {
-      version: 1,
-      kind: "claude_code_oauth",
-      accessToken: trimmed,
-      source: "legacy_db",
-      importedAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-    },
-    storageFormat: "legacy_plain_token",
-  }
 }
 
 export function decryptClaudeCodeCredential(
