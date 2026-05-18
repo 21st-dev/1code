@@ -1,0 +1,31 @@
+import { trpcClient } from "../../../lib/trpc"
+import { BUILTIN_SLASH_COMMANDS } from "../commands"
+
+export async function expandCustomSlashCommand(
+  text: string,
+  projectPath?: string,
+) {
+  const slashMatch = text.match(/^\/(\S+)\s*(.*)$/s)
+  if (!slashMatch) return text
+
+  const [, commandName, args] = slashMatch
+  const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name))
+  if (builtinNames.has(commandName)) return text
+
+  try {
+    const commands = await trpcClient.commands.list.query({ projectPath })
+    const cmd = commands.find(
+      (candidate) =>
+        candidate.name.toLowerCase() === commandName.toLowerCase(),
+    )
+    if (!cmd) return text
+
+    const { content } = await trpcClient.commands.getContent.query({
+      path: cmd.path,
+    })
+    return content.replace(/\$ARGUMENTS/g, args.trim())
+  } catch (error) {
+    console.error("Failed to expand custom slash command:", error)
+    return text
+  }
+}

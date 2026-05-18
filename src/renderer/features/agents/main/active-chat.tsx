@@ -143,7 +143,6 @@ import {
   type AgentMode,
   type SelectedCommit
 } from "../atoms"
-import { BUILTIN_SLASH_COMMANDS } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
@@ -155,6 +154,7 @@ import { useDesktopNotifications } from "../hooks/use-desktop-notifications"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useHaptic } from "../hooks/use-haptic"
 import { usePastedTextFiles, type PastedTextFile } from "../hooks/use-pasted-text-files"
+import { usePendingAgentMessages } from "../hooks/use-pending-agent-messages"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import { useWorkspaceDiffFetch } from "../hooks/use-workspace-diff-fetch"
@@ -165,12 +165,14 @@ import {
   getSubChatDraftFull
 } from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
+import { buildAgentMessageParts } from "../lib/message-parts"
 import {
   createQueueItem, createTextPreview, generateQueueId,
   toQueuedFile,
   toQueuedImage,
   toQueuedTextContext, toQueuedDiffTextContext, toQueuedPastedText, type DiffTextContext, type SelectedTextContext
 } from "../lib/queue-utils"
+import { expandCustomSlashCommand } from "../lib/slash-command-expansion"
 import {
   FileOpenProvider,
   MENTION_PREFIXES,
@@ -2245,65 +2247,12 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }, [isStreaming, subChatId, setLoadingSubChats])
 
-  // Watch for pending PR message and send it
-  const [pendingPrMessage, setPendingPrMessage] = useAtom(pendingPrMessageAtom)
-
-  useEffect(() => {
-    if (pendingPrMessage?.subChatId === subChatId && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingPrMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingPrMessage.message }],
-      })
-
-      // Reset creating PR state after message is sent
-      setIsCreatingPr(false)
-
-      // Ensure the target sub-chat is focused after sending
-      const store = useAgentSubChatStore.getState()
-      store.addToOpenSubChats(subChatId)
-      store.setActiveSubChat(subChatId)
-    }
-  }, [pendingPrMessage, isStreaming, sendMessage, setPendingPrMessage, setIsCreatingPr, subChatId])
-
-  // Watch for pending Review message and send it
-  const [pendingReviewMessage, setPendingReviewMessage] = useAtom(
-    pendingReviewMessageAtom,
-  )
-
-  useEffect(() => {
-    if (pendingReviewMessage?.subChatId === subChatId && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingReviewMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingReviewMessage.message }],
-      })
-    }
-  }, [pendingReviewMessage, isStreaming, sendMessage, setPendingReviewMessage, subChatId])
-
-  // Watch for pending conflict resolution message and send it
-  const [pendingConflictMessage, setPendingConflictMessage] = useAtom(
-    pendingConflictResolutionMessageAtom,
-  )
-
-  useEffect(() => {
-    if (pendingConflictMessage?.subChatId === subChatId && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingConflictMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingConflictMessage.message }],
-      })
-    }
-  }, [pendingConflictMessage, isStreaming, sendMessage, setPendingConflictMessage, subChatId])
+  usePendingAgentMessages({
+    subChatId,
+    isStreaming,
+    sendMessage,
+    setIsCreatingPr,
+  })
 
   // Handle pending "Build plan" from sidebar (atom - effect is defined after handleApprovePlan)
   const [pendingBuildPlanSubChatId, setPendingBuildPlanSubChatId] = useAtom(
@@ -3473,34 +3422,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     const text = inputValue.trim()
 
-    // Expand custom slash commands with arguments (e.g. "/Apex my argument")
-    // This mirrors the logic in new-chat-form.tsx
-    let finalText = text
-    const slashMatch = text.match(/^\/(\S+)\s*(.*)$/s)
-    if (slashMatch) {
-      const [, commandName, args] = slashMatch
-      const builtinNames = new Set(
-        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
-      )
-      if (!builtinNames.has(commandName)) {
-        try {
-          const commands = await trpcClient.commands.list.query({
-            projectPath,
-          })
-          const cmd = commands.find(
-            (c) => c.name.toLowerCase() === commandName.toLowerCase(),
-          )
-          if (cmd) {
-            const { content } = await trpcClient.commands.getContent.query({
-              path: cmd.path,
-            })
-            finalText = content.replace(/\$ARGUMENTS/g, args.trim())
-          }
-        } catch (error) {
-          console.error("Failed to expand custom slash command:", error)
-        }
-      }
-    }
+    const finalText = await expandCustomSlashCommand(text, projectPath)
 
     // Clear editor and draft from localStorage
     editorRef.current?.clear()
@@ -3521,78 +3443,15 @@ const ChatViewInner = memo(function ChatViewInner({
       onAutoRename(finalText || "Image message", subChatId)
     }
 
-    // Build message parts: images first, then files, then text
-    // Include base64Data for API transmission
-    const parts: any[] = [
-      ...currentImages
-        .filter((img) => !img.isLoading && img.url)
-        .map((img) => ({
-          type: "data-image" as const,
-          data: {
-            url: img.url,
-            mediaType: img.mediaType,
-            filename: img.filename,
-            base64Data: img.base64Data, // Include base64 data for Claude API
-          },
-        })),
-      ...currentFiles
-        .filter((f) => !f.isLoading && f.url)
-        .map((f) => ({
-          type: "data-file" as const,
-          data: {
-            url: f.url,
-            mediaType: (f as any).mediaType,
-            filename: f.filename,
-            size: f.size,
-          },
-        })),
-    ]
-
-    // Add text contexts as mention tokens
-    let mentionPrefix = ""
-
-    if (currentTextContexts.length > 0 || currentDiffTextContexts.length > 0 || currentPastedTexts.length > 0) {
-      const quoteMentions = currentTextContexts.map((tc) => {
-        const preview = tc.preview.replace(/[:\[\]]/g, "") // Sanitize preview
-        const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
-        return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
-      })
-
-      const diffMentions = currentDiffTextContexts.map((dtc) => {
-        const preview = dtc.preview.replace(/[:\[\]]/g, "") // Sanitize preview
-        const encodedText = utf8ToBase64(dtc.text) // Base64 encode full text
-        const lineNum = dtc.lineNumber || 0
-        return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
-      })
-
-      // Add pasted text / chat history as mentions (format: prefix:size:preview|filepath)
-      // Using | as separator since filepath can contain colons
-      const pastedTextMentions = currentPastedTexts.map((pt) => {
-        const sanitizedPreview = pt.preview.replace(/[:\[\]|]/g, "")
-        const prefix = pt.kind === "chatHistory" ? MENTION_PREFIXES.CHAT_HISTORY : MENTION_PREFIXES.PASTED
-        return `@[${prefix}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
-      })
-
-      mentionPrefix = [...quoteMentions, ...diffMentions, ...pastedTextMentions].join(" ") + " "
-    }
-
-    if (finalText || mentionPrefix) {
-      parts.push({ type: "text", text: mentionPrefix + (finalText || "") })
-    }
-
-    // Add cached file contents as hidden parts (sent to agent but not displayed in UI)
-    // These are from dropped text files - content is embedded so agent sees it immediately
-    if (fileContentsRef.current.size > 0) {
-      for (const [mentionId, content] of fileContentsRef.current.entries()) {
-        // Extract file path from mentionId (file:local:path or file:external:path)
-        const filePath = mentionId.replace(/^file:(local|external):/, "")
-        parts.push({
-          type: "file-content",
-          filePath,
-          content,
-        })
-      }
-    }
+    const parts = buildAgentMessageParts({
+      text: finalText,
+      images: currentImages,
+      files: currentFiles,
+      textContexts: currentTextContexts,
+      diffTextContexts: currentDiffTextContexts,
+      pastedTexts: currentPastedTexts,
+      fileContents: fileContentsRef.current.entries(),
+    })
 
     clearAll()
     clearTextContexts()
@@ -3655,6 +3514,7 @@ const ChatViewInner = memo(function ChatViewInner({
     isArchived,
     onRestoreWorkspace,
     parentChatId,
+    projectPath,
     subChatId,
     onAutoRename,
     clearAll,
@@ -3679,63 +3539,14 @@ const ChatViewInner = memo(function ChatViewInner({
         await waitForStreamingReady(subChatId)
       }
 
-      // Build message parts from queued item
-      const parts: any[] = [
-        ...(item.images || []).map((img) => ({
-          type: "data-image" as const,
-          data: {
-            url: img.url,
-            mediaType: img.mediaType,
-            filename: img.filename,
-            base64Data: img.base64Data,
-          },
-        })),
-        ...(item.files || []).map((f) => ({
-          type: "data-file" as const,
-          data: {
-            url: f.url,
-            mediaType: f.mediaType,
-            filename: f.filename,
-            size: f.size,
-          },
-        })),
-      ]
-
-      // Add text contexts as mention tokens
-      let mentionPrefix = ""
-      if (item.textContexts && item.textContexts.length > 0) {
-        const quoteMentions = item.textContexts.map((tc) => {
-          const preview = tc.text.slice(0, 50).replace(/[:\[\]]/g, "") // Create and sanitize preview
-          const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
-          return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
-        })
-        mentionPrefix = quoteMentions.join(" ") + " "
-      }
-
-      // Add diff text contexts as mention tokens
-      if (item.diffTextContexts && item.diffTextContexts.length > 0) {
-        const diffMentions = item.diffTextContexts.map((dtc) => {
-          const preview = dtc.text.slice(0, 50).replace(/[:\[\]]/g, "") // Create and sanitize preview
-          const encodedText = utf8ToBase64(dtc.text) // Base64 encode full text
-          const lineNum = dtc.lineNumber || 0
-          return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
-        })
-        mentionPrefix += diffMentions.join(" ") + " "
-      }
-
-      // Add pasted text / chat history as mentions
-      if (item.pastedTexts && item.pastedTexts.length > 0) {
-        const pastedMentions = item.pastedTexts.map((pt) => {
-          const sanitizedPreview = pt.preview.replace(/[:\[\]|]/g, "")
-          const prefix = pt.kind === "chatHistory" ? MENTION_PREFIXES.CHAT_HISTORY : MENTION_PREFIXES.PASTED
-          return `@[${prefix}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
-        })
-        mentionPrefix += pastedMentions.join(" ") + " "
-      }
-
-      if (item.message || mentionPrefix) {
-        parts.push({ type: "text", text: mentionPrefix + (item.message || "") })
-      }
+      const parts = buildAgentMessageParts({
+        text: item.message,
+        images: item.images,
+        files: item.files,
+        textContexts: item.textContexts,
+        diffTextContexts: item.diffTextContexts,
+        pastedTexts: item.pastedTexts,
+      })
 
       // Track message sent
       trackMessageSent({
@@ -3795,33 +3606,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     const text = inputValue.trim()
 
-    // Expand custom slash commands with arguments (e.g. "/Apex my argument")
-    let finalText = text
-    const slashMatch = text.match(/^\/(\S+)\s*(.*)$/s)
-    if (slashMatch) {
-      const [, commandName, args] = slashMatch
-      const builtinNames = new Set(
-        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
-      )
-      if (!builtinNames.has(commandName)) {
-        try {
-          const commands = await trpcClient.commands.list.query({
-            projectPath,
-          })
-          const cmd = commands.find(
-            (c) => c.name.toLowerCase() === commandName.toLowerCase(),
-          )
-          if (cmd) {
-            const { content } = await trpcClient.commands.getContent.query({
-              path: cmd.path,
-            })
-            finalText = content.replace(/\$ARGUMENTS/g, args.trim())
-          }
-        } catch (error) {
-          console.error("Failed to expand custom slash command:", error)
-        }
-      }
-    }
+    const finalText = await expandCustomSlashCommand(text, projectPath)
 
     // Clear editor and draft from localStorage
     editorRef.current?.clear()
@@ -3836,35 +3621,11 @@ const ChatViewInner = memo(function ChatViewInner({
       mode: subChatModeRef.current,
     })
 
-    // Build message parts
-    const parts: any[] = [
-      ...currentImages
-        .filter((img) => !img.isLoading && img.url)
-        .map((img) => ({
-          type: "data-image" as const,
-          data: {
-            url: img.url,
-            mediaType: img.mediaType,
-            filename: img.filename,
-            base64Data: img.base64Data,
-          },
-        })),
-      ...currentFiles
-        .filter((f) => !f.isLoading && f.url)
-        .map((f) => ({
-          type: "data-file" as const,
-          data: {
-            url: f.url,
-            mediaType: f.mediaType,
-            filename: f.filename,
-            size: f.size,
-          },
-        })),
-    ]
-
-    if (finalText) {
-      parts.push({ type: "text", text: finalText })
-    }
+    const parts = buildAgentMessageParts({
+      text: finalText,
+      images: currentImages,
+      files: currentFiles,
+    })
 
     // Clear attachments
     clearAll()
@@ -3888,6 +3649,7 @@ const ChatViewInner = memo(function ChatViewInner({
     isArchived,
     onRestoreWorkspace,
     parentChatId,
+    projectPath,
     subChatId,
     handleStop,
     clearAll,
