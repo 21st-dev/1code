@@ -59,7 +59,6 @@ import { SettingsContent } from "../../settings/settings-content"
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const desktopView = useAtomValue(desktopViewAtom)
-  const setDesktopView = useSetAtom(desktopViewAtom)
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
@@ -150,12 +149,6 @@ export function AgentsContent() {
     enabled: !!selectedTeamId,
   })
   const selectedTeam = teams?.find((t: any) => t.id === selectedTeamId) as any
-
-  useEffect(() => {
-    if (desktopView === "automations" || desktopView === "automations-detail" || desktopView === "inbox") {
-      setDesktopView(null)
-    }
-  }, [desktopView, setDesktopView])
 
   // Fetch agent chats for keyboard navigation and mobile view
   const { data: agentChats } = api.agents.getAgentChats.useQuery(

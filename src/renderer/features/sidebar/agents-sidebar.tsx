@@ -1033,7 +1033,7 @@ const KanbanButton = memo(function KanbanButton() {
     setSelectedChatId(null)
     setSelectedDraftId(null)
     setShowNewChatForm(false)
-    setDesktopView(null) // Clear automations/inbox view
+    setDesktopView(null) // Clear desktop view
   }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, setDesktopView])
 
   // Hide button if feature is disabled
@@ -1978,7 +1978,7 @@ export function AgentsSidebar({
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
     setShowNewChatForm(true) // Explicitly show new chat form
-    setDesktopView(null) // Clear automations/inbox view
+    setDesktopView(null) // Clear desktop view
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2065,7 +2065,7 @@ export function AgentsSidebar({
 
     setSelectedChatId(chatId)
     setShowNewChatForm(false) // Clear new chat form state when selecting a workspace
-    setDesktopView(null) // Clear automations/inbox view when selecting a chat
+    setDesktopView(null) // Clear desktop view when selecting a chat
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()

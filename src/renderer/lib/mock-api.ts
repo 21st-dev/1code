@@ -378,20 +378,6 @@ export const api = {
       },
     },
   },
-  usage: {
-    getUserUsage: {
-      useQuery: (_args?: AnyObj, _opts?: AnyObj) => ({
-        // Desktop: no usage limits
-        data: {
-          usage: 0,
-          limit: Infinity,
-          planType: "desktop" as const,
-          next_payment_at: null,
-        },
-        isLoading: false,
-      }),
-    },
-  },
   useUtils: () => {
     const utils = trpc.useUtils()
     return {
