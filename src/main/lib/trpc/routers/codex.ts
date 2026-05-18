@@ -18,6 +18,7 @@ import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import {
   fetchMcpTools,
   fetchMcpToolsStdio,
@@ -242,7 +243,7 @@ function resolveCodexAcpBinaryPath(): string {
   return toUnpackedAsarPath(resolvedPath)
 }
 
-function resolveBundledCodexCliPath(): string {
+function getBundledCodexCliPath(): string {
   const binaryName = process.platform === "win32" ? "codex.exe" : "codex"
   const resourcesDir = app.isPackaged
     ? join(process.resourcesPath, "bin")
@@ -253,7 +254,11 @@ function resolveBundledCodexCliPath(): string {
         `${process.platform}-${process.arch}`,
       )
 
-  const binaryPath = join(resourcesDir, binaryName)
+  return join(resourcesDir, binaryName)
+}
+
+function resolveBundledCodexCliPath(): string {
+  const binaryPath = getBundledCodexCliPath()
   if (existsSync(binaryPath)) {
     return binaryPath
   }
@@ -265,6 +270,40 @@ function resolveBundledCodexCliPath(): string {
   throw new Error(
     `[codex] Bundled Codex CLI not found at ${binaryPath}. ${hint}`,
   )
+}
+
+function getCodexRuntimeStatus() {
+  const cliHint = app.isPackaged
+    ? "Reinstall the app so the bundled Codex command is restored."
+    : "Run `bun run codex:download` from the repo, then restart the dev app."
+  const acpHint = app.isPackaged
+    ? "Reinstall the app so the bundled Codex ACP runtime is restored."
+    : "Run `bun install` from the repo, then restart the dev app."
+
+  let acpPath: string | null = null
+  let acpResolveError: string | null = null
+  try {
+    acpPath = resolveCodexAcpBinaryPath()
+  } catch (error) {
+    acpResolveError =
+      error instanceof Error
+        ? error.message
+        : "Codex ACP runtime path could not be resolved."
+  }
+
+  const loginCli = getRuntimeExecutableStatus(
+    getBundledCodexCliPath(),
+    cliHint,
+  )
+  const acp = getRuntimeExecutableStatus(acpPath, acpHint)
+
+  return {
+    runtime: "codex" as const,
+    requiresGlobalCli: false,
+    ok: loginCli.ok && acp.ok && !acpResolveError,
+    loginCli,
+    acp: acpResolveError ? { ...acp, error: acpResolveError } : acp,
+  }
 }
 
 function stripAnsi(input: string): string {
@@ -1365,6 +1404,8 @@ function cleanupProvider(subChatId: string): void {
 }
 
 export const codexRouter = router({
+  getRuntimeStatus: publicProcedure.query(() => getCodexRuntimeStatus()),
+
   getIntegration: publicProcedure.query(async () => {
     const result = await runCodexCli(["login", "status"])
     const combinedOutput = [result.stdout, result.stderr]

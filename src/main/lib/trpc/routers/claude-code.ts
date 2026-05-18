@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm"
 import { createHash, randomBytes, randomUUID } from "node:crypto"
 import { z } from "zod"
-import { getClaudeShellEnvironment } from "../../claude"
+import {
+  getBundledClaudeBinaryPath,
+  getClaudeShellEnvironment,
+} from "../../claude"
 import {
   CLAUDE_CODE_OAUTH_CLIENT_ID,
   CLAUDE_CODE_TOKEN_URL,
@@ -20,6 +23,7 @@ import {
   claudeCodeCredentials,
   getDatabase,
 } from "../../db"
+import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { publicProcedure, router } from "../index"
 
 type ClaudeCodeLocalLoginSessionState =
@@ -212,6 +216,21 @@ async function exchangeClaudeCodeAuthCode({
  * Uses first-party Claude Code OAuth and stores tokens locally.
  */
 export const claudeCodeRouter = router({
+  getRuntimeStatus: publicProcedure.query(() => {
+    const hint = process.env.ELECTRON_RENDERER_URL
+      ? "Run `bun run claude:download` from the repo, then restart the dev app."
+      : "Reinstall the app so the bundled Claude Code runtime is restored."
+
+    return {
+      runtime: "claude-code" as const,
+      requiresGlobalCli: false,
+      executable: getRuntimeExecutableStatus(
+        getBundledClaudeBinaryPath(),
+        hint,
+      ),
+    }
+  }),
+
   /**
    * Check if user has existing CLI config (API key or proxy)
    * If true, user can skip OAuth onboarding
