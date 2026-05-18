@@ -6,6 +6,29 @@
 - `git diff --check`: passed
 - `bun run ts:check`: passed
 - `bun run build`: passed
+- `rg -n "shell\\.openExternal" src/main --glob '!**/*.svg'`: only the centralized `src/main/lib/local-only.ts` helper opens external URLs directly.
+
+## Local CLI and Credential Probe
+
+Commands:
+
+```bash
+resources/bin/darwin-arm64/claude --version
+resources/bin/darwin-arm64/codex --version
+~/.local/bin/claude --version
+~/.local/bin/claude auth status
+codex login status
+bun -e 'import { getExistingClaudeCredentials } from "./src/main/lib/claude-token.ts"; const c = getExistingClaudeCredentials(); console.log(JSON.stringify({ found: Boolean(c), source: c?.source ?? null, refreshable: Boolean(c?.refreshToken), expiresAt: c?.expiresAt ?? null }, null, 2));'
+```
+
+Observed on 2026-05-18:
+
+- Bundled Claude Code binary reports `2.1.143 (Claude Code)`.
+- Bundled Codex binary reports `codex-cli 0.130.0`.
+- System Claude Code binary reports `2.1.138 (Claude Code)`.
+- System Claude Code auth status reports `loggedIn: false`, `authMethod: none`, and `apiProvider: firstParty`.
+- Local Claude Code credential probe reports `found: false`, so there is currently no local Claude Code credential for the app to import on this machine.
+- Codex CLI reports `Logged in using ChatGPT`.
 
 ## Local-Only Startup Smoke
 
@@ -26,9 +49,9 @@ Observed:
 - Window reached `ready to show`.
 - Page finished loading.
 
-## Manual Credential Smoke Remaining
+## Credential Smoke Remaining
 
-The login/import-and-send path should be manually verified from the UI because it reads the user's local Claude Code credential store, may open an Anthropic browser login, and may consume Claude Code subscription usage:
+The login/import-and-send path still requires an authenticated UI smoke because the current machine has no local Claude Code credential to import. This path reads the user's local Claude Code credential store, may open an Anthropic browser login, and may consume Claude Code subscription usage:
 
 1. Open Settings > Models.
 2. Click `Connect` under Anthropic Accounts.
