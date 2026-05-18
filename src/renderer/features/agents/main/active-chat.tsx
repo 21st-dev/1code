@@ -16,9 +16,7 @@ import {
   IconCloseSidebarRight,
   IconOpenSidebarRight,
   IconSpinner,
-  PauseIcon,
   UnarchiveIcon,
-  VolumeIcon
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import {
@@ -60,7 +58,6 @@ import { useShallow } from "zustand/react/shallow"
 import type { FileStatus } from "../../../../shared/changes-types"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { trackMessageSent } from "../../../lib/analytics"
-import { apiFetch } from "../../../lib/api-fetch"
 import {
   defaultAgentModeAtom,
   isDesktopAtom, isFullscreenAtom,
@@ -68,8 +65,6 @@ import {
   selectedOllamaModelAtom,
   soundNotificationsEnabledAtom
 } from "../../../lib/atoms"
-import { useFileChangeListener, useGitWatcher } from "../../../lib/hooks/use-file-change-listener"
-import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { useI18n } from "../../../lib/i18n"
 import { appStore } from "../../../lib/jotai-store"
@@ -119,7 +114,6 @@ import {
   justCreatedIdsAtom,
   loadingSubChatsAtom,
   MODEL_ID_MAP,
-  pendingAuthRetryMessageAtom,
   pendingBuildPlanSubChatIdAtom,
   pendingConflictResolutionMessageAtom,
   pendingChatHistoryAtom,
@@ -154,6 +148,8 @@ import { AgentSendButton } from "../components/agent-send-button"
 import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
 import { useAgentsFileUpload, type UploadedImage } from "../hooks/use-agents-file-upload"
+import { useAgentPanelConflicts } from "../hooks/use-agent-panel-conflicts"
+import { useAuthRetry } from "../hooks/use-auth-retry"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
 import { useDesktopNotifications } from "../hooks/use-desktop-notifications"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
@@ -161,6 +157,7 @@ import { useHaptic } from "../hooks/use-haptic"
 import { usePastedTextFiles, type PastedTextFile } from "../hooks/use-pasted-text-files"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
+import { useWorkspaceDiffFetch } from "../hooks/use-workspace-diff-fetch"
 import { ACPChatTransport } from "../lib/acp-chat-transport"
 import { formatHistoryForContext } from "../lib/export-chat"
 import {
@@ -423,347 +420,6 @@ function CopyButton({
         />
       </div>
     </button>
-  )
-}
-
-// Play button component for TTS (text-to-speech) with streaming support
-type PlayButtonState = "idle" | "loading" | "playing"
-
-const PLAYBACK_SPEEDS = [1, 2, 3] as const
-type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
-
-function PlayButton({
-  text,
-  isMobile = false,
-  playbackRate = 1,
-  onPlaybackRateChange,
-}: {
-  text: string
-  isMobile?: boolean
-  playbackRate?: PlaybackSpeed
-  onPlaybackRateChange?: (rate: PlaybackSpeed) => void
-}) {
-  const isLocalOnly = useLocalOnlyMode()
-  const [state, setState] = useState<PlayButtonState>("idle")
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const mediaSourceRef = useRef<MediaSource | null>(null)
-  const sourceBufferRef = useRef<SourceBuffer | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const chunkCountRef = useRef(0)
-
-  // Update playback rate when it changes
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackRate
-    }
-  }, [playbackRate])
-
-  const cleanup = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-    }
-    if (audioRef.current) {
-      audioRef.current.pause()
-      if (audioRef.current.src) {
-        URL.revokeObjectURL(audioRef.current.src)
-      }
-    }
-    if (
-      mediaSourceRef.current &&
-      mediaSourceRef.current.readyState === "open"
-    ) {
-      try {
-        mediaSourceRef.current.endOfStream()
-      } catch {
-        // Ignore errors during cleanup
-      }
-    }
-    audioRef.current = null
-    mediaSourceRef.current = null
-    sourceBufferRef.current = null
-    chunkCountRef.current = 0
-  }, [])
-
-  const handlePlay = async () => {
-    // If playing, stop the audio
-    if (state === "playing") {
-      cleanup()
-      setState("idle")
-      return
-    }
-
-    // If loading, cancel and reset
-    if (state === "loading") {
-      cleanup()
-      setState("idle")
-      return
-    }
-
-    // Start loading
-    setState("loading")
-    chunkCountRef.current = 0
-
-    try {
-      // Check if MediaSource is supported for streaming
-      const supportsMediaSource =
-        typeof MediaSource !== "undefined" &&
-        MediaSource.isTypeSupported("audio/mpeg")
-
-      if (supportsMediaSource) {
-        // Use streaming approach with MediaSource API
-        await playWithStreaming()
-      } else {
-        // Fallback: wait for full response (Safari, older browsers)
-        await playWithFallback()
-      }
-    } catch (error) {
-      if ((error as Error).name !== "AbortError") {
-        console.error("[PlayButton] TTS error:", error)
-      }
-      cleanup()
-      setState("idle")
-    }
-  }
-
-  const playWithStreaming = async () => {
-    const mediaSource = new MediaSource()
-    mediaSourceRef.current = mediaSource
-
-    const audio = new Audio()
-    audioRef.current = audio
-
-    audio.src = URL.createObjectURL(mediaSource)
-
-    audio.onended = () => {
-      cleanup()
-      setState("idle")
-    }
-
-    audio.onerror = () => {
-      cleanup()
-      setState("idle")
-    }
-
-    // Track if we've already started playing
-    let hasStartedPlaying = false
-
-    // Start playback when browser has enough data (canplay event)
-    audio.oncanplay = async () => {
-      if (hasStartedPlaying) return
-      hasStartedPlaying = true
-      try {
-        await audio.play()
-        audio.playbackRate = playbackRate
-        setState("playing")
-      } catch {
-        cleanup()
-        setState("idle")
-      }
-    }
-
-    // Wait for MediaSource to open
-    await new Promise<void>((resolve, reject) => {
-      mediaSource.addEventListener("sourceopen", () => resolve(), {
-        once: true,
-      })
-      mediaSource.addEventListener(
-        "error",
-        () => reject(new Error("MediaSource error")),
-        {
-          once: true,
-        },
-      )
-    })
-
-    const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg")
-    sourceBufferRef.current = sourceBuffer
-
-    // Create abort controller for this request
-    abortControllerRef.current = new AbortController()
-
-    const fetchStartTime = Date.now()
-    const response = await apiFetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: abortControllerRef.current.signal,
-    })
-
-    if (!response.ok) {
-      throw new Error("TTS request failed")
-    }
-
-    if (!response.body) {
-      throw new Error("No response body")
-    }
-
-    const reader = response.body.getReader()
-    const pendingChunks: Uint8Array[] = []
-    let isAppending = false
-
-    const appendNextChunk = () => {
-      if (
-        isAppending ||
-        pendingChunks.length === 0 ||
-        !sourceBufferRef.current ||
-        sourceBufferRef.current.updating
-      ) {
-        return
-      }
-
-      isAppending = true
-      const chunk = pendingChunks.shift()!
-      try {
-        // Use ArrayBuffer.isView to ensure TypeScript knows this is a valid BufferSource
-        const buffer = new Uint8Array(chunk.buffer.slice(0)) as BufferSource
-        sourceBufferRef.current.appendBuffer(buffer)
-      } catch {
-        // Buffer might be full or source closed
-        isAppending = false
-      }
-    }
-
-    sourceBuffer.addEventListener("updateend", () => {
-      isAppending = false
-      appendNextChunk()
-    })
-
-    // Read stream chunks
-    const processStream = async () => {
-      while (true) {
-        const { done, value } = await reader.read()
-
-        if (done) {
-          // Wait for all pending chunks to be appended
-          while (pendingChunks.length > 0 || sourceBuffer.updating) {
-            await new Promise((r) => setTimeout(r, 50))
-          }
-          if (mediaSource.readyState === "open") {
-            try {
-              mediaSource.endOfStream()
-            } catch {
-              // Ignore
-            }
-          }
-          break
-        }
-
-        if (value) {
-          chunkCountRef.current++
-          pendingChunks.push(value)
-          appendNextChunk()
-
-          // Just accumulate data, don't try to play yet
-          // Playback will start via canplay event listener
-        }
-      }
-    }
-
-    // Start processing stream - playback will start via canplay event
-    processStream()
-  }
-
-  const playWithFallback = async () => {
-    abortControllerRef.current = new AbortController()
-
-    const response = await apiFetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: abortControllerRef.current.signal,
-    })
-
-    if (!response.ok) {
-      throw new Error("TTS request failed")
-    }
-
-    const audioBlob = await response.blob()
-    const audioUrl = URL.createObjectURL(audioBlob)
-
-    const audio = new Audio(audioUrl)
-    audioRef.current = audio
-
-    audio.onended = () => {
-      cleanup()
-      setState("idle")
-    }
-
-    audio.onerror = () => {
-      cleanup()
-      setState("idle")
-    }
-
-    await audio.play()
-    // Set playback rate AFTER play() - browser resets it when setting src
-    audio.playbackRate = playbackRate
-    setState("playing")
-  }
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return cleanup
-  }, [cleanup])
-
-  if (isLocalOnly) {
-    return null
-  }
-
-  return (
-    <div className="relative flex items-center">
-      <button
-        onClick={handlePlay}
-        tabIndex={-1}
-        className={cn(
-          "p-1.5 rounded-md transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
-          state === "loading" && "cursor-wait",
-        )}
-      >
-        <div className="relative w-3.5 h-3.5">
-          {state === "loading" ? (
-            <IconSpinner className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
-          ) : state === "playing" ? (
-            <PauseIcon className="w-3.5 h-3.5 text-muted-foreground" />
-          ) : (
-            <VolumeIcon className="w-3.5 h-3.5 text-muted-foreground" />
-          )}
-        </div>
-      </button>
-
-      {/* Speed selector - cyclic button with animation, only visible when playing */}
-      {state === "playing" && (
-        <button
-          onClick={() => {
-            const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackRate)
-            const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length
-            onPlaybackRateChange?.(PLAYBACK_SPEEDS[nextIndex])
-          }}
-          tabIndex={-1}
-          className={cn(
-            "p-1.5 rounded-md transition-[background-color,opacity,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
-            isMobile
-              ? "opacity-100"
-              : "opacity-0 group-hover/message:opacity-100",
-          )}
-        >
-          <div className="relative w-4 h-3.5 flex items-center justify-center">
-            {PLAYBACK_SPEEDS.map((speed) => (
-              <span
-                key={speed}
-                className={cn(
-                  "absolute inset-0 flex items-center justify-center text-xs font-medium text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                  speed === playbackRate
-                    ? "opacity-100 scale-100"
-                    : "opacity-0 scale-50",
-                )}
-              >
-                {speed}x
-              </span>
-            ))}
-          </div>
-        </button>
-      )}
-    </div>
   )
 }
 
@@ -2023,23 +1679,6 @@ const ChatViewInner = memo(function ChatViewInner({
     setPendingMention(null)
   }, [isActive, pendingMention, setPendingMention])
 
-  // TTS playback rate state (persists across messages and sessions via localStorage)
-  const [ttsPlaybackRate, setTtsPlaybackRate] = useState<PlaybackSpeed>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("tts-playback-rate")
-      if (saved && PLAYBACK_SPEEDS.includes(Number(saved) as PlaybackSpeed)) {
-        return Number(saved) as PlaybackSpeed
-      }
-    }
-    return 1
-  })
-
-  // Save playback rate to localStorage when it changes
-  const handlePlaybackRateChange = useCallback((rate: PlaybackSpeed) => {
-    setTtsPlaybackRate(rate)
-    localStorage.setItem("tts-playback-rate", String(rate))
-  }, [])
-
   // PR creation loading state - from atom to allow resetting after message sent
   const setIsCreatingPr = useSetAtom(isCreatingPrAtom)
 
@@ -3047,60 +2686,12 @@ const ChatViewInner = memo(function ChatViewInner({
     [displayQuestions, handleSubmitWithQuestionAnswer],
   )
 
-  // Watch for pending auth retry message (after successful OAuth flow)
-  const [pendingAuthRetry, setPendingAuthRetry] = useAtom(
-    pendingAuthRetryMessageAtom,
-  )
-
-  useEffect(() => {
-    // Only retry when:
-    // 1. There's a pending message
-    // 2. readyToRetry is true (set by modal on OAuth success)
-    // 3. We're in the correct chat
-    // 4. Not currently streaming
-    if (
-      pendingAuthRetry &&
-      pendingAuthRetry.readyToRetry &&
-      pendingAuthRetry.subChatId === subChatId &&
-      pendingAuthRetry.provider === provider &&
-      !isStreaming
-    ) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingAuthRetry(null)
-
-      // Build message parts
-      const parts: Array<
-        { type: "text"; text: string } | { type: "data-image"; data: any }
-      > = [{ type: "text", text: pendingAuthRetry.prompt }]
-
-      // Add images if present
-      if (pendingAuthRetry.images && pendingAuthRetry.images.length > 0) {
-        for (const img of pendingAuthRetry.images) {
-          parts.push({
-            type: "data-image",
-            data: {
-              base64Data: img.base64Data,
-              mediaType: img.mediaType,
-              filename: img.filename,
-            },
-          })
-        }
-      }
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts,
-      })
-    }
-  }, [
-    pendingAuthRetry,
+  useAuthRetry({
+    subChatId,
     provider,
     isStreaming,
     sendMessage,
-    setPendingAuthRetry,
-    subChatId,
-  ])
+  })
 
   const handlePlanApproval = useCallback(
     async (toolUseId: string, approved: boolean) => {
@@ -4983,106 +4574,6 @@ export function ChatView({
     return () => window.removeEventListener("keydown", handleKeyDown, true)
   }, [isTerminalSidebarOpen, setIsTerminalSidebarOpen])
 
-  // Mutual exclusion: Details sidebar vs Plan/Terminal/Diff(side-peek) sidebars
-  // When one opens, close the conflicting ones and remember for restoration
-
-  // Track what was auto-closed and by whom for restoration
-  const autoClosedStateRef = useRef<{
-    // What closed Details
-    detailsClosedBy: "plan" | "terminal" | "diff" | null
-    // What Details closed
-    planClosedByDetails: boolean
-    terminalClosedByDetails: boolean
-    diffClosedByDetails: boolean
-  }>({
-    detailsClosedBy: null,
-    planClosedByDetails: false,
-    terminalClosedByDetails: false,
-    diffClosedByDetails: false,
-  })
-
-  // Track previous states to detect opens/closes
-  const prevSidebarStatesRef = useRef({
-    details: isDetailsSidebarOpen,
-    plan: isPlanSidebarOpen && !!currentPlanPath,
-    terminal: isTerminalSidebarOpen,
-  })
-
-  useEffect(() => {
-    const prev = prevSidebarStatesRef.current
-    const auto = autoClosedStateRef.current
-    const isPlanOpen = isPlanSidebarOpen && !!currentPlanPath
-
-    // Detect state changes
-    const detailsJustOpened = isDetailsSidebarOpen && !prev.details
-    const detailsJustClosed = !isDetailsSidebarOpen && prev.details
-    const planJustOpened = isPlanOpen && !prev.plan
-    const planJustClosed = !isPlanOpen && prev.plan
-    const terminalJustOpened = isTerminalSidebarOpen && !prev.terminal
-    const terminalJustClosed = !isTerminalSidebarOpen && prev.terminal
-
-    // Terminal in "bottom" mode doesn't conflict with Details sidebar
-    const terminalConflictsWithDetails = terminalDisplayMode === "side-peek"
-
-    // Details opened → close conflicting sidebars and remember
-    if (detailsJustOpened) {
-      if (isPlanOpen) {
-        auto.planClosedByDetails = true
-        setIsPlanSidebarOpen(false)
-      }
-      if (isTerminalSidebarOpen && terminalConflictsWithDetails) {
-        auto.terminalClosedByDetails = true
-        setIsTerminalSidebarOpen(false)
-      }
-    }
-    // Details closed → restore what it closed
-    else if (detailsJustClosed) {
-      if (auto.planClosedByDetails) {
-        auto.planClosedByDetails = false
-        setIsPlanSidebarOpen(true)
-      }
-      if (auto.terminalClosedByDetails) {
-        auto.terminalClosedByDetails = false
-        setIsTerminalSidebarOpen(true)
-      }
-    }
-    // Plan opened → close Details and remember
-    else if (planJustOpened && isDetailsSidebarOpen) {
-      auto.detailsClosedBy = "plan"
-      setIsDetailsSidebarOpen(false)
-    }
-    // Plan closed → restore Details if we closed it
-    else if (planJustClosed && auto.detailsClosedBy === "plan") {
-      auto.detailsClosedBy = null
-      setIsDetailsSidebarOpen(true)
-    }
-    // Terminal opened → close Details and remember (only in side-peek mode)
-    else if (terminalJustOpened && isDetailsSidebarOpen && terminalConflictsWithDetails) {
-      auto.detailsClosedBy = "terminal"
-      setIsDetailsSidebarOpen(false)
-    }
-    // Terminal closed → restore Details if we closed it
-    else if (terminalJustClosed && auto.detailsClosedBy === "terminal") {
-      auto.detailsClosedBy = null
-      setIsDetailsSidebarOpen(true)
-    }
-
-    prevSidebarStatesRef.current = {
-      details: isDetailsSidebarOpen,
-      plan: isPlanOpen,
-      terminal: isTerminalSidebarOpen,
-    }
-  }, [
-    isDetailsSidebarOpen,
-    isPlanSidebarOpen,
-    currentPlanPath,
-    isTerminalSidebarOpen,
-    terminalDisplayMode,
-    setIsDetailsSidebarOpen,
-    setIsPlanSidebarOpen,
-    setIsTerminalSidebarOpen,
-  ])
-
   // Diff data cache - stored in atoms to persist across workspace switches
   const diffCacheAtom = useMemo(
     () => workspaceDiffCacheAtomFamily(chatId),
@@ -5129,6 +4620,19 @@ export function ChatView({
   const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
   const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
 
+  useAgentPanelConflicts({
+    isDetailsSidebarOpen,
+    isPlanSidebarOpen,
+    currentPlanPath,
+    isTerminalSidebarOpen,
+    terminalDisplayMode,
+    isDiffSidebarOpen,
+    diffDisplayMode,
+    setIsDetailsSidebarOpen,
+    setIsPlanSidebarOpen,
+    setIsTerminalSidebarOpen,
+    setIsDiffSidebarOpen,
+  })
 
   // Force narrow width when switching to side-peek mode (from dialog/fullscreen)
   useEffect(() => {
@@ -5137,63 +4641,6 @@ export function ChatView({
       appStore.set(agentsDiffSidebarWidthAtom, 400)
     }
   }, [diffDisplayMode])
-
-  // Handle Diff + Details sidebar conflict (side-peek mode only)
-  // - If Diff opens in side-peek while Details is open: close Details and remember
-  // - If user manually switches Diff to side-peek while Details is open: close Details and remember
-  // - If Details opens while Diff is in side-peek mode: close Diff and remember
-  const prevDiffStateRef = useRef<{ isOpen: boolean; mode: string; detailsOpen: boolean }>({
-    isOpen: isDiffSidebarOpen,
-    mode: diffDisplayMode,
-    detailsOpen: isDetailsSidebarOpen,
-  })
-  // Flag to skip center-peek switch when restoring Diff after Details closes
-  const isRestoringDiffRef = useRef(false)
-  useEffect(() => {
-    const prev = prevDiffStateRef.current
-    const auto = autoClosedStateRef.current
-    const isNowSidePeek = isDiffSidebarOpen && diffDisplayMode === "side-peek"
-    const wasSidePeek = prev.isOpen && prev.mode === "side-peek"
-    const detailsJustOpened = isDetailsSidebarOpen && !prev.detailsOpen
-    const detailsJustClosed = !isDetailsSidebarOpen && prev.detailsOpen
-    const diffSidePeekJustClosed = wasSidePeek && !isNowSidePeek
-
-    if (isNowSidePeek && isDetailsSidebarOpen) {
-      // Details just opened while Diff is in side-peek → close Diff and remember
-      if (detailsJustOpened) {
-        auto.diffClosedByDetails = true
-        setIsDiffSidebarOpen(false)
-      }
-      // Diff just opened in side-peek mode → close Details and remember
-      // Skip if we're restoring Diff after Details closed
-      else if (!prev.isOpen && !isRestoringDiffRef.current) {
-        auto.detailsClosedBy = "diff"
-        setIsDetailsSidebarOpen(false)
-      }
-      // User manually switched to side-peek while Diff was already open → close Details and remember
-      else if (prev.isOpen && prev.mode !== "side-peek") {
-        auto.detailsClosedBy = "diff"
-        setIsDetailsSidebarOpen(false)
-      }
-    }
-    // Diff side-peek closed → restore Details if we closed it
-    else if (diffSidePeekJustClosed && auto.detailsClosedBy === "diff") {
-      auto.detailsClosedBy = null
-      setIsDetailsSidebarOpen(true)
-    }
-    // Details closed → restore Diff if we closed it (in side-peek mode, not switching to dialog)
-    else if (detailsJustClosed && auto.diffClosedByDetails) {
-      auto.diffClosedByDetails = false
-      isRestoringDiffRef.current = true
-      setIsDiffSidebarOpen(true)
-      // Reset flag after state update
-      requestAnimationFrame(() => {
-        isRestoringDiffRef.current = false
-      })
-    }
-
-    prevDiffStateRef.current = { isOpen: isDiffSidebarOpen, mode: diffDisplayMode, detailsOpen: isDetailsSidebarOpen }
-  }, [isDiffSidebarOpen, diffDisplayMode, isDetailsSidebarOpen, setDiffDisplayMode, setIsDetailsSidebarOpen, setIsDiffSidebarOpen])
 
   // Hide/show traffic lights based on full-page diff or full-page file viewer
   // When exiting full-page mode, restore based on sidebar state (not unconditionally true)
@@ -5581,9 +5028,6 @@ export function ChatView({
   // Check if this workspace is archived
   const isArchived = !!agentChat?.archivedAt
 
-  // Get user usage data for credit checks
-  const { data: usageData } = api.usage.getUserUsage.useQuery()
-
   // Desktop: use worktreePath instead of sandbox
   const worktreePath = agentChat?.worktreePath as string | null
   // Desktop: original project path for MCP config lookup
@@ -5656,154 +5100,16 @@ export function ChatView({
   // The sidebar render is guarded by canOpenDiff, so it naturally hides.
   // Per-chat state (diffSidebarOpenAtomFamily) preserves each chat's preference.
 
-  // Fetch diff stats - extracted as callback for reuse in onFinish
-  const fetchDiffStatsDebounceRef = useRef<NodeJS.Timeout | null>(null)
-  const isFetchingDiffRef = useRef(false)
-
-  const fetchDiffStats = useCallback(async () => {
-    console.log("[fetchDiffStats] Called with:", { worktreePath, chatId })
-
-    // Don't reset stats if worktreePath is temporarily undefined - just skip the fetch
-    // This prevents the button from becoming disabled when component re-renders
-    if (!worktreePath) {
-      console.log("[fetchDiffStats] Skipping - no worktreePath")
-      return
-    }
-
-    // Prevent duplicate parallel fetches
-    if (isFetchingDiffRef.current) {
-      console.log("[fetchDiffStats] Skipping - already fetching")
-      return
-    }
-    isFetchingDiffRef.current = true
-    console.log("[fetchDiffStats] Starting fetch...")
-
-    try {
-      // Desktop: use new getParsedDiff endpoint (all-in-one: parsing + file contents)
-      if (worktreePath && chatId) {
-        const result = await trpcClient.chats.getParsedDiff.query({ chatId })
-
-        if (result.files.length > 0) {
-          // Store parsed files directly (already parsed on server)
-          setParsedFileDiffs(result.files)
-
-          // Store prefetched file contents
-          setPrefetchedFileContents(result.fileContents)
-
-          // Set diff content to null since we have parsed files
-          // (AgentDiffView will use parsedFileDiffs when available)
-          setDiffContent(null)
-
-          setDiffStats({
-            fileCount: result.files.length,
-            additions: result.totalAdditions,
-            deletions: result.totalDeletions,
-            isLoading: false,
-            hasChanges: result.files.length > 0,
-          })
-        } else {
-          setDiffStats({
-            fileCount: 0,
-            additions: 0,
-            deletions: 0,
-            isLoading: false,
-            hasChanges: false,
-          })
-          // Use empty array instead of null to signal "no changes" vs "still loading"
-          setParsedFileDiffs([])
-          setPrefetchedFileContents({})
-          setDiffContent(null)
-        }
-        return
-      }
-
-      // Desktop without chat (viewing main repo directly)
-      if (worktreePath && !chatId) {
-        // TODO: Need to add endpoint that accepts worktreePath directly
-        return
-      }
-
-    } catch (error) {
-      console.error("[fetchDiffStats] Error:", error)
-      setDiffStats((prev: DiffStats) => ({ ...prev, isLoading: false }))
-    } finally {
-      console.log("[fetchDiffStats] Done")
-      isFetchingDiffRef.current = false
-    }
-  }, [worktreePath, chatId]) // Note: activeSubChatId removed - diff is same for whole chat
-
-  // Debounced version for calling after stream ends
-  const fetchDiffStatsDebounced = useCallback(() => {
-    if (fetchDiffStatsDebounceRef.current) {
-      clearTimeout(fetchDiffStatsDebounceRef.current)
-    }
-    fetchDiffStatsDebounceRef.current = setTimeout(() => {
-      fetchDiffStats()
-    }, 2000) // 2s debounce to avoid spamming if multiple streams end
-  }, [fetchDiffStats])
-
-  // Ref to hold the latest fetchDiffStatsDebounced for use in onFinish callbacks
-  const fetchDiffStatsRef = useRef(fetchDiffStatsDebounced)
-  useEffect(() => {
-    fetchDiffStatsRef.current = fetchDiffStatsDebounced
-  }, [fetchDiffStatsDebounced])
-
-  // Fetch diff stats on mount and when worktreePath changes
-  useEffect(() => {
-    fetchDiffStats()
-  }, [fetchDiffStats])
-
-  // Refresh diff stats when diff sidebar opens (background refresh - don't block UI)
-  // Keep existing data visible while fetching, only update if data changed
-  useEffect(() => {
-    if (isDiffSidebarOpen) {
-      // Fetch in background - existing parsedFileDiffs will be shown immediately
-      fetchDiffStats()
-    }
-  }, [isDiffSidebarOpen, fetchDiffStats])
-
-  // Throttled diff refresh for filesystem events (file edits, git ops)
-  // Initialize to Date.now() to prevent double-fetch on mount
-  // (the "mount" effect already fetches, throttle should wait)
-  const lastDiffFetchTimeRef = useRef<number>(Date.now())
-  const DIFF_THROTTLE_MS = 2000 // Max 1 fetch per 2 seconds
-  const diffRefreshTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const scheduleDiffRefresh = useCallback(() => {
-    const now = Date.now()
-    const timeSinceLastFetch = now - lastDiffFetchTimeRef.current
-
-    if (timeSinceLastFetch >= DIFF_THROTTLE_MS) {
-      lastDiffFetchTimeRef.current = now
-      fetchDiffStats()
-      return
-    }
-
-    const delay = DIFF_THROTTLE_MS - timeSinceLastFetch
-    if (diffRefreshTimerRef.current) {
-      clearTimeout(diffRefreshTimerRef.current)
-    }
-    diffRefreshTimerRef.current = setTimeout(() => {
-      diffRefreshTimerRef.current = null
-      lastDiffFetchTimeRef.current = Date.now()
-      fetchDiffStats()
-    }, delay)
-  }, [fetchDiffStats])
-
-  useEffect(() => {
-    return () => {
-      if (diffRefreshTimerRef.current) {
-        clearTimeout(diffRefreshTimerRef.current)
-        diffRefreshTimerRef.current = null
-      }
-    }
-  }, [])
-
-  // Listen for file changes from Claude Write/Edit tools and refresh diff
-  useFileChangeListener(worktreePath, { onChange: scheduleDiffRefresh })
-
-  // Subscribe to GitWatcher for real-time file system monitoring (chokidar on main process)
-  useGitWatcher(worktreePath, { onChange: scheduleDiffRefresh, debounceMs: 200 })
+  const { fetchDiffStats, fetchDiffStatsRef, scheduleDiffRefresh } =
+    useWorkspaceDiffFetch({
+      chatId,
+      worktreePath,
+      isDiffSidebarOpen,
+      setDiffStats,
+      setParsedFileDiffs,
+      setPrefetchedFileContents,
+      setDiffContent,
+    })
 
   // Handle Create PR (Direct) - pushes branch and opens GitHub compare URL
   const handleCreatePrDirect = useCallback(async () => {
