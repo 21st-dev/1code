@@ -1,7 +1,7 @@
 # agent-context-recommendations Specification
 
 ## Purpose
-TBD - created by archiving change add-natural-context-recommendations. Update Purpose after archive.
+Define local, natural-language context recommendations that help users add relevant project files, folders, and command context before sending an agent message.
 ## Requirements
 ### Requirement: Natural-Language Context Recommendations
 The system SHALL recommend relevant enabled skills and custom agents from the user's current chat draft without requiring an `@` trigger.

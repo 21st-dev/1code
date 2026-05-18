@@ -1,7 +1,7 @@
 # local-only-cloud-guard Specification
 
 ## Purpose
-TBD - created by archiving change add-default-local-only-cloud-guard. Update Purpose after archive.
+Define the default local-only boundary that blocks official hosted upstream services while allowing user-owned provider endpoints and explicit local workflows.
 ## Requirements
 ### Requirement: Local-only mode defaults on
 The desktop app SHALL enable local-only mode by default and SHALL only disable it when an explicit environment override sets `AGENT_CODE_FOR_ME_LOCAL_ONLY=false`, legacy `ONECODE_LOCAL_ONLY=false`, or `MAIN_VITE_LOCAL_ONLY=false`.

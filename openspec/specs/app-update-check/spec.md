@@ -1,7 +1,7 @@
 # app-update-check Specification
 
 ## Purpose
-TBD - created by archiving change add-manual-release-update-check. Update Purpose after archive.
+Define the manual GitHub Releases update check for Locus without enabling automatic hosted update feeds.
 ## Requirements
 ### Requirement: Manual GitHub Release Check
 The system SHALL provide a manual update check for Locus releases without automatic download or installation.
@@ -42,4 +42,3 @@ The system SHALL avoid sending local project, chat, file, provider, or credentia
 - **WHEN** the manual update check requests the GitHub Releases latest endpoint
 - **THEN** the request includes only normal HTTP metadata needed to fetch the public release record
 - **AND** it does not include local project paths, chat content, provider keys, or user credentials
-

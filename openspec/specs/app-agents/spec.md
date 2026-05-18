@@ -1,7 +1,7 @@
 # app-agents Specification
 
 ## Purpose
-TBD - created by archiving change add-app-agents. Update Purpose after archive.
+Define local application-level agent profiles, including import, edit, validation, and registry-backed discovery behavior.
 ## Requirements
 ### Requirement: Local App Agent Profiles
 The system SHALL let users manage application-level agent profiles stored locally by the app, independent of runtime-specific file formats.
@@ -61,4 +61,3 @@ The system SHALL provide a curated App Agent registry browser that lets users in
 - **WHEN** the user imports a registry App Agent
 - **THEN** the system stores it as a local App Agent
 - **AND** existing local App Agents with the same normalized name are updated instead of creating duplicates.
-

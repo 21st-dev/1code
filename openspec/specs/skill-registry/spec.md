@@ -1,7 +1,7 @@
 # skill-registry Specification
 
 ## Purpose
-TBD - created by archiving change add-skill-registry-sync. Update Purpose after archive.
+Define the reusable skill registry, runtime install targets, source metadata, and update/rollback behavior for Claude Code and Codex skills.
 ## Requirements
 ### Requirement: Registry Skill Catalog
 The system SHALL provide a registry catalog for reusable global skills that is independent of a developer's local `~/.codex/skills` directory.

@@ -1,7 +1,7 @@
 # usage-panel Specification
 
 ## Purpose
-TBD - created by archiving change add-usage-panel. Update Purpose after archive.
+Define the local Usage surface for observed token usage, context occupancy, and provider limit status without claiming unavailable account quota.
 ## Requirements
 ### Requirement: Local Usage Summary
 The system SHALL provide a lightweight Usage surface that summarizes token usage observed locally by Locus.
@@ -44,4 +44,3 @@ The system SHALL keep provider limit status focused on Claude Code OAuth and Cod
 - **THEN** it shows Claude Code OAuth and Codex as limited-provider entries
 - **AND** each entry distinguishes locally observed usage from provider-reported account limits
 - **AND** custom API-key, OpenAI-compatible, DeepSeek, and Ollama providers are excluded from provider limit status
-

@@ -1,7 +1,7 @@
 # ui-localization Specification
 
 ## Purpose
-TBD - created by archiving change add-bilingual-ui. Update Purpose after archive.
+Define English and Simplified Chinese interface coverage, language persistence, and intentional technical-term exceptions.
 ## Requirements
 ### Requirement: Bilingual Interface Language
 The system SHALL provide English and Simplified Chinese UI language support for app-authored renderer interface text.

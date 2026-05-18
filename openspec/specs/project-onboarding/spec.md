@@ -1,7 +1,7 @@
 # project-onboarding Specification
 
 ## Purpose
-TBD - created by archiving change add-repository-onboarding-skip. Update Purpose after archive.
+Define deferred repository onboarding so users can enter the app shell without a project while project-dependent agent workflows remain unavailable.
 ## Requirements
 ### Requirement: Deferred Repository Selection
 The system SHALL allow users to defer repository selection during onboarding and enter the main app shell without a selected project.
@@ -18,4 +18,3 @@ The system SHALL allow users to defer repository selection during onboarding and
 - **AND** later opens, clones, or selects a project
 - **THEN** the app records the project as the active project
 - **AND** the deferred repository onboarding flag is cleared
-

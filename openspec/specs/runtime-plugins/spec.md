@@ -1,7 +1,7 @@
 # runtime-plugins Specification
 
 ## Purpose
-TBD - created by archiving change add-dual-runtime-plugins. Update Purpose after archive.
+Define runtime-aware plugin discovery, source browsing, and enablement behavior for Claude Code and Codex plugin formats.
 ## Requirements
 ### Requirement: Runtime-Aware Plugin Catalog
 The system SHALL list local plugin packages by runtime so Claude Code plugins and Codex plugins are not presented as the same installation format.
@@ -68,4 +68,3 @@ The system SHALL keep plugin source browsing read-only until explicit install/up
 - **WHEN** the user refreshes plugins from the Sources view
 - **THEN** the app re-scans local/cache plugin metadata
 - **AND** does not contact remote plugin marketplaces
-
