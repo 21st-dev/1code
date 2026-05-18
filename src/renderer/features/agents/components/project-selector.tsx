@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react"
 import { useAtom, useSetAtom } from "jotai"
+import { toast } from "sonner"
 import {
   Popover,
   PopoverContent,
@@ -126,7 +127,16 @@ export function ProjectSelector() {
 
   const handleOpenFolder = async () => {
     setOpen(false)
-    await openFolder.mutateAsync()
+    try {
+      const project = await openFolder.mutateAsync()
+      if (!project) {
+        toast.info(t("chat.selectRepoCancelled"))
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("chat.selectRepoFailed"),
+      )
+    }
   }
 
   const handleCloneFromGitHub = async () => {
@@ -175,6 +185,7 @@ export function ProjectSelector() {
   if (!validSelection && (!projects || projects.length === 0) && !isLoadingProjects) {
     return (
       <button
+        type="button"
         onClick={handleOpenFolder}
         disabled={openFolder.isPending}
         className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
@@ -254,6 +265,7 @@ export function ProjectSelector() {
           </CommandList>
           <div className="border-t border-border/50 py-1">
             <button
+              type="button"
               onClick={handleOpenFolder}
               disabled={openFolder.isPending}
               className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
@@ -266,6 +278,7 @@ export function ProjectSelector() {
               </span>
             </button>
             <button
+              type="button"
               onClick={() => {
                 setOpen(false)
                 setGithubDialogOpen(true)

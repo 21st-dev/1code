@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useAtom, useSetAtom } from "jotai"
 import { ChevronLeft } from "lucide-react"
+import { toast } from "sonner"
 
 import { IconSpinner, GitHubIcon } from "../../components/ui/icons"
 import { LanguageSwitcher } from "../../components/language-switcher"
@@ -93,7 +94,16 @@ export function SelectRepoPage() {
   })
 
   const handleOpenFolder = async () => {
-    await openFolder.mutateAsync()
+    try {
+      const project = await openFolder.mutateAsync()
+      if (!project) {
+        toast.info(t("chat.selectRepoCancelled"))
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("chat.selectRepoFailed"),
+      )
+    }
   }
 
   const handleCloneFromGitHub = async () => {
@@ -125,6 +135,7 @@ export function SelectRepoPage() {
 
         {/* Back button */}
         <button
+          type="button"
           onClick={handleBack}
           disabled={cloneFromGitHub.isPending}
           className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors disabled:opacity-50"
@@ -216,6 +227,7 @@ export function SelectRepoPage() {
         {/* Content */}
         <div className="space-y-3">
           <button
+            type="button"
             onClick={handleOpenFolder}
             disabled={openFolder.isPending}
             className="w-full h-8 px-4 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
@@ -227,6 +239,7 @@ export function SelectRepoPage() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setShowClonePage(true)}
             disabled={cloneFromGitHub.isPending}
             className="w-full h-8 px-4 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.06)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.06)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"

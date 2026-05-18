@@ -1018,7 +1018,16 @@ export function NewChatForm({
   })
 
   const handleOpenFolder = async () => {
-    await openFolder.mutateAsync()
+    try {
+      const project = await openFolder.mutateAsync()
+      if (!project) {
+        toast.info(t("chat.selectRepoCancelled"))
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("chat.selectRepoFailed"),
+      )
+    }
   }
 
   const trpcUtils = trpc.useUtils()
@@ -1581,6 +1590,7 @@ export function NewChatForm({
             // No project selected - show select repo button (like Sign in button)
             <div className="flex justify-center">
               <button
+                type="button"
                 onClick={handleOpenFolder}
                 disabled={openFolder.isPending}
                 className="h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed"

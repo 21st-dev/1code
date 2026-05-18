@@ -50,7 +50,7 @@ export const projectsRouter = router({
 
     if (!window) {
       console.error("[Projects] No window available for folder dialog")
-      return null
+      throw new Error("No active window available for folder picker")
     }
 
     // Ensure window is focused before showing dialog (fixes first-launch timing issue on macOS)
