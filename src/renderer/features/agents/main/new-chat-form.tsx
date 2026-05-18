@@ -206,6 +206,7 @@ export function NewChatForm({
     const exists = projectsList.some((p) => p.id === selectedProject.id)
     return exists ? selectedProject : null
   }, [selectedProject, projectsList, isLoadingProjects])
+  const projectForChat = isLoadingProjects ? null : validatedProject
 
   // Clear invalid project from storage
   useEffect(() => {
@@ -1042,7 +1043,7 @@ export function NewChatForm({
     const hasFiles = files.filter((f) => !f.isLoading).length > 0
     const hasPastedTexts = pastedTexts.length > 0
 
-    if ((!hasText && !hasImages && !hasFiles && !hasPastedTexts) || !selectedProject) {
+    if ((!hasText && !hasImages && !hasFiles && !hasPastedTexts) || !projectForChat) {
       return
     }
 
@@ -1060,7 +1061,7 @@ export function NewChatForm({
         // This is a custom command - load content and replace $ARGUMENTS
         try {
           const commands = await trpcUtils.commands.list.fetch({
-            projectPath: validatedProject?.path,
+            projectPath: projectForChat.path,
           })
           const cmd = commands.find((c) => c.name.toLowerCase() === commandName.toLowerCase())
 
@@ -1143,7 +1144,7 @@ export function NewChatForm({
 
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
-      projectId: selectedProject.id,
+      projectId: projectForChat.id,
       name: message.trim().slice(0, 50), // Use first 50 chars as chat name
       model: selectedChatModel,
       initialMessageParts: parts.length > 0 ? parts : undefined,
@@ -1156,8 +1157,7 @@ export function NewChatForm({
     })
     // Editor, images, files, and pasted texts are cleared in onSuccess callback
   }, [
-    selectedProject,
-    validatedProject?.path,
+    projectForChat,
     createChatMutation,
     hasContent,
     selectedBranch,
@@ -1924,7 +1924,7 @@ export function NewChatForm({
                             createChatMutation.isPending || isUploading
                           }
                           disabled={Boolean(
-                            !hasContent || !selectedProject || isUploading,
+                            !hasContent || !projectForChat || isUploading,
                           )}
                           onClick={handleSend}
                           mode={agentMode}
@@ -2174,9 +2174,9 @@ export function NewChatForm({
               size="sm"
               onClick={() => {
                 const prompt = COMMAND_PROMPTS["worktree-setup"]
-                if (prompt && validatedProject) {
+                if (prompt && projectForChat) {
                   createChatMutation.mutate({
-                    projectId: validatedProject.id,
+                    projectId: projectForChat.id,
                     name: "Worktree Setup",
                     model: selectedChatModel,
                     initialMessageParts: [
