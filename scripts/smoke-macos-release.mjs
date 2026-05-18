@@ -58,6 +58,22 @@ function run(command, args, options = {}) {
   return result
 }
 
+function observeLaunchedProcess(installedApp) {
+  const result = spawnSync("pgrep", ["-fl", "Contents/MacOS/Locus"], {
+    encoding: "utf-8",
+    stdio: "pipe",
+  })
+
+  return result.stdout
+    .split("\n")
+    .filter(Boolean)
+    .some((line) => line.includes(installedApp))
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function findDefaultDmg(releaseDir, version) {
   if (!existsSync(releaseDir)) {
     throw new Error(`Release directory not found: ${releaseDir}`)
@@ -166,6 +182,15 @@ async function main() {
 
     if (shouldLaunch) {
       run("open", ["-n", installedApp])
+      await sleep(4_000)
+
+      if (!observeLaunchedProcess(installedApp)) {
+        printManualChecklist(installedApp, shouldLaunch)
+        throw new Error(
+          "Launch was requested, but no matching Locus process was observed. Unsigned or ad-hoc builds may be blocked by Gatekeeper.",
+        )
+      }
+
       console.log("[smoke] launched installed copy; complete the manual UI checks now.")
     }
 
