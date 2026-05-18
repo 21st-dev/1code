@@ -1,8 +1,8 @@
-# Agent Code for Me
+# Locus
 
-Local-first desktop client for coding agents.
+Local coding agents for your own machine.
 
-This project is a fork of [1Code](https://github.com/21st-dev/1code) adapted for a local-first workflow. It keeps the desktop UI, local project selection, worktrees, terminal, git tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local provider storage while removing upstream hosted product surfaces from the default build.
+Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a local-first desktop workflow. It keeps the desktop UI, local project selection, worktrees, terminal, git tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local provider storage while removing upstream hosted product surfaces from the default build.
 
 ## Current Scope
 
@@ -21,7 +21,7 @@ Local-only mode is enabled by default. It prevents the desktop app from contacti
 To intentionally test hosted/internal services, disable it explicitly:
 
 ```bash
-AGENT_CODE_FOR_ME_LOCAL_ONLY=false bun run dev
+LOCUS_LOCAL_ONLY=false bun run dev
 # or
 MAIN_VITE_LOCAL_ONLY=false bun run dev
 ```
@@ -60,7 +60,8 @@ Auto-update publishing is not part of the default local-first build. If this for
 ## Notes
 
 - Voice transcription uses a user-provided OpenAI API key only; the upstream hosted subscription fallback has been removed from the default build.
-- Some compatibility names and paths such as `.1code/worktree.json`, `1code` CLI, and `~/.21st/worktrees` may still exist to avoid breaking existing local project data.
+- New worktree setup config is saved to `.locus/worktree.json`. Legacy `.1code/worktree.json` remains readable so existing projects keep working.
+- Some compatibility names and paths such as the legacy `1code` CLI, `~/Library/Application Support/Agent Code for Me`, and `~/.21st/worktrees` may still exist to avoid breaking existing local project data.
 - Some upstream compatibility names remain to avoid breaking existing local project data, but hosted product surfaces should not be reintroduced without an OpenSpec proposal.
 
 ## License

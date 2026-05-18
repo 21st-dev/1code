@@ -8,9 +8,11 @@ export function shouldEnableLocalOnly(
   viteEnv: Record<string, string | undefined> = {},
 ): boolean {
   const values = [
+    env.LOCUS_LOCAL_ONLY,
     env.AGENT_CODE_FOR_ME_LOCAL_ONLY,
     env.ONECODE_LOCAL_ONLY,
     env.MAIN_VITE_LOCAL_ONLY,
+    viteEnv.LOCUS_LOCAL_ONLY,
     viteEnv.AGENT_CODE_FOR_ME_LOCAL_ONLY,
     viteEnv.ONECODE_LOCAL_ONLY,
     viteEnv.MAIN_VITE_LOCAL_ONLY,

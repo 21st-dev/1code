@@ -34,7 +34,7 @@ export async function fetchMcpTools(
 
   try {
     client = new Client({
-      name: 'agent-code-for-me',
+      name: 'locus',
       version: '1.0.0',
     });
 
@@ -101,7 +101,7 @@ export async function fetchMcpToolsStdio(config: {
 
   try {
     const client = new Client({
-      name: 'agent-code-for-me',
+      name: 'locus',
       version: '1.0.0',
     });
 

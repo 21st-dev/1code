@@ -46,10 +46,10 @@ export interface OAuthCallbacks {
 
 const CALLBACK_PORT = 8914;
 const CALLBACK_PATH = '/callback';
-// Client names for OAuth registration
-// Some MCP servers (like Figma) have an allowlist - try '1code' first, fall back to 'Codex'
-const CLIENT_NAME = '1code';
-const FALLBACK_CLIENT_NAME = 'Codex';
+// Client names for OAuth registration.
+// Keep legacy names as fallbacks because some MCP servers use allowlists.
+const CLIENT_NAMES = ['Locus', '1code', 'Codex'];
+const DEFAULT_CLIENT_ID = 'locus';
 
 /**
  * Generate a styled OAuth callback page with terminal emulator aesthetic
@@ -569,6 +569,29 @@ export class CraftOAuth {
     }>;
   }
 
+  private async registerClientWithFallback(registrationEndpoint: string): Promise<{
+    client_id: string;
+    client_secret?: string;
+  }> {
+    let lastError: unknown;
+
+    for (const clientName of CLIENT_NAMES) {
+      this.callbacks.onStatus(`Registering client as '${clientName}'...`);
+      try {
+        const client = await this.registerClient(registrationEndpoint, clientName);
+        this.callbacks.onStatus(`Registered as client: ${client.client_id}`);
+        return client;
+      } catch (error) {
+        lastError = error;
+        this.callbacks.onStatus(`Registration as '${clientName}' failed`);
+      }
+    }
+
+    const msg = lastError instanceof Error ? lastError.message : 'Unknown error';
+    this.callbacks.onStatus(`Client registration failed: ${msg}`);
+    throw lastError;
+  }
+
   // Exchange authorization code for tokens
   private async exchangeCodeForTokens(
     tokenEndpoint: string,
@@ -695,28 +718,11 @@ export class CraftOAuth {
     // Register client if endpoint available
     let clientId: string;
     if (metadata.registration_endpoint) {
-      // Try primary client name first, fall back to alternative if rejected
-      this.callbacks.onStatus(`Registering client as '${CLIENT_NAME}'...`);
-      try {
-        const client = await this.registerClient(metadata.registration_endpoint, CLIENT_NAME);
-        clientId = client.client_id;
-        this.callbacks.onStatus(`Registered as client: ${clientId}`);
-      } catch (error) {
-        // Try fallback client name (some servers have allowlists)
-        this.callbacks.onStatus(`Registration as '${CLIENT_NAME}' failed, trying '${FALLBACK_CLIENT_NAME}'...`);
-        try {
-          const client = await this.registerClient(metadata.registration_endpoint, FALLBACK_CLIENT_NAME);
-          clientId = client.client_id;
-          this.callbacks.onStatus(`Registered as client: ${clientId}`);
-        } catch (fallbackError) {
-          const msg = fallbackError instanceof Error ? fallbackError.message : 'Unknown error';
-          this.callbacks.onStatus(`Client registration failed: ${msg}`);
-          throw fallbackError;
-        }
-      }
+      const client = await this.registerClientWithFallback(metadata.registration_endpoint);
+      clientId = client.client_id;
     } else {
       // Use a default client ID for public clients
-      clientId = 'craft-agent';
+      clientId = DEFAULT_CLIENT_ID;
       this.callbacks.onStatus(`Using default client ID: ${clientId}`);
     }
 
@@ -781,24 +787,12 @@ export class CraftOAuth {
     let clientId: string;
     let clientSecret: string | undefined;
     if (metadata.registration_endpoint) {
-      // Try primary client name first, fall back to alternative if rejected
-      this.callbacks.onStatus(`Registering client as '${CLIENT_NAME}'...`);
-      try {
-        const client = await this.registerClient(metadata.registration_endpoint, CLIENT_NAME);
-        clientId = client.client_id;
-        clientSecret = client.client_secret;
-        this.callbacks.onStatus(`Registered as client: ${clientId}`);
-      } catch (error) {
-        // Try fallback client name (some servers have allowlists)
-        this.callbacks.onStatus(`Registration as '${CLIENT_NAME}' failed, trying '${FALLBACK_CLIENT_NAME}'...`);
-        const client = await this.registerClient(metadata.registration_endpoint, FALLBACK_CLIENT_NAME);
-        clientId = client.client_id;
-        clientSecret = client.client_secret;
-        this.callbacks.onStatus(`Registered as client: ${clientId}`);
-      }
+      const client = await this.registerClientWithFallback(metadata.registration_endpoint);
+      clientId = client.client_id;
+      clientSecret = client.client_secret;
     } else {
       // No registration endpoint - use default client ID
-      clientId = '1code';
+      clientId = DEFAULT_CLIENT_ID;
     }
 
     const pkce = generatePKCE();

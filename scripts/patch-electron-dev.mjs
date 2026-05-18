@@ -11,8 +11,8 @@ const electronApp = join(root, "node_modules/electron/dist/Electron.app")
 const plistPath = join(electronApp, "Contents/Info.plist")
 const icnsSource = join(root, "build/icon.icns")
 const icnsDest = join(electronApp, "Contents/Resources/electron.icns")
-const appName = "Agent Code for Me"
-const bundleIdentifier = "io.github.lupanpan1030.agentcodeforme.dev"
+const appName = "Locus"
+const bundleIdentifier = "io.github.lupanpan1030.locus.dev"
 
 function setPlistValue(key, value) {
   execSync(`/usr/libexec/PlistBuddy -c "Set :${key} ${value}" "${plistPath}"`)

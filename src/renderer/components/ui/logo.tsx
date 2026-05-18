@@ -13,7 +13,7 @@ export function Logo({ fill = "currentColor", className, ...props }: LogoProps) 
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={cn("w-full h-full", className)}
-      aria-label="Agent Code for Me logo"
+      aria-label="Locus logo"
       {...props}
     >
       <g

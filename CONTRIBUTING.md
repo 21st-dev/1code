@@ -1,4 +1,4 @@
-# Contributing to Agent Code for Me
+# Contributing to Locus
 
 ## Building From Source
 
@@ -41,7 +41,7 @@ This repository runs in **Local-only mode by default**. Hosted upstream product 
 Local-only can only be disabled explicitly for development or internal compatibility checks:
 
 ```bash
-AGENT_CODE_FOR_ME_LOCAL_ONLY=false bun run dev
+LOCUS_LOCAL_ONLY=false bun run dev
 # or
 MAIN_VITE_LOCAL_ONLY=false bun run dev
 ```

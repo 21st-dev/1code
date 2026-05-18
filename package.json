@@ -1,11 +1,11 @@
 {
-  "name": "agent-code-for-me",
+  "name": "locus",
   "version": "0.0.72",
   "private": true,
-  "description": "Local-first desktop UI for coding agents",
+  "description": "Local coding agents for your own machine",
   "homepage": "https://github.com/lupanpan1030/agent-code-for-me",
   "author": {
-    "name": "Agent Code for Me"
+    "name": "Locus"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -18,14 +18,14 @@
     "package:linux": "electron-builder --linux",
     "dist": "electron-builder",
     "dist:manifest": "node scripts/generate-update-manifest.mjs",
-    "dist:upload": "echo \"No update upload target configured for Agent Code for Me\"",
+    "dist:upload": "echo \"No update upload target configured for Locus\"",
     "claude:download": "node scripts/download-claude-binary.mjs --version=2.1.143",
     "claude:download:all": "node scripts/download-claude-binary.mjs --version=2.1.143 --all",
     "codex:download": "node scripts/download-codex-binary.mjs --version=0.130.0",
     "codex:download:all": "node scripts/download-codex-binary.mjs --version=0.130.0 --all",
     "release": "rm -rf release && bun i && bun run claude:download && bun run codex:download && bun run build && bun run package:mac",
     "release:dev": "rm -rf release && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && rm -rf node_modules && bun i",
-    "sync:public": "echo \"Upstream sync is disabled for Agent Code for Me\"",
+    "sync:public": "echo \"Upstream sync is disabled for Locus\"",
     "icon:generate": "node scripts/generate-icon.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
@@ -136,13 +136,14 @@
     "vite": "^6.3.4"
   },
   "build": {
-    "appId": "io.github.lupanpan1030.agentcodeforme",
-    "productName": "Agent Code for Me",
+    "appId": "io.github.lupanpan1030.locus",
+    "productName": "Locus",
     "npmRebuild": true,
     "protocols": [
       {
-        "name": "Agent Code for Me",
+        "name": "Locus",
         "schemes": [
+          "locus",
           "agent-code-for-me"
         ]
       }
@@ -169,6 +170,13 @@
       {
         "from": "resources/bin/VERSION",
         "to": "bin/VERSION"
+      },
+      {
+        "from": "resources/cli",
+        "to": "cli",
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/skill-registry",
@@ -210,7 +218,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Agent Code for Me needs microphone access for voice dictation"
+        "NSMicrophoneUsageDescription": "Locus needs microphone access for voice dictation"
       }
     },
     "dmg": {

@@ -10,8 +10,8 @@
  *   node scripts/generate-update-manifest.mjs
  *
  * The script expects electron-builder ZIP files to exist in the release/ directory:
- *   - Agent Code for Me-{version}-arm64-mac.zip
- *   - Agent Code for Me-{version}-mac.zip
+ *   - Locus-{version}-arm64-mac.zip
+ *   - Locus-{version}-mac.zip
  *
  * Run this after `npm run dist` to generate the manifest files.
  */
@@ -77,8 +77,8 @@ function findReleaseFile(pattern, ext = ".zip") {
  */
 function generateManifest(arch) {
   // electron-builder names files differently:
-  // arm64: Agent Code for Me-{version}-arm64-mac.zip
-  // x64: Agent Code for Me-{version}-mac.zip
+  // arm64: Locus-{version}-arm64-mac.zip
+  // x64: Locus-{version}-mac.zip
   const pattern = arch === "arm64" ? `${version}-arm64-mac` : `${version}-mac`
   const zipPath = findReleaseFile(pattern, ".zip")
 
@@ -268,5 +268,5 @@ if (linuxManifest) {
   console.log(`   - ${prefix}-linux.yml`)
   console.log(`   - ${linuxManifest.artifactName}`)
 }
-console.log("2. Publish release notes wherever you host Agent Code for Me releases")
+console.log("2. Publish release notes wherever you host Locus releases")
 console.log("=".repeat(50))

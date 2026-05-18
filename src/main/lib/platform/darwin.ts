@@ -64,8 +64,8 @@ export class DarwinPlatformProvider extends BasePlatformProvider {
 
   getCliConfig(): CliConfig {
     return {
-      installPath: "/usr/local/bin/1code",
-      scriptName: "1code",
+      installPath: "/usr/local/bin/locus",
+      scriptName: "locus",
       requiresAdmin: true, // /usr/local/bin requires admin on macOS
     }
   }
@@ -159,7 +159,16 @@ export class DarwinPlatformProvider extends BasePlatformProvider {
         `osascript -e 'do shell script "ln -s \\"${sourcePath}\\" ${installPath}" with administrator privileges'`
       )
 
-      console.log("[CLI] Installed 1code command to", installPath)
+      const legacyInstallPath = "/usr/local/bin/1code"
+      const legacySourcePath = path.join(path.dirname(sourcePath), "1code")
+      if (existsSync(legacyInstallPath) && existsSync(legacySourcePath)) {
+        await execAsync(
+          `osascript -e 'do shell script "rm -f ${legacyInstallPath} && ln -s \\"${legacySourcePath}\\" ${legacyInstallPath}" with administrator privileges'`
+        )
+        console.log("[CLI] Updated existing 1code compatibility command")
+      }
+
+      console.log("[CLI] Installed locus command to", installPath)
       return { success: true }
     } catch (error: unknown) {
       const errorMessage =
@@ -183,7 +192,7 @@ export class DarwinPlatformProvider extends BasePlatformProvider {
         `osascript -e 'do shell script "rm -f ${installPath}" with administrator privileges'`
       )
 
-      console.log("[CLI] Uninstalled 1code command")
+      console.log("[CLI] Uninstalled locus command")
       return { success: true }
     } catch (error: unknown) {
       const errorMessage =

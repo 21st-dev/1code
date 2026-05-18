@@ -26,24 +26,26 @@ import {
 
 import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
 
-const APP_NAME = "Agent Code for Me"
-const APP_COPYRIGHT = "Copyright © 2026 Agent Code for Me"
+const APP_NAME = "Locus"
+const LEGACY_APP_NAME = "Agent Code for Me"
+const APP_COPYRIGHT = "Copyright © 2026 Locus"
 const APP_HOMEPAGE_URL = "https://github.com/lupanpan1030/agent-code-for-me"
 
 // Deep link protocol (must match package.json build.protocols.schemes)
-// Use different protocol in dev to avoid conflicts with production app
-const PROTOCOL = IS_DEV ? "agent-code-for-me-dev" : "agent-code-for-me"
+// Use different protocol in dev to avoid conflicts with production app.
+// Keep the old agent-code-for-me protocol registered as a compatibility alias.
+const PROTOCOL = IS_DEV ? "locus-dev" : "locus"
+const LEGACY_PROTOCOL = IS_DEV ? "agent-code-for-me-dev" : "agent-code-for-me"
+const SUPPORTED_PROTOCOLS = [PROTOCOL, LEGACY_PROTOCOL]
 
 app.setName(IS_DEV ? `${APP_NAME} Dev` : APP_NAME)
 
-// Set dev mode userData path BEFORE requestSingleInstanceLock()
-// This ensures dev and prod have separate instance locks
-if (IS_DEV) {
-  const { join } = require("path")
-  const devUserData = join(app.getPath("userData"), "..", `${APP_NAME} Dev`)
-  app.setPath("userData", devUserData)
-  console.log("[Dev] Using separate userData path:", devUserData)
-}
+// Keep the old userData path during the rebrand so existing local projects,
+// credentials, settings, and SQLite data continue to load after upgrade.
+const userDataName = IS_DEV ? `${LEGACY_APP_NAME} Dev` : LEGACY_APP_NAME
+const userDataPath = join(app.getPath("appData"), userDataName)
+app.setPath("userData", userDataPath)
+console.log("[App] Using userData path:", userDataPath)
 
 // Increase V8 old-space limit for renderer/main processes to reduce OOM frequency
 // under heavy multi-chat workloads. Must be set before app readiness/window creation.
@@ -64,7 +66,7 @@ function handleDeepLink(url: string): void {
   try {
     const parsed = new URL(url)
 
-    // Handle MCP OAuth callback: agent-code-for-me://mcp-oauth?code=xxx&state=yyy
+    // Handle MCP OAuth callback: locus://mcp-oauth?code=xxx&state=yyy
     if (parsed.pathname === "/mcp-oauth" || parsed.host === "mcp-oauth") {
       const code = parsed.searchParams.get("code")
       const state = parsed.searchParams.get("state")
@@ -80,7 +82,8 @@ function handleDeepLink(url: string): void {
 
 // Register protocol BEFORE app is ready
 console.log("[Protocol] ========== PROTOCOL REGISTRATION ==========")
-console.log("[Protocol] Protocol:", PROTOCOL)
+console.log("[Protocol] Primary protocol:", PROTOCOL)
+console.log("[Protocol] Legacy protocol:", LEGACY_PROTOCOL)
 console.log("[Protocol] Is dev mode (process.defaultApp):", process.defaultApp)
 console.log("[Protocol] process.execPath:", process.execPath)
 console.log("[Protocol] process.argv:", process.argv)
@@ -91,31 +94,39 @@ console.log("[Protocol] process.argv:", process.argv)
  * Launch Services caches protocol handlers and may need time to update.
  */
 function registerProtocol(): boolean {
-  let success = false
+  let primarySucceeded = false
 
-  if (process.defaultApp) {
-    // Dev mode: need to pass execPath and script path
-    if (process.argv.length >= 2) {
-      success = app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [
-        process.argv[1]!,
-      ])
+  for (const protocol of SUPPORTED_PROTOCOLS) {
+    let success = false
+
+    if (process.defaultApp) {
+      // Dev mode: need to pass execPath and script path
+      if (process.argv.length >= 2) {
+        success = app.setAsDefaultProtocolClient(protocol, process.execPath, [
+          process.argv[1]!,
+        ])
+        console.log(
+          `[Protocol] Dev mode registration (${protocol}):`,
+          success ? "success" : "failed",
+        )
+      } else {
+        console.warn("[Protocol] Dev mode: insufficient argv for registration")
+      }
+    } else {
+      // Production mode
+      success = app.setAsDefaultProtocolClient(protocol)
       console.log(
-        `[Protocol] Dev mode registration:`,
+        `[Protocol] Production registration (${protocol}):`,
         success ? "success" : "failed",
       )
-    } else {
-      console.warn("[Protocol] Dev mode: insufficient argv for registration")
     }
-  } else {
-    // Production mode
-    success = app.setAsDefaultProtocolClient(PROTOCOL)
-    console.log(
-      `[Protocol] Production registration:`,
-      success ? "success" : "failed",
-    )
+
+    if (protocol === PROTOCOL) {
+      primarySucceeded = success
+    }
   }
 
-  return success
+  return primarySucceeded
 }
 
 // Store initial registration result (set in app.whenReady())
@@ -185,7 +196,7 @@ const authCallbackServer = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>Agent Code for Me - MCP Authentication</title>
+  <title>${APP_NAME} - MCP Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -261,7 +272,7 @@ authCallbackServer.on("error", (error: NodeJS.ErrnoException) => {
       `[Auth Server] Port ${AUTH_SERVER_PORT} is already in use; continuing without the local callback server.`,
     )
     console.warn(
-      "[Auth Server] Close the other Agent Code for Me instance or free the port if auth callbacks do not complete.",
+      `[Auth Server] Close the other ${APP_NAME} instance or free the port if auth callbacks do not complete.`,
     )
     return
   }
@@ -356,7 +367,9 @@ if (gotTheLock) {
   // Handle second instance launch (also handles deep links on Windows/Linux)
   app.on("second-instance", (_event, commandLine) => {
     // Check for deep link in command line args
-    const url = commandLine.find((arg) => arg.startsWith(`${PROTOCOL}://`))
+    const url = commandLine.find((arg) =>
+      SUPPORTED_PROTOCOLS.some((protocol) => arg.startsWith(`${protocol}://`)),
+    )
     if (url) {
       handleDeepLink(url)
     }
@@ -389,8 +402,8 @@ if (gotTheLock) {
     if (process.platform === "win32") {
       app.setAppUserModelId(
         IS_DEV
-          ? "io.github.lupanpan1030.agentcodeforme.dev"
-          : "io.github.lupanpan1030.agentcodeforme",
+          ? "io.github.lupanpan1030.locus.dev"
+          : "io.github.lupanpan1030.locus",
       )
     }
 
@@ -464,8 +477,8 @@ if (gotTheLock) {
             { type: "separator" },
             {
               label: isCliInstalled()
-                ? "Uninstall '1code' Command..."
-                : "Install '1code' Command in PATH...",
+                ? "Uninstall 'locus' Command..."
+                : "Install 'locus' Command in PATH...",
               ...(terminalMenuIcon && { icon: terminalMenuIcon }),
               click: async () => {
                 const { dialog } = await import("electron")
@@ -475,7 +488,7 @@ if (gotTheLock) {
                     dialog.showMessageBox({
                       type: "info",
                       message: "CLI command uninstalled",
-                      detail: "The '1code' command has been removed from your PATH.",
+                      detail: "The 'locus' command has been removed from your PATH.",
                     })
                     buildMenu()
                   } else {
@@ -488,7 +501,7 @@ if (gotTheLock) {
                       type: "info",
                       message: "CLI command installed",
                       detail:
-                        `You can now use '1code .' in any terminal to open ${APP_NAME} in that directory.`,
+                        `You can now use 'locus .' in any terminal to open ${APP_NAME} in that directory.`,
                     })
                     buildMenu()
                   } else {
@@ -725,12 +738,12 @@ if (gotTheLock) {
       }
     }, 3000)
 
-    // Handle directory argument from CLI (e.g., `1code /path/to/project`)
+    // Handle directory argument from CLI (e.g., `locus /path/to/project`)
     parseLaunchDirectory()
 
     // Handle deep link from app launch (Windows/Linux)
     const deepLinkUrl = process.argv.find((arg) =>
-      arg.startsWith(`${PROTOCOL}://`),
+      SUPPORTED_PROTOCOLS.some((protocol) => arg.startsWith(`${protocol}://`)),
     )
     if (deepLinkUrl) {
       handleDeepLink(deepLinkUrl)

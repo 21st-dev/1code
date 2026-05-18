@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is this?
 
-**Agent Code for Me** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude/Codex-compatible agents in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**Locus** - A local-first Electron desktop app for local coding agents. Users create chat sessions linked to local project folders, interact with Claude/Codex-compatible agents in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
 
 ## Commands
 
@@ -165,6 +165,8 @@ rm -rf ~/Library/Application\ Support/Agent\ Code\ for\ Me\ Dev/
 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -kill -r -domain local -domain system -domain user
 
 # 3. Clear app preferences if present
+defaults delete io.github.lupanpan1030.locus.dev 2>/dev/null || true
+defaults delete io.github.lupanpan1030.locus 2>/dev/null || true
 defaults delete io.github.lupanpan1030.agentcodeforme.dev 2>/dev/null || true
 defaults delete io.github.lupanpan1030.agentcodeforme 2>/dev/null || true
 
@@ -177,9 +179,10 @@ bun run dev
 - **Folder dialog not appearing**: Window focus timing issues on first launch. Fixed by ensuring window focus before showing `dialog.showOpenDialog()`.
 
 **Dev vs Production App:**
-- Dev mode uses `agent-code-for-me-dev://` protocol
-- Production uses `agent-code-for-me://` protocol
-- Dev mode uses separate userData path (`~/Library/Application Support/Agent Code for Me Dev/`)
+- Dev mode uses `locus-dev://` protocol and accepts legacy `agent-code-for-me-dev://` links
+- Production uses `locus://` protocol and accepts legacy `agent-code-for-me://` links
+- Dev mode keeps the existing userData compatibility path (`~/Library/Application Support/Agent Code for Me Dev/`)
+- Production keeps the existing userData compatibility path (`~/Library/Application Support/Agent Code for Me/`)
 - This prevents conflicts between dev and production installs
 
 ## Releasing a New Version
@@ -187,8 +190,8 @@ bun run dev
 ### Prerequisites for Notarization
 
 - Apple signing identity configured through `APPLE_IDENTITY`
-- Optional keychain profile for manual notarization, for example `agent-code-for-me-notarize`
-- Create with: `xcrun notarytool store-credentials "agent-code-for-me-notarize" --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID`
+- Optional keychain profile for manual notarization, for example `locus-notarize`
+- Create with: `xcrun notarytool store-credentials "locus-notarize" --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID`
 
 ### Release Commands
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 1code compatibility CLI launcher
+# Locus CLI launcher
 # Opens Locus with the specified directory
 
 # Resolve the directory argument (default to current directory)

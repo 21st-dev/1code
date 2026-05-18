@@ -1,7 +1,7 @@
 # Project Context
 
 ## Purpose
-**Agent Code for Me** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude/Codex-compatible agents in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**Locus** - A local-first Electron desktop app for local coding agents. Users create chat sessions linked to local project folders, interact with Claude/Codex-compatible agents in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
 
 ## Tech Stack
 | Layer | Tech |

@@ -63,8 +63,8 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
     const home = this.getHome()
 
     return {
-      installPath: path.join(home, ".local", "bin", "1code.cmd"),
-      scriptName: "1code.cmd",
+      installPath: path.join(home, ".local", "bin", "locus.cmd"),
+      scriptName: "locus.cmd",
       requiresAdmin: false, // Install to user directory, no admin needed
     }
   }
@@ -127,6 +127,13 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
       await mkdir(installDir, { recursive: true })
       await copyFile(sourcePath, installPath)
 
+      const legacyInstallPath = path.join(installDir, "1code.cmd")
+      const legacySourcePath = path.join(path.dirname(sourcePath), "1code.cmd")
+      if (existsSync(legacyInstallPath) && existsSync(legacySourcePath)) {
+        await copyFile(legacySourcePath, legacyInstallPath)
+        console.log("[CLI] Updated existing 1code compatibility command")
+      }
+
       // Note: We intentionally do NOT use `setx PATH` here because:
       // 1. setx has a 1024 character limit that silently truncates PATH
       // 2. It can corrupt the user's PATH environment variable
@@ -136,7 +143,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
       // For terminal usage, users can manually add to PATH:
       // $env:Path += ";${installDir}"
 
-      console.log("[CLI] Installed 1code command to", installPath)
+      console.log("[CLI] Installed locus command to", installPath)
       console.log(
         "[CLI] To use from terminal, add to PATH:",
         `$env:Path += ";${installDir}"`
@@ -144,7 +151,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
 
       return {
         success: true,
-        pathHint: `To use 1code from terminal, add to your PATH: ${installDir}`,
+        pathHint: `To use locus from terminal, add to your PATH: ${installDir}`,
       }
     } catch (error: unknown) {
       const errorMessage =
@@ -173,7 +180,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
         // Directory not empty or other error, that's okay
       }
 
-      console.log("[CLI] Uninstalled 1code command")
+      console.log("[CLI] Uninstalled locus command")
       return { success: true }
     } catch (error: unknown) {
       const errorMessage =

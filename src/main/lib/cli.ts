@@ -1,10 +1,10 @@
 /**
- * CLI command support for the legacy `1code` command.
- * Allows users to open Agent Code for Me from terminal with:
- * 1code . or 1code /path/to/project
+ * CLI command support for the `locus` command.
+ * Allows users to open Locus from terminal with:
+ * locus . or locus /path/to/project
  *
  * Based on PR #16 by @caffeinum (Aleksey Bykhun)
- * Kept as a compatibility command while the app is rebranded.
+ * The old `1code` command remains as a compatibility launcher.
  */
 
 import { app } from "electron"
@@ -12,7 +12,7 @@ import { join } from "path"
 import { existsSync, lstatSync } from "fs"
 import { platform } from "./platform"
 
-// Launch directory from CLI (e.g., `1code /path/to/project`)
+// Launch directory from CLI (e.g., `locus /path/to/project`)
 let launchDirectory: string | null = null
 
 /**
@@ -26,7 +26,7 @@ export function getLaunchDirectory(): string | null {
 
 /**
  * Parse CLI arguments to find a directory argument
- * Called on app startup to handle `1code .` or `1code /path/to/project`
+ * Called on app startup to handle `locus .` or `locus /path/to/project`
  */
 export function parseLaunchDirectory(): void {
   // Look for a directory argument in argv

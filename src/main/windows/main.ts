@@ -21,7 +21,7 @@ import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
 import { isLocalOnlyMode, isOfficialCloudUrl } from "../lib/local-only"
 
-const APP_NAME = "Agent Code for Me"
+const APP_NAME = "Locus"
 
 // Flag to bypass close confirmation when app.quit() has already been confirmed
 let isQuitting = false
