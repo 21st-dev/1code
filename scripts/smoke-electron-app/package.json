@@ -1,0 +1,5 @@
+{
+  "name": "locus-smoke-electron-app",
+  "private": true,
+  "main": "../smoke-local-claude-code.cjs"
+}

@@ -27,8 +27,10 @@ Observed on 2026-05-18:
 - Bundled Codex binary reports `codex-cli 0.130.0`.
 - System Claude Code binary reports `2.1.138 (Claude Code)`.
 - System Claude Code auth status reports `loggedIn: false`, `authMethod: none`, and `apiProvider: firstParty`.
-- Local Claude Code credential probe reports `found: false`, so there is currently no local Claude Code credential for the app to import on this machine.
+- Local external credential probe reports `found: false`, so the system CLI credential store did not expose an importable external credential during this check.
 - Codex CLI reports `Logged in using ChatGPT`.
+
+Note: this probe checks external Claude Code credential sources such as the system CLI/keychain path. It does not inspect the app's encrypted account database. The app-level Settings > Models state showed an active `Local Claude Code` account, and the follow-up Electron smoke below validated that encrypted app credential directly.
 
 ## Local-Only Startup Smoke
 
@@ -49,15 +51,22 @@ Observed:
 - Window reached `ready to show`.
 - Page finished loading.
 
-## Credential Smoke Remaining
+## App Credential Read-Only Smoke
 
-The login/import-and-send path still requires an authenticated UI smoke because the current machine has no local Claude Code credential to import. This path reads the user's local Claude Code credential store, may open an Anthropic browser login, and may consume Claude Code subscription usage:
+Command:
 
-1. Open Settings > Models.
-2. Click `Connect` under Anthropic Accounts.
-3. If local Claude Code credentials already exist, confirm the app imports them without opening hosted 21st auth.
-4. If no local credentials exist, confirm the app opens Anthropic's official Claude Code OAuth login URL, accepts the returned authentication code, exchanges it locally, and imports the resulting local credentials.
-5. Confirm the account row shows refreshable or non-refreshable local credential status.
-6. Open a local repo chat.
-7. Send a read-only prompt such as `Read AGENTS.md and summarize the repo instructions.`
-8. Confirm no 21st hosted auth, sandbox status, or hosted desktop auth requests appear in main-process logs.
+```bash
+env -u ELECTRON_RUN_AS_NODE ./node_modules/electron/dist/Electron.app/Contents/MacOS/Electron scripts/smoke-electron-app --project=/Users/ethan/Documents/GitHub/agent-code-for-me
+```
+
+Observed on 2026-05-18:
+
+- The smoke helper used the same dev app data path: `/Users/ethan/Library/Application Support/Agent Code for Me Dev/data/agents.db`.
+- The active app account metadata was `displayName: "Local Claude Code"`, `storageFormat: "envelope"`, `refreshable: true`, `encryptionAvailable: true`, and `source: "manual"`.
+- The helper used Electron safeStorage to decrypt the app-stored envelope without printing raw tokens.
+- The bundled Claude Code SDK ran the read-only prompt: `Read AGENTS.md and summarize the repository instructions in one short paragraph. Do not edit files, do not write files, and do not run shell commands.`
+- The helper allowed only `Read`, `Glob`, and `Grep` tool calls.
+- The SDK emitted 48 messages and reported `claude_code_version: "2.1.143"`.
+- `stderrBytes` was `0`.
+- Hosted URL marker scan returned no matches for `21st.dev`, `1code.dev`, `21st.sh`, `e2b.app`, `csb.app`, or `codesandbox.io`.
+- Result: passed.
