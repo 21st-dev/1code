@@ -26,7 +26,7 @@ When local-only mode is enabled, the main process SHALL reject hosted upstream U
 - **THEN** analytics, Sentry, and auto-update checks do not initialize or contact official hosted services
 
 ### Requirement: Renderer hides hosted feature entrypoints
-The default local-first desktop app SHALL remove or fully isolate user-facing hosted upstream feature entrypoints rather than presenting disabled cloud workflows as normal product options. The renderer SHALL avoid querying remote upstream APIs and SHALL not render entrypoints for remote sandbox chats, automations, inbox, hosted subscription gating, hosted updates, hosted changelog fetching, hosted TTS, hosted voice fallback, or hosted desktop auth in the default local-first build.
+The default local-first desktop app SHALL remove or fully isolate user-facing hosted upstream feature entrypoints rather than presenting disabled cloud workflows as normal product options. The renderer SHALL avoid querying remote upstream APIs and SHALL not render entrypoints for remote sandbox chats, automations, inbox, hosted subscription gating, hosted updates, hosted changelog fetching, hosted TTS, hosted voice fallback, or hosted desktop auth in the default local-first build. The renderer MAY offer a manual fork-owned GitHub Releases check that only reports available Locus releases and opens the release page for manual download.
 
 #### Scenario: Sidebar renders in local-only mode
 - **WHEN** the agents sidebar mounts
@@ -43,13 +43,17 @@ The default local-first desktop app SHALL remove or fully isolate user-facing ho
 - **THEN** onboarding presents local credential, API-key, custom-provider, Codex, or Ollama-compatible choices
 - **AND** hosted desktop auth or sandbox OAuth is not presented as the default path
 
+#### Scenario: User manually checks fork release
+- **WHEN** the user opens Settings > About and clicks "Check for updates"
+- **THEN** the app may request the fork-owned GitHub Releases latest endpoint
+- **AND** the app does not initialize an automatic updater or fetch an official upstream hosted update feed
+
 ### Requirement: User-owned external services remain available
 Local-only mode SHALL NOT block user-configured AI provider endpoints, Ollama localhost requests, Git/GitHub operations initiated by local workflows, or external links that are not official upstream hosted services.
 
 #### Scenario: User sends a request through a custom provider
 - **WHEN** a user configures an Anthropic-compatible provider endpoint that is not an official upstream hosted URL
 - **THEN** the local agent flow may call that provider normally
-
 #### Scenario: Local workflow opens GitHub
 - **WHEN** a local Git/GitHub workflow opens a GitHub URL
 - **THEN** local-only mode does not block that external URL
