@@ -296,6 +296,9 @@ export const en = {
   "settings.models.codexApiKey.priority": "Takes priority over subscription",
   "settings.models.openaiApiKey.description":
     "Required for voice transcription (Whisper API)",
+  "settings.models.helperApis.title": "Helper APIs",
+  "settings.models.helperApis.description":
+    "Optional OpenAI-compatible providers for lightweight helpers. These are independent from Claude Code OAuth.",
   "settings.models.subChatTitle.title": "Sub-chat Title API",
   "settings.models.subChatTitle.description":
     "Optional OpenAI-compatible API for naming sub-chats. Ollama is tried first.",
@@ -314,7 +317,7 @@ export const en = {
     "Stored encrypted on this device",
   "settings.models.commitMessage.baseUrlHint":
     "Base URL or /chat/completions endpoint",
-  "settings.models.overrideModel.title": "Override Model",
+  "settings.models.overrideModel.title": "Custom Claude-compatible Provider",
   "settings.models.overrideModel.modelHint":
     "Model identifier to use for requests",
   "settings.models.overrideModel.authHint":
@@ -996,6 +999,10 @@ export const en = {
   "toast.models.subChatTitleSettingsReset": "Sub-chat title API reset",
   "toast.models.commitMessageSettingsSaved": "Commit message API saved",
   "toast.models.commitMessageSettingsReset": "Commit message API reset",
+  "toast.models.helperApisPrompt.title": "Claude Code is connected",
+  "toast.models.helperApisPrompt.description":
+    "Optionally configure Helper APIs for sub-chat titles and commit messages.",
+  "toast.models.helperApisPrompt.action": "Configure",
   "toast.models.failedToSaveModelSettings": "Failed to save model settings",
   "toast.models.failedToResetModelSettings": "Failed to reset model settings",
   "toast.models.failedToDisconnectCodex": "Failed to disconnect Codex",
@@ -1523,6 +1530,10 @@ export const en = {
   "agent.model.dontAskAgain": "Don't ask again",
   "agent.model.newChat": "New chat",
   "agent.model.customModel": "Custom Model",
+  "agent.model.customProvider": "Custom Provider",
+  "agent.model.group.customProvider": "Custom Provider",
+  "agent.model.group.claudeCodeOAuth": "Claude Code OAuth",
+  "agent.model.group.local": "Local",
   "agent.model.recommendedSuffix": "(recommended)",
   "agent.model.searchPlaceholder": "Search models...",
   "agent.model.noModelsFound": "No models found.",
@@ -2272,6 +2283,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.codexApiKey.priority": "优先级高于 subscription",
   "settings.models.openaiApiKey.description":
     "语音转写需要使用（Whisper API）",
+  "settings.models.helperApis.title": "Helper APIs",
+  "settings.models.helperApis.description":
+    "可选的 OpenAI-compatible provider，用于轻量辅助生成；它们独立于 Claude Code OAuth。",
   "settings.models.subChatTitle.title": "Sub-chat 标题 API",
   "settings.models.subChatTitle.description":
     "可选的 OpenAI-compatible API，用于给 sub-chat 命名。会优先尝试 Ollama。",
@@ -2290,7 +2304,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "加密保存在这台设备上",
   "settings.models.commitMessage.baseUrlHint":
     "Base URL 或 /chat/completions endpoint",
-  "settings.models.overrideModel.title": "Override Model",
+  "settings.models.overrideModel.title": "Custom Claude-compatible Provider",
   "settings.models.overrideModel.modelHint": "请求时使用的 Model 标识",
   "settings.models.overrideModel.authHint":
     "选择 Claude Code 接收 provider token 的方式",
@@ -2965,6 +2979,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.subChatTitleSettingsReset": "Sub-chat 标题 API 已重置",
   "toast.models.commitMessageSettingsSaved": "Commit message API 已保存",
   "toast.models.commitMessageSettingsReset": "Commit message API 已重置",
+  "toast.models.helperApisPrompt.title": "Claude Code 已连接",
+  "toast.models.helperApisPrompt.description":
+    "可选配置 Helper APIs，用于 sub-chat 标题和 commit message。",
+  "toast.models.helperApisPrompt.action": "去配置",
   "toast.models.failedToSaveModelSettings": "保存 Model 设置失败",
   "toast.models.failedToResetModelSettings": "重置 Model 设置失败",
   "toast.models.failedToDisconnectCodex": "断开 Codex 失败",
@@ -3486,6 +3504,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.model.dontAskAgain": "不再询问",
   "agent.model.newChat": "新建 chat",
   "agent.model.customModel": "Custom Model",
+  "agent.model.customProvider": "Custom Provider",
+  "agent.model.group.customProvider": "Custom Provider",
+  "agent.model.group.claudeCodeOAuth": "Claude Code OAuth",
+  "agent.model.group.local": "本地",
   "agent.model.recommendedSuffix": "（推荐）",
   "agent.model.searchPlaceholder": "搜索 models...",
   "agent.model.noModelsFound": "没有找到 model。",
