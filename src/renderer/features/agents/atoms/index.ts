@@ -940,6 +940,26 @@ export const showMessageJsonAtom = atomWithStorage<boolean>(
 export type DesktopView = "settings" | null
 export const desktopViewAtom = atom<DesktopView>(null)
 
+// Legacy dormant view atoms retained for old HMR/dynamic chunks and persisted UI
+// state. Do not add new Automations/Inbox UI without a fresh OpenSpec proposal.
+export const automationDetailIdAtom = atom<string | null>(null)
+export type AutomationTemplateParams = {
+  name: string
+  platform: string
+  trigger: string
+  instructions: string
+} | null
+export const automationTemplateParamsAtom = atom<AutomationTemplateParams>(null)
+export const inboxSelectedChatIdAtom = atom<string | null>(null)
+export const agentsInboxSidebarWidthAtom = atomWithStorage<number>(
+  "agents-inbox-sidebar-width",
+  240,
+  undefined,
+  { getOnInit: true },
+)
+export type InboxMobileViewMode = "list" | "chat"
+export const inboxMobileViewModeAtom = atom<InboxMobileViewMode>("list")
+
 // Settings inner sidebar widths (for MCP, Skills, Agents two-panel layouts)
 // Non-persisted — resets to default on re-render
 export const settingsMcpSidebarWidthAtom = atom(240)

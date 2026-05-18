@@ -65,7 +65,14 @@ export {
 
   // Desktop view navigation
   desktopViewAtom,
+  automationDetailIdAtom,
+  automationTemplateParamsAtom,
+  inboxSelectedChatIdAtom,
+  agentsInboxSidebarWidthAtom,
+  inboxMobileViewModeAtom,
   type DesktopView,
+  type AutomationTemplateParams,
+  type InboxMobileViewMode,
 } from "../../features/agents/atoms"
 
 // ============================================
