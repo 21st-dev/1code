@@ -100,6 +100,7 @@ import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
 import { exportChat, copyChat, type ExportFormat } from "../agents/lib/export-chat"
+import { UsagePopover } from "./usage-popover"
 
 // Feedback URL: uses env variable for hosted version, falls back to this fork's issues.
 const FEEDBACK_URL =
@@ -1374,6 +1375,9 @@ export function AgentsSidebar({
 
   // Desktop: use selectedProject instead of teams
   const [selectedProject] = useAtom(selectedProjectAtom)
+  const activeSubChatId = useAgentSubChatStore((state) =>
+    state.chatId === selectedChatId ? state.activeSubChatId : null,
+  )
 
   // Fetch all local chats (no project filter)
   const { data: localChats } = trpc.chats.list.useQuery({})
@@ -2747,6 +2751,11 @@ export function AgentsSidebar({
                   </TooltipTrigger>
                   <TooltipContent>{t("common.settings")}{settingsHotkey && <> <Kbd>{settingsHotkey}</Kbd></>}</TooltipContent>
                 </Tooltip>
+
+                <UsagePopover
+                  chatId={selectedChatId}
+                  subChatId={activeSubChatId}
+                />
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />

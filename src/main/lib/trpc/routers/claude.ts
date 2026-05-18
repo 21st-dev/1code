@@ -888,6 +888,7 @@ export const claudeRouter = router({
               userMessage = {
                 id: crypto.randomUUID(),
                 role: "user",
+                createdAt: new Date().toISOString(),
                 parts,
               }
               messagesToSave = [...existingMessages, userMessage]
@@ -2539,6 +2540,7 @@ ${prompt}
                   const assistantMessage = {
                     id: crypto.randomUUID(),
                     role: "assistant",
+                    createdAt: new Date().toISOString(),
                     parts,
                     metadata,
                   }
@@ -2618,6 +2620,7 @@ ${prompt}
               const assistantMessage = {
                 id: crypto.randomUUID(),
                 role: "assistant",
+                createdAt: new Date().toISOString(),
                 parts,
                 metadata,
               }

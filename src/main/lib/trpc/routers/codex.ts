@@ -1811,6 +1811,7 @@ export const codexRouter = router({
               const userMessage = {
                 id: crypto.randomUUID(),
                 role: "user",
+                createdAt: new Date().toISOString(),
                 parts: buildUserParts(input.prompt, input.images),
                 metadata: { model: metadataModel },
               }
@@ -1942,15 +1943,16 @@ export const codexRouter = router({
               onFinish: async ({ responseMessage, isContinuation }) => {
                 try {
                   const usageMetadata = await resolveUsageOnce()
-                  const responseWithUsage = usageMetadata
-                    ? {
-                        ...responseMessage,
-                        metadata: {
-                          ...((responseMessage as any)?.metadata || {}),
-                          ...usageMetadata,
-                        },
-                      }
-                    : responseMessage
+                  const responseWithUsage = {
+                    ...responseMessage,
+                    createdAt:
+                      (responseMessage as any)?.createdAt ??
+                      new Date().toISOString(),
+                    metadata: {
+                      ...((responseMessage as any)?.metadata || {}),
+                      ...(usageMetadata || {}),
+                    },
+                  }
                   const cleanedResponseMessage =
                     cleanAssistantMessageForPersistence(responseWithUsage)
 

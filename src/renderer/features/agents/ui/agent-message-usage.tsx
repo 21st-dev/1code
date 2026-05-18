@@ -47,6 +47,13 @@ function formatDuration(ms: number): string {
   return `${minutes}m ${remainingSeconds}s`
 }
 
+function formatCost(value: number): string {
+  if (value < 0.01) {
+    return `$${value.toFixed(4)}`
+  }
+  return `$${value.toFixed(2)}`
+}
+
 export const AgentMessageUsage = memo(function AgentMessageUsage({
   metadata,
   isStreaming = false,
@@ -61,6 +68,7 @@ export const AgentMessageUsage = memo(function AgentMessageUsage({
     inputTokens = 0,
     outputTokens = 0,
     totalTokens = 0,
+    totalCostUsd = 0,
     durationMs,
     resultSubtype,
   } = metadata
@@ -121,11 +129,37 @@ export const AgentMessageUsage = memo(function AgentMessageUsage({
 
           {/* Tokens group */}
           {displayTokens > 0 && (
-            <div className="flex justify-between text-xs gap-4 pt-1.5 mt-1 border-t border-border/50">
-              <span className="text-muted-foreground">{t("agent.usage.tokens")}</span>
-              <span className="font-mono font-medium text-foreground">
-                {displayTokens.toLocaleString()}
-              </span>
+            <div className="space-y-1 pt-1.5 mt-1 border-t border-border/50">
+              <div className="flex justify-between text-xs gap-4">
+                <span className="text-muted-foreground">{t("agent.usage.tokens")}</span>
+                <span className="font-mono font-medium text-foreground">
+                  {displayTokens.toLocaleString()}
+                </span>
+              </div>
+              {inputTokens > 0 && (
+                <div className="flex justify-between text-xs gap-4">
+                  <span className="text-muted-foreground">{t("agent.usage.input")}</span>
+                  <span className="font-mono text-foreground">
+                    {inputTokens.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {outputTokens > 0 && (
+                <div className="flex justify-between text-xs gap-4">
+                  <span className="text-muted-foreground">{t("agent.usage.output")}</span>
+                  <span className="font-mono text-foreground">
+                    {outputTokens.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {totalCostUsd > 0 && (
+                <div className="flex justify-between text-xs gap-4">
+                  <span className="text-muted-foreground">{t("agent.usage.estimatedCost")}</span>
+                  <span className="font-mono text-foreground">
+                    {formatCost(totalCostUsd)}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>

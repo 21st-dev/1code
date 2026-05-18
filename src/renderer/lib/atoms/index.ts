@@ -776,6 +776,19 @@ export const codexApiKeyAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
+export type UsageBudgetConfig = {
+  weeklyTokenBudget: number
+}
+
+export const usageBudgetAtom = atomWithStorage<UsageBudgetConfig>(
+  "usage:budget-v1",
+  {
+    weeklyTokenBudget: 0,
+  },
+  undefined,
+  { getOnInit: true },
+)
+
 export function normalizeCodexApiKey(apiKey: string): string | null {
   const trimmed = apiKey.trim()
   if (!trimmed) return null

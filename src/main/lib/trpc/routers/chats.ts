@@ -156,6 +156,156 @@ function buildUtilityChatCompletionBody(
   }
 }
 
+type UsageTotals = {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  estimatedCostUsd: number
+  messageCount: number
+}
+
+type ContextUsageSummary = {
+  usedTokens: number
+  windowTokens: number
+  remainingTokens: number
+  percentUsed: number
+  model: string | null
+}
+
+type UsageAmounts = {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  estimatedCostUsd: number
+}
+
+function emptyUsageTotals(): UsageTotals {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    estimatedCostUsd: 0,
+    messageCount: 0,
+  }
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function readObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function getMessageTimestampMs(
+  message: Record<string, unknown>,
+  fallbackDate: Date | null,
+): number {
+  const metadata = readObject(message.metadata)
+  const candidates = [
+    message.createdAt,
+    metadata.createdAt,
+    metadata.timestamp,
+    metadata.completedAt,
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate instanceof Date) return candidate.getTime()
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return candidate < 1_000_000_000_000 ? candidate * 1000 : candidate
+    }
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      const parsed = Date.parse(candidate)
+      if (!Number.isNaN(parsed)) return parsed
+    }
+  }
+
+  return fallbackDate?.getTime() ?? 0
+}
+
+function getUsageAmounts(message: Record<string, unknown>): UsageAmounts | null {
+  const metadata = readObject(message.metadata)
+  const nestedUsage = readObject(metadata.usage)
+
+  const inputTokens =
+    readNumber(metadata.inputTokens) ??
+    readNumber(nestedUsage.inputTokens) ??
+    0
+  const outputTokens =
+    readNumber(metadata.outputTokens) ??
+    readNumber(nestedUsage.outputTokens) ??
+    0
+  const totalTokens =
+    readNumber(metadata.totalTokens) ??
+    readNumber(nestedUsage.totalTokens) ??
+    inputTokens + outputTokens
+  const estimatedCostUsd =
+    readNumber(metadata.totalCostUsd) ??
+    readNumber(nestedUsage.totalCostUsd) ??
+    0
+
+  if (inputTokens <= 0 && outputTokens <= 0 && totalTokens <= 0 && estimatedCostUsd <= 0) {
+    return null
+  }
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    estimatedCostUsd,
+  }
+}
+
+function addUsageTotals(target: UsageTotals, usage: UsageAmounts): void {
+  target.inputTokens += usage.inputTokens
+  target.outputTokens += usage.outputTokens
+  target.totalTokens += usage.totalTokens
+  target.estimatedCostUsd += usage.estimatedCostUsd
+  target.messageCount += 1
+}
+
+function getContextUsage(
+  message: Record<string, unknown>,
+): ContextUsageSummary | null {
+  const metadata = readObject(message.metadata)
+  const windowTokens =
+    readNumber(metadata.modelContextWindow) ??
+    readNumber(metadata.contextWindow)
+
+  if (!windowTokens || windowTokens <= 0) {
+    return null
+  }
+
+  const model = typeof metadata.model === "string" ? metadata.model : null
+  const normalizedModel = model?.toLowerCase() ?? ""
+  const isCodexModel =
+    normalizedModel.includes("codex") || normalizedModel.startsWith("gpt-")
+  const inputTokens = readNumber(metadata.inputTokens) ?? 0
+  const outputTokens = readNumber(metadata.outputTokens) ?? 0
+  const totalTokens = readNumber(metadata.totalTokens)
+  const cacheReadInputTokens = readNumber(metadata.cacheReadInputTokens) ?? 0
+  const cacheCreationInputTokens =
+    readNumber(metadata.cacheCreationInputTokens) ?? 0
+
+  const usedTokens = Math.max(
+    0,
+    isCodexModel && totalTokens !== null
+      ? totalTokens - outputTokens
+      : inputTokens + cacheReadInputTokens + cacheCreationInputTokens,
+  )
+  const percentUsed = Math.min(100, (usedTokens / windowTokens) * 100)
+
+  return {
+    usedTokens,
+    windowTokens,
+    remainingTokens: Math.max(0, windowTokens - usedTokens),
+    percentUsed,
+    model,
+  }
+}
+
 async function logProviderRequestFailure(
   label: string,
   response: Response,
@@ -566,6 +716,7 @@ export const chatsRouter = router({
           {
             id: `msg-${Date.now()}`,
             role: "user",
+            createdAt: new Date().toISOString(),
             parts: input.initialMessageParts,
             ...(initialMetadata ? { metadata: initialMetadata } : {}),
           },
@@ -575,6 +726,7 @@ export const chatsRouter = router({
           {
             id: `msg-${Date.now()}`,
             role: "user",
+            createdAt: new Date().toISOString(),
             parts: [{ type: "text", text: input.initialMessage }],
             ...(initialMetadata ? { metadata: initialMetadata } : {}),
           },
@@ -2252,6 +2404,97 @@ export const chatsRouter = router({
         format: "markdown" as const,
         content: markdown,
         filename: `${safeFilename}-${chat.id.slice(0, 8)}.md`,
+      }
+    }),
+
+  /**
+   * Get locally observed token usage for the sidebar Usage popover.
+   * This is based only on message metadata stored in the local SQLite DB.
+   */
+  getUsageSummary: publicProcedure
+    .input(
+      z
+        .object({
+          chatId: z.string().nullable().optional(),
+          subChatId: z.string().nullable().optional(),
+        })
+        .optional(),
+    )
+    .query(({ input }) => {
+      const db = getDatabase()
+      const activeChatId = input?.chatId ?? null
+      const activeSubChatId = input?.subChatId ?? null
+      const currentConversation = emptyUsageTotals()
+      const currentWorkspace = emptyUsageTotals()
+      const today = emptyUsageTotals()
+      const last7Days = emptyUsageTotals()
+      const now = Date.now()
+      const startOfToday = new Date()
+      startOfToday.setHours(0, 0, 0, 0)
+      const todayStartMs = startOfToday.getTime()
+      const sevenDaysAgoMs = now - 7 * 24 * 60 * 60 * 1000
+      let context: ContextUsageSummary | null = null
+
+      const rows = db
+        .select({
+          id: subChats.id,
+          chatId: subChats.chatId,
+          messages: subChats.messages,
+          updatedAt: subChats.updatedAt,
+        })
+        .from(subChats)
+        .all()
+
+      for (const row of rows) {
+        let messages: unknown
+        try {
+          messages = JSON.parse(row.messages || "[]")
+        } catch {
+          continue
+        }
+
+        if (!Array.isArray(messages)) continue
+
+        if (row.id === activeSubChatId && !context) {
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const candidate = readObject(messages[i])
+            const candidateContext = getContextUsage(candidate)
+            if (candidateContext) {
+              context = candidateContext
+              break
+            }
+          }
+        }
+
+        for (const rawMessage of messages) {
+          const message = readObject(rawMessage)
+          const usage = getUsageAmounts(message)
+          if (!usage) continue
+
+          const timestampMs = getMessageTimestampMs(message, row.updatedAt)
+
+          if (activeSubChatId && row.id === activeSubChatId) {
+            addUsageTotals(currentConversation, usage)
+          }
+          if (activeChatId && row.chatId === activeChatId) {
+            addUsageTotals(currentWorkspace, usage)
+          }
+          if (timestampMs >= todayStartMs) {
+            addUsageTotals(today, usage)
+          }
+          if (timestampMs >= sevenDaysAgoMs) {
+            addUsageTotals(last7Days, usage)
+          }
+        }
+      }
+
+      return {
+        currentConversation,
+        currentWorkspace,
+        today,
+        last7Days,
+        context,
+        generatedAt: new Date(now).toISOString(),
       }
     }),
 
