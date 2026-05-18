@@ -359,6 +359,18 @@ if (!gotTheLock) {
     gotTheLock = app.requestSingleInstanceLock()
   }
   if (!gotTheLock) {
+    let lockOwner = "unknown owner"
+    try {
+      const lockPath = join(userDataPath, "SingletonLock")
+      if (existsSync(lockPath)) {
+        lockOwner = readlinkSync(lockPath)
+      }
+    } catch (error) {
+      console.warn("[App] Failed to read SingletonLock owner:", error)
+    }
+    console.warn(
+      `[App] Another ${APP_NAME}${IS_DEV ? " Dev" : ""} instance is already running (${lockOwner}). Quitting this launch.`,
+    )
     app.quit()
   }
 }
