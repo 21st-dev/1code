@@ -67,9 +67,9 @@ import { trpc } from "../../../lib/trpc"
 import {
   AgentsSlashCommand,
   COMMAND_PROMPTS,
-  BUILTIN_SLASH_COMMANDS,
   type SlashCommandOption,
 } from "../commands"
+import { expandCustomSlashCommand } from "../lib/slash-command-expansion"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { usePastedTextFiles } from "../hooks/use-pasted-text-files"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
@@ -1047,37 +1047,7 @@ export function NewChatForm({
       return
     }
 
-    // Check if message is a slash command with arguments (e.g. "/hello world")
-    // Note: 's' flag makes '.' match newlines, so multi-line arguments are captured
-    const slashMatch = message.match(/^\/(\S+)\s*(.*)$/s)
-    if (slashMatch) {
-      const [, commandName, args] = slashMatch
-
-      // Check if it's a builtin command - if so, don't process as custom command
-      const builtinNames = new Set(
-        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
-      )
-      if (!builtinNames.has(commandName)) {
-        // This is a custom command - load content and replace $ARGUMENTS
-        try {
-          const commands = await trpcUtils.commands.list.fetch({
-            projectPath: projectForChat.path,
-          })
-          const cmd = commands.find((c) => c.name.toLowerCase() === commandName.toLowerCase())
-
-          if (cmd) {
-            const { content } = await trpcUtils.commands.getContent.fetch({
-              path: cmd.path,
-            })
-            // Replace $ARGUMENTS with the provided args
-            message = content.replace(/\$ARGUMENTS/g, args.trim())
-          }
-        } catch (error) {
-          console.error("Failed to process custom command:", error)
-          // Fall through with original message
-        }
-      }
-    }
+    message = await expandCustomSlashCommand(message, projectForChat.path)
 
     // Build message parts array (images first, then text, then hidden file contents)
     type MessagePart =
@@ -1168,7 +1138,6 @@ export function NewChatForm({
     pastedTexts,
     selectedChatModel,
     agentMode,
-    trpcUtils,
   ])
 
   const handleMentionSelect = useCallback((mention: FileMentionOption) => {

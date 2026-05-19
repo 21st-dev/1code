@@ -3392,9 +3392,13 @@ const ChatViewInner = memo(function ChatViewInner({
       const queuedDiffTextContexts = currentDiffTextContexts.map(toQueuedDiffTextContext)
       const queuedPastedTexts = currentPastedTexts.map(toQueuedPastedText)
 
+      const queuedText = await expandCustomSlashCommand(
+        inputValue.trim(),
+        projectPath,
+      )
       const item = createQueueItem(
         generateQueueId(),
-        inputValue.trim(),
+        queuedText,
         queuedImages.length > 0 ? queuedImages : undefined,
         queuedFiles.length > 0 ? queuedFiles : undefined,
         queuedTextContexts.length > 0 ? queuedTextContexts : undefined,

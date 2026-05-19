@@ -6,6 +6,58 @@ import type { BuiltinCommandAction, SlashCommandOption } from "./types"
 export const COMMAND_PROMPTS: Partial<
   Record<BuiltinCommandAction["type"], string>
 > = {
+  init: `Initialize this project for local coding agents.
+
+Your task:
+1. Inspect the repository structure and existing project instruction files first.
+2. Check for AGENTS.md, CLAUDE.md, .claude/, .codex/, README, package/config files, and any existing contributor guidance.
+3. If AGENTS.md and/or CLAUDE.md already exist, preserve them and only make narrow updates that are clearly needed.
+4. If neither instruction file exists, create a concise AGENTS.md for Locus/Codex-style agents and a minimal CLAUDE.md that points Claude Code to the shared guidance when useful.
+
+The output should help future local coding agents understand how to work in this repo.
+
+Rules:
+- Do not overwrite existing instructions wholesale.
+- Keep guidance project-specific, short, and verifiable.
+- Include setup, test, build, and safety notes only when the repo actually provides evidence for them.
+- Prefer AGENTS.md as the shared cross-agent instruction file.
+- Keep CLAUDE.md minimal if it can delegate to AGENTS.md.
+- If you are in Plan mode or are unsure, propose the exact file changes before editing.
+
+Now inspect the project and initialize or refine the project instruction files.`,
+  doctor: `Run a read-only local diagnostics pass for this project and Locus agent workflow.
+
+Your task:
+1. Inspect the current project state without changing files.
+2. Check git status, repository root, package manager files, available scripts, dependency/install hints, test/build commands, and obvious setup blockers.
+3. Check for local agent instruction/config files such as AGENTS.md, CLAUDE.md, .claude/, .codex/, and .locus/worktree.json.
+4. If relevant and safely available, inspect local Claude/Codex/MCP/plugin indicators from the project or user-visible config, but do not reveal secrets or tokens.
+5. Separate findings into: OK, Warning, Broken/Blocked, and Suggested next actions.
+
+Rules:
+- Do not modify files.
+- Do not run destructive commands.
+- Do not print secrets, API keys, tokens, or full env values.
+- Prefer lightweight commands first, such as pwd, git status --short, git rev-parse --show-toplevel, ls, package script inspection, and targeted config checks.
+- If a command may be slow or risky, explain it instead of running it.
+
+Now diagnose the local project and agent workflow health.`,
+  diff: `Summarize the current working tree diff.
+
+Your task:
+1. Inspect git status for staged, unstaged, and untracked files.
+2. Review the relevant diff summary and, when useful, targeted file diffs.
+3. Explain what changed in plain language.
+4. Call out behavioral risks, likely regressions, missing tests, and suggested verification.
+5. Separate unrelated changes if the working tree appears mixed.
+
+Rules:
+- Do not modify files.
+- Do not stage, commit, reset, checkout, or clean anything.
+- Include untracked files in the summary, but do not dump huge file contents.
+- If this is not a git repository, say so and summarize what can be inspected locally.
+
+Now inspect and summarize the current changes.`,
   review:
     "Please review the code in the current context and provide feedback on code quality, potential bugs, and improvements.",
   "pr-comments":
@@ -48,8 +100,25 @@ Now analyze this project and create .locus/worktree.json with the appropriate se
  */
 export function isPromptCommand(
   type: BuiltinCommandAction["type"],
-): type is "review" | "pr-comments" | "release-notes" | "security-review" | "commit" | "worktree-setup" {
+): type is "init" | "doctor" | "diff" | "review" | "pr-comments" | "release-notes" | "security-review" | "commit" | "worktree-setup" {
   return type in COMMAND_PROMPTS
+}
+
+export function getBuiltinCommandPrompt(
+  commandName: string,
+  args = "",
+): string | null {
+  const commandKey = commandName.toLowerCase() as BuiltinCommandAction["type"]
+  const prompt = COMMAND_PROMPTS[commandKey]
+  if (!prompt) return null
+
+  const trimmedArgs = args.trim()
+  if (!trimmedArgs) return prompt
+
+  return `${prompt}
+
+Additional user instructions:
+${trimmedArgs}`
 }
 
 /**
@@ -85,6 +154,27 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandOption[] = [
     category: "builtin",
   },
   // Prompt-based commands
+  {
+    id: "builtin:init",
+    name: "init",
+    command: "/init",
+    description: "Initialize project instruction files for local agents",
+    category: "builtin",
+  },
+  {
+    id: "builtin:doctor",
+    name: "doctor",
+    command: "/doctor",
+    description: "Diagnose local project and agent workflow health",
+    category: "builtin",
+  },
+  {
+    id: "builtin:diff",
+    name: "diff",
+    command: "/diff",
+    description: "Summarize current working tree changes",
+    category: "builtin",
+  },
   {
     id: "builtin:review",
     name: "review",

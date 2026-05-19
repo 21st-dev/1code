@@ -1,5 +1,9 @@
 import { trpcClient } from "../../../lib/trpc"
-import { BUILTIN_SLASH_COMMANDS } from "../commands"
+import {
+  BUILTIN_SLASH_COMMANDS,
+  getBuiltinCommandPrompt,
+  type BuiltinCommandAction,
+} from "../commands"
 
 export async function expandCustomSlashCommand(
   text: string,
@@ -9,8 +13,14 @@ export async function expandCustomSlashCommand(
   if (!slashMatch) return text
 
   const [, commandName, args] = slashMatch
+  const commandKey = commandName.toLowerCase() as BuiltinCommandAction["type"]
+  const prompt = getBuiltinCommandPrompt(commandKey, args)
+  if (prompt) {
+    return prompt
+  }
+
   const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name))
-  if (builtinNames.has(commandName)) return text
+  if (builtinNames.has(commandKey)) return text
 
   try {
     const commands = await trpcClient.commands.list.query({ projectPath })
