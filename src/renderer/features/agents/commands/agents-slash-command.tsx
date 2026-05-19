@@ -279,9 +279,9 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   if (!isOpen) return null
 
   // Calculate dropdown dimensions (matching file mention style)
-  const dropdownWidth = 320
+  const dropdownWidth = 360
   const itemHeight = 28  // h-7 = 28px to match file mention
-  const headerHeight = 24
+  const headerHeight = 42
   // Single "Commands" header for all options
   const headersCount = options.length > 0 ? 1 : 0
   const requestedHeight = Math.min(
@@ -352,8 +352,13 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       {/* All commands in one section - custom first, then builtin */}
       {options.length > 0 && (
         <>
-          <div className="px-2.5 py-1.5 mx-1 text-xs font-medium text-muted-foreground">
-            Commands
+          <div className="px-2.5 py-1.5 mx-1">
+            <p className="text-xs font-medium text-foreground">
+              {t("agent.slash.header")}
+            </p>
+            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+              {t("agent.slash.headerHint")}
+            </p>
           </div>
           {options.map((option, index) => {
             const isSelected = selectedIndex === index

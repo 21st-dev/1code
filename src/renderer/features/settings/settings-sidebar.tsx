@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronLeft, Info } from "lucide-react"
+import { ChevronLeft, Command, Info } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
   EyeOpenFilledIcon,
@@ -69,6 +69,11 @@ const WORKSPACE_TABS: SettingsTabDefinition[] = [
 ]
 
 const AGENT_CAPABILITY_TABS: SettingsTabDefinition[] = [
+  {
+    id: "commands" as SettingsTab,
+    labelKey: "settings.sidebar.commands",
+    icon: Command,
+  },
   {
     id: "skills" as SettingsTab,
     labelKey: "settings.sidebar.skills",
