@@ -9,7 +9,7 @@
   },
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "node scripts/ensure-electron-native-modules.mjs && electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-builder --dir",
@@ -35,7 +35,9 @@
     "db:studio": "drizzle-kit studio",
     "test": "bun test tests",
     "ts:check": "tsc --noEmit",
-    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
+    "native:check": "node scripts/ensure-electron-native-modules.mjs --check-only",
+    "native:rebuild": "node scripts/ensure-electron-native-modules.mjs --force",
+    "postinstall": "node scripts/ensure-electron-native-modules.mjs --force && node scripts/patch-electron-dev.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",
