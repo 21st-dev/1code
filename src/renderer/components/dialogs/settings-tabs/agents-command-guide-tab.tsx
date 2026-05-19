@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Terminal,
 } from "lucide-react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { ComponentType, ReactNode } from "react"
 import { toast } from "sonner"
 import { Badge } from "../../ui/badge"
@@ -327,6 +327,9 @@ function OfficialSnapshotPanel({
   onRefresh: () => void
 }) {
   const { t } = useI18n()
+  const [expandedProviders, setExpandedProviders] = useState<
+    Set<OfficialCommandProviderId>
+  >(() => new Set())
   const providers = snapshot?.providers ?? []
   const lastUpdated = formatSnapshotDate(snapshot?.updatedAt ?? null)
   const hasSnapshotState = providers.some(
@@ -387,7 +390,11 @@ function OfficialSnapshotPanel({
             const sourceCount = provider.sources.filter(
               (source) => source.fetchedAt,
             ).length
-            const sampleEntries = provider.entries.slice(0, 8)
+            const isExpanded = expandedProviders.has(provider.provider)
+            const visibleEntries = isExpanded
+              ? provider.entries
+              : provider.entries.slice(0, 8)
+            const hasHiddenEntries = provider.entries.length > visibleEntries.length
 
             return (
               <div
@@ -466,25 +473,83 @@ function OfficialSnapshotPanel({
                   ))}
                 </div>
 
-                {sampleEntries.length > 0 && (
-                  <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
-                    {sampleEntries.map((entry) => (
-                      <div
-                        key={`${entry.kind}:${entry.name}:${entry.sourceTitle}`}
-                        className="min-w-0 rounded-md bg-background px-2.5 py-2"
-                      >
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <p className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
-                            {entry.name}
+                {visibleEntries.length > 0 && (
+                  <>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="truncate text-[11px] font-medium text-muted-foreground">
+                        {t("settings.commands.officialCommandListTitle", {
+                          count: provider.entries.length,
+                        })}
+                      </p>
+                      {provider.entries.length > 8 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0 px-2 text-[11px]"
+                          onClick={() => {
+                            setExpandedProviders((current) => {
+                              const next = new Set(current)
+                              if (next.has(provider.provider)) {
+                                next.delete(provider.provider)
+                              } else {
+                                next.add(provider.provider)
+                              }
+                              return next
+                            })
+                          }}
+                        >
+                          {isExpanded
+                            ? t("settings.commands.officialCollapseCommands")
+                            : t("settings.commands.officialShowAllCommands", {
+                                count: provider.entries.length,
+                              })}
+                        </Button>
+                      )}
+                    </div>
+                    <div
+                      className={cn(
+                        "mt-2 grid gap-1.5",
+                        isExpanded
+                          ? "max-h-[560px] overflow-y-auto pr-1 sm:grid-cols-1"
+                          : "sm:grid-cols-2",
+                      )}
+                    >
+                      {visibleEntries.map((entry) => (
+                        <div
+                          key={`${entry.kind}:${entry.name}:${entry.sourceTitle}`}
+                          className="min-w-0 rounded-md bg-background px-2.5 py-2"
+                        >
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <p
+                              className={cn(
+                                "min-w-0 flex-1 font-mono text-[11px] text-foreground",
+                                isExpanded ? "break-all" : "truncate",
+                              )}
+                            >
+                              {entry.name}
+                            </p>
+                            <SourceBadge label={getOfficialKindLabel(entry.kind, t)} />
+                          </div>
+                          <p
+                            className={cn(
+                              "mt-1 text-[10px] text-muted-foreground",
+                              isExpanded ? "leading-relaxed" : "truncate",
+                            )}
+                          >
+                            {entry.description || entry.sourceTitle}
                           </p>
-                          <SourceBadge label={getOfficialKindLabel(entry.kind, t)} />
                         </div>
-                        <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                          {entry.description || entry.sourceTitle}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                    {hasHiddenEntries && (
+                      <p className="mt-2 text-[10px] text-muted-foreground">
+                        {t("settings.commands.officialHiddenCommands", {
+                          count: provider.entries.length - visibleEntries.length,
+                        })}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )
