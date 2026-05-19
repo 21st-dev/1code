@@ -2,12 +2,16 @@ import { useEffect, useState } from "react"
 import {
   AlertCircle,
   CheckCircle2,
+  Download,
   ExternalLink,
   Github,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "../../ui/button"
+import { Progress } from "../../ui/progress"
+import { Switch } from "../../ui/switch"
 import { trpc } from "../../../lib/trpc"
 import { useI18n } from "../../../lib/i18n"
 import { cn } from "../../../lib/utils"
@@ -39,48 +43,129 @@ function formatDate(value?: string | null): string | null {
   })
 }
 
+function formatBytes(value?: number | null): string {
+  if (!value || value <= 0) return "0 B"
+  const units = ["B", "KB", "MB", "GB"]
+  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
+  return `${(value / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
+}
+
 export function AgentsAboutTab() {
   const { t } = useI18n()
+  const utils = trpc.useUtils()
   const isNarrowScreen = useIsNarrowScreen()
-  const currentQuery = trpc.appUpdates.getCurrent.useQuery()
-  const checkMutation = trpc.appUpdates.check.useMutation()
+  const currentQuery = trpc.appUpdates.getCurrent.useQuery(undefined, {
+    refetchInterval: 3000,
+  })
   const openExternalMutation = trpc.external.openExternal.useMutation({
     onError: (error) => toast.error(error.message),
   })
+  const checkMutation = trpc.appUpdates.checkNow.useMutation({
+    onSuccess: (data) => {
+      void utils.appUpdates.getCurrent.invalidate()
+      if (data.status === "update-available") {
+        toast.success(t("settings.about.updateAvailableToast"))
+      } else if (data.status === "up-to-date") {
+        toast.success(t("settings.about.upToDateToast"))
+      } else if (data.status === "disabled") {
+        toast.info(t("settings.about.autoUpdateDisabledToast"))
+      } else if (data.status === "error") {
+        toast.error(data.error || t("settings.about.checkFailed"))
+      } else {
+        toast.info(t("settings.about.checkCompleteToast"))
+      }
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  const downloadMutation = trpc.appUpdates.download.useMutation({
+    onSuccess: (data) => {
+      void utils.appUpdates.getCurrent.invalidate()
+      if (data.status === "error") {
+        toast.error(data.error || t("settings.about.checkFailed"))
+      } else if (data.status === "downloaded") {
+        toast.success(t("settings.about.downloadCompleteToast"))
+      } else {
+        toast.success(t("settings.about.downloadStartedToast"))
+      }
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  const quitAndInstallMutation = trpc.appUpdates.quitAndInstall.useMutation({
+    onError: (error) => toast.error(error.message),
+  })
+  const setAutoCheckMutation = trpc.appUpdates.setAutoCheckEnabled.useMutation({
+    onSuccess: () => {
+      void utils.appUpdates.getCurrent.invalidate()
+    },
+    onError: (error) => toast.error(error.message),
+  })
 
-  const result = checkMutation.data
-  const publishedDate = formatDate(result?.publishedAt)
-  const resultIsAvailable = result?.status === "update-available"
-  const resultIsUpToDate = result?.status === "up-to-date"
-  const resultIsNoRelease = result?.status === "no-release"
-  const sourceRepo =
-    currentQuery.data?.releasesRepo ?? "lupanpan1030/agent-code-for-me"
-
-  const handleCheck = () => {
-    checkMutation.mutate(undefined, {
-      onSuccess: (data) => {
-        if (data.status === "update-available") {
-          toast.success(t("settings.about.updateAvailableToast"))
-        } else if (data.status === "up-to-date") {
-          toast.success(t("settings.about.upToDateToast"))
-        } else if (data.status === "no-release") {
-          toast.info(t("settings.about.noReleaseToast"))
-        } else {
-          toast.info(t("settings.about.checkCompleteToast"))
-        }
-      },
-      onError: (error) => toast.error(error.message),
-    })
-  }
+  const data = currentQuery.data
+  const state = data?.state
+  const sourceRepo = data?.releasesRepo ?? "lupanpan1030/agent-code-for-me"
+  const releaseDate = formatDate(state?.releaseDate ?? state?.checkedAt)
+  const progressPercent = Math.round(state?.progress?.percent ?? 0)
+  const isChecking = state?.status === "checking" || checkMutation.isPending
+  const isDownloading = state?.status === "downloading" || downloadMutation.isPending
+  const canCheck = Boolean(state?.supported) && !isChecking && !isDownloading
+  const canDownload =
+    state?.status === "update-available" && !downloadMutation.isPending
+  const canRestart =
+    state?.status === "downloaded" && !quitAndInstallMutation.isPending
 
   const handleOpenRelease = () => {
-    const url =
-      result?.releasePageUrl ||
-      currentQuery.data?.latestPageUrl ||
-      currentQuery.data?.releasesPageUrl
+    const url = data?.latestPageUrl || data?.releasesPageUrl
     if (!url) return
     openExternalMutation.mutate(url)
   }
+
+  const statusTitle = (() => {
+    if (!state) return t("settings.about.updateIdle")
+    if (state.status === "disabled") {
+      if (state.disabledReason === "development") {
+        return t("settings.about.autoUpdateDevelopment")
+      }
+      if (state.disabledReason === "portable") {
+        return t("settings.about.autoUpdatePortable")
+      }
+      if (state.disabledReason === "unsupported-platform") {
+        return t("settings.about.autoUpdateUnsupported")
+      }
+      return t("settings.about.autoUpdateDisabled")
+    }
+    if (state.status === "checking") return t("settings.about.checking")
+    if (state.status === "up-to-date") return t("settings.about.upToDate")
+    if (state.status === "update-available") {
+      return t("settings.about.updateAvailable")
+    }
+    if (state.status === "downloading") {
+      return t("settings.about.downloadingUpdate")
+    }
+    if (state.status === "downloaded") {
+      return t("settings.about.updateReadyToInstall")
+    }
+    if (state.status === "error") return t("settings.about.checkFailed")
+    return t("settings.about.updateIdle")
+  })()
+
+  const statusDetail = (() => {
+    if (!state) return t("settings.about.updateIdleDescription")
+    if (state.status === "disabled") {
+      if (state.disabledReason === "disabled-by-user") {
+        return t("settings.about.autoUpdateDisabledDescription")
+      }
+      return t("settings.about.autoUpdateUnsupportedDescription")
+    }
+    if (state.latestVersion) {
+      return t("settings.about.versionSummary", {
+        current: state.currentVersion,
+        latest: state.latestVersion,
+      })
+    }
+    return t("settings.about.currentVersionSummary", {
+      current: state.currentVersion,
+    })
+  })()
 
   return (
     <div className="p-6 space-y-6">
@@ -104,7 +189,7 @@ export function AgentsAboutTab() {
             </span>
           </div>
           <span className="text-sm font-mono text-muted-foreground">
-            v{currentQuery.data?.currentVersion ?? "..."}
+            v{data?.currentVersion ?? "..."}
           </span>
         </div>
       </div>
@@ -114,109 +199,141 @@ export function AgentsAboutTab() {
           <div className="flex items-start justify-between gap-6">
             <div className="flex flex-col space-y-1">
               <span className="text-sm font-medium text-foreground">
-                {t("settings.about.manualUpdates")}
+                {t("settings.about.updates")}
               </span>
               <span className="text-xs text-muted-foreground">
-                {t("settings.about.manualUpdatesDescription")}
+                {t("settings.about.updatesDescription")}
               </span>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCheck}
-              disabled={checkMutation.isPending}
-              className="shrink-0"
-            >
-              <RefreshCw
-                className={cn(
-                  "h-4 w-4 mr-2",
-                  checkMutation.isPending && "animate-spin",
-                )}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {t("settings.about.autoCheck")}
+              </span>
+              <Switch
+                checked={state?.enabled ?? true}
+                disabled={!state?.supported || setAutoCheckMutation.isPending}
+                onCheckedChange={(enabled) =>
+                  setAutoCheckMutation.mutate({ enabled })
+                }
               />
-              {checkMutation.isPending
-                ? t("settings.about.checking")
-                : t("settings.about.checkForUpdates")}
-            </Button>
+            </div>
           </div>
 
-          {result && (
-            <div
-              className={cn(
-                "rounded-md border p-3",
-                result.status === "update-available"
-                  ? "border-blue-500/30 bg-blue-500/10"
-                  : result.status === "up-to-date"
-                    ? "border-green-500/30 bg-green-500/10"
-                    : "border-yellow-500/30 bg-yellow-500/10",
-              )}
-            >
-              <div className="flex items-start gap-3">
-                {resultIsUpToDate ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-500" />
-                ) : (
-                  <AlertCircle
-                    className={cn(
-                      "mt-0.5 h-4 w-4",
-                      resultIsAvailable
+          <div
+            className={cn(
+              "rounded-md border p-3",
+              state?.status === "update-available" ||
+                state?.status === "downloading" ||
+                state?.status === "downloaded"
+                ? "border-blue-500/30 bg-blue-500/10"
+                : state?.status === "up-to-date"
+                  ? "border-green-500/30 bg-green-500/10"
+                  : state?.status === "error"
+                    ? "border-destructive/30 bg-destructive/10"
+                    : "border-border bg-muted/20",
+            )}
+          >
+            <div className="flex items-start gap-3">
+              {state?.status === "up-to-date" ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-500" />
+              ) : (
+                <AlertCircle
+                  className={cn(
+                    "mt-0.5 h-4 w-4",
+                    state?.status === "error"
+                      ? "text-destructive"
+                      : state?.status === "update-available" ||
+                          state?.status === "downloading" ||
+                          state?.status === "downloaded"
                         ? "text-blue-500"
-                        : "text-yellow-500",
-                    )}
-                  />
-                )}
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {resultIsAvailable
-                        ? t("settings.about.updateAvailable")
-                        : resultIsUpToDate
-                          ? t("settings.about.upToDate")
-                          : resultIsNoRelease
-                            ? t("settings.about.noRelease")
-                            : t("settings.about.versionComparisonUnknown")}
-                    </p>
+                        : "text-muted-foreground",
+                  )}
+                />
+              )}
+              <div className="min-w-0 flex-1 space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {statusTitle}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {statusDetail}
+                    {releaseDate ? ` · ${releaseDate}` : ""}
+                  </p>
+                </div>
+
+                {state?.releaseName ? (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {state.releaseName}
+                  </p>
+                ) : null}
+
+                {state?.status === "downloading" ? (
+                  <div className="space-y-1.5">
+                    <Progress value={progressPercent} />
                     <p className="text-xs text-muted-foreground">
-                      {result.latestVersion
-                        ? t("settings.about.versionSummary", {
-                            current: result.currentVersion,
-                            latest: result.latestVersion,
-                          })
-                        : t("settings.about.currentVersionSummary", {
-                            current: result.currentVersion,
-                          })}
-                      {publishedDate ? ` · ${publishedDate}` : ""}
+                      {t("settings.about.downloadProgress", {
+                        percent: progressPercent,
+                        transferred: formatBytes(state.progress?.transferred),
+                        total: formatBytes(state.progress?.total),
+                      })}
                     </p>
                   </div>
-                  {result.releaseName ? (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {result.releaseName}
-                    </p>
-                  ) : null}
+                ) : null}
+
+                {state?.error ? (
+                  <p className="text-xs text-destructive">{state.error}</p>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
                   <Button
-                    variant="secondary"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => checkMutation.mutate()}
+                    disabled={!canCheck}
+                  >
+                    <RefreshCw
+                      className={cn("h-4 w-4 mr-2", isChecking && "animate-spin")}
+                    />
+                    {isChecking
+                      ? t("settings.about.checking")
+                      : t("settings.about.checkNow")}
+                  </Button>
+
+                  {canDownload ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => downloadMutation.mutate()}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {t("settings.about.downloadUpdate")}
+                    </Button>
+                  ) : null}
+
+                  {canRestart ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => quitAndInstallMutation.mutate()}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      {t("settings.about.restartToInstall")}
+                    </Button>
+                  ) : null}
+
+                  <Button
+                    variant="ghost"
                     size="sm"
                     onClick={handleOpenRelease}
                     disabled={openExternalMutation.isPending}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
-                    {resultIsNoRelease
-                      ? t("settings.about.openGitHubReleases")
-                      : t("settings.about.openGitHubRelease")}
+                    {t("settings.about.openGitHubRelease")}
                   </Button>
                 </div>
               </div>
             </div>
-          )}
-
-          {checkMutation.error && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3">
-              <p className="text-sm font-medium text-destructive">
-                {t("settings.about.checkFailed")}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {checkMutation.error.message}
-              </p>
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
