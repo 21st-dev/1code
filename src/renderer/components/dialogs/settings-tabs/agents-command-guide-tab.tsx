@@ -391,10 +391,14 @@ function OfficialSnapshotPanel({
               (source) => source.fetchedAt,
             ).length
             const isExpanded = expandedProviders.has(provider.provider)
-            const visibleEntries = isExpanded
-              ? provider.entries
-              : provider.entries.slice(0, 8)
-            const hasHiddenEntries = provider.entries.length > visibleEntries.length
+            const visibleEntries = isExpanded ? provider.entries : []
+            const commandKindCounts = provider.entries.reduce(
+              (counts, entry) => {
+                counts[entry.kind] += 1
+                return counts
+              },
+              { cli: 0, slash: 0, flag: 0 } as Record<OfficialCommandKind, number>,
+            )
 
             return (
               <div
@@ -473,81 +477,66 @@ function OfficialSnapshotPanel({
                   ))}
                 </div>
 
-                {visibleEntries.length > 0 && (
+                {provider.entries.length > 0 && (
                   <>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="truncate text-[11px] font-medium text-muted-foreground">
-                        {t("settings.commands.officialCommandListTitle", {
-                          count: provider.entries.length,
-                        })}
-                      </p>
-                      {provider.entries.length > 8 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 shrink-0 px-2 text-[11px]"
-                          onClick={() => {
-                            setExpandedProviders((current) => {
-                              const next = new Set(current)
-                              if (next.has(provider.provider)) {
-                                next.delete(provider.provider)
-                              } else {
-                                next.add(provider.provider)
-                              }
-                              return next
-                            })
-                          }}
-                        >
-                          {isExpanded
-                            ? t("settings.commands.officialCollapseCommands")
-                            : t("settings.commands.officialShowAllCommands", {
-                                count: provider.entries.length,
-                              })}
-                        </Button>
-                      )}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md bg-background px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium text-foreground">
+                          {t("settings.commands.officialCommandSummaryTitle", {
+                            count: provider.entries.length,
+                          })}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {t("settings.commands.officialCommandSummaryMeta", {
+                            cli: commandKindCounts.cli,
+                            slash: commandKindCounts.slash,
+                            flag: commandKindCounts.flag,
+                          })}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 shrink-0 px-2 text-[11px]"
+                        onClick={() => {
+                          setExpandedProviders((current) => {
+                            const next = new Set(current)
+                            if (next.has(provider.provider)) {
+                              next.delete(provider.provider)
+                            } else {
+                              next.add(provider.provider)
+                            }
+                            return next
+                          })
+                        }}
+                      >
+                        {isExpanded
+                          ? t("settings.commands.officialCollapseCommands")
+                          : t("settings.commands.officialShowAllCommands", {
+                              count: provider.entries.length,
+                            })}
+                      </Button>
                     </div>
-                    <div
-                      className={cn(
-                        "mt-2 grid gap-1.5",
-                        isExpanded
-                          ? "max-h-[560px] overflow-y-auto pr-1 sm:grid-cols-1"
-                          : "sm:grid-cols-2",
-                      )}
-                    >
-                      {visibleEntries.map((entry) => (
-                        <div
-                          key={`${entry.kind}:${entry.name}:${entry.sourceTitle}`}
-                          className="min-w-0 rounded-md bg-background px-2.5 py-2"
-                        >
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <p
-                              className={cn(
-                                "min-w-0 flex-1 font-mono text-[11px] text-foreground",
-                                isExpanded ? "break-all" : "truncate",
-                              )}
-                            >
-                              {entry.name}
-                            </p>
-                            <SourceBadge label={getOfficialKindLabel(entry.kind, t)} />
-                          </div>
-                          <p
-                            className={cn(
-                              "mt-1 text-[10px] text-muted-foreground",
-                              isExpanded ? "leading-relaxed" : "truncate",
-                            )}
+                    {isExpanded && (
+                      <div className="mt-2 grid max-h-[560px] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-1">
+                        {visibleEntries.map((entry) => (
+                          <div
+                            key={`${entry.kind}:${entry.name}:${entry.sourceTitle}`}
+                            className="min-w-0 rounded-md bg-background px-2.5 py-2"
                           >
-                            {entry.description || entry.sourceTitle}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    {hasHiddenEntries && (
-                      <p className="mt-2 text-[10px] text-muted-foreground">
-                        {t("settings.commands.officialHiddenCommands", {
-                          count: provider.entries.length - visibleEntries.length,
-                        })}
-                      </p>
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p className="min-w-0 flex-1 break-all font-mono text-[11px] text-foreground">
+                                {entry.name}
+                              </p>
+                              <SourceBadge label={getOfficialKindLabel(entry.kind, t)} />
+                            </div>
+                            <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                              {entry.description || entry.sourceTitle}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </>
                 )}
