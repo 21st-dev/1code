@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, "..")
 const isWindows = process.platform === "win32"
+const skipPostinstall = process.env.LOCUS_SKIP_POSTINSTALL === "1"
 const electronBin = path.join(
   rootDir,
   "node_modules",
@@ -95,6 +96,11 @@ function rebuildNativeModules() {
 
 if (process.env.VERCEL) {
   console.log("[native] Skipping Electron native module check on Vercel.")
+  process.exit(0)
+}
+
+if (skipPostinstall) {
+  console.log("[native] Skipping Electron native module check for this install.")
   process.exit(0)
 }
 

@@ -14,6 +14,11 @@ const icnsDest = join(electronApp, "Contents/Resources/electron.icns")
 const appName = "Locus"
 const bundleIdentifier = "io.github.lupanpan1030.locus.dev"
 
+if (process.env.LOCUS_SKIP_POSTINSTALL === "1") {
+  console.log("[patch-electron-dev] Skipping Electron dev patch for this install.")
+  process.exit(0)
+}
+
 function setPlistValue(key, value) {
   execSync(`/usr/libexec/PlistBuddy -c "Set :${key} ${value}" "${plistPath}"`)
 }

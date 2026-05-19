@@ -24,7 +24,12 @@ jobs:
           bun-version: 1.3.14
 
       - name: Install dependencies
+        env:
+          LOCUS_SKIP_POSTINSTALL: "1"
         run: bun install --frozen-lockfile
+
+      - name: Rebuild Electron native modules
+        run: bun run native:rebuild
 
       - name: Download bundled agent binaries
         run: |
