@@ -46,7 +46,7 @@ Generate release attachment metadata after packaging:
 bun run release:manifest
 ```
 
-The manifest generator accepts the current friend-build macOS artifacts, such as `Locus-0.0.72-arm64-friend.zip`, and electron-builder default ZIP names. Attach the generated manifest and release artifacts to GitHub Releases manually.
+The manifest generator accepts the current friend-build macOS artifacts, such as `Locus-0.0.73-arm64-friend.zip`, and electron-builder default ZIP names. Attach the generated manifest and release artifacts to GitHub Releases manually.
 
 Run the macOS DMG smoke helper before sharing a build:
 
