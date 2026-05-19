@@ -7,17 +7,26 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, "..")
 const isWindows = process.platform === "win32"
 const skipPostinstall = process.env.LOCUS_SKIP_POSTINSTALL === "1"
-const electronBin = path.join(
+const electronBinShim = path.join(
   rootDir,
   "node_modules",
   ".bin",
   isWindows ? "electron.cmd" : "electron",
 )
-const electronRebuildBin = path.join(
+const electronCli = path.join(rootDir, "node_modules", "electron", "cli.js")
+const electronRebuildBinShim = path.join(
   rootDir,
   "node_modules",
   ".bin",
   isWindows ? "electron-rebuild.cmd" : "electron-rebuild",
+)
+const electronRebuildCli = path.join(
+  rootDir,
+  "node_modules",
+  "@electron",
+  "rebuild",
+  "lib",
+  "cli.js",
 )
 
 const args = new Set(process.argv.slice(2))
@@ -51,12 +60,37 @@ function run(command, commandArgs, options = {}) {
   })
 }
 
+function resolveNodeCliCommand(binPath, cliPath) {
+  if (existsSync(binPath)) {
+    return {
+      command: binPath,
+      args: [],
+      display: binPath,
+    }
+  }
+
+  if (existsSync(cliPath)) {
+    return {
+      command: process.execPath,
+      args: [cliPath],
+      display: cliPath,
+    }
+  }
+
+  return null
+}
+
 function testNativeModule(moduleInfo) {
-  const result = run(electronBin, ["-e", moduleInfo.test], {
-    env: {
-      ELECTRON_RUN_AS_NODE: "1",
+  const electronCommand = resolveNodeCliCommand(electronBinShim, electronCli)
+  const result = run(
+    electronCommand.command,
+    [...electronCommand.args, "-e", moduleInfo.test],
+    {
+      env: {
+        ELECTRON_RUN_AS_NODE: "1",
+      },
     },
-  })
+  )
 
   return {
     ok: result.status === 0,
@@ -83,9 +117,18 @@ function summarizeFailures(results) {
 
 function rebuildNativeModules() {
   console.log("[native] Rebuilding Electron native modules...")
+  const electronRebuildCommand = resolveNodeCliCommand(
+    electronRebuildBinShim,
+    electronRebuildCli,
+  )
   const result = run(
-    electronRebuildBin,
-    ["-f", "-w", nativeModules.map((moduleInfo) => moduleInfo.name).join(",")],
+    electronRebuildCommand.command,
+    [
+      ...electronRebuildCommand.args,
+      "-f",
+      "-w",
+      nativeModules.map((moduleInfo) => moduleInfo.name).join(","),
+    ],
     { stdio: "inherit" },
   )
 
@@ -104,12 +147,17 @@ if (skipPostinstall) {
   process.exit(0)
 }
 
-if (!existsSync(electronBin)) {
+const electronCommand = resolveNodeCliCommand(electronBinShim, electronCli)
+if (!electronCommand) {
   console.error("[native] Electron is not installed. Run `bun install` first.")
   process.exit(1)
 }
 
-if (!existsSync(electronRebuildBin)) {
+const electronRebuildCommand = resolveNodeCliCommand(
+  electronRebuildBinShim,
+  electronRebuildCli,
+)
+if (!electronRebuildCommand) {
   console.error("[native] electron-rebuild is not installed. Run `bun install` first.")
   process.exit(1)
 }
