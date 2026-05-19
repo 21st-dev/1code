@@ -271,10 +271,14 @@
       "category": "Development"
     },
     "nsis": {
+      "artifactName": "Locus-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Locus-${version}-portable.${ext}"
     }
   },
   "pnpm": {
