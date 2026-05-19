@@ -92,15 +92,6 @@ function SourceBadge({ label }: { label: string }) {
   )
 }
 
-function CountBadge({ value, label }: { value: number; label: string }) {
-  return (
-    <div className="min-w-0 rounded-md bg-muted px-2.5 py-1.5">
-      <p className="font-mono text-sm font-semibold text-foreground">{value}</p>
-      <p className="truncate text-[10px] text-muted-foreground">{label}</p>
-    </div>
-  )
-}
-
 function OfficialDocsCard({
   title,
   description,
@@ -145,31 +136,39 @@ function OfficialDocsCard({
   )
 }
 
-function GuideTile({
+function CapabilitySummaryCard({
   icon: Icon,
   title,
   description,
   label,
+  value,
+  countLabel,
 }: {
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
   label: string
+  value: number
+  countLabel: string
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border bg-background px-3 py-3">
-      <div className="flex items-start gap-2">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="text-xs font-semibold text-foreground">{title}</p>
-            <SourceBadge label={label} />
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            {description}
-          </p>
+    <div className="min-w-0 rounded-lg border border-border bg-background px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="truncate text-xs font-semibold text-foreground">{title}</p>
         </div>
+        <SourceBadge label={label} />
       </div>
+      <div className="mt-3 flex min-w-0 items-baseline gap-2">
+        <p className="font-mono text-2xl font-semibold leading-none text-foreground">
+          {value}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">{countLabel}</p>
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        {description}
+      </p>
     </div>
   )
 }
@@ -215,6 +214,9 @@ function getBuiltinCommandDescription(
     plan: "settings.commands.builtin.plan",
     agent: "settings.commands.builtin.agent",
     compact: "settings.commands.builtin.compact",
+    init: "settings.commands.builtin.init",
+    doctor: "settings.commands.builtin.doctor",
+    diff: "settings.commands.builtin.diff",
     review: "settings.commands.builtin.review",
     "pr-comments": "settings.commands.builtin.prComments",
     "release-notes": "settings.commands.builtin.releaseNotes",
@@ -820,115 +822,44 @@ export function AgentsCommandGuideTab() {
         </Button>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <GuideTile
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <CapabilitySummaryCard
           icon={Command}
           title={t("settings.commands.guide.chatTitle")}
           description={t("settings.commands.guide.chatDescription")}
           label={t("settings.commands.usableInChat")}
+          value={BUILTIN_SLASH_COMMANDS.length}
+          countLabel={t("settings.commands.countLocus")}
         />
-        <GuideTile
+        <CapabilitySummaryCard
           icon={FileText}
           title={t("settings.commands.guide.filesTitle")}
           description={t("settings.commands.guide.filesDescription")}
           label={t("settings.commands.usableInChat")}
+          value={userAndProjectCommands.length}
+          countLabel={t("settings.commands.countLocalFiles")}
         />
-        <GuideTile
+        <CapabilitySummaryCard
           icon={Terminal}
           title={t("settings.commands.guide.cliTitle")}
           description={t("settings.commands.guide.cliDescription")}
           label={t("settings.commands.referenceOnly")}
+          value={runtimeCommandCount}
+          countLabel={t("settings.commands.countRuntime")}
         />
-        <GuideTile
+        <CapabilitySummaryCard
           icon={Plug}
           title={t("settings.commands.guide.pluginsTitle")}
           description={t("settings.commands.guide.pluginsDescription")}
           label={t("settings.commands.referenceOnly")}
-        />
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-4">
-        <CountBadge
-          value={BUILTIN_SLASH_COMMANDS.length}
-          label={t("settings.commands.countLocus")}
-        />
-        <CountBadge
-          value={userAndProjectCommands.length}
-          label={t("settings.commands.countLocalFiles")}
-        />
-        <CountBadge
-          value={runtimeCommandCount}
-          label={t("settings.commands.countRuntime")}
-        />
-        <CountBadge
           value={pluginCommandSummary.total}
-          label={t("settings.commands.countPlugin")}
+          countLabel={t("settings.commands.countPlugin")}
         />
       </div>
 
       <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
         {t("settings.commands.localIndexNotice")}
       </div>
-
-      <section className="space-y-3">
-        <SectionHeader
-          icon={BookOpen}
-          title={t("settings.commands.officialDocsTitle")}
-          description={t("settings.commands.officialDocsDescription")}
-        />
-        <div className="grid gap-3 lg:grid-cols-2">
-          <OfficialDocsCard
-            title={t("settings.commands.officialClaudeTitle")}
-            description={t("settings.commands.officialClaudeDescription")}
-            updateNote={t("settings.commands.officialClaudeUpdate")}
-            links={[
-              {
-                label: t("settings.commands.officialCliReference"),
-                url: "https://code.claude.com/docs/en/cli-reference",
-              },
-              {
-                label: t("settings.commands.officialCommandsReference"),
-                url: "https://code.claude.com/docs/en/commands",
-              },
-              {
-                label: t("settings.commands.officialDocsIndex"),
-                url: "https://code.claude.com/docs/llms.txt",
-              },
-            ]}
-          />
-          <OfficialDocsCard
-            title={t("settings.commands.officialCodexTitle")}
-            description={t("settings.commands.officialCodexDescription")}
-            updateNote={t("settings.commands.officialCodexUpdate")}
-            links={[
-              {
-                label: t("settings.commands.officialCliReference"),
-                url: "https://developers.openai.com/codex/cli/reference",
-              },
-              {
-                label: t("settings.commands.officialSlashCommands"),
-                url: "https://developers.openai.com/codex/cli/slash-commands",
-              },
-              {
-                label: t("settings.commands.officialDocsIndex"),
-                url: "https://developers.openai.com/codex/llms.txt",
-              },
-              {
-                label: t("settings.commands.officialChangelog"),
-                url: "https://developers.openai.com/codex/changelog",
-              },
-            ]}
-          />
-        </div>
-        <OfficialSnapshotPanel
-          snapshot={officialIndexQuery.data}
-          runtimes={runtimeGuideQuery.data}
-          isLoading={officialIndexQuery.isLoading}
-          isRefreshing={isOfficialIndexRefreshing}
-          refreshError={refreshOfficialIndexMutation.error?.message ?? null}
-          onRefresh={handleRefreshOfficialIndex}
-        />
-      </section>
 
       <section className="space-y-3">
         <SectionHeader
@@ -1026,6 +957,66 @@ export function AgentsCommandGuideTab() {
             badgeLabel={t("settings.commands.sourcePlugin")}
           />
         )}
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader
+          icon={BookOpen}
+          title={t("settings.commands.officialDocsTitle")}
+          description={t("settings.commands.officialDocsDescription")}
+        />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <OfficialDocsCard
+            title={t("settings.commands.officialClaudeTitle")}
+            description={t("settings.commands.officialClaudeDescription")}
+            updateNote={t("settings.commands.officialClaudeUpdate")}
+            links={[
+              {
+                label: t("settings.commands.officialCliReference"),
+                url: "https://code.claude.com/docs/en/cli-reference",
+              },
+              {
+                label: t("settings.commands.officialCommandsReference"),
+                url: "https://code.claude.com/docs/en/commands",
+              },
+              {
+                label: t("settings.commands.officialDocsIndex"),
+                url: "https://code.claude.com/docs/llms.txt",
+              },
+            ]}
+          />
+          <OfficialDocsCard
+            title={t("settings.commands.officialCodexTitle")}
+            description={t("settings.commands.officialCodexDescription")}
+            updateNote={t("settings.commands.officialCodexUpdate")}
+            links={[
+              {
+                label: t("settings.commands.officialCliReference"),
+                url: "https://developers.openai.com/codex/cli/reference",
+              },
+              {
+                label: t("settings.commands.officialSlashCommands"),
+                url: "https://developers.openai.com/codex/cli/slash-commands",
+              },
+              {
+                label: t("settings.commands.officialDocsIndex"),
+                url: "https://developers.openai.com/codex/llms.txt",
+              },
+              {
+                label: t("settings.commands.officialChangelog"),
+                url: "https://developers.openai.com/codex/changelog",
+              },
+            ]}
+          />
+        </div>
+        <OfficialSnapshotPanel
+          snapshot={officialIndexQuery.data}
+          runtimes={runtimeGuideQuery.data}
+          isLoading={officialIndexQuery.isLoading}
+          isRefreshing={isOfficialIndexRefreshing}
+          refreshError={refreshOfficialIndexMutation.error?.message ?? null}
+          onRefresh={handleRefreshOfficialIndex}
+        />
       </section>
     </div>
   )

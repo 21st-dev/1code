@@ -354,28 +354,28 @@ export const en = {
 
   "settings.commands.title": "Command Guide",
   "settings.commands.subtitle":
-    "Read the badges first: Use in chat appears after typing /; Reference is a local CLI or plugin capability index.",
+    "See what you can select from chat with /, plus local CLI, plugin, and official references.",
   "settings.commands.refresh": "Refresh local detection",
   "settings.commands.localIndexNotice":
-    "This is detected from the local app, local command files, installed plugins, and runtime help output. It is not a complete official Claude Code or Codex manual.",
+    "Local index only: app shortcuts, command files, installed plugins, and runtime --help output. Official docs remain the complete reference.",
   "settings.commands.guide.chatTitle": "Chat / commands",
   "settings.commands.guide.chatDescription":
-    "Type / in the message box and choose one of Locus's built-in chat workflows.",
+    "Type / in chat to select these Locus workflows.",
   "settings.commands.guide.filesTitle": "Command files",
   "settings.commands.guide.filesDescription":
-    "Reusable prompt files from ~/.claude/commands or the current project.",
+    "Reusable prompt files from ~/.claude/commands or the opened project. They also appear in chat.",
   "settings.commands.guide.cliTitle": "Runtime CLI",
   "settings.commands.guide.cliDescription":
-    "Terminal subcommands exposed by the local Claude Code and Codex executables.",
+    "Top-level terminal subcommands detected from local Claude Code and Codex executables.",
   "settings.commands.guide.pluginsTitle": "Plugin commands",
   "settings.commands.guide.pluginsDescription":
-    "Command components declared by installed plugins. Treat them as capability references here.",
-  "settings.commands.usableInChat": "Use in chat",
-  "settings.commands.referenceOnly": "Reference",
-  "settings.commands.countLocus": "Locus chat",
-  "settings.commands.countLocalFiles": "Command files",
+    "Installed plugin command components. Availability depends on the plugin runtime.",
+  "settings.commands.usableInChat": "Chat usable",
+  "settings.commands.referenceOnly": "Reference only",
+  "settings.commands.countLocus": "built-in workflows",
+  "settings.commands.countLocalFiles": "local files",
   "settings.commands.countRuntime": "CLI subcommands",
-  "settings.commands.countPlugin": "Plugin commands",
+  "settings.commands.countPlugin": "plugin components",
   "settings.commands.officialDocsTitle": "Official Docs and Updates",
   "settings.commands.officialDocsDescription":
     "Use these links for the complete provider-owned command references. Locus only stores a local capability index.",
@@ -457,6 +457,9 @@ export const en = {
   "settings.commands.builtin.plan": "Switch the current chat to Plan mode.",
   "settings.commands.builtin.agent": "Switch the current chat to Agent mode.",
   "settings.commands.builtin.compact": "Compact conversation context.",
+  "settings.commands.builtin.init": "Initialize project instruction files for local agents.",
+  "settings.commands.builtin.doctor": "Diagnose local project and agent workflow health.",
+  "settings.commands.builtin.diff": "Summarize current working tree changes.",
   "settings.commands.builtin.review": "Ask the agent to review the current work.",
   "settings.commands.builtin.prComments": "Draft PR review comments.",
   "settings.commands.builtin.releaseNotes": "Draft release notes from the current work.",
@@ -2401,28 +2404,28 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
 
   "settings.commands.title": "Command Guide",
   "settings.commands.subtitle":
-    "先看标签：Chat 可用表示输入 / 后可以直接选；仅参考表示本机 CLI 或 plugin 能力索引。",
+    "查看 Chat 里输入 / 后可选的 commands，以及本机 CLI、plugin 和官方参考索引。",
   "settings.commands.refresh": "刷新本机检测",
   "settings.commands.localIndexNotice":
-    "这里来自本机 app、本地 command 文件、已安装 plugins 和 runtime help output；不是 Claude Code 或 Codex 的完整官方手册。",
+    "这里是本机索引：app 快捷工作流、command 文件、已安装 plugins 和 runtime --help output。完整说明仍以官方文档为准。",
   "settings.commands.guide.chatTitle": "Chat / commands",
   "settings.commands.guide.chatDescription":
-    "在消息输入框输入 /，选择 Locus 内置的 chat 工作流。",
+    "在 Chat 输入 / 后，可以直接选择这些 Locus 工作流。",
   "settings.commands.guide.filesTitle": "Command 文件",
   "settings.commands.guide.filesDescription":
-    "来自 ~/.claude/commands 或当前 project 的可复用 prompt 文件。",
+    "来自 ~/.claude/commands 或已打开 project 的可复用 prompt 文件，也会出现在 Chat 里。",
   "settings.commands.guide.cliTitle": "Runtime CLI",
   "settings.commands.guide.cliDescription":
-    "本机 Claude Code 和 Codex executable 暴露的 terminal subcommands。",
+    "从本机 Claude Code 和 Codex executable 检测到的 top-level terminal subcommands。",
   "settings.commands.guide.pluginsTitle": "Plugin commands",
   "settings.commands.guide.pluginsDescription":
-    "已安装 plugins 声明的 command components。这里先当成本机能力参考。",
+    "已安装 plugins 声明的 command components，是否可用取决于 plugin runtime。",
   "settings.commands.usableInChat": "Chat 可用",
   "settings.commands.referenceOnly": "仅参考",
-  "settings.commands.countLocus": "Locus chat",
-  "settings.commands.countLocalFiles": "Command 文件",
+  "settings.commands.countLocus": "内置工作流",
+  "settings.commands.countLocalFiles": "本地文件",
   "settings.commands.countRuntime": "CLI subcommands",
-  "settings.commands.countPlugin": "Plugin commands",
+  "settings.commands.countPlugin": "plugin components",
   "settings.commands.officialDocsTitle": "官方文档与更新",
   "settings.commands.officialDocsDescription":
     "完整命令列表以 provider 官方文档为准。Locus 这里只保存本机能力索引。",
@@ -2504,6 +2507,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.commands.builtin.plan": "把当前 chat 切到 Plan mode。",
   "settings.commands.builtin.agent": "把当前 chat 切到 Agent mode。",
   "settings.commands.builtin.compact": "压缩当前 conversation context。",
+  "settings.commands.builtin.init": "初始化给本地 agents 使用的项目说明文件。",
+  "settings.commands.builtin.doctor": "诊断本地 project 和 agent 工作流状态。",
+  "settings.commands.builtin.diff": "总结当前 working tree 的改动。",
   "settings.commands.builtin.review": "让 Agent review 当前工作。",
   "settings.commands.builtin.prComments": "生成 PR review comments 草稿。",
   "settings.commands.builtin.releaseNotes": "基于当前改动生成 release notes。",
