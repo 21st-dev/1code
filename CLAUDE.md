@@ -202,7 +202,7 @@ bun run release
 # Or step by step:
 bun run build              # Compile TypeScript
 bun run package:mac        # Build macOS app artifacts
-bun run dist:manifest      # Generate latest-mac.yml manifests
+bun run dist:manifest      # Generate fallback latest-mac.yml metadata
 ```
 
 ### Bump Version Before Release
@@ -215,15 +215,15 @@ npm version patch --no-git-tag-version
 
 1. If signing/notarizing, submit and check notarization with your configured keychain profile.
 2. Staple DMGs: `cd release && xcrun stapler staple *.dmg`
-3. Upload stapled DMGs/ZIPs and generated manifests to your own update feed if one is configured.
+3. Publish signed artifacts through GitHub Releases/electron-builder publish metadata when using Auto Update.
 4. Update GitHub release notes if publishing a GitHub release.
 
 ### Update Artifacts
 
 | File | Purpose |
 |------|---------|
-| `latest-mac.yml` | Manifest for arm64 auto-updates |
-| `latest-mac-x64.yml` | Manifest for Intel auto-updates |
+| `latest-mac.yml` | Manifest for arm64 auto-updates / fallback metadata |
+| `latest-mac-x64.yml` | Manifest for Intel auto-updates / fallback metadata |
 | `*{version}-arm64-mac.zip` | Auto-update payload (arm64) |
 | `*{version}-mac.zip` | Auto-update payload (Intel) |
 | `*{version}-arm64.dmg` | Manual download (arm64) |
@@ -231,11 +231,16 @@ npm version patch --no-git-tag-version
 
 ### Auto-Update Flow
 
-1. Auto-updates are disabled unless `MAIN_VITE_UPDATE_FEED_URL` is configured and Local-only mode is disabled.
-2. When enabled, the app checks the configured update feed on startup and when window regains focus (with 1 min cooldown).
-2. If version in manifest > current version, shows "Update Available" banner
-3. User clicks Download → downloads ZIP in background
-4. User clicks "Restart Now" → installs update and restarts
+1. Auto Update uses this fork's GitHub Releases feed through `electron-updater`.
+2. Packaged macOS apps and Windows NSIS installs check on startup and when the window regains focus (with 1 min cooldown).
+3. Development, Linux, and Windows portable builds show manual GitHub Releases fallback behavior.
+4. If the feed version is newer than `package.json`'s app version, Settings > About shows an update-available state.
+5. User clicks Download → downloads the update in background.
+6. User clicks "Restart to install" → installs update and restarts.
+
+### Signing Boundary
+
+Automatic update production readiness depends on signing. macOS builds need Developer ID signing plus notarization/stapling, and Windows NSIS builds should be code signed. Unsigned GitHub Release artifacts are internal test builds only and must be labeled that way.
 
 ## Current Status (WIP)
 

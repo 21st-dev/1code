@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Generate manual GitHub Releases manifest files.
+ * Generate fallback GitHub Releases manifest files.
  *
- * Locus does not initialize electron-updater in the default local-first build.
- * These manifests are release attachment metadata for humans/manual checks, not
- * an automatic update feed.
+ * Locus uses electron-updater for packaged macOS and Windows NSIS installs.
+ * These manifests remain release attachment metadata for manual/fallback checks;
+ * electron-builder publish metadata is the production updater feed.
  *
  * Usage:
  *   node scripts/generate-update-manifest.mjs

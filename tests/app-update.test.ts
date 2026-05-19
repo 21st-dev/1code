@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import {
   compareVersions,
+  getAutoUpdateDisabledReason,
+  getAutoUpdateSupport,
+  parseAppUpdateSettingsContent,
   parseGitHubReleaseForUpdate,
   parseVersion,
+  serializeAppUpdateSettings,
 } from "../src/shared/app-update"
 
 describe("app update parsing", () => {
@@ -78,5 +82,76 @@ describe("app update parsing", () => {
         },
       ),
     ).toThrow("Latest GitHub Release did not include a tag")
+  })
+
+  test("parses app update settings with safe defaults", () => {
+    expect(parseAppUpdateSettingsContent(null)).toEqual({
+      autoCheckEnabled: true,
+    })
+    expect(parseAppUpdateSettingsContent("not json")).toEqual({
+      autoCheckEnabled: true,
+    })
+    expect(
+      parseAppUpdateSettingsContent('{"autoCheckEnabled":false}'),
+    ).toEqual({ autoCheckEnabled: false })
+    expect(serializeAppUpdateSettings({ autoCheckEnabled: false })).toContain(
+      '"autoCheckEnabled": false',
+    )
+  })
+
+  test("detects auto-update support by runtime target", () => {
+    expect(
+      getAutoUpdateSupport({
+        isPackaged: false,
+        platform: "darwin",
+      }),
+    ).toEqual({ supported: false, reason: "development" })
+
+    expect(
+      getAutoUpdateSupport({
+        isPackaged: true,
+        platform: "darwin",
+      }),
+    ).toEqual({ supported: true })
+
+    expect(
+      getAutoUpdateSupport({
+        isPackaged: true,
+        platform: "win32",
+      }),
+    ).toEqual({ supported: true })
+
+    expect(
+      getAutoUpdateSupport({
+        isPackaged: true,
+        platform: "win32",
+        env: { PORTABLE_EXECUTABLE_DIR: "C:\\Temp" },
+      }),
+    ).toEqual({ supported: false, reason: "portable" })
+
+    expect(
+      getAutoUpdateSupport({
+        isPackaged: true,
+        platform: "linux",
+      }),
+    ).toEqual({ supported: false, reason: "unsupported-platform" })
+  })
+
+  test("reports disabled-by-user after target support is satisfied", () => {
+    expect(
+      getAutoUpdateDisabledReason({
+        isPackaged: true,
+        platform: "darwin",
+        autoCheckEnabled: false,
+      }),
+    ).toBe("disabled-by-user")
+
+    expect(
+      getAutoUpdateDisabledReason({
+        isPackaged: false,
+        platform: "darwin",
+        autoCheckEnabled: false,
+      }),
+    ).toBe("development")
   })
 })

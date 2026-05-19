@@ -4,6 +4,7 @@ import { createServer } from "http"
 import { join } from "path"
 import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
 import { isLocalOnlyMode, openExternalUrl } from "./lib/local-only"
+import { startAutomaticAppUpdateChecks } from "./lib/app-updater"
 import { closeDatabase, initDatabase } from "./lib/db"
 import {
   getLaunchDirectory,
@@ -727,7 +728,7 @@ if (gotTheLock) {
     // Create main window
     createMainWindow()
 
-    console.log("[AutoUpdater] Hosted updater removed from local-first build")
+    startAutomaticAppUpdateChecks()
 
     // Warm up MCP cache 3 seconds after startup (background, non-blocking)
     // This populates the cache so all future sessions can use filtered MCP servers

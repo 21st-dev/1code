@@ -1,6 +1,15 @@
 import { app } from "electron"
+import { z } from "zod"
 import { publicProcedure, router } from "../index"
 import { assertOfficialCloudAllowed } from "../../local-only"
+import {
+  checkForAppUpdates,
+  downloadAppUpdate,
+  getAppUpdateState,
+  quitAndInstallAppUpdate,
+  readAppUpdateSettings,
+  setAppUpdateAutoCheckEnabled,
+} from "../../app-updater"
 import {
   parseGitHubReleaseForUpdate,
   type GitHubReleaseLike,
@@ -29,12 +38,35 @@ function getReleaseUrls() {
 export const appUpdatesRouter = router({
   getCurrent: publicProcedure.query(() => {
     const urls = getReleaseUrls()
+    const settings = readAppUpdateSettings()
     return {
       currentVersion: app.getVersion(),
+      isPackaged: app.isPackaged,
+      platform: process.platform,
       releasesRepo: urls.repo,
       releasesPageUrl: urls.releasesPageUrl,
       latestPageUrl: urls.latestPageUrl,
+      autoCheckEnabled: settings.autoCheckEnabled,
+      state: getAppUpdateState(),
     }
+  }),
+
+  setAutoCheckEnabled: publicProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(({ input }) => {
+      return setAppUpdateAutoCheckEnabled(input.enabled)
+    }),
+
+  checkNow: publicProcedure.mutation(async () => {
+    return checkForAppUpdates({ manual: true })
+  }),
+
+  download: publicProcedure.mutation(async () => {
+    return downloadAppUpdate()
+  }),
+
+  quitAndInstall: publicProcedure.mutation(() => {
+    return quitAndInstallAppUpdate()
   }),
 
   check: publicProcedure.mutation(async () => {

@@ -88,6 +88,7 @@
     "diff": "^8.0.3",
     "drizzle-orm": "^0.45.1",
     "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3",
     "jotai": "^2.11.1",
     "js-yaml": "^4.1.0",
     "jsonc-parser": "^3.3.1",
@@ -145,6 +146,13 @@
     "appId": "io.github.lupanpan1030.locus",
     "productName": "Locus",
     "npmRebuild": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "lupanpan1030",
+        "repo": "agent-code-for-me"
+      }
+    ],
     "protocols": [
       {
         "name": "Locus",
