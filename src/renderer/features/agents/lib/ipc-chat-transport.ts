@@ -186,7 +186,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       subChatClaudeModelSourceAtomFamily(this.config.subChatId),
     )
     const modelSource =
-      selectedModelSource === "auto" ? undefined : selectedModelSource
+      selectedModelSource === "auto" ? "claude-oauth" : selectedModelSource
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)

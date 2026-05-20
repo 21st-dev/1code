@@ -1,6 +1,7 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
+import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import {
   codexApiKeyAtom,
   codexLoginModalOpenAtom,
@@ -15,6 +16,7 @@ import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
   pendingAuthRetryMessageAtom,
   subChatCodexModelIdAtomFamily,
+  subChatCodexModelSourceAtomFamily,
   subChatCodexThinkingAtomFamily,
 } from "../atoms"
 import { CODEX_MODELS, type CodexThinkingLevel } from "./models"
@@ -148,7 +150,19 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     if (forceNewSession) {
       forceFreshSessionSubChats.delete(this.config.subChatId)
     }
-    const codexApiKey = normalizeCodexApiKey(appStore.get(codexApiKeyAtom))
+    const selectedCodexModelSource = appStore.get(
+      subChatCodexModelSourceAtomFamily(this.config.subChatId),
+    )
+    const storedCodexApiKey = normalizeCodexApiKey(appStore.get(codexApiKeyAtom))
+    const effectiveCodexModelSource =
+      selectedCodexModelSource === "chatgpt" &&
+      appStore.get(codexOnboardingAuthMethodAtom) === "api_key" &&
+      storedCodexApiKey
+        ? "openai-api-key"
+        : selectedCodexModelSource
+    const providerProfileId = parseProviderProfileSource(effectiveCodexModelSource)
+    const codexApiKey =
+      effectiveCodexModelSource === "openai-api-key" ? storedCodexApiKey : ""
     const selectedModel = getSelectedCodexModel(this.config.subChatId)
 
     return new ReadableStream({
@@ -186,6 +200,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
             ...(sessionId ? { sessionId } : {}),
             ...(forceNewSession ? { forceNewSession: true } : {}),
             ...(images.length > 0 ? { images } : {}),
+            ...(providerProfileId ? { providerProfileId } : {}),
             ...(codexApiKey
               ? {
                   authConfig: {
@@ -207,6 +222,15 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
 
               if (chunk.type === "auth-error") {
                 forceFreshSessionSubChats.add(this.config.subChatId)
+
+                if (providerProfileId) {
+                  const error = new Error("Provider Profile authentication failed")
+                  toast.error(tr("agent.transport.codexRequestFailed"), {
+                    description: error.message,
+                  })
+                  controller.error(error)
+                  return
+                }
 
                 void (async () => {
                   const credentials = await resolveCodexCredentialsForAuthError()

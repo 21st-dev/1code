@@ -31,6 +31,7 @@ import {
   getActiveLocalApiProviderConfig,
   type LocalApiProviderPurpose,
 } from "./local-api-provider-config"
+import { getProviderDefaultRuntimeConfig } from "../../provider-profiles/storage"
 import {
   buildCommitFileSummary,
   buildCommitMessagePrompt,
@@ -76,9 +77,10 @@ function getFallbackName(userMessage: string): string {
 }
 
 type LocalChatCompletionProviderConfig = {
-  apiKey: string
+  apiKey: string | null
   apiUrl: string
   model: string
+  authMode?: "bearer" | "x-api-key" | "none"
 }
 
 const COMMIT_MESSAGE_PROVIDER_TIMEOUT_MS = 15_000
@@ -123,6 +125,16 @@ function buildChatCompletionUrl(baseUrl: string): string {
 function getLocalChatCompletionProviderConfig(
   purpose: LocalApiProviderPurpose,
 ): LocalChatCompletionProviderConfig | null {
+  const profile = getProviderDefaultRuntimeConfig(purpose)
+  if (profile && profile.protocol === "openai-chat") {
+    return {
+      apiKey: profile.token,
+      apiUrl: buildChatCompletionUrl(profile.baseUrl),
+      model: profile.modelOverride || profile.defaultModel,
+      authMode: profile.authMode,
+    }
+  }
+
   const config = getActiveLocalApiProviderConfig(purpose)
   if (!config) return null
 
@@ -130,7 +142,22 @@ function getLocalChatCompletionProviderConfig(
     apiKey: config.token,
     apiUrl: buildChatCompletionUrl(config.baseUrl),
     model: config.model,
+    authMode: "bearer",
   }
+}
+
+function buildUtilityProviderHeaders(
+  config: LocalChatCompletionProviderConfig,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+  if (config.authMode === "x-api-key" && config.apiKey) {
+    headers["x-api-key"] = config.apiKey
+  } else if (config.authMode !== "none" && config.apiKey) {
+    headers.Authorization = `Bearer ${config.apiKey}`
+  }
+  return headers
 }
 
 function isDeepSeekChatCompletionProvider(
@@ -341,10 +368,7 @@ async function generateChatNameWithConfiguredProvider(
     assertOfficialCloudAllowed("generate chat title with configured provider", config.apiUrl)
     const response = await fetch(config.apiUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: buildUtilityProviderHeaders(config),
       body: JSON.stringify(
         buildUtilityChatCompletionBody(config, {
           model: config.model,
@@ -401,10 +425,7 @@ async function generateCommitMessageWithConfiguredProvider(
     const response = await fetch(config.apiUrl, {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: buildUtilityProviderHeaders(config),
       body: JSON.stringify(
         buildUtilityChatCompletionBody(config, {
           model: config.model,

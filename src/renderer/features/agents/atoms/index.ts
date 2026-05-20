@@ -112,12 +112,29 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-export type ClaudeModelSource = "auto" | "claude-oauth" | "custom-provider"
+export type ProviderProfileSource = `provider-profile:${string}`
+export type ClaudeModelSource =
+  | "auto"
+  | "claude-oauth"
+  | "custom-provider"
+  | ProviderProfileSource
+export type CodexModelSource =
+  | "chatgpt"
+  | "openai-api-key"
+  | ProviderProfileSource
 
 export const lastSelectedClaudeModelSourceAtom =
   atomWithStorage<ClaudeModelSource>(
     "agents:lastSelectedClaudeModelSource",
-    "auto",
+    "claude-oauth",
+    undefined,
+    { getOnInit: true },
+  )
+
+export const lastSelectedCodexModelSourceAtom =
+  atomWithStorage<CodexModelSource>(
+    "agents:lastSelectedCodexModelSource",
+    "chatgpt",
     undefined,
     { getOnInit: true },
   )
@@ -191,6 +208,39 @@ export const subChatClaudeModelSourceAtomFamily = atomFamily((subChatId: string)
       const current = get(subChatClaudeModelSourcesStorageAtom)
       if (current[subChatId] === newModelSource) return
       set(subChatClaudeModelSourcesStorageAtom, {
+        ...current,
+        [subChatId]: newModelSource,
+      })
+    },
+  ),
+)
+
+const subChatCodexModelSourcesStorageAtom = atomWithStorage<
+  Record<string, CodexModelSource>
+>(
+  "agents:subChatCodexModelSources",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatCodexModelSourceAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedCodexModelSourceAtom)
+      return (
+        get(subChatCodexModelSourcesStorageAtom)[subChatId] ??
+        get(lastSelectedCodexModelSourceAtom)
+      )
+    },
+    (get, set, newModelSource: CodexModelSource) => {
+      if (!subChatId) {
+        set(lastSelectedCodexModelSourceAtom, newModelSource)
+        return
+      }
+      const current = get(subChatCodexModelSourcesStorageAtom)
+      if (current[subChatId] === newModelSource) return
+      set(subChatCodexModelSourcesStorageAtom, {
         ...current,
         [subChatId]: newModelSource,
       })

@@ -38,6 +38,12 @@ import {
   getActiveClaudeProviderConfig,
   type ClaudeProviderRuntimeConfig,
 } from "./claude-provider-config"
+import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
+import {
+  getLegacyClaudeProviderProfileId,
+  getProviderProfileRuntimeConfig,
+} from "../../provider-profiles/storage"
+import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import { createRollbackStash } from "../../git/stash"
 import {
   ensureMcpTokensFresh,
@@ -726,7 +732,7 @@ export const claudeRouter = router({
         mode: z.enum(["plan", "agent"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
-        modelSource: z.enum(["claude-oauth", "custom-provider"]).optional(),
+        modelSource: z.string().optional(),
         customConfig: z
           .object({
             model: z.string().min(1),
@@ -908,9 +914,51 @@ export const claudeRouter = router({
               : undefined
             let providerConfig: ClaudeProviderRuntimeConfig | undefined
 
-            if (input.modelSource === "custom-provider") {
+            const selectedProviderProfileId = parseProviderProfileSource(
+              input.modelSource,
+            )
+
+            if (selectedProviderProfileId) {
+              const profile = getProviderProfileRuntimeConfig(selectedProviderProfileId)
+              if (!profile || !profile.targetRuntimes.includes("claude")) {
+                emitError(
+                  new Error("Provider profile is not available for Claude"),
+                  "Provider profile unavailable",
+                )
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return
+              }
+
+              const gateway = await getProviderGatewayEndpoint(profile.id, "anthropic")
+              providerConfig = {
+                model: profile.defaultModel,
+                baseUrl: gateway.baseUrl,
+                token: gateway.token,
+                authMode: "auth_token",
+              }
+            } else if (input.modelSource === "custom-provider") {
+              const legacyProfileId = getLegacyClaudeProviderProfileId()
+              if (legacyProfileId) {
+                const profile = getProviderProfileRuntimeConfig(legacyProfileId)
+                if (profile) {
+                  const gateway = await getProviderGatewayEndpoint(
+                    profile.id,
+                    "anthropic",
+                  )
+                  providerConfig = {
+                    model: profile.defaultModel,
+                    baseUrl: gateway.baseUrl,
+                    token: gateway.token,
+                    authMode: "auth_token",
+                  }
+                }
+              }
+
               providerConfig =
-                getActiveClaudeProviderConfig() || legacyProviderConfig
+                providerConfig ||
+                getActiveClaudeProviderConfig() ||
+                legacyProviderConfig
 
               if (!providerConfig) {
                 emitError(
@@ -921,11 +969,6 @@ export const claudeRouter = router({
                 safeComplete()
                 return
               }
-            } else if (!input.modelSource) {
-              // Backward compatibility for older renderer calls that predate
-              // explicit model-source selection.
-              providerConfig =
-                getActiveClaudeProviderConfig() || legacyProviderConfig
             }
 
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline

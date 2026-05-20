@@ -19,6 +19,8 @@ import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
+import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
+import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import {
   fetchMcpTools,
   fetchMcpToolsStdio,
@@ -37,6 +39,7 @@ type CodexProviderSession = {
   cwd: string
   authFingerprint: string | null
   mcpFingerprint: string
+  providerProfileId: string | null
 }
 
 type CodexLoginSessionState =
@@ -1230,13 +1233,23 @@ function preprocessCodexModelName(params: {
   return params.modelId
 }
 
+function codexProviderProfileModelId(modelId: string): string {
+  if (/\/(none|minimal|low|medium|high|xhigh)$/.test(modelId)) {
+    return modelId
+  }
+  return `${modelId}/none`
+}
+
 function getAuthFingerprint(authConfig?: { apiKey: string }): string | null {
   const apiKey = authConfig?.apiKey?.trim()
   if (!apiKey) return null
   return createHash("sha256").update(apiKey).digest("hex")
 }
 
-function buildCodexProviderEnv(authConfig?: { apiKey: string }): Record<string, string> {
+function buildCodexProviderEnv(params?: {
+  authConfig?: { apiKey: string }
+  providerGatewayToken?: string
+}): Record<string, string> {
   // Prefer shell-derived values (notably PATH) so stdio MCP dependencies
   // like pipx/npx resolve the same way as in MCP tool probing.
   const env: Record<string, string> = {}
@@ -1254,14 +1267,22 @@ function buildCodexProviderEnv(authConfig?: { apiKey: string }): Record<string, 
     }
   }
 
-  const apiKey = authConfig?.apiKey?.trim()
+  const apiKey = params?.authConfig?.apiKey?.trim()
   if (!apiKey) {
-    return env
+    return {
+      ...env,
+      ...(params?.providerGatewayToken
+        ? { LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN: params.providerGatewayToken }
+        : {}),
+    }
   }
 
   return {
     ...env,
     CODEX_API_KEY: apiKey,
+    ...(params?.providerGatewayToken
+      ? { LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN: params.providerGatewayToken }
+      : {}),
   }
 }
 
@@ -1346,6 +1367,12 @@ function getOrCreateProvider(params: {
   authConfig?: {
     apiKey: string
   }
+  providerProfile?: {
+    id: string
+    name: string
+    baseUrl: string
+    token: string
+  }
 }): ACPProvider {
   const authFingerprint = getAuthFingerprint(params.authConfig)
   const existing = providerSessions.get(params.subChatId)
@@ -1354,7 +1381,8 @@ function getOrCreateProvider(params: {
     existing &&
     existing.cwd === params.cwd &&
     existing.authFingerprint === authFingerprint &&
-    existing.mcpFingerprint === params.mcpFingerprint
+    existing.mcpFingerprint === params.mcpFingerprint &&
+    existing.providerProfileId === (params.providerProfile?.id ?? null)
   ) {
     return existing.provider
   }
@@ -1373,7 +1401,26 @@ function getOrCreateProvider(params: {
 
   const provider = createACPProvider({
     command: resolveCodexAcpBinaryPath(),
-    env: buildCodexProviderEnv(params.authConfig),
+    env: buildCodexProviderEnv({
+      authConfig: params.authConfig,
+      providerGatewayToken: params.providerProfile?.token,
+    }),
+    ...(params.providerProfile
+      ? {
+          args: [
+            "-c",
+            `model_provider=${JSON.stringify("locus_profile")}`,
+            "-c",
+            `model_providers.locus_profile.name=${JSON.stringify(params.providerProfile.name)}`,
+            "-c",
+            `model_providers.locus_profile.base_url=${JSON.stringify(params.providerProfile.baseUrl)}`,
+            "-c",
+            `model_providers.locus_profile.env_key=${JSON.stringify("LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN")}`,
+            "-c",
+            `model_providers.locus_profile.wire_api=${JSON.stringify("responses")}`,
+          ],
+        }
+      : {}),
     authMethodId: getCodexAuthMethodId(params.authConfig),
     session: {
       cwd: params.cwd,
@@ -1390,6 +1437,7 @@ function getOrCreateProvider(params: {
     cwd: params.cwd,
     authFingerprint,
     mcpFingerprint: params.mcpFingerprint,
+    providerProfileId: params.providerProfile?.id ?? null,
   })
 
   return provider
@@ -1696,6 +1744,7 @@ export const codexRouter = router({
             apiKey: z.string().min(1),
           })
           .optional(),
+        providerProfileId: z.string().optional(),
       }),
     )
     .subscription(({ input }) => {
@@ -1751,11 +1800,42 @@ export const codexRouter = router({
             }
 
             const existingMessages = parseStoredMessages(existingSubChat.messages)
+            let codexProviderProfile:
+              | {
+                  id: string
+                  name: string
+                  baseUrl: string
+                  token: string
+                  model: string
+                }
+              | undefined
+            if (input.providerProfileId) {
+              const profile = getProviderProfileRuntimeConfig(input.providerProfileId)
+              if (!profile || !profile.targetRuntimes.includes("codex")) {
+                safeEmit({
+                  type: "auth-error",
+                  errorText: "Provider profile is not available for Codex",
+                })
+                safeEmit({ type: "finish" })
+                safeComplete()
+                return
+              }
+              const gateway = await getProviderGatewayEndpoint(profile.id, "responses")
+              codexProviderProfile = {
+                id: profile.id,
+                name: profile.name,
+                baseUrl: gateway.baseUrl,
+                token: gateway.token,
+                model: codexProviderProfileModelId(profile.defaultModel),
+              }
+            }
             const requestedModelId =
-              extractCodexModelId(input.model) || DEFAULT_CODEX_MODEL
+              codexProviderProfile?.model ||
+              extractCodexModelId(input.model) ||
+              DEFAULT_CODEX_MODEL
             const selectedModelId = preprocessCodexModelName({
               modelId: requestedModelId,
-              authConfig: input.authConfig,
+              authConfig: codexProviderProfile ? undefined : input.authConfig,
             })
             const metadataModel = selectedModelId
 
@@ -1860,7 +1940,8 @@ export const codexRouter = router({
                 input.forceNewSession
                   ? undefined
                   : input.sessionId ?? getLastSessionId(existingMessages),
-              authConfig: input.authConfig,
+              authConfig: codexProviderProfile ? undefined : input.authConfig,
+              providerProfile: codexProviderProfile,
             })
 
             const startedAt = Date.now()

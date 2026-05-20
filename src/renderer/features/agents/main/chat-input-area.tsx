@@ -43,6 +43,7 @@ import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
   codexApiKeyAtom,
+  codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
@@ -55,11 +56,13 @@ import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
 import {
   lastSelectedCodexModelIdAtom,
+  lastSelectedCodexModelSourceAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedClaudeModelSourceAtom,
   lastSelectedModelIdAtom,
   subChatClaudeModelSourceAtomFamily,
   subChatCodexModelIdAtomFamily,
+  subChatCodexModelSourceAtomFamily,
   subChatCodexThinkingAtomFamily,
   subChatModelIdAtomFamily,
   subChatModeAtomFamily,
@@ -70,6 +73,10 @@ import {
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentModelSelector } from "../components/agent-model-selector"
+import {
+  isProviderProfileSource,
+  parseProviderProfileSource,
+} from "../../../../shared/provider-profile-types"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
@@ -473,6 +480,12 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [selectedSubChatCodexModelId, setSelectedSubChatCodexModelId] = useAtom(
     subChatCodexModelIdAtom,
   )
+  const subChatCodexModelSourceAtom = useMemo(
+    () => subChatCodexModelSourceAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatCodexModelSource, setSelectedSubChatCodexModelSource] =
+    useAtom(subChatCodexModelSourceAtom)
   const subChatCodexThinkingAtom = useMemo(
     () => subChatCodexThinkingAtomFamily(subChatId),
     [subChatId],
@@ -492,6 +505,9 @@ export const ChatInputArea = memo(function ChatInputArea({
     lastSelectedClaudeModelSourceAtom,
   )
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
+  const setLastSelectedCodexModelSource = useSetAtom(
+    lastSelectedCodexModelSourceAtom,
+  )
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
   const availableModels = useAvailableModels()
@@ -520,6 +536,12 @@ export const ChatInputArea = memo(function ChatInputArea({
   const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
   const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
   const hiddenModels = useAtomValue(hiddenModelsAtom)
+  const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
+  const { data: providerProfilesData } =
+    trpc.providerProfiles.listProfiles.useQuery(undefined, {
+      staleTime: 30_000,
+    })
+  const providerProfiles = providerProfilesData?.profiles ?? []
 
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
@@ -527,14 +549,19 @@ export const ChatInputArea = memo(function ChatInputArea({
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const { data: claudeCodeIntegration } =
     trpc.claudeCode.getIntegration.useQuery()
+  const shouldUseCodexApiKeyModels =
+    selectedSubChatCodexModelSource === "openai-api-key" ||
+    (selectedSubChatCodexModelSource === "chatgpt" &&
+      codexOnboardingAuthMethod === "api_key" &&
+      hasAppCodexApiKey)
   const codexUiModels = useMemo(
     () => {
-      let models = hasAppCodexApiKey
+      let models = shouldUseCodexApiKeyModels
         ? CODEX_MODELS.filter((model) => isCodexApiKeySupportedModel(model.id))
         : CODEX_MODELS
       return models.filter((model) => !hiddenModels.includes(model.id))
     },
-    [hasAppCodexApiKey, hiddenModels],
+    [hiddenModels, shouldUseCodexApiKeyModels],
   )
   const selectedCodexModel = useMemo(
     () =>
@@ -581,12 +608,15 @@ export const ChatInputArea = memo(function ChatInputArea({
   // This prevents later global default changes from affecting existing sub-chats.
   useEffect(() => {
     if (provider !== "codex") return
+    setSelectedSubChatCodexModelSource(selectedSubChatCodexModelSource)
     if (selectedCodexModel?.id) {
       setSelectedSubChatCodexModelId(selectedCodexModel.id)
     }
     setSelectedSubChatCodexThinking(selectedCodexThinking)
   }, [
     provider,
+    selectedSubChatCodexModelSource,
+    setSelectedSubChatCodexModelSource,
     selectedCodexModel?.id,
     selectedCodexThinking,
     setSelectedSubChatCodexModelId,
@@ -596,28 +626,59 @@ export const ChatInputArea = memo(function ChatInputArea({
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
+  const selectedClaudeProfileId = parseProviderProfileSource(
+    selectedClaudeModelSource,
+  )
+  const selectedClaudeProviderProfile =
+    selectedClaudeProfileId
+      ? providerProfiles.find(
+          (profile) =>
+            profile.id === selectedClaudeProfileId &&
+            profile.targetRuntimes.includes("claude"),
+        )
+      : undefined
+  const selectedClaudeProfileIsPending =
+    Boolean(selectedClaudeProfileId) && !providerProfilesData
   const effectiveClaudeModelSource =
     selectedClaudeModelSource === "auto"
-      ? hasCustomClaudeConfig
-        ? "custom-provider"
-        : "claude-oauth"
-      : hasCustomClaudeConfig
-        ? selectedClaudeModelSource
-        : "claude-oauth"
+      ? "claude-oauth"
+      : selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig
+        ? "claude-oauth"
+        : selectedClaudeProfileId &&
+            !selectedClaudeProviderProfile &&
+            !selectedClaudeProfileIsPending
+          ? "claude-oauth"
+          : selectedClaudeModelSource
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||
     apiKeyOnboardingCompleted ||
-    hasCustomClaudeConfig
+    hasCustomClaudeConfig ||
+    providerProfiles.some(
+      (profile) =>
+        profile.targetRuntimes.includes("claude") &&
+        profile.lastTestStatus?.ok !== false,
+    )
 
   useEffect(() => {
-    if (hasCustomClaudeConfig) return
-    if (selectedClaudeModelSource !== "custom-provider") return
-    setSelectedClaudeModelSource("claude-oauth")
-    setLastSelectedClaudeModelSource("claude-oauth")
+    if (selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig) {
+      setSelectedClaudeModelSource("claude-oauth")
+      setLastSelectedClaudeModelSource("claude-oauth")
+      return
+    }
+    if (
+      isProviderProfileSource(selectedClaudeModelSource) &&
+      !selectedClaudeProviderProfile &&
+      !selectedClaudeProfileIsPending
+    ) {
+      setSelectedClaudeModelSource("claude-oauth")
+      setLastSelectedClaudeModelSource("claude-oauth")
+    }
   }, [
     hasCustomClaudeConfig,
     selectedClaudeModelSource,
+    selectedClaudeProviderProfile,
+    selectedClaudeProfileIsPending,
     setLastSelectedClaudeModelSource,
     setSelectedClaudeModelSource,
   ])
@@ -637,11 +698,27 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
+      const selectedProfileId = parseProviderProfileSource(
+        selectedSubChatCodexModelSource,
+      )
+      const selectedProfile = selectedProfileId
+        ? providerProfiles.find((profile) => profile.id === selectedProfileId)
+        : undefined
+      if (selectedProfile) {
+        return `${selectedProfile.name} · ${selectedProfile.defaultModel}`
+      }
+      if (selectedSubChatCodexModelSource === "openai-api-key") {
+        return `${t("agent.model.codexApiKey")} · ${selectedCodexModel.name}`
+      }
       return selectedCodexModel.name
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
       return currentOllamaModel || "Ollama"
+    }
+
+    if (selectedClaudeProviderProfile) {
+      return `${selectedClaudeProviderProfile.name} · ${selectedClaudeProviderProfile.defaultModel}`
     }
 
     if (effectiveClaudeModelSource === "custom-provider") {
@@ -655,11 +732,14 @@ export const ChatInputArea = memo(function ChatInputArea({
     return `${selectedModel.name} ${selectedModel.version}`
   }, [
     provider,
+    selectedSubChatCodexModelSource,
+    providerProfiles,
     selectedCodexModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
     effectiveClaudeModelSource,
+    selectedClaudeProviderProfile,
     selectedModel,
     t,
   ])
@@ -1653,6 +1733,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       allowProviderSwitch={canSwitchProvider}
                       onContinueWithProvider={!canSwitchProvider ? onContinueWithProvider : undefined}
                       selectedModelLabel={selectedModelLabel}
+                      providerProfiles={providerProfiles}
                       onOpenModelsSettings={() => {
                         setSettingsTab("models")
                         setSettingsOpen(true)
@@ -1702,6 +1783,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setSelectedSubChatCodexThinking(nextThinking)
                           setLastSelectedCodexModelId(model.id)
                           setLastSelectedCodexThinking(nextThinking)
+                        },
+                        selectedModelSource: selectedSubChatCodexModelSource,
+                        onSelectModelSource: (source) => {
+                          setSelectedSubChatCodexModelSource(source)
+                          setLastSelectedCodexModelSource(source)
                         },
                         selectedThinking: selectedCodexThinking,
                         onSelectThinking: (thinking) => {

@@ -32,6 +32,7 @@ import {
   justCreatedIdsAtom,
   lastSelectedAgentIdAtom,
   lastSelectedCodexModelIdAtom,
+  lastSelectedCodexModelSourceAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedClaudeModelSourceAtom,
   lastSelectedBranchesAtom,
@@ -42,8 +43,11 @@ import {
   selectedProjectAtom,
   getNextMode,
   type AgentMode,
+  subChatClaudeModelSourceAtomFamily,
+  subChatCodexModelSourceAtomFamily,
 } from "../atoms"
 import { defaultAgentModeAtom } from "../../../lib/atoms"
+import { appStore } from "../../../lib/jotai-store"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
 import {
@@ -52,6 +56,7 @@ import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
   codexApiKeyAtom,
+  codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
@@ -101,6 +106,10 @@ import {
 import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
 import { AgentModelSelector } from "../components/agent-model-selector"
+import {
+  isProviderProfileSource,
+  parseProviderProfileSource,
+} from "../../../../shared/provider-profile-types"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -237,29 +246,55 @@ export function NewChatForm({
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
+  const { data: providerProfilesData } =
+    trpc.providerProfiles.listProfiles.useQuery(undefined, {
+      staleTime: 30_000,
+    })
+  const providerProfiles = providerProfilesData?.profiles ?? []
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   const [selectedClaudeModelSource, setSelectedClaudeModelSource] = useAtom(
     lastSelectedClaudeModelSourceAtom,
   )
+  const selectedClaudeProfileId = parseProviderProfileSource(
+    selectedClaudeModelSource,
+  )
+  const selectedClaudeProviderProfile =
+    selectedClaudeProfileId
+      ? providerProfiles.find(
+          (profile) =>
+            profile.id === selectedClaudeProfileId &&
+            profile.targetRuntimes.includes("claude"),
+        )
+      : undefined
+  const selectedClaudeProfileIsPending =
+    Boolean(selectedClaudeProfileId) && !providerProfilesData
   const effectiveClaudeModelSource =
     selectedClaudeModelSource === "auto"
-      ? hasCustomClaudeConfig
-        ? "custom-provider"
-        : "claude-oauth"
-      : hasCustomClaudeConfig
-        ? selectedClaudeModelSource
-        : "claude-oauth"
+      ? "claude-oauth"
+      : selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig
+        ? "claude-oauth"
+        : selectedClaudeProfileId &&
+            !selectedClaudeProviderProfile &&
+            !selectedClaudeProfileIsPending
+          ? "claude-oauth"
+          : selectedClaudeModelSource
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
+  const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
   const { data: claudeCodeIntegration } =
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||
     apiKeyOnboardingCompleted ||
-    hasCustomClaudeConfig
+    hasCustomClaudeConfig ||
+    providerProfiles.some(
+      (profile) =>
+        profile.targetRuntimes.includes("claude") &&
+        profile.lastTestStatus?.ok !== false,
+    )
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
@@ -333,6 +368,8 @@ export function NewChatForm({
   const [lastSelectedCodexModelId, setLastSelectedCodexModelId] = useAtom(
     lastSelectedCodexModelIdAtom,
   )
+  const [lastSelectedCodexModelSource, setLastSelectedCodexModelSource] =
+    useAtom(lastSelectedCodexModelSourceAtom)
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
@@ -356,14 +393,19 @@ export function NewChatForm({
   const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
   const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
   const hiddenModels = useAtomValue(hiddenModelsAtom)
+  const shouldUseCodexApiKeyModels =
+    lastSelectedCodexModelSource === "openai-api-key" ||
+    (lastSelectedCodexModelSource === "chatgpt" &&
+      codexOnboardingAuthMethod === "api_key" &&
+      hasAppCodexApiKey)
   const codexUiModels = useMemo(
     () => {
-      let models = hasAppCodexApiKey
+      let models = shouldUseCodexApiKeyModels
         ? CODEX_MODELS.filter((model) => isCodexApiKeySupportedModel(model.id))
         : CODEX_MODELS
       return models.filter((model) => !hiddenModels.includes(model.id))
     },
-    [hasAppCodexApiKey, hiddenModels],
+    [hiddenModels, shouldUseCodexApiKeyModels],
   )
   const selectedCodexModel = useMemo(
     () =>
@@ -408,7 +450,17 @@ export function NewChatForm({
 
   const selectedChatModel = useMemo(() => {
     if (selectedAgent.id === "codex") {
+      const selectedProfileId = parseProviderProfileSource(lastSelectedCodexModelSource)
+      const selectedProfile = selectedProfileId
+        ? providerProfiles.find((profile) => profile.id === selectedProfileId)
+        : undefined
+      if (selectedProfile) {
+        return selectedProfile.defaultModel
+      }
       return `${selectedCodexModel.id}/${selectedCodexThinking}`
+    }
+    if (selectedClaudeProviderProfile) {
+      return selectedClaudeProviderProfile.defaultModel
     }
     if (effectiveClaudeModelSource === "custom-provider") {
       return providerConfigData?.config?.model ?? "custom-provider"
@@ -416,8 +468,11 @@ export function NewChatForm({
     return selectedModel?.id ?? "opus"
   }, [
     effectiveClaudeModelSource,
+    lastSelectedCodexModelSource,
     providerConfigData?.config?.model,
+    providerProfiles,
     selectedAgent.id,
+    selectedClaudeProviderProfile,
     selectedCodexModel.id,
     selectedCodexThinking,
     selectedModel?.id,
@@ -429,11 +484,25 @@ export function NewChatForm({
     enabledAgents.find((agent) => agent.id === "claude-code") || fallbackAgent
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "codex") {
+      const selectedProfileId = parseProviderProfileSource(lastSelectedCodexModelSource)
+      const selectedProfile = selectedProfileId
+        ? providerProfiles.find((profile) => profile.id === selectedProfileId)
+        : undefined
+      if (selectedProfile) {
+        return `${selectedProfile.name} · ${selectedProfile.defaultModel}`
+      }
+      if (lastSelectedCodexModelSource === "openai-api-key") {
+        return `${t("agent.model.codexApiKey")} · ${selectedCodexModel.name}`
+      }
       return selectedCodexModel.name
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
       return currentOllamaModel || "Ollama"
+    }
+
+    if (selectedClaudeProviderProfile) {
+      return `${selectedClaudeProviderProfile.name} · ${selectedClaudeProviderProfile.defaultModel}`
     }
 
     if (effectiveClaudeModelSource === "custom-provider") {
@@ -447,22 +516,35 @@ export function NewChatForm({
     return `${selectedModel.name} ${selectedModel.version}`
   }, [
     selectedAgent.id,
+    lastSelectedCodexModelSource,
+    providerProfiles,
     selectedCodexModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
     effectiveClaudeModelSource,
+    selectedClaudeProviderProfile,
     selectedModel,
     t,
   ])
 
   useEffect(() => {
-    if (hasCustomClaudeConfig) return
-    if (selectedClaudeModelSource !== "custom-provider") return
-    setSelectedClaudeModelSource("claude-oauth")
+    if (selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig) {
+      setSelectedClaudeModelSource("claude-oauth")
+      return
+    }
+    if (
+      isProviderProfileSource(selectedClaudeModelSource) &&
+      !selectedClaudeProviderProfile &&
+      !selectedClaudeProfileIsPending
+    ) {
+      setSelectedClaudeModelSource("claude-oauth")
+    }
   }, [
     hasCustomClaudeConfig,
     selectedClaudeModelSource,
+    selectedClaudeProviderProfile,
+    selectedClaudeProfileIsPending,
     setSelectedClaudeModelSource,
   ])
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
@@ -971,7 +1053,16 @@ export function NewChatForm({
       // Track this chat and its first subchat as just created for typewriter effect
       const ids = [data.id]
       if (data.subChats?.[0]?.id) {
-        ids.push(data.subChats[0].id)
+        const firstSubChatId = data.subChats[0].id
+        ids.push(firstSubChatId)
+        appStore.set(
+          subChatClaudeModelSourceAtomFamily(firstSubChatId),
+          effectiveClaudeModelSource,
+        )
+        appStore.set(
+          subChatCodexModelSourceAtomFamily(firstSubChatId),
+          lastSelectedCodexModelSource,
+        )
       }
       setJustCreatedIds((prev) => new Set([...prev, ...ids]))
     },
@@ -1807,6 +1898,7 @@ export function NewChatForm({
                             setLastSelectedAgentId(provider)
                           }}
                           selectedModelLabel={selectedModelLabel}
+                          providerProfiles={providerProfiles}
                           onOpenModelsSettings={() => {
                             setSettingsActiveTab("models")
                             setSettingsDialogOpen(true)
@@ -1851,6 +1943,8 @@ export function NewChatForm({
                               setLastSelectedCodexModelId(model.id)
                               setLastSelectedCodexThinking(nextThinking)
                             },
+                            selectedModelSource: lastSelectedCodexModelSource,
+                            onSelectModelSource: setLastSelectedCodexModelSource,
                             selectedThinking: selectedCodexThinking,
                             onSelectThinking: setLastSelectedCodexThinking,
                             isConnected: codexOnboardingCompleted,
