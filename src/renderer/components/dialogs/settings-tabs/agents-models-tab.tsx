@@ -1,7 +1,17 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, MoreHorizontal, Plus, Trash2 } from "lucide-react"
+import { CheckCircle2, ChevronDown, MoreHorizontal, Plus, Trash2, XCircle } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import {
+  providerProfileAuthModes,
+  providerProfileProtocols,
+  providerProfileTargets,
+  providerProfileSource,
+  type ProviderProfileAuthMode,
+  type ProviderProfileDefaultPurpose,
+  type ProviderProfileProtocol,
+  type ProviderProfileTarget,
+} from "../../../../shared/provider-profile-types"
 import {
   agentsLoginModalOpenAtom,
   claudeLoginModalConfigAtom,
@@ -15,6 +25,12 @@ import {
   openaiApiKeyAtom,
   type ClaudeProviderAuthMode,
 } from "../../../lib/atoms"
+import {
+  lastSelectedClaudeModelSourceAtom,
+  lastSelectedCodexModelSourceAtom,
+  type ClaudeModelSource,
+  type CodexModelSource,
+} from "../../../features/agents/atoms"
 import { useI18n, type TranslationKey } from "../../../lib/i18n"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
 import { CLAUDE_MODELS, CODEX_MODELS } from "../../../features/agents/lib/models"
@@ -279,6 +295,576 @@ function AnthropicAccountsSection() {
   )
 }
 
+const PROVIDER_DEFAULT_PURPOSES: ProviderProfileDefaultPurpose[] = [
+  "claude-main",
+  "codex-main",
+  "sub_chat_title",
+  "commit_message",
+]
+
+function getProviderPurposeLabel(
+  purpose: ProviderProfileDefaultPurpose,
+  t: (key: TranslationKey) => string,
+) {
+  switch (purpose) {
+    case "claude-main":
+      return t("settings.models.providerProfiles.defaultClaude")
+    case "codex-main":
+      return t("settings.models.providerProfiles.defaultCodex")
+    case "sub_chat_title":
+      return t("settings.models.providerProfiles.defaultTitle")
+    case "commit_message":
+      return t("settings.models.providerProfiles.defaultCommit")
+  }
+}
+
+function purposeMatchesProfile(
+  purpose: ProviderProfileDefaultPurpose,
+  targets: string[],
+) {
+  switch (purpose) {
+    case "claude-main":
+      return targets.includes("claude")
+    case "codex-main":
+      return targets.includes("codex")
+    case "sub_chat_title":
+    case "commit_message":
+      return targets.includes("helpers")
+  }
+}
+
+function ProviderProfilesSettingsSection() {
+  const { t } = useI18n()
+  const setLastSelectedClaudeModelSource = useSetAtom(
+    lastSelectedClaudeModelSourceAtom,
+  )
+  const setLastSelectedCodexModelSource = useSetAtom(
+    lastSelectedCodexModelSourceAtom,
+  )
+  const trpcUtils = trpc.useUtils()
+  const { data: presetsData } = trpc.providerProfiles.listPresets.useQuery()
+  const { data: profilesData } = trpc.providerProfiles.listProfiles.useQuery()
+  const { data: defaultsData } = trpc.providerProfiles.getDefaults.useQuery()
+  const saveProfileMutation = trpc.providerProfiles.saveProfile.useMutation()
+  const deleteProfileMutation = trpc.providerProfiles.deleteProfile.useMutation()
+  const testProfileMutation = trpc.providerProfiles.testProfile.useMutation()
+  const setDefaultMutation = trpc.providerProfiles.setDefault.useMutation()
+
+  const presets = presetsData?.presets ?? []
+  const profiles = profilesData?.profiles ?? []
+  const defaults = defaultsData?.defaults
+  const [editingId, setEditingId] = useState<string | undefined>()
+  const [presetId, setPresetId] = useState("")
+  const [name, setName] = useState("")
+  const [protocol, setProtocol] =
+    useState<ProviderProfileProtocol>("openai-chat")
+  const [baseUrl, setBaseUrl] = useState("")
+  const [defaultModel, setDefaultModel] = useState("")
+  const [authMode, setAuthMode] = useState<ProviderProfileAuthMode>("bearer")
+  const [token, setToken] = useState("")
+  const [headersText, setHeadersText] = useState("")
+  const [targetRuntimes, setTargetRuntimes] = useState<ProviderProfileTarget[]>([
+    "claude",
+    "codex",
+    "helpers",
+  ])
+
+  const selectedPreset = useMemo(
+    () => presets.find((preset) => preset.id === presetId),
+    [presetId, presets],
+  )
+  const editingProfile = useMemo(
+    () => profiles.find((profile) => profile.id === editingId),
+    [editingId, profiles],
+  )
+
+  const applyPreset = useCallback(
+    (nextPresetId: string) => {
+      const preset = presets.find((item) => item.id === nextPresetId)
+      if (!preset) return
+      setEditingId(undefined)
+      setPresetId(preset.id)
+      setName(preset.name)
+      setProtocol(preset.protocol)
+      setBaseUrl(preset.baseUrl)
+      setDefaultModel(preset.defaultModel)
+      setAuthMode(preset.authMode)
+      setToken("")
+      setHeadersText("")
+      setTargetRuntimes([...preset.targetRuntimes])
+    },
+    [presets],
+  )
+
+  useEffect(() => {
+    if (presetId || presets.length === 0 || editingId) return
+    applyPreset(presets[0]!.id)
+  }, [applyPreset, editingId, presetId, presets])
+
+  const resetForm = useCallback(() => {
+    setEditingId(undefined)
+    if (presetId) {
+      applyPreset(presetId)
+      return
+    }
+    if (presets[0]) {
+      applyPreset(presets[0].id)
+    }
+  }, [applyPreset, presetId, presets])
+
+  const editProfile = (profile: (typeof profiles)[number]) => {
+    setEditingId(profile.id)
+    setPresetId(profile.presetId ?? "")
+    setName(profile.name)
+    setProtocol(profile.protocol)
+    setBaseUrl(profile.baseUrl)
+    setDefaultModel(profile.defaultModel)
+    setAuthMode(profile.authMode)
+    setToken("")
+    setHeadersText(
+      Object.keys(profile.headers).length > 0
+        ? JSON.stringify(profile.headers, null, 2)
+        : "",
+    )
+    setTargetRuntimes([...profile.targetRuntimes])
+  }
+
+  const toggleTarget = (target: ProviderProfileTarget) => {
+    setTargetRuntimes((current) =>
+      current.includes(target)
+        ? current.filter((item) => item !== target)
+        : [...current, target],
+    )
+  }
+
+  const canSaveProfile = Boolean(
+    name.trim() &&
+    baseUrl.trim() &&
+    defaultModel.trim() &&
+    targetRuntimes.length > 0 &&
+    (authMode === "none" || token.trim() || editingProfile?.hasToken),
+  )
+
+  const handleSaveProfile = () => {
+    let headers: Record<string, string> = {}
+    if (headersText.trim()) {
+      try {
+        const parsed = JSON.parse(headersText) as unknown
+        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+          throw new Error("Invalid headers JSON")
+        }
+        headers = Object.fromEntries(
+          Object.entries(parsed as Record<string, unknown>).map(([key, value]) => [
+            key,
+            String(value),
+          ]),
+        )
+      } catch {
+        toast.error(t("settings.models.providerProfiles.invalidHeaders"))
+        return
+      }
+    }
+
+    saveProfileMutation.mutate(
+      {
+        ...(editingId ? { id: editingId } : {}),
+        name: name.trim(),
+        presetId: presetId || null,
+        protocol,
+        baseUrl: baseUrl.trim(),
+        defaultModel: defaultModel.trim(),
+        authMode,
+        ...(token.trim() ? { token: token.trim() } : {}),
+        headers,
+        targetRuntimes,
+        capabilities: {
+          ...(selectedPreset?.capabilities ?? editingProfile?.capabilities ?? {}),
+          claude: targetRuntimes.includes("claude"),
+          codex: targetRuntimes.includes("codex"),
+          helpers: targetRuntimes.includes("helpers"),
+          local: targetRuntimes.includes("local"),
+        },
+      },
+      {
+        onSuccess: async ({ profile }) => {
+          setEditingId(profile.id)
+          setToken("")
+          await Promise.all([
+            trpcUtils.providerProfiles.listProfiles.invalidate(),
+            trpcUtils.providerProfiles.getDefaults.invalidate(),
+          ])
+          toast.success(t("toast.models.providerProfileSaved"))
+        },
+        onError: (error) => {
+          toast.error(error.message || t("toast.models.failedToSaveProviderProfile"))
+        },
+      },
+    )
+  }
+
+  const handleDeleteProfile = (profileId: string) => {
+    const confirmed = window.confirm(
+      t("settings.models.providerProfiles.deleteConfirm"),
+    )
+    if (!confirmed) return
+    deleteProfileMutation.mutate(
+      { id: profileId },
+      {
+        onSuccess: async () => {
+          if (editingId === profileId) resetForm()
+          await Promise.all([
+            trpcUtils.providerProfiles.listProfiles.invalidate(),
+            trpcUtils.providerProfiles.getDefaults.invalidate(),
+          ])
+          toast.success(t("toast.models.providerProfileDeleted"))
+        },
+        onError: (error) => {
+          toast.error(error.message || t("toast.models.failedToDeleteProviderProfile"))
+        },
+      },
+    )
+  }
+
+  const handleTestProfile = (profileId: string) => {
+    testProfileMutation.mutate(
+      { id: profileId },
+      {
+        onSuccess: async ({ status }) => {
+          await trpcUtils.providerProfiles.listProfiles.invalidate()
+          if (status.ok) {
+            toast.success(status.message)
+          } else {
+            toast.error(status.message)
+          }
+        },
+        onError: (error) => {
+          toast.error(error.message || t("toast.models.providerProfileTestFailed"))
+        },
+      },
+    )
+  }
+
+  const handleSetDefault = (
+    purpose: ProviderProfileDefaultPurpose,
+    profileId: string,
+  ) => {
+    const currentProfileId = defaults?.[purpose]?.profileId ?? null
+    const nextProfileId = currentProfileId === profileId ? null : profileId
+    setDefaultMutation.mutate(
+      {
+        purpose,
+        profileId: nextProfileId,
+      },
+      {
+        onSuccess: async () => {
+          if (purpose === "claude-main") {
+            setLastSelectedClaudeModelSource(
+              nextProfileId
+                ? (providerProfileSource(nextProfileId) as ClaudeModelSource)
+                : "claude-oauth",
+            )
+          } else if (purpose === "codex-main") {
+            setLastSelectedCodexModelSource(
+              nextProfileId
+                ? (providerProfileSource(nextProfileId) as CodexModelSource)
+                : "chatgpt",
+            )
+          }
+          await trpcUtils.providerProfiles.getDefaults.invalidate()
+          toast.success(t("toast.models.providerDefaultSaved"))
+        },
+        onError: (error) => {
+          toast.error(error.message || t("toast.models.failedToSaveProviderDefault"))
+        },
+      },
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="pb-1">
+        <h4 className="text-sm font-medium text-foreground">
+          {t("settings.models.providerProfiles.title")}
+        </h4>
+        <p className="text-xs text-muted-foreground">
+          {t("settings.models.providerProfiles.description")}
+        </p>
+      </div>
+
+      <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
+        <div className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+          <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">
+                  {t("settings.models.providerProfiles.preset")}
+                </Label>
+                <select
+                  value={presetId}
+                  onChange={(event) => applyPreset(event.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">
+                  {t("settings.models.providerProfiles.name")}
+                </Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Base URL</Label>
+                <Input
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder="https://api.example.com/v1"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">
+                  {t("onboarding.customModel.modelName")}
+                </Label>
+                <Input
+                  value={defaultModel}
+                  onChange={(e) => setDefaultModel(e.target.value)}
+                  placeholder="model-id"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Protocol</Label>
+                <select
+                  value={protocol}
+                  onChange={(event) =>
+                    setProtocol(event.target.value as ProviderProfileProtocol)
+                  }
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {providerProfileProtocols.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Auth</Label>
+                <select
+                  value={authMode}
+                  onChange={(event) =>
+                    setAuthMode(event.target.value as ProviderProfileAuthMode)
+                  }
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {providerProfileAuthModes.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">API Key</Label>
+                <Input
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder={
+                    editingProfile?.hasToken ? t("common.savedToken") : "sk-..."
+                  }
+                  disabled={authMode === "none"}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">
+                {t("settings.models.providerProfiles.targets")}
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {providerProfileTargets.map((target) => (
+                  <button
+                    key={target}
+                    type="button"
+                    onClick={() => toggleTarget(target)}
+                    className={[
+                      "rounded-md border px-2 py-1 text-xs transition-colors",
+                      targetRuntimes.includes(target)
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    {target}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">
+                {t("settings.models.providerProfiles.headers")}
+              </Label>
+              <Input
+                value={headersText}
+                onChange={(e) => setHeadersText(e.target.value)}
+                placeholder='{"HTTP-Referer":"https://example.com"}'
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">
+                {editingId
+                  ? t("settings.models.providerProfiles.editing")
+                  : t("settings.models.providerProfiles.create")}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {selectedPreset?.region
+                  ? `${selectedPreset.name} · ${selectedPreset.region}`
+                  : t("settings.models.providerProfiles.customPreset")}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={handleSaveProfile}
+                disabled={!canSaveProfile || saveProfileMutation.isPending}
+              >
+                {saveProfileMutation.isPending
+                  ? t("common.saving")
+                  : t("common.save")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={resetForm}>
+                {t("common.reset")}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("settings.models.providerProfiles.secretNotice")}
+            </p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-border">
+          {profiles.length === 0 ? (
+            <div className="p-4 text-sm text-muted-foreground">
+              {t("settings.models.providerProfiles.empty")}
+            </div>
+          ) : (
+            profiles.map((profile) => {
+              const status = profile.lastTestStatus
+              return (
+                <div key={profile.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {profile.name}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          {profile.protocol}
+                        </Badge>
+                        {status && (
+                          <Badge
+                            variant={status.ok ? "secondary" : "outline"}
+                            className="gap-1 text-xs"
+                          >
+                            {status.ok ? (
+                              <CheckCircle2 className="h-3 w-3" />
+                            ) : (
+                              <XCircle className="h-3 w-3" />
+                            )}
+                            {status.ok ? "OK" : "Failed"}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {profile.defaultModel} · {profile.baseUrl}
+                      </div>
+                      {status?.message && (
+                        <div className="text-xs text-muted-foreground">
+                          {status.message}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => editProfile(profile)}
+                      >
+                        {t("settings.models.providerProfiles.edit")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleTestProfile(profile.id)}
+                        disabled={testProfileMutation.isPending}
+                      >
+                        {t("settings.models.providerProfiles.test")}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDeleteProfile(profile.id)}
+                        disabled={deleteProfileMutation.isPending}
+                        className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+                        aria-label={t("common.delete")}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile.targetRuntimes.map((target) => (
+                      <Badge key={target} variant="secondary" className="text-xs">
+                        {target}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {PROVIDER_DEFAULT_PURPOSES.map((purpose) => {
+                      const active = defaults?.[purpose]?.profileId === profile.id
+                      const supported = purposeMatchesProfile(
+                        purpose,
+                        profile.targetRuntimes,
+                      )
+                      return (
+                        <Button
+                          key={purpose}
+                          size="sm"
+                          variant={active ? "secondary" : "outline"}
+                          onClick={() => handleSetDefault(purpose, profile.id)}
+                          disabled={!supported || setDefaultMutation.isPending}
+                          className="text-xs"
+                        >
+                          {getProviderPurposeLabel(purpose, t)}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type LocalApiProviderPurpose = "sub_chat_title" | "commit_message"
 
 type LocalApiProviderSettingsSectionProps = {
@@ -539,6 +1125,9 @@ export function AgentsModelsTab() {
   const [isSavingCodexApiKey, setIsSavingCodexApiKey] = useState(false)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
+  const setLastSelectedCodexModelSource = useSetAtom(
+    lastSelectedCodexModelSourceAtom,
+  )
   const [storedOpenAIKey, setStoredOpenAIKey] = useAtom(openaiApiKeyAtom)
   const [openaiKey, setOpenaiKey] = useState(storedOpenAIKey)
   const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
@@ -755,6 +1344,7 @@ export function AgentsModelsTab() {
     try {
       setStoredCodexApiKey(normalized)
       setCodexApiKey(normalized)
+      setLastSelectedCodexModelSource("openai-api-key")
       await trpcUtils.codex.getIntegration.invalidate()
       toast.success(t("toast.models.codexApiKeySaved"))
     } catch {
@@ -769,6 +1359,7 @@ export function AgentsModelsTab() {
     try {
       setStoredCodexApiKey("")
       setCodexApiKey("")
+      setLastSelectedCodexModelSource("chatgpt")
 
       if (codexIntegration?.state === "connected_api_key") {
         await codexLogoutMutation.mutateAsync().catch(() => {
@@ -988,6 +1579,8 @@ export function AgentsModelsTab() {
           )}
         </div>
       </div>
+
+      <ProviderProfilesSettingsSection />
 
       <div ref={helperApisSectionRef} className="space-y-3 scroll-mt-6">
         <div className="pb-1">

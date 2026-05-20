@@ -24,7 +24,11 @@ import {
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
 import { useI18n, type TranslationKey } from "../../../lib/i18n"
-import type { ClaudeModelSource } from "../atoms"
+import {
+  isProviderProfileSource,
+  providerProfileSource,
+} from "../../../../shared/provider-profile-types"
+import type { ClaudeModelSource, CodexModelSource } from "../atoms"
 import type { CodexThinkingLevel, ModelInfo } from "../lib/models"
 import { formatCodexThinkingLabel } from "../lib/models"
 
@@ -52,6 +56,24 @@ type CodexModelOption = {
   info?: ModelInfo
 }
 
+type ProviderProfileOption = {
+  id: string
+  name: string
+  presetId: string | null
+  defaultModel: string
+  targetRuntimes: string[]
+  capabilities?: {
+    claude?: boolean
+    codex?: boolean
+    local?: boolean
+    helpers?: boolean
+  }
+  lastTestStatus?: {
+    ok: boolean
+    message: string
+  } | null
+}
+
 interface AgentModelSelectorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -63,6 +85,7 @@ interface AgentModelSelectorProps {
   contentClassName?: string
   onOpenModelsSettings?: () => void
   onContinueWithProvider?: (provider: AgentProviderId) => void
+  providerProfiles?: ProviderProfileOption[]
   claude: {
     models: ClaudeModelOption[]
     selectedModelId?: string
@@ -83,6 +106,8 @@ interface AgentModelSelectorProps {
     models: CodexModelOption[]
     selectedModelId: string
     onSelectModel: (modelId: string) => void
+    selectedModelSource: CodexModelSource
+    onSelectModelSource: (source: CodexModelSource) => void
     selectedThinking: CodexThinkingLevel
     onSelectThinking: (thinking: CodexThinkingLevel) => void
     isConnected: boolean
@@ -91,11 +116,23 @@ interface AgentModelSelectorProps {
 
 type FlatModelItem =
   | { type: "claude"; model: ClaudeModelOption }
+  | { type: "codex-source"; source: Extract<CodexModelSource, "chatgpt" | "openai-api-key"> }
   | { type: "codex"; model: CodexModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
   | { type: "custom" }
+  | {
+      type: "provider-profile"
+      profile: ProviderProfileOption
+      runtime: "claude" | "codex" | "local"
+    }
 
-type ModelGroupId = "custom" | "claude" | "codex" | "ollama"
+type ModelGroupId =
+  | "custom"
+  | "claude"
+  | "claudeProfiles"
+  | "codex"
+  | "codexProfiles"
+  | "local"
 
 type ActiveModelInfo = {
   info: ModelInfo
@@ -482,6 +519,7 @@ export function AgentModelSelector({
   contentClassName,
   onOpenModelsSettings,
   onContinueWithProvider,
+  providerProfiles = [],
   claude,
   codex,
 }: AgentModelSelectorProps) {
@@ -494,7 +532,9 @@ export function AgentModelSelector({
   const canSelectProvider = (provider: AgentProviderId) =>
     allowProviderSwitch || selectedAgentId === provider
   const selectedClaudeModelSource =
-    claude.hasCustomModelConfig ? claude.selectedModelSource : "claude-oauth"
+    claude.selectedModelSource === "custom-provider" && !claude.hasCustomModelConfig
+      ? "claude-oauth"
+      : claude.selectedModelSource
 
   // Build flat list of all models (show all regardless of connection status)
   const allModels = useMemo<FlatModelItem[]>(() => {
@@ -517,12 +557,31 @@ export function AgentModelSelector({
       }
     }
 
+    for (const profile of providerProfiles) {
+      if (profile.targetRuntimes.includes("local")) {
+        items.push({ type: "provider-profile", profile, runtime: "local" })
+        continue
+      }
+      if (profile.targetRuntimes.includes("claude")) {
+        items.push({ type: "provider-profile", profile, runtime: "claude" })
+      }
+    }
+
+    items.push({ type: "codex-source", source: "chatgpt" })
+    items.push({ type: "codex-source", source: "openai-api-key" })
     for (const m of codex.models) {
       items.push({ type: "codex", model: m })
     }
 
+    for (const profile of providerProfiles) {
+      if (profile.targetRuntimes.includes("local")) continue
+      if (profile.targetRuntimes.includes("codex")) {
+        items.push({ type: "provider-profile", profile, runtime: "codex" })
+      }
+    }
+
     return items
-  }, [claude, codex])
+  }, [claude, codex, providerProfiles])
 
   // Filter by search
   const filteredModels = useMemo(() => {
@@ -538,12 +597,24 @@ export function AgentModelSelector({
           )
         case "codex":
           return item.model.name.toLowerCase().includes(q)
+        case "codex-source":
+          return (
+            (item.source === "chatgpt" ? "codex chatgpt" : "codex api key")
+              .toLowerCase()
+              .includes(q)
+          )
         case "ollama":
           return item.modelName.toLowerCase().includes(q)
         case "custom":
           return (
             t("agent.model.customProvider").toLowerCase().includes(q) ||
             t("agent.model.customModel").toLowerCase().includes(q)
+          )
+        case "provider-profile":
+          return (
+            item.profile.name.toLowerCase().includes(q) ||
+            item.profile.defaultModel.toLowerCase().includes(q) ||
+            (item.profile.presetId ?? "").toLowerCase().includes(q)
           )
       }
     })
@@ -555,10 +626,15 @@ export function AgentModelSelector({
         return "custom"
       case "claude":
         return "claude"
+      case "provider-profile":
+        if (item.runtime === "claude") return "claudeProfiles"
+        if (item.runtime === "codex") return "codexProfiles"
+        return "local"
+      case "codex-source":
       case "codex":
         return "codex"
       case "ollama":
-        return "ollama"
+        return "local"
     }
   }, [])
 
@@ -568,10 +644,14 @@ export function AgentModelSelector({
         return t("agent.model.group.customProvider")
       case "claude":
         return t("agent.model.group.claudeCodeOAuth")
+      case "claudeProfiles":
+        return t("agent.model.group.claudeProviderProfiles")
       case "codex":
-        return "Codex"
-      case "ollama":
-        return t("agent.model.group.local")
+        return t("agent.model.group.codexOfficial")
+      case "codexProfiles":
+        return t("agent.model.group.codexProviderProfiles")
+      case "local":
+        return t("agent.model.group.localProviderProfiles")
     }
   }, [t])
 
@@ -579,15 +659,24 @@ export function AgentModelSelector({
     const groups: Record<ModelGroupId, FlatModelItem[]> = {
       custom: [],
       claude: [],
+      claudeProfiles: [],
       codex: [],
-      ollama: [],
+      codexProfiles: [],
+      local: [],
     }
 
     for (const item of filteredModels) {
       groups[getItemGroup(item)].push(item)
     }
 
-    return (["custom", "claude", "codex", "ollama"] as ModelGroupId[])
+    return ([
+      "custom",
+      "claude",
+      "claudeProfiles",
+      "codex",
+      "codexProfiles",
+      "local",
+    ] as ModelGroupId[])
       .map((id) => ({ id, heading: getGroupHeading(id), items: groups[id] }))
       .filter((group) => group.items.length > 0)
   }, [filteredModels, getGroupHeading, getItemGroup])
@@ -651,7 +740,16 @@ export function AgentModelSelector({
           claude.selectedModelId === item.model.id
         )
       case "codex":
-        return selectedAgentId === "codex" && codex.selectedModelId === item.model.id
+        return (
+          selectedAgentId === "codex" &&
+          !isProviderProfileSource(codex.selectedModelSource) &&
+          codex.selectedModelId === item.model.id
+        )
+      case "codex-source":
+        return (
+          selectedAgentId === "codex" &&
+          codex.selectedModelSource === item.source
+        )
       case "ollama":
         return selectedAgentId === "claude-code" && claude.selectedOllamaModel === item.modelName
       case "custom":
@@ -659,14 +757,30 @@ export function AgentModelSelector({
           selectedAgentId === "claude-code" &&
           selectedClaudeModelSource === "custom-provider"
         )
+      case "provider-profile": {
+        const source = providerProfileSource(item.profile.id)
+        if (item.runtime === "claude") {
+          return selectedAgentId === "claude-code" && selectedClaudeModelSource === source
+        }
+        return selectedAgentId === "codex" && codex.selectedModelSource === source
+      }
     }
   }
 
   const getItemProvider = (item: FlatModelItem): AgentProviderId => {
-    return item.type === "codex" ? "codex" : "claude-code"
+    if (item.type === "codex" || item.type === "codex-source") return "codex"
+    if (item.type === "provider-profile") {
+      if (item.runtime === "claude") return "claude-code"
+      if (item.runtime === "codex") return "codex"
+      return item.profile.targetRuntimes.includes("codex") ? "codex" : "claude-code"
+    }
+    return "claude-code"
   }
 
   const isItemDisabled = (item: FlatModelItem): boolean => {
+    if (item.type === "provider-profile" && item.profile.lastTestStatus?.ok === false) {
+      return true
+    }
     const provider = getItemProvider(item)
     if (canSelectProvider(provider)) return false
     // When onContinueWithProvider is available, cross-provider items are clickable (not disabled)
@@ -727,7 +841,15 @@ export function AgentModelSelector({
       case "codex":
         if (!canSelectProvider("codex")) return
         onSelectedAgentIdChange("codex")
+        if (isProviderProfileSource(codex.selectedModelSource)) {
+          codex.onSelectModelSource("chatgpt")
+        }
         codex.onSelectModel(item.model.id)
+        break
+      case "codex-source":
+        if (!canSelectProvider("codex")) return
+        onSelectedAgentIdChange("codex")
+        codex.onSelectModelSource(item.source)
         break
       case "ollama":
         if (!canSelectProvider("claude-code")) return
@@ -739,6 +861,18 @@ export function AgentModelSelector({
         onSelectedAgentIdChange("claude-code")
         claude.onSelectModelSource("custom-provider")
         break
+      case "provider-profile": {
+        const source = providerProfileSource(item.profile.id)
+        const targetProvider = getItemProvider(item)
+        if (!canSelectProvider(targetProvider)) return
+        onSelectedAgentIdChange(targetProvider)
+        if (targetProvider === "claude-code") {
+          claude.onSelectModelSource(source as ClaudeModelSource)
+        } else {
+          codex.onSelectModelSource(source as CodexModelSource)
+        }
+        break
+      }
     }
     handleOpenChange(false)
   }
@@ -748,11 +882,18 @@ export function AgentModelSelector({
       case "claude":
         return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "codex":
+      case "codex-source":
         return <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "ollama":
         return <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
       case "custom":
         return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "provider-profile":
+        return item.runtime === "claude" ? (
+          <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        ) : (
+          <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        )
     }
   }
 
@@ -762,10 +903,16 @@ export function AgentModelSelector({
         return `${item.model.name} ${item.model.version}`
       case "codex":
         return item.model.name
+      case "codex-source":
+        return item.source === "chatgpt"
+          ? t("agent.model.codexChatGPT")
+          : t("agent.model.codexApiKey")
       case "ollama":
         return item.modelName + (item.isRecommended ? ` ${t("agent.model.recommendedSuffix")}` : "")
       case "custom":
         return t("agent.model.customProvider")
+      case "provider-profile":
+        return `${item.profile.name} · ${item.profile.defaultModel}`
     }
   }
 
@@ -774,8 +921,10 @@ export function AgentModelSelector({
       case "claude":
       case "codex":
         return item.model.info ?? null
+      case "codex-source":
       case "ollama":
       case "custom":
+      case "provider-profile":
         return null
     }
   }
@@ -784,12 +933,16 @@ export function AgentModelSelector({
     switch (item.type) {
       case "claude":
         return `claude-${item.model.id}`
+      case "codex-source":
+        return `codex-source-${item.source}`
       case "codex":
         return `codex-${item.model.id}`
       case "ollama":
         return `ollama-${item.modelName}`
       case "custom":
         return "custom"
+      case "provider-profile":
+        return `provider-profile-${item.runtime}-${item.profile.id}`
     }
   }
 
