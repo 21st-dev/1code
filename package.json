@@ -1,6 +1,6 @@
 {
   "name": "locus",
-  "version": "0.0.73",
+  "version": "0.0.74-provider-profiles.1",
   "private": true,
   "description": "Local coding agents for your own machine",
   "homepage": "https://github.com/lupanpan1030/agent-code-for-me",
