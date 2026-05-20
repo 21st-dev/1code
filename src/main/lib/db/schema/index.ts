@@ -161,6 +161,42 @@ export const localApiProviderConfigs = sqliteTable("local_api_provider_configs",
   ),
 })
 
+// ============ AGENT PROVIDER PROFILES ============
+// Runtime-neutral provider profiles for Claude, Codex, helpers, and local endpoints.
+export const agentProviderProfiles = sqliteTable("agent_provider_profiles", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull(),
+  presetId: text("preset_id"),
+  protocol: text("protocol").notNull(), // "anthropic" | "openai-chat" | "openai-responses"
+  baseUrl: text("base_url").notNull(),
+  defaultModel: text("default_model").notNull(),
+  authMode: text("auth_mode").notNull().default("bearer"), // "bearer" | "x-api-key" | "none"
+  encryptedToken: text("encrypted_token"),
+  headersJson: text("headers_json").notNull().default("{}"),
+  targetRuntimesJson: text("target_runtimes_json").notNull().default("[]"),
+  capabilitiesJson: text("capabilities_json").notNull().default("{}"),
+  lastTestStatusJson: text("last_test_status_json"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const agentProviderDefaults = sqliteTable("agent_provider_defaults", {
+  purpose: text("purpose").primaryKey(), // "claude-main" | "codex-main" | "sub_chat_title" | "commit_message"
+  profileId: text("profile_id").references(() => agentProviderProfiles.id, {
+    onDelete: "set null",
+  }),
+  modelOverride: text("model_override"),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ APP AGENTS ============
 // Runtime-neutral app-managed agent profiles.
 export const appAgents = sqliteTable("app_agents", {
@@ -196,5 +232,9 @@ export type ClaudeProviderConfig = typeof claudeProviderConfig.$inferSelect
 export type NewClaudeProviderConfig = typeof claudeProviderConfig.$inferInsert
 export type LocalApiProviderConfig = typeof localApiProviderConfigs.$inferSelect
 export type NewLocalApiProviderConfig = typeof localApiProviderConfigs.$inferInsert
+export type AgentProviderProfile = typeof agentProviderProfiles.$inferSelect
+export type NewAgentProviderProfile = typeof agentProviderProfiles.$inferInsert
+export type AgentProviderDefault = typeof agentProviderDefaults.$inferSelect
+export type NewAgentProviderDefault = typeof agentProviderDefaults.$inferInsert
 export type AppAgent = typeof appAgents.$inferSelect
 export type NewAppAgent = typeof appAgents.$inferInsert
