@@ -3,8 +3,38 @@ import { resolve } from "path"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "tailwindcss"
 import autoprefixer from "autoprefixer"
+import type { Plugin } from "vite"
 
 const isDev = process.env.NODE_ENV !== "production"
+
+function pierreDiffsPlainHighlighterPlugin(): Plugin {
+  const shimPath = resolve(
+    __dirname,
+    "src/renderer/lib/vendor/pierre-diffs-shiki-shim.ts",
+  )
+
+  return {
+    name: "locus:pierre-diffs-plain-highlighter",
+    enforce: "pre",
+    resolveId(source, importer) {
+      const normalizedImporter = importer?.replace(/\\/g, "/")
+      if (!normalizedImporter?.includes("/node_modules/@pierre/diffs/")) {
+        return null
+      }
+
+      if (
+        source === "shiki" ||
+        source === "shiki/core" ||
+        source === "@shikijs/engine-javascript" ||
+        source === "@shikijs/transformers"
+      ) {
+        return shimPath
+      }
+
+      return null
+    },
+  }
+}
 
 export default defineConfig({
   main: {
@@ -51,6 +81,7 @@ export default defineConfig({
   },
   renderer: {
     plugins: [
+      pierreDiffsPlainHighlighterPlugin(),
       react({
         // In dev mode, use WDYR as JSX import source to track ALL component re-renders
         jsxImportSource: isDev

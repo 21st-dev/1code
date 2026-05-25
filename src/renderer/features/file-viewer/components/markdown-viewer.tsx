@@ -1,6 +1,4 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
-import Editor from "@monaco-editor/react"
-import { useTheme } from "next-themes"
 import { useAtom } from "jotai"
 import { useAtomValue } from "jotai"
 import { Loader2, AlertCircle, Check, X } from "lucide-react"
@@ -42,7 +40,6 @@ const FILE_VIEWER_MODES = [
   { value: "center-peek" as const, labelKey: "changes.diff.dialog" as TranslationKey, Icon: IconCenterPeek },
   { value: "full-page" as const, labelKey: "changes.diff.fullscreen" as TranslationKey, Icon: IconFullPage },
 ]
-import { defaultEditorOptions, getMonacoTheme } from "./monaco-config"
 import { getFileName } from "../utils/file-utils"
 
 interface MarkdownViewerProps {
@@ -58,8 +55,6 @@ export function MarkdownViewer({
 }: MarkdownViewerProps) {
   const { t } = useI18n()
   const fileName = getFileName(filePath)
-  const { resolvedTheme } = useTheme()
-  const monacoTheme = getMonacoTheme(resolvedTheme || "dark")
 
   const [showPreview, setShowPreview] = useState(true)
   const [wordWrap] = useAtom(fileViewerWordWrapAtom)
@@ -100,14 +95,6 @@ export function MarkdownViewer({
         }
       },
     },
-  )
-
-  const editorOptions = useMemo(
-    () => ({
-      ...defaultEditorOptions,
-      wordWrap: wordWrap ? ("on" as const) : ("off" as const),
-    }),
-    [wordWrap],
   )
 
   useEffect(() => {
@@ -171,6 +158,7 @@ export function MarkdownViewer({
   }
 
   const content = data?.ok ? data.content : ""
+  const lines = content.split("\n")
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -194,18 +182,26 @@ export function MarkdownViewer({
             />
           </div>
         ) : (
-          <Editor
-            height="100%"
-            language="markdown"
-            value={content}
-            theme={monacoTheme}
-            options={editorOptions}
-            loading={
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            }
-          />
+          <div className="h-full overflow-auto bg-muted/20">
+            <pre
+              className={cn(
+                "m-0 min-w-full p-3 font-mono text-xs leading-5 text-foreground",
+                wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre",
+              )}
+            >
+              {lines.map((line, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-3"
+                >
+                  <span className="select-none text-right tabular-nums text-muted-foreground/60">
+                    {index + 1}
+                  </span>
+                  <code>{line || " "}</code>
+                </div>
+              ))}
+            </pre>
+          </div>
         )}
       </div>
     </div>
