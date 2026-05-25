@@ -45,6 +45,7 @@ import {
 } from "../../provider-profiles/storage"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import { createRollbackStash } from "../../git/stash"
+import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import {
   ensureMcpTokensFresh,
   fetchMcpTools,
@@ -294,6 +295,54 @@ const imageAttachmentSchema = z.object({
 })
 
 export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
+
+const longTextAttachmentSchema = z.object({
+  type: z.literal("long-text-attachment").optional(),
+  attachmentId: z.string(),
+  localRef: z.string(),
+  filename: z.string(),
+  byteLength: z.number().int().nonnegative(),
+  preview: z.string().optional(),
+  kind: z.enum(["pasted", "chatHistory"]),
+})
+
+function buildLongTextAttachmentParts(
+  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+): any[] {
+  return (attachments ?? []).map((attachment) => ({
+    type: "long-text-attachment",
+    attachmentId: attachment.attachmentId,
+    localRef: attachment.localRef,
+    filename: attachment.filename,
+    byteLength: attachment.byteLength,
+    preview: attachment.preview ?? "",
+    kind: attachment.kind,
+  }))
+}
+
+function longTextAttachmentSignatureFromParts(parts: any[] | undefined): string {
+  return JSON.stringify(
+    (parts ?? [])
+      .filter((part: any) => part?.type === "long-text-attachment")
+      .map((part: any) => ({
+        localRef: part.localRef,
+        byteLength: part.byteLength,
+        kind: part.kind,
+      }))
+  )
+}
+
+function longTextAttachmentSignatureFromInput(
+  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+): string {
+  return JSON.stringify(
+    (attachments ?? []).map((attachment) => ({
+      localRef: attachment.localRef,
+      byteLength: attachment.byteLength,
+      kind: attachment.kind,
+    }))
+  )
+}
 
 /**
  * Clear all performance caches (for testing/debugging)
@@ -743,6 +792,7 @@ export const claudeRouter = router({
           .optional(),
         maxThinkingTokens: z.number().optional(), // Enable extended thinking
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
+        longTextAttachments: z.array(longTextAttachmentSchema).optional(),
         historyEnabled: z.boolean().optional(),
         offlineModeEnabled: z.boolean().optional(), // Whether offline mode (Ollama) is enabled in settings
         enableTasks: z.boolean().optional(), // Enable task management tools (TodoWrite, Task agents)
@@ -868,7 +918,10 @@ export const claudeRouter = router({
               (p: any) => p.type === "text",
             )?.text
             const isDuplicate =
-              lastMsg?.role === "user" && lastMsgText === input.prompt
+              lastMsg?.role === "user" &&
+              lastMsgText === input.prompt &&
+              longTextAttachmentSignatureFromParts(lastMsg?.parts) ===
+                longTextAttachmentSignatureFromInput(input.longTextAttachments)
 
             // 2. Create user message and save BEFORE streaming (skip if duplicate)
             let userMessage: any
@@ -891,6 +944,7 @@ export const claudeRouter = router({
                   })
                 }
               }
+              parts.push(...buildLongTextAttachmentParts(input.longTextAttachments))
               userMessage = {
                 id: crypto.randomUUID(),
                 role: "user",
@@ -1109,6 +1163,18 @@ export const claudeRouter = router({
             } else if (skillMentions.length > 0) {
               // Append skill instruction to existing prompt
               finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
+            }
+
+            try {
+              finalPrompt = await prependLongTextAttachmentPromptBlocks(
+                finalPrompt,
+                input.longTextAttachments,
+              )
+            } catch (attachmentError) {
+              emitError(attachmentError, "Long text attachment unavailable")
+              safeEmit({ type: "finish" } as UIMessageChunk)
+              safeComplete()
+              return
             }
 
             // Build prompt: if there are images, create an AsyncIterable<SDKUserMessage>
