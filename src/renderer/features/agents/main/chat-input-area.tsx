@@ -1079,18 +1079,20 @@ export const ChatInputArea = memo(function ChatInputArea({
       images.length > 0 ||
       files.length > 0 ||
       textContexts.length > 0 ||
-      (diffTextContexts?.length ?? 0) > 0
+      (diffTextContexts?.length ?? 0) > 0 ||
+      pastedTexts.length > 0
 
     if (hasContent) {
       await saveSubChatDraftWithAttachments(chatId, subChatIdValue, draft, {
         images,
         files,
         textContexts,
+        pastedTexts,
       })
     } else {
       clearSubChatDraft(chatId, subChatIdValue)
     }
-  }, [editorRef, images, files, textContexts, diffTextContexts])
+  }, [editorRef, images, files, textContexts, diffTextContexts, pastedTexts])
 
   // Content change handler
   const handleContentChange = useCallback((newHasContent: boolean) => {

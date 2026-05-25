@@ -5,6 +5,7 @@
 
 import type { UploadedImage, UploadedFile } from "../hooks/use-agents-file-upload"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
+import type { LongTextAttachment } from "../../../../shared/long-text-attachments"
 
 export interface QueuedImage {
   id: string
@@ -56,13 +57,9 @@ export interface QueuedDiffTextContext {
   lineType?: "old" | "new"
 }
 
-export interface QueuedPastedText {
-  id: string
+export type QueuedPastedText = LongTextAttachment & {
   filePath: string
-  filename: string
   size: number
-  preview: string
-  kind?: "pasted" | "chatHistory"
 }
 
 export type AgentQueueItem = {
@@ -172,9 +169,11 @@ export function toQueuedDiffTextContext(ctx: DiffTextContext): QueuedDiffTextCon
 export function toQueuedPastedText(pt: PastedTextFile): QueuedPastedText {
   return {
     id: pt.id,
+    localRef: pt.localRef,
     filePath: pt.filePath,
     filename: pt.filename,
-    size: pt.size,
+    byteLength: pt.byteLength,
+    size: pt.byteLength,
     preview: pt.preview,
     kind: pt.kind,
   }

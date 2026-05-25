@@ -31,6 +31,12 @@ interface AgentPastedTextItemProps {
   onRemove?: () => void
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export function AgentPastedTextItem({
   filePath,
   filename,
@@ -49,7 +55,7 @@ export function AgentPastedTextItem({
     : (preview.split("\n")[0]?.trim() || preview.trim())
   const displayTitle = title.length > 20 ? `${title.slice(0, 20)}...` : title
 
-  const subtitle = isChatHistory ? "Past chat" : "Pasted Text"
+  const subtitle = `${isChatHistory ? "Past chat" : "Pasted Text"} · ${formatSize(size)}`
 
   return (
     <div

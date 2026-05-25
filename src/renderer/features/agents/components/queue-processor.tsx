@@ -13,6 +13,7 @@ import { MENTION_PREFIXES } from "../mentions/agents-mentions-editor"
 import { utf8ToBase64 } from "../utils/base64"
 import type { AgentQueueItem } from "../lib/queue-utils"
 import { useI18n } from "../../../lib/i18n"
+import { toLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
 
 // Delay between processing queue items (ms)
 const QUEUE_PROCESS_DELAY = 1000
@@ -93,7 +94,8 @@ export function QueueProcessor() {
           })),
         ]
 
-        // Expand text contexts, diff text contexts, and pasted texts as mention tokens
+        // Expand text contexts and diff text contexts as legacy mention tokens.
+        // Long pasted text is preserved as metadata parts, not prompt text.
         let mentionPrefix = ""
 
         if (item.textContexts && item.textContexts.length > 0) {
@@ -116,11 +118,7 @@ export function QueueProcessor() {
         }
 
         if (item.pastedTexts && item.pastedTexts.length > 0) {
-          const pastedMentions = item.pastedTexts.map((pt) => {
-            const sanitizedPreview = pt.preview.replace(/[:\[\]|]/g, "")
-            return `@[${MENTION_PREFIXES.PASTED}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
-          })
-          mentionPrefix += pastedMentions.join(" ") + " "
+          parts.push(...item.pastedTexts.map(toLongTextAttachmentPart))
         }
 
         if (item.message || mentionPrefix) {

@@ -13,6 +13,7 @@ import {
 import { MemoizedAssistantMessages } from "./messages-list"
 import { extractTextMentions, TextMentionBlocks, TextMentionBlock } from "../mentions/render-file-mentions"
 import { AgentImageItem } from "../ui/agent-image-item"
+import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { IconTextUndo } from "../../../components/ui/icons"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
@@ -133,6 +134,8 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
 
   const imageParts =
     userMsg?.parts?.filter((p: any) => p.type === "data-image") || []
+  const longTextParts =
+    userMsg?.parts?.filter((p: any) => p.type === "long-text-attachment") || []
 
   // Extract text mentions (quote/diff) to render separately above sticky block
   // NOTE: useMemo must be called before any early returns to follow Rules of Hooks
@@ -152,15 +155,21 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
     sandboxSetupStatus === "error" && isLastGroup && assistantIds.length === 0
 
   // Check if this is an image-only message (no text content and no text mentions)
-  const isImageOnlyMessage = imageParts.length > 0 && !textContent.trim() && textMentions.length === 0
+  const isImageOnlyMessage =
+    imageParts.length > 0 &&
+    !textContent.trim() &&
+    textMentions.length === 0 &&
+    longTextParts.length === 0
 
   // Check if this is an attachment-only message (no text but has images or text mentions)
-  const isAttachmentOnlyMessage = !textContent.trim() && (imageParts.length > 0 || textMentions.length > 0)
+  const isAttachmentOnlyMessage =
+    !textContent.trim() &&
+    (imageParts.length > 0 || textMentions.length > 0 || longTextParts.length > 0)
 
   return (
     <MessageGroupWrapper isLastGroup={isLastGroup}>
       {/* All attachments in one row - NOT sticky (only when there's also text) */}
-      {((!isImageOnlyMessage && imageParts.length > 0) || textMentions.length > 0) && (
+      {((!isImageOnlyMessage && imageParts.length > 0) || textMentions.length > 0 || longTextParts.length > 0) && (
         <div className="mb-2 pointer-events-auto flex flex-wrap items-end gap-1.5">
           {imageParts.length > 0 && !isImageOnlyMessage && (() => {
             const resolveImgUrl = (img: any) =>
@@ -187,6 +196,16 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
           })()}
           {textMentions.map((mention, idx) => (
             <TextMentionBlock key={`mention-${idx}`} mention={mention} />
+          ))}
+          {longTextParts.map((part: any, idx: number) => (
+            <AgentPastedTextItem
+              key={`long-text-${part.attachmentId || idx}`}
+              filePath={part.localRef}
+              filename={part.filename}
+              size={part.byteLength}
+              preview={part.preview || part.filename}
+              kind={part.kind}
+            />
           ))}
         </div>
       )}
@@ -215,6 +234,9 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
                   }
                   if (pastedCount > 0) {
                     parts.push(pastedCount === 1 ? "pasted text" : `${pastedCount} pasted texts`)
+                  }
+                  if (longTextParts.length > 0) {
+                    parts.push(longTextParts.length === 1 ? "long text" : `${longTextParts.length} long texts`)
                   }
                   if (codeCount > 0) {
                     parts.push(codeCount === 1 ? "code selection" : `${codeCount} code selections`)

@@ -1,14 +1,15 @@
 import { useState, useCallback, useRef } from "react"
+import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
+import {
+  LONG_TEXT_ATTACHMENT_REF_PREFIX,
+  type LongTextAttachment,
+} from "../../../../shared/long-text-attachments"
 
-export interface PastedTextFile {
-  id: string
+export type PastedTextFile = LongTextAttachment & {
   filePath: string
-  filename: string
   size: number
-  preview: string
   createdAt: Date
-  kind?: "pasted" | "chatHistory"
 }
 
 export interface UsePastedTextFilesReturn {
@@ -28,39 +29,63 @@ export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn 
   // Keep ref in sync with state
   pastedTextsRef.current = pastedTexts
 
-  const writePastedTextMutation = trpc.files.writePastedText.useMutation()
-  const writePastedTextMutationRef = useRef(writePastedTextMutation)
-  writePastedTextMutationRef.current = writePastedTextMutation
+  const stageLongTextAttachmentMutation = trpc.files.stageLongTextAttachment.useMutation()
+  const stageLongTextAttachmentMutationRef = useRef(stageLongTextAttachmentMutation)
+  stageLongTextAttachmentMutationRef.current = stageLongTextAttachmentMutation
+  const deleteLongTextAttachmentMutation = trpc.files.deleteLongTextAttachment.useMutation()
+  const deleteLongTextAttachmentMutationRef = useRef(deleteLongTextAttachmentMutation)
+  deleteLongTextAttachmentMutationRef.current = deleteLongTextAttachmentMutation
 
   const addPastedText = useCallback(
     async (text: string) => {
       try {
-        const result = await writePastedTextMutationRef.current.mutateAsync({
+        const result = await stageLongTextAttachmentMutationRef.current.mutateAsync({
           subChatId,
           text,
+          kind: "pasted",
         })
 
-        // Create preview from first 50 chars, replace newlines with spaces
-        const preview = text.slice(0, 50).replace(/\n/g, " ")
         const newPasted: PastedTextFile = {
-          id: `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          id: result.id,
+          localRef: result.localRef,
           filePath: result.filePath,
           filename: result.filename,
-          size: result.size,
-          preview: preview.length < text.length ? `${preview}...` : preview,
+          byteLength: result.byteLength,
+          size: result.byteLength,
+          preview: result.preview,
           createdAt: new Date(),
+          kind: "pasted",
         }
 
         setPastedTexts((prev) => [...prev, newPasted])
       } catch (error) {
         console.error("[usePastedTextFiles] Failed to write:", error)
+        toast.error("Could not attach pasted text", {
+          description:
+            error instanceof Error
+              ? error.message
+              : "The pasted text could not be staged.",
+        })
       }
     },
     [subChatId]
   )
 
   const removePastedText = useCallback((id: string) => {
-    setPastedTexts((prev) => prev.filter((p) => p.id !== id))
+    setPastedTexts((prev) => {
+      const removed = prev.find((p) => p.id === id)
+      if (
+        typeof removed?.localRef === "string" &&
+        removed.localRef.startsWith(LONG_TEXT_ATTACHMENT_REF_PREFIX)
+      ) {
+        void deleteLongTextAttachmentMutationRef.current
+          .mutateAsync({ localRef: removed.localRef })
+          .catch((error) => {
+            console.warn("[usePastedTextFiles] Failed to delete:", error)
+          })
+      }
+      return prev.filter((p) => p.id !== id)
+    })
   }, [])
 
   const clearPastedTexts = useCallback(() => {

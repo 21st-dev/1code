@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai"
 import { createContext, memo, useCallback, useContext, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { showMessageJsonAtom } from "../atoms"
 import { extractTextMentions, TextMentionBlocks } from "../mentions/render-file-mentions"
+import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import {
   getPerChatMessageKey,
   isLastMessagePerChatAtomFamily,
@@ -994,6 +995,7 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
     .join("\n") || ""
 
   const imageParts = userMsg.parts?.filter((p: any) => p.type === "data-image") || []
+  const longTextParts = userMsg.parts?.filter((p: any) => p.type === "long-text-attachment") || []
 
   // Extract text mentions (quote/diff) to render separately above sticky block
   const { textMentions, cleanedText: textContent } = useMemo(
@@ -1034,13 +1036,28 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
         </div>
       )}
 
+      {longTextParts.length > 0 && (
+        <div className="mb-2 pointer-events-auto flex flex-wrap items-end gap-1.5">
+          {longTextParts.map((part: any, idx: number) => (
+            <AgentPastedTextItem
+              key={`long-text-${part.attachmentId || idx}`}
+              filePath={part.localRef}
+              filename={part.filename}
+              size={part.byteLength}
+              preview={part.preview || part.filename}
+              kind={part.kind}
+            />
+          ))}
+        </div>
+      )}
+
       {/* User message text - sticky */}
       <div
         data-user-message-id={userMsg.id}
         className={`[&>div]:!mb-4 pointer-events-auto sticky z-10 ${stickyTopClass}`}
       >
         {/* Show "Using X" summary when no text but have attachments */}
-        {!textContent.trim() && (imageParts.length > 0 || textMentions.length > 0) ? (
+        {!textContent.trim() && (imageParts.length > 0 || textMentions.length > 0 || longTextParts.length > 0) ? (
           <div className="flex justify-start drop-shadow-[0_10px_20px_hsl(var(--background))]" data-user-bubble>
             <div className="space-y-2 w-full">
               <div className="bg-input-background border px-3 py-2 rounded-xl text-sm text-muted-foreground italic">
@@ -1057,6 +1074,9 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
                   }
                   if (pastedCount > 0) {
                     parts.push(pastedCount === 1 ? "pasted text" : `${pastedCount} pasted texts`)
+                  }
+                  if (longTextParts.length > 0) {
+                    parts.push(longTextParts.length === 1 ? "long text" : `${longTextParts.length} long texts`)
                   }
                   if (codeCount > 0) {
                     parts.push(codeCount === 1 ? "code selection" : `${codeCount} code selections`)
