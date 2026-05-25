@@ -88,7 +88,6 @@ import { getResolvedHotkey } from "../../../lib/hotkeys"
 import {
   AgentsFileMention,
   AgentsMentionsEditor,
-  MENTION_PREFIXES,
   type AgentsMentionsEditorHandle,
   type FileMentionOption,
 } from "../mentions"
@@ -114,6 +113,10 @@ import { AgentContextRecommendations } from "../components/agent-context-recomme
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
+import {
+  toLongTextAttachmentPart,
+  type LongTextAttachmentPart,
+} from "../../../../shared/long-text-attachments"
 import {
   loadGlobalDrafts,
   saveGlobalDrafts,
@@ -1143,6 +1146,7 @@ export function NewChatForm({
     // Build message parts array (images first, then text, then hidden file contents)
     type MessagePart =
       | { type: "text"; text: string }
+      | LongTextAttachmentPart
       | {
           type: "data-image"
           data: {
@@ -1170,19 +1174,9 @@ export function NewChatForm({
         },
       }))
 
-    // Add pasted text as pasted mentions (format: pasted:size:preview|filepath)
-    // Using | as separator since filepath can contain colons
     let finalMessage = message.trim()
     if (pastedTexts.length > 0) {
-      const pastedMentions = pastedTexts
-        .map((pt) => {
-          // Sanitize preview to remove special characters that break mention parsing
-          const sanitizedPreview = pt.preview.replace(/[:\[\]|]/g, "")
-          const prefix = pt.kind === "chatHistory" ? MENTION_PREFIXES.CHAT_HISTORY : MENTION_PREFIXES.PASTED
-          return `@[${prefix}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
-        })
-        .join(" ")
-      finalMessage = pastedMentions + (finalMessage ? " " + finalMessage : "")
+      parts.push(...pastedTexts.map(toLongTextAttachmentPart))
     }
 
     if (finalMessage) {
@@ -1592,6 +1586,7 @@ export function NewChatForm({
             filename={pt.filename}
             size={pt.size}
             preview={pt.preview}
+            kind={pt.kind}
             onRemove={() => removePastedText(pt.id)}
           />
         ))}

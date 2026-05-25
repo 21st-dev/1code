@@ -12,6 +12,7 @@ import {
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
+import type { LongTextAttachmentPart } from "../../../../shared/long-text-attachments"
 import { trpcClient } from "../../../lib/trpc"
 import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
@@ -161,6 +162,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       .find((m) => m.role === "user")
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
+    const longTextAttachments = this.extractLongTextAttachments(lastUser)
 
     // Get sessionId for resume (server preserves sessionId on abort so
     // the next message can resume with full conversation context)
@@ -226,6 +228,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             offlineModeEnabled,
             enableTasks,
             ...(images.length > 0 && { images }),
+            ...(longTextAttachments.length > 0 ? { longTextAttachments } : {}),
           },
           {
             onData: (chunk: UIMessageChunk) => {
@@ -353,6 +356,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   provider: "claude-code",
                   prompt,
                   ...(images.length > 0 && { images }),
+                  ...(longTextAttachments.length > 0 && { longTextAttachments }),
                   readyToRetry: false,
                 })
                 appStore.set(claudeLoginModalConfigAtom, {
@@ -536,5 +540,36 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     }
 
     return images
+  }
+
+  private extractLongTextAttachments(
+    msg: UIMessage | undefined
+  ): LongTextAttachmentPart[] {
+    if (!msg?.parts) return []
+
+    return msg.parts
+      .filter((part): part is LongTextAttachmentPart =>
+        (part as any).type === "long-text-attachment" &&
+        typeof (part as any).localRef === "string"
+      )
+      .map((part) => ({
+        type: "long-text-attachment",
+        attachmentId:
+          typeof (part as any).attachmentId === "string"
+            ? (part as any).attachmentId
+            : `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        localRef: part.localRef,
+        filename:
+          typeof (part as any).filename === "string"
+            ? (part as any).filename
+            : "pasted.txt",
+        byteLength:
+          typeof (part as any).byteLength === "number"
+            ? (part as any).byteLength
+            : 0,
+        preview:
+          typeof (part as any).preview === "string" ? (part as any).preview : "",
+        kind: (part as any).kind === "chatHistory" ? "chatHistory" : "pasted",
+      }))
   }
 }

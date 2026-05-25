@@ -690,6 +690,15 @@ export const chatsRouter = router({
                   base64Data: z.string().optional(),
                 }),
               }),
+              z.object({
+                type: z.literal("long-text-attachment"),
+                attachmentId: z.string(),
+                localRef: z.string(),
+                filename: z.string(),
+                byteLength: z.number().int().nonnegative(),
+                preview: z.string(),
+                kind: z.enum(["pasted", "chatHistory"]),
+              }),
               // Hidden file content - sent to agent but not displayed in UI
               z.object({
                 type: z.literal("file-content"),

@@ -18,6 +18,7 @@ import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
@@ -33,6 +34,54 @@ const imageAttachmentSchema = z.object({
   mediaType: z.string(),
   filename: z.string().optional(),
 })
+
+const longTextAttachmentSchema = z.object({
+  type: z.literal("long-text-attachment").optional(),
+  attachmentId: z.string(),
+  localRef: z.string(),
+  filename: z.string(),
+  byteLength: z.number().int().nonnegative(),
+  preview: z.string().optional(),
+  kind: z.enum(["pasted", "chatHistory"]),
+})
+
+function buildLongTextAttachmentParts(
+  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+): any[] {
+  return (attachments ?? []).map((attachment) => ({
+    type: "long-text-attachment",
+    attachmentId: attachment.attachmentId,
+    localRef: attachment.localRef,
+    filename: attachment.filename,
+    byteLength: attachment.byteLength,
+    preview: attachment.preview ?? "",
+    kind: attachment.kind,
+  }))
+}
+
+function longTextAttachmentSignatureFromParts(parts: any[] | undefined): string {
+  return JSON.stringify(
+    (parts ?? [])
+      .filter((part: any) => part?.type === "long-text-attachment")
+      .map((part: any) => ({
+        localRef: part.localRef,
+        byteLength: part.byteLength,
+        kind: part.kind,
+      }))
+  )
+}
+
+function longTextAttachmentSignatureFromInput(
+  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+): string {
+  return JSON.stringify(
+    (attachments ?? []).map((attachment) => ({
+      localRef: attachment.localRef,
+      byteLength: attachment.byteLength,
+      kind: attachment.kind,
+    }))
+  )
+}
 
 type CodexProviderSession = {
   provider: ACPProvider
@@ -1311,6 +1360,7 @@ function buildUserParts(
         filename?: string
       }>
     | undefined,
+  longTextAttachments?: z.infer<typeof longTextAttachmentSchema>[],
 ): any[] {
   const parts: any[] = [{ type: "text", text: prompt }]
 
@@ -1327,6 +1377,8 @@ function buildUserParts(
       })
     }
   }
+
+  parts.push(...buildLongTextAttachmentParts(longTextAttachments))
 
   return parts
 }
@@ -1739,6 +1791,7 @@ export const codexRouter = router({
         sessionId: z.string().optional(),
         forceNewSession: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(),
+        longTextAttachments: z.array(longTextAttachmentSchema).optional(),
         authConfig: z
           .object({
             apiKey: z.string().min(1),
@@ -1842,7 +1895,9 @@ export const codexRouter = router({
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
               lastMessage?.role === "user" &&
-              extractPromptFromStoredMessage(lastMessage) === input.prompt
+              extractPromptFromStoredMessage(lastMessage) === input.prompt &&
+              longTextAttachmentSignatureFromParts(lastMessage?.parts) ===
+                longTextAttachmentSignatureFromInput(input.longTextAttachments)
 
             let messagesForStream = existingMessages
             const isAuthoritativeRun = () => {
@@ -1892,7 +1947,11 @@ export const codexRouter = router({
                 id: crypto.randomUUID(),
                 role: "user",
                 createdAt: new Date().toISOString(),
-                parts: buildUserParts(input.prompt, input.images),
+                parts: buildUserParts(
+                  input.prompt,
+                  input.images,
+                  input.longTextAttachments,
+                ),
                 metadata: { model: metadataModel },
               }
 
@@ -1966,6 +2025,7 @@ export const codexRouter = router({
             }
 
             const appAgentPrompt = await preparePromptWithAppAgents(input.prompt)
+            let finalPrompt = appAgentPrompt.prompt
             if (appAgentPrompt.appAgentMentions.length > 0) {
               console.log(
                 `[codex] App Agents mentioned:`,
@@ -1979,13 +2039,31 @@ export const codexRouter = router({
               )
             }
 
+            try {
+              finalPrompt = await prependLongTextAttachmentPromptBlocks(
+                finalPrompt,
+                input.longTextAttachments,
+              )
+            } catch (attachmentError) {
+              safeEmit({
+                type: "error",
+                errorText:
+                  attachmentError instanceof Error
+                    ? attachmentError.message
+                    : String(attachmentError),
+              })
+              safeEmit({ type: "finish" })
+              safeComplete()
+              return
+            }
+
             const result = streamText({
               model: provider.languageModel(selectedModelId),
               messages: [
                 {
                   role: "user",
                   content: buildModelMessageContent(
-                    appAgentPrompt.prompt,
+                    finalPrompt,
                     input.images,
                   ),
                 },

@@ -2048,6 +2048,11 @@ const ChatViewInner = memo(function ChatViewInner({
       } else {
         clearTextContexts()
       }
+      if (savedDraft.pastedTexts.length > 0) {
+        setPastedTextsFromDraft(savedDraft.pastedTexts)
+      } else {
+        clearPastedTexts()
+      }
     } else if (
       prevSubChatIdForDraftRef.current &&
       prevSubChatIdForDraftRef.current !== subChatId
@@ -2056,6 +2061,7 @@ const ChatViewInner = memo(function ChatViewInner({
       editorRef.current?.clear()
       clearAll()
       clearTextContexts()
+      clearPastedTexts()
     }
 
     prevSubChatIdForDraftRef.current = subChatId
@@ -2065,8 +2071,10 @@ const ChatViewInner = memo(function ChatViewInner({
     setImagesFromDraft,
     setFilesFromDraft,
     setTextContextsFromDraft,
+    setPastedTextsFromDraft,
     clearAll,
     clearTextContexts,
+    clearPastedTexts,
   ])
 
   // Use subChatId as stable key to prevent HMR-induced duplicate resume requests
@@ -2889,16 +2897,43 @@ const ChatViewInner = memo(function ChatViewInner({
               const preview = beforePipe.slice(colonIdx + 1)
               restoredPastedTexts.push({
                 id: `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                localRef: filePath,
                 filePath,
                 filename: filePath.split("/").pop() || "pasted.txt",
+                byteLength: size,
                 size,
                 preview,
                 createdAt: new Date(),
+                kind: "pasted",
               })
             }
           }
           mentionsToRemove.push(match[0])
         }
+      }
+
+      for (const part of userMsg.parts || []) {
+        const longTextPart = part as any
+        if (longTextPart?.type !== "long-text-attachment") continue
+        if (typeof longTextPart.localRef !== "string" || !longTextPart.localRef) {
+          continue
+        }
+
+        const byteLength =
+          typeof longTextPart.byteLength === "number" ? longTextPart.byteLength : 0
+        restoredPastedTexts.push({
+          id:
+            longTextPart.attachmentId ||
+            `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          localRef: longTextPart.localRef,
+          filePath: longTextPart.localRef,
+          filename: longTextPart.filename || "pasted.txt",
+          byteLength,
+          size: byteLength,
+          preview: longTextPart.preview || longTextPart.filename || "Pasted text",
+          createdAt: new Date(),
+          kind: longTextPart.kind === "chatHistory" ? "chatHistory" : "pasted",
+        })
       }
 
       // Remove mention tokens from text to get clean user text
@@ -3595,10 +3630,12 @@ const ChatViewInner = memo(function ChatViewInner({
     const hasText = inputValue.trim().length > 0
     const currentImages = imagesRef.current
     const currentFiles = filesRef.current
+    const currentPastedTexts = pastedTextsRef.current
     const hasImages =
       currentImages.filter((img) => !img.isLoading && img.url).length > 0
+    const hasPastedTexts = currentPastedTexts.length > 0
 
-    if (!hasText && !hasImages) return
+    if (!hasText && !hasImages && !hasPastedTexts) return
 
     // Stop current stream if streaming and wait for status to become ready.
     // The server-side save block sets sessionId=null on abort, so the next
@@ -3634,10 +3671,12 @@ const ChatViewInner = memo(function ChatViewInner({
       text: finalText,
       images: currentImages,
       files: currentFiles,
+      pastedTexts: currentPastedTexts,
     })
 
     // Clear attachments
     clearAll()
+    clearPastedTexts()
 
     // Update timestamps
     useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
@@ -3662,6 +3701,7 @@ const ChatViewInner = memo(function ChatViewInner({
     subChatId,
     handleStop,
     clearAll,
+    clearPastedTexts,
   ])
 
   // NOTE: Auto-processing of queue is now handled globally by QueueProcessor
@@ -3892,10 +3932,11 @@ const ChatViewInner = memo(function ChatViewInner({
         // 1. Format current messages as markdown
         const historyMarkdown = formatHistoryForContext(messages as any)
 
-        // 2. Save to disk via writePastedText endpoint
-        const result = await trpcClient.files.writePastedText.mutate({
+        // 2. Stage as a long text attachment in the main process
+        const result = await trpcClient.files.stageLongTextAttachment.mutate({
           subChatId,
           text: historyMarkdown,
+          kind: "chatHistory",
         })
 
         // 3. Create new sub-chat
@@ -3931,10 +3972,12 @@ const ChatViewInner = memo(function ChatViewInner({
 
         // 4. Store pending chat history for the new sub-chat to consume on mount
         const historyFile: PendingChatHistory["file"] = {
-          id: `chatHistory_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          id: result.id,
+          localRef: result.localRef,
           filePath: result.filePath,
           filename: result.filename,
-          size: result.size,
+          byteLength: result.byteLength,
+          size: result.byteLength,
           preview: subChatNameRef.current?.trim() || "Previous Chat",
           createdAt: new Date(),
           kind: "chatHistory",

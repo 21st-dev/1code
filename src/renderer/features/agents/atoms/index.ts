@@ -2,6 +2,10 @@ import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
+import type {
+  LongTextAttachment,
+  LongTextAttachmentPart,
+} from "../../../../shared/long-text-attachments"
 
 // Agent mode type - extensible for future modes like "debug"
 export type AgentMode = "agent" | "plan"
@@ -684,6 +688,7 @@ export type PendingAuthRetryMessage = {
     mediaType: string
     filename?: string
   }>
+  longTextAttachments?: LongTextAttachmentPart[]
   readyToRetry: boolean  // Only retry when this is true (set by modal on OAuth success)
 }
 export const pendingAuthRetryMessageAtom = atom<PendingAuthRetryMessage | null>(null)
@@ -692,12 +697,9 @@ export const pendingAuthRetryMessageAtom = atom<PendingAuthRetryMessage | null>(
 // Set when user switches provider mid-chat, consumed by ChatInputArea on mount
 export interface PendingChatHistory {
   subChatId: string
-  file: {
-    id: string
+  file: LongTextAttachment & {
     filePath: string
-    filename: string
     size: number
-    preview: string
     createdAt: Date
     kind: "chatHistory"
   }
