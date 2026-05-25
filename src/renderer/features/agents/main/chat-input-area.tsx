@@ -586,6 +586,19 @@ export const ChatInputArea = memo(function ChatInputArea({
 
     return selectedCodexModel.thinkings[0]!
   }, [selectedCodexModel, selectedSubChatCodexThinking])
+  const selectedCodexProfileId = parseProviderProfileSource(
+    selectedSubChatCodexModelSource,
+  )
+  const selectedCodexProviderProfile =
+    selectedCodexProfileId
+      ? providerProfiles.find(
+          (profile) =>
+            profile.id === selectedCodexProfileId &&
+            profile.targetRuntimes.includes("codex"),
+        )
+      : undefined
+  const selectedCodexProfileIsPending =
+    Boolean(selectedCodexProfileId) && !providerProfilesData
 
   useEffect(() => {
     if (
@@ -621,6 +634,23 @@ export const ChatInputArea = memo(function ChatInputArea({
     selectedCodexThinking,
     setSelectedSubChatCodexModelId,
     setSelectedSubChatCodexThinking,
+  ])
+
+  useEffect(() => {
+    if (
+      selectedCodexProfileId &&
+      !selectedCodexProviderProfile &&
+      !selectedCodexProfileIsPending
+    ) {
+      setSelectedSubChatCodexModelSource("chatgpt")
+      setLastSelectedCodexModelSource("chatgpt")
+    }
+  }, [
+    selectedCodexProfileId,
+    selectedCodexProviderProfile,
+    selectedCodexProfileIsPending,
+    setLastSelectedCodexModelSource,
+    setSelectedSubChatCodexModelSource,
   ])
 
   const { data: providerConfigData } =
@@ -1079,18 +1109,20 @@ export const ChatInputArea = memo(function ChatInputArea({
       images.length > 0 ||
       files.length > 0 ||
       textContexts.length > 0 ||
-      (diffTextContexts?.length ?? 0) > 0
+      (diffTextContexts?.length ?? 0) > 0 ||
+      pastedTexts.length > 0
 
     if (hasContent) {
       await saveSubChatDraftWithAttachments(chatId, subChatIdValue, draft, {
         images,
         files,
         textContexts,
+        pastedTexts,
       })
     } else {
       clearSubChatDraft(chatId, subChatIdValue)
     }
-  }, [editorRef, images, files, textContexts, diffTextContexts])
+  }, [editorRef, images, files, textContexts, diffTextContexts, pastedTexts])
 
   // Content change handler
   const handleContentChange = useCallback((newHasContent: boolean) => {

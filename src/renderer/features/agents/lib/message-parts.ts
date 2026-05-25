@@ -1,5 +1,10 @@
-import { MENTION_PREFIXES } from "../mentions"
+import { MENTION_PREFIXES } from "../../mentions/types/core"
 import { utf8ToBase64 } from "../utils/base64"
+import type {
+  LongTextAttachment,
+  LongTextAttachmentPart,
+} from "../../../../shared/long-text-attachments"
+import { toLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
 
 type SendableImage = {
   isLoading?: boolean
@@ -30,11 +35,9 @@ type MentionDiffTextContext = {
   preview?: string
 }
 
-type MentionPastedText = {
+type MentionPastedText = LongTextAttachment & {
   filePath: string
   size: number
-  preview: string
-  kind?: "pasted" | "chatHistory"
 }
 
 export type AgentUserMessagePart =
@@ -58,6 +61,7 @@ export type AgentUserMessagePart =
     }
   | { type: "text"; text: string }
   | { type: "file-content"; filePath: string; content: string }
+  | LongTextAttachmentPart
 
 function sanitizePreview(preview: string, extraChars = "") {
   const escapedExtra = extraChars.replace(/[\\\]^]/g, "\\$&")
@@ -71,11 +75,9 @@ function contextPreview(ctx: MentionTextContext | MentionDiffTextContext) {
 export function buildMentionPrefix({
   textContexts = [],
   diffTextContexts = [],
-  pastedTexts = [],
 }: {
   textContexts?: MentionTextContext[]
   diffTextContexts?: MentionDiffTextContext[]
-  pastedTexts?: MentionPastedText[]
 }) {
   const quoteMentions = textContexts.map((tc) => {
     const preview = sanitizePreview(contextPreview(tc))
@@ -90,16 +92,7 @@ export function buildMentionPrefix({
     return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
   })
 
-  const pastedMentions = pastedTexts.map((pt) => {
-    const sanitizedPreview = sanitizePreview(pt.preview, "|")
-    const prefix =
-      pt.kind === "chatHistory"
-        ? MENTION_PREFIXES.CHAT_HISTORY
-        : MENTION_PREFIXES.PASTED
-    return `@[${prefix}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
-  })
-
-  const mentions = [...quoteMentions, ...diffMentions, ...pastedMentions]
+  const mentions = [...quoteMentions, ...diffMentions]
   return mentions.length > 0 ? `${mentions.join(" ")} ` : ""
 }
 
@@ -148,8 +141,11 @@ export function buildAgentMessageParts({
   const mentionPrefix = buildMentionPrefix({
     textContexts,
     diffTextContexts,
-    pastedTexts,
   })
+
+  for (const pastedText of pastedTexts) {
+    parts.push(toLongTextAttachmentPart(pastedText))
+  }
 
   if (text || mentionPrefix) {
     parts.push({ type: "text", text: mentionPrefix + (text || "") })

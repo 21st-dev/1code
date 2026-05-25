@@ -1,12 +1,14 @@
 import { useEffect } from "react"
 import { useAtom } from "jotai"
 import { pendingAuthRetryMessageAtom } from "../atoms"
+import type { LongTextAttachmentPart } from "../../../../shared/long-text-attachments"
 
 type AuthRetryProvider = "claude-code" | "codex"
 
 type AuthRetryPart =
   | { type: "text"; text: string }
   | { type: "data-image"; data: unknown }
+  | LongTextAttachmentPart
 
 type SendAuthRetryMessage = (message: {
   role: "user"
@@ -54,6 +56,10 @@ export function useAuthRetry({
           filename: img.filename,
         },
       })
+    }
+
+    for (const attachment of pendingAuthRetry.longTextAttachments ?? []) {
+      parts.push(attachment)
     }
 
     sendMessage({

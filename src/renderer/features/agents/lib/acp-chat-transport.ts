@@ -1,6 +1,10 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
+import {
+  normalizeLongTextAttachmentPart,
+  type LongTextAttachmentPart,
+} from "../../../../shared/long-text-attachments"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import {
   codexApiKeyAtom,
@@ -134,6 +138,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
 
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
+    const longTextAttachments = this.extractLongTextAttachments(lastUser)
 
     const lastAssistant = [...options.messages]
       .reverse()
@@ -200,6 +205,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
             ...(sessionId ? { sessionId } : {}),
             ...(forceNewSession ? { forceNewSession: true } : {}),
             ...(images.length > 0 ? { images } : {}),
+            ...(longTextAttachments.length > 0 ? { longTextAttachments } : {}),
             ...(providerProfileId ? { providerProfileId } : {}),
             ...(codexApiKey
               ? {
@@ -241,6 +247,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                     provider: "codex",
                     prompt,
                     ...(images.length > 0 && { images }),
+                    ...(longTextAttachments.length > 0 && { longTextAttachments }),
                     readyToRetry: shouldAutoRetryOnce,
                   })
 
@@ -391,5 +398,16 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     }
 
     return images
+  }
+
+  private extractLongTextAttachments(
+    message: UIMessage | undefined
+  ): LongTextAttachmentPart[] {
+    if (!message?.parts) return []
+
+    return message.parts.flatMap((part) => {
+      const attachment = normalizeLongTextAttachmentPart(part)
+      return attachment ? [attachment] : []
+    })
   }
 }

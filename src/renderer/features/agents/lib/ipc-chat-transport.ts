@@ -12,6 +12,10 @@ import {
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
+import {
+  normalizeLongTextAttachmentPart,
+  type LongTextAttachmentPart,
+} from "../../../../shared/long-text-attachments"
 import { trpcClient } from "../../../lib/trpc"
 import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
@@ -161,6 +165,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       .find((m) => m.role === "user")
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
+    const longTextAttachments = this.extractLongTextAttachments(lastUser)
 
     // Get sessionId for resume (server preserves sessionId on abort so
     // the next message can resume with full conversation context)
@@ -226,6 +231,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             offlineModeEnabled,
             enableTasks,
             ...(images.length > 0 && { images }),
+            ...(longTextAttachments.length > 0 ? { longTextAttachments } : {}),
           },
           {
             onData: (chunk: UIMessageChunk) => {
@@ -353,6 +359,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   provider: "claude-code",
                   prompt,
                   ...(images.length > 0 && { images }),
+                  ...(longTextAttachments.length > 0 && { longTextAttachments }),
                   readyToRetry: false,
                 })
                 appStore.set(claudeLoginModalConfigAtom, {
@@ -536,5 +543,16 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     }
 
     return images
+  }
+
+  private extractLongTextAttachments(
+    msg: UIMessage | undefined
+  ): LongTextAttachmentPart[] {
+    if (!msg?.parts) return []
+
+    return msg.parts.flatMap((part) => {
+      const attachment = normalizeLongTextAttachmentPart(part)
+      return attachment ? [attachment] : []
+    })
   }
 }

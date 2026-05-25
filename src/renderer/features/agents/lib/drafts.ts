@@ -3,7 +3,9 @@ import type {
   UploadedImage,
   UploadedFile,
 } from "../hooks/use-agents-file-upload"
+import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import type { SelectedTextContext } from "./queue-utils"
+import type { LongTextAttachment } from "../../../../shared/long-text-attachments"
 
 // Constants
 export const DRAFTS_STORAGE_KEY = "agent-drafts-global"
@@ -38,6 +40,12 @@ export interface DraftTextContext {
   createdAt: string // ISO string instead of Date
 }
 
+export type DraftPastedText = LongTextAttachment & {
+  filePath: string
+  size: number
+  createdAt: string
+}
+
 // Types
 export interface DraftContent {
   text: string
@@ -45,6 +53,7 @@ export interface DraftContent {
   images?: DraftImage[]
   files?: DraftFile[]
   textContexts?: DraftTextContext[]
+  pastedTexts?: DraftPastedText[]
 }
 
 export interface DraftProject {
@@ -65,6 +74,7 @@ export interface NewChatDraft {
   images?: DraftImage[]
   files?: DraftFile[]
   textContexts?: DraftTextContext[]
+  pastedTexts?: DraftPastedText[]
 }
 
 // SubChatDraft uses key format: "chatId:subChatId"
@@ -413,6 +423,23 @@ export function toDraftTextContext(
   }
 }
 
+export function toDraftPastedText(text: PastedTextFile): DraftPastedText {
+  return {
+    id: text.id,
+    filename: text.filename,
+    byteLength: text.byteLength,
+    preview: text.preview,
+    localRef: text.localRef,
+    kind: text.kind,
+    filePath: text.filePath,
+    size: text.size,
+    createdAt:
+      text.createdAt instanceof Date
+        ? text.createdAt.toISOString()
+        : String(text.createdAt),
+  }
+}
+
 /**
  * Revoke blob URLs associated with a draft item
  */
@@ -520,6 +547,28 @@ export function fromDraftTextContext(
   }
 }
 
+export function fromDraftPastedText(
+  draft: DraftPastedText
+): PastedTextFile | null {
+  const localRef = draft.localRef || draft.filePath
+  if (!localRef) return null
+
+  const byteLength = draft.byteLength || draft.size || 0
+  return {
+    id:
+      draft.id ||
+      `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    filename: draft.filename || localRef.split("/").pop() || "pasted.txt",
+    byteLength,
+    preview: draft.preview || draft.filename || "Pasted text",
+    localRef,
+    kind: draft.kind === "chatHistory" ? "chatHistory" : "pasted",
+    filePath: draft.filePath || localRef,
+    size: draft.size || byteLength,
+    createdAt: draft.createdAt ? new Date(draft.createdAt) : new Date(),
+  }
+}
+
 /**
  * Full draft data including attachments
  */
@@ -528,6 +577,7 @@ export interface FullDraftData {
   images: UploadedImage[]
   files: UploadedFile[]
   textContexts: SelectedTextContext[]
+  pastedTexts: PastedTextFile[]
 }
 
 /**
@@ -554,6 +604,10 @@ export function getSubChatDraftFull(
         ?.map(fromDraftFile)
         .filter((f): f is UploadedFile => f !== null) ?? [],
     textContexts: draft.textContexts?.map(fromDraftTextContext) ?? [],
+    pastedTexts:
+      draft.pastedTexts
+        ?.map(fromDraftPastedText)
+        .filter((text): text is PastedTextFile => text !== null) ?? [],
   }
 }
 
@@ -568,6 +622,7 @@ export async function saveSubChatDraftWithAttachments(
     images?: UploadedImage[]
     files?: UploadedFile[]
     textContexts?: SelectedTextContext[]
+    pastedTexts?: PastedTextFile[]
   }
 ): Promise<{ success: boolean; error?: string }> {
   const globalDrafts = loadGlobalDrafts()
@@ -577,7 +632,8 @@ export async function saveSubChatDraftWithAttachments(
     text.trim() ||
     (options?.images?.length ?? 0) > 0 ||
     (options?.files?.length ?? 0) > 0 ||
-    (options?.textContexts?.length ?? 0) > 0
+    (options?.textContexts?.length ?? 0) > 0 ||
+    (options?.pastedTexts?.length ?? 0) > 0
 
   if (!hasContent) {
     delete globalDrafts[key]
@@ -598,6 +654,7 @@ export async function saveSubChatDraftWithAttachments(
     : []
 
   const draftTextContexts = options?.textContexts?.map(toDraftTextContext) ?? []
+  const draftPastedTexts = options?.pastedTexts?.map(toDraftPastedText) ?? []
 
   const draft: DraftContent = {
     text,
@@ -605,6 +662,7 @@ export async function saveSubChatDraftWithAttachments(
     ...(draftImages.length > 0 && { images: draftImages }),
     ...(draftFiles.length > 0 && { files: draftFiles }),
     ...(draftTextContexts.length > 0 && { textContexts: draftTextContexts }),
+    ...(draftPastedTexts.length > 0 && { pastedTexts: draftPastedTexts }),
   }
 
   // Check storage limits before saving

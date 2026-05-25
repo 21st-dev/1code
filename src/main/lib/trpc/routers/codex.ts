@@ -18,6 +18,7 @@ import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
@@ -33,6 +34,54 @@ const imageAttachmentSchema = z.object({
   mediaType: z.string(),
   filename: z.string().optional(),
 })
+
+const longTextAttachmentSchema = z.object({
+  type: z.literal("long-text-attachment").optional(),
+  attachmentId: z.string(),
+  localRef: z.string(),
+  filename: z.string(),
+  byteLength: z.number().int().nonnegative(),
+  preview: z.string().optional(),
+  kind: z.enum(["pasted", "chatHistory"]),
+})
+
+function buildLongTextAttachmentParts(
+  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+): any[] {
+  return (attachments ?? []).map((attachment) => ({
+    type: "long-text-attachment",
+    attachmentId: attachment.attachmentId,
+    localRef: attachment.localRef,
+    filename: attachment.filename,
+    byteLength: attachment.byteLength,
+    preview: attachment.preview ?? "",
+    kind: attachment.kind,
+  }))
+}
+
+function longTextAttachmentSignatureFromParts(parts: any[] | undefined): string {
+  return JSON.stringify(
+    (parts ?? [])
+      .filter((part: any) => part?.type === "long-text-attachment")
+      .map((part: any) => ({
+        localRef: part.localRef,
+        byteLength: part.byteLength,
+        kind: part.kind,
+      }))
+  )
+}
+
+function longTextAttachmentSignatureFromInput(
+  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+): string {
+  return JSON.stringify(
+    (attachments ?? []).map((attachment) => ({
+      localRef: attachment.localRef,
+      byteLength: attachment.byteLength,
+      kind: attachment.kind,
+    }))
+  )
+}
 
 type CodexProviderSession = {
   provider: ACPProvider
@@ -152,6 +201,7 @@ const DEFAULT_CODEX_MODEL = "gpt-5.5/high"
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_USAGE_POLL_ATTEMPTS = 3
 const CODEX_USAGE_POLL_INTERVAL_MS = 200
+const CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS = 5_000
 
 type CodexTokenUsage = {
   input_tokens?: number
@@ -196,6 +246,18 @@ const codexMcpListEntrySchema = z
   .passthrough()
 
 type CodexMcpListEntry = z.infer<typeof codexMcpListEntrySchema>
+
+type CodexAcpSpawnProbeStatus = {
+  ok: boolean
+  exitCode: number | null
+  signal: string | null
+  error: string | null
+  stdoutPreview: string
+  stderrPreview: string
+  durationMs: number
+}
+
+type CodexAuthMethodId = "chatgpt" | "codex-api-key"
 
 function getCodexPackageName(): string {
   const platform = process.platform
@@ -275,7 +337,120 @@ function resolveBundledCodexCliPath(): string {
   )
 }
 
-function getCodexRuntimeStatus() {
+function previewProcessOutput(output: string): string {
+  return stripAnsi(output).replace(/\s+/g, " ").trim().slice(0, 240)
+}
+
+async function probeCodexAcpSpawn(
+  acpPath: string | null,
+): Promise<CodexAcpSpawnProbeStatus> {
+  const startedAt = Date.now()
+
+  if (!acpPath) {
+    return {
+      ok: false,
+      exitCode: null,
+      signal: null,
+      error: "Codex ACP runtime path could not be resolved.",
+      stdoutPreview: "",
+      stderrPreview: "",
+      durationMs: Date.now() - startedAt,
+    }
+  }
+
+  return await new Promise((resolvePromise) => {
+    let child: ChildProcess | null = null
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    let stdout = ""
+    let stderr = ""
+    let settled = false
+
+    const appendOutput = (current: string, chunk: Buffer | string): string =>
+      `${current}${chunk.toString()}`.slice(-8_000)
+
+    const finish = (
+      status: Omit<CodexAcpSpawnProbeStatus, "durationMs">,
+    ) => {
+      if (settled) return
+      settled = true
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+      resolvePromise({
+        ...status,
+        durationMs: Date.now() - startedAt,
+      })
+    }
+
+    try {
+      child = spawn(acpPath, ["--help"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        cwd: homedir(),
+      })
+    } catch (error) {
+      finish({
+        ok: false,
+        exitCode: null,
+        signal: null,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Codex ACP spawn probe failed before process start.",
+        stdoutPreview: "",
+        stderrPreview: "",
+      })
+      return
+    }
+
+    timeout = setTimeout(() => {
+      try {
+        child?.kill("SIGTERM")
+      } catch {}
+      finish({
+        ok: false,
+        exitCode: null,
+        signal: "timeout",
+        error: `codex-acp --help timed out after ${CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS}ms.`,
+        stdoutPreview: previewProcessOutput(stdout),
+        stderrPreview: previewProcessOutput(stderr),
+      })
+    }, CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS)
+
+    child.stdout?.on("data", (chunk) => {
+      stdout = appendOutput(stdout, chunk)
+    })
+    child.stderr?.on("data", (chunk) => {
+      stderr = appendOutput(stderr, chunk)
+    })
+    child.once("error", (error) => {
+      finish({
+        ok: false,
+        exitCode: null,
+        signal: null,
+        error: error.message,
+        stdoutPreview: previewProcessOutput(stdout),
+        stderrPreview: previewProcessOutput(stderr),
+      })
+    })
+    child.once("close", (exitCode, signal) => {
+      finish({
+        ok: exitCode === 0,
+        exitCode,
+        signal,
+        error:
+          exitCode === 0
+            ? null
+            : `codex-acp --help exited with code ${exitCode ?? "null"}${
+                signal ? ` and signal ${signal}` : ""
+              }.`,
+        stdoutPreview: previewProcessOutput(stdout),
+        stderrPreview: previewProcessOutput(stderr),
+      })
+    })
+  })
+}
+
+async function getCodexRuntimeStatus() {
   const cliHint = app.isPackaged
     ? "Reinstall the app so the bundled Codex command is restored."
     : "Run `bun run codex:download` from the repo, then restart the dev app."
@@ -299,13 +474,25 @@ function getCodexRuntimeStatus() {
     cliHint,
   )
   const acp = getRuntimeExecutableStatus(acpPath, acpHint)
+  const spawnProbe = acp.ok
+    ? await probeCodexAcpSpawn(acp.path)
+    : {
+        ok: false,
+        exitCode: null,
+        signal: null,
+        error: acp.error,
+        stdoutPreview: "",
+        stderrPreview: "",
+        durationMs: 0,
+      }
+  const acpWithProbe = { ...acp, spawnProbe }
 
   return {
     runtime: "codex" as const,
     requiresGlobalCli: false,
-    ok: loginCli.ok && acp.ok && !acpResolveError,
+    ok: loginCli.ok && acp.ok && spawnProbe.ok && !acpResolveError,
     loginCli,
-    acp: acpResolveError ? { ...acp, error: acpResolveError } : acp,
+    acp: acpResolveError ? { ...acpWithProbe, error: acpResolveError } : acpWithProbe,
   }
 }
 
@@ -429,6 +616,23 @@ function extractCodexError(error: unknown): { message: string; code?: string } {
   return {
     message: typeof message === "string" ? message : String(message),
     code: typeof code === "string" ? code : undefined,
+  }
+}
+
+function getCodexErrorDiagnostics(error: unknown) {
+  const anyError = error as any
+  const code = anyError?.data?.code || anyError?.code || anyError?.cause?.code
+  const exitCode =
+    anyError?.data?.exitCode ??
+    anyError?.exitCode ??
+    anyError?.status ??
+    anyError?.cause?.exitCode ??
+    null
+
+  return {
+    name: typeof anyError?.name === "string" ? anyError.name : null,
+    code: typeof code === "string" ? code : null,
+    exitCode: typeof exitCode === "number" ? exitCode : null,
   }
 }
 
@@ -1286,20 +1490,27 @@ function buildCodexProviderEnv(params?: {
   }
 }
 
-function getCodexAuthMethodId(authConfig?: {
-  apiKey: string
-}): "codex-api-key" | undefined {
-  const apiKey = authConfig?.apiKey?.trim()
-  if (!apiKey) {
+function getCodexAuthMethodId(params?: {
+  authConfig?: {
+    apiKey: string
+  }
+  providerProfile?: {
+    id: string
+  }
+}): CodexAuthMethodId | undefined {
+  if (params?.providerProfile) {
     return undefined
   }
+
+  const apiKey = params?.authConfig?.apiKey?.trim()
 
   // codex-acp advertises auth methods:
   // - chatgpt
   // - codex-api-key
   // - openai-api-key
-  // For app-managed API key path we want deterministic key auth.
-  return "codex-api-key"
+  // Official ChatGPT and app-managed API key paths should be explicit so a
+  // stale custom provider profile cannot affect the next ACP session.
+  return apiKey ? "codex-api-key" : "chatgpt"
 }
 
 function buildUserParts(
@@ -1311,6 +1522,7 @@ function buildUserParts(
         filename?: string
       }>
     | undefined,
+  longTextAttachments?: z.infer<typeof longTextAttachmentSchema>[],
 ): any[] {
   const parts: any[] = [{ type: "text", text: prompt }]
 
@@ -1327,6 +1539,8 @@ function buildUserParts(
       })
     }
   }
+
+  parts.push(...buildLongTextAttachmentParts(longTextAttachments))
 
   return parts
 }
@@ -1398,30 +1612,65 @@ function getOrCreateProvider(params: {
   const existingSessionIdForProvider = hasAppManagedApiKey
     ? undefined
     : params.existingSessionId
+  const command = resolveCodexAcpBinaryPath()
+  const providerProfileArgs = params.providerProfile
+    ? [
+        "-c",
+        `model_provider=${JSON.stringify("locus_profile")}`,
+        "-c",
+        `model_providers.locus_profile.name=${JSON.stringify(params.providerProfile.name)}`,
+        "-c",
+        `model_providers.locus_profile.base_url=${JSON.stringify(params.providerProfile.baseUrl)}`,
+        "-c",
+        `model_providers.locus_profile.env_key=${JSON.stringify("LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN")}`,
+        "-c",
+        `model_providers.locus_profile.wire_api=${JSON.stringify("responses")}`,
+      ]
+    : undefined
+  const authMethodId = getCodexAuthMethodId({
+    authConfig: params.authConfig,
+    providerProfile: params.providerProfile,
+  })
+  const providerSource = params.providerProfile
+    ? "provider-profile"
+    : hasAppManagedApiKey
+      ? "codex-api-key"
+      : "chatgpt"
+  const commandStatus = getRuntimeExecutableStatus(
+    command,
+    "Codex ACP runtime must be executable before provider start.",
+  )
+
+  console.info("[codex-acp] starting provider", {
+    subChatId: params.subChatId.slice(-8),
+    command,
+    commandOk: commandStatus.ok,
+    commandError: commandStatus.error,
+    cwd: params.cwd,
+    cwdExists: existsSync(params.cwd),
+    args: providerProfileArgs
+      ? providerProfileArgs.map((arg) =>
+          arg.includes("model_providers.locus_profile.name=")
+            ? "model_providers.locus_profile.name=<configured>"
+            : arg.includes("model_providers.locus_profile.base_url=")
+              ? "model_providers.locus_profile.base_url=<configured>"
+              : arg,
+        )
+      : [],
+    authMethodId: authMethodId ?? null,
+    providerSource,
+    hasExistingSessionId: Boolean(existingSessionIdForProvider),
+    mcpServerCount: params.mcpServers.length,
+  })
 
   const provider = createACPProvider({
-    command: resolveCodexAcpBinaryPath(),
+    command,
     env: buildCodexProviderEnv({
       authConfig: params.authConfig,
       providerGatewayToken: params.providerProfile?.token,
     }),
-    ...(params.providerProfile
-      ? {
-          args: [
-            "-c",
-            `model_provider=${JSON.stringify("locus_profile")}`,
-            "-c",
-            `model_providers.locus_profile.name=${JSON.stringify(params.providerProfile.name)}`,
-            "-c",
-            `model_providers.locus_profile.base_url=${JSON.stringify(params.providerProfile.baseUrl)}`,
-            "-c",
-            `model_providers.locus_profile.env_key=${JSON.stringify("LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN")}`,
-            "-c",
-            `model_providers.locus_profile.wire_api=${JSON.stringify("responses")}`,
-          ],
-        }
-      : {}),
-    authMethodId: getCodexAuthMethodId(params.authConfig),
+    ...(providerProfileArgs ? { args: providerProfileArgs } : {}),
+    authMethodId,
     session: {
       cwd: params.cwd,
       mcpServers: params.mcpServers,
@@ -1739,6 +1988,7 @@ export const codexRouter = router({
         sessionId: z.string().optional(),
         forceNewSession: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(),
+        longTextAttachments: z.array(longTextAttachmentSchema).optional(),
         authConfig: z
           .object({
             apiKey: z.string().min(1),
@@ -1842,7 +2092,9 @@ export const codexRouter = router({
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
               lastMessage?.role === "user" &&
-              extractPromptFromStoredMessage(lastMessage) === input.prompt
+              extractPromptFromStoredMessage(lastMessage) === input.prompt &&
+              longTextAttachmentSignatureFromParts(lastMessage?.parts) ===
+                longTextAttachmentSignatureFromInput(input.longTextAttachments)
 
             let messagesForStream = existingMessages
             const isAuthoritativeRun = () => {
@@ -1892,7 +2144,11 @@ export const codexRouter = router({
                 id: crypto.randomUUID(),
                 role: "user",
                 createdAt: new Date().toISOString(),
-                parts: buildUserParts(input.prompt, input.images),
+                parts: buildUserParts(
+                  input.prompt,
+                  input.images,
+                  input.longTextAttachments,
+                ),
                 metadata: { model: metadataModel },
               }
 
@@ -1966,6 +2222,7 @@ export const codexRouter = router({
             }
 
             const appAgentPrompt = await preparePromptWithAppAgents(input.prompt)
+            let finalPrompt = appAgentPrompt.prompt
             if (appAgentPrompt.appAgentMentions.length > 0) {
               console.log(
                 `[codex] App Agents mentioned:`,
@@ -1979,13 +2236,31 @@ export const codexRouter = router({
               )
             }
 
+            try {
+              finalPrompt = await prependLongTextAttachmentPromptBlocks(
+                finalPrompt,
+                input.longTextAttachments,
+              )
+            } catch (attachmentError) {
+              safeEmit({
+                type: "error",
+                errorText:
+                  attachmentError instanceof Error
+                    ? attachmentError.message
+                    : String(attachmentError),
+              })
+              safeEmit({ type: "finish" })
+              safeComplete()
+              return
+            }
+
             const result = streamText({
               model: provider.languageModel(selectedModelId),
               messages: [
                 {
                   role: "user",
                   content: buildModelMessageContent(
-                    appAgentPrompt.prompt,
+                    finalPrompt,
                     input.images,
                   ),
                 },
@@ -2054,7 +2329,15 @@ export const codexRouter = router({
                   console.error("[codex] Failed to persist messages:", error)
                 }
               },
-              onError: (error) => extractCodexError(error).message,
+              onError: (error) => {
+                const normalized = extractCodexError(error)
+                console.error("[codex-acp] stream error", {
+                  subChatId: input.subChatId.slice(-8),
+                  ...getCodexErrorDiagnostics(error),
+                  message: normalized.message,
+                })
+                return normalized.message
+              },
             })
 
             const reader = uiStream.getReader()
@@ -2099,6 +2382,11 @@ export const codexRouter = router({
           } catch (error) {
             const normalized = extractCodexError(error)
 
+            console.error("[codex-acp] chat stream error", {
+              subChatId: input.subChatId.slice(-8),
+              ...getCodexErrorDiagnostics(error),
+              message: normalized.message,
+            })
             console.error("[codex] chat stream error:", error)
             if (isCodexAuthError(normalized)) {
               safeEmit({ type: "auth-error", errorText: normalized.message })

@@ -1,10 +1,16 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { readdir, stat, readFile, writeFile, mkdir, rename as fsRename, rm } from "node:fs/promises"
+import { readdir, stat, readFile, rename as fsRename, rm } from "node:fs/promises"
 import { join, relative, basename, extname, dirname, resolve, isAbsolute } from "node:path"
-import { app, shell } from "electron"
+import { shell } from "electron"
 import { watch } from "node:fs"
 import { observable } from "@trpc/server/observable"
+import {
+  cleanupStaleLongTextAttachments,
+  deleteLongTextAttachment,
+  isLongTextAttachmentLocalRef,
+  stageLongTextAttachment,
+} from "../../long-text-attachments"
 
 // Directories to ignore when scanning
 const IGNORED_DIRS = new Set([
@@ -429,9 +435,28 @@ export const filesRouter = router({
       })
     }),
 
+  stageLongTextAttachment: publicProcedure
+    .input(
+      z.object({
+        subChatId: z.string(),
+        text: z.string(),
+        filename: z.string().optional(),
+        kind: z.enum(["pasted", "chatHistory"]).default("pasted"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const attachment = await stageLongTextAttachment(input)
+
+      return {
+        ...attachment,
+        filePath: attachment.localRef,
+        size: attachment.byteLength,
+      }
+    }),
+
   /**
-   * Write pasted text to a file in the session's pasted directory
-   * Used for large text pastes that shouldn't be embedded inline
+   * Backward-compatible wrapper for older renderer code paths.
+   * New code should call stageLongTextAttachment and treat localRef as opaque.
    */
   writePastedText: publicProcedure
     .input(
@@ -442,35 +467,32 @@ export const filesRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const { subChatId, text, filename } = input
-
-      // Create pasted directory in session folder
-      const sessionDir = join(app.getPath("userData"), "claude-sessions", subChatId)
-      const pastedDir = join(sessionDir, "pasted")
-      await mkdir(pastedDir, { recursive: true })
-
-      // Generate filename with timestamp
-      const finalFilename = filename || `pasted_${Date.now()}.txt`
-
-      // Validate filename doesn't contain path separators or null bytes
-      validateFileName(finalFilename)
-
-      const filePath = join(pastedDir, finalFilename)
-
-      // Ensure the resolved path stays within the pasted directory
-      validatePathSafe(filePath, pastedDir)
-
-      // Write file
-      await writeFile(filePath, text, "utf-8")
-
-      console.log(`[files] Wrote pasted text to ${filePath} (${text.length} bytes)`)
+      const attachment = await stageLongTextAttachment({
+        ...input,
+        kind: "pasted",
+      })
 
       return {
-        filePath,
-        filename: finalFilename,
-        size: text.length,
+        ...attachment,
+        filePath: attachment.localRef,
+        size: attachment.byteLength,
       }
     }),
+
+  deleteLongTextAttachment: publicProcedure
+    .input(z.object({ localRef: z.string() }))
+    .mutation(async ({ input }) => {
+      if (!isLongTextAttachmentLocalRef(input.localRef)) {
+        return { deleted: false }
+      }
+      return { deleted: await deleteLongTextAttachment(input.localRef) }
+    }),
+
+  cleanupLongTextAttachments: publicProcedure
+    .input(z.object({ olderThanMs: z.number().int().positive().optional() }).optional())
+    .mutation(async ({ input }) => ({
+      deleted: await cleanupStaleLongTextAttachments(input?.olderThanMs),
+    })),
 
   /**
    * Rename a file or folder
