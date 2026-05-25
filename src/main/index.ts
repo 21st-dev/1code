@@ -605,6 +605,16 @@ if (gotTheLock) {
             { role: "cut" },
             { role: "copy" },
             { role: "paste" },
+            {
+              label: "Find",
+              accelerator: "CmdOrCtrl+F",
+              click: () => {
+                const win = BrowserWindow.getFocusedWindow()
+                if (win) {
+                  win.webContents.send("shortcut:find")
+                }
+              },
+            },
             { role: "selectAll" },
           ],
         },

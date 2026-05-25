@@ -118,6 +118,11 @@ contextBridge.exposeInMainWorld("desktopApi", {
     ipcRenderer.on("shortcut:open-settings", handler)
     return () => ipcRenderer.removeListener("shortcut:open-settings", handler)
   },
+  onShortcutFind: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on("shortcut:find", handler)
+    return () => ipcRenderer.removeListener("shortcut:find", handler)
+  },
 
   // File change events (from Claude Write/Edit tools)
   onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => {
@@ -229,6 +234,7 @@ export interface DesktopApi {
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   onShortcutOpenSettings: (callback: () => void) => () => void
+  onShortcutFind: (callback: () => void) => () => void
   // File changes
   onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => () => void
   // Git status changes (from file watcher)

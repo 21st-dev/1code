@@ -65,6 +65,8 @@ export interface DesktopApi {
 
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
+  onShortcutOpenSettings: (callback: () => void) => () => void
+  onShortcutFind: (callback: () => void) => () => void
 
   // Worktree setup failures
   onWorktreeSetupFailed: (callback: (payload: WorktreeSetupFailurePayload) => void) => () => void

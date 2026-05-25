@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect } from "react"
+import { Suspense, useCallback, useEffect } from "react"
 import { useAtom } from "jotai"
 import { useAtomValue } from "jotai"
 import {
@@ -53,12 +53,12 @@ import { getFileName } from "../utils/file-utils"
 import { ImageViewer } from "./image-viewer"
 import { MarkdownViewer } from "./markdown-viewer"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
-import { shouldUseMonacoPreview } from "./code-viewer-limits"
+import { shouldUsePlainCodePreview } from "./code-viewer-limits"
+import {
+  LazyMonacoCodeViewer,
+  scheduleMonacoCodeViewerPreload,
+} from "./monaco-preview-loader"
 import { PlainCodeBlock } from "./plain-code-block"
-
-const LazyMonacoCodeViewer = lazy(() =>
-  import("./monaco-code-viewer").then((module) => ({ default: module.MonacoCodeViewer })),
-)
 
 interface FileViewerSidebarProps {
   filePath: string
@@ -338,6 +338,12 @@ export function FileViewerSidebar({
 }: FileViewerSidebarProps) {
   const viewerType = getFileViewerType(filePath)
 
+  useEffect(() => {
+    if (viewerType !== "image" && viewerType !== "unsupported") {
+      scheduleMonacoCodeViewerPreload()
+    }
+  }, [viewerType])
+
   switch (viewerType) {
     case "image":
       return (
@@ -398,6 +404,7 @@ function CodeViewer({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (document.querySelector("[data-file-viewer-path] .find-widget.visible")) return
         e.preventDefault()
         onClose()
       }
@@ -447,7 +454,13 @@ function CodeViewer({
         className="flex-1 min-h-0 overflow-hidden allow-text-selection"
         data-file-viewer-path={filePath}
       >
-        {shouldUseMonacoPreview(byteLength, content) ? (
+        {shouldUsePlainCodePreview(byteLength, content) ? (
+          <PlainCodeBlock
+            content={content || ""}
+            wordWrap={wordWrap}
+            lineNumbers={lineNumbers}
+          />
+        ) : (
           <Suspense fallback={<LoadingSpinner />}>
             <LazyMonacoCodeViewer
               filePath={filePath}
@@ -459,12 +472,6 @@ function CodeViewer({
               onClose={onClose}
             />
           </Suspense>
-        ) : (
-          <PlainCodeBlock
-            content={content || ""}
-            wordWrap={wordWrap}
-            lineNumbers={lineNumbers}
-          />
         )}
       </div>
     </div>

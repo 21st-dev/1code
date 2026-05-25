@@ -128,6 +128,27 @@ export interface UseAgentsHotkeysOptions {
 // Hotkeys that work even in inputs
 const GLOBAL_HOTKEYS = new Set(["open-shortcuts"])
 
+function dispatchFileViewerFind(): void {
+  window.dispatchEvent(new Event("file-viewer:find"))
+}
+
+function isFileViewerEditorFocused(activeElement: Element | null, eventTarget: EventTarget | null): boolean {
+  const targetElement = eventTarget instanceof Element ? eventTarget : null
+
+  return Boolean(
+    activeElement?.closest?.("[data-file-viewer-path]") ||
+    targetElement?.closest?.("[data-file-viewer-path]") ||
+    document.querySelector('[data-file-viewer-active="true"]') ||
+    document.querySelector(
+      [
+        "[data-file-viewer-path] .monaco-editor.focused",
+        "[data-file-viewer-path] .monaco-editor textarea:focus",
+        "[data-file-viewer-path] .monaco-editor .inputarea:focus",
+      ].join(", "),
+    ),
+  )
+}
+
 // ============================================================================
 // HOTKEYS MANAGER HOOK
 // ============================================================================
@@ -179,6 +200,15 @@ export function useAgentsHotkeys(
     [createActionContext],
   )
 
+  const handleFindShortcut = useCallback(() => {
+    if (isFileViewerEditorFocused(document.activeElement, null)) {
+      dispatchFileViewerFind()
+      return
+    }
+
+    handleHotkeyAction("toggle-chat-search")
+  }, [handleHotkeyAction])
+
   // Listen for Cmd+N via IPC from main process (menu accelerator)
   React.useEffect(() => {
     if (!enabled) return
@@ -204,6 +234,18 @@ export function useAgentsHotkeys(
 
     return cleanup
   }, [enabled, handleHotkeyAction])
+
+  // Listen for Cmd+F via IPC from main process (menu accelerator)
+  React.useEffect(() => {
+    if (!enabled) return
+    if (!window.desktopApi?.onShortcutFind) return
+
+    const cleanup = window.desktopApi.onShortcutFind(() => {
+      handleFindShortcut()
+    })
+
+    return cleanup
+  }, [enabled, handleFindShortcut])
 
   // Get the resolved hotkey for a shortcut, respecting custom bindings
   const getHotkeyForAction = useCallback(
@@ -255,18 +297,18 @@ export function useAgentsHotkeys(
         return
       }
 
-      // Check search-in-chat hotkey
-      // Skip if focus is inside a file viewer Monaco editor so Cmd+F triggers editor find
+      // Check search-in-chat hotkey, routing file-viewer focus to Monaco find.
       const searchInChatHotkey = getHotkeyForAction("search-in-chat")
       if (searchInChatHotkey && matchesHotkey(e, searchInChatHotkey)) {
-        const active = document.activeElement
-        const isInFileViewer = active?.closest?.("[data-file-viewer-path]")
-        if (!isInFileViewer) {
-          e.preventDefault()
-          e.stopPropagation()
+        e.preventDefault()
+        e.stopPropagation()
+        if (isFileViewerEditorFocused(document.activeElement, e.target)) {
+          dispatchFileViewerFind()
+        } else {
           handleHotkeyAction("toggle-chat-search")
           return
         }
+        return
       }
 
       // Check file-search hotkey (Cmd+P)

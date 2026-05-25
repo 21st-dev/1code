@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useMemo, useCallback, useEffect, useRef } from "react"
+import { Suspense, useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { useAtom } from "jotai"
 import { useAtomValue } from "jotai"
 import { Loader2, AlertCircle, Check, X } from "lucide-react"
@@ -35,11 +35,11 @@ import { EDITOR_ICONS } from "@/lib/editor-icons"
 import { fileViewerWordWrapAtom, fileViewerDisplayModeAtom } from "../../agents/atoms"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { shouldUseMonacoPreview } from "./code-viewer-limits"
+import {
+  LazyMonacoCodeViewer,
+  scheduleMonacoCodeViewerPreload,
+} from "./monaco-preview-loader"
 import { PlainCodeBlock } from "./plain-code-block"
-
-const LazyMonacoCodeViewer = lazy(() =>
-  import("./monaco-code-viewer").then((module) => ({ default: module.MonacoCodeViewer })),
-)
 
 const FILE_VIEWER_MODES = [
   { value: "side-peek" as const, labelKey: "changes.diff.sidebar" as TranslationKey, Icon: IconSidePeek },
@@ -68,6 +68,12 @@ export function MarkdownViewer({
   const handleToggleView = useCallback(() => {
     setShowPreview((prev) => !prev)
   }, [])
+
+  useEffect(() => {
+    if (!showPreview) {
+      scheduleMonacoCodeViewerPreload()
+    }
+  }, [showPreview])
 
   const absolutePath = useMemo(() => {
     return filePath.startsWith("/") ? filePath : `${projectPath}/${filePath}`
@@ -106,6 +112,7 @@ export function MarkdownViewer({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (document.querySelector("[data-file-viewer-path] .find-widget.visible")) return
         e.preventDefault()
         onClose()
       }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import Editor, { type Monaco } from "@monaco-editor/react"
 import type { editor } from "monaco-editor"
 import { useTheme } from "next-themes"
@@ -7,6 +8,16 @@ import { defaultEditorOptions, getMonacoTheme, registerMonacoTheme } from "./mon
 import { useVSCodeTheme } from "@/lib/themes"
 
 type ContextMenuPosition = { x: number; y: number }
+const FIND_ACTION_ID = "actions.find"
+
+function isFindHotkey(e: KeyboardEvent): boolean {
+  return (
+    e.key.toLowerCase() === "f" &&
+    (e.metaKey || e.ctrlKey) &&
+    !e.altKey &&
+    !e.shiftKey
+  )
+}
 
 export function MonacoCodeViewer({
   filePath,
@@ -31,8 +42,68 @@ export function MonacoCodeViewer({
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const activeViewerRef = useRef(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null)
   const [hasSelection, setHasSelection] = useState(false)
+
+  const setActiveViewer = useCallback((active: boolean) => {
+    activeViewerRef.current = active
+    const container = containerRef.current
+    if (container) {
+      container.dataset.fileViewerActive = active ? "true" : "false"
+    }
+  }, [])
+
+  const openFind = useCallback(() => {
+    const monacoEditor = editorRef.current
+    if (monacoEditor) {
+      monacoEditor.focus()
+      const triggerFindCommand = () => {
+        try {
+          monacoEditor.trigger("keyboard", FIND_ACTION_ID, {})
+        } catch {
+          // Monaco contributions can be tree-shaken; keep the viewer stable if find is unavailable.
+        }
+      }
+      const focusFindInput = () => {
+        window.setTimeout(() => {
+          const input = containerRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+            [
+              ".find-widget.visible textarea[aria-label='Find']",
+              ".find-widget.visible input[aria-label='Find']",
+              ".find-widget.visible textarea.input",
+              ".find-widget.visible input",
+            ].join(", "),
+          )
+          input?.focus()
+          input?.select()
+        }, 0)
+      }
+
+      const findAction = monacoEditor.getAction(FIND_ACTION_ID)
+      if (findAction) {
+        try {
+          void Promise.resolve(findAction.run()).then(() => {
+            window.setTimeout(() => {
+              if (!containerRef.current?.querySelector(".find-widget.visible")) {
+                triggerFindCommand()
+              }
+              focusFindInput()
+            }, 0)
+          }).catch(() => {
+            triggerFindCommand()
+            focusFindInput()
+          })
+        } catch {
+          triggerFindCommand()
+        }
+        focusFindInput()
+        return
+      }
+      triggerFindCommand()
+      focusFindInput()
+    }
+  }, [])
 
   const monacoTheme = useMemo(() => {
     if (currentTheme && monacoRef.current) {
@@ -47,6 +118,35 @@ export function MonacoCodeViewer({
       monacoRef.current.editor.setTheme(themeName)
     }
   }, [currentTheme])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    let animationFrame = 0
+    const layoutEditor = () => {
+      window.cancelAnimationFrame(animationFrame)
+      animationFrame = window.requestAnimationFrame(() => {
+        const monacoEditor = editorRef.current
+        if (!monacoEditor) return
+
+        const rect = container.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          monacoEditor.layout({ width: rect.width, height: rect.height })
+        }
+      })
+    }
+
+    layoutEditor()
+    const resizeObserver = new ResizeObserver(layoutEditor)
+    resizeObserver.observe(container)
+    window.addEventListener("resize", layoutEditor)
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      resizeObserver.disconnect()
+      window.removeEventListener("resize", layoutEditor)
+    }
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -106,9 +206,74 @@ export function MonacoCodeViewer({
     }
   }, [])
 
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handlePointerDown = (e: PointerEvent) => {
+      setActiveViewer(container.contains(e.target as Node))
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown, true)
+    return () => window.removeEventListener("pointerdown", handlePointerDown, true)
+  }, [setActiveViewer])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const isActiveFileViewer = () => {
+      const activeElement = document.activeElement
+      return Boolean(
+        activeViewerRef.current ||
+        activeElement && container.contains(activeElement) ||
+        container.querySelector(".monaco-editor.focused"),
+      )
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isFindHotkey(e)) return
+      if (!isActiveFileViewer()) return
+
+      const monacoEditor = editorRef.current
+      if (!monacoEditor) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      openFind()
+    }
+
+    const handleFileViewerFind = () => {
+      if (isActiveFileViewer()) {
+        openFind()
+      }
+    }
+
+    container.addEventListener("keydown", handleKeyDown, true)
+    window.addEventListener("keydown", handleKeyDown, true)
+    window.addEventListener("file-viewer:find", handleFileViewerFind)
+    return () => {
+      container.removeEventListener("keydown", handleKeyDown, true)
+      window.removeEventListener("keydown", handleKeyDown, true)
+      window.removeEventListener("file-viewer:find", handleFileViewerFind)
+    }
+  }, [openFind])
+
   const handleEditorMount = useCallback((monacoEditor: editor.IStandaloneCodeEditor, monacoInstance: Monaco) => {
     editorRef.current = monacoEditor
     monacoRef.current = monacoInstance
+    setActiveViewer(true)
+    const layoutMountedEditor = () => {
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (rect && rect.width > 0 && rect.height > 0) {
+        monacoEditor.layout({ width: rect.width, height: rect.height })
+      } else {
+        monacoEditor.layout()
+      }
+    }
+    window.requestAnimationFrame(layoutMountedEditor)
+    window.setTimeout(layoutMountedEditor, 0)
+    window.setTimeout(layoutMountedEditor, 100)
 
     if (currentTheme) {
       const themeName = registerMonacoTheme(monacoInstance, currentTheme)
@@ -132,6 +297,13 @@ export function MonacoCodeViewer({
       monacoEditor.onDidDispose(() => observer.disconnect())
     }
 
+    const focusTextDisposable = monacoEditor.onDidFocusEditorText(() => setActiveViewer(true))
+    const focusWidgetDisposable = monacoEditor.onDidFocusEditorWidget(() => setActiveViewer(true))
+    monacoEditor.onDidDispose(() => {
+      focusTextDisposable.dispose()
+      focusWidgetDisposable.dispose()
+    })
+
     const selectionDisposable = monacoEditor.onDidChangeCursorSelection(() => {
       const selection = monacoEditor.getSelection()
       const hasText = !!(
@@ -142,7 +314,7 @@ export function MonacoCodeViewer({
       setHasSelection(hasText)
     })
     monacoEditor.onDidDispose(() => selectionDisposable.dispose())
-  }, [currentTheme])
+  }, [currentTheme, setActiveViewer])
 
   const handleCopy = useCallback(() => {
     const monacoEditor = editorRef.current
@@ -158,12 +330,8 @@ export function MonacoCodeViewer({
   }, [content])
 
   const handleFind = useCallback(() => {
-    const monacoEditor = editorRef.current
-    if (monacoEditor) {
-      monacoEditor.focus()
-      monacoEditor.trigger("contextmenu", "actions.find", null)
-    }
-  }, [])
+    openFind()
+  }, [openFind])
 
   const handleAddToContext = useCallback(() => {
     const monacoEditor = editorRef.current
@@ -219,7 +387,7 @@ export function MonacoCodeViewer({
           onMount={handleEditorMount}
         />
       </div>
-      {contextMenu && (
+      {contextMenu && createPortal(
         <EditorContextMenu
           position={contextMenu}
           onClose={() => setContextMenu(null)}
@@ -228,7 +396,8 @@ export function MonacoCodeViewer({
           onFind={handleFind}
           onAddToContext={handleAddToContext}
           hasSelection={hasSelection}
-        />
+        />,
+        document.body,
       )}
     </>
   )
@@ -302,7 +471,7 @@ function EditorContextMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[200px] py-1 rounded-[10px] border border-border bg-popover text-sm text-popover-foreground shadow-lg dark animate-in fade-in-0 zoom-in-95 duration-100"
+      className="fixed z-[1000] min-w-[200px] py-1 rounded-[10px] border border-border bg-popover text-sm text-popover-foreground shadow-lg dark pointer-events-auto animate-in fade-in-0 zoom-in-95 duration-100"
       style={{ left: adjustedPosition.x, top: adjustedPosition.y }}
     >
       <div className={itemClass} onClick={() => handleEditorAction("editor.action.revealDefinition")}>
