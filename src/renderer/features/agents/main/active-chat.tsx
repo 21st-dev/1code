@@ -56,6 +56,7 @@ import { flushSync } from "react-dom"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
 import type { FileStatus } from "../../../../shared/changes-types"
+import { isProviderProfileSource } from "../../../../shared/provider-profile-types"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { trackMessageSent } from "../../../lib/analytics"
 import {
@@ -3961,9 +3962,15 @@ const ChatViewInner = memo(function ChatViewInner({
           subChatCodexModelIdAtomFamily(newId),
           appStore.get(subChatCodexModelIdAtomFamily(subChatId)),
         )
+        const inheritedCodexModelSource = appStore.get(
+          subChatCodexModelSourceAtomFamily(subChatId),
+        )
         appStore.set(
           subChatCodexModelSourceAtomFamily(newId),
-          appStore.get(subChatCodexModelSourceAtomFamily(subChatId)),
+          targetProvider === "codex" &&
+            isProviderProfileSource(inheritedCodexModelSource)
+            ? "chatgpt"
+            : inheritedCodexModelSource,
         )
         appStore.set(
           subChatCodexThinkingAtomFamily(newId),

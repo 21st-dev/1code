@@ -586,6 +586,19 @@ export const ChatInputArea = memo(function ChatInputArea({
 
     return selectedCodexModel.thinkings[0]!
   }, [selectedCodexModel, selectedSubChatCodexThinking])
+  const selectedCodexProfileId = parseProviderProfileSource(
+    selectedSubChatCodexModelSource,
+  )
+  const selectedCodexProviderProfile =
+    selectedCodexProfileId
+      ? providerProfiles.find(
+          (profile) =>
+            profile.id === selectedCodexProfileId &&
+            profile.targetRuntimes.includes("codex"),
+        )
+      : undefined
+  const selectedCodexProfileIsPending =
+    Boolean(selectedCodexProfileId) && !providerProfilesData
 
   useEffect(() => {
     if (
@@ -621,6 +634,23 @@ export const ChatInputArea = memo(function ChatInputArea({
     selectedCodexThinking,
     setSelectedSubChatCodexModelId,
     setSelectedSubChatCodexThinking,
+  ])
+
+  useEffect(() => {
+    if (
+      selectedCodexProfileId &&
+      !selectedCodexProviderProfile &&
+      !selectedCodexProfileIsPending
+    ) {
+      setSelectedSubChatCodexModelSource("chatgpt")
+      setLastSelectedCodexModelSource("chatgpt")
+    }
+  }, [
+    selectedCodexProfileId,
+    selectedCodexProviderProfile,
+    selectedCodexProfileIsPending,
+    setLastSelectedCodexModelSource,
+    setSelectedSubChatCodexModelSource,
   ])
 
   const { data: providerConfigData } =

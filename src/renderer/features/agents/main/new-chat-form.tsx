@@ -433,6 +433,19 @@ export function NewChatForm({
 
     return selectedCodexModel.thinkings[0]!
   }, [selectedCodexModel, lastSelectedCodexThinking])
+  const selectedCodexProfileId = parseProviderProfileSource(
+    lastSelectedCodexModelSource,
+  )
+  const selectedCodexProviderProfile =
+    selectedCodexProfileId
+      ? providerProfiles.find(
+          (profile) =>
+            profile.id === selectedCodexProfileId &&
+            profile.targetRuntimes.includes("codex"),
+        )
+      : undefined
+  const selectedCodexProfileIsPending =
+    Boolean(selectedCodexProfileId) && !providerProfilesData
 
   useEffect(() => {
     if (
@@ -449,6 +462,21 @@ export function NewChatForm({
     lastSelectedCodexThinking,
     selectedCodexThinking,
     setLastSelectedCodexThinking,
+  ])
+
+  useEffect(() => {
+    if (
+      selectedCodexProfileId &&
+      !selectedCodexProviderProfile &&
+      !selectedCodexProfileIsPending
+    ) {
+      setLastSelectedCodexModelSource("chatgpt")
+    }
+  }, [
+    selectedCodexProfileId,
+    selectedCodexProviderProfile,
+    selectedCodexProfileIsPending,
+    setLastSelectedCodexModelSource,
   ])
 
   const selectedChatModel = useMemo(() => {
