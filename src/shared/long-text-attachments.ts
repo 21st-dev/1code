@@ -35,3 +35,30 @@ export function toLongTextAttachmentPart(
     kind: attachment.kind,
   }
 }
+
+export function normalizeLongTextAttachmentPart(
+  value: unknown
+): LongTextAttachmentPart | null {
+  if (!value || typeof value !== "object") return null
+
+  const part = value as Record<string, unknown>
+  if (
+    part.type !== "long-text-attachment" ||
+    typeof part.localRef !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    type: "long-text-attachment",
+    attachmentId:
+      typeof part.attachmentId === "string"
+        ? part.attachmentId
+        : `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    localRef: part.localRef,
+    filename: typeof part.filename === "string" ? part.filename : "pasted.txt",
+    byteLength: typeof part.byteLength === "number" ? part.byteLength : 0,
+    preview: typeof part.preview === "string" ? part.preview : "",
+    kind: part.kind === "chatHistory" ? "chatHistory" : "pasted",
+  }
+}

@@ -1,7 +1,10 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
-import type { LongTextAttachmentPart } from "../../../../shared/long-text-attachments"
+import {
+  normalizeLongTextAttachmentPart,
+  type LongTextAttachmentPart,
+} from "../../../../shared/long-text-attachments"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import {
   codexApiKeyAtom,
@@ -402,29 +405,9 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   ): LongTextAttachmentPart[] {
     if (!message?.parts) return []
 
-    return message.parts
-      .filter((part): part is LongTextAttachmentPart =>
-        (part as any).type === "long-text-attachment" &&
-        typeof (part as any).localRef === "string"
-      )
-      .map((part) => ({
-        type: "long-text-attachment",
-        attachmentId:
-          typeof (part as any).attachmentId === "string"
-            ? (part as any).attachmentId
-            : `pasted_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        localRef: part.localRef,
-        filename:
-          typeof (part as any).filename === "string"
-            ? (part as any).filename
-            : "pasted.txt",
-        byteLength:
-          typeof (part as any).byteLength === "number"
-            ? (part as any).byteLength
-            : 0,
-        preview:
-          typeof (part as any).preview === "string" ? (part as any).preview : "",
-        kind: (part as any).kind === "chatHistory" ? "chatHistory" : "pasted",
-      }))
+    return message.parts.flatMap((part) => {
+      const attachment = normalizeLongTextAttachmentPart(part)
+      return attachment ? [attachment] : []
+    })
   }
 }
