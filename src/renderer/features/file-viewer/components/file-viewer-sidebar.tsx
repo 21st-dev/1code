@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react"
+import { lazy, Suspense, useCallback, useEffect } from "react"
 import { useAtom } from "jotai"
 import { useAtomValue } from "jotai"
 import {
@@ -7,6 +7,7 @@ import {
   FileWarning,
   MoreHorizontal,
   WrapText,
+  Map,
   Check,
   X,
 } from "lucide-react"
@@ -41,16 +42,23 @@ import { CopyButton } from "../../agents/ui/message-action-buttons"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
 import {
   fileViewerWordWrapAtom,
+  fileViewerMinimapAtom,
   fileViewerLineNumbersAtom,
   fileViewerDisplayModeAtom,
   type FileViewerDisplayMode,
 } from "../../agents/atoms"
 import { useFileContent, getErrorMessage } from "../hooks/use-file-content"
-import { getFileViewerType } from "../utils/language-map"
+import { getMonacoLanguage, getFileViewerType } from "../utils/language-map"
 import { getFileName } from "../utils/file-utils"
 import { ImageViewer } from "./image-viewer"
 import { MarkdownViewer } from "./markdown-viewer"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
+import { shouldUseMonacoPreview } from "./code-viewer-limits"
+import { PlainCodeBlock } from "./plain-code-block"
+
+const LazyMonacoCodeViewer = lazy(() =>
+  import("./monaco-code-viewer").then((module) => ({ default: module.MonacoCodeViewer })),
+)
 
 interface FileViewerSidebarProps {
   filePath: string
@@ -198,6 +206,7 @@ function CodeViewerHeader({
 }) {
   const { t } = useI18n()
   const [wordWrap, setWordWrap] = useAtom(fileViewerWordWrapAtom)
+  const [minimap, setMinimap] = useAtom(fileViewerMinimapAtom)
   const [lineNumbers, setLineNumbers] = useAtom(fileViewerLineNumbersAtom)
   const [displayMode, setDisplayMode] = useAtom(fileViewerDisplayModeAtom)
   const preferredEditor = useAtomValue(preferredEditorAtom)
@@ -299,6 +308,13 @@ function CodeViewerHeader({
               {t("fileViewer.wordWrap")}
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem
+              checked={minimap}
+              onCheckedChange={() => setMinimap(!minimap)}
+            >
+              <Map className="mr-2 h-3.5 w-3.5" />
+              {t("fileViewer.minimap")}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
               checked={lineNumbers}
               onCheckedChange={() => setLineNumbers(!lineNumbers)}
             >
@@ -359,12 +375,13 @@ function CodeViewer({
   onClose: () => void
 }) {
   const fileName = getFileName(filePath)
+  const language = getMonacoLanguage(filePath)
   const [wordWrap] = useAtom(fileViewerWordWrapAtom)
+  const [minimap] = useAtom(fileViewerMinimapAtom)
   const [lineNumbers] = useAtom(fileViewerLineNumbersAtom)
   const preferredEditor = useAtomValue(preferredEditorAtom)
   const openInAppMutation = trpc.external.openInApp.useMutation()
-  const { content, isLoading, error } = useFileContent(projectPath, filePath)
-  const lines = useMemo(() => (content ?? "").split("\n"), [content])
+  const { content, isLoading, error, byteLength } = useFileContent(projectPath, filePath)
 
   // Handle ⌘⇧O hotkey to open current file in external editor
   useEffect(() => {
@@ -427,29 +444,28 @@ function CodeViewer({
         content={content}
       />
       <div
-        className="flex-1 min-h-0 overflow-auto allow-text-selection bg-muted/20"
+        className="flex-1 min-h-0 overflow-hidden allow-text-selection"
         data-file-viewer-path={filePath}
       >
-        <pre
-          className={cn(
-            "m-0 min-w-full p-3 font-mono text-xs leading-5 text-foreground",
-            wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre",
-          )}
-        >
-          {lineNumbers
-            ? lines.map((line, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-3"
-                >
-                  <span className="select-none text-right tabular-nums text-muted-foreground/60">
-                    {index + 1}
-                  </span>
-                  <code>{line || " "}</code>
-                </div>
-              ))
-            : <code>{content || ""}</code>}
-        </pre>
+        {shouldUseMonacoPreview(byteLength, content) ? (
+          <Suspense fallback={<LoadingSpinner />}>
+            <LazyMonacoCodeViewer
+              filePath={filePath}
+              content={content || ""}
+              language={language}
+              wordWrap={wordWrap}
+              minimap={minimap}
+              lineNumbers={lineNumbers}
+              onClose={onClose}
+            />
+          </Suspense>
+        ) : (
+          <PlainCodeBlock
+            content={content || ""}
+            wordWrap={wordWrap}
+            lineNumbers={lineNumbers}
+          />
+        )}
       </div>
     </div>
   )

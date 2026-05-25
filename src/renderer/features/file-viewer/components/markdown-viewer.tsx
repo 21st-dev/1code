@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import { lazy, Suspense, useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { useAtom } from "jotai"
 import { useAtomValue } from "jotai"
 import { Loader2, AlertCircle, Check, X } from "lucide-react"
@@ -34,6 +34,12 @@ import {
 import { EDITOR_ICONS } from "@/lib/editor-icons"
 import { fileViewerWordWrapAtom, fileViewerDisplayModeAtom } from "../../agents/atoms"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
+import { shouldUseMonacoPreview } from "./code-viewer-limits"
+import { PlainCodeBlock } from "./plain-code-block"
+
+const LazyMonacoCodeViewer = lazy(() =>
+  import("./monaco-code-viewer").then((module) => ({ default: module.MonacoCodeViewer })),
+)
 
 const FILE_VIEWER_MODES = [
   { value: "side-peek" as const, labelKey: "changes.diff.sidebar" as TranslationKey, Icon: IconSidePeek },
@@ -158,7 +164,7 @@ export function MarkdownViewer({
   }
 
   const content = data?.ok ? data.content : ""
-  const lines = content.split("\n")
+  const byteLength = data?.ok ? data.byteLength : null
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -182,26 +188,29 @@ export function MarkdownViewer({
             />
           </div>
         ) : (
-          <div className="h-full overflow-auto bg-muted/20">
-            <pre
-              className={cn(
-                "m-0 min-w-full p-3 font-mono text-xs leading-5 text-foreground",
-                wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre",
-              )}
-            >
-              {lines.map((line, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-3"
-                >
-                  <span className="select-none text-right tabular-nums text-muted-foreground/60">
-                    {index + 1}
-                  </span>
-                  <code>{line || " "}</code>
-                </div>
-              ))}
-            </pre>
-          </div>
+          shouldUseMonacoPreview(byteLength, content) ? (
+            <Suspense fallback={
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            }>
+              <LazyMonacoCodeViewer
+                filePath={filePath}
+                content={content}
+                language="markdown"
+                wordWrap={wordWrap}
+                minimap={false}
+                lineNumbers
+                onClose={onClose}
+              />
+            </Suspense>
+          ) : (
+            <PlainCodeBlock
+              content={content}
+              wordWrap={wordWrap}
+              lineNumbers
+            />
+          )
         )}
       </div>
     </div>
