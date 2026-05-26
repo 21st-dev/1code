@@ -1731,7 +1731,7 @@ export function NewChatForm({
                       onShiftTab={toggleMode}
                       placeholder={modePlaceholder}
                       className={cn(
-                        "bg-transparent max-h-[240px] overflow-y-auto p-1",
+                        "bg-transparent max-h-[240px] overflow-y-auto p-1 leading-5",
                         isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
                       )}
                       onPaste={handlePaste}
@@ -1740,8 +1740,8 @@ export function NewChatForm({
                       onBlur={() => setIsFocused(false)}
                     />
                   </div>
-                  <PromptInputActions className="w-full">
-                    <div className="flex items-center gap-0.5 flex-1 min-w-0">
+                  <PromptInputActions className="w-full flex-wrap gap-x-1 gap-y-1">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-0.5 gap-y-1">
                       {/* Mode toggle (Agent/Plan) */}
                       <DropdownMenu
                         open={modeDropdownOpen}
@@ -1760,16 +1760,13 @@ export function NewChatForm({
                         <DropdownMenuTrigger
                           aria-label={modeSelectorTitle}
                           title={modeSelectorTitle}
-                          className="flex max-w-[132px] items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                          className="flex max-w-[112px] min-w-0 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                         >
                           {agentMode === "plan" ? (
                             <PlanIcon className="h-3.5 w-3.5 shrink-0" />
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                           )}
-                          <span className="hidden sm:inline text-muted-foreground/80">
-                            {t("chat.mode.selectorLabel")}:
-                          </span>
                           <span className="truncate">{modeLabel}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
@@ -1916,7 +1913,7 @@ export function NewChatForm({
                           )}
                       </DropdownMenu>
 
-                      <div className="group/model-controls flex items-center gap-0.5">
+                      <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
                         <AgentModelSelector
                           open={isModelDropdownOpen}
                           onOpenChange={setIsModelDropdownOpen}
@@ -1930,6 +1927,7 @@ export function NewChatForm({
                             setLastSelectedAgentId(provider)
                           }}
                           selectedModelLabel={selectedModelLabel}
+                          triggerClassName="min-w-0 max-w-full"
                           providerProfiles={providerProfiles}
                           onOpenModelsSettings={() => {
                             setSettingsActiveTab("models")

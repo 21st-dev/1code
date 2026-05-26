@@ -1365,7 +1365,7 @@ export const AgentsMentionsEditor = memo(
       return (
         <div className="relative">
           {!hasContent && placeholder && (
-            <div className="pointer-events-none absolute left-1 top-1 text-sm text-muted-foreground/60 whitespace-pre-wrap">
+            <div className="pointer-events-none absolute left-1 right-1 top-1 text-sm leading-5 text-muted-foreground/60 whitespace-pre-wrap break-words">
               {placeholder}
             </div>
           )}

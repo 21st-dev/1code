@@ -1462,7 +1462,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       }}
       className="px-2 pb-2 shadow-sm shadow-background relative z-10"
     >
-      <div className="w-full max-w-2xl mx-auto">
+      <div className="w-full max-w-2xl mx-auto @container">
         <div
           className="relative w-full"
           onDragOver={handleDragOver}
@@ -1572,7 +1572,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onShiftTab={toggleMode}
                   placeholder={modePlaceholder}
                   className={cn(
-                    "bg-transparent max-h-[200px] overflow-y-auto p-1",
+                    "bg-transparent max-h-[200px] min-h-[44px] overflow-y-auto p-1 leading-5",
                     isMobile && "min-h-[56px]",
                   )}
                   onPaste={handlePaste}
@@ -1580,8 +1580,8 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onBlur={handleEditorBlur}
                 />
               </div>
-              <PromptInputActions className="w-full">
-                <div className="flex items-center gap-0.5 flex-1 min-w-0">
+              <PromptInputActions className="w-full flex-wrap gap-x-1 gap-y-1">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-0.5 gap-y-1">
                   {/* Mode toggle (Agent/Plan) */}
                   <DropdownMenu
                     open={modeDropdownOpen}
@@ -1602,16 +1602,13 @@ export const ChatInputArea = memo(function ChatInputArea({
                         type="button"
                         aria-label={modeSelectorTitle}
                         title={modeSelectorTitle}
-                        className="flex max-w-[132px] items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        className="flex max-w-[112px] min-w-0 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                       >
                         {subChatMode === "plan" ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span className="hidden sm:inline text-muted-foreground/80">
-                          {t("chat.mode.selectorLabel")}:
-                        </span>
                         <span className="truncate">{modeLabel}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
@@ -1758,7 +1755,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       )}
                   </DropdownMenu>
 
-                  <div className="group/model-controls flex items-center gap-0.5">
+                  <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
                     <AgentModelSelector
                       open={isModelDropdownOpen}
                       onOpenChange={setIsModelDropdownOpen}
@@ -1771,6 +1768,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       allowProviderSwitch={canSwitchProvider}
                       onContinueWithProvider={!canSwitchProvider ? onContinueWithProvider : undefined}
                       selectedModelLabel={selectedModelLabel}
+                      triggerClassName="min-w-0 max-w-full"
                       providerProfiles={providerProfiles}
                       onOpenModelsSettings={() => {
                         setSettingsTab("models")

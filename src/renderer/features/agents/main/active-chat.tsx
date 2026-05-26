@@ -6675,25 +6675,25 @@ Make sure to preserve all functionality from both branches when resolving confli
                       <div className="p-1 text-muted-foreground text-sm">
                         {t("chat.placeholder.default")}
                       </div>
-                      <PromptInputActions className="w-full">
-                        <div className="flex items-center gap-0.5 flex-1 min-w-0">
+                      <PromptInputActions className="w-full flex-wrap gap-x-1 gap-y-1">
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-0.5 gap-y-1">
                           {/* Mode selector placeholder */}
                           <button
                             disabled
-                            className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground rounded-md cursor-not-allowed"
+                            className="flex max-w-[112px] min-w-0 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground rounded-md cursor-not-allowed"
                           >
                             <AgentIcon className="h-3.5 w-3.5" />
-                            <span>{t("chat.mode.agent")}</span>
+                            <span className="truncate">{t("chat.mode.agent")}</span>
                             <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                           </button>
 
                           {/* Model selector placeholder */}
                           <button
                             disabled
-                            className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground rounded-md cursor-not-allowed"
+                            className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground rounded-md cursor-not-allowed"
                           >
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
-                            <span>
+                            <span className="truncate">
                               {hasCustomClaudeConfig ? (
                                 t("agent.model.customModel")
                               ) : (
