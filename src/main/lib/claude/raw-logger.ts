@@ -21,8 +21,9 @@ let currentSessionId: string | null = null
 async function ensureLogsDir(): Promise<string> {
   if (!logsDir) {
     logsDir = join(app.getPath("userData"), "logs", "claude")
-    await mkdir(logsDir, { recursive: true })
   }
+
+  await mkdir(logsDir, { recursive: true })
   return logsDir
 }
 
