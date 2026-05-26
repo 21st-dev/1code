@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm"
-import { safeStorage } from "electron"
 import { z } from "zod"
 import { claudeProviderConfig, getDatabase } from "../../db"
+import {
+  decryptStringFromStorage,
+  encryptStringForStorage,
+  isSecureStorageAvailable,
+} from "../../secure-storage"
 import { publicProcedure, router } from "../index"
 
 const CONFIG_ID = "default"
@@ -29,21 +33,11 @@ type ClaudeProviderMetadata = {
 }
 
 function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[ClaudeProviderConfig] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-
-  return safeStorage.encryptString(token).toString("base64")
+  return encryptStringForStorage(token)
 }
 
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
+function decryptToken(encrypted: string): string | null {
+  return decryptStringFromStorage(encrypted)
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -97,11 +91,14 @@ export function getActiveClaudeProviderConfig():
     return undefined
   }
 
+  const token = decryptToken(row.encryptedToken)
+  if (!token) return undefined
+
   return {
     model: row.model,
     baseUrl: row.baseUrl,
     authMode: claudeProviderAuthModeSchema.catch("auth_token").parse(row.authMode),
-    token: normalizeProviderToken(decryptToken(row.encryptedToken)),
+    token: normalizeProviderToken(token),
   }
 }
 
@@ -136,7 +133,7 @@ export const claudeProviderConfigRouter = router({
 
     return {
       config: row ? rowToMetadata(row) : null,
-      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      encryptionAvailable: Boolean(row?.encryptedToken) && isSecureStorageAvailable(),
     }
   }),
 
@@ -188,7 +185,7 @@ export const claudeProviderConfigRouter = router({
     const row = getStoredProviderRow()
     return {
       config: row ? rowToMetadata(row) : null,
-      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      encryptionAvailable: isSecureStorageAvailable(),
     }
   }),
 
@@ -223,7 +220,7 @@ export const claudeProviderConfigRouter = router({
       return {
         migrated: !existing,
         reason: existing ? "secure_config_exists" : null,
-        encryptionAvailable: safeStorage.isEncryptionAvailable(),
+        encryptionAvailable: isSecureStorageAvailable(),
       }
     }),
 })

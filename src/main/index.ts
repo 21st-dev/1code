@@ -17,6 +17,7 @@ import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
 import { getAllMcpConfigHandler, hasActiveClaudeSessions, abortAllClaudeSessions } from "./lib/trpc/routers/claude"
 import { getAllCodexMcpConfigHandler, hasActiveCodexStreams, abortAllCodexStreams } from "./lib/trpc/routers/codex"
+import { resolveUserDataPath } from "./lib/user-data-path"
 import {
   createMainWindow,
   createWindow,
@@ -28,6 +29,7 @@ import {
 import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
 
 const APP_NAME = "Locus"
+const APP_DISPLAY_NAME = IS_DEV ? `${APP_NAME} Dev` : APP_NAME
 const LEGACY_APP_NAME = "Agent Code for Me"
 const APP_COPYRIGHT = "Copyright © 2026 Locus"
 const APP_HOMEPAGE_URL = "https://github.com/lupanpan1030/agent-code-for-me"
@@ -39,14 +41,24 @@ const PROTOCOL = IS_DEV ? "locus-dev" : "locus"
 const LEGACY_PROTOCOL = IS_DEV ? "agent-code-for-me-dev" : "agent-code-for-me"
 const SUPPORTED_PROTOCOLS = [PROTOCOL, LEGACY_PROTOCOL]
 
-app.setName(IS_DEV ? `${APP_NAME} Dev` : APP_NAME)
+app.setName(APP_DISPLAY_NAME)
 
 // Keep the old userData path during the rebrand so existing local projects,
 // credentials, settings, and SQLite data continue to load after upgrade.
-const userDataName = IS_DEV ? `${LEGACY_APP_NAME} Dev` : LEGACY_APP_NAME
-const userDataPath = join(app.getPath("appData"), userDataName)
+// LOCUS_USER_DATA_DIR is an explicit escape hatch for clean first-run QA.
+const userDataConfig = resolveUserDataPath({
+  appDataPath: app.getPath("appData"),
+  isDev: IS_DEV,
+  legacyAppName: LEGACY_APP_NAME,
+})
+const userDataPath = userDataConfig.path
 app.setPath("userData", userDataPath)
-console.log("[App] Using userData path:", userDataPath)
+console.log(
+  userDataConfig.source === "default"
+    ? "[App] Using userData path:"
+    : `[App] Using userData path override from ${userDataConfig.source}:`,
+  userDataPath,
+)
 
 // Increase V8 old-space limit for renderer/main processes to reduce OOM frequency
 // under heavy multi-chat workloads. Must be set before app readiness/window creation.
@@ -197,7 +209,7 @@ const authCallbackServer = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>${APP_NAME} - MCP Authentication</title>
+  <title>${APP_DISPLAY_NAME} - MCP Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -273,7 +285,7 @@ authCallbackServer.on("error", (error: NodeJS.ErrnoException) => {
       `[Auth Server] Port ${AUTH_SERVER_PORT} is already in use; continuing without the local callback server.`,
     )
     console.warn(
-      `[Auth Server] Close the other ${APP_NAME} instance or free the port if auth callbacks do not complete.`,
+      `[Auth Server] Close the other ${APP_DISPLAY_NAME} instance or free the port if auth callbacks do not complete.`,
     )
     return
   }
@@ -370,7 +382,7 @@ if (!gotTheLock) {
       console.warn("[App] Failed to read SingletonLock owner:", error)
     }
     console.warn(
-      `[App] Another ${APP_NAME}${IS_DEV ? " Dev" : ""} instance is already running (${lockOwner}). Quitting this launch.`,
+      `[App] Another ${APP_DISPLAY_NAME} instance is already running (${lockOwner}). Quitting this launch.`,
     )
     app.quit()
   }
@@ -420,7 +432,7 @@ if (gotTheLock) {
       )
     }
 
-    console.log(`[App] Starting ${APP_NAME}${IS_DEV ? " (DEV)" : ""}...`)
+    console.log(`[App] Starting ${APP_DISPLAY_NAME}...`)
 
     // Verify protocol registration after app is ready
     // This helps diagnose first-install issues where the protocol isn't recognized yet
@@ -444,7 +456,7 @@ if (gotTheLock) {
 
     // Set About panel options with Claude Code version
     app.setAboutPanelOptions({
-      applicationName: APP_NAME,
+      applicationName: APP_DISPLAY_NAME,
       applicationVersion: app.getVersion(),
       version: `Claude Code ${claudeCodeVersion}`,
       copyright: APP_COPYRIGHT,
@@ -469,10 +481,10 @@ if (gotTheLock) {
       const localOnly = isLocalOnlyMode()
       const template: Electron.MenuItemConstructorOptions[] = [
         {
-          label: app.name,
+          label: APP_DISPLAY_NAME,
           submenu: [
             {
-              label: `About ${APP_NAME}`,
+              label: `About ${APP_DISPLAY_NAME}`,
               click: () => app.showAboutPanel(),
             },
             { type: "separator" },
@@ -514,7 +526,7 @@ if (gotTheLock) {
                       type: "info",
                       message: "CLI command installed",
                       detail:
-                        `You can now use 'locus .' in any terminal to open ${APP_NAME} in that directory.`,
+                        `You can now use 'locus .' in any terminal to open ${APP_DISPLAY_NAME} in that directory.`,
                     })
                     buildMenu()
                   } else {
@@ -693,6 +705,10 @@ if (gotTheLock) {
 
     // macOS: Set dock menu (right-click on dock icon)
     if (process.platform === "darwin") {
+      if (IS_DEV) {
+        app.dock?.setBadge("DEV")
+      }
+
       const dockMenu = Menu.buildFromTemplate([
         {
           label: "New Window",

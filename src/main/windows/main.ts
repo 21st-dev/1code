@@ -19,8 +19,17 @@ import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
 import { isLocalOnlyMode, LocalOnlyBlockedError, openExternalUrl } from "../lib/local-only"
+import { shouldOpenDevToolsOnStartup } from "../lib/devtools-startup"
+import { IS_DEV } from "../constants"
 
 const APP_NAME = "Locus"
+const APP_DISPLAY_NAME = IS_DEV ? `${APP_NAME} Dev` : APP_NAME
+
+function formatWindowTitle(title?: string): string {
+  const trimmed = title?.trim()
+  if (!IS_DEV) return trimmed || APP_DISPLAY_NAME
+  return trimmed ? `${trimmed} - ${APP_DISPLAY_NAME}` : APP_DISPLAY_NAME
+}
 
 // Flag to bypass close confirmation when app.quit() has already been confirmed
 let isQuitting = false
@@ -82,13 +91,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle("app:set-badge", (event, count: number | null) => {
     const win = getWindowFromEvent(event)
     if (process.platform === "darwin") {
-      app.dock?.setBadge(count ? String(count) : "")
+      app.dock?.setBadge(count ? String(count) : (IS_DEV ? "DEV" : ""))
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
       if (count !== null && count > 0) {
-        win.setTitle(`${APP_NAME} (${count})`)
+        win.setTitle(`${formatWindowTitle()} (${count})`)
       } else {
-        win.setTitle(APP_NAME)
+        win.setTitle(formatWindowTitle())
         win.setOverlayIcon(null, "")
       }
     }
@@ -255,7 +264,7 @@ function registerIpcHandlers(): void {
     const win = getWindowFromEvent(event)
     if (win) {
       // Show just the title, or default app name if empty
-      win.setTitle(title || APP_NAME)
+      win.setTitle(formatWindowTitle(title))
     }
   })
 
@@ -394,7 +403,7 @@ function loadAppInWindow(
     const url = new URL(process.env.ELECTRON_RENDERER_URL)
     buildParams(url.searchParams)
     window.loadURL(url.toString())
-    if (!app.isPackaged && windowId === "main") {
+    if (!app.isPackaged && windowId === "main" && shouldOpenDevToolsOnStartup()) {
       window.webContents.openDevTools()
     }
   } else {
@@ -462,7 +471,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     minWidth: 500, // Allow narrow mobile-like mode
     minHeight: 600,
     show: false,
-    title: APP_NAME,
+    title: formatWindowTitle(),
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#09090b" : "#ffffff",
     // hiddenInset shows native traffic lights inset in the window
     // hiddenInset hides the native title bar but keeps traffic lights visible

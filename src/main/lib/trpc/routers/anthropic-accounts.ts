@@ -1,5 +1,4 @@
 import { eq, sql } from "drizzle-orm"
-import { safeStorage } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
 import {
@@ -8,6 +7,7 @@ import {
 } from "../../claude-credentials"
 import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../../db"
 import { createId } from "../../db/utils"
+import { encryptStringForStorage } from "../../secure-storage"
 import { publicProcedure, router } from "../index"
 import { clearClaudeCaches } from "./claude"
 
@@ -15,11 +15,7 @@ import { clearClaudeCaches } from "./claude"
  * Encrypt token using Electron's safeStorage
  */
 function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[AnthropicAccounts] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-  return safeStorage.encryptString(token).toString("base64")
+  return encryptStringForStorage(token)
 }
 
 /**

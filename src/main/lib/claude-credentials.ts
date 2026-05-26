@@ -1,5 +1,4 @@
 import { eq, sql } from "drizzle-orm"
-import { safeStorage } from "electron"
 import {
   getExistingClaudeCredentials,
   isTokenExpired,
@@ -20,6 +19,11 @@ import {
   getDatabase,
 } from "./db"
 import { createId } from "./db/utils"
+import {
+  decryptStringFromStorage,
+  encryptStringForStorage,
+  isSecureStorageAvailable,
+} from "./secure-storage"
 
 export { createClaudeCodeCredentialEnvelope, parseClaudeCodeCredentialPayload }
 export type { ClaudeCodeCredentialEnvelope, ClaudeCodeCredentialStorageFormat }
@@ -47,21 +51,11 @@ type ActiveCredentialRow = {
 }
 
 function encryptSecret(value: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[ClaudeCredentials] Encryption not available, storing as base64")
-    return Buffer.from(value).toString("base64")
-  }
-
-  return safeStorage.encryptString(value).toString("base64")
+  return encryptStringForStorage(value)
 }
 
-function decryptSecret(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
+function decryptSecret(encrypted: string): string | null {
+  return decryptStringFromStorage(encrypted)
 }
 
 function toIsoString(value: Date | null | undefined): string | null {
@@ -71,7 +65,9 @@ function toIsoString(value: Date | null | undefined): string | null {
 export function decryptClaudeCodeCredential(
   encrypted: string,
 ): StoredClaudeCodeCredential | null {
-  return parseClaudeCodeCredentialPayload(decryptSecret(encrypted))
+  const decrypted = decryptSecret(encrypted)
+  if (!decrypted) return null
+  return parseClaudeCodeCredentialPayload(decrypted)
 }
 
 function encryptClaudeCodeCredential(
@@ -154,7 +150,7 @@ function credentialMetadataFromStored(
     isExpiringSoon: isTokenExpired(envelope?.expiresAt),
     importedAt: envelope?.importedAt ?? null,
     updatedAt: envelope?.updatedAt ?? null,
-    encryptionAvailable: safeStorage.isEncryptionAvailable(),
+    encryptionAvailable: Boolean(stored) && isSecureStorageAvailable(),
   }
 }
 

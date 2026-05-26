@@ -1,6 +1,10 @@
 import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "fs"
 import { join, dirname } from "path"
-import { safeStorage } from "electron"
+import {
+  decryptBufferToString,
+  encryptStringToBuffer,
+  isSecureStorageAvailable,
+} from "./lib/secure-storage"
 
 export interface AuthUser {
   id: string
@@ -33,7 +37,7 @@ export class AuthStore {
    * Check if encryption is available on this system
    */
   private isEncryptionAvailable(): boolean {
-    return safeStorage.isEncryptionAvailable()
+    return isSecureStorageAvailable()
   }
 
   /**
@@ -48,9 +52,9 @@ export class AuthStore {
 
       const jsonData = JSON.stringify(data)
       
-      if (this.isEncryptionAvailable()) {
+      const encrypted = encryptStringToBuffer(jsonData)
+      if (encrypted) {
         // Encrypt using OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
-        const encrypted = safeStorage.encryptString(jsonData)
         writeFileSync(this.filePath, encrypted)
       } else {
         // Fallback: store with warning (should rarely happen)
@@ -69,10 +73,15 @@ export class AuthStore {
   load(): AuthData | null {
     try {
       // Try encrypted file first
-      if (existsSync(this.filePath) && this.isEncryptionAvailable()) {
+      if (existsSync(this.filePath)) {
         const encrypted = readFileSync(this.filePath)
-        const decrypted = safeStorage.decryptString(encrypted)
-        return JSON.parse(decrypted)
+        const decrypted = decryptBufferToString(encrypted)
+        if (decrypted) {
+          return JSON.parse(decrypted)
+        }
+        console.warn(
+          "Encrypted auth data could not be decrypted; continuing unauthenticated",
+        )
       }
       
       // Fallback: try unencrypted file (for migration or when encryption unavailable)
@@ -84,7 +93,9 @@ export class AuthStore {
         // Migrate to encrypted storage if now available
         if (this.isEncryptionAvailable()) {
           this.save(data)
-          unlinkSync(fallbackPath) // Remove unencrypted file after migration
+          if (existsSync(this.filePath)) {
+            unlinkSync(fallbackPath) // Remove unencrypted file after migration
+          }
         }
         
         return data

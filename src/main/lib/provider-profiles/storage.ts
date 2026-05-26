@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm"
-import { safeStorage } from "electron"
 import { z } from "zod"
 import {
   agentProviderDefaults,
@@ -25,6 +24,10 @@ import {
   getActiveLocalApiProviderConfig,
   type LocalApiProviderPurpose,
 } from "../trpc/routers/local-api-provider-config"
+import {
+  decryptStringFromStorage,
+  encryptStringForStorage,
+} from "../secure-storage"
 
 const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
 const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
@@ -69,18 +72,11 @@ export type ProviderProfileRuntimeConfig = {
 }
 
 function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[ProviderProfiles] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-  return safeStorage.encryptString(token).toString("base64")
+  return encryptStringForStorage(token)
 }
 
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  return safeStorage.decryptString(Buffer.from(encrypted, "base64"))
+function decryptToken(encrypted: string): string | null {
+  return decryptStringFromStorage(encrypted)
 }
 
 export function normalizeProviderToken(token: string): string {
@@ -189,7 +185,8 @@ export function getProviderProfileRuntimeConfig(
 
   const authMode = providerProfileAuthModeSchema.parse(row.authMode)
   const encryptedToken = row.encryptedToken
-  const token = encryptedToken ? normalizeProviderToken(decryptToken(encryptedToken)) : null
+  const decryptedToken = encryptedToken ? decryptToken(encryptedToken) : null
+  const token = decryptedToken ? normalizeProviderToken(decryptedToken) : null
   if (authMode !== "none" && !token) {
     throw new Error("Provider profile token is missing")
   }

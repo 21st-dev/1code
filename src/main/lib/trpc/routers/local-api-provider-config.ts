@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm"
-import { safeStorage } from "electron"
 import { z } from "zod"
 import { getDatabase, localApiProviderConfigs } from "../../db"
+import {
+  decryptStringFromStorage,
+  encryptStringForStorage,
+  isSecureStorageAvailable,
+} from "../../secure-storage"
 import { publicProcedure, router } from "../index"
 
 export const localApiProviderPurposeSchema = z.enum([
@@ -32,21 +36,11 @@ const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
 const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
 
 function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[LocalApiProviderConfig] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-
-  return safeStorage.encryptString(token).toString("base64")
+  return encryptStringForStorage(token)
 }
 
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
+function decryptToken(encrypted: string): string | null {
+  return decryptStringFromStorage(encrypted)
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -99,11 +93,14 @@ export function getActiveLocalApiProviderConfig(
     return undefined
   }
 
+  const token = decryptToken(row.encryptedToken)
+  if (!token) return undefined
+
   return {
     purpose,
     model: row.model,
     baseUrl: row.baseUrl,
-    token: normalizeProviderToken(decryptToken(row.encryptedToken)),
+    token: normalizeProviderToken(token),
   }
 }
 
@@ -123,7 +120,7 @@ export const localApiProviderConfigRouter = router({
 
     return {
       config: row ? rowToMetadata(row) : null,
-      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      encryptionAvailable: Boolean(row?.encryptedToken) && isSecureStorageAvailable(),
     }
   }),
 
@@ -173,7 +170,7 @@ export const localApiProviderConfigRouter = router({
     const row = getStoredProviderRow(input.purpose)
     return {
       config: row ? rowToMetadata(row) : null,
-      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      encryptionAvailable: isSecureStorageAvailable(),
     }
   }),
 
