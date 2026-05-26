@@ -1,13 +1,19 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { branchExistsOnRemote } from "../worktree";
-import { execWithShellEnv } from "../shell-env";
+import {
+	readGitHubOriginRepo,
+	runGitHubCliJson,
+} from "../../github-workflow/gh-cli";
+import {
+	parseGitHubActionsJobId,
+	parseGitHubActionsRunId,
+} from "../../../../shared/github-workflow-context";
 import {
 	type CheckItem,
 	type GHPRResponse,
 	type GitHubStatus,
 	GHPRResponseSchema,
-	GHRepoResponseSchema,
 } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -15,6 +21,14 @@ const execFileAsync = promisify(execFile);
 // Cache for GitHub status (10 second TTL)
 const cache = new Map<string, { data: GitHubStatus; timestamp: number }>();
 const CACHE_TTL_MS = 10_000;
+
+export function invalidateGitHubStatusCache(worktreePath?: string): void {
+	if (worktreePath) {
+		cache.delete(worktreePath);
+		return;
+	}
+	cache.clear();
+}
 
 /**
  * Fetches GitHub PR status for a worktree using the `gh` CLI.
@@ -32,8 +46,8 @@ export async function fetchGitHubPRStatus(
 
 	try {
 		// First, get the repo URL
-		const repoUrl = await getRepoUrl(worktreePath);
-		if (!repoUrl) {
+		const repo = await getOriginGitHubRepo(worktreePath);
+		if (!repo) {
 			return null;
 		}
 
@@ -48,7 +62,7 @@ export async function fetchGitHubPRStatus(
 		// Check if branch exists on remote and get PR info in parallel
 		const [branchCheck, prInfo] = await Promise.all([
 			branchExistsOnRemote(worktreePath, branchName),
-			getPRForBranch(worktreePath, branchName),
+			getPRForBranch(worktreePath, branchName, repo.repoSlug),
 		]);
 
 		// Convert result to boolean - only "exists" is true
@@ -56,8 +70,10 @@ export async function fetchGitHubPRStatus(
 		const existsOnRemote = branchCheck.status === "exists";
 
 		const result: GitHubStatus = {
+			branch: branchName,
 			pr: prInfo,
-			repoUrl,
+			repoSlug: repo.repoSlug,
+			repoUrl: repo.repoUrl,
 			branchExistsOnRemote: existsOnRemote,
 			lastRefreshed: Date.now(),
 		};
@@ -72,51 +88,34 @@ export async function fetchGitHubPRStatus(
 	}
 }
 
-async function getRepoUrl(worktreePath: string): Promise<string | null> {
-	try {
-		const { stdout } = await execWithShellEnv(
-			"gh",
-			["repo", "view", "--json", "url"],
-			{ cwd: worktreePath },
-		);
-		const raw = JSON.parse(stdout);
-		const result = GHRepoResponseSchema.safeParse(raw);
-		if (!result.success) {
-			console.error("[GitHub] Repo schema validation failed:", result.error);
-			console.error("[GitHub] Raw data:", JSON.stringify(raw, null, 2));
-			return null;
-		}
-		return result.data.url;
-	} catch {
-		return null;
-	}
+export async function getOriginGitHubRepo(
+	worktreePath: string,
+): Promise<{ repoSlug: string; repoUrl: string } | null> {
+	return readGitHubOriginRepo(worktreePath);
 }
 
 async function getPRForBranch(
 	worktreePath: string,
 	branch: string,
+	repoSlug: string,
 ): Promise<GitHubStatus["pr"]> {
 	try {
-		// Use execWithShellEnv to handle macOS GUI app PATH issues
-		const { stdout } = await execWithShellEnv(
-			"gh",
+		const data = await runGitHubCliJson(
 			[
 				"pr",
 				"view",
 				branch,
+				"--repo",
+				repoSlug,
 				"--json",
-				"number,title,url,state,isDraft,mergedAt,additions,deletions,reviewDecision,statusCheckRollup,mergeable",
+				"number,title,url,state,isDraft,baseRefName,headRefName,body,author,mergedAt,additions,deletions,reviewDecision,statusCheckRollup,mergeable",
 			],
-			{ cwd: worktreePath },
+			GHPRResponseSchema,
+			{
+				cwd: worktreePath,
+				commandDescription: "GitHub pull request",
+			},
 		);
-		const raw = JSON.parse(stdout);
-		const result = GHPRResponseSchema.safeParse(raw);
-		if (!result.success) {
-			console.error("[GitHub] PR schema validation failed:", result.error);
-			console.error("[GitHub] Raw data:", JSON.stringify(raw, null, 2));
-			throw new Error("PR schema validation failed");
-		}
-		const data = result.data;
 
 		const checks = parseChecks(data.statusCheckRollup);
 
@@ -125,6 +124,10 @@ async function getPRForBranch(
 			title: data.title,
 			url: data.url,
 			state: mapPRState(data.state, data.isDraft),
+			baseBranch: data.baseRefName ?? undefined,
+			headBranch: data.headRefName ?? undefined,
+			authorLogin: data.author?.login,
+			body: data.body ?? undefined,
 			mergedAt: data.mergedAt ? new Date(data.mergedAt).getTime() : undefined,
 			additions: data.additions,
 			deletions: data.deletions,
@@ -164,7 +167,7 @@ function mapReviewDecision(
 	return "pending";
 }
 
-function parseChecks(rollup: GHPRResponse["statusCheckRollup"]): CheckItem[] {
+export function parseChecks(rollup: GHPRResponse["statusCheckRollup"]): CheckItem[] {
 	if (!rollup || rollup.length === 0) {
 		return [];
 	}
@@ -194,7 +197,14 @@ function parseChecks(rollup: GHPRResponse["statusCheckRollup"]): CheckItem[] {
 			status = "pending";
 		}
 
-		return { name, status, url };
+		return {
+			name,
+			status,
+			url,
+			runId: parseGitHubActionsRunId(url) ?? undefined,
+			jobId: parseGitHubActionsJobId(url) ?? undefined,
+			workflowName: ctx.workflowName,
+		};
 	});
 }
 

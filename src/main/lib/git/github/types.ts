@@ -4,7 +4,7 @@ import { z } from "zod";
 export const GHCheckContextSchema = z.object({
 	name: z.string().optional(),
 	context: z.string().optional(), // StatusContext uses 'context' instead of 'name'
-	state: z.enum(["SUCCESS", "FAILURE", "PENDING", "ERROR"]).optional(),
+	state: z.enum(["SUCCESS", "FAILURE", "PENDING", "ERROR", "EXPECTED"]).optional(),
 	status: z.string().optional(), // CheckRun status: COMPLETED, IN_PROGRESS, etc.
 	conclusion: z
 		.enum([
@@ -31,6 +31,10 @@ export const GHPRResponseSchema = z.object({
 	url: z.string(),
 	state: z.enum(["OPEN", "CLOSED", "MERGED"]),
 	isDraft: z.boolean(),
+	baseRefName: z.string().nullable().optional(),
+	headRefName: z.string().nullable().optional(),
+	body: z.string().nullable().optional(),
+	author: z.object({ login: z.string() }).nullable().optional(),
 	mergedAt: z.string().nullable(),
 	additions: z.number(),
 	deletions: z.number(),
@@ -43,10 +47,6 @@ export const GHPRResponseSchema = z.object({
 	mergeable: z.enum(["MERGEABLE", "CONFLICTING", "UNKNOWN"]).optional(),
 });
 
-export const GHRepoResponseSchema = z.object({
-	url: z.string(),
-});
-
 export type GHPRResponse = z.infer<typeof GHPRResponseSchema>;
 
 /** Single CI/CD check item */
@@ -54,6 +54,9 @@ export interface CheckItem {
 	name: string;
 	status: "success" | "failure" | "pending" | "skipped" | "cancelled";
 	url?: string;
+	runId?: number;
+	jobId?: number;
+	workflowName?: string;
 }
 
 /** PR mergeability status */
@@ -61,11 +64,16 @@ export type MergeableStatus = "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
 
 /** GitHub PR and branch status */
 export interface GitHubStatus {
+	branch: string;
 	pr: {
 		number: number;
 		title: string;
 		url: string;
 		state: "open" | "draft" | "merged" | "closed";
+		baseBranch?: string;
+		headBranch?: string;
+		authorLogin?: string;
+		body?: string;
 		mergedAt?: number;
 		additions: number;
 		deletions: number;
@@ -75,6 +83,7 @@ export interface GitHubStatus {
 		/** Whether the PR can be cleanly merged */
 		mergeable?: MergeableStatus;
 	} | null;
+	repoSlug: string;
 	repoUrl: string;
 	branchExistsOnRemote: boolean;
 	lastRefreshed: number;
