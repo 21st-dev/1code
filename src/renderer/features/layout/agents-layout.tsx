@@ -43,6 +43,16 @@ const SIDEBAR_MAX_WIDTH = 300
 const SIDEBAR_ANIMATION_DURATION = 0
 const SIDEBAR_CLOSE_HOTKEY = "⌘\\"
 
+type WorktreeSetupEvent = {
+  kind: "create-failed" | "create-timeout" | "setup-failed"
+  message: string
+  projectId: string
+  fallback?: {
+    mode: "project-directory"
+    path: string
+  }
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -246,14 +256,34 @@ export function AgentsLayout() {
     const desktopApi = window.desktopApi as any
     if (!desktopApi?.onWorktreeSetupFailed) return
 
-    const unsubscribe = desktopApi.onWorktreeSetupFailed((payload: { kind: "create-failed" | "setup-failed"; message: string; projectId: string }) => {
+    const unsubscribe = desktopApi.onWorktreeSetupFailed((payload: WorktreeSetupEvent) => {
       const errorMessage = payload.message.replace(/\s+/g, " ").trim()
-      const title =
-        payload.kind === "create-failed"
-          ? "Worktree creation failed"
-          : "Worktree setup failed"
+      const hasProjectDirectoryFallback =
+        payload.fallback?.mode === "project-directory"
+      const fallbackDescription = hasProjectDirectoryFallback
+        ? `Running in project directory instead: ${payload.fallback?.path}`
+        : null
+      const description = [errorMessage, fallbackDescription]
+        .filter(Boolean)
+        .join(" ")
 
-      toast.error(title, {
+      if (payload.kind === "create-timeout") {
+        toast.warning("Worktree checkout timed out", {
+          description: description || fallbackDescription || undefined,
+          duration: 12000,
+        })
+        return
+      }
+
+      if (payload.kind === "create-failed") {
+        toast.error("Worktree creation failed", {
+          description: description || fallbackDescription || undefined,
+          duration: 12000,
+        })
+        return
+      }
+
+      toast.error("Worktree setup failed", {
         description: errorMessage || undefined,
         duration: 10000,
         action: {

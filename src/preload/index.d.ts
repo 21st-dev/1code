@@ -7,9 +7,13 @@ export interface DesktopUser {
 }
 
 export interface WorktreeSetupFailurePayload {
-  kind: "create-failed" | "setup-failed"
+  kind: "create-failed" | "create-timeout" | "setup-failed"
   message: string
   projectId: string
+  fallback?: {
+    mode: "project-directory"
+    path: string
+  }
 }
 
 export interface DesktopApi {
