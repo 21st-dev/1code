@@ -673,6 +673,10 @@ export const pendingPrMessageAtom = atom<{ message: string; subChatId: string } 
 // Set by ChatView when "Review" is clicked, consumed by ChatViewInner
 export const pendingReviewMessageAtom = atom<{ message: string; subChatId: string } | null>(null)
 
+// Pending GitHub context message to send to chat
+// Set by GitHub workflow context UI, consumed by ChatViewInner
+export const pendingGitHubContextMessageAtom = atom<{ message: string; subChatId: string } | null>(null)
+
 // Pending merge conflict resolution message to send to chat
 // Set when user clicks "Fix Conflicts" button, consumed by ChatViewInner
 export const pendingConflictResolutionMessageAtom = atom<{ message: string; subChatId: string } | null>(null)

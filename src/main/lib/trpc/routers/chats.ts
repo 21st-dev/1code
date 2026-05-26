@@ -39,9 +39,13 @@ import {
 } from "./commit-message-utils"
 
 type WorktreeSetupFailurePayload = {
-  kind: "create-failed" | "setup-failed"
+  kind: "create-failed" | "create-timeout" | "setup-failed"
   message: string
   projectId: string
+  fallback?: {
+    mode: "project-directory"
+    path: string
+  }
 }
 
 function sendWorktreeSetupFailure(
@@ -830,10 +834,15 @@ export const chatsRouter = router({
           }
         } else {
           console.warn(`[Worktree] Failed: ${result.error}`)
+          const isTimeout = result.failureReason === "checkout-timeout"
           sendWorktreeSetupFailure(requestingWindowId, {
-            kind: "create-failed",
+            kind: isTimeout ? "create-timeout" : "create-failed",
             message: result.error || "Worktree creation failed.",
             projectId: project.id,
+            fallback: {
+              mode: "project-directory",
+              path: project.path,
+            },
           })
           // Fallback to project path
           db.update(chats)

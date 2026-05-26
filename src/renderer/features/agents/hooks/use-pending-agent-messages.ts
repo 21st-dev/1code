@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { useAtom } from "jotai"
 import {
   pendingConflictResolutionMessageAtom,
+  pendingGitHubContextMessageAtom,
   pendingPrMessageAtom,
   pendingReviewMessageAtom,
 } from "../atoms"
@@ -31,6 +32,9 @@ export function usePendingAgentMessages({
   )
   const [pendingConflictMessage, setPendingConflictMessage] = useAtom(
     pendingConflictResolutionMessageAtom,
+  )
+  const [pendingGitHubContextMessage, setPendingGitHubContextMessage] = useAtom(
+    pendingGitHubContextMessageAtom,
   )
 
   useEffect(() => {
@@ -69,6 +73,26 @@ export function usePendingAgentMessages({
     isStreaming,
     sendMessage,
     setPendingReviewMessage,
+    subChatId,
+  ])
+
+  useEffect(() => {
+    if (pendingGitHubContextMessage?.subChatId !== subChatId || isStreaming) return
+
+    setPendingGitHubContextMessage(null)
+    sendMessage({
+      role: "user",
+      parts: [{ type: "text", text: pendingGitHubContextMessage.message }],
+    })
+
+    const store = useAgentSubChatStore.getState()
+    store.addToOpenSubChats(subChatId)
+    store.setActiveSubChat(subChatId)
+  }, [
+    pendingGitHubContextMessage,
+    isStreaming,
+    sendMessage,
+    setPendingGitHubContextMessage,
     subChatId,
   ])
 

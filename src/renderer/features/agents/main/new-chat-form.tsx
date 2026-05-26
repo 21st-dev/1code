@@ -247,6 +247,9 @@ export function NewChatForm({
       : t("chat.placeholder.agentMode")
   const modeSelectorTitle = t("chat.mode.selectorTooltip")
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
+  const [worktreeCreateState, setWorktreeCreateState] = useState<
+    "idle" | "creating"
+  >("idle")
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
   const { data: providerProfilesData } =
@@ -1071,6 +1074,9 @@ export function NewChatForm({
   // Create chat mutation (real tRPC)
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
+    onMutate: (variables) => {
+      setWorktreeCreateState(variables.useWorktree ? "creating" : "idle")
+    },
     onSuccess: (data) => {
       // Clear editor, images, files, pasted texts, and file contents cache only on success
       editorRef.current?.clear()
@@ -1099,6 +1105,9 @@ export function NewChatForm({
     },
     onError: (error) => {
       toast.error(error.message)
+    },
+    onSettled: () => {
+      setWorktreeCreateState("idle")
     },
   })
 
@@ -2199,6 +2208,15 @@ export function NewChatForm({
                     />
                   )}
                 </div>
+                {worktreeCreateState === "creating" && createChatMutation.isPending && (
+                  <div
+                    className="mt-2 ml-[5px] flex items-center gap-2 text-xs text-muted-foreground"
+                    role="status"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                    <span>Creating worktree...</span>
+                  </div>
+                )}
 
                 {/* Worktree config banner - moved to corner banner below */}
 

@@ -42,6 +42,14 @@ const CodexIcon = ({ className }: { className?: string }) => (
 
 export type AgentProviderId = "claude-code" | "codex"
 
+export type ContinueWithProviderSelection = {
+  claudeModelId?: string
+  claudeModelSource?: ClaudeModelSource
+  codexModelId?: string
+  codexModelSource?: CodexModelSource
+  codexThinking?: CodexThinkingLevel
+}
+
 type ClaudeModelOption = {
   id: string
   name: string
@@ -84,7 +92,10 @@ interface AgentModelSelectorProps {
   triggerClassName?: string
   contentClassName?: string
   onOpenModelsSettings?: () => void
-  onContinueWithProvider?: (provider: AgentProviderId) => void
+  onContinueWithProvider?: (
+    provider: AgentProviderId,
+    selection?: ContinueWithProviderSelection,
+  ) => void
   providerProfiles?: ProviderProfileOption[]
   claude: {
     models: ClaudeModelOption[]
@@ -526,7 +537,10 @@ export function AgentModelSelector({
   const { t } = useI18n()
   const [search, setSearch] = useState("")
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
-  const [pendingProvider, setPendingProvider] = useState<AgentProviderId | null>(null)
+  const [pendingAction, setPendingAction] = useState<{
+    provider: AgentProviderId
+    selection?: ContinueWithProviderSelection
+  } | null>(null)
   const [activeModelInfo, setActiveModelInfo] = useState<ActiveModelInfo | null>(null)
 
   const canSelectProvider = (provider: AgentProviderId) =>
@@ -792,25 +806,64 @@ export function AgentModelSelector({
     return !canSelectProvider(getItemProvider(item)) && !!onContinueWithProvider
   }
 
+  const getCrossProviderSelection = (
+    item: FlatModelItem,
+    provider: AgentProviderId,
+  ): ContinueWithProviderSelection | undefined => {
+    switch (item.type) {
+      case "claude":
+        return {
+          claudeModelId: item.model.id,
+          claudeModelSource: "claude-oauth",
+        }
+      case "custom":
+        return { claudeModelSource: "custom-provider" }
+      case "codex-source":
+        return { codexModelSource: item.source }
+      case "codex": {
+        const thinking = item.model.thinkings.includes(codex.selectedThinking)
+          ? codex.selectedThinking
+          : item.model.thinkings.includes("high")
+            ? "high"
+            : item.model.thinkings[0]
+        return {
+          codexModelId: item.model.id,
+          ...(thinking ? { codexThinking: thinking } : {}),
+        }
+      }
+      case "provider-profile": {
+        const source = providerProfileSource(item.profile.id)
+        return provider === "codex"
+          ? { codexModelSource: source as CodexModelSource }
+          : { claudeModelSource: source as ClaudeModelSource }
+      }
+      case "ollama":
+        return undefined
+    }
+  }
+
   const handleConfirmCrossProvider = useCallback(
     (dontShowAgain: boolean) => {
+      const action = pendingAction
       if (dontShowAgain) {
         try {
           localStorage.setItem(CROSS_PROVIDER_DIALOG_DISMISSED_KEY, "true")
         } catch {}
       }
       setConfirmDialogOpen(false)
-      if (pendingProvider && onContinueWithProvider) {
-        onContinueWithProvider(pendingProvider)
+      setPendingAction(null)
+      if (action && onContinueWithProvider) {
+        window.setTimeout(() => {
+          onContinueWithProvider(action.provider, action.selection)
+        }, 0)
       }
-      setPendingProvider(null)
     },
-    [pendingProvider, onContinueWithProvider],
+    [pendingAction, onContinueWithProvider],
   )
 
   const handleCloseConfirmDialog = useCallback(() => {
     setConfirmDialogOpen(false)
-    setPendingProvider(null)
+    setPendingAction(null)
   }, [])
 
   const handleItemClick = (item: FlatModelItem) => {
@@ -819,13 +872,18 @@ export function AgentModelSelector({
     // Cross-provider click → show confirmation or continue directly
     if (!canSelectProvider(provider) && onContinueWithProvider) {
       handleOpenChange(false)
+      const selection = getCrossProviderSelection(item, provider)
       const dismissed = (() => {
-        try { return localStorage.getItem(CROSS_PROVIDER_DIALOG_DISMISSED_KEY) === "true" } catch { return false }
+        try {
+          return localStorage.getItem(CROSS_PROVIDER_DIALOG_DISMISSED_KEY) === "true"
+        } catch {
+          return false
+        }
       })()
       if (dismissed) {
-        onContinueWithProvider(provider)
+        onContinueWithProvider(provider, selection)
       } else {
-        setPendingProvider(provider)
+        setPendingAction({ provider, selection })
         setConfirmDialogOpen(true)
       }
       return
@@ -1088,7 +1146,7 @@ export function AgentModelSelector({
 
       <CrossProviderConfirmDialog
         isOpen={confirmDialogOpen}
-        providerName={pendingProvider === "codex" ? "Codex" : "Claude Code"}
+        providerName={pendingAction?.provider === "codex" ? "Codex" : "Claude Code"}
         onConfirm={handleConfirmCrossProvider}
         onClose={handleCloseConfirmDialog}
       />

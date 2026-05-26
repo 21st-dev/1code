@@ -139,8 +139,8 @@ contextBridge.exposeInMainWorld("desktopApi", {
   },
 
   // Worktree setup failure events
-  onWorktreeSetupFailed: (callback: (data: { kind: "create-failed" | "setup-failed"; message: string; projectId: string }) => void) => {
-    const handler = (_event: unknown, data: { kind: "create-failed" | "setup-failed"; message: string; projectId: string }) => callback(data)
+  onWorktreeSetupFailed: (callback: (data: { kind: "create-failed" | "create-timeout" | "setup-failed"; message: string; projectId: string; fallback?: { mode: "project-directory"; path: string } }) => void) => {
+    const handler = (_event: unknown, data: { kind: "create-failed" | "create-timeout" | "setup-failed"; message: string; projectId: string; fallback?: { mode: "project-directory"; path: string } }) => callback(data)
     ipcRenderer.on("worktree:setup-failed", handler)
     return () => ipcRenderer.removeListener("worktree:setup-failed", handler)
   },

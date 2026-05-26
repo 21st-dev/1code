@@ -1631,6 +1631,169 @@ export const en = {
   "agent.pr.readyToMerge": "Ready to merge",
   "agent.pr.changesRequested": "Changes requested",
   "agent.pr.open": "Open",
+  "githubWorkflow.prContext.prNumber": "PR #{number}",
+  "githubWorkflow.prContext.statusLabel": "Status",
+  "githubWorkflow.prContext.checksLabel": "Checks",
+  "githubWorkflow.prContext.reviewLabel": "Review",
+  "githubWorkflow.prContext.reviewPending": "Pending",
+  "githubWorkflow.prContext.checksSummary":
+    "{passed} passed, {failed} failed, {pending} pending",
+  "githubWorkflow.prContext.sendToAgent": "Send PR context",
+  "githubWorkflow.prContext.failedChecks": "Failed checks",
+  "githubWorkflow.prContext.sendFailedLog": "Send log",
+  "githubWorkflow.prContext.failedLogSent":
+    "Failed check log sent to current agent",
+  "githubWorkflow.prContext.failedLogUnavailable":
+    "Failed check log unavailable",
+  "githubWorkflow.prContext.noFailedChecks":
+    "No failed checks to send. Current checks are passing, pending, skipped, or cancelled.",
+  "githubWorkflow.prContext.openInBrowser": "Open in browser",
+  "githubWorkflow.prContext.sentToAgent": "PR context sent to current agent",
+  "githubWorkflow.prContext.noActiveChat": "No active agent chat",
+  "githubWorkflow.reviewComments.title": "Review comments",
+  "githubWorkflow.reviewComments.loading": "Loading review comments...",
+  "githubWorkflow.reviewComments.none": "No review comments.",
+  "githubWorkflow.reviewComments.noUnresolved":
+    "No unresolved review comments.",
+  "githubWorkflow.reviewComments.threadCount": "{count} thread(s)",
+  "githubWorkflow.reviewComments.moreFiles": "+{count} more file(s)",
+  "githubWorkflow.reviewComments.sendToAgent": "Send comments",
+  "githubWorkflow.reviewComments.sentToAgent":
+    "Review comments sent to current agent",
+  "githubWorkflow.writeBack.title": "Write back to GitHub",
+  "githubWorkflow.writeBack.publicNotice":
+    "This can publish text or change PR state on GitHub. Review the target and exact content before confirming.",
+  "githubWorkflow.writeBack.target": "Target",
+  "githubWorkflow.writeBack.body": "Public comment",
+  "githubWorkflow.writeBack.reviewers": "Reviewer logins",
+  "githubWorkflow.writeBack.cancel": "Cancel",
+  "githubWorkflow.writeBack.action.prComment": "Post PR comment",
+  "githubWorkflow.writeBack.action.reviewThreadReply":
+    "Reply to review thread",
+  "githubWorkflow.writeBack.action.markReady": "Mark ready for review",
+  "githubWorkflow.writeBack.action.requestReviewers": "Request reviewers",
+  "githubWorkflow.writeBack.confirmTitle.prComment":
+    "Post comment to PR?",
+  "githubWorkflow.writeBack.confirmTitle.reviewThreadReply":
+    "Reply to review thread?",
+  "githubWorkflow.writeBack.confirmTitle.markReady":
+    "Mark PR ready for review?",
+  "githubWorkflow.writeBack.confirmTitle.requestReviewers":
+    "Request reviewers?",
+  "githubWorkflow.writeBack.confirmDescription.prComment":
+    "Locus will run gh pr comment with the edited body after confirmation.",
+  "githubWorkflow.writeBack.confirmDescription.reviewThreadReply":
+    "Locus will post this reply to the selected unresolved review thread. It will not resolve the thread.",
+  "githubWorkflow.writeBack.confirmDescription.markReady":
+    "Locus will mark this draft PR ready for review through local gh auth.",
+  "githubWorkflow.writeBack.confirmDescription.requestReviewers":
+    "Locus will request the listed reviewers through local gh auth.",
+  "githubWorkflow.writeBack.confirmButton.prComment": "Post comment",
+  "githubWorkflow.writeBack.confirmButton.reviewThreadReply": "Post reply",
+  "githubWorkflow.writeBack.confirmButton.markReady": "Mark ready",
+  "githubWorkflow.writeBack.confirmButton.requestReviewers":
+    "Request reviewers",
+  "githubWorkflow.writeBack.confirming": "Writing...",
+  "githubWorkflow.writeBack.success.prComment": "PR comment posted",
+  "githubWorkflow.writeBack.success.reviewThreadReply":
+    "Review-thread reply posted",
+  "githubWorkflow.writeBack.success.markReady": "PR marked ready for review",
+  "githubWorkflow.writeBack.success.requestReviewers": "Reviewers requested",
+  "githubWorkflow.writeBack.failed": "GitHub write-back failed",
+  "githubWorkflow.writeBack.disabled.ghMissing":
+    "Install GitHub CLI and make sure gh is available on PATH before writing back.",
+  "githubWorkflow.writeBack.disabled.notAuthenticated":
+    "Run gh auth login before writing back to GitHub.",
+  "githubWorkflow.writeBack.disabled.notGithubRepo":
+    "This workspace origin is not a GitHub repository.",
+  "githubWorkflow.writeBack.disabled.githubUnavailable":
+    "GitHub write-back is unavailable. Check GitHub CLI output and network access.",
+  "githubWorkflow.writeBack.disabled.noPr":
+    "Load a current pull request before writing back to GitHub.",
+  "githubWorkflow.writeBack.disabled.missingPrNumber":
+    "A pull request number is required before writing back.",
+  "githubWorkflow.writeBack.disabled.prMismatch":
+    "The selected pull request no longer matches the current branch. Refresh GitHub context.",
+  "githubWorkflow.writeBack.disabled.emptyBody":
+    "Enter the public GitHub comment text before confirming.",
+  "githubWorkflow.writeBack.disabled.missingThreadId":
+    "This review thread is missing a GitHub thread id, so Locus cannot reply to it.",
+  "githubWorkflow.writeBack.disabled.emptyReviewers":
+    "Enter at least one reviewer login before confirming.",
+  "githubWorkflow.writeBack.disabled.unsupportedPrState":
+    "Only draft pull requests can be marked ready for review.",
+  "githubWorkflow.writeBack.disabled.writeFailed":
+    "GitHub write-back failed. Check GitHub CLI output and repository access.",
+  "githubWorkflow.status.unavailable": "GitHub unavailable",
+  "githubWorkflow.status.ghMissing": "GitHub CLI not found",
+  "githubWorkflow.status.notAuthenticated": "GitHub CLI not authenticated",
+  "githubWorkflow.status.notGithubRepo": "Not a GitHub repository",
+  "githubWorkflow.status.noPr": "No PR for current branch",
+  "githubWorkflow.status.invalidUrl": "Invalid GitHub URL",
+  "githubWorkflow.status.ghMissingMessage":
+    "Install GitHub CLI and make sure gh is available on PATH.",
+  "githubWorkflow.status.notAuthenticatedMessage":
+    "Run gh auth login to let Locus read GitHub context through your local GitHub CLI session.",
+  "githubWorkflow.status.notGithubRepoMessage":
+    "This workspace origin is not a GitHub repository. Paste a full GitHub issue or PR URL to import a task.",
+  "githubWorkflow.status.noPrMessage":
+    "Current branch {branch} has no pull request yet.",
+  "githubWorkflow.status.invalidUrlMessage":
+    "Paste a GitHub issue or PR URL, such as https://github.com/org/repo/issues/123 or /pull/123.",
+  "githubWorkflow.status.unavailableMessage":
+    "GitHub context could not be read. Check GitHub CLI output and network access.",
+  "githubWorkflow.status.runGhAuthLogin": "Run gh auth login",
+  "githubWorkflow.status.authTerminalStarted":
+    "Opened a terminal for gh auth login",
+  "githubWorkflow.taskImport.title": "Start from GitHub",
+  "githubWorkflow.taskImport.placeholder":
+    "Paste issue or PR URL, or /pull/123",
+  "githubWorkflow.taskImport.load": "Load GitHub task",
+  "githubWorkflow.taskImport.loaded": "GitHub task loaded",
+  "githubWorkflow.taskImport.failed": "Failed to load GitHub task",
+  "githubWorkflow.taskImport.issueNumber": "Issue #{number}",
+  "githubWorkflow.taskImport.pullRequestNumber": "PR #{number}",
+  "githubWorkflow.taskImport.meta": "{state} · {comments} comments",
+  "githubWorkflow.taskImport.startCurrentAgent": "Start current agent",
+  "githubWorkflow.taskImport.sentToAgent":
+    "GitHub task sent to current agent",
+  "githubWorkflow.draftPr.ready": "Ready to create PR",
+  "githubWorkflow.draftPr.prepare": "Draft PR",
+  "githubWorkflow.draftPr.preparing": "Preparing...",
+  "githubWorkflow.draftPr.cancel": "Cancel",
+  "githubWorkflow.draftPr.title": "PR title",
+  "githubWorkflow.draftPr.summary": "Summary",
+  "githubWorkflow.draftPr.testPlan": "Test plan",
+  "githubWorkflow.draftPr.body": "PR body",
+  "githubWorkflow.draftPr.meta":
+    "{branch} -> {baseBranch} · {changes} files · {commits} commits",
+  "githubWorkflow.draftPr.noMutation":
+    "Preparation only. No GitHub PR has been created.",
+  "githubWorkflow.draftPr.createNotice":
+    "Creates only after confirmation, using local gh auth.",
+  "githubWorkflow.draftPr.create": "Create draft PR",
+  "githubWorkflow.draftPr.creating": "Creating...",
+  "githubWorkflow.draftPr.created": "Draft PR created",
+  "githubWorkflow.draftPr.openCreated": "Open PR",
+  "githubWorkflow.draftPr.confirmTitle": "Create draft PR?",
+  "githubWorkflow.draftPr.confirmDescription":
+    "Locus will push committed branch changes if needed, then run gh pr create --draft with the edited title and body.",
+  "githubWorkflow.draftPr.confirmCreate": "Create draft PR",
+  "githubWorkflow.draftPr.createFailed": "Failed to create draft PR",
+  "githubWorkflow.draftPr.createDisabled": "Create draft PR",
+  "githubWorkflow.draftPr.createDisabledHint":
+    "Creation will be enabled after the confirmation step is wired.",
+  "githubWorkflow.draftPr.failed": "Failed to prepare draft PR",
+  "githubWorkflow.draftPr.dirtyWorktreeMessage":
+    "Commit or stash local changes before creating a PR. Draft PR creation only includes committed branch changes.",
+  "githubWorkflow.draftPr.branchMismatchMessage":
+    "The current branch changed after this draft was prepared. Refresh the draft before creating the PR.",
+  "githubWorkflow.draftPr.noCommittedChangesMessage":
+    "No committed branch changes are available for a PR yet.",
+  "githubWorkflow.draftPr.baseBranchMessage":
+    "Create or switch to a feature branch before preparing a PR.",
+  "githubWorkflow.draftPr.existingPrMessage":
+    "This branch already has a PR. Open the existing PR instead of creating another one.",
   "agent.tool.interrupted": "{tool} interrupted",
   "agent.tool.preparingAgent": "Preparing agent",
   "agent.tool.runningAgent": "Running {agent}",
@@ -3731,6 +3894,170 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.pr.readyToMerge": "可 merge",
   "agent.pr.changesRequested": "请求修改",
   "agent.pr.open": "Open",
+  "githubWorkflow.prContext.prNumber": "PR #{number}",
+  "githubWorkflow.prContext.statusLabel": "状态",
+  "githubWorkflow.prContext.checksLabel": "Checks",
+  "githubWorkflow.prContext.reviewLabel": "Review",
+  "githubWorkflow.prContext.reviewPending": "等待中",
+  "githubWorkflow.prContext.checksSummary":
+    "{passed} 个通过，{failed} 个失败，{pending} 个等待",
+  "githubWorkflow.prContext.sendToAgent": "发送 PR 上下文",
+  "githubWorkflow.prContext.failedChecks": "失败的 checks",
+  "githubWorkflow.prContext.sendFailedLog": "发送 log",
+  "githubWorkflow.prContext.failedLogSent":
+    "已把失败 check log 发送到当前 agent",
+  "githubWorkflow.prContext.failedLogUnavailable":
+    "失败 check log 不可用",
+  "githubWorkflow.prContext.noFailedChecks":
+    "没有失败的 checks 可以发送。当前 checks 处于通过、等待、跳过或取消状态。",
+  "githubWorkflow.prContext.openInBrowser": "浏览器打开",
+  "githubWorkflow.prContext.sentToAgent": "已把 PR 上下文发送到当前 agent",
+  "githubWorkflow.prContext.noActiveChat": "没有当前 agent chat",
+  "githubWorkflow.reviewComments.title": "Review comments",
+  "githubWorkflow.reviewComments.loading": "正在加载 review comments...",
+  "githubWorkflow.reviewComments.none": "没有 review comments。",
+  "githubWorkflow.reviewComments.noUnresolved":
+    "没有未解决的 review comments。",
+  "githubWorkflow.reviewComments.threadCount": "{count} 个 thread",
+  "githubWorkflow.reviewComments.moreFiles": "还有 {count} 个文件",
+  "githubWorkflow.reviewComments.sendToAgent": "发送 comments",
+  "githubWorkflow.reviewComments.sentToAgent":
+    "已把 review comments 发送到当前 agent",
+  "githubWorkflow.writeBack.title": "写回 GitHub",
+  "githubWorkflow.writeBack.publicNotice":
+    "这个操作可能会在 GitHub 上公开发布文字或改变 PR 状态。确认前请检查目标和具体内容。",
+  "githubWorkflow.writeBack.target": "目标",
+  "githubWorkflow.writeBack.body": "公开评论",
+  "githubWorkflow.writeBack.reviewers": "Reviewer logins",
+  "githubWorkflow.writeBack.cancel": "取消",
+  "githubWorkflow.writeBack.action.prComment": "发布 PR 评论",
+  "githubWorkflow.writeBack.action.reviewThreadReply":
+    "回复 review thread",
+  "githubWorkflow.writeBack.action.markReady": "标记为 ready for review",
+  "githubWorkflow.writeBack.action.requestReviewers": "请求 reviewers",
+  "githubWorkflow.writeBack.confirmTitle.prComment":
+    "发布评论到 PR？",
+  "githubWorkflow.writeBack.confirmTitle.reviewThreadReply":
+    "回复这个 review thread？",
+  "githubWorkflow.writeBack.confirmTitle.markReady":
+    "把 PR 标记为 ready for review？",
+  "githubWorkflow.writeBack.confirmTitle.requestReviewers":
+    "请求 reviewers？",
+  "githubWorkflow.writeBack.confirmDescription.prComment":
+    "确认后，Locus 会用编辑后的正文运行 gh pr comment。",
+  "githubWorkflow.writeBack.confirmDescription.reviewThreadReply":
+    "确认后，Locus 会把这段回复发到选中的未解决 review thread。不会自动 resolve thread。",
+  "githubWorkflow.writeBack.confirmDescription.markReady":
+    "确认后，Locus 会通过本机 gh 登录状态把这个 draft PR 标记为 ready for review。",
+  "githubWorkflow.writeBack.confirmDescription.requestReviewers":
+    "确认后，Locus 会通过本机 gh 登录状态请求这些 reviewers。",
+  "githubWorkflow.writeBack.confirmButton.prComment": "发布评论",
+  "githubWorkflow.writeBack.confirmButton.reviewThreadReply": "发布回复",
+  "githubWorkflow.writeBack.confirmButton.markReady": "标记 ready",
+  "githubWorkflow.writeBack.confirmButton.requestReviewers":
+    "请求 reviewers",
+  "githubWorkflow.writeBack.confirming": "写回中...",
+  "githubWorkflow.writeBack.success.prComment": "PR 评论已发布",
+  "githubWorkflow.writeBack.success.reviewThreadReply":
+    "Review-thread 回复已发布",
+  "githubWorkflow.writeBack.success.markReady":
+    "PR 已标记为 ready for review",
+  "githubWorkflow.writeBack.success.requestReviewers": "已请求 reviewers",
+  "githubWorkflow.writeBack.failed": "GitHub 写回失败",
+  "githubWorkflow.writeBack.disabled.ghMissing":
+    "写回前请先安装 GitHub CLI，并确认 gh 在 PATH 里可用。",
+  "githubWorkflow.writeBack.disabled.notAuthenticated":
+    "写回 GitHub 前请先运行 gh auth login。",
+  "githubWorkflow.writeBack.disabled.notGithubRepo":
+    "这个 workspace 的 origin 不是 GitHub 仓库。",
+  "githubWorkflow.writeBack.disabled.githubUnavailable":
+    "GitHub 写回不可用。请检查 GitHub CLI 输出和网络连接。",
+  "githubWorkflow.writeBack.disabled.noPr":
+    "写回 GitHub 前需要先加载当前 pull request。",
+  "githubWorkflow.writeBack.disabled.missingPrNumber":
+    "写回前需要 pull request number。",
+  "githubWorkflow.writeBack.disabled.prMismatch":
+    "选中的 pull request 已经不匹配当前分支。请刷新 GitHub context。",
+  "githubWorkflow.writeBack.disabled.emptyBody":
+    "确认前请输入要公开发布到 GitHub 的评论内容。",
+  "githubWorkflow.writeBack.disabled.missingThreadId":
+    "这个 review thread 缺少 GitHub thread id，Locus 不能回复它。",
+  "githubWorkflow.writeBack.disabled.emptyReviewers":
+    "确认前请输入至少一个 reviewer login。",
+  "githubWorkflow.writeBack.disabled.unsupportedPrState":
+    "只有 draft pull request 可以标记为 ready for review。",
+  "githubWorkflow.writeBack.disabled.writeFailed":
+    "GitHub 写回失败。请检查 GitHub CLI 输出和仓库权限。",
+  "githubWorkflow.status.unavailable": "GitHub 不可用",
+  "githubWorkflow.status.ghMissing": "找不到 GitHub CLI",
+  "githubWorkflow.status.notAuthenticated": "GitHub CLI 未登录",
+  "githubWorkflow.status.notGithubRepo": "不是 GitHub 仓库",
+  "githubWorkflow.status.noPr": "当前分支没有 PR",
+  "githubWorkflow.status.invalidUrl": "无效的 GitHub URL",
+  "githubWorkflow.status.ghMissingMessage":
+    "安装 GitHub CLI，并确认 gh 在 PATH 里可用。",
+  "githubWorkflow.status.notAuthenticatedMessage":
+    "运行 gh auth login，让 Locus 通过本机 GitHub CLI session 读取 GitHub 上下文。",
+  "githubWorkflow.status.notGithubRepoMessage":
+    "这个 workspace 的 origin 不是 GitHub 仓库。可以粘贴完整的 GitHub issue 或 PR URL 来导入任务。",
+  "githubWorkflow.status.noPrMessage":
+    "当前分支 {branch} 还没有关联的 pull request。",
+  "githubWorkflow.status.invalidUrlMessage":
+    "请粘贴 GitHub issue 或 PR URL，例如 https://github.com/org/repo/issues/123 或 /pull/123。",
+  "githubWorkflow.status.unavailableMessage":
+    "无法读取 GitHub 上下文。请检查 GitHub CLI 输出和网络连接。",
+  "githubWorkflow.status.runGhAuthLogin": "运行 gh auth login",
+  "githubWorkflow.status.authTerminalStarted":
+    "已打开终端运行 gh auth login",
+  "githubWorkflow.taskImport.title": "从 GitHub 开始",
+  "githubWorkflow.taskImport.placeholder":
+    "粘贴 issue/PR URL，或 /pull/123",
+  "githubWorkflow.taskImport.load": "加载 GitHub task",
+  "githubWorkflow.taskImport.loaded": "已加载 GitHub task",
+  "githubWorkflow.taskImport.failed": "加载 GitHub task 失败",
+  "githubWorkflow.taskImport.issueNumber": "Issue #{number}",
+  "githubWorkflow.taskImport.pullRequestNumber": "PR #{number}",
+  "githubWorkflow.taskImport.meta": "{state} · {comments} 条评论",
+  "githubWorkflow.taskImport.startCurrentAgent": "用当前 agent 开始",
+  "githubWorkflow.taskImport.sentToAgent":
+    "已把 GitHub task 发送到当前 agent",
+  "githubWorkflow.draftPr.ready": "可以准备 PR",
+  "githubWorkflow.draftPr.prepare": "Draft PR",
+  "githubWorkflow.draftPr.preparing": "准备中...",
+  "githubWorkflow.draftPr.cancel": "取消",
+  "githubWorkflow.draftPr.title": "PR 标题",
+  "githubWorkflow.draftPr.summary": "Summary",
+  "githubWorkflow.draftPr.testPlan": "Test plan",
+  "githubWorkflow.draftPr.body": "PR body",
+  "githubWorkflow.draftPr.meta":
+    "{branch} -> {baseBranch} · {changes} 个文件 · {commits} 个 commit",
+  "githubWorkflow.draftPr.noMutation":
+    "这里只是准备内容，还没有创建 GitHub PR。",
+  "githubWorkflow.draftPr.createNotice":
+    "确认后才会创建，并复用本机 gh 登录状态。",
+  "githubWorkflow.draftPr.create": "创建 draft PR",
+  "githubWorkflow.draftPr.creating": "创建中...",
+  "githubWorkflow.draftPr.created": "Draft PR 已创建",
+  "githubWorkflow.draftPr.openCreated": "打开 PR",
+  "githubWorkflow.draftPr.confirmTitle": "创建 draft PR？",
+  "githubWorkflow.draftPr.confirmDescription":
+    "Locus 会先 push 已提交的分支改动，然后用编辑后的标题和正文运行 gh pr create --draft。",
+  "githubWorkflow.draftPr.confirmCreate": "创建 draft PR",
+  "githubWorkflow.draftPr.createFailed": "创建 draft PR 失败",
+  "githubWorkflow.draftPr.createDisabled": "创建 draft PR",
+  "githubWorkflow.draftPr.createDisabledHint":
+    "下一步接入用户确认后才会启用创建。",
+  "githubWorkflow.draftPr.failed": "准备 draft PR 失败",
+  "githubWorkflow.draftPr.dirtyWorktreeMessage":
+    "创建 PR 前先提交或 stash 本地改动。Draft PR 只会包含已经提交到分支上的改动。",
+  "githubWorkflow.draftPr.branchMismatchMessage":
+    "当前分支已经不是准备 draft 时的分支。请刷新 draft 后再创建 PR。",
+  "githubWorkflow.draftPr.noCommittedChangesMessage":
+    "当前还没有可用于 PR 的已提交分支改动。",
+  "githubWorkflow.draftPr.baseBranchMessage":
+    "请先创建或切换到 feature branch，再准备 PR。",
+  "githubWorkflow.draftPr.existingPrMessage":
+    "这个分支已经有关联 PR。请打开已有 PR，而不是再创建一个。",
   "agent.tool.interrupted": "{tool} 已中断",
   "agent.tool.preparingAgent": "准备 Agent 中",
   "agent.tool.runningAgent": "正在运行 {agent}",

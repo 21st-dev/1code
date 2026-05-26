@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import { devNull, homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -16,6 +16,26 @@ import type { WorktreeSetupResult } from "./worktree-config";
 import { generateWorktreeFolderName } from "./worktree-naming";
 
 const execFileAsync = promisify(execFile);
+export const WORKTREE_CREATE_TIMEOUT_MS = 300_000;
+export const WORKTREE_CREATE_TIMEOUT_SECONDS =
+	WORKTREE_CREATE_TIMEOUT_MS / 1000;
+export const WORKTREE_CHECKOUT_TIMEOUT_MESSAGE = `Worktree checkout timed out after ${WORKTREE_CREATE_TIMEOUT_SECONDS} seconds.`;
+
+export type WorktreeCreateFailureReason =
+	| "checkout-timeout"
+	| "git-lock"
+	| "git-lfs"
+	| "unknown";
+
+export class WorktreeCreateError extends Error {
+	reason: WorktreeCreateFailureReason;
+
+	constructor(message: string, reason: WorktreeCreateFailureReason) {
+		super(message);
+		this.name = "WorktreeCreateError";
+		this.reason = reason;
+	}
+}
 
 /**
  * Error thrown by execFile when the command fails.
@@ -34,6 +54,70 @@ function isExecFileException(error: unknown): error is ExecFileException {
 	return (
 		error instanceof Error &&
 		("code" in error || "signal" in error || "killed" in error)
+	);
+}
+
+export function isWorktreeCheckoutTimeout(error: unknown): boolean {
+	if (!isExecFileException(error)) {
+		return false;
+	}
+
+	const message = error.message.toLowerCase();
+	return (
+		error.killed === true ||
+		error.signal === "SIGTERM" ||
+		message.includes("timed out") ||
+		message.includes("timeout")
+	);
+}
+
+export function getWorktreeCreateError(
+	error: unknown,
+	usesLfs: boolean,
+): WorktreeCreateError {
+	if (isWorktreeCheckoutTimeout(error)) {
+		return new WorktreeCreateError(
+			`${WORKTREE_CHECKOUT_TIMEOUT_MESSAGE} Locus cleaned up the partial worktree and will run this chat in the project directory.`,
+			"checkout-timeout",
+		);
+	}
+
+	const errorMessage = error instanceof Error ? error.message : String(error);
+	const lowerError = errorMessage.toLowerCase();
+
+	const isLockError =
+		lowerError.includes("could not lock") ||
+		lowerError.includes("unable to lock") ||
+		(lowerError.includes(".lock") && lowerError.includes("file exists"));
+
+	if (isLockError) {
+		return new WorktreeCreateError(
+			`Failed to create worktree: The git repository is locked by another process. ` +
+				`This usually happens when another git operation is in progress, or a previous operation crashed. ` +
+				`Please wait for the other operation to complete, or manually remove the lock file ` +
+				`(e.g., .git/config.lock or .git/index.lock) if you're sure no git operations are running.`,
+			"git-lock",
+		);
+	}
+
+	const isLfsError =
+		lowerError.includes("git-lfs") ||
+		lowerError.includes("filter-process") ||
+		lowerError.includes("smudge filter") ||
+		(lowerError.includes("lfs") && lowerError.includes("not")) ||
+		(lowerError.includes("lfs") && usesLfs);
+
+	if (isLfsError) {
+		return new WorktreeCreateError(
+			`Failed to create worktree: This repository uses Git LFS, but git-lfs was not found or failed. ` +
+				`Please install git-lfs (e.g., 'brew install git-lfs') and run 'git lfs install'.`,
+			"git-lfs",
+		);
+	}
+
+	return new WorktreeCreateError(
+		`Failed to create worktree: ${errorMessage}`,
+		"unknown",
 	);
 }
 
@@ -179,47 +263,13 @@ export async function createWorktree(
 				branch,
 				commitHash,
 			],
-			{ env, timeout: 120_000 },
+			{ env, timeout: WORKTREE_CREATE_TIMEOUT_MS },
 		);
 
 	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		const lowerError = errorMessage.toLowerCase();
-
-		const isLockError =
-			lowerError.includes("could not lock") ||
-			lowerError.includes("unable to lock") ||
-			(lowerError.includes(".lock") && lowerError.includes("file exists"));
-
-		if (isLockError) {
-			console.error(
-				`Git lock file error during worktree creation: ${errorMessage}`,
-			);
-			throw new Error(
-				`Failed to create worktree: The git repository is locked by another process. ` +
-					`This usually happens when another git operation is in progress, or a previous operation crashed. ` +
-					`Please wait for the other operation to complete, or manually remove the lock file ` +
-					`(e.g., .git/config.lock or .git/index.lock) if you're sure no git operations are running.`,
-			);
-		}
-
-		const isLfsError =
-			lowerError.includes("git-lfs") ||
-			lowerError.includes("filter-process") ||
-			lowerError.includes("smudge filter") ||
-			(lowerError.includes("lfs") && lowerError.includes("not")) ||
-			(lowerError.includes("lfs") && usesLfs);
-
-		if (isLfsError) {
-			console.error(`Git LFS error during worktree creation: ${errorMessage}`);
-			throw new Error(
-				`Failed to create worktree: This repository uses Git LFS, but git-lfs was not found or failed. ` +
-					`Please install git-lfs (e.g., 'brew install git-lfs') and run 'git lfs install'.`,
-			);
-		}
-
-		console.error(`Failed to create worktree: ${errorMessage}`);
-		throw new Error(`Failed to create worktree: ${errorMessage}`);
+		const worktreeError = getWorktreeCreateError(error, usesLfs);
+		console.error(`Failed to create worktree: ${worktreeError.message}`);
+		throw worktreeError;
 	}
 }
 
@@ -894,6 +944,8 @@ export interface WorktreeResult {
 	branch?: string;
 	baseBranch?: string;
 	error?: string;
+	failureReason?: WorktreeCreateFailureReason;
+	cleanupErrors?: string[];
 }
 
 export interface CreateWorktreeForChatOptions {
@@ -915,6 +967,9 @@ export async function createWorktreeForChat(
 	branchType?: "local" | "remote",
 	options?: CreateWorktreeForChatOptions,
 ): Promise<WorktreeResult> {
+	let branch: string | undefined;
+	let worktreePath: string | undefined;
+
 	try {
 		const git = simpleGit(projectPath);
 		const isRepo = await git.checkIsRepo();
@@ -926,11 +981,11 @@ export async function createWorktreeForChat(
 		// Use provided base branch or auto-detect
 		const baseBranch = selectedBaseBranch || await getDefaultBranch(projectPath);
 
-		const branch = generateBranchName();
+		branch = generateBranchName();
 		const worktreesDir = join(homedir(), ".21st", "worktrees");
 		const projectWorktreeDir = join(worktreesDir, projectSlug);
 		const folderName = generateWorktreeFolderName(projectWorktreeDir);
-		const worktreePath = join(projectWorktreeDir, folderName);
+		worktreePath = join(projectWorktreeDir, folderName);
 
 		// Determine startPoint based on branch type
 		// For local branches, use the local ref directly
@@ -963,11 +1018,64 @@ export async function createWorktreeForChat(
 
 		return { success: true, worktreePath, branch, baseBranch };
 	} catch (error) {
+		const cleanupErrors =
+			branch && worktreePath
+				? await cleanupFailedWorktree(projectPath, worktreePath, branch)
+				: [];
+		const failureReason =
+			error instanceof WorktreeCreateError ? error.reason : "unknown";
+
 		return {
 			success: false,
 			error: error instanceof Error ? error.message : "Unknown error",
+			failureReason,
+			cleanupErrors,
 		};
 	}
+}
+
+async function cleanupFailedWorktree(
+	mainRepoPath: string,
+	worktreePath: string,
+	branch: string,
+): Promise<string[]> {
+	const errors: string[] = [];
+	const env = await getGitEnv();
+
+	async function runCleanupGit(args: string[]): Promise<void> {
+		try {
+			await execFileAsync("git", args, { env, timeout: 60_000 });
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			errors.push(message);
+		}
+	}
+
+	await runCleanupGit([
+		"-C",
+		mainRepoPath,
+		"worktree",
+		"remove",
+		worktreePath,
+		"--force",
+	]);
+
+	try {
+		await rm(worktreePath, { recursive: true, force: true });
+	} catch (error) {
+		errors.push(error instanceof Error ? error.message : String(error));
+	}
+
+	await runCleanupGit(["-C", mainRepoPath, "branch", "-D", branch]);
+	await runCleanupGit(["-C", mainRepoPath, "worktree", "prune"]);
+
+	if (errors.length > 0) {
+		console.warn(
+			`[worktree] Cleanup after failed create had warnings: ${errors.join("; ")}`,
+		);
+	}
+
+	return errors;
 }
 
 /**
