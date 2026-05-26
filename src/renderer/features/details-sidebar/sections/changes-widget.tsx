@@ -4,7 +4,19 @@ import { memo, useCallback, useMemo, useState, useEffect, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowUpRight } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { ArrowUpRight, GitPullRequest } from "lucide-react"
 import { DiffIcon } from "@/components/ui/icons"
 import {
   Tooltip,
@@ -24,6 +36,8 @@ import {
 import { trpc } from "@/lib/trpc"
 import { preferredEditorAtom } from "@/lib/atoms"
 import { APP_META } from "../../../../shared/external-apps"
+import type { GitHubDraftPullRequestUnavailableReason } from "../../../../shared/github-workflow-context"
+import { getGitHubDraftPrUnavailableMessageKey } from "../../../../shared/github-workflow-ui-state"
 import type { ParsedDiffFile } from "../types"
 import { useI18n } from "@/lib/i18n"
 
@@ -45,6 +59,30 @@ interface ChangesWidgetProps {
   onFileSelect?: (filePath: string) => void
   /** Diff display mode - affects tooltip text */
   diffDisplayMode?: "side-peek" | "center-peek" | "full-page"
+}
+
+interface DraftPrFormState {
+  title: string
+  summary: string
+  testPlan: string
+  body: string
+}
+
+interface DraftPrMetaState {
+  repoSlug: string
+  branch: string
+  baseBranch: string
+  changedFileCount: number
+  commitCount: number
+}
+
+function getDraftPrUnavailableMessage(
+  reason: GitHubDraftPullRequestUnavailableReason,
+  fallback: string,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  const key = getGitHubDraftPrUnavailableMessageKey(reason)
+  return key ? t(key) : fallback
 }
 
 /**
@@ -112,6 +150,11 @@ export const ChangesWidget = memo(function ChangesWidget({
   // Mutations for context menu actions
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
   const openInAppMutation = trpc.external.openInApp.useMutation()
+  const prepareDraftPrMutation =
+    trpc.githubWorkflow.prepareDraftPullRequest.useMutation()
+  const createDraftPrMutation =
+    trpc.githubWorkflow.createDraftPullRequest.useMutation()
+  const trpcUtils = trpc.useUtils()
 
   const syncActionKind = getSyncActionKind({
     hasUpstream,
@@ -121,6 +164,15 @@ export const ChangesWidget = memo(function ChangesWidget({
   })
 
   const shouldCommitAndPush = !!worktreePath && !!onCommitAndPush && !isSyncStatusLoading && syncActionKind !== "pull" && syncActionKind !== "loading"
+  const isLikelyDefaultBranch =
+    currentBranch === "main" ||
+    currentBranch === "master" ||
+    currentBranch === "develop"
+  const canPrepareDraftPr =
+    !!worktreePath &&
+    !!currentBranch &&
+    !isLikelyDefaultBranch &&
+    !prepareDraftPrMutation.isPending
 
   // Preferred editor
   const preferredEditor = useAtomValue(preferredEditorAtom)
@@ -142,6 +194,13 @@ export const ChangesWidget = memo(function ChangesWidget({
   // Selection state - all files selected by default
   const [selectedForCommit, setSelectedForCommit] = useState<Set<string>>(new Set())
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false)
+  const [draftPrForm, setDraftPrForm] = useState<DraftPrFormState | null>(null)
+  const [draftPrMeta, setDraftPrMeta] = useState<DraftPrMetaState | null>(null)
+  const [draftPrError, setDraftPrError] = useState<string | null>(null)
+  const [isDraftPrOpen, setIsDraftPrOpen] = useState(false)
+  const [createdDraftPrUrl, setCreatedDraftPrUrl] = useState<string | null>(null)
+  const [isCreateDraftPrDialogOpen, setIsCreateDraftPrDialogOpen] =
+    useState(false)
   const prevAllPathsRef = useRef<Set<string>>(new Set())
 
   // Helper to get display path (handles /dev/null for deleted files)
@@ -231,6 +290,11 @@ export const ChangesWidget = memo(function ChangesWidget({
   const commitLabelSuffix = selectedCount > 0
     ? ` ${selectedCount} file${selectedCount !== 1 ? "s" : ""}`
     : ""
+  const canCreateDraftPr =
+    !!draftPrForm?.title.trim() &&
+    !!draftPrForm.body.trim() &&
+    !!draftPrMeta &&
+    !createDraftPrMutation.isPending
 
   // Toggle all files selection
   const handleSelectAllChange = useCallback(() => {
@@ -253,6 +317,296 @@ export const ChangesWidget = memo(function ChangesWidget({
       onCommit?.(selectedPaths)
     }
   }, [displayFiles, selectedForCommit, onCommit, onCommitAndPush, getDisplayPath, shouldCommitAndPush])
+
+  const handlePrepareDraftPr = useCallback(async () => {
+    if (!canPrepareDraftPr) return
+
+    setDraftPrError(null)
+    setCreatedDraftPrUrl(null)
+    try {
+      const result = await prepareDraftPrMutation.mutateAsync({ chatId })
+      if (result.status === "unavailable") {
+        setIsDraftPrOpen(false)
+        setDraftPrForm(null)
+        setDraftPrMeta(null)
+        setDraftPrError(
+          getDraftPrUnavailableMessage(result.reason, result.message, t),
+        )
+        return
+      }
+
+      const { preparation } = result
+      setDraftPrForm({
+        title: preparation.title,
+        summary: preparation.summary,
+        testPlan: preparation.testPlan,
+        body: preparation.body,
+      })
+      setDraftPrMeta({
+        repoSlug: preparation.repoSlug,
+        branch: preparation.branch,
+        baseBranch: preparation.baseBranch,
+        changedFileCount: preparation.changedFiles.length,
+        commitCount: preparation.commits.length,
+      })
+      setIsDraftPrOpen(true)
+    } catch (error) {
+      setIsDraftPrOpen(false)
+      setDraftPrError(
+        error instanceof Error
+          ? error.message
+          : t("githubWorkflow.draftPr.failed"),
+      )
+    }
+  }, [canPrepareDraftPr, chatId, prepareDraftPrMutation, t])
+
+  const updateDraftPrField = useCallback(
+    (field: keyof DraftPrFormState, value: string) => {
+      setDraftPrForm((current) =>
+        current
+          ? {
+              ...current,
+              [field]: value,
+            }
+          : current,
+      )
+    },
+    [],
+  )
+
+  const handleCreateDraftPr = useCallback(async () => {
+    if (!draftPrForm || !draftPrMeta || !canCreateDraftPr) return
+
+    setDraftPrError(null)
+    setCreatedDraftPrUrl(null)
+    try {
+      const result = await createDraftPrMutation.mutateAsync({
+        chatId,
+        branch: draftPrMeta.branch,
+        baseBranch: draftPrMeta.baseBranch,
+        title: draftPrForm.title,
+        body: draftPrForm.body,
+      })
+
+      setIsCreateDraftPrDialogOpen(false)
+
+      if (result.status === "unavailable") {
+        setDraftPrError(
+          getDraftPrUnavailableMessage(result.reason, result.message, t),
+        )
+        if (result.existingPrUrl) {
+          setCreatedDraftPrUrl(result.existingPrUrl)
+          setIsDraftPrOpen(false)
+        }
+        return
+      }
+
+      setCreatedDraftPrUrl(result.url)
+      setIsDraftPrOpen(false)
+      void trpcUtils.githubWorkflow.getCurrentPullRequestContext.invalidate({
+        chatId,
+      })
+      void trpcUtils.githubWorkflow.getStatus.invalidate({ chatId })
+      void trpcUtils.chats.getPrStatus.invalidate({ chatId })
+    } catch (error) {
+      setIsCreateDraftPrDialogOpen(false)
+      setDraftPrError(
+        error instanceof Error
+          ? error.message
+          : t("githubWorkflow.draftPr.createFailed"),
+      )
+    }
+  }, [
+    canCreateDraftPr,
+    chatId,
+    createDraftPrMutation,
+    draftPrForm,
+    draftPrMeta,
+    t,
+    trpcUtils,
+  ])
+
+  const draftPrButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 text-xs min-w-24"
+      onClick={handlePrepareDraftPr}
+      disabled={!canPrepareDraftPr}
+    >
+      <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+      {prepareDraftPrMutation.isPending
+        ? t("githubWorkflow.draftPr.preparing")
+        : t("githubWorkflow.draftPr.prepare")}
+    </Button>
+  )
+
+  const draftPrPanel = (
+    <>
+      {draftPrError && (
+        <div className="border-t border-border/50 px-2 py-2 text-xs text-destructive">
+          {draftPrError}
+        </div>
+      )}
+
+      {createdDraftPrUrl && (
+        <div className="flex items-center justify-between gap-2 border-t border-border/50 px-2 py-2 text-xs">
+          <span className="min-w-0 truncate text-emerald-600 dark:text-emerald-400">
+            {t("githubWorkflow.draftPr.created")}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => window.desktopApi.openExternal(createdDraftPrUrl)}
+          >
+            <ArrowUpRight className="mr-1 h-3 w-3" />
+            {t("githubWorkflow.draftPr.openCreated")}
+          </Button>
+        </div>
+      )}
+
+      {isDraftPrOpen && draftPrForm && draftPrMeta && (
+        <div className="border-t border-border/50 px-2 py-2 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-foreground">
+                {t("githubWorkflow.draftPr.ready")}
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground truncate">
+                {t("githubWorkflow.draftPr.meta", {
+                  branch: draftPrMeta.branch,
+                  baseBranch: draftPrMeta.baseBranch,
+                  changes: draftPrMeta.changedFileCount,
+                  commits: draftPrMeta.commitCount,
+                })}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => {
+                setIsDraftPrOpen(false)
+                setDraftPrError(null)
+              }}
+            >
+              {t("githubWorkflow.draftPr.cancel")}
+            </Button>
+          </div>
+
+          <label className="block space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t("githubWorkflow.draftPr.title")}
+            </span>
+            <Input
+              value={draftPrForm.title}
+              onChange={(event) =>
+                updateDraftPrField("title", event.target.value)}
+              className="h-7 rounded-md px-2 text-xs"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t("githubWorkflow.draftPr.summary")}
+            </span>
+            <Textarea
+              value={draftPrForm.summary}
+              onChange={(event) =>
+                updateDraftPrField("summary", event.target.value)}
+              className="min-h-16 rounded-md px-2 py-1.5 text-xs"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t("githubWorkflow.draftPr.testPlan")}
+            </span>
+            <Textarea
+              value={draftPrForm.testPlan}
+              onChange={(event) =>
+                updateDraftPrField("testPlan", event.target.value)}
+              className="min-h-14 rounded-md px-2 py-1.5 text-xs"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t("githubWorkflow.draftPr.body")}
+            </span>
+            <Textarea
+              value={draftPrForm.body}
+              onChange={(event) =>
+                updateDraftPrField("body", event.target.value)}
+              className="min-h-28 rounded-md px-2 py-1.5 text-xs"
+            />
+          </label>
+
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <span className="text-[11px] text-muted-foreground">
+              {t("githubWorkflow.draftPr.createNotice")}
+            </span>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={!canCreateDraftPr}
+              onClick={() => setIsCreateDraftPrDialogOpen(true)}
+            >
+              {createDraftPrMutation.isPending
+                ? t("githubWorkflow.draftPr.creating")
+                : t("githubWorkflow.draftPr.create")}
+            </Button>
+          </div>
+
+          <AlertDialog
+            open={isCreateDraftPrDialogOpen}
+            onOpenChange={(open) => {
+              if (!createDraftPrMutation.isPending) {
+                setIsCreateDraftPrDialogOpen(open)
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t("githubWorkflow.draftPr.confirmTitle")}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("githubWorkflow.draftPr.confirmDescription")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="px-5 pb-3 text-xs text-muted-foreground">
+                {t("githubWorkflow.draftPr.meta", {
+                  branch: draftPrMeta.branch,
+                  baseBranch: draftPrMeta.baseBranch,
+                  changes: draftPrMeta.changedFileCount,
+                  commits: draftPrMeta.commitCount,
+                })}
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={createDraftPrMutation.isPending}>
+                  {t("githubWorkflow.draftPr.cancel")}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={!canCreateDraftPr}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    void handleCreateDraftPr()
+                  }}
+                >
+                  {createDraftPrMutation.isPending
+                    ? t("githubWorkflow.draftPr.creating")
+                    : t("githubWorkflow.draftPr.confirmCreate")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
+    </>
+  )
 
   return (
     <div className="mx-2 mb-2">
@@ -400,6 +754,8 @@ export const ChangesWidget = memo(function ChangesWidget({
                 </Button>
               )}
 
+              {draftPrButton}
+
               {/* View diff button */}
               <Button
                 variant="outline"
@@ -410,11 +766,21 @@ export const ChangesWidget = memo(function ChangesWidget({
                 {t("changes.viewDiff")}
               </Button>
             </div>
+
+            {draftPrPanel}
           </>
         ) : (
-          <div className="text-xs text-muted-foreground px-2 py-2">
-            {t("changes.noChanges")}
-          </div>
+          <>
+            <div className="text-xs text-muted-foreground px-2 py-2">
+              {t("changes.noChanges")}
+            </div>
+            {canPrepareDraftPr && (
+              <div className="flex gap-2 p-2 border-t border-border/50">
+                {draftPrButton}
+              </div>
+            )}
+            {draftPrPanel}
+          </>
         )}
       </div>
     </div>
