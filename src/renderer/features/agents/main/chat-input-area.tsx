@@ -72,7 +72,10 @@ import {
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
-import { AgentModelSelector } from "../components/agent-model-selector"
+import {
+  AgentModelSelector,
+  type ContinueWithProviderSelection,
+} from "../components/agent-model-selector"
 import {
   isProviderProfileSource,
   parseProviderProfileSource,
@@ -217,7 +220,10 @@ export interface ChatInputAreaProps {
   // Callback to switch provider for brand new (empty) sub-chats
   onProviderChange?: (provider: "claude-code" | "codex") => void
   // Callback to continue chat with a different provider (creates new sub-chat with history)
-  onContinueWithProvider?: (provider: "claude-code" | "codex") => void
+  onContinueWithProvider?: (
+    provider: "claude-code" | "codex",
+    selection?: ContinueWithProviderSelection,
+  ) => void
   // Whether this sub-chat tab is the active/visible one (prevents window-level hotkeys in background tabs)
   isActive?: boolean
 }

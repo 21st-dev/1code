@@ -5,12 +5,14 @@ import {
   parseProviderProfileSource,
   providerProfileSource,
 } from "../src/shared/provider-profile-types"
+import { PROVIDER_PROFILE_PRESETS } from "../src/main/lib/provider-profiles/presets"
 import {
   hasProviderGatewayAuthHeader,
   redactProviderSecrets,
 } from "../src/shared/provider-profile-security"
 import {
   anthropicMessagesToChatCompletions,
+  buildProviderChatCompletionBody,
   chatCompletionToAnthropicMessage,
   chatCompletionToResponse,
   responsesToChatCompletions,
@@ -23,6 +25,20 @@ describe("provider profile source ids", () => {
     expect(source).toBe("provider-profile:profile_123")
     expect(parseProviderProfileSource(source)).toBe("profile_123")
     expect(parseProviderProfileSource("claude-oauth")).toBeNull()
+  })
+})
+
+describe("provider profile presets", () => {
+  test("uses the current DeepSeek OpenAI-compatible default", () => {
+    const preset = PROVIDER_PROFILE_PRESETS.find((item) => item.id === "deepseek")
+
+    expect(preset).toMatchObject({
+      protocol: "openai-chat",
+      baseUrl: "https://api.deepseek.com",
+      defaultModel: "deepseek-v4-flash",
+      authMode: "bearer",
+      targetRuntimes: ["claude", "codex", "helpers"],
+    })
   })
 })
 
@@ -260,6 +276,51 @@ describe("provider profile request transforms", () => {
 })
 
 describe("provider profile gateway security helpers", () => {
+  test("disables DeepSeek thinking mode for OpenAI chat gateway requests", () => {
+    const deepSeek = PROVIDER_PROFILE_PRESETS.find((item) => item.id === "deepseek")
+    expect(deepSeek).toBeDefined()
+
+    const body = buildProviderChatCompletionBody(deepSeek!, {
+      model: "deepseek-v4-flash",
+      messages: [{ role: "user", content: "Use a tool." }],
+      tools: [{ type: "function", function: { name: "read_file" } }],
+    })
+
+    expect(body.thinking).toEqual({ type: "disabled" })
+  })
+
+  test("leaves non-DeepSeek OpenAI chat gateway requests unchanged", () => {
+    const qwen = PROVIDER_PROFILE_PRESETS.find((item) => item.id === "dashscope-qwen")
+    expect(qwen).toBeDefined()
+    const input = {
+      model: "qwen-plus",
+      messages: [{ role: "user", content: "Hello" }],
+    }
+
+    const body = buildProviderChatCompletionBody(qwen!, input)
+
+    expect(body).toBe(input)
+    expect(body).not.toHaveProperty("thinking")
+  })
+
+  test("does not add OpenAI thinking toggle to Anthropic-format DeepSeek profiles", () => {
+    const input = {
+      model: "deepseek-v4-flash",
+      messages: [{ role: "user", content: "Hello" }],
+    }
+
+    const body = buildProviderChatCompletionBody(
+      {
+        protocol: "anthropic",
+        baseUrl: "https://api.deepseek.com/anthropic",
+      },
+      input,
+    )
+
+    expect(body).toBe(input)
+    expect(body).not.toHaveProperty("thinking")
+  })
+
   test("accepts only the per-process gateway token", () => {
     expect(
       hasProviderGatewayAuthHeader({ authorization: "Bearer gateway-token" }, "gateway-token"),

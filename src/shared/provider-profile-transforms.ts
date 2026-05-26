@@ -1,4 +1,8 @@
 type AnyRecord = Record<string, any>
+type ChatCompletionProfile = {
+  baseUrl: string
+  protocol: string
+}
 
 function asArray(value: unknown): any[] {
   return Array.isArray(value) ? value : []
@@ -50,6 +54,34 @@ function stringifyArguments(value: unknown): string {
     return JSON.stringify(value ?? {})
   } catch {
     return "{}"
+  }
+}
+
+function isDeepSeekOpenAiChatProfile(profile: ChatCompletionProfile): boolean {
+  if (profile.protocol !== "openai-chat") return false
+
+  try {
+    const url = new URL(profile.baseUrl)
+    return url.hostname.toLowerCase() === "api.deepseek.com"
+  } catch {
+    return profile.baseUrl.toLowerCase().includes("api.deepseek.com")
+  }
+}
+
+export function buildProviderChatCompletionBody<T extends AnyRecord>(
+  profile: ChatCompletionProfile,
+  body: T,
+): T | (T & { thinking: { type: "disabled" } }) {
+  if (!isDeepSeekOpenAiChatProfile(profile)) {
+    return body
+  }
+
+  return {
+    ...body,
+    // DeepSeek V4 enables thinking by default. Locus provider profile gateways
+    // translate tool calls across API dialects and do not persist DeepSeek's
+    // reasoning_content, so non-thinking mode is the reliable agent default.
+    thinking: { type: "disabled" },
   }
 }
 

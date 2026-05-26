@@ -1043,7 +1043,7 @@ function LocalApiProviderSettingsSection({
               onBlur={handleBlurSave}
               disabled={saveProviderMutation.isPending}
               className="w-full"
-              placeholder="deepseek-chat"
+              placeholder="deepseek-v4-flash"
             />
           </div>
         </div>

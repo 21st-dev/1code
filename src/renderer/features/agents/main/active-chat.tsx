@@ -145,6 +145,7 @@ import {
   type AgentMode,
   type SelectedCommit
 } from "../atoms"
+import type { ContinueWithProviderSelection } from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
@@ -3924,7 +3925,10 @@ const ChatViewInner = memo(function ChatViewInner({
   // Continue conversation with a different provider - creates new sub-chat with history attachment
   const isContinuingRef = useRef(false)
   const handleContinueWithProvider = useCallback(
-    async (targetProvider: "claude-code" | "codex") => {
+    async (
+      targetProvider: "claude-code" | "codex",
+      selection?: ContinueWithProviderSelection,
+    ) => {
       if (isStreaming || isContinuingRef.current) return
       if (!messages || messages.length === 0) return
       isContinuingRef.current = true
@@ -3952,29 +3956,33 @@ const ChatViewInner = memo(function ChatViewInner({
         // Inherit model preferences from source sub-chat for deterministic behavior.
         appStore.set(
           subChatModelIdAtomFamily(newId),
-          appStore.get(subChatModelIdAtomFamily(subChatId)),
+          selection?.claudeModelId ?? appStore.get(subChatModelIdAtomFamily(subChatId)),
         )
         appStore.set(
           subChatClaudeModelSourceAtomFamily(newId),
-          appStore.get(subChatClaudeModelSourceAtomFamily(subChatId)),
+          selection?.claudeModelSource ??
+            appStore.get(subChatClaudeModelSourceAtomFamily(subChatId)),
         )
         appStore.set(
           subChatCodexModelIdAtomFamily(newId),
-          appStore.get(subChatCodexModelIdAtomFamily(subChatId)),
+          selection?.codexModelId ??
+            appStore.get(subChatCodexModelIdAtomFamily(subChatId)),
         )
         const inheritedCodexModelSource = appStore.get(
           subChatCodexModelSourceAtomFamily(subChatId),
         )
         appStore.set(
           subChatCodexModelSourceAtomFamily(newId),
-          targetProvider === "codex" &&
-            isProviderProfileSource(inheritedCodexModelSource)
-            ? "chatgpt"
-            : inheritedCodexModelSource,
+          selection?.codexModelSource ??
+            (targetProvider === "codex" &&
+              isProviderProfileSource(inheritedCodexModelSource)
+              ? "chatgpt"
+              : inheritedCodexModelSource),
         )
         appStore.set(
           subChatCodexThinkingAtomFamily(newId),
-          appStore.get(subChatCodexThinkingAtomFamily(subChatId)),
+          selection?.codexThinking ??
+            appStore.get(subChatCodexThinkingAtomFamily(subChatId)),
         )
 
         // 4. Store pending chat history for the new sub-chat to consume on mount

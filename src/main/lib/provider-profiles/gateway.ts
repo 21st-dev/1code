@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto"
 import {
   anthropicMessagesToChatCompletions,
   anthropicMessagesToResponses,
+  buildProviderChatCompletionBody,
   chatCompletionToAnthropicMessage,
   chatCompletionToResponse,
   responsesToChatCompletions,
@@ -802,7 +803,10 @@ async function handleAnthropicRequest(
     return
   }
 
-  const chatBody = anthropicMessagesToChatCompletions({ ...body, model })
+  const chatBody = buildProviderChatCompletionBody(
+    profile,
+    anthropicMessagesToChatCompletions({ ...body, model }),
+  )
   if (body.stream) {
     await streamChatAsAnthropic({
       profile,
@@ -858,7 +862,10 @@ async function handleResponsesRequest(
     return
   }
 
-  const chatBody = responsesToChatCompletions({ ...body, model })
+  const chatBody = buildProviderChatCompletionBody(
+    profile,
+    responsesToChatCompletions({ ...body, model }),
+  )
   if (body.stream) {
     await streamChatAsResponses({
       profile,
@@ -1013,11 +1020,11 @@ export async function testProviderProfile(
       const { response, json } = await forwardJson({
         profile,
         url: appendPath(profile.baseUrl, "/chat/completions"),
-        body: {
+        body: buildProviderChatCompletionBody(profile, {
           model,
           messages: [{ role: "user", content: "Reply OK." }],
           max_tokens: 16,
-        },
+        }),
         signal: controller.signal,
       })
       if (!response.ok) {
