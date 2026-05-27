@@ -14,6 +14,8 @@ import {
 import { IconSpinner, PlanIcon, AgentIcon } from "../../../components/ui/icons"
 import type { SubChatMeta } from "../stores/sub-chat-store"
 import { formatTimeAgo } from "../utils/format-time-ago"
+import { useI18n } from "../../../lib/i18n"
+import { getDisplayChatName } from "../utils/chat-names"
 
 interface SubChatsQuickSwitchDialogProps {
   isOpen: boolean
@@ -38,6 +40,7 @@ function SubChatCard({
   fileChanges: SubChatFileChange[]
   onMouseEnter?: () => void
 }) {
+  const { t } = useI18n()
   const mode = subChat.mode || "agent"
   const timeAgo = formatTimeAgo(subChat.updated_at || subChat.created_at)
 
@@ -114,7 +117,7 @@ function SubChatCard({
               isSelected ? "text-primary-foreground" : "text-foreground",
             )}
           >
-            {subChat.name || "New Chat"}
+            {getDisplayChatName(subChat.name, t("chat.defaultTitle"))}
           </span>
           {/* Time and stats */}
           <div className="flex items-center gap-1.5 text-[11px]">
@@ -145,7 +148,8 @@ function SubChatCard({
                       : "text-muted-foreground/60",
                   )}
                 >
-                  {stats.fileCount} {stats.fileCount === 1 ? "file" : "files"}
+                  {stats.fileCount}{" "}
+                  {t(stats.fileCount === 1 ? "agent.status.file" : "agent.status.files")}
                 </span>
                 {(stats.additions > 0 || stats.deletions > 0) && (
                   <>

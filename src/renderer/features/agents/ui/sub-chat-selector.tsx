@@ -52,6 +52,7 @@ import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { SubChatContextMenu } from "./sub-chat-context-menu"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { useI18n } from "../../../lib/i18n"
+import { getDisplayChatName } from "../utils/chat-names"
 
 interface DiffStats {
   fileCount: number
@@ -442,12 +443,12 @@ export function SubChatSelector({
         // Revert on error (like Canvas)
         useAgentSubChatStore
           .getState()
-          .updateSubChatName(subChat.id, oldName || "New Chat")
+          .updateSubChatName(subChat.id, getDisplayChatName(oldName, t("chat.defaultTitle")))
       } finally {
         setEditLoading(false)
       }
     },
-    [editName, renameMutation],
+    [editName, renameMutation, t],
   )
 
   const handleEditCancel = useCallback((subChat: SubChatMeta) => {
@@ -830,7 +831,7 @@ export function SubChatSelector({
                             }}
                             className="relative z-0 text-left flex-1 min-w-0 pr-1 overflow-hidden block whitespace-nowrap"
                           >
-                            {subChat.name || "New Chat"}
+                            {getDisplayChatName(subChat.name, t("chat.defaultTitle"))}
                           </span>
                         )}
 

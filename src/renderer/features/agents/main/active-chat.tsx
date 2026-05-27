@@ -222,6 +222,7 @@ import { SubChatStatusCard } from "../ui/sub-chat-status-card"
 import { SplitViewContainer } from "../ui/split-view-container"
 import { TextSelectionPopover } from "../ui/text-selection-popover"
 import { autoRenameAgentChat } from "../utils/auto-rename"
+import { getDisplayChatName } from "../utils/chat-names"
 import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
@@ -1814,7 +1815,10 @@ const ChatViewInner = memo(function ChatViewInner({
         // Revert on error (toast shown by mutation onError)
         useAgentSubChatStore
           .getState()
-          .updateSubChatName(subChatId, subChatNameRef.current || t("chat.defaultTitle"))
+          .updateSubChatName(
+            subChatId,
+            getDisplayChatName(subChatNameRef.current, t("chat.defaultTitle")),
+          )
       }
     },
     [subChatId, t],
@@ -4003,7 +4007,7 @@ const ChatViewInner = memo(function ChatViewInner({
         const store = useAgentSubChatStore.getState()
         store.addToAllSubChats({
           id: newId,
-          name: "New Chat",
+          name: t("chat.defaultTitle"),
           created_at: new Date().toISOString(),
           mode: subChatMode,
         })
@@ -4066,7 +4070,7 @@ const ChatViewInner = memo(function ChatViewInner({
             onSave={handleRenameSubChat}
             isMobile={false}
             chatId={subChatId}
-            hasMessages={true} /* Always show "New Chat" placeholder when name is empty */
+            hasMessages={true} /* Always show the localized placeholder when name is empty */
           />
           {/* Workspace subtitle: repo • branch */}
           {(workspaceRepoName || workspaceBranch) && (
@@ -4910,7 +4914,7 @@ export function ChatView({
       if (files.length > 0) {
         result.push({
           id: subChat.id,
-          name: subChat.name || "New Chat",
+          name: getDisplayChatName(subChat.name, t("chat.defaultTitle")),
           filePaths: files.map((f) => f.filePath),
           fileCount: files.length,
           updatedAt: subChat.updated_at || subChat.created_at || "",
@@ -4927,7 +4931,7 @@ export function ChatView({
     })
 
     return result
-  }, [allSubChats, subChatFiles])
+  }, [allSubChats, subChatFiles, t])
 
   // Note: We no longer forcibly close diff sidebar when canOpenDiff is false.
   // The sidebar render is guarded by canOpenDiff, so it naturally hides.
@@ -5241,7 +5245,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           : sc.updated_at?.toISOString()
       return {
         id: sc.id,
-        name: sc.name || "New Chat",
+        name: getDisplayChatName(sc.name, t("chat.defaultTitle")),
         // Prefer DB timestamp, fall back to local timestamp, then current time
         created_at:
           createdAt ?? existingLocal?.created_at ?? new Date().toISOString(),
@@ -5264,7 +5268,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       if (!dbSubChatIds.has(id)) {
         allSubChats.push({
           id,
-          name: "New Chat",
+          name: t("chat.defaultTitle"),
           created_at: new Date().toISOString(),
         })
       }
@@ -5294,7 +5298,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         freshState.setActiveSubChat(validOpenIds[0])
       }
     }
-  }, [agentChat, chatId])
+  }, [agentChat, chatId, t])
 
   // Auto-detect plan path from ACTIVE sub-chat messages when sub-chat changes
   // This ensures the plan sidebar shows the correct plan for the active sub-chat only
@@ -5753,7 +5757,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
     const newSubChat = await trpcClient.chats.createSubChat.mutate({
       chatId,
-      name: "New Chat",
+      name: t("chat.defaultTitle"),
       mode: newSubChatMode,
     })
     const newId = newSubChat.id
@@ -5770,7 +5774,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           ...(old.subChats || []),
           {
             id: newId,
-            name: "New Chat",
+            name: t("chat.defaultTitle"),
             mode: newSubChatMode,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -5791,7 +5795,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     // Add to allSubChats with placeholder name
     store.addToAllSubChats({
       id: newId,
-      name: "New Chat",
+      name: t("chat.defaultTitle"),
       created_at: new Date().toISOString(),
       mode: newSubChatMode,
     })
@@ -5955,6 +5959,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     syncFinishedMessagesToChatCache,
     pruneIfDetachedAndIdle,
     agentChat?.name,
+    t,
   ])
 
   // Keyboard shortcut: New sub-chat
