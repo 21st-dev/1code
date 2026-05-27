@@ -2,6 +2,7 @@ import { useTheme } from "next-themes"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { IconSpinner } from "../../../icons"
 import { useAtom, useSetAtom } from "jotai"
+import { useTranslation } from "react-i18next"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "../../../lib/utils"
 import {
@@ -128,6 +129,7 @@ function ThemePreviewBox({
 }
 
 export function AgentsAppearanceTab() {
+  const { t, i18n } = useTranslation()
   const { resolvedTheme, setTheme: setNextTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const isNarrowScreen = useIsNarrowScreen()
@@ -382,9 +384,9 @@ export function AgentsAppearanceTab() {
       {/* Header - hidden on narrow screens since it's in the navigation bar */}
       {!isNarrowScreen && (
         <div className="flex flex-col space-y-1.5 text-center sm:text-left">
-          <h3 className="text-sm font-semibold text-foreground">Appearance</h3>
+          <h3 className="text-sm font-semibold text-foreground">{t('settings.appearance.title')}</h3>
           <p className="text-xs text-muted-foreground">
-            Customize the look and feel of the interface
+            {t('settings.appearance.themeDescription')}
           </p>
         </div>
       )}
@@ -395,10 +397,10 @@ export function AgentsAppearanceTab() {
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Interface theme
+              {t('settings.appearance.theme')}
             </span>
             <span className="text-xs text-muted-foreground">
-              Select or customize your interface color scheme
+              {t('settings.appearance.themeDescription')}
             </span>
           </div>
 
@@ -417,7 +419,7 @@ export function AgentsAppearanceTab() {
                           : (systemLightTheme ?? null)
                       }
                     />
-                    <span className="text-xs truncate">System preference</span>
+                    <span className="text-xs truncate">{t('settings.appearance.system')}</span>
                   </>
                 ) : (
                   <>
@@ -516,10 +518,10 @@ export function AgentsAppearanceTab() {
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm font-medium text-foreground">
-                    Light
+                    {t('settings.appearance.light')}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Theme to use for light system appearance
+                    {t('settings.appearance.lightDescription')}
                   </span>
                 </div>
 
@@ -552,10 +554,10 @@ export function AgentsAppearanceTab() {
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm font-medium text-foreground">
-                    Dark
+                    {t('settings.appearance.dark')}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Theme to use for dark system appearance
+                    {t('settings.appearance.darkDescription')}
                   </span>
                 </div>
 
@@ -594,10 +596,10 @@ export function AgentsAppearanceTab() {
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Workspace icon
+              {t('settings.appearance.workspaceIcon')}
             </span>
             <span className="text-xs text-muted-foreground">
-              Show project icon in the sidebar workspace list
+              {t('settings.appearance.workspaceIconDescription')}
             </span>
           </div>
           <Switch
@@ -608,16 +610,48 @@ export function AgentsAppearanceTab() {
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              Always expand to-do list
+              {t('settings.appearance.alwaysExpandTodoList')}
             </span>
             <span className="text-xs text-muted-foreground">
-              Show the full to-do list instead of compact view
+              {t('settings.appearance.alwaysExpandTodoListDescription')}
             </span>
           </div>
           <Switch
             checked={alwaysExpandTodoList}
             onCheckedChange={setAlwaysExpandTodoList}
           />
+        </div>
+      </div>
+
+      {/* Language Section */}
+      <div className="bg-background rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              {t('settings.appearance.language')}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {t('settings.appearance.languageDescription')}
+            </span>
+          </div>
+
+          <Select
+            value={i18n.language}
+            onValueChange={(value) => {
+              i18n.changeLanguage(value)
+              localStorage.setItem('i18nextLng', value)
+            }}
+          >
+            <SelectTrigger className="w-auto px-2">
+              <span className="text-xs">
+                {i18n.language === 'zh-CN' ? '简体中文' : 'English'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">English</SelectItem>
+              <SelectItem value="zh-CN">简体中文</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>
