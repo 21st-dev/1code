@@ -2,6 +2,7 @@ import { memo, useMemo } from "react"
 import { cn } from "../../../lib/utils"
 import { KanbanCard, type KanbanCardData } from "./kanban-card"
 import type { SubChatStatus } from "../lib/derive-status"
+import { useI18n } from "../../../lib/i18n"
 
 interface KanbanColumnProps {
   title: string
@@ -39,6 +40,8 @@ export const KanbanColumn = memo(function KanbanColumn({
   onExportChat,
   onCopyChat,
 }: KanbanColumnProps) {
+  const { t } = useI18n()
+
   // Sort cards: pinned first, then by updatedAt desc
   const sortedCards = useMemo(() => {
     const pinned = cards.filter((c) => c.isPinned)
@@ -77,7 +80,7 @@ export const KanbanColumn = memo(function KanbanColumn({
       <div className="flex-1 overflow-y-auto px-1 pb-4 space-y-2">
         {sortedCards.length === 0 ? (
           <div className="px-3 py-8 text-center text-sm text-muted-foreground/60">
-            No workspaces
+            {t("kanban.noWorkspaces")}
           </div>
         ) : (
           sortedCards.map((card) => (

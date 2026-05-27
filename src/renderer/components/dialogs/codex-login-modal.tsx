@@ -209,7 +209,7 @@ export function CodexLoginModal({ autoStart = true }: CodexLoginModalProps) {
               onClick={handleOpenModelsSettings}
               className="text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
             >
-              Connect with API key in Settings
+              {t("onboarding.codex.apiKeySettingsLink")}
             </button>
           </div>
         )}

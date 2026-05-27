@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react"
 import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
+import { useI18n } from "../../../lib/i18n"
 import {
   LONG_TEXT_ATTACHMENT_REF_PREFIX,
   type LongTextAttachment,
@@ -23,6 +24,7 @@ export interface UsePastedTextFilesReturn {
 }
 
 export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn {
+  const { t } = useI18n()
   const [pastedTexts, setPastedTexts] = useState<PastedTextFile[]>([])
   const pastedTextsRef = useRef<PastedTextFile[]>([])
 
@@ -60,15 +62,15 @@ export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn 
         setPastedTexts((prev) => [...prev, newPasted])
       } catch (error) {
         console.error("[usePastedTextFiles] Failed to write:", error)
-        toast.error("Could not attach pasted text", {
+        toast.error(t("agent.paste.attachFailed"), {
           description:
             error instanceof Error
               ? error.message
-              : "The pasted text could not be staged.",
+              : t("agent.paste.attachFailedDescription"),
         })
       }
     },
-    [subChatId]
+    [subChatId, t]
   )
 
   const removePastedText = useCallback((id: string) => {

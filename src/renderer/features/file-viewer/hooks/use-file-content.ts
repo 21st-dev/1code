@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useRef } from "react"
+import type { TranslationKey } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
 
 /**
@@ -18,19 +19,19 @@ export interface FileContentResult {
 }
 
 /**
- * Get user-friendly error message for file load errors
+ * Get the translation key for a file load error.
  */
-export function getErrorMessage(error: FileLoadError): string {
+export function getErrorMessageKey(error: FileLoadError): TranslationKey {
   switch (error) {
     case "not-found":
-      return "File not found"
+      return "fileViewer.error.notFound"
     case "too-large":
-      return "File is too large to display (max 2 MB)"
+      return "fileViewer.error.tooLarge"
     case "binary":
-      return "Cannot display binary file"
+      return "fileViewer.error.binary"
     case "unknown":
     default:
-      return "Failed to load file"
+      return "fileViewer.error.unknown"
   }
 }
 

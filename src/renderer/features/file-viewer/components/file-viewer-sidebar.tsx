@@ -47,7 +47,7 @@ import {
   fileViewerDisplayModeAtom,
   type FileViewerDisplayMode,
 } from "../../agents/atoms"
-import { useFileContent, getErrorMessage } from "../hooks/use-file-content"
+import { useFileContent, getErrorMessageKey } from "../hooks/use-file-content"
 import { getMonacoLanguage, getFileViewerType } from "../utils/language-map"
 import { getFileName } from "../utils/file-utils"
 import { ImageViewer } from "./image-viewer"
@@ -388,6 +388,7 @@ function CodeViewer({
   const preferredEditor = useAtomValue(preferredEditorAtom)
   const openInAppMutation = trpc.external.openInApp.useMutation()
   const { content, isLoading, error, byteLength } = useFileContent(projectPath, filePath)
+  const { t } = useI18n()
 
   // Handle ⌘⇧O hotkey to open current file in external editor
   useEffect(() => {
@@ -436,7 +437,7 @@ function CodeViewer({
 
           onClose={onClose}
         />
-        <ErrorDisplay error={getErrorMessage(error)} />
+        <ErrorDisplay error={t(getErrorMessageKey(error))} />
       </div>
     )
   }

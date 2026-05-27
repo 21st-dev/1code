@@ -2,6 +2,7 @@ import { memo, useMemo } from "react"
 import { KanbanColumn } from "./kanban-column"
 import type { KanbanCardData } from "./kanban-card"
 import type { SubChatStatus } from "../lib/derive-status"
+import { useI18n, type TranslationKey } from "../../../lib/i18n"
 
 interface KanbanBoardProps {
   cards: KanbanCardData[]
@@ -19,11 +20,11 @@ interface KanbanBoardProps {
 }
 
 // 4 columns: drafts + workspace statuses
-const COLUMNS: { status: SubChatStatus; title: string }[] = [
-  { status: "draft", title: "Drafts" },
-  { status: "in-progress", title: "In Progress" },
-  { status: "needs-input", title: "Need Input" },
-  { status: "done", title: "Done" },
+const COLUMNS: { status: SubChatStatus; titleKey: TranslationKey }[] = [
+  { status: "draft", titleKey: "kanban.column.drafts" },
+  { status: "in-progress", titleKey: "kanban.column.inProgress" },
+  { status: "needs-input", titleKey: "kanban.column.needInput" },
+  { status: "done", titleKey: "kanban.column.done" },
 ]
 
 export const KanbanBoard = memo(function KanbanBoard({
@@ -38,6 +39,8 @@ export const KanbanBoard = memo(function KanbanBoard({
   onExportChat,
   onCopyChat,
 }: KanbanBoardProps) {
+  const { t } = useI18n()
+
   // Group cards by status
   const cardsByStatus = useMemo(() => {
     const grouped: Record<SubChatStatus, KanbanCardData[]> = {
@@ -61,7 +64,7 @@ export const KanbanBoard = memo(function KanbanBoard({
         {COLUMNS.map((column) => (
           <KanbanColumn
             key={column.status}
-            title={column.title}
+            title={t(column.titleKey)}
             status={column.status}
             cards={cardsByStatus[column.status]}
             isMultiSelectMode={isMultiSelectMode}

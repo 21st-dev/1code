@@ -4,6 +4,8 @@ import { useEffect, useRef, useCallback } from "react"
 import { useAtom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
+import { useI18n } from "../../../lib/i18n"
+import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 
 // Track pending notifications count for badge
 const pendingNotificationsAtom = atomWithStorage<number>(
@@ -13,6 +15,28 @@ const pendingNotificationsAtom = atomWithStorage<number>(
 
 // Track window focus state
 let isWindowFocused = true
+
+function resolveStandaloneChinesePreference() {
+  try {
+    const rawPreference = localStorage.getItem("preferences:language")
+    const preference = rawPreference ? JSON.parse(rawPreference) : "system"
+    return (
+      preference === "zh-CN" ||
+      (preference === "system" &&
+        (navigator.language || navigator.languages?.[0] || "en")
+          .toLowerCase()
+          .startsWith("zh"))
+    )
+  } catch {
+    return false
+  }
+}
+
+function standaloneT(key: TranslationKey, values?: Record<string, string>) {
+  const template = resolveStandaloneChinesePreference() ? zhCN[key] ?? en[key] : en[key]
+  if (!values) return template
+  return template.replace(/\{(\w+)\}/g, (match, valueKey) => values[valueKey] ?? match)
+}
 
 /**
  * Generate a badge icon image for Windows taskbar overlay
@@ -58,6 +82,7 @@ function generateBadgeIcon(count: number): string {
  * - Clears badge when window regains focus
  */
 export function useDesktopNotifications() {
+  const { t } = useI18n()
   const [pendingCount, setPendingCount] = useAtom(pendingNotificationsAtom)
   const isInitialized = useRef(false)
 
@@ -137,12 +162,12 @@ export function useDesktopNotifications() {
 
         // Show native notification
         window.desktopApi?.showNotification({
-          title: "Agent finished",
-          body: `${agentName} completed the task`,
+          title: t("desktopNotification.agentFinished.title"),
+          body: t("desktopNotification.agentFinished.body", { name: agentName }),
         })
       }
     },
-    [setPendingCount],
+    [setPendingCount, t],
   )
 
   /**
@@ -172,8 +197,8 @@ export function showAgentNotification(agentName: string) {
   // Only notify if window is not focused
   if (!document.hasFocus()) {
     window.desktopApi?.showNotification({
-      title: "Agent finished",
-      body: `${agentName} completed the task`,
+      title: standaloneT("desktopNotification.agentFinished.title"),
+      body: standaloneT("desktopNotification.agentFinished.body", { name: agentName }),
     })
   }
 }

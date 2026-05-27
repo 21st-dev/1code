@@ -726,12 +726,12 @@ const FileDiffCard = memo(function FileDiffCard({
               )}
               {isNewFile && (
                 <span className="shrink-0 text-[11px] text-emerald-600 dark:text-emerald-400">
-                  (new)
+                  {t("changes.diff.fileStatusNew")}
                 </span>
               )}
               {isDeletedFile && (
                 <span className="shrink-0 text-[11px] text-red-600 dark:text-red-400">
-                  (deleted)
+                  {t("changes.diff.fileStatusDeleted")}
                 </span>
               )}
             </div>
@@ -795,7 +795,11 @@ const FileDiffCard = memo(function FileDiffCard({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                {isExpandLoading ? "Expanding..." : isFullExpanded ? "Show changes only" : "Show full file"}
+                {isExpandLoading
+                  ? t("changes.diff.expanding")
+                  : isFullExpanded
+                    ? t("changes.diff.showChangesOnly")
+                    : t("changes.diff.showFullFile")}
               </TooltipContent>
             </Tooltip>
           )}
@@ -862,23 +866,23 @@ const FileDiffCard = memo(function FileDiffCard({
           <ContextMenuContent className="w-56">
             <ContextMenuItem onClick={handleCopyPath} className="text-xs">
               <ClipboardIcon className="mr-2 size-3.5" />
-              Copy File Path
+              {t("changes.copyPath")}
             </ContextMenuItem>
             <ContextMenuItem onClick={handleCopyRelativePath} className="text-xs">
               <ClipboardIcon className="mr-2 size-3.5" />
-              Copy Relative File Path
+              {t("changes.copyRelativePath")}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={handleRevealInFinder} className="text-xs">
               <FolderIcon className="mr-2 size-3.5" />
-              Reveal in Finder
+              {t("changes.revealInFinder")}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={handleOpenInFilePreview} className="text-xs">
-              Open in File Preview
+              {t("changes.openInFilePreview")}
             </ContextMenuItem>
             <ContextMenuItem onClick={handleOpenInPreferredEditor} className="text-xs">
-              Open in {editorMeta.label}
+              {t("changes.openInEditor", { editor: editorMeta.label })}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -895,7 +899,7 @@ const FileDiffCard = memo(function FileDiffCard({
                   onClick={handleDiscard}
                   className="text-xs data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
                 >
-                  Discard Changes
+                  {t("changes.discardChanges")}
                 </ContextMenuItem>
               </>
             )}
@@ -910,13 +914,13 @@ const FileDiffCard = memo(function FileDiffCard({
         <div>
           {file.isBinary ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">
-              Binary file diff can't be rendered.
+              {t("changes.diff.binaryFileCannotRender")}
             </div>
           ) : isLargeDiff ? (
             <div className="px-3 py-3 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  File is too large to display here
+                  {t("changes.diff.fileTooLarge")}
                 </div>
                 {absolutePath && (
                   <div className="flex shrink-0 items-center gap-0 text-xs">
@@ -944,8 +948,7 @@ const FileDiffCard = memo(function FileDiffCard({
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-950/30">
               <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
               <span>
-                Diff format appears truncated or corrupted. Unable to render
-                this file's changes.
+                {t("changes.diff.truncatedOrCorrupted")}
               </span>
             </div>
           ) : (
@@ -1155,7 +1158,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
             setDiff(diffContent.trim() ? diffContent : "")
           } catch (error) {
             setDiffError(
-              error instanceof Error ? error.message : "Failed to fetch diff",
+              error instanceof Error ? error.message : t("changes.diff.failedFetch"),
             )
           } finally {
             setIsLoadingDiff(false)
@@ -1163,12 +1166,12 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
           return
         }
 
-        setDiffError("Chat ID is required")
+        setDiffError(t("changes.diff.chatIdRequired"))
         setIsLoadingDiff(false)
       }
 
       fetchDiff()
-    }, [chatId, initialDiff, initialParsedFiles])
+    }, [chatId, initialDiff, initialParsedFiles, t])
 
     const handleRefresh = useCallback(async () => {
       setIsLoadingDiff(true)
@@ -1178,7 +1181,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         let diffContent = ""
 
         if (!chatId) {
-          throw new Error("Chat ID is required")
+          throw new Error(t("changes.diff.chatIdRequired"))
         }
         const result = await trpcClient.chats.getDiff.query({ chatId })
         diffContent = result.diff || ""
@@ -1190,12 +1193,12 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         }
       } catch (error) {
         setDiffError(
-          error instanceof Error ? error.message : "Failed to fetch diff",
+          error instanceof Error ? error.message : t("changes.diff.failedFetch"),
         )
       } finally {
         setIsLoadingDiff(false)
       }
-    }, [chatId])
+    }, [chatId, t])
 
     const isLight = isHydrated ? resolvedTheme !== "dark" : true
     const codeThemeId = useCodeTheme()

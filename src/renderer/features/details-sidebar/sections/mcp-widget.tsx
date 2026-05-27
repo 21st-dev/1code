@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react"
 import { memo, useMemo, useState } from "react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
 import { sessionInfoAtom, type MCPServer } from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
 import { cn } from "../../../lib/utils"
 import { pendingMentionAtom } from "../../agents/atoms"
 
@@ -63,6 +64,7 @@ function ServerIcon({ server }: { server: MCPServer }) {
 }
 
 export const McpWidget = memo(function McpWidget() {
+  const { t } = useI18n()
   const sessionInfo = useAtomValue(sessionInfoAtom)
   const setPendingMention = useSetAtom(pendingMentionAtom)
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
@@ -90,7 +92,7 @@ export const McpWidget = memo(function McpWidget() {
     return (
       <div className="px-2 py-2">
         <div className="text-xs text-muted-foreground">
-          No MCP servers configured
+          {t("settings.mcp.noneConfigured")}
         </div>
       </div>
     )

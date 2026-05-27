@@ -261,14 +261,16 @@ export function AgentsLayout() {
       const hasProjectDirectoryFallback =
         payload.fallback?.mode === "project-directory"
       const fallbackDescription = hasProjectDirectoryFallback
-        ? `Running in project directory instead: ${payload.fallback?.path}`
+        ? t("toast.worktree.runningInProjectDirectory", {
+          path: payload.fallback?.path ?? "",
+        })
         : null
       const description = [errorMessage, fallbackDescription]
         .filter(Boolean)
         .join(" ")
 
       if (payload.kind === "create-timeout") {
-        toast.warning("Worktree checkout timed out", {
+        toast.warning(t("toast.worktree.checkoutTimedOut"), {
           description: description || fallbackDescription || undefined,
           duration: 12000,
         })
@@ -276,18 +278,18 @@ export function AgentsLayout() {
       }
 
       if (payload.kind === "create-failed") {
-        toast.error("Worktree creation failed", {
+        toast.error(t("toast.worktree.creationFailed"), {
           description: description || fallbackDescription || undefined,
           duration: 12000,
         })
         return
       }
 
-      toast.error("Worktree setup failed", {
+      toast.error(t("toast.worktree.setupFailed"), {
         description: errorMessage || undefined,
         duration: 10000,
         action: {
-          label: "Open settings",
+          label: t("toast.worktree.openSettings"),
           onClick: () => {
             const projectMatch = projects?.find((project) => project.id === payload.projectId)
             if (projectMatch) {
@@ -301,7 +303,7 @@ export function AgentsLayout() {
     })
 
     return unsubscribe
-  }, [projects, setSelectedProject, setSettingsActiveTab, setSettingsDialogOpen])
+  }, [projects, setSelectedProject, setSettingsActiveTab, setSettingsDialogOpen, t])
 
   // Clear sub-chat store when no chat is selected
   useEffect(() => {

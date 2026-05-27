@@ -379,28 +379,28 @@ export function AgentsDebugTab() {
               })
             }
           >
-            Info + Undo
+            {t("settings.debug.sampleInfoUndoButton")}
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => toast.success(t("settings.debug.sampleSuccess"), { description: t("settings.debug.sampleOperationCompleted") })}
           >
-            Success
+            {t("settings.debug.sampleSuccessButton")}
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => toast.error(t("settings.debug.sampleError"), { description: t("settings.debug.sampleSomethingWentWrong") })}
           >
-            Error
+            {t("settings.debug.sampleErrorButton")}
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => toast(t("settings.debug.sampleDefaultToast"), { description: t("settings.debug.sampleDescription") })}
           >
-            Default
+            {t("settings.debug.sampleDefaultButton")}
           </Button>
           <Button
             variant="outline"
@@ -410,7 +410,7 @@ export function AgentsDebugTab() {
               setTimeout(() => toast.dismiss(id), 3000)
             }}
           >
-            Loading
+            {t("settings.debug.sampleLoadingButton")}
           </Button>
           <Button
             variant="outline"
@@ -422,7 +422,7 @@ export function AgentsDebugTab() {
               }, 2000)
             }}
           >
-            Promise
+            {t("settings.debug.samplePromiseButton")}
           </Button>
         </div>
       </div>
