@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   Command,
   ExternalLink,
   FileText,
@@ -15,6 +16,11 @@ import type { ComponentType, ReactNode } from "react"
 import { toast } from "sonner"
 import { Badge } from "../../ui/badge"
 import { Button } from "../../ui/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../../ui/collapsible"
 import { BUILTIN_SLASH_COMMANDS } from "../../../features/agents/commands"
 import { selectedProjectAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -692,6 +698,7 @@ export function AgentsCommandGuideTab() {
   const trpcUtils = trpc.useUtils()
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
+  const [showAdvancedReferences, setShowAdvancedReferences] = useState(false)
 
   const runtimeGuideQuery = trpc.commands.runtimeGuide.useQuery(undefined, {
     staleTime: 60_000,
@@ -822,7 +829,7 @@ export function AgentsCommandGuideTab() {
         </Button>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2">
         <CapabilitySummaryCard
           icon={Command}
           title={t("settings.commands.guide.chatTitle")}
@@ -838,22 +845,6 @@ export function AgentsCommandGuideTab() {
           label={t("settings.commands.usableInChat")}
           value={userAndProjectCommands.length}
           countLabel={t("settings.commands.countLocalFiles")}
-        />
-        <CapabilitySummaryCard
-          icon={Terminal}
-          title={t("settings.commands.guide.cliTitle")}
-          description={t("settings.commands.guide.cliDescription")}
-          label={t("settings.commands.referenceOnly")}
-          value={runtimeCommandCount}
-          countLabel={t("settings.commands.countRuntime")}
-        />
-        <CapabilitySummaryCard
-          icon={Plug}
-          title={t("settings.commands.guide.pluginsTitle")}
-          description={t("settings.commands.guide.pluginsDescription")}
-          label={t("settings.commands.referenceOnly")}
-          value={pluginCommandSummary.total}
-          countLabel={t("settings.commands.countPlugin")}
         />
       </div>
 
@@ -899,125 +890,174 @@ export function AgentsCommandGuideTab() {
         <CommandFileList commands={userAndProjectCommands} />
       </section>
 
-      <section className="space-y-3">
-        <SectionHeader
-          icon={Terminal}
-          title={t("settings.commands.runtimeCliCommands")}
-          description={t("settings.commands.runtimeCliDescription")}
-        />
-        <div className="grid gap-3 xl:grid-cols-2">
-          {runtimeGuideQuery.isLoading ? (
-            <EmptyLine>{t("common.loading")}</EmptyLine>
-          ) : (
-            (runtimeGuideQuery.data ?? []).map((runtime) => (
-              <RuntimePanel key={runtime.runtime} runtime={runtime} />
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <SectionHeader
-          icon={Plug}
-          title={t("settings.commands.pluginCommands")}
-          description={t("settings.commands.pluginCommandsDescription", {
-            total: pluginCommandSummary.total,
-            claude: pluginCommandSummary.claude,
-            codex: pluginCommandSummary.codex,
-          })}
-        />
-        {pluginCommandSummary.entries.length > 0 ? (
-          <div className="grid gap-1.5 sm:grid-cols-2">
-            {pluginCommandSummary.entries.slice(0, 16).map((entry) => (
-              <div
-                key={entry.key}
-                className="flex items-start justify-between gap-3 rounded-md bg-muted/50 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-xs text-foreground">
-                    /{entry.commandName}
-                  </p>
-                  <p className="mt-1 truncate text-[11px] text-muted-foreground">
-                    {entry.description || entry.pluginName}
-                  </p>
-                </div>
-                <SourceBadge
-                  label={
-                    entry.runtime === "codex"
-                      ? t("settings.commands.runtimeCodex")
-                      : t("settings.commands.runtimeClaude")
-                  }
-                />
-              </div>
-            ))}
+      <Collapsible
+        open={showAdvancedReferences}
+        onOpenChange={setShowAdvancedReferences}
+        className="space-y-4"
+      >
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit gap-1.5"
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform",
+                !showAdvancedReferences && "-rotate-90",
+              )}
+            />
+            {showAdvancedReferences
+              ? t("settings.commands.hideAdvancedReferences")
+              : t("settings.commands.showAdvancedReferences")}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-6">
+          <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            {t("settings.commands.advancedReferencesDescription")}
           </div>
-        ) : (
-          <CommandFileList
-            commands={pluginFileCommands}
-            badgeLabel={t("settings.commands.sourcePlugin")}
-          />
-        )}
-      </section>
 
-      <section className="space-y-3">
-        <SectionHeader
-          icon={BookOpen}
-          title={t("settings.commands.officialDocsTitle")}
-          description={t("settings.commands.officialDocsDescription")}
-        />
-        <div className="grid gap-3 lg:grid-cols-2">
-          <OfficialDocsCard
-            title={t("settings.commands.officialClaudeTitle")}
-            description={t("settings.commands.officialClaudeDescription")}
-            updateNote={t("settings.commands.officialClaudeUpdate")}
-            links={[
-              {
-                label: t("settings.commands.officialCliReference"),
-                url: "https://code.claude.com/docs/en/cli-reference",
-              },
-              {
-                label: t("settings.commands.officialCommandsReference"),
-                url: "https://code.claude.com/docs/en/commands",
-              },
-              {
-                label: t("settings.commands.officialDocsIndex"),
-                url: "https://code.claude.com/docs/llms.txt",
-              },
-            ]}
-          />
-          <OfficialDocsCard
-            title={t("settings.commands.officialCodexTitle")}
-            description={t("settings.commands.officialCodexDescription")}
-            updateNote={t("settings.commands.officialCodexUpdate")}
-            links={[
-              {
-                label: t("settings.commands.officialCliReference"),
-                url: "https://developers.openai.com/codex/cli/reference",
-              },
-              {
-                label: t("settings.commands.officialSlashCommands"),
-                url: "https://developers.openai.com/codex/cli/slash-commands",
-              },
-              {
-                label: t("settings.commands.officialDocsIndex"),
-                url: "https://developers.openai.com/codex/llms.txt",
-              },
-              {
-                label: t("settings.commands.officialChangelog"),
-                url: "https://developers.openai.com/codex/changelog",
-              },
-            ]}
-          />
-        </div>
-        <OfficialSnapshotPanel
-          snapshot={officialIndexQuery.data}
-          runtimes={runtimeGuideQuery.data}
-          isLoading={officialIndexQuery.isLoading}
-          isRefreshing={isOfficialIndexRefreshing}
-          refreshError={refreshOfficialIndexMutation.error?.message ?? null}
-          onRefresh={handleRefreshOfficialIndex}
-        />
-      </section>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <CapabilitySummaryCard
+              icon={Terminal}
+              title={t("settings.commands.guide.cliTitle")}
+              description={t("settings.commands.guide.cliDescription")}
+              label={t("settings.commands.referenceOnly")}
+              value={runtimeCommandCount}
+              countLabel={t("settings.commands.countRuntime")}
+            />
+            <CapabilitySummaryCard
+              icon={Plug}
+              title={t("settings.commands.guide.pluginsTitle")}
+              description={t("settings.commands.guide.pluginsDescription")}
+              label={t("settings.commands.referenceOnly")}
+              value={pluginCommandSummary.total}
+              countLabel={t("settings.commands.countPlugin")}
+            />
+          </div>
+
+          <section className="space-y-3">
+            <SectionHeader
+              icon={Terminal}
+              title={t("settings.commands.runtimeCliCommands")}
+              description={t("settings.commands.runtimeCliDescription")}
+            />
+            <div className="grid gap-3 xl:grid-cols-2">
+              {runtimeGuideQuery.isLoading ? (
+                <EmptyLine>{t("common.loading")}</EmptyLine>
+              ) : (
+                (runtimeGuideQuery.data ?? []).map((runtime) => (
+                  <RuntimePanel key={runtime.runtime} runtime={runtime} />
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeader
+              icon={Plug}
+              title={t("settings.commands.pluginCommands")}
+              description={t("settings.commands.pluginCommandsDescription", {
+                total: pluginCommandSummary.total,
+                claude: pluginCommandSummary.claude,
+                codex: pluginCommandSummary.codex,
+              })}
+            />
+            {pluginCommandSummary.entries.length > 0 ? (
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {pluginCommandSummary.entries.slice(0, 16).map((entry) => (
+                  <div
+                    key={entry.key}
+                    className="flex items-start justify-between gap-3 rounded-md bg-muted/50 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-xs text-foreground">
+                        /{entry.commandName}
+                      </p>
+                      <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                        {entry.description || entry.pluginName}
+                      </p>
+                    </div>
+                    <SourceBadge
+                      label={
+                        entry.runtime === "codex"
+                          ? t("settings.commands.runtimeCodex")
+                          : t("settings.commands.runtimeClaude")
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <CommandFileList
+                commands={pluginFileCommands}
+                badgeLabel={t("settings.commands.sourcePlugin")}
+              />
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeader
+              icon={BookOpen}
+              title={t("settings.commands.officialDocsTitle")}
+              description={t("settings.commands.officialDocsDescription")}
+            />
+            <div className="grid gap-3 lg:grid-cols-2">
+              <OfficialDocsCard
+                title={t("settings.commands.officialClaudeTitle")}
+                description={t("settings.commands.officialClaudeDescription")}
+                updateNote={t("settings.commands.officialClaudeUpdate")}
+                links={[
+                  {
+                    label: t("settings.commands.officialCliReference"),
+                    url: "https://code.claude.com/docs/en/cli-reference",
+                  },
+                  {
+                    label: t("settings.commands.officialCommandsReference"),
+                    url: "https://code.claude.com/docs/en/commands",
+                  },
+                  {
+                    label: t("settings.commands.officialDocsIndex"),
+                    url: "https://code.claude.com/docs/llms.txt",
+                  },
+                ]}
+              />
+              <OfficialDocsCard
+                title={t("settings.commands.officialCodexTitle")}
+                description={t("settings.commands.officialCodexDescription")}
+                updateNote={t("settings.commands.officialCodexUpdate")}
+                links={[
+                  {
+                    label: t("settings.commands.officialCliReference"),
+                    url: "https://developers.openai.com/codex/cli/reference",
+                  },
+                  {
+                    label: t("settings.commands.officialSlashCommands"),
+                    url: "https://developers.openai.com/codex/cli/slash-commands",
+                  },
+                  {
+                    label: t("settings.commands.officialDocsIndex"),
+                    url: "https://developers.openai.com/codex/llms.txt",
+                  },
+                  {
+                    label: t("settings.commands.officialChangelog"),
+                    url: "https://developers.openai.com/codex/changelog",
+                  },
+                ]}
+              />
+            </div>
+            <OfficialSnapshotPanel
+              snapshot={officialIndexQuery.data}
+              runtimes={runtimeGuideQuery.data}
+              isLoading={officialIndexQuery.isLoading}
+              isRefreshing={isOfficialIndexRefreshing}
+              refreshError={refreshOfficialIndexMutation.error?.message ?? null}
+              onRefresh={handleRefreshOfficialIndex}
+            />
+          </section>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   )
 }

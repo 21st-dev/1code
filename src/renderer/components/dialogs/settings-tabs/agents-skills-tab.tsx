@@ -5,7 +5,7 @@ import { selectedProjectAtom, settingsSkillsSidebarWidthAtom } from "../../../fe
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { AlertTriangle, Download, ExternalLink, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
+import { AlertTriangle, ChevronDown, Download, ExternalLink, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { SkillIcon, MarkdownIcon, CodeIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -372,14 +372,17 @@ function ItemDetail({
   const [description, setDescription] = useState(item.description)
   const [content, setContent] = useState(item.content)
   const [viewMode, setViewMode] = useState<"rendered" | "editor">("rendered")
+  const [showDetails, setShowDetails] = useState(false)
 
   const isReadOnly = !isEditableItem(item)
+  const hasMetadataDetails = Boolean(item.registry || item.collection || item.path)
 
   // Reset local state when item changes
   useEffect(() => {
     setDescription(item.description)
     setContent(item.content)
     setViewMode("rendered")
+    setShowDetails(false)
   }, [item.id, item.description, item.content])
 
   const hasChanges =
@@ -480,7 +483,27 @@ function ItemDetail({
           )}
         </div>
 
-        {item.registry && (
+        {hasMetadataDetails && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDetails((current) => !current)}
+            className="h-7 w-fit gap-1.5 px-2 text-xs text-muted-foreground"
+          >
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                !showDetails && "-rotate-90",
+              )}
+            />
+            {showDetails
+              ? t("settings.skills.hideMetadata")
+              : t("settings.skills.showMetadata")}
+          </Button>
+        )}
+
+        {showDetails && item.registry && (
           <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -538,7 +561,7 @@ function ItemDetail({
           </div>
         )}
 
-        {item.collection && (
+        {showDetails && item.collection && (
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -586,19 +609,21 @@ function ItemDetail({
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <Label>{t("settings.skills.source")}</Label>
-          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">
-                {getSourceLabel(item.source, t)}
-              </span>
-              <span className="text-xs text-muted-foreground font-mono truncate">
-                {item.path}
-              </span>
+        {showDetails && (
+          <div className="space-y-1.5">
+            <Label>{t("settings.skills.source")}</Label>
+            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">
+                  {getSourceLabel(item.source, t)}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono truncate">
+                  {item.path}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Instructions */}
         <div className="space-y-1.5">
@@ -875,39 +900,6 @@ function SidebarListItem({
           {item.description}
         </div>
       )}
-      {item.registry && (
-        <div className="mt-1 flex items-center gap-1 pl-[18px]">
-          {SKILL_RUNTIMES.map((runtime) => {
-            const runtimeState = getRegistryRuntimeState(item, runtime)
-            return (
-              <span
-                key={runtime}
-                className={cn(
-                  "rounded px-1.5 py-0.5 text-[10px] font-medium",
-                  getRuntimeStatusClass(runtimeState?.status),
-                )}
-              >
-                {getRuntimeLabel(runtime, t)}
-              </span>
-            )
-          })}
-        </div>
-      )}
-      {item.collection && (
-        <div className="mt-1 flex items-center gap-1 pl-[18px]">
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
-            {t("settings.skills.external")}
-          </span>
-          {item.collection.runtimes?.map((runtime) => (
-            <span
-              key={runtime}
-              className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground"
-            >
-              {getRuntimeLabel(runtime, t)}
-            </span>
-          ))}
-        </div>
-      )}
     </button>
   )
 }
@@ -918,7 +910,7 @@ export function AgentsSkillsTab() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [activeView, setActiveView] = useState<SkillsViewMode>("skills")
-  const [activeSkillFilter, setActiveSkillFilter] = useState<SkillFilter>("all")
+  const [activeSkillFilter, setActiveSkillFilter] = useState<SkillFilter>("installed")
   const [showAddForm, setShowAddForm] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 

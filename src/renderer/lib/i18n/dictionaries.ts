@@ -368,6 +368,9 @@ export const en = {
   "settings.models.codexApiKey.priority": "Takes priority over subscription",
   "settings.models.openaiApiKey.description":
     "Required for voice transcription (Whisper API)",
+  "settings.models.advancedRouting.title": "Advanced model routing",
+  "settings.models.advancedRouting.description":
+    "Provider Profiles and Helper APIs for custom routing, local endpoints, and helper generation.",
   "settings.models.helperApis.title": "Helper APIs",
   "settings.models.helperApis.description":
     "Optional OpenAI-compatible providers for lightweight helpers. These are independent from Claude Code OAuth.",
@@ -426,6 +429,10 @@ export const en = {
   "settings.commands.refresh": "Refresh local detection",
   "settings.commands.localIndexNotice":
     "Local index only: app shortcuts, command files, installed plugins, and runtime --help output. Official docs remain the complete reference.",
+  "settings.commands.showAdvancedReferences": "Show advanced references",
+  "settings.commands.hideAdvancedReferences": "Hide advanced references",
+  "settings.commands.advancedReferencesDescription":
+    "CLI subcommands, plugin command components, and official docs snapshots are reference material for debugging runtime behavior.",
   "settings.commands.guide.chatTitle": "Chat / commands",
   "settings.commands.guide.chatDescription":
     "Type / in chat to select these Locus workflows.",
@@ -716,6 +723,8 @@ export const en = {
 
   "settings.skills.description": "Description",
   "settings.skills.noDescription": "No description",
+  "settings.skills.showMetadata": "Show details",
+  "settings.skills.hideMetadata": "Hide details",
   "settings.skills.commandDescriptionPlaceholder": "Command description...",
   "settings.skills.skillDescriptionPlaceholder": "Skill description...",
   "settings.skills.usage": "Usage",
@@ -2750,6 +2759,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.codexApiKey.priority": "优先级高于订阅",
   "settings.models.openaiApiKey.description":
     "语音转写需要使用（Whisper API）",
+  "settings.models.advancedRouting.title": "高级模型路由",
+  "settings.models.advancedRouting.description":
+    "提供方配置和辅助 API 用于自定义路由、本地端点和轻量辅助生成。",
   "settings.models.helperApis.title": "辅助 API",
   "settings.models.helperApis.description":
     "可选的兼容 OpenAI 的提供方，用于轻量辅助生成；它们独立于 Claude Code OAuth。",
@@ -2807,6 +2819,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.commands.refresh": "刷新本机检测",
   "settings.commands.localIndexNotice":
     "这里是本机索引：应用快捷工作流、命令文件、已安装插件和运行时 --help 输出。完整说明仍以官方文档为准。",
+  "settings.commands.showAdvancedReferences": "显示高级参考",
+  "settings.commands.hideAdvancedReferences": "隐藏高级参考",
+  "settings.commands.advancedReferencesDescription":
+    "CLI 子命令、插件命令组件和官方文档快照主要用于排查运行时行为。",
   "settings.commands.guide.chatTitle": "对话 / 命令",
   "settings.commands.guide.chatDescription":
     "在对话输入 / 后，可以直接选择这些 Locus 工作流。",
@@ -3092,6 +3108,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
 
   "settings.skills.description": "描述",
   "settings.skills.noDescription": "没有描述",
+  "settings.skills.showMetadata": "显示详情",
+  "settings.skills.hideMetadata": "隐藏详情",
   "settings.skills.commandDescriptionPlaceholder": "命令描述...",
   "settings.skills.skillDescriptionPlaceholder": "技能描述...",
   "settings.skills.usage": "用法",

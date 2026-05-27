@@ -1100,6 +1100,7 @@ export function AgentsModelsTab() {
   const [model, setModel] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
   const [token, setToken] = useState("")
+  const [isAdvancedRoutingOpen, setIsAdvancedRoutingOpen] = useState(false)
   const helperApisSectionRef = useRef<HTMLDivElement | null>(null)
   const [modelsSettingsTarget, setModelsSettingsTarget] = useAtom(
     modelsSettingsTargetAtom,
@@ -1157,6 +1158,7 @@ export function AgentsModelsTab() {
   useEffect(() => {
     if (modelsSettingsTarget !== "helper-apis") return
 
+    setIsAdvancedRoutingOpen(true)
     const timeoutId = window.setTimeout(() => {
       helperApisSectionRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -1580,44 +1582,67 @@ export function AgentsModelsTab() {
         </div>
       </div>
 
-      <ProviderProfilesSettingsSection />
+      <Collapsible
+        open={isAdvancedRoutingOpen}
+        onOpenChange={setIsAdvancedRoutingOpen}
+        className="space-y-4"
+      >
+        <CollapsibleTrigger className="flex items-start gap-2 text-left text-sm font-medium text-foreground transition-colors hover:text-foreground/80">
+          <ChevronDown
+            className={`mt-0.5 h-4 w-4 shrink-0 transition-transform ${
+              isAdvancedRoutingOpen ? "" : "-rotate-90"
+            }`}
+          />
+          <span className="min-w-0">
+            <span className="block">
+              {t("settings.models.advancedRouting.title")}
+            </span>
+            <span className="mt-1 block text-xs font-normal leading-relaxed text-muted-foreground">
+              {t("settings.models.advancedRouting.description")}
+            </span>
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-6">
+          <ProviderProfilesSettingsSection />
 
-      <div ref={helperApisSectionRef} className="space-y-3 scroll-mt-6">
-        <div className="pb-1">
-          <h4 className="text-sm font-medium text-foreground">
-            {t("settings.models.helperApis.title")}
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.models.helperApis.description")}
-          </p>
-        </div>
+          <div ref={helperApisSectionRef} className="space-y-3 scroll-mt-6">
+            <div className="pb-1">
+              <h4 className="text-sm font-medium text-foreground">
+                {t("settings.models.helperApis.title")}
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {t("settings.models.helperApis.description")}
+              </p>
+            </div>
 
-        <LocalApiProviderSettingsSection
-          purpose="sub_chat_title"
-          titleKey="settings.models.subChatTitle.title"
-          descriptionKey="settings.models.subChatTitle.description"
-          modelHintKey="settings.models.subChatTitle.modelHint"
-          tokenHintKey="settings.models.subChatTitle.tokenHint"
-          baseUrlHintKey="settings.models.subChatTitle.baseUrlHint"
-          savedToastKey="toast.models.subChatTitleSettingsSaved"
-          resetToastKey="toast.models.subChatTitleSettingsReset"
-          failedSaveToastKey="toast.models.failedToSaveSubChatTitleSettings"
-          failedResetToastKey="toast.models.failedToResetSubChatTitleSettings"
-        />
+            <LocalApiProviderSettingsSection
+              purpose="sub_chat_title"
+              titleKey="settings.models.subChatTitle.title"
+              descriptionKey="settings.models.subChatTitle.description"
+              modelHintKey="settings.models.subChatTitle.modelHint"
+              tokenHintKey="settings.models.subChatTitle.tokenHint"
+              baseUrlHintKey="settings.models.subChatTitle.baseUrlHint"
+              savedToastKey="toast.models.subChatTitleSettingsSaved"
+              resetToastKey="toast.models.subChatTitleSettingsReset"
+              failedSaveToastKey="toast.models.failedToSaveSubChatTitleSettings"
+              failedResetToastKey="toast.models.failedToResetSubChatTitleSettings"
+            />
 
-        <LocalApiProviderSettingsSection
-          purpose="commit_message"
-          titleKey="settings.models.commitMessage.title"
-          descriptionKey="settings.models.commitMessage.description"
-          modelHintKey="settings.models.commitMessage.modelHint"
-          tokenHintKey="settings.models.commitMessage.tokenHint"
-          baseUrlHintKey="settings.models.commitMessage.baseUrlHint"
-          savedToastKey="toast.models.commitMessageSettingsSaved"
-          resetToastKey="toast.models.commitMessageSettingsReset"
-          failedSaveToastKey="toast.models.failedToSaveCommitMessageSettings"
-          failedResetToastKey="toast.models.failedToResetCommitMessageSettings"
-        />
-      </div>
+            <LocalApiProviderSettingsSection
+              purpose="commit_message"
+              titleKey="settings.models.commitMessage.title"
+              descriptionKey="settings.models.commitMessage.description"
+              modelHintKey="settings.models.commitMessage.modelHint"
+              tokenHintKey="settings.models.commitMessage.tokenHint"
+              baseUrlHintKey="settings.models.commitMessage.baseUrlHint"
+              savedToastKey="toast.models.commitMessageSettingsSaved"
+              resetToastKey="toast.models.commitMessageSettingsReset"
+              failedSaveToastKey="toast.models.failedToSaveCommitMessageSettings"
+              failedResetToastKey="toast.models.failedToResetCommitMessageSettings"
+            />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* ===== API Keys Section (Collapsible) ===== */}
       <Collapsible open={isApiKeysOpen} onOpenChange={setIsApiKeysOpen}>
