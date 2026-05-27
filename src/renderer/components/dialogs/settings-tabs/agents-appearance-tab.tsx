@@ -2,6 +2,7 @@ import { useTheme } from "next-themes"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { IconSpinner } from "../../../icons"
 import { useAtom, useSetAtom } from "jotai"
+import { useTranslation } from "react-i18next"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "../../../lib/utils"
 import {
@@ -128,6 +129,7 @@ function ThemePreviewBox({
 }
 
 export function AgentsAppearanceTab() {
+  const { t, i18n } = useTranslation()
   const { resolvedTheme, setTheme: setNextTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const isNarrowScreen = useIsNarrowScreen()
@@ -618,6 +620,38 @@ export function AgentsAppearanceTab() {
             checked={alwaysExpandTodoList}
             onCheckedChange={setAlwaysExpandTodoList}
           />
+        </div>
+      </div>
+
+      {/* Language Section */}
+      <div className="bg-background rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              {t('settings.appearance.language')}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {t('settings.appearance.languageDescription')}
+            </span>
+          </div>
+
+          <Select
+            value={i18n.language}
+            onValueChange={(value) => {
+              i18n.changeLanguage(value)
+              localStorage.setItem('i18nextLng', value)
+            }}
+          >
+            <SelectTrigger className="w-auto px-2">
+              <span className="text-xs">
+                {i18n.language === 'zh-CN' ? '简体中文' : 'English'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">English</SelectItem>
+              <SelectItem value="zh-CN">简体中文</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>

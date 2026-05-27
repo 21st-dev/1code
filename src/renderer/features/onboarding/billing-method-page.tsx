@@ -3,6 +3,7 @@
 import { useSetAtom } from "jotai"
 import { Check } from "lucide-react"
 import { useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import {
   ClaudeCodeIcon,
@@ -29,53 +30,54 @@ type BillingOption = {
   icon: React.ReactNode
 }
 
-const billingOptions: BillingOption[] = [
-  {
-    id: "claude-subscription",
-    method: "claude-subscription",
-    group: "claude-code",
-    title: "Claude Pro/Max",
-    subtitle: "Use your Claude subscription for unlimited access.",
-    recommended: true,
-    icon: <ClaudeCodeIcon className="w-5 h-5" />,
-  },
-  {
-    id: "api-key",
-    method: "api-key",
-    group: "claude-code",
-    title: "Anthropic API Key",
-    subtitle: "Pay-as-you-go with your own API key.",
-    icon: <KeyFilledIcon className="w-5 h-5" />,
-  },
-  {
-    id: "custom-model",
-    method: "custom-model",
-    group: "claude-code",
-    title: "Custom Model",
-    subtitle: "Use a custom base URL and model.",
-    icon: <SettingsFilledIcon className="w-5 h-5" />,
-  },
-  {
-    id: "codex-subscription",
-    method: "codex-subscription",
-    group: "codex",
-    title: "Codex Subscription",
-    subtitle: "Use your Codex ChatGPT login.",
-    recommended: true,
-    icon: <CodexIcon className="w-5 h-5" />,
-  },
-  {
-    id: "codex-api-key",
-    method: "codex-api-key",
-    group: "codex",
-    title: "API Key",
-    subtitle: "Use an app-managed OpenAI API key for Codex.",
-    icon: <KeyFilledIcon className="w-5 h-5" />,
-  },
-]
-
 export function BillingMethodPage() {
+  const { t } = useTranslation()
   const setBillingMethod = useSetAtom(billingMethodAtom)
+
+  const billingOptions: BillingOption[] = useMemo(() => [
+    {
+      id: "claude-subscription",
+      method: "claude-subscription",
+      group: "claude-code",
+      title: t('onboarding.billingMethod.claudePro'),
+      subtitle: t('onboarding.billingMethod.claudeProSubtitle'),
+      recommended: true,
+      icon: <ClaudeCodeIcon className="w-5 h-5" />,
+    },
+    {
+      id: "api-key",
+      method: "api-key",
+      group: "claude-code",
+      title: t('onboarding.billingMethod.apiKey'),
+      subtitle: t('onboarding.billingMethod.apiKeySubtitle'),
+      icon: <KeyFilledIcon className="w-5 h-5" />,
+    },
+    {
+      id: "custom-model",
+      method: "custom-model",
+      group: "claude-code",
+      title: t('onboarding.billingMethod.customModel'),
+      subtitle: t('onboarding.billingMethod.customModelSubtitle'),
+      icon: <SettingsFilledIcon className="w-5 h-5" />,
+    },
+    {
+      id: "codex-subscription",
+      method: "codex-subscription",
+      group: "codex",
+      title: t('onboarding.billingMethod.codexSubscription'),
+      subtitle: t('onboarding.billingMethod.codexSubscriptionSubtitle'),
+      recommended: true,
+      icon: <CodexIcon className="w-5 h-5" />,
+    },
+    {
+      id: "codex-api-key",
+      method: "codex-api-key",
+      group: "codex",
+      title: t('onboarding.billingMethod.codexApiKey'),
+      subtitle: t('onboarding.billingMethod.codexApiKeySubtitle'),
+      icon: <KeyFilledIcon className="w-5 h-5" />,
+    },
+  ], [t])
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const [selectedGroup, setSelectedGroup] =
     useState<BillingOptionGroup>("claude-code")
@@ -84,13 +86,13 @@ export function BillingMethodPage() {
 
   const visibleOptions = useMemo(
     () => billingOptions.filter((option) => option.group === selectedGroup),
-    [selectedGroup],
+    [selectedGroup, billingOptions],
   )
 
   const selectedOption = useMemo(() => {
     const found = billingOptions.find((option) => option.id === selectedOptionId)
     return found || billingOptions[0]
-  }, [selectedOptionId])
+  }, [selectedOptionId, billingOptions])
 
   const handleContinue = () => {
     if (
@@ -116,10 +118,10 @@ export function BillingMethodPage() {
         {/* Header */}
         <div className="text-center space-y-1">
           <h1 className="text-base font-semibold tracking-tight">
-            Connect AI Provider
+            {t('onboarding.billingMethod.title')}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Choose how you'd like to connect your provider.
+            {t('onboarding.billingMethod.subtitle')}
           </p>
         </div>
 
@@ -137,7 +139,7 @@ export function BillingMethodPage() {
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            Claude Code
+            {t('onboarding.billingMethod.claudeCode')}
           </button>
           <button
             type="button"
@@ -152,7 +154,7 @@ export function BillingMethodPage() {
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            Codex
+            {t('onboarding.billingMethod.codex')}
           </button>
         </div>
 
@@ -198,7 +200,7 @@ export function BillingMethodPage() {
                     <span className="text-sm font-medium">{option.title}</span>
                     {option.recommended && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                        Recommended
+                        {t('onboarding.billingMethod.recommended')}
                       </span>
                     )}
                   </div>
@@ -216,7 +218,7 @@ export function BillingMethodPage() {
           onClick={handleContinue}
           className="w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center"
         >
-          Continue
+          {t('common.continue')}
         </button>
       </div>
     </div>
