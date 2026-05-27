@@ -680,8 +680,8 @@ function CreateMcpServerForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="stdio">stdio (local command)</SelectItem>
-              <SelectItem value="http">HTTP (SSE)</SelectItem>
+              <SelectItem value="stdio">{t("settings.mcp.transportStdio")}</SelectItem>
+              <SelectItem value="http">{t("settings.mcp.transportHttpSse")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

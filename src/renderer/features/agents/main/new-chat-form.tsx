@@ -2261,8 +2261,7 @@ export function NewChatForm({
       {showWorktreeBanner && (
         <div className="absolute bottom-4 right-4 max-w-sm p-3 pb-4 bg-muted/50 backdrop-blur-sm rounded-lg border border-border space-y-3 shadow-lg z-50">
           <p className="text-sm text-muted-foreground">
-            Configure a worktree setup script to install dependencies or copy
-            environment variables.
+            {t("chat.worktreeSetupBanner.description")}
           </p>
           <div className="flex items-center justify-end gap-2">
             <Button
@@ -2270,7 +2269,7 @@ export function NewChatForm({
               size="sm"
               onClick={handleConfigureWorktree}
             >
-              Settings
+              {t("common.settings")}
             </Button>
             <Button
               size="sm"
@@ -2279,7 +2278,7 @@ export function NewChatForm({
                 if (prompt && projectForChat) {
                   createChatMutation.mutate({
                     projectId: projectForChat.id,
-                    name: "Worktree Setup",
+                    name: t("chat.worktreeSetupBanner.chatName"),
                     model: selectedChatModel,
                     initialMessageParts: [
                       { type: "text", text: prompt },
@@ -2290,7 +2289,7 @@ export function NewChatForm({
                 }
               }}
             >
-              Fill with AI
+              {t("chat.worktreeSetupBanner.fillWithAI")}
             </Button>
           </div>
         </div>
