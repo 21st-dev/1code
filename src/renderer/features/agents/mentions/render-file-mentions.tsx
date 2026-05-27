@@ -319,6 +319,9 @@ function parseMention(id: string): ParsedMention | null {
  * Component to render a single file/folder/skill/agent/tool/quote/diff mention chip (matching canvas style)
  */
 function MentionChip({ mention }: { mention: ParsedMention }) {
+  const { t } = useI18n()
+  const onOpenFile = useContext(FileOpenContext)
+
   // Quote and diff mentions render as block cards
   if (mention.type === "quote") {
     // Get a short title from the label
@@ -337,7 +340,7 @@ function MentionChip({ mention }: { mention: ParsedMention }) {
             {displayTitle}
           </span>
           <span className="text-xs text-muted-foreground">
-            Selected Text
+            {t("agent.textSelection.selectedText")}
           </span>
         </span>
       </span>
@@ -359,14 +362,15 @@ function MentionChip({ mention }: { mention: ParsedMention }) {
             {fileName}
           </span>
           <span className="text-xs text-muted-foreground">
-            {mention.lineNumber ? `Line ${mention.lineNumber}` : "Code selection"}
+            {mention.lineNumber
+              ? t("agent.textSelection.line", { line: mention.lineNumber })
+              : t("agent.textSelection.codeSelection")}
           </span>
         </span>
       </span>
     )
   }
 
-  const onOpenFile = useContext(FileOpenContext)
   const isClickable = (mention.type === "file" || mention.type === "folder") && !!onOpenFile
 
   const Icon = mention.type === "skill"
@@ -380,11 +384,11 @@ function MentionChip({ mention }: { mention: ParsedMention }) {
           : (getFileIconByExtension(mention.label) ?? UnknownFileIcon)
 
   const title = mention.type === "skill"
-    ? `Skill: ${mention.label}`
+    ? t("agent.mention.skillTitle", { name: mention.label })
     : mention.type === "agent"
-      ? `Agent: ${mention.label}`
+      ? t("agent.mention.agentTitle", { name: mention.label })
       : mention.type === "tool"
-        ? `MCP Tool: ${mention.path}`
+        ? t("agent.mention.mcpToolTitle", { name: mention.path })
         : `${mention.repository}:${mention.path}`
 
   return (

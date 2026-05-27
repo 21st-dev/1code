@@ -1,4 +1,5 @@
 import type { ChangeCategory, ChangedFile } from "../../../shared/changes-types";
+import { useI18n } from "../../lib/i18n";
 import { ChangesView } from "./changes-view";
 import type { SubChatFilterItem } from "./components/changes-file-filter";
 import type { CommitInfo } from "./components/history-view";
@@ -61,10 +62,12 @@ export function ChangesPanel({
 	onActiveTabChange,
 	pushCount,
 }: ChangesPanelProps) {
+	const { t } = useI18n();
+
 	if (!worktreePath) {
 		return (
 			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-				No worktree path available
+				{t("changes.noWorktreePath")}
 			</div>
 		);
 	}

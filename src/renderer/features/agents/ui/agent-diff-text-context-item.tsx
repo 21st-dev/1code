@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { X } from "lucide-react"
+import { useI18n } from "../../../lib/i18n"
 import { isPlanFile } from "./agent-tool-utils"
 
 // Code selection icon - cursor arrow with text cursor
@@ -43,6 +44,7 @@ export function AgentDiffTextContextItem({
   lineType,
   onRemove,
 }: AgentDiffTextContextItemProps) {
+  const { t } = useI18n()
   const [isHovered, setIsHovered] = useState(false)
 
   // Check if this is a plan selection
@@ -73,16 +75,19 @@ export function AgentDiffTextContextItem({
         </span>
         <span className="text-xs text-muted-foreground flex items-center gap-1">
           {isPlan ? (
-            "Text selection"
+            t("agent.textSelection.selectedText")
           ) : (
             <>
-              {lineNumber && <span>Line {lineNumber}</span>}
+              {lineNumber && <span>{t("agent.textSelection.line", { line: lineNumber })}</span>}
               {lineType && (
                 <span className={lineType === "new" ? "text-green-500" : "text-red-500"}>
-                  {lineNumber ? "· " : ""}{lineType === "new" ? "Added" : "Removed"}
+                  {lineNumber ? "· " : ""}
+                  {lineType === "new"
+                    ? t("agent.textSelection.added")
+                    : t("agent.textSelection.removed")}
                 </span>
               )}
-              {!lineNumber && !lineType && "Code selection"}
+              {!lineNumber && !lineType && t("agent.textSelection.codeSelection")}
             </>
           )}
         </span>
