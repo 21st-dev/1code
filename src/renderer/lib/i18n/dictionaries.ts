@@ -182,7 +182,7 @@ export const en = {
   "settings.sidebar.group.advanced": "Advanced",
 
   "settings.preferences.title": "Preferences",
-  "settings.preferences.subtitle": "Configure Claude's behavior and features",
+  "settings.preferences.subtitle": "Configure agent behavior and app features",
   "settings.preferences.extendedThinking.title": "Extended Thinking",
   "settings.preferences.extendedThinking.description":
     "Enable deeper reasoning with more thinking tokens (uses more credits).",
@@ -193,7 +193,7 @@ export const en = {
     "Mode for new agents (Plan = read-only, Agent = can edit)",
   "settings.preferences.coAuthoredBy.title": "Include Co-Authored-By",
   "settings.preferences.coAuthoredBy.description":
-    'Add "Co-authored-by: Claude" to git commits made by Claude',
+    'Add a "Co-authored-by" trailer to commits created from the app',
   "settings.preferences.desktopNotifications.title": "Desktop Notifications",
   "settings.preferences.desktopNotifications.description":
     "Show system notifications when agent needs input or completes work",
@@ -2579,7 +2579,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "新智能体的默认模式（Plan = 只读，Agent = 可编辑）",
   "settings.preferences.coAuthoredBy.title": "包含共同作者署名",
   "settings.preferences.coAuthoredBy.description":
-    "在 Claude 生成的 git 提交中加入 \"Co-authored-by: Claude\"",
+    "在应用创建的 git 提交中加入共同作者署名",
   "settings.preferences.desktopNotifications.title": "桌面通知",
   "settings.preferences.desktopNotifications.description":
     "当智能体需要输入或完成工作时显示系统通知",
