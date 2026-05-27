@@ -277,7 +277,7 @@ function PluginDetail({
           {/* Components — clickable when the runtime exposes them to shared tabs */}
           {plugin.components.commands.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Commands ({plugin.components.commands.length})</Label>
+              <Label>{t("settings.plugins.commandsCount", { count: plugin.components.commands.length })}</Label>
               <div className="space-y-1">
                 {plugin.components.commands.map((cmd) => (
                   <button
@@ -309,7 +309,7 @@ function PluginDetail({
 
           {plugin.components.skills.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Skills ({plugin.components.skills.length})</Label>
+              <Label>{t("settings.plugins.skillsCount", { count: plugin.components.skills.length })}</Label>
               <div className="space-y-1">
                 {plugin.components.skills.map((skill) => (
                   <button
@@ -341,7 +341,7 @@ function PluginDetail({
 
           {plugin.components.agents.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Agents ({plugin.components.agents.length})</Label>
+              <Label>{t("settings.plugins.agentsCount", { count: plugin.components.agents.length })}</Label>
               <div className="space-y-1">
                 {plugin.components.agents.map((agent) => (
                   <button
@@ -374,7 +374,7 @@ function PluginDetail({
           {plugin.components.mcpServers.length > 0 && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">
-                <Label>MCP Servers ({plugin.components.mcpServers.length})</Label>
+                <Label>{t("settings.plugins.mcpServersCount", { count: plugin.components.mcpServers.length })}</Label>
                 {canApproveMcp && (
                   <Button
                     variant="outline"

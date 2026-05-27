@@ -26,6 +26,7 @@ import {
 import { cn } from "../../../lib/utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { useFileOpen } from "../mentions"
+import { useI18n } from "../../../lib/i18n"
 
 interface GitActivityBadgesProps {
   parts: any[]
@@ -38,6 +39,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
   chatId,
   subChatId,
 }: GitActivityBadgesProps) {
+  const { t } = useI18n()
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setDiffSidebarOpen = useSetAtom(diffSidebarOpenAtomFamily(chatId))
   const setFilteredDiffFiles = useSetAtom(filteredDiffFilesAtom)
@@ -120,7 +122,14 @@ export const GitActivityBadges = memo(function GitActivityBadges({
             className="flex items-center justify-between pl-2.5 pr-0.5 h-7 cursor-pointer hover:bg-muted/50 transition-colors duration-150"
           >
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
-              <span>Edited {changedFiles.length} {changedFiles.length === 1 ? "file" : "files"}</span>
+              <span>
+                {t("agent.git.editedFiles", {
+                  count: changedFiles.length,
+                  unit: changedFiles.length === 1
+                    ? t("agent.git.fileUnit")
+                    : t("agent.git.filesUnit"),
+                })}
+              </span>
               {(totals.additions > 0 || totals.deletions > 0) && (
                 <>
                   <span className="text-green-600 dark:text-green-400">+{totals.additions}</span>

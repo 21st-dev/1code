@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { X } from "lucide-react"
+import { useI18n } from "../../../lib/i18n"
 
 // Text selection icon - "A" with text cursor
 function TextSelectIcon({ className }: { className?: string }) {
@@ -45,17 +46,18 @@ export function AgentPastedTextItem({
   kind = "pasted",
   onRemove,
 }: AgentPastedTextItemProps) {
+  const { t } = useI18n()
   const [isHovered, setIsHovered] = useState(false)
 
   const isChatHistory = kind === "chatHistory"
 
   // Get a short title from the preview
   const title = isChatHistory
-    ? (preview?.trim() || "Previous Chat")
+    ? (preview?.trim() || t("agent.pastedText.previousChat"))
     : (preview.split("\n")[0]?.trim() || preview.trim())
   const displayTitle = title.length > 20 ? `${title.slice(0, 20)}...` : title
 
-  const subtitle = `${isChatHistory ? "Past chat" : "Pasted Text"} · ${formatSize(size)}`
+  const subtitle = `${isChatHistory ? t("agent.pastedText.pastChat") : t("agent.pastedText.pastedText")} · ${formatSize(size)}`
 
   return (
     <div

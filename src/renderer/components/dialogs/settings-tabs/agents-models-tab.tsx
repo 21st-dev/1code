@@ -621,7 +621,7 @@ function ProviderProfilesSettingsSection() {
 
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Base URL</Label>
+                <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
                 <Input
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
@@ -642,7 +642,7 @@ function ProviderProfilesSettingsSection() {
 
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Protocol</Label>
+                <Label className="text-sm font-medium">{t("common.protocol")}</Label>
                 <select
                   value={protocol}
                   onChange={(event) =>
@@ -658,7 +658,7 @@ function ProviderProfilesSettingsSection() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Auth</Label>
+                <Label className="text-sm font-medium">{t("common.auth")}</Label>
                 <select
                   value={authMode}
                   onChange={(event) =>
@@ -674,7 +674,7 @@ function ProviderProfilesSettingsSection() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">API Key</Label>
+                <Label className="text-sm font-medium">{t("common.apiKey")}</Label>
                 <Input
                   type="password"
                   value={token}
@@ -1074,7 +1074,7 @@ function LocalApiProviderSettingsSection({
 
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex-1">
-            <Label className="text-sm font-medium">Base URL</Label>
+            <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
             <p className="text-xs text-muted-foreground">
               {t(baseUrlHintKey)}
             </p>
@@ -1631,7 +1631,7 @@ export function AgentsModelsTab() {
             <div className="flex items-center justify-between gap-6 p-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">Codex API Key</Label>
+                  <Label className="text-sm font-medium">{t("common.codexApiKey")}</Label>
                   {hasAppCodexApiKey && (
                     <Badge variant="secondary" className="text-xs">
                       {t("common.active")}
@@ -1672,7 +1672,7 @@ export function AgentsModelsTab() {
             <div className="flex items-center justify-between gap-6 p-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">OpenAI API Key</Label>
+                  <Label className="text-sm font-medium">{t("common.openaiApiKey")}</Label>
                   {canResetOpenAI && (
                     <Button
                       variant="ghost"
@@ -1805,7 +1805,7 @@ export function AgentsModelsTab() {
 
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex-1">
-                  <Label className="text-sm font-medium">Base URL</Label>
+                  <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
                   <p className="text-xs text-muted-foreground">
                     ANTHROPIC_BASE_URL env
                   </p>

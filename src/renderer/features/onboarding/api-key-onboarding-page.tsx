@@ -365,7 +365,7 @@ export function ApiKeyOnboardingPage() {
 
           {/* Base URL */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Base URL</Label>
+            <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
             <Input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}

@@ -3993,7 +3993,7 @@ const ChatViewInner = memo(function ChatViewInner({
           filename: result.filename,
           byteLength: result.byteLength,
           size: result.byteLength,
-          preview: subChatNameRef.current?.trim() || "Previous Chat",
+          preview: subChatNameRef.current?.trim() || t("agent.pastedText.previousChat"),
           createdAt: new Date(),
           kind: "chatHistory",
         }

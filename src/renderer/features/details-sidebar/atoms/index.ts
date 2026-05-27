@@ -4,6 +4,7 @@ import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { LucideIcon } from "lucide-react"
 import { Box, FileText, Terminal, FileDiff, ListTodo } from "lucide-react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
+import type { TranslationKey } from "../../../lib/i18n"
 
 // ============================================================================
 // Widget System Types & Registry
@@ -14,18 +15,19 @@ export type WidgetId = "info" | "todo" | "plan" | "terminal" | "diff" | "mcp"
 export interface WidgetConfig {
   id: WidgetId
   label: string
+  labelKey: TranslationKey
   icon: LucideIcon
   canExpand: boolean // true = can open as separate sidebar
   defaultVisible: boolean
 }
 
 export const WIDGET_REGISTRY: WidgetConfig[] = [
-  { id: "info", label: "Workspace", icon: Box, canExpand: false, defaultVisible: true },
-  { id: "todo", label: "To-dos", icon: ListTodo, canExpand: false, defaultVisible: true },
-  { id: "plan", label: "Plan", icon: FileText, canExpand: true, defaultVisible: true },
-  { id: "terminal", label: "Terminal", icon: Terminal, canExpand: true, defaultVisible: false },
-  { id: "diff", label: "Changes", icon: FileDiff, canExpand: true, defaultVisible: true },
-  { id: "mcp", label: "MCP Servers", icon: OriginalMCPIcon as unknown as LucideIcon, canExpand: false, defaultVisible: true },
+  { id: "info", label: "Workspace", labelKey: "details.workspace", icon: Box, canExpand: false, defaultVisible: true },
+  { id: "todo", label: "To-dos", labelKey: "details.todoList", icon: ListTodo, canExpand: false, defaultVisible: true },
+  { id: "plan", label: "Plan", labelKey: "details.plan", icon: FileText, canExpand: true, defaultVisible: true },
+  { id: "terminal", label: "Terminal", labelKey: "details.terminal", icon: Terminal, canExpand: true, defaultVisible: false },
+  { id: "diff", label: "Changes", labelKey: "changes.title", icon: FileDiff, canExpand: true, defaultVisible: true },
+  { id: "mcp", label: "MCP Servers", labelKey: "details.mcpServers", icon: OriginalMCPIcon as unknown as LucideIcon, canExpand: false, defaultVisible: true },
 ]
 
 // Helper to get default visible widgets

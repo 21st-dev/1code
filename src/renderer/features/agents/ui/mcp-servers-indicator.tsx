@@ -238,7 +238,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent>
-          {connectedCount} MCP server{connectedCount !== 1 ? "s" : ""} connected
+          {t("agent.mcp.connectedServers", { count: connectedCount })}
         </TooltipContent>
       </Tooltip>
 
@@ -252,10 +252,10 @@ export const McpServersIndicator = memo(function McpServersIndicator({
       >
         <div className="px-3 py-2 border-b">
           <h4 className="font-medium text-sm" id="mcp-servers-title">
-            MCP Servers
+            {t("agent.mcp.serversTitle")}
           </h4>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Model Context Protocol servers
+            {t("agent.mcp.serversDescription")}
           </p>
         </div>
 

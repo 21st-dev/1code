@@ -166,6 +166,17 @@ function getConfigSource(
   return "~/.claude.json / ~/.claude/mcp.json"
 }
 
+function getGroupDisplayName(
+  groupName: string,
+  projectPath: string | null,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  if (groupName.toLowerCase() === "global" && !projectPath) {
+    return t("settings.mcp.global")
+  }
+  return groupName
+}
+
 function CopyValueButton({ value }: { value: string }) {
   const { t } = useI18n()
   const [copied, setCopied] = useState(false)
@@ -565,7 +576,9 @@ function CreateMcpServerForm({
   const [command, setCommand] = useState("")
   const [args, setArgs] = useState("")
   const [url, setUrl] = useState("")
-  const [scope, setScope] = useState<"global" | "project">("global")
+  const [scope, setScope] = useState<"global" | "project">(
+    defaultProvider === "claude-code" && hasProject ? "project" : "global",
+  )
   const effectiveScope = provider === "codex" ? "global" : scope
 
   const canSave = name.trim().length > 0 && (effectiveScope !== "project" || !!projectPath) && (
@@ -635,6 +648,8 @@ function CreateMcpServerForm({
               setProvider(nextProvider)
               if (nextProvider === "codex") {
                 setScope("global")
+              } else if (hasProject) {
+                setScope("project")
               }
             }}
           >
@@ -1183,7 +1198,7 @@ export function AgentsMcpTab() {
                               </div>
                               <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 min-w-0">
                                 <span className="truncate flex-1 min-w-0">
-                                  {item.groupName}
+                                  {getGroupDisplayName(item.groupName, item.projectPath, t)}
                                 </span>
                                 {server.status !== "pending" && (
                                   <span className="flex-shrink-0">

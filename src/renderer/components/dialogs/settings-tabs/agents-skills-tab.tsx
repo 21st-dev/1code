@@ -112,6 +112,27 @@ function getItemStatusLabel(item: UnifiedItem, t: ReturnType<typeof useI18n>["t"
   }
 }
 
+function getRegistryStatusLabel(status: string, t: ReturnType<typeof useI18n>["t"]) {
+  switch (status) {
+    case "not-installed":
+      return t("settings.skills.statusAvailable")
+    case "installed":
+      return t("settings.skills.statusInstalled")
+    case "update-available":
+      return t("settings.skills.statusUpdateAvailable")
+    case "modified":
+      return t("settings.skills.statusModified")
+    case "user-owned":
+      return t("settings.skills.statusUserOwned")
+    case "missing-source":
+      return t("settings.skills.statusMissingSource")
+    case "integrity-error":
+      return t("settings.skills.statusIntegrityError")
+    default:
+      return status
+  }
+}
+
 function getItemStatusClass(item: UnifiedItem) {
   if (item.kind === "command") return "bg-orange-500/10 text-orange-500"
   if (item.kind === "registry-collection") return "bg-violet-500/10 text-violet-500"
@@ -1071,7 +1092,7 @@ export function AgentsSkillsTab() {
           skill.description || t("settings.skills.noDescriptionSentence"),
           "",
           `${t("settings.skills.version")}: ${skill.version}`,
-          `${t("settings.skills.status")}: ${skill.status}`,
+          `${t("settings.skills.status")}: ${getRegistryStatusLabel(skill.status, t)}`,
         ].join("\n"),
         registry: {
           id: skill.id,

@@ -7,6 +7,7 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
+import { useI18n } from "../../../lib/i18n"
 
 // Claude model context windows
 const CONTEXT_WINDOWS = {
@@ -102,6 +103,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
   isCompacting,
   disabled,
 }: AgentContextIndicatorProps) {
+  const { t } = useI18n()
   const contextTokens = tokenData.totalInputTokens
   const contextWindow = tokenData.contextWindow ?? CONTEXT_WINDOWS[modelId]
   const percentUsed = Math.min(100, (contextTokens / contextWindow) * 100)
@@ -135,7 +137,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
         <p className="text-xs">
           {isEmpty ? (
             <span className="text-muted-foreground">
-              Context: 0 / {formatTokens(contextWindow)}
+              {t("agent.context.empty", { window: formatTokens(contextWindow) })}
             </span>
           ) : (
             <>
@@ -144,8 +146,10 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
               </span>
               <span className="text-muted-foreground mx-1">·</span>
               <span className="text-muted-foreground">
-                {formatTokens(contextTokens)} /{" "}
-                {formatTokens(contextWindow)} context
+                {t("agent.context.used", {
+                  tokens: formatTokens(contextTokens),
+                  window: formatTokens(contextWindow),
+                })}
               </span>
             </>
           )}

@@ -2521,7 +2521,7 @@ export function AgentsSidebar({
               {newWorkspaceHotkey && (
                 <span className="flex items-center gap-1.5">
                   <Kbd>{newWorkspaceHotkey}</Kbd>
-                  {newWorkspaceAltHotkey && <><span className="text-[10px] opacity-50">or</span><Kbd>{newWorkspaceAltHotkey}</Kbd></>}
+                  {newWorkspaceAltHotkey && <><span className="text-[10px] opacity-50">{t("common.or")}</span><Kbd>{newWorkspaceAltHotkey}</Kbd></>}
                 </span>
               )}
             </TooltipContent>

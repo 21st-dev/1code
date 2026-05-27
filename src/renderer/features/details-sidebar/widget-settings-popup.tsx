@@ -12,6 +12,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { PlanIcon, DiffIcon, OriginalMCPIcon } from "@/components/ui/icons"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/lib/i18n"
 import {
   WIDGET_REGISTRY,
   widgetVisibilityAtomFamily,
@@ -44,6 +45,7 @@ function getWidgetIcon(widgetId: WidgetId) {
 }
 
 export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
+  const { t } = useI18n()
   const visibilityAtom = useMemo(
     () => widgetVisibilityAtomFamily(workspaceId),
     [workspaceId],
@@ -156,7 +158,7 @@ export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
           size="sm"
           className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors rounded-md"
         >
-          Edit widgets
+          {t("details.editWidgets")}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -166,7 +168,7 @@ export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
       >
         <div className="space-y-1">
           <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-            Widgets
+            {t("details.widgets")}
           </div>
           {orderedWidgets.map((widget) => {
             const isVisible = visibleWidgets.includes(widget.id)
@@ -203,7 +205,7 @@ export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
                   className="h-4 w-4 pointer-events-none"
                 />
                 <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm flex-1">{widget.label}</span>
+                <span className="text-sm flex-1">{t(widget.labelKey)}</span>
               </div>
             )
           })}

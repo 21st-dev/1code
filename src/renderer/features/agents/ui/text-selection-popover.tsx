@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useTextSelection, type TextSelectionSource } from "../context/text-selection-context"
+import { useI18n } from "../../../lib/i18n"
 
 interface TextSelectionPopoverProps {
   onAddToContext: (text: string, source: TextSelectionSource) => void
@@ -15,6 +16,7 @@ export function TextSelectionPopover({
   onQuickComment,
   onFocusInput,
 }: TextSelectionPopoverProps) {
+  const { t } = useI18n()
   const { selectedText, source, selectionRect, clearSelection } =
     useTextSelection()
   const [isVisible, setIsVisible] = useState(false)
@@ -127,7 +129,7 @@ export function TextSelectionPopover({
           onClick={handleAddToContext}
           className="rounded px-1.5 py-0.5 text-xs text-popover-foreground hover:bg-white/15 transition-colors duration-100 active:scale-[0.97]"
         >
-          Add to context
+          {t("agent.textSelection.addToContext")}
         </button>
         {/* Quick comment button shows for diff and tool-edit selections */}
         {onQuickComment && (source.type === "diff" || source.type === "tool-edit") && (
@@ -137,7 +139,7 @@ export function TextSelectionPopover({
               onClick={handleQuickComment}
               className="rounded px-1.5 py-0.5 text-xs text-popover-foreground hover:bg-white/15 transition-colors duration-100 active:scale-[0.97]"
             >
-              Reply
+              {t("agent.textSelection.reply")}
             </button>
           </>
         )}

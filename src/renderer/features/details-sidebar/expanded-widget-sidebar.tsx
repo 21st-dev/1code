@@ -151,7 +151,7 @@ export function ExpandedWidgetSidebar({
             {widgetConfig && (
               <>
                 <widgetConfig.icon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">{widgetConfig.label}</span>
+                <span className="text-sm font-medium">{t(widgetConfig.labelKey)}</span>
               </>
             )}
           </div>

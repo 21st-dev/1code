@@ -16,7 +16,7 @@ import {
   codexOnboardingCompletedAtom,
   type BillingMethod,
 } from "../../lib/atoms"
-import { useI18n } from "../../lib/i18n"
+import { useI18n, type TranslationKey } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
 
 type BillingOptionGroup = "claude-code" | "codex"
@@ -25,8 +25,8 @@ type BillingOption = {
   id: string
   method: Exclude<BillingMethod, null>
   group: BillingOptionGroup
-  title: string
-  subtitle: string
+  titleKey: TranslationKey
+  subtitleKey: TranslationKey
   recommended?: boolean
   icon: React.ReactNode
 }
@@ -36,8 +36,8 @@ const billingOptions: BillingOption[] = [
     id: "claude-subscription",
     method: "claude-subscription",
     group: "claude-code",
-    title: "Claude Pro/Max",
-    subtitle: "Use your Claude subscription for unlimited access.",
+    titleKey: "onboarding.billing.claudeProMax.title",
+    subtitleKey: "onboarding.billing.claudeSubscription.subtitle",
     recommended: true,
     icon: <ClaudeCodeIcon className="w-5 h-5" />,
   },
@@ -45,24 +45,24 @@ const billingOptions: BillingOption[] = [
     id: "api-key",
     method: "api-key",
     group: "claude-code",
-    title: "Anthropic API Key",
-    subtitle: "Pay-as-you-go with your own API key.",
+    titleKey: "onboarding.billing.anthropicApiKey.title",
+    subtitleKey: "onboarding.billing.anthropicApiKey.subtitle",
     icon: <KeyFilledIcon className="w-5 h-5" />,
   },
   {
     id: "custom-model",
     method: "custom-model",
     group: "claude-code",
-    title: "Custom Model",
-    subtitle: "Use a custom base URL and model.",
+    titleKey: "onboarding.billing.customModel.title",
+    subtitleKey: "onboarding.billing.customModel.subtitle",
     icon: <SettingsFilledIcon className="w-5 h-5" />,
   },
   {
     id: "codex-subscription",
     method: "codex-subscription",
     group: "codex",
-    title: "Codex Subscription",
-    subtitle: "Use your Codex ChatGPT login.",
+    titleKey: "onboarding.billing.codexSubscription.title",
+    subtitleKey: "onboarding.billing.codexSubscription.subtitle",
     recommended: true,
     icon: <CodexIcon className="w-5 h-5" />,
   },
@@ -70,8 +70,8 @@ const billingOptions: BillingOption[] = [
     id: "codex-api-key",
     method: "codex-api-key",
     group: "codex",
-    title: "API Key",
-    subtitle: "Use an app-managed OpenAI API key for Codex.",
+    titleKey: "onboarding.billing.codexApiKey.title",
+    subtitleKey: "onboarding.billing.codexApiKey.subtitle",
     icon: <KeyFilledIcon className="w-5 h-5" />,
   },
 ]
@@ -108,33 +108,9 @@ export function BillingMethodPage() {
     setBillingMethod(selectedOption.method)
   }
 
-  const getOptionTitle = (option: BillingOption) => {
-    switch (option.id) {
-      case "claude-subscription":
-        return t("onboarding.billing.claudeSubscription.title")
-      case "codex-subscription":
-        return t("onboarding.billing.codexSubscription.title")
-      default:
-        return option.title
-    }
-  }
+  const getOptionTitle = (option: BillingOption) => t(option.titleKey)
 
-  const getOptionSubtitle = (option: BillingOption) => {
-    switch (option.id) {
-      case "claude-subscription":
-        return t("onboarding.billing.claudeSubscription.subtitle")
-      case "api-key":
-        return t("onboarding.billing.anthropicApiKey.subtitle")
-      case "custom-model":
-        return t("onboarding.billing.customModel.subtitle")
-      case "codex-subscription":
-        return t("onboarding.billing.codexSubscription.subtitle")
-      case "codex-api-key":
-        return t("onboarding.billing.codexApiKey.subtitle")
-      default:
-        return option.subtitle
-    }
-  }
+  const getOptionSubtitle = (option: BillingOption) => t(option.subtitleKey)
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">

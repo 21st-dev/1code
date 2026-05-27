@@ -10,6 +10,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "../../../components/ui/hover-card"
+import { useI18n } from "../../../lib/i18n"
 
 /**
  * Context for opening files in the file viewer sidebar.
@@ -569,27 +570,29 @@ function formatSize(bytes: number): string {
  * Used for displaying above message bubbles, not inline
  */
 export function TextMentionBlock({ mention }: { mention: ParsedMention }) {
+  const { t } = useI18n()
+
   if (mention.type !== "quote" && mention.type !== "diff" && mention.type !== "pasted" && mention.type !== "chatHistory") return null
 
   const displayTitle = mention.type === "chatHistory"
-    ? (mention.label?.trim() || "Previous Chat")
+    ? (mention.label?.trim() || t("agent.pastedText.previousChat"))
     : mention.type === "quote"
       ? (mention.label.split('\n')[0]?.slice(0, 20) || mention.label.slice(0, 20))
       : mention.type === "pasted"
         ? (mention.label.split('\n')[0]?.slice(0, 20) || mention.label.slice(0, 20))
-        : (mention.path?.split("/").pop() || "Code")
+        : (mention.path?.split("/").pop() || t("agent.textSelection.code"))
 
   const title = displayTitle.length < 20 ? displayTitle : `${displayTitle}...`
 
   const subtitle = mention.type === "chatHistory"
-    ? "Past chat"
+    ? t("agent.pastedText.pastChat")
     : mention.type === "quote"
-      ? "Selected Text"
+      ? t("agent.textSelection.selectedText")
       : mention.type === "pasted"
-        ? `Pasted Text · ${formatSize(mention.size || 0)}`
+        ? `${t("agent.pastedText.pastedText")} · ${formatSize(mention.size || 0)}`
         : mention.lineNumber
-          ? `Line ${mention.lineNumber}`
-          : "Code selection"
+          ? t("agent.textSelection.line", { line: mention.lineNumber })
+          : t("agent.textSelection.codeSelection")
 
   const icon = mention.type === "chatHistory"
     ? <ChatHistoryIcon className="size-4 text-muted-foreground" />

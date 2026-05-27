@@ -68,6 +68,31 @@ export function AnthropicOnboardingPage() {
   const localLoginError =
     localLoginState === "error" ? localLoginErrorMessage : null
   const hasError = flowState.step === "error" || Boolean(localLoginError)
+  const localizedLocalLoginOutput = localLoginOutput
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const trimmed = line.trim()
+      if (
+        trimmed ===
+        "Opening Anthropic sign-in in your browser. Paste the full authentication code here after sign-in."
+      ) {
+        return t("onboarding.claude.localLoginOpening")
+      }
+      if (trimmed === "Authentication code submitted; exchanging token locally...") {
+        return t("onboarding.claude.localLoginCodeSubmitted")
+      }
+      if (trimmed === "Local Claude Code credentials imported.") {
+        return t("onboarding.claude.localLoginImported")
+      }
+      const failedPrefix = "Claude Code login failed:"
+      if (trimmed.startsWith(failedPrefix)) {
+        return `${t("onboarding.claude.localLoginFailed")} ${trimmed.slice(failedPrefix.length).trim()}`
+      }
+      return trimmed
+    })
+    .join("\n")
 
   const handleBack = () => {
     setBillingMethod(null)
@@ -256,9 +281,9 @@ export function AnthropicOnboardingPage() {
               </div>
               {(isLocalLoginRunning || localLoginState === "importing") && (
                 <>
-                  {localLoginOutput && (
+                  {localizedLocalLoginOutput && (
                     <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 p-3 text-xs text-muted-foreground">
-                      {localLoginOutput.trim()}
+                      {localizedLocalLoginOutput}
                     </pre>
                   )}
                   {localLoginUrl && (

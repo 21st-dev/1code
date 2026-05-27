@@ -2212,7 +2212,7 @@ export function NewChatForm({
                     role="status"
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                    <span>Creating worktree...</span>
+                    <span>{t("chat.creatingWorktree")}</span>
                   </div>
                 )}
 
