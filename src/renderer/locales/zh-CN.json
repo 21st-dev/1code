@@ -113,10 +113,12 @@
     },
     "appearance": {
       "title": "外观",
-      "theme": "主题",
-      "themeDescription": "选择您喜欢的主题",
+      "theme": "界面主题",
+      "themeDescription": "选择或自定义您的界面配色方案",
       "light": "浅色",
+      "lightDescription": "浅色系统外观使用的主题",
       "dark": "深色",
+      "darkDescription": "深色系统外观使用的主题",
       "system": "跟随系统",
       "fontSize": "字体大小",
       "fontSizeDescription": "调整字体大小",
@@ -124,7 +126,11 @@
       "medium": "中",
       "large": "大",
       "language": "语言",
-      "languageDescription": "选择您喜欢的语言"
+      "languageDescription": "选择您喜欢的语言",
+      "workspaceIcon": "工作区图标",
+      "workspaceIconDescription": "在侧边栏工作区列表中显示项目图标",
+      "alwaysExpandTodoList": "始终展开待办事项列表",
+      "alwaysExpandTodoListDescription": "显示完整的待办事项列表而不是紧凑视图"
     },
     "preferences": {
       "title": "首选项"

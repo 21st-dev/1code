@@ -113,18 +113,24 @@
     },
     "appearance": {
       "title": "Appearance",
-      "theme": "Theme",
-      "themeDescription": "Select your preferred theme",
+      "theme": "Interface theme",
+      "themeDescription": "Select or customize your interface color scheme",
       "light": "Light",
+      "lightDescription": "Theme to use for light system appearance",
       "dark": "Dark",
-      "system": "System",
+      "darkDescription": "Theme to use for dark system appearance",
+      "system": "System preference",
       "fontSize": "Font Size",
       "fontSizeDescription": "Adjust the font size",
       "small": "Small",
       "medium": "Medium",
       "large": "Large",
       "language": "Language",
-      "languageDescription": "Select your preferred language"
+      "languageDescription": "Select your preferred language",
+      "workspaceIcon": "Workspace icon",
+      "workspaceIconDescription": "Show project icon in the sidebar workspace list",
+      "alwaysExpandTodoList": "Always expand to-do list",
+      "alwaysExpandTodoListDescription": "Show the full to-do list instead of compact view"
     },
     "preferences": {
       "title": "Preferences"
