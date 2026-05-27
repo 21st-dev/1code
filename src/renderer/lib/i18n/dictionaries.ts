@@ -973,6 +973,14 @@ export const en = {
   "settings.mcp.scopeCodexGlobal": "Global (~/.codex/config.toml)",
   "settings.mcp.scopeClaudeGlobal": "Global (~/.claude.json)",
   "settings.mcp.scopeProjectNamed": "Project: {project}",
+  "settings.mcp.scopeProjectRecommended":
+    "Recommended: saved only for this project instead of your user-wide config.",
+  "settings.mcp.scopeGlobalWarning":
+    "Global writes user-level config and can affect other projects.",
+  "settings.mcp.scopeCodexGlobalHint":
+    "This bundled Codex CLI currently adds MCP servers only to global config. Use Claude Code for project-scoped MCP servers.",
+  "settings.mcp.scopeNoProjectHint":
+    "Open a project to save an MCP server only for that project.",
   "settings.mcp.serverName": "Server Name",
   "settings.mcp.serverNameHint":
     "Alphanumeric, dashes, and underscores only",
@@ -1793,7 +1801,7 @@ export const en = {
   "githubWorkflow.status.ghMissingMessage":
     "Install GitHub CLI and make sure gh is available on PATH.",
   "githubWorkflow.status.notAuthenticatedMessage":
-    "Run gh auth login to let Locus read GitHub context through your local GitHub CLI session.",
+    "Run gh auth login to authorize the local GitHub CLI for repository, issue, pull request, and check context.\nLocus reuses that local CLI session; it does not receive your GitHub password or token.\nIf you skip or fail auth, local chat and repo work still work, but GitHub context, import, and write-back stay unavailable.",
   "githubWorkflow.status.notGithubRepoMessage":
     "This workspace origin is not a GitHub repository. Paste a full GitHub issue or PR URL to import a task.",
   "githubWorkflow.status.noPrMessage":
@@ -3361,6 +3369,14 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.scopeCodexGlobal": "全局 (~/.codex/config.toml)",
   "settings.mcp.scopeClaudeGlobal": "全局 (~/.claude.json)",
   "settings.mcp.scopeProjectNamed": "项目：{project}",
+  "settings.mcp.scopeProjectRecommended":
+    "推荐：只保存到当前项目，不写入用户级全局配置。",
+  "settings.mcp.scopeGlobalWarning":
+    "全局会写入用户级配置，并可能影响其它项目。",
+  "settings.mcp.scopeCodexGlobalHint":
+    "当前内置 Codex CLI 添加 MCP 服务器时只能写入全局配置。需要项目范围时请使用 Claude Code。",
+  "settings.mcp.scopeNoProjectHint":
+    "打开一个项目后，可以只为该项目保存 MCP 服务器。",
   "settings.mcp.serverName": "服务器名称",
   "settings.mcp.serverNameHint":
     "只能使用字母、数字、连字符和下划线",
@@ -4176,7 +4192,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "githubWorkflow.status.ghMissingMessage":
     "安装 GitHub CLI，并确认 gh 在 PATH 里可用。",
   "githubWorkflow.status.notAuthenticatedMessage":
-    "运行 gh auth login，让 Locus 通过本机 GitHub CLI session 读取 GitHub 上下文。",
+    "运行 gh auth login，授权本机 GitHub CLI 读取仓库、issue、PR 和检查结果上下文。\nLocus 复用这个本机 CLI session，不接收你的 GitHub 密码或 token。\n如果跳过或登录失败，本地对话和仓库操作仍可继续使用，但 GitHub 上下文、导入和写回会不可用。",
   "githubWorkflow.status.notGithubRepoMessage":
     "这个工作区的 origin 不是 GitHub 仓库。可以粘贴完整的 GitHub issue 或 PR URL 来导入任务。",
   "githubWorkflow.status.noPrMessage":

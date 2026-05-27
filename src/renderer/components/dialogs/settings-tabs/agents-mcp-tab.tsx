@@ -577,7 +577,7 @@ function CreateMcpServerForm({
   const [args, setArgs] = useState("")
   const [url, setUrl] = useState("")
   const [scope, setScope] = useState<"global" | "project">(
-    defaultProvider === "claude-code" && hasProject ? "project" : "global",
+    hasProject ? "project" : "global",
   )
   const effectiveScope = provider === "codex" ? "global" : scope
 
@@ -722,40 +722,65 @@ function CreateMcpServerForm({
           </div>
         )}
 
-        {provider === "codex" ? (
-          <div className="space-y-1.5">
-            <Label>{t("settings.mcp.scope")}</Label>
-            <Select value="global" disabled>
-              <SelectTrigger disabled>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="global">
-                  {t("settings.mcp.scopeCodexGlobal")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        ) : hasProject && (
-          <div className="space-y-1.5">
-            <Label>{t("settings.mcp.scope")}</Label>
-            <Select value={scope} onValueChange={(v) => setScope(v as "global" | "project")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="global">
-                  {t("settings.mcp.scopeClaudeGlobal")}
-                </SelectItem>
-                <SelectItem value="project">
-                  {projectName
-                    ? t("settings.mcp.scopeProjectNamed", { project: projectName })
-                    : t("common.project")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        <div className="space-y-1.5">
+          <Label>{t("settings.mcp.scope")}</Label>
+          {provider === "codex" ? (
+            <>
+              <Select value="global" disabled>
+                <SelectTrigger disabled>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">
+                    {t("settings.mcp.scopeCodexGlobal")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {t("settings.mcp.scopeCodexGlobalHint")}
+              </p>
+            </>
+          ) : hasProject ? (
+            <>
+              <Select value={scope} onValueChange={(v) => setScope(v as "global" | "project")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">
+                    {t("settings.mcp.scopeClaudeGlobal")}
+                  </SelectItem>
+                  <SelectItem value="project">
+                    {projectName
+                      ? t("settings.mcp.scopeProjectNamed", { project: projectName })
+                      : t("common.project")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {scope === "project"
+                  ? t("settings.mcp.scopeProjectRecommended")
+                  : t("settings.mcp.scopeGlobalWarning")}
+              </p>
+            </>
+          ) : (
+            <>
+              <Select value="global" disabled>
+                <SelectTrigger disabled>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">
+                    {t("settings.mcp.scopeClaudeGlobal")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {t("settings.mcp.scopeNoProjectHint")}
+              </p>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -765,8 +790,13 @@ function CreateMcpServerForm({
 export function AgentsMcpTab() {
   const { t } = useI18n()
   const lastSelectedAgentId = useAtomValue(lastSelectedAgentIdAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
   const defaultAddProvider: McpProvider =
-    lastSelectedAgentId === "codex" ? "codex" : "claude-code"
+    selectedProject?.path
+      ? "claude-code"
+      : lastSelectedAgentId === "codex"
+        ? "codex"
+        : "claude-code"
   const [selectedServerKey, setSelectedServerKey] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
@@ -777,7 +807,6 @@ export function AgentsMcpTab() {
     projectPath?: string | null
   } | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const selectedProject = useAtomValue(selectedProjectAtom)
   const providerSections = useMemo<ProviderSection[]>(
     () => [
       { provider: "claude-code", title: "CLAUDE CODE" },

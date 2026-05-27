@@ -255,7 +255,7 @@ function GitHubInlineStatus({
       <div className="text-xs font-medium text-foreground truncate">
         {title}
       </div>
-      <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+      <div className="mt-0.5 whitespace-pre-line text-[11px] leading-4 text-muted-foreground">
         {message}
       </div>
       {actionLabel && onAction && (
