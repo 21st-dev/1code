@@ -25,9 +25,9 @@
 - [x] 4.5 Commit the action-integration slice.
 
 ## 5. Verification
-- [ ] 5.1 Run focused Bun tests.
-- [ ] 5.2 Run `bun run ts:check`.
-- [ ] 5.3 Run `bun run build`.
-- [ ] 5.4 Start the real desktop app/dev runtime.
-- [ ] 5.5 Perform real click and visual smoke checks for workbench filters, task cards, and safe actions.
-- [ ] 5.6 Fix findings and commit verification follow-ups if needed.
+- [x] 5.1 Run focused Bun tests.
+- [x] 5.2 Run `bun run ts:check`.
+- [x] 5.3 Run `bun run build`.
+- [x] 5.4 Start the real desktop app/dev runtime.
+- [x] 5.5 Perform real click and visual smoke checks for workbench filters, task cards, and safe actions.
+- [x] 5.6 Fix findings and commit verification follow-ups if needed.
