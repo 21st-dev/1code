@@ -198,6 +198,31 @@ export function createLocalBrowserDomSummaryScript(): string {
   })()`
 }
 
+export function createLocalBrowserClickTrackerScript(): string {
+  return `(() => {
+    if (window.__LOCUS_LOCAL_BROWSER_CLICK_TRACKER__) return true;
+    window.__LOCUS_LOCAL_BROWSER_CLICK_TRACKER__ = true;
+    const describe = (node) => {
+      const element = node && node.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+      if (!element) return null;
+      const parts = [element.tagName.toLowerCase()];
+      const id = element.getAttribute("id");
+      if (id) parts.push("#" + id);
+      const testId = element.getAttribute("data-testid");
+      if (testId) parts.push("[data-testid='" + testId + "']");
+      const role = element.getAttribute("role");
+      if (role) parts.push("[role='" + role + "']");
+      const label = element.getAttribute("aria-label") || element.getAttribute("title") || element.innerText || element.textContent || "";
+      const text = String(label).replace(/\\s+/g, " ").trim().slice(0, 140);
+      return text ? parts.join("") + " - " + text : parts.join("");
+    };
+    document.addEventListener("click", (event) => {
+      window.__LOCUS_LAST_CLICKED_ELEMENT__ = describe(event.target);
+    }, true);
+    return true;
+  })()`
+}
+
 function withDefaultScheme(input: string): string {
   if (/^\d{2,5}$/.test(input)) return `http://localhost:${input}`
   if (input.startsWith("[::1]") || input.startsWith("localhost") || input.startsWith("127.0.0.1")) {

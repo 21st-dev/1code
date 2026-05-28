@@ -37,6 +37,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   ArrowDown,
   ChevronDown,
+  Globe2,
   ListTree,
   TerminalSquare
 } from "lucide-react"
@@ -94,6 +95,8 @@ import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
   agentsDiffSidebarWidthAtom,
+  localBrowserWorkbenchOpenAtomFamily,
+  localBrowserWorkbenchWidthAtom,
   agentsPlanSidebarWidthAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatUnseenChangesAtom,
@@ -117,6 +120,7 @@ import {
   MODEL_ID_MAP,
   pendingBuildPlanSubChatIdAtom,
   pendingConflictResolutionMessageAtom,
+  pendingLocalBrowserReportAtomFamily,
   pendingChatHistoryAtom,
   type PendingChatHistory,
   pendingMentionAtom,
@@ -215,6 +219,7 @@ import { AgentUserMessageBubble } from "../ui/agent-user-message-bubble"
 import { AgentUserQuestion, type AgentUserQuestionHandle } from "../ui/agent-user-question"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { ChatTitleEditor } from "../ui/chat-title-editor"
+import { LocalBrowserWorkbench } from "../ui/local-browser-workbench"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
 import { QuickCommentInput } from "../ui/quick-comment-input"
 import { SubChatSelector } from "../ui/sub-chat-selector"
@@ -1684,6 +1689,26 @@ const ChatViewInner = memo(function ChatViewInner({
     editorRef.current?.focus()
     setPendingMention(null)
   }, [isActive, pendingMention, setPendingMention])
+
+  const pendingLocalBrowserReportAtom = useMemo(
+    () => pendingLocalBrowserReportAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [pendingLocalBrowserReport, setPendingLocalBrowserReport] = useAtom(
+    pendingLocalBrowserReportAtom,
+  )
+  useEffect(() => {
+    if (!isActive || !pendingLocalBrowserReport) return
+    const current = editorRef.current?.getValue() ?? ""
+    const separator = current.trim().length > 0 ? "\n\n" : ""
+    editorRef.current?.setValue(`${current}${separator}${pendingLocalBrowserReport}`)
+    editorRef.current?.focus()
+    setPendingLocalBrowserReport(null)
+  }, [
+    isActive,
+    pendingLocalBrowserReport,
+    setPendingLocalBrowserReport,
+  ])
 
   // PR creation loading state - from atom to allow resetting after message sent
   const setIsCreatingPr = useSetAtom(isCreatingPrAtom)
@@ -4367,6 +4392,23 @@ export function ChatView({
   // Details sidebar state (unified sidebar that combines all right sidebars)
   const isUnifiedSidebarEnabled = useAtomValue(unifiedSidebarEnabledAtom)
   const [isDetailsSidebarOpen, setIsDetailsSidebarOpen] = useAtom(detailsSidebarOpenAtom)
+  const localBrowserWorkbenchAtom = useMemo(
+    () => localBrowserWorkbenchOpenAtomFamily(chatId),
+    [chatId],
+  )
+  const [isLocalBrowserWorkbenchOpen, setIsLocalBrowserWorkbenchOpen] = useAtom(localBrowserWorkbenchAtom)
+  const pendingActiveLocalBrowserReportAtom = useMemo(
+    () => pendingLocalBrowserReportAtomFamily(activeSubChatIdForPlan || ""),
+    [activeSubChatIdForPlan],
+  )
+  const setPendingActiveLocalBrowserReport = useSetAtom(pendingActiveLocalBrowserReportAtom)
+  const handleInsertLocalBrowserReport = useCallback((report: string) => {
+    if (!activeSubChatIdForPlan) {
+      toast.error(t("agent.chat.toast.noActiveChat"))
+      return
+    }
+    setPendingActiveLocalBrowserReport(report)
+  }, [activeSubChatIdForPlan, setPendingActiveLocalBrowserReport, t])
 
   // Resolved hotkeys for tooltips
   const toggleDetailsHotkey = useResolvedHotkeyDisplay("toggle-details")
@@ -6441,6 +6483,27 @@ Make sure to preserve all functionality from both branches when resolving confli
                     </>
                   )}
                 </div>
+                {/* Local Browser Workbench Button */}
+                {!isMobileFullscreen &&
+                  worktreePath &&
+                  !isLocalBrowserWorkbenchOpen && (
+                    <Tooltip delayDuration={500}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setIsLocalBrowserWorkbenchOpen(true)}
+                          className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                          aria-label={t("localBrowser.openWorkbench")}
+                        >
+                          <Globe2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {t("localBrowser.openWorkbench")}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 {/* Overview/Terminal Button - shows when sidebar is closed and worktree/sandbox exists (desktop only) */}
                 {!isMobileFullscreen &&
                   worktreePath && (
@@ -6763,6 +6826,31 @@ Make sure to preserve all functionality from both branches when resolving confli
             </>
           )}
         </div>
+
+        {/* Local Browser Workbench - local visual QA loop for dev servers/static previews */}
+        {!isMobileFullscreen && worktreePath && (
+          <ResizableSidebar
+            isOpen={isLocalBrowserWorkbenchOpen}
+            onClose={() => setIsLocalBrowserWorkbenchOpen(false)}
+            widthAtom={localBrowserWorkbenchWidthAtom}
+            minWidth={620}
+            maxWidth={1100}
+            side="right"
+            animationDuration={0}
+            initialWidth={0}
+            exitWidth={0}
+            showResizeTooltip={true}
+            className="bg-background border-l"
+            style={{ borderLeftWidth: "0.5px" }}
+          >
+            <LocalBrowserWorkbench
+              chatId={chatId}
+              worktreePath={worktreePath}
+              onClose={() => setIsLocalBrowserWorkbenchOpen(false)}
+              onInsertReport={handleInsertLocalBrowserReport}
+            />
+          </ResizableSidebar>
+        )}
 
         {/* Plan Sidebar - shows plan files on the right (leftmost right sidebar) */}
         {/* Only show when we have an active sub-chat with a plan */}

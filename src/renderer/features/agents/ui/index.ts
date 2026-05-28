@@ -12,6 +12,7 @@ export { ViewportToggle } from "./viewport-toggle"
 export { ScaleControl } from "./scale-control"
 export { DevicePresetsBar } from "./device-presets-bar"
 export { PreviewUrlInput } from "./preview-url-input"
+export { LocalBrowserWorkbench } from "./local-browser-workbench"
 
 // Diff components
 export { AgentDiffView, diffViewModeAtom } from "./agent-diff-view"
