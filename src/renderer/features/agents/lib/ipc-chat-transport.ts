@@ -16,6 +16,7 @@ import {
   normalizeLongTextAttachmentPart,
   type LongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
+import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
 import { trpcClient } from "../../../lib/trpc"
 import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
@@ -147,9 +148,15 @@ type IPCChatTransportConfig = {
 
 // Image attachment type matching the tRPC schema
 type ImageAttachment = {
-  base64Data: string
+  base64Data?: string
+  localRef?: string
+  attachmentId?: string
   mediaType: string
   filename?: string
+  sizeBytes?: number
+  width?: number
+  height?: number
+  sha256?: string
 }
 
 export class IPCChatTransport implements ChatTransport<UIMessage> {
@@ -529,6 +536,21 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const images: ImageAttachment[] = []
 
     for (const part of msg.parts) {
+      const attachment = normalizeChatImageAttachmentPart(part)
+      if (attachment) {
+        images.push({
+          attachmentId: attachment.attachmentId,
+          localRef: attachment.localRef,
+          mediaType: attachment.mediaType,
+          filename: attachment.filename,
+          sizeBytes: attachment.sizeBytes,
+          width: attachment.width,
+          height: attachment.height,
+          sha256: attachment.sha256,
+        })
+        continue
+      }
+
       // Check for data-image parts with base64 data
       if (part.type === "data-image" && (part as any).data) {
         const data = (part as any).data

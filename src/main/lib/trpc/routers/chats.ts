@@ -695,6 +695,26 @@ export const chatsRouter = router({
                 }),
               }),
               z.object({
+                type: z.literal("attachment-image"),
+                attachmentId: z.string(),
+                localRef: z.string(),
+                filename: z.string(),
+                mediaType: z.string(),
+                sizeBytes: z.number().int().nonnegative(),
+                width: z.number().optional(),
+                height: z.number().optional(),
+                sha256: z.string().optional(),
+              }),
+              z.object({
+                type: z.literal("data-file"),
+                data: z.object({
+                  url: z.string(),
+                  mediaType: z.string().optional(),
+                  filename: z.string(),
+                  size: z.number().optional(),
+                }),
+              }),
+              z.object({
                 type: z.literal("long-text-attachment"),
                 attachmentId: z.string(),
                 localRef: z.string(),

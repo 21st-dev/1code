@@ -5,6 +5,7 @@ import {
   normalizeLongTextAttachmentPart,
   type LongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
+import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import {
   codexApiKeyAtom,
@@ -51,9 +52,15 @@ type ACPChatTransportConfig = {
 }
 
 type ImageAttachment = {
-  base64Data: string
+  base64Data?: string
+  localRef?: string
+  attachmentId?: string
   mediaType: string
   filename?: string
+  sizeBytes?: number
+  width?: number
+  height?: number
+  sha256?: string
 }
 
 // When a sub-chat hits auth-error, force one fresh Codex ACP session on next send.
@@ -385,6 +392,21 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     const images: ImageAttachment[] = []
 
     for (const part of message.parts) {
+      const attachment = normalizeChatImageAttachmentPart(part)
+      if (attachment) {
+        images.push({
+          attachmentId: attachment.attachmentId,
+          localRef: attachment.localRef,
+          mediaType: attachment.mediaType,
+          filename: attachment.filename,
+          sizeBytes: attachment.sizeBytes,
+          width: attachment.width,
+          height: attachment.height,
+          sha256: attachment.sha256,
+        })
+        continue
+      }
+
       if (part.type === "data-image" && (part as any).data) {
         const data = (part as any).data
         if (data.base64Data && data.mediaType) {

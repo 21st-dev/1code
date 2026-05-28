@@ -1942,7 +1942,7 @@ const ChatViewInner = memo(function ChatViewInner({
     isUploading,
     setImagesFromDraft,
     setFilesFromDraft,
-  } = useAgentsFileUpload()
+  } = useAgentsFileUpload({ chatId: parentChatId, subChatId })
 
   // Text context selection hook (for selecting text from assistant messages and diff)
   const {
@@ -2955,16 +2955,32 @@ const ChatViewInner = memo(function ChatViewInner({
 
       // Extract images from user message for restoring into input
       const userMsgImages: UploadedImage[] = (userMsg.parts || [])
-        .filter((p: any) => p.type === "data-image" && p.data)
+        .filter(
+          (p: any) =>
+            (p.type === "data-image" && p.data) ||
+            (p.type === "attachment-image" && p.localRef),
+        )
         .map((p: any) => ({
           id: crypto.randomUUID(),
-          filename: p.data.filename || "image",
-          url: p.data.url || (p.data.base64Data && p.data.mediaType
-            ? `data:${p.data.mediaType};base64,${p.data.base64Data}`
-            : ""),
-          base64Data: p.data.base64Data,
-          mediaType: p.data.mediaType,
-          isLoading: false,
+          kind: "image" as const,
+          filename: p.type === "attachment-image" ? p.filename || "image" : p.data.filename || "image",
+          url:
+            p.type === "attachment-image"
+              ? ""
+              : p.data.url || (p.data.base64Data && p.data.mediaType
+                ? `data:${p.data.mediaType};base64,${p.data.base64Data}`
+                : ""),
+          base64Data: p.type === "data-image" ? p.data.base64Data : undefined,
+          localRef: p.type === "attachment-image" ? p.localRef : undefined,
+          attachmentId:
+            p.type === "attachment-image" ? p.attachmentId : undefined,
+          sizeBytes: p.type === "attachment-image" ? p.sizeBytes : undefined,
+          width: p.type === "attachment-image" ? p.width : undefined,
+          height: p.type === "attachment-image" ? p.height : undefined,
+          sha256: p.type === "attachment-image" ? p.sha256 : undefined,
+          mediaType: p.type === "attachment-image" ? p.mediaType : p.data.mediaType,
+          isLoading: p.type === "attachment-image",
+          status: p.type === "attachment-image" ? "ready" as const : undefined,
         }))
 
       setIsRollingBack(true)
@@ -3419,7 +3435,8 @@ const ChatViewInner = memo(function ChatViewInner({
     const currentDiffTextContexts = diffTextContextsRef.current
     const currentPastedTexts = pastedTextsRef.current
     const hasImages =
-      currentImages.filter((img) => !img.isLoading && img.url).length > 0
+      currentImages.filter((img) => !img.isLoading && (img.localRef || img.url))
+        .length > 0
     const hasTextContexts = currentTextContexts.length > 0
     const hasDiffTextContexts = currentDiffTextContexts.length > 0
     const hasPastedTexts = currentPastedTexts.length > 0
@@ -3429,7 +3446,7 @@ const ChatViewInner = memo(function ChatViewInner({
     // If streaming, add to queue instead of sending directly
     if (isStreamingRef.current) {
       const queuedImages = currentImages
-        .filter((img) => !img.isLoading && img.url)
+        .filter((img) => !img.isLoading && (img.localRef || img.url))
         .map(toQueuedImage)
       const queuedFiles = currentFiles
         .filter((f) => !f.isLoading && f.url)
@@ -3638,7 +3655,8 @@ const ChatViewInner = memo(function ChatViewInner({
     const currentFiles = filesRef.current
     const currentPastedTexts = pastedTextsRef.current
     const hasImages =
-      currentImages.filter((img) => !img.isLoading && img.url).length > 0
+      currentImages.filter((img) => !img.isLoading && (img.localRef || img.url))
+        .length > 0
     const hasPastedTexts = currentPastedTexts.length > 0
 
     if (!hasText && !hasImages && !hasPastedTexts) return

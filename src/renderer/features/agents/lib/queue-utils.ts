@@ -6,6 +6,10 @@
 import type { UploadedImage, UploadedFile } from "../hooks/use-agents-file-upload"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import type { LongTextAttachment } from "../../../../shared/long-text-attachments"
+import type {
+  ChatImageAttachmentSource,
+  ChatImageMediaType,
+} from "../../../../shared/chat-attachments"
 
 export interface QueuedImage {
   id: string
@@ -13,6 +17,14 @@ export interface QueuedImage {
   mediaType: string
   filename?: string
   base64Data?: string
+  localRef?: string
+  attachmentId?: string
+  sizeBytes?: number
+  width?: number
+  height?: number
+  sha256?: string
+  source?: ChatImageAttachmentSource
+  kind?: "image"
 }
 
 export interface QueuedFile {
@@ -128,9 +140,17 @@ export function toQueuedImage(img: UploadedImage): QueuedImage {
   return {
     id: img.id,
     url: img.url,
-    mediaType: img.mediaType || "image/png",
+    mediaType: img.mediaType || ("image/png" satisfies ChatImageMediaType),
     filename: img.filename,
-    base64Data: img.base64Data,
+    localRef: img.localRef,
+    base64Data: img.localRef ? undefined : img.base64Data,
+    attachmentId: img.attachmentId,
+    sizeBytes: img.sizeBytes,
+    width: img.width,
+    height: img.height,
+    sha256: img.sha256,
+    source: img.source,
+    kind: img.kind,
   }
 }
 

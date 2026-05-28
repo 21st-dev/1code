@@ -6,6 +6,7 @@ import type {
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import type { SelectedTextContext } from "./queue-utils"
 import type { LongTextAttachment } from "../../../../shared/long-text-attachments"
+import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
 
 // Constants
 export const DRAFTS_STORAGE_KEY = "agent-drafts-global"
@@ -20,8 +21,15 @@ const draftBlobUrls = new Map<string, string[]>()
 export interface DraftImage {
   id: string
   filename: string
-  base64Data: string
   mediaType: string
+  localRef?: string
+  attachmentId?: string
+  sizeBytes?: number
+  width?: number
+  height?: number
+  sha256?: string
+  source?: ChatImageAttachmentSource
+  base64Data?: string // legacy draft compatibility only
 }
 
 export interface DraftFile {
@@ -374,6 +382,20 @@ async function blobUrlToBase64(blobUrl: string): Promise<string> {
  * Convert UploadedImage to DraftImage (filter out images without base64)
  */
 export function toDraftImage(img: UploadedImage): DraftImage | null {
+  if (img.localRef) {
+    return {
+      id: img.id,
+      filename: img.filename,
+      mediaType: img.mediaType || "image/png",
+      localRef: img.localRef,
+      attachmentId: img.attachmentId,
+      sizeBytes: img.sizeBytes,
+      width: img.width,
+      height: img.height,
+      sha256: img.sha256,
+      source: img.source,
+    }
+  }
   if (!img.base64Data) return null
   return {
     id: img.id,
@@ -466,6 +488,24 @@ export function revokeAllDraftBlobUrls(): void {
  * Tracks blob URL for cleanup to prevent memory leaks
  */
 export function fromDraftImage(draft: DraftImage): UploadedImage | null {
+  if (draft.localRef) {
+    return {
+      id: draft.id,
+      kind: "image",
+      source: draft.source || "file-picker",
+      filename: draft.filename,
+      url: "",
+      localRef: draft.localRef,
+      attachmentId: draft.attachmentId,
+      sizeBytes: draft.sizeBytes,
+      width: draft.width,
+      height: draft.height,
+      sha256: draft.sha256,
+      mediaType: draft.mediaType,
+      isLoading: true,
+      status: "ready",
+    }
+  }
   if (!draft.base64Data) return null
   try {
     const byteCharacters = atob(draft.base64Data)

@@ -45,6 +45,7 @@ import {
 } from "../../provider-profiles/storage"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import { createRollbackStash } from "../../git/stash"
+import { resolveChatImageAttachments } from "../../chat-attachments"
 import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import {
   ensureMcpTokensFresh,
@@ -287,11 +288,16 @@ const clearPendingApprovals = (message: string, subChatId?: string) => {
   }
 }
 
-// Image attachment schema
 const imageAttachmentSchema = z.object({
-  base64Data: z.string(),
+  base64Data: z.string().optional(),
+  localRef: z.string().optional(),
+  attachmentId: z.string().optional(),
   mediaType: z.string(), // e.g. "image/png", "image/jpeg"
   filename: z.string().optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  sha256: z.string().optional(),
 })
 
 export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
@@ -342,6 +348,78 @@ function longTextAttachmentSignatureFromInput(
       kind: attachment.kind,
     }))
   )
+}
+
+function chatImageAttachmentSignatureFromParts(parts: any[] | undefined): string {
+  return JSON.stringify(
+    (parts ?? [])
+      .filter(
+        (part: any) =>
+          part?.type === "attachment-image" || part?.type === "data-image",
+      )
+      .map((part: any) => {
+        if (part.type === "attachment-image") {
+          return {
+            localRef: part.localRef,
+            sizeBytes: part.sizeBytes,
+            mediaType: part.mediaType,
+          }
+        }
+        return {
+          legacy: true,
+          filename: part.data?.filename,
+          mediaType: part.data?.mediaType,
+          base64Length:
+            typeof part.data?.base64Data === "string"
+              ? part.data.base64Data.length
+              : 0,
+        }
+      })
+  )
+}
+
+function chatImageAttachmentSignatureFromInput(
+  images: z.infer<typeof imageAttachmentSchema>[] | undefined
+): string {
+  return JSON.stringify(
+    (images ?? []).map((image) => ({
+      localRef: image.localRef,
+      sizeBytes: image.sizeBytes,
+      mediaType: image.mediaType,
+      legacy: image.localRef ? undefined : Boolean(image.base64Data),
+      base64Length:
+        !image.localRef && image.base64Data ? image.base64Data.length : 0,
+    }))
+  )
+}
+
+function buildChatImageAttachmentParts(
+  images: z.infer<typeof imageAttachmentSchema>[] | undefined
+): any[] {
+  return (images ?? []).map((image) => {
+    if (image.localRef) {
+      return {
+        type: "attachment-image",
+        attachmentId: image.attachmentId || image.localRef,
+        localRef: image.localRef,
+        filename: image.filename || "image",
+        mediaType: image.mediaType,
+        sizeBytes: image.sizeBytes || 0,
+        width: image.width,
+        height: image.height,
+        sha256: image.sha256,
+      }
+    }
+
+    return {
+      type: "data-image",
+      data: {
+        base64Data: image.base64Data,
+        mediaType: image.mediaType,
+        filename: image.filename,
+      },
+    }
+  })
 }
 
 /**
@@ -898,6 +976,15 @@ export const claudeRouter = router({
               ? lastAssistantMsg?.metadata?.sdkMessageUuid || null
               : null
             const historyEnabled = input.historyEnabled === true
+            let resolvedImages: ImageAttachment[] = []
+            try {
+              resolvedImages = await resolveChatImageAttachments(input.images)
+            } catch (attachmentError) {
+              emitError(attachmentError, "Image attachment unavailable")
+              safeEmit({ type: "finish" } as UIMessageChunk)
+              safeComplete()
+              return
+            }
 
             // Clear shouldForkResume flag after reading (consumed once) and persist to DB
             if (shouldForkResume) {
@@ -921,7 +1008,9 @@ export const claudeRouter = router({
               lastMsg?.role === "user" &&
               lastMsgText === input.prompt &&
               longTextAttachmentSignatureFromParts(lastMsg?.parts) ===
-                longTextAttachmentSignatureFromInput(input.longTextAttachments)
+                longTextAttachmentSignatureFromInput(input.longTextAttachments) &&
+              chatImageAttachmentSignatureFromParts(lastMsg?.parts) ===
+                chatImageAttachmentSignatureFromInput(input.images)
 
             // 2. Create user message and save BEFORE streaming (skip if duplicate)
             let userMessage: any
@@ -932,18 +1021,7 @@ export const claudeRouter = router({
               messagesToSave = existingMessages
             } else {
               const parts: any[] = [{ type: "text", text: input.prompt }]
-              if (input.images && input.images.length > 0) {
-                for (const img of input.images) {
-                  parts.push({
-                    type: "data-image",
-                    data: {
-                      base64Data: img.base64Data,
-                      mediaType: img.mediaType,
-                      filename: img.filename,
-                    },
-                  })
-                }
-              }
+              parts.push(...buildChatImageAttachmentParts(input.images))
               parts.push(...buildLongTextAttachmentParts(input.longTextAttachments))
               userMessage = {
                 id: crypto.randomUUID(),
@@ -1181,10 +1259,10 @@ export const claudeRouter = router({
             // Otherwise use simple string prompt
             let prompt: string | AsyncIterable<any> = finalPrompt
 
-            if (input.images && input.images.length > 0) {
+            if (resolvedImages.length > 0) {
               // Create message content array with images first, then text
               const messageContent: any[] = [
-                ...input.images.map((img) => ({
+                ...resolvedImages.map((img) => ({
                   type: "image" as const,
                   source: {
                     type: "base64" as const,

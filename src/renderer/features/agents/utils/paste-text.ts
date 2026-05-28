@@ -1,5 +1,6 @@
 import { toast } from "sonner"
 import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
+import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
 
 // Threshold for auto-converting large pasted text to a file (5KB)
 // Text larger than this will be saved as a file attachment instead of pasted inline
@@ -90,7 +91,10 @@ export function insertTextAtCursor(text: string, editableElement: Element): void
  */
 export function handlePasteEvent(
   e: React.ClipboardEvent,
-  handleAddAttachments: (files: File[]) => void,
+  handleAddAttachments: (
+    files: File[],
+    source?: ChatImageAttachmentSource,
+  ) => void,
   addPastedText?: AddPastedTextFn,
 ): void {
   const files = Array.from(e.clipboardData.items)
@@ -100,7 +104,7 @@ export function handlePasteEvent(
 
   if (files.length > 0) {
     e.preventDefault()
-    handleAddAttachments(files)
+    handleAddAttachments(files, "clipboard")
   } else {
     // Paste as plain text only (prevents HTML from being pasted)
     const text = e.clipboardData.getData("text/plain")

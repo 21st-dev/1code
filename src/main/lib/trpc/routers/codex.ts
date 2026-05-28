@@ -18,6 +18,7 @@ import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { resolveChatImageAttachments } from "../../chat-attachments"
 import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
@@ -30,9 +31,15 @@ import {
 import { publicProcedure, router } from "../index"
 
 const imageAttachmentSchema = z.object({
-  base64Data: z.string(),
+  base64Data: z.string().optional(),
+  localRef: z.string().optional(),
+  attachmentId: z.string().optional(),
   mediaType: z.string(),
   filename: z.string().optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  sha256: z.string().optional(),
 })
 
 const longTextAttachmentSchema = z.object({
@@ -79,6 +86,49 @@ function longTextAttachmentSignatureFromInput(
       localRef: attachment.localRef,
       byteLength: attachment.byteLength,
       kind: attachment.kind,
+    }))
+  )
+}
+
+function chatImageAttachmentSignatureFromParts(parts: any[] | undefined): string {
+  return JSON.stringify(
+    (parts ?? [])
+      .filter(
+        (part: any) =>
+          part?.type === "attachment-image" || part?.type === "data-image",
+      )
+      .map((part: any) => {
+        if (part.type === "attachment-image") {
+          return {
+            localRef: part.localRef,
+            sizeBytes: part.sizeBytes,
+            mediaType: part.mediaType,
+          }
+        }
+        return {
+          legacy: true,
+          filename: part.data?.filename,
+          mediaType: part.data?.mediaType,
+          base64Length:
+            typeof part.data?.base64Data === "string"
+              ? part.data.base64Data.length
+              : 0,
+        }
+      })
+  )
+}
+
+function chatImageAttachmentSignatureFromInput(
+  images: z.infer<typeof imageAttachmentSchema>[] | undefined
+): string {
+  return JSON.stringify(
+    (images ?? []).map((image) => ({
+      localRef: image.localRef,
+      sizeBytes: image.sizeBytes,
+      mediaType: image.mediaType,
+      legacy: image.localRef ? undefined : Boolean(image.base64Data),
+      base64Length:
+        !image.localRef && image.base64Data ? image.base64Data.length : 0,
     }))
   )
 }
@@ -1511,8 +1561,14 @@ function buildUserParts(
   images:
     | Array<{
         base64Data?: string
+        localRef?: string
+        attachmentId?: string
         mediaType?: string
         filename?: string
+        sizeBytes?: number
+        width?: number
+        height?: number
+        sha256?: string
       }>
     | undefined,
   longTextAttachments?: z.infer<typeof longTextAttachmentSchema>[],
@@ -1521,6 +1577,20 @@ function buildUserParts(
 
   if (images && images.length > 0) {
     for (const image of images) {
+      if (image.localRef && image.mediaType) {
+        parts.push({
+          type: "attachment-image",
+          attachmentId: image.attachmentId || image.localRef,
+          localRef: image.localRef,
+          filename: image.filename || "image",
+          mediaType: image.mediaType,
+          sizeBytes: image.sizeBytes || 0,
+          width: image.width,
+          height: image.height,
+          sha256: image.sha256,
+        })
+        continue
+      }
       if (!image.base64Data || !image.mediaType) continue
       parts.push({
         type: "data-image",
@@ -1542,8 +1612,8 @@ function buildModelMessageContent(
   prompt: string,
   images:
     | Array<{
-        base64Data?: string
-        mediaType?: string
+        base64Data: string
+        mediaType: string
         filename?: string
       }>
     | undefined,
@@ -2043,6 +2113,25 @@ export const codexRouter = router({
             }
 
             const existingMessages = parseStoredMessages(existingSubChat.messages)
+            let resolvedImages: Array<{
+              base64Data: string
+              mediaType: string
+              filename?: string
+            }> = []
+            try {
+              resolvedImages = await resolveChatImageAttachments(input.images)
+            } catch (attachmentError) {
+              safeEmit({
+                type: "error",
+                errorText:
+                  attachmentError instanceof Error
+                    ? `Image attachment unavailable: ${attachmentError.message}`
+                    : `Image attachment unavailable: ${String(attachmentError)}`,
+              })
+              safeEmit({ type: "finish" })
+              safeComplete()
+              return
+            }
             let codexProviderProfile:
               | {
                   id: string
@@ -2084,7 +2173,9 @@ export const codexRouter = router({
               lastMessage?.role === "user" &&
               extractPromptFromStoredMessage(lastMessage) === input.prompt &&
               longTextAttachmentSignatureFromParts(lastMessage?.parts) ===
-                longTextAttachmentSignatureFromInput(input.longTextAttachments)
+                longTextAttachmentSignatureFromInput(input.longTextAttachments) &&
+              chatImageAttachmentSignatureFromParts(lastMessage?.parts) ===
+                chatImageAttachmentSignatureFromInput(input.images)
 
             let messagesForStream = existingMessages
             const isAuthoritativeRun = () => {
@@ -2251,7 +2342,7 @@ export const codexRouter = router({
                   role: "user",
                   content: buildModelMessageContent(
                     finalPrompt,
-                    input.images,
+                    resolvedImages,
                   ),
                 },
               ],

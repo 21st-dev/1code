@@ -6,6 +6,7 @@ import type {
   LongTextAttachment,
   LongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
+import type { ChatImageAttachmentSendInput } from "../../../../shared/chat-attachments"
 
 // Agent mode type - extensible for future modes like "debug"
 export type AgentMode = "agent" | "plan"
@@ -687,11 +688,7 @@ export type PendingAuthRetryMessage = {
   subChatId: string  // Required: only retry in the correct chat
   provider: "claude-code" | "codex"
   prompt: string
-  images?: Array<{
-    base64Data: string
-    mediaType: string
-    filename?: string
-  }>
+  images?: ChatImageAttachmentSendInput[]
   longTextAttachments?: LongTextAttachmentPart[]
   readyToRetry: boolean  // Only retry when this is true (set by modal on OAuth success)
 }

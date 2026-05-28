@@ -4,12 +4,12 @@ In progress. The user explicitly resumed `add-rich-chat-attachments`.
 ## 1. Attachment Model and Storage
 - [x] 1.1 Define shared attachment metadata types for renderer and main-process boundaries.
 - [x] 1.2 Add a main-process attachment staging service with validation, local storage, and cleanup.
-- [ ] 1.3 Store draft/message attachment references without long-lived base64 payloads.
-- [ ] 1.4 Preserve compatibility with existing `data-image` message parts during migration.
+- [x] 1.3 Store draft/message attachment references without long-lived base64 payloads.
+- [x] 1.4 Preserve compatibility with existing `data-image` message parts during migration.
 
 ## 2. Input UI
 - [ ] 2.1 Make new-chat and active-chat inputs share the same image acceptance rules.
-- [ ] 2.2 Support file picker, drag-and-drop, and clipboard paste for images in both input surfaces.
+- [x] 2.2 Support file picker, drag-and-drop, and clipboard paste for images in both input surfaces.
 - [ ] 2.3 Allow image-only sends in new chats, active chats, queued sends, and force sends.
 - [ ] 2.4 Add attachment preview, remove, loading, failed, size, and unsupported-type states.
 - [ ] 2.5 Keep file mentions and small text-file context behavior working alongside image attachments.
@@ -21,10 +21,10 @@ In progress. The user explicitly resumed `add-rich-chat-attachments`.
 - [ ] 3.4 Re-check attachment capability when provider or model selection changes.
 
 ## 4. Send Pipeline
-- [ ] 4.1 Resolve staged image refs into Claude image payloads in the main process.
-- [ ] 4.2 Resolve staged image refs into Codex image payloads in the main process.
-- [ ] 4.3 Preserve image refs through queue processing and auth retry flows.
-- [ ] 4.4 Ensure transport/server logs never include base64 image bytes.
+- [x] 4.1 Resolve staged image refs into Claude image payloads in the main process.
+- [x] 4.2 Resolve staged image refs into Codex image payloads in the main process.
+- [x] 4.3 Preserve image refs through queue processing and auth retry flows.
+- [x] 4.4 Ensure transport/server logs never include base64 image bytes.
 
 ## 5. Message Rendering and Drafts
 - [ ] 5.1 Render sent image attachments from local refs in user bubbles.

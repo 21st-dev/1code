@@ -9,11 +9,9 @@ import { agentChatStore } from "../stores/agent-chat-store"
 import { trackMessageSent } from "../../../lib/analytics"
 import { appStore } from "../../../lib/jotai-store"
 import { loadingSubChatsAtom, setLoading, clearLoading } from "../atoms"
-import { MENTION_PREFIXES } from "../mentions/agents-mentions-editor"
-import { utf8ToBase64 } from "../utils/base64"
 import type { AgentQueueItem } from "../lib/queue-utils"
 import { useI18n } from "../../../lib/i18n"
-import { toLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
+import { buildAgentMessageParts } from "../lib/message-parts"
 
 // Delay between processing queue items (ms)
 const QUEUE_PROCESS_DELAY = 1000
@@ -72,58 +70,22 @@ export function QueueProcessor() {
       }
 
       try {
-        // Build message parts from queued item
-        const parts: any[] = [
-          ...(item.images || []).map((img) => ({
-            type: "data-image" as const,
-            data: {
-              url: img.url,
-              mediaType: img.mediaType,
-              filename: img.filename,
-              base64Data: img.base64Data,
-            },
+        // Build message parts from queued item. New image attachments stay as
+        // local refs; legacy queued images can still fall back to data-image.
+        const parts = buildAgentMessageParts({
+          text: item.message,
+          images: item.images,
+          files: item.files,
+          textContexts: item.textContexts?.map((context) => ({
+            ...context,
+            preview: context.text.slice(0, 50),
           })),
-          ...(item.files || []).map((f) => ({
-            type: "data-file" as const,
-            data: {
-              url: f.url,
-              mediaType: f.mediaType,
-              filename: f.filename,
-              size: f.size,
-            },
+          diffTextContexts: item.diffTextContexts?.map((context) => ({
+            ...context,
+            preview: context.text.slice(0, 50),
           })),
-        ]
-
-        // Expand text contexts and diff text contexts as legacy mention tokens.
-        // Long pasted text is preserved as metadata parts, not prompt text.
-        let mentionPrefix = ""
-
-        if (item.textContexts && item.textContexts.length > 0) {
-          const quoteMentions = item.textContexts.map((tc) => {
-            const preview = tc.text.slice(0, 50).replace(/[:\[\]]/g, "")
-            const encodedText = utf8ToBase64(tc.text)
-            return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
-          })
-          mentionPrefix += quoteMentions.join(" ") + " "
-        }
-
-        if (item.diffTextContexts && item.diffTextContexts.length > 0) {
-          const diffMentions = item.diffTextContexts.map((dtc) => {
-            const preview = dtc.text.slice(0, 50).replace(/[:\[\]]/g, "")
-            const encodedText = utf8ToBase64(dtc.text)
-            const lineNum = dtc.lineNumber || 0
-            return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
-          })
-          mentionPrefix += diffMentions.join(" ") + " "
-        }
-
-        if (item.pastedTexts && item.pastedTexts.length > 0) {
-          parts.push(...item.pastedTexts.map(toLongTextAttachmentPart))
-        }
-
-        if (item.message || mentionPrefix) {
-          parts.push({ type: "text", text: mentionPrefix + (item.message || "") })
-        }
+          pastedTexts: item.pastedTexts,
+        })
 
         // Get mode from sub-chat store for analytics
         const subChatMeta = useAgentSubChatStore

@@ -114,10 +114,6 @@ import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
 import {
-  toLongTextAttachmentPart,
-  type LongTextAttachmentPart,
-} from "../../../../shared/long-text-attachments"
-import {
   loadGlobalDrafts,
   saveGlobalDrafts,
   generateDraftId,
@@ -125,6 +121,7 @@ import {
   markDraftVisible,
   type DraftProject,
 } from "../lib/drafts"
+import { buildAgentMessageParts } from "../lib/message-parts"
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
@@ -625,6 +622,8 @@ export function NewChatForm({
     }
   }, [validatedProject?.id, lastSelectedBranches])
 
+  const tempAttachmentScopeRef = useRef(`new-chat-images-${Date.now()}`)
+
   // File upload hook
   const {
     images,
@@ -635,7 +634,7 @@ export function NewChatForm({
     clearImages,
     clearFiles,
     isUploading,
-  } = useAgentsFileUpload()
+  } = useAgentsFileUpload({ subChatId: tempAttachmentScopeRef.current })
 
   // Pasted text files - use a stable temp ID for new chat
   const tempPastedIdRef = useRef(`new-chat-${Date.now()}`)
@@ -1170,7 +1169,8 @@ export function NewChatForm({
 
     // Allow send if there's text, images, files, or pasted text files
     const hasText = message.trim().length > 0
-    const hasImages = images.filter((img) => !img.isLoading && img.url).length > 0
+    const hasImages =
+      images.filter((img) => !img.isLoading && (img.localRef || img.url)).length > 0
     const hasFiles = files.filter((f) => !f.isLoading).length > 0
     const hasPastedTexts = pastedTexts.length > 0
 
@@ -1180,59 +1180,13 @@ export function NewChatForm({
 
     message = await expandCustomSlashCommand(message, projectForChat.path)
 
-    // Build message parts array (images first, then text, then hidden file contents)
-    type MessagePart =
-      | { type: "text"; text: string }
-      | LongTextAttachmentPart
-      | {
-          type: "data-image"
-          data: {
-            url: string
-            mediaType?: string
-            filename?: string
-            base64Data?: string
-          }
-        }
-      | {
-          type: "file-content"
-          filePath: string
-          content: string
-        }
-
-    const parts: MessagePart[] = images
-      .filter((img) => !img.isLoading && img.url)
-      .map((img) => ({
-        type: "data-image" as const,
-        data: {
-          url: img.url!,
-          mediaType: img.mediaType,
-          filename: img.filename,
-          base64Data: img.base64Data,
-        },
-      }))
-
     let finalMessage = message.trim()
-    if (pastedTexts.length > 0) {
-      parts.push(...pastedTexts.map(toLongTextAttachmentPart))
-    }
-
-    if (finalMessage) {
-      parts.push({ type: "text" as const, text: finalMessage })
-    }
-
-    // Add cached file contents as hidden parts (sent to agent but not displayed in UI)
-    // These are from dropped text files - content is embedded so agent sees it immediately
-    if (fileContentsRef.current.size > 0) {
-      for (const [mentionId, content] of fileContentsRef.current.entries()) {
-        // Extract file path from mentionId (file:local:path or file:external:path)
-        const filePath = mentionId.replace(/^file:(local|external):/, "")
-        parts.push({
-          type: "file-content" as const,
-          filePath,
-          content,
-        })
-      }
-    }
+    const parts = buildAgentMessageParts({
+      text: finalMessage,
+      images,
+      pastedTexts,
+      fileContents: fileContentsRef.current.entries(),
+    })
 
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
@@ -1495,7 +1449,7 @@ export function NewChatForm({
 
       // Handle images via existing attachment system (base64)
       if (imageFiles.length > 0) {
-        handleAddAttachments(imageFiles)
+        handleAddAttachments(imageFiles, "drag-drop")
       }
 
       // Process other files - for text files, read content and add as file mention

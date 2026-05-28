@@ -2,12 +2,17 @@ import { useEffect } from "react"
 import { useAtom } from "jotai"
 import { pendingAuthRetryMessageAtom } from "../atoms"
 import type { LongTextAttachmentPart } from "../../../../shared/long-text-attachments"
+import {
+  isSupportedChatImageMediaType,
+  type ChatImageAttachmentPart,
+} from "../../../../shared/chat-attachments"
 
 type AuthRetryProvider = "claude-code" | "codex"
 
 type AuthRetryPart =
   | { type: "text"; text: string }
   | { type: "data-image"; data: unknown }
+  | ChatImageAttachmentPart
   | LongTextAttachmentPart
 
 type SendAuthRetryMessage = (message: {
@@ -48,14 +53,28 @@ export function useAuthRetry({
     ]
 
     for (const img of pendingAuthRetry.images ?? []) {
-      parts.push({
-        type: "data-image",
-        data: {
-          base64Data: img.base64Data,
+      if (img.localRef && isSupportedChatImageMediaType(img.mediaType)) {
+        parts.push({
+          type: "attachment-image",
+          attachmentId: img.attachmentId || img.localRef,
+          localRef: img.localRef,
+          filename: img.filename || "image",
           mediaType: img.mediaType,
-          filename: img.filename,
-        },
-      })
+          sizeBytes: img.sizeBytes || 0,
+          width: img.width,
+          height: img.height,
+          sha256: img.sha256,
+        })
+      } else {
+        parts.push({
+          type: "data-image",
+          data: {
+            base64Data: img.base64Data,
+            mediaType: img.mediaType,
+            filename: img.filename,
+          },
+        })
+      }
     }
 
     for (const attachment of pendingAuthRetry.longTextAttachments ?? []) {

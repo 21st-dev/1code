@@ -5,13 +5,29 @@ import type {
   LongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
 import { toLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
+import {
+  isSupportedChatImageMediaType,
+  toChatImageAttachmentPart,
+  type ChatImageAttachment,
+  type ChatImageAttachmentPart,
+} from "../../../../shared/chat-attachments"
 
 type SendableImage = {
+  id?: string
   isLoading?: boolean
   url?: string
   mediaType?: string
   filename?: string
   base64Data?: string
+  localRef?: string
+  attachmentId?: string
+  sizeBytes?: number
+  width?: number
+  height?: number
+  sha256?: string
+  kind?: "image"
+  source?: ChatImageAttachment["source"]
+  status?: string
 }
 
 type SendableFile = {
@@ -41,6 +57,7 @@ type MentionPastedText = LongTextAttachment & {
 }
 
 export type AgentUserMessagePart =
+  | ChatImageAttachmentPart
   | {
       type: "data-image"
       data: {
@@ -70,6 +87,43 @@ function sanitizePreview(preview: string, extraChars = "") {
 
 function contextPreview(ctx: MentionTextContext | MentionDiffTextContext) {
   return ctx.preview ?? ctx.text.slice(0, 50)
+}
+
+function toSendableImagePart(
+  img: SendableImage
+): AgentUserMessagePart | null {
+  if (img.isLoading || img.status === "failed") return null
+
+  if (
+    img.localRef &&
+    img.mediaType &&
+    isSupportedChatImageMediaType(img.mediaType)
+  ) {
+    return toChatImageAttachmentPart({
+      id: img.attachmentId || img.id || img.localRef,
+      kind: "image",
+      source: img.source || "file-picker",
+      filename: img.filename || "image",
+      mediaType: img.mediaType,
+      sizeBytes: img.sizeBytes || 0,
+      width: img.width,
+      height: img.height,
+      sha256: img.sha256,
+      localRef: img.localRef,
+      status: "ready",
+    })
+  }
+
+  if (!img.url) return null
+  return {
+    type: "data-image",
+    data: {
+      url: img.url,
+      mediaType: img.mediaType,
+      filename: img.filename,
+      base64Data: img.base64Data,
+    },
+  }
 }
 
 export function buildMentionPrefix({
@@ -115,16 +169,8 @@ export function buildAgentMessageParts({
 }) {
   const parts: AgentUserMessagePart[] = [
     ...images
-      .filter((img) => !img.isLoading && img.url)
-      .map((img) => ({
-        type: "data-image" as const,
-        data: {
-          url: img.url!,
-          mediaType: img.mediaType,
-          filename: img.filename,
-          base64Data: img.base64Data,
-        },
-      })),
+      .map(toSendableImagePart)
+      .filter((part): part is AgentUserMessagePart => part !== null),
     ...files
       .filter((file) => !file.isLoading && file.url)
       .map((file) => ({

@@ -83,6 +83,7 @@ import {
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
+import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
 import {
   clearSubChatDraft,
   saveSubChatDraftWithAttachments,
@@ -181,7 +182,7 @@ export interface ChatInputAreaProps {
   // File uploads
   images: UploadedImage[]
   files: UploadedFile[]
-  onAddAttachments: (files: File[]) => void
+  onAddAttachments: (files: File[], source?: ChatImageAttachmentSource) => void
   onRemoveImage: (id: string) => void
   onRemoveFile: (id: string) => void
   isUploading: boolean
@@ -1343,7 +1344,7 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Handle images via existing attachment system (base64)
       if (imageFiles.length > 0) {
-        onAddAttachments(imageFiles)
+      onAddAttachments(imageFiles, "drag-drop")
       }
 
       // Process other files - for text files, read content and add as file mention
