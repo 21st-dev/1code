@@ -6,9 +6,9 @@ In progress.
 - [x] 1.2 Validate the OpenSpec change strictly.
 
 ## 2. Shared Local Browser Model
-- [ ] 2.1 Add shared URL validation and normalization helpers for local-only preview targets.
-- [ ] 2.2 Add bounded diagnostic/report builders for browser context handoff.
-- [ ] 2.3 Add automated tests for URL guardrails and report bounding.
+- [x] 2.1 Add shared URL validation and normalization helpers for local-only preview targets.
+- [x] 2.2 Add bounded diagnostic/report builders for browser context handoff.
+- [x] 2.3 Add automated tests for URL guardrails and report bounding.
 
 ## 3. Workbench UI
 - [ ] 3.1 Add per-chat browser workbench open/width state.
@@ -24,7 +24,7 @@ In progress.
 
 ## 5. Verification
 - [x] 5.1 Run `openspec validate add-local-browser-workbench --strict --no-interactive`.
-- [ ] 5.2 Run targeted unit tests.
+- [x] 5.2 Run targeted unit tests.
 - [ ] 5.3 Run `bun run ts:check`.
 - [ ] 5.4 Run the real desktop app against a local static test page and click through the workbench.
 - [ ] 5.5 Capture screenshot/visual evidence for the workbench preview and diagnostics.
