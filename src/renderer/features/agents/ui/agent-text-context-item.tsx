@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { X } from "lucide-react"
+import { useI18n } from "../../../lib/i18n"
 
 // Text selection icon - "A" with text cursor
 function TextSelectIcon({ className }: { className?: string }) {
@@ -24,6 +25,7 @@ export function AgentTextContextItem({
   preview,
   onRemove,
 }: AgentTextContextItemProps) {
+  const { t } = useI18n()
   const [isHovered, setIsHovered] = useState(false)
 
   // Get a short title from the preview (first line or first ~15 chars)
@@ -47,7 +49,7 @@ export function AgentTextContextItem({
           {displayTitle}
         </span>
         <span className="text-xs text-muted-foreground">
-          Selected Text
+          {t("agent.textSelection.selectedText")}
         </span>
       </div>
 

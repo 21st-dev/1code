@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover"
 import { IconChevronDown, CheckIcon, LaptopIcon } from "../../../components/ui/icons"
+import { useI18n, type TranslationKey } from "../../../lib/i18n"
 import { cn } from "../../../lib/utils"
 import type { WorkMode } from "../atoms"
 
@@ -20,12 +21,12 @@ interface WorkModeSelectorProps {
 const workModeOptions = [
   {
     id: "local" as const,
-    label: "Local",
+    labelKey: "agent.workMode.local" as TranslationKey,
     icon: LaptopIcon,
   },
   {
     id: "worktree" as const,
-    label: "Worktree",
+    labelKey: "agent.workMode.worktree" as TranslationKey,
     icon: GitBranch,
   },
 ]
@@ -35,6 +36,7 @@ export function WorkModeSelector({
   onChange,
   disabled,
 }: WorkModeSelectorProps) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const selectedOption = workModeOptions.find((opt) => opt.id === value) || workModeOptions[1]
   const Icon = selectedOption.icon
@@ -51,7 +53,7 @@ export function WorkModeSelector({
           disabled={disabled}
         >
           <Icon className="w-4 h-4" />
-          <span>{selectedOption.label}</span>
+          <span>{t(selectedOption.labelKey)}</span>
           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
@@ -74,7 +76,7 @@ export function WorkModeSelector({
               )}
             >
               <OptionIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="flex-1">{option.label}</span>
+              <span className="flex-1">{t(option.labelKey)}</span>
               {isSelected && <CheckIcon className="h-4 w-4 shrink-0" />}
             </button>
           )
