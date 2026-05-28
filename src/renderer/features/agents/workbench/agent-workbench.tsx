@@ -15,6 +15,26 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
+import { Input } from "../../../components/ui/input"
+import { Textarea } from "../../../components/ui/textarea"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog"
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +43,8 @@ import {
 import { trpc } from "../../../lib/trpc"
 import { useI18n, type TranslationKey } from "../../../lib/i18n"
 import { cn } from "../../../lib/utils"
+import type { GitHubDraftPullRequestUnavailableReason } from "../../../../shared/github-workflow-context"
+import { getGitHubDraftPrUnavailableMessageKey } from "../../../../shared/github-workflow-ui-state"
 import {
   desktopViewAtom,
   diffSidebarOpenAtomFamily,
@@ -81,6 +103,19 @@ type WorkbenchTask = {
   }
 }
 
+type DraftPrFormState = {
+  title: string
+  body: string
+}
+
+type DraftPrMetaState = {
+  repoSlug: string
+  branch: string
+  baseBranch: string
+  changedFileCount: number
+  commitCount: number
+}
+
 const FILTERS: WorkbenchFilter[] = [
   "all",
   "running",
@@ -120,6 +155,15 @@ function getPreparePrHint(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"
   return t("workbench.preparePrHint")
 }
 
+function getDraftPrUnavailableMessage(
+  reason: GitHubDraftPullRequestUnavailableReason,
+  fallback: string,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  const key = getGitHubDraftPrUnavailableMessageKey(reason)
+  return key ? t(key) : fallback
+}
+
 function formatUpdatedAt(value: Date | string | null): string {
   if (!value) return ""
   const date = value instanceof Date ? value : new Date(value)
@@ -137,11 +181,15 @@ function TaskCard({
   onOpen,
   onReview,
   onOpenPr,
+  onPreparePr,
+  isPreparingPr,
 }: {
   task: WorkbenchTask
   onOpen: (task: WorkbenchTask) => void
   onReview: (task: WorkbenchTask, setDiffSidebarOpen: (open: boolean) => void) => void
   onOpenPr: (task: WorkbenchTask) => void
+  onPreparePr: (task: WorkbenchTask) => void
+  isPreparingPr: boolean
 }) {
   const { t } = useI18n()
   const StatusIcon = getStatusIcon(task.status)
@@ -154,6 +202,10 @@ function TaskCard({
   const handleReview = useCallback(
     () => onReview(task, setDiffSidebarOpen),
     [onReview, setDiffSidebarOpen, task],
+  )
+  const handlePreparePr = useCallback(
+    () => onPreparePr(task),
+    [onPreparePr, task],
   )
 
   return (
@@ -281,11 +333,17 @@ function TaskCard({
                   variant="outline"
                   size="sm"
                   className="h-7 px-3 text-xs"
-                  disabled={!task.actions.canCreatePr}
-                  onClick={handleReview}
+                  disabled={!task.actions.canCreatePr || isPreparingPr}
+                  onClick={handlePreparePr}
                 >
-                  <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
-                  {t("workbench.preparePr")}
+                  {isPreparingPr ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {isPreparingPr
+                    ? t("githubWorkflow.draftPr.preparing")
+                    : t("workbench.preparePr")}
                 </Button>
               </span>
             </TooltipTrigger>
@@ -297,9 +355,197 @@ function TaskCard({
   )
 }
 
+function DraftPrDialog({
+  task,
+  form,
+  meta,
+  error,
+  createdUrl,
+  isOpen,
+  isConfirmOpen,
+  isCreating,
+  canCreate,
+  onOpenChange,
+  onConfirmOpenChange,
+  onFormChange,
+  onCreate,
+  onOpenCreated,
+}: {
+  task: WorkbenchTask | null
+  form: DraftPrFormState | null
+  meta: DraftPrMetaState | null
+  error: string | null
+  createdUrl: string | null
+  isOpen: boolean
+  isConfirmOpen: boolean
+  isCreating: boolean
+  canCreate: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirmOpenChange: (open: boolean) => void
+  onFormChange: (field: keyof DraftPrFormState, value: string) => void
+  onCreate: () => void
+  onOpenCreated: (url: string) => void
+}) {
+  const { t } = useI18n()
+
+  return (
+    <>
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="w-[680px] p-0">
+          <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogTitle className="text-base">
+              {t("githubWorkflow.draftPr.ready")}
+            </DialogTitle>
+            <DialogDescription>
+              {task ? task.title : t("workbench.title")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+            {error && (
+              <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            {createdUrl && (
+              <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm">
+                <span className="min-w-0 truncate text-emerald-700 dark:text-emerald-300">
+                  {t("githubWorkflow.draftPr.created")}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => onOpenCreated(createdUrl)}
+                >
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  {t("githubWorkflow.draftPr.openCreated")}
+                </Button>
+              </div>
+            )}
+
+            {form && meta && (
+              <div className="space-y-4">
+                <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  {t("githubWorkflow.draftPr.meta", {
+                    branch: meta.branch,
+                    baseBranch: meta.baseBranch,
+                    changes: meta.changedFileCount,
+                    commits: meta.commitCount,
+                  })}
+                </div>
+
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("githubWorkflow.draftPr.title")}
+                  </span>
+                  <Input
+                    value={form.title}
+                    onChange={(event) =>
+                      onFormChange("title", event.target.value)}
+                    className="h-8"
+                  />
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("githubWorkflow.draftPr.body")}
+                  </span>
+                  <Textarea
+                    value={form.body}
+                    onChange={(event) =>
+                      onFormChange("body", event.target.value)}
+                    className="min-h-64 font-mono text-xs"
+                  />
+                </label>
+
+                <p className="text-xs text-muted-foreground">
+                  {t("githubWorkflow.draftPr.createNotice")}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t border-border px-5 py-4">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isCreating}
+            >
+              {t("githubWorkflow.draftPr.cancel")}
+            </Button>
+            <Button
+              disabled={!canCreate}
+              onClick={() => onConfirmOpenChange(true)}
+            >
+              {isCreating
+                ? t("githubWorkflow.draftPr.creating")
+                : t("githubWorkflow.draftPr.create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {form && meta && (
+        <AlertDialog
+          open={isConfirmOpen}
+          onOpenChange={(open) => {
+            if (!isCreating) onConfirmOpenChange(open)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t("githubWorkflow.draftPr.confirmTitle")}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("githubWorkflow.draftPr.confirmDescription")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="px-5 pb-3 text-xs text-muted-foreground">
+              {t("githubWorkflow.draftPr.meta", {
+                branch: meta.branch,
+                baseBranch: meta.baseBranch,
+                changes: meta.changedFileCount,
+                commits: meta.commitCount,
+              })}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isCreating}>
+                {t("githubWorkflow.draftPr.cancel")}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!canCreate}
+                onClick={(event) => {
+                  event.preventDefault()
+                  onCreate()
+                }}
+              >
+                {isCreating
+                  ? t("githubWorkflow.draftPr.creating")
+                  : t("githubWorkflow.draftPr.confirmCreate")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </>
+  )
+}
+
 export function AgentWorkbench() {
   const { t } = useI18n()
   const [filter, setFilter] = useState<WorkbenchFilter>("all")
+  const [preparingPrTaskId, setPreparingPrTaskId] = useState<string | null>(null)
+  const [draftPrTask, setDraftPrTask] = useState<WorkbenchTask | null>(null)
+  const [draftPrForm, setDraftPrForm] = useState<DraftPrFormState | null>(null)
+  const [draftPrMeta, setDraftPrMeta] = useState<DraftPrMetaState | null>(null)
+  const [draftPrError, setDraftPrError] = useState<string | null>(null)
+  const [createdDraftPrUrl, setCreatedDraftPrUrl] = useState<string | null>(null)
+  const [isDraftPrDialogOpen, setIsDraftPrDialogOpen] = useState(false)
+  const [isCreateDraftPrDialogOpen, setIsCreateDraftPrDialogOpen] =
+    useState(false)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
@@ -309,6 +555,11 @@ export function AgentWorkbench() {
   const setSelectedDiffFilePath = useSetAtom(selectedDiffFilePathAtom)
   const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
   const streamingStatuses = useStreamingStatusStore((state) => state.statuses)
+  const prepareDraftPrMutation =
+    trpc.githubWorkflow.prepareDraftPullRequest.useMutation()
+  const createDraftPrMutation =
+    trpc.githubWorkflow.createDraftPullRequest.useMutation()
+  const trpcUtils = trpc.useUtils()
   const runningSubChatIds = useMemo(
     () =>
       Object.entries(streamingStatuses)
@@ -338,6 +589,11 @@ export function AgentWorkbench() {
 
   const tasks = (tasksQuery.data?.tasks ?? []) as WorkbenchTask[]
   const counts = tasksQuery.data?.counts
+  const canCreateDraftPr =
+    !!draftPrForm?.title.trim() &&
+    !!draftPrForm.body.trim() &&
+    !!draftPrMeta &&
+    !createDraftPrMutation.isPending
 
   const openTask = useCallback(
     (task: WorkbenchTask) => {
@@ -380,6 +636,131 @@ export function AgentWorkbench() {
       window.desktopApi.openExternal(task.pr.url)
     }
   }, [])
+
+  const handlePreparePr = useCallback(
+    async (task: WorkbenchTask) => {
+      if (!task.actions.canCreatePr) return
+
+      setPreparingPrTaskId(task.id)
+      setDraftPrTask(task)
+      setDraftPrForm(null)
+      setDraftPrMeta(null)
+      setDraftPrError(null)
+      setCreatedDraftPrUrl(null)
+      setIsCreateDraftPrDialogOpen(false)
+
+      try {
+        const result = await prepareDraftPrMutation.mutateAsync({
+          chatId: task.id,
+        })
+
+        if (result.status === "unavailable") {
+          setDraftPrError(
+            getDraftPrUnavailableMessage(result.reason, result.message, t),
+          )
+          setIsDraftPrDialogOpen(true)
+          return
+        }
+
+        const { preparation } = result
+        setDraftPrForm({
+          title: preparation.title,
+          body: preparation.body,
+        })
+        setDraftPrMeta({
+          repoSlug: preparation.repoSlug,
+          branch: preparation.branch,
+          baseBranch: preparation.baseBranch,
+          changedFileCount: preparation.changedFiles.length,
+          commitCount: preparation.commits.length,
+        })
+        setIsDraftPrDialogOpen(true)
+      } catch (error) {
+        setDraftPrError(
+          error instanceof Error
+            ? error.message
+            : t("githubWorkflow.draftPr.failed"),
+        )
+        setIsDraftPrDialogOpen(true)
+      } finally {
+        setPreparingPrTaskId(null)
+      }
+    },
+    [prepareDraftPrMutation, t],
+  )
+
+  const updateDraftPrField = useCallback(
+    (field: keyof DraftPrFormState, value: string) => {
+      setDraftPrForm((current) =>
+        current
+          ? {
+              ...current,
+              [field]: value,
+            }
+          : current,
+      )
+    },
+    [],
+  )
+
+  const handleCreateDraftPr = useCallback(async () => {
+    if (!draftPrTask || !draftPrForm || !draftPrMeta || !canCreateDraftPr) {
+      return
+    }
+
+    setDraftPrError(null)
+    setCreatedDraftPrUrl(null)
+    try {
+      const result = await createDraftPrMutation.mutateAsync({
+        chatId: draftPrTask.id,
+        branch: draftPrMeta.branch,
+        baseBranch: draftPrMeta.baseBranch,
+        title: draftPrForm.title,
+        body: draftPrForm.body,
+      })
+
+      setIsCreateDraftPrDialogOpen(false)
+
+      if (result.status === "unavailable") {
+        setDraftPrError(
+          getDraftPrUnavailableMessage(result.reason, result.message, t),
+        )
+        if (result.existingPrUrl) {
+          setCreatedDraftPrUrl(result.existingPrUrl)
+        }
+        return
+      }
+
+      setCreatedDraftPrUrl(result.url)
+      setDraftPrForm(null)
+      setDraftPrMeta(null)
+      await Promise.all([
+        trpcUtils.agentWorkbench.listTasks.invalidate(),
+        trpcUtils.chats.getPrStatus.invalidate({ chatId: draftPrTask.id }),
+        trpcUtils.githubWorkflow.getStatus.invalidate({
+          chatId: draftPrTask.id,
+        }),
+        trpcUtils.githubWorkflow.getCurrentPullRequestContext.invalidate({
+          chatId: draftPrTask.id,
+        }),
+      ])
+    } catch (error) {
+      setIsCreateDraftPrDialogOpen(false)
+      setDraftPrError(
+        error instanceof Error
+          ? error.message
+          : t("githubWorkflow.draftPr.createFailed"),
+      )
+    }
+  }, [
+    canCreateDraftPr,
+    createDraftPrMutation,
+    draftPrForm,
+    draftPrMeta,
+    draftPrTask,
+    t,
+    trpcUtils,
+  ])
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-background">
@@ -467,11 +848,29 @@ export function AgentWorkbench() {
                 onOpen={openTask}
                 onReview={handleReview}
                 onOpenPr={handleOpenPr}
+                onPreparePr={handlePreparePr}
+                isPreparingPr={preparingPrTaskId === task.id}
               />
             ))}
           </div>
         )}
       </div>
+      <DraftPrDialog
+        task={draftPrTask}
+        form={draftPrForm}
+        meta={draftPrMeta}
+        error={draftPrError}
+        createdUrl={createdDraftPrUrl}
+        isOpen={isDraftPrDialogOpen}
+        isConfirmOpen={isCreateDraftPrDialogOpen}
+        isCreating={createDraftPrMutation.isPending}
+        canCreate={canCreateDraftPr}
+        onOpenChange={setIsDraftPrDialogOpen}
+        onConfirmOpenChange={setIsCreateDraftPrDialogOpen}
+        onFormChange={updateDraftPrField}
+        onCreate={() => void handleCreateDraftPr()}
+        onOpenCreated={(url) => window.desktopApi.openExternal(url)}
+      />
     </div>
   )
 }
