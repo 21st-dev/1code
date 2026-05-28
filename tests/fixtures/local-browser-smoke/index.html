@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Locus Local Browser Smoke</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7f8fa;
+        color: #111827;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+
+      button,
+      a {
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      button {
+        border: 1px solid #111827;
+        background: #111827;
+        color: white;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+
+      a {
+        color: #0f766e;
+      }
+
+      .status {
+        margin-top: 18px;
+        padding: 12px;
+        border: 1px solid #cbd5e1;
+        background: white;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Local Browser Smoke Target</h1>
+      <p>
+        This page is served from localhost for the Locus Local Browser Workbench smoke check.
+      </p>
+      <label>
+        Smoke input
+        <input name="smoke-input" placeholder="type here" />
+      </label>
+      <p>
+        <button data-testid="smoke-action" type="button">Click smoke action</button>
+      </p>
+      <p>
+        <a href="https://example.com/blocked-by-local-browser">Remote navigation guard link</a>
+      </p>
+      <div class="status" role="status">Waiting for click</div>
+    </main>
+    <script>
+      document.querySelector("[data-testid='smoke-action']").addEventListener("click", () => {
+        console.error("smoke console error from local browser target");
+        document.querySelector(".status").textContent = "Smoke action clicked";
+      });
+    </script>
+  </body>
+</html>

@@ -42,6 +42,7 @@ import { ViewportToggle } from "./viewport-toggle"
 type WebviewElement = HTMLElement & {
   capturePage?: () => Promise<{ toDataURL?: () => string }>
   executeJavaScript?: (code: string, userGesture?: boolean) => Promise<unknown>
+  loadURL?: (url: string) => Promise<void> | void
   reload?: () => void
   reloadIgnoringCache?: () => void
 }
@@ -65,6 +66,7 @@ export function LocalBrowserWorkbench({
 }: LocalBrowserWorkbenchProps) {
   const { t } = useI18n()
   const webviewRef = useRef<WebviewElement | null>(null)
+  const lastAllowedUrlRef = useRef<string | null>(null)
   const [urlInput, setUrlInput] = useState("localhost:3000")
   const [currentUrl, setCurrentUrl] = useState<string | null>(null)
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -93,6 +95,10 @@ export function LocalBrowserWorkbench({
   const previewHeight = viewportMode === "desktop" ? DESKTOP_VIEWPORT.height : viewportHeight
   const scaledWidth = Math.round(previewWidth * (scale / 100))
   const scaledHeight = Math.round(previewHeight * (scale / 100))
+
+  useEffect(() => {
+    if (currentUrl) lastAllowedUrlRef.current = currentUrl
+  }, [currentUrl])
 
   const pushConsoleMessage = useCallback((message: LocalBrowserConsoleMessage) => {
     setConsoleMessages((prev) => [...prev, message].slice(-MAX_CONSOLE_MESSAGES))
@@ -159,6 +165,7 @@ export function LocalBrowserWorkbench({
           reason: result.message,
           timestamp: new Date().toISOString(),
         })
+        rollbackToLastAllowedUrl(webview, lastAllowedUrlRef.current)
         return
       }
       setCurrentUrl(result.url)
@@ -168,7 +175,10 @@ export function LocalBrowserWorkbench({
     const handleNavigated = (event: any) => {
       const nextUrl = String(event.url || "")
       const result = normalizeLocalBrowserUrl(nextUrl)
-      if (!result.ok) return
+      if (!result.ok) {
+        rollbackToLastAllowedUrl(webview, lastAllowedUrlRef.current)
+        return
+      }
       setCurrentUrl(result.url)
       setUrlInput(result.url)
     }
@@ -645,4 +655,11 @@ function formatDomSummary(summary: LocalBrowserDomSummary | null): string[] {
   if (summary.activeElement) items.push(`Active: ${summary.activeElement}`)
   if (summary.textSample) items.push(`Text: ${summary.textSample.slice(0, 220)}`)
   return items
+}
+
+function rollbackToLastAllowedUrl(webview: WebviewElement, allowedUrl: string | null) {
+  if (!allowedUrl || !webview.loadURL) return
+  window.setTimeout(() => {
+    void webview.loadURL?.(allowedUrl)
+  }, 0)
 }

@@ -26,6 +26,13 @@ In progress.
 - [x] 5.1 Run `openspec validate add-local-browser-workbench --strict --no-interactive`.
 - [x] 5.2 Run targeted unit tests.
 - [x] 5.3 Run `bun run ts:check`.
-- [ ] 5.4 Run the real desktop app against a local static test page and click through the workbench.
-- [ ] 5.5 Capture screenshot/visual evidence for the workbench preview and diagnostics.
-- [ ] 5.6 Commit completed slices incrementally before continuing.
+- [x] 5.4 Run the real desktop app against a local static test page and click through the workbench.
+- [x] 5.5 Capture screenshot/visual evidence for the workbench preview and diagnostics.
+- [x] 5.6 Commit completed slices incrementally before continuing.
+
+Evidence:
+- Spec: `openspec validate add-local-browser-workbench --strict --no-interactive` passed.
+- Automated: `bun test tests` passed.
+- Static/build: `bun run ts:check` and `bun run build` passed.
+- Real UI smoke: launched Electron dev app with `LOCUS_USER_DATA_DIR=/tmp/locus-local-browser-workbench-profile`, served `tests/fixtures/local-browser-smoke` at `http://127.0.0.1:49321/`, opened the Local Browser Workbench, loaded the local page, clicked the page button, captured screenshot/DOM/console diagnostics, inserted the report into the active chat input, and visually confirmed the screenshot thumbnail plus report text.
+- Navigation guard smoke: clicked the page's remote `https://example.com/...` link, confirmed the workbench displayed the local-only error, recorded the blocked URL in failures, and rolled the preview back to `127.0.0.1:49321`.
