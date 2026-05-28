@@ -4,11 +4,11 @@
 - [x] 1.3 Commit the proposal as the first slice.
 
 ## 2. Main-Process Workbench Model
-- [ ] 2.1 Add task-summary types and status classification helpers.
-- [ ] 2.2 Add `agentWorkbench.listTasks` as a read-only aggregate query.
-- [ ] 2.3 Derive task cards from projects, chats, sub-chats, worktree metadata, git status, and PR metadata.
-- [ ] 2.4 Add focused tests for classification and filtering.
-- [ ] 2.5 Commit the main-process model slice.
+- [x] 2.1 Add task-summary types and status classification helpers.
+- [x] 2.2 Add `agentWorkbench.listTasks` as a read-only aggregate query.
+- [x] 2.3 Derive task cards from projects, chats, sub-chats, worktree metadata, git status, and PR metadata.
+- [x] 2.4 Add focused tests for classification and filtering.
+- [x] 2.5 Commit the main-process model slice.
 
 ## 3. Renderer Workbench Surface
 - [ ] 3.1 Add isolated `src/renderer/features/agents/workbench/` components and view helpers.

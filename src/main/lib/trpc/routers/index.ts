@@ -23,6 +23,7 @@ import { voiceRouter } from "./voice"
 import { pluginsRouter } from "./plugins"
 import { appUpdatesRouter } from "./app-updates"
 import { githubWorkflowRouter } from "./github-workflow"
+import { agentWorkbenchRouter } from "./agent-workbench"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -56,6 +57,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     plugins: pluginsRouter,
     appUpdates: appUpdatesRouter,
     githubWorkflow: githubWorkflowRouter,
+    agentWorkbench: agentWorkbenchRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })
