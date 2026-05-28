@@ -993,7 +993,7 @@ export const showMessageJsonAtom = atomWithStorage<boolean>(
 
 // Desktop view mode - takes priority over chat-based rendering.
 // null = default behavior (chat/new-chat/kanban).
-export type DesktopView = "settings" | null
+export type DesktopView = "settings" | "workbench" | null
 export const desktopViewAtom = atom<DesktopView>(null)
 
 // Settings inner sidebar widths (for MCP, Skills, Agents two-panel layouts)

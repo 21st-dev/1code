@@ -11,15 +11,15 @@
 - [x] 2.5 Commit the main-process model slice.
 
 ## 3. Renderer Workbench Surface
-- [ ] 3.1 Add isolated `src/renderer/features/agents/workbench/` components and view helpers.
-- [ ] 3.2 Add filters for all, running, needs review, PRs, blocked, and clean.
-- [ ] 3.3 Add task cards with branch, project, latest sub-chat, diff count, PR status, and status reason.
-- [ ] 3.4 Wire a workbench entry point into the agents shell with minimal active-chat changes.
-- [ ] 3.5 Commit the renderer workbench slice.
+- [x] 3.1 Add isolated `src/renderer/features/agents/workbench/` components and view helpers.
+- [x] 3.2 Add filters for all, running, needs review, PRs, blocked, and clean.
+- [x] 3.3 Add task cards with branch, project, latest sub-chat, diff count, PR status, and status reason.
+- [x] 3.4 Wire a workbench entry point into the agents shell with minimal active-chat changes.
+- [x] 3.5 Commit the renderer workbench slice.
 
 ## 4. Actions and Workflow Integration
-- [ ] 4.1 Wire Open/Continue to existing chat and sub-chat selection.
-- [ ] 4.2 Wire Review Diff to existing diff sidebar/filter behavior where available.
+- [x] 4.1 Wire Open/Continue to existing chat and sub-chat selection.
+- [x] 4.2 Wire Review Diff to existing diff sidebar/filter behavior where available.
 - [ ] 4.3 Wire Open PR and Create PR through existing GitHub workflow surfaces and confirmations.
 - [ ] 4.4 Add disabled reasons for unavailable actions.
 - [ ] 4.5 Commit the action-integration slice.

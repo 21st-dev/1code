@@ -54,6 +54,7 @@ import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialo
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { isDesktopApp } from "../../../lib/utils/platform"
 import { SettingsContent } from "../../settings/settings-content"
+import { AgentWorkbench } from "../workbench/agent-workbench"
 
 // Main Component
 export function AgentsContent() {
@@ -762,9 +763,11 @@ export function AgentsContent() {
         data-agents-page
         data-mobile-view
       >
-        {/* Mobile: Settings fullscreen view */}
+        {/* Mobile: full-screen desktop utility views */}
         {desktopView === "settings" ? (
           <SettingsContent />
+        ) : desktopView === "workbench" ? (
+          <AgentWorkbench />
         ) : mobileViewMode === "chats" ? (
           // Chats List Mode (default) - uses AgentsSidebar in fullscreen
           <AgentsSidebar
@@ -880,6 +883,8 @@ export function AgentsContent() {
         >
           {desktopView === "settings" ? (
             <SettingsContent />
+          ) : desktopView === "workbench" ? (
+            <AgentWorkbench />
           ) : selectedChatId ? (
             <div className="h-full flex flex-col relative overflow-hidden">
               <ChatView

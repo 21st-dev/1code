@@ -28,7 +28,7 @@ import {
 } from "../../lib/atoms"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { MoreHorizontal, Columns3 } from "lucide-react"
+import { LayoutDashboard, MoreHorizontal, Columns3 } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: archive is handled inline, not via hook
 import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
@@ -1057,6 +1057,37 @@ const KanbanButton = memo(function KanbanButton() {
         {t("sidebar.kanbanView")}
         {openKanbanHotkey && <Kbd>{openKanbanHotkey}</Kbd>}
       </TooltipContent>
+    </Tooltip>
+  )
+})
+
+const WorkbenchButton = memo(function WorkbenchButton() {
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
+  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
+  const setDesktopView = useSetAtom(desktopViewAtom)
+  const { t } = useI18n()
+
+  const handleClick = useCallback(() => {
+    setSelectedChatId(null)
+    setSelectedDraftId(null)
+    setShowNewChatForm(false)
+    setDesktopView("workbench")
+  }, [setDesktopView, setSelectedChatId, setSelectedDraftId, setShowNewChatForm])
+
+  return (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleClick}
+          aria-label={t("sidebar.workbench")}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+        >
+          <LayoutDashboard className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{t("sidebar.workbench")}</TooltipContent>
     </Tooltip>
   )
 })
@@ -2785,6 +2816,8 @@ export function AgentsSidebar({
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />
+
+                <WorkbenchButton />
 
                 {/* Kanban View Button - isolated component */}
                 <KanbanButton />
