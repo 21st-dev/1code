@@ -998,6 +998,8 @@ interface AgentsSidebarProps {
   onToggleSidebar?: () => void
   isMobileFullscreen?: boolean
   onChatSelect?: () => void
+  onNewWorkspaceProjectPicker?: () => Promise<void> | void
+  isNewWorkspaceProjectPickerPending?: boolean
 }
 
 // Memoized Archive Button to prevent re-creation on every sidebar render
@@ -1276,6 +1278,8 @@ export function AgentsSidebar({
   onToggleSidebar,
   isMobileFullscreen = false,
   onChatSelect,
+  onNewWorkspaceProjectPicker,
+  isNewWorkspaceProjectPickerPending = false,
 }: AgentsSidebarProps) {
   const { t } = useI18n()
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
@@ -1973,12 +1977,13 @@ export function AgentsSidebar({
     return chatIds
   }, [pendingQuestions])
 
-  const handleNewAgent = () => {
+  const handleNewAgent = async () => {
     triggerHaptic("light")
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
     setShowNewChatForm(true) // Explicitly show new chat form
     setDesktopView(null) // Clear desktop view
+    await onNewWorkspaceProjectPicker?.()
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2506,6 +2511,7 @@ export function AgentsSidebar({
             <TooltipTrigger asChild>
               <ButtonCustom
                 onClick={handleNewAgent}
+                disabled={isNewWorkspaceProjectPickerPending}
                 variant="outline"
                 size="sm"
                 className={cn(
@@ -2660,6 +2666,26 @@ export function AgentsSidebar({
                 formatTime={formatTime}
                 justCreatedIds={justCreatedIds}
               />
+            </div>
+          ) : searchQuery.trim() ? (
+            <div className="px-3 py-8 text-center">
+              <SearchIcon className="mx-auto mb-2 h-4 w-4 text-muted-foreground/70" />
+              <div className="text-xs font-medium text-foreground">
+                {t("sidebar.noWorkspaceResults")}
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                {t("sidebar.noWorkspaceResultsDescription", { query: searchQuery.trim() })}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("")
+                  searchInputRef.current?.focus()
+                }}
+                className="mt-3 inline-flex h-6 items-center rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                {t("sidebar.clearWorkspaceSearch")}
+              </button>
             </div>
           ) : null}
         </div>

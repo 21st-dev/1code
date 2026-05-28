@@ -26,9 +26,11 @@ export interface AgentActionContext {
   setSettingsActiveTab?: (tab: SettingsTab) => void
   setFileSearchDialogOpen?: (open: boolean) => void
   toggleChatSearch?: () => void
+  openProjectPickerForNewWorkspace?: () => Promise<void> | void
 
   // Data
   selectedChatId?: string | null
+  hasSelectedProject?: boolean
   isLocalOnly?: boolean
 }
 
@@ -87,6 +89,9 @@ const createNewAgentAction: AgentActionDefinition = {
     context.setShowNewChatForm?.(true)
     // Clear secondary desktop view
     context.setDesktopView?.(null)
+    if (!context.hasSelectedProject) {
+      await context.openProjectPickerForNewWorkspace?.()
+    }
     return { success: true }
   },
 }

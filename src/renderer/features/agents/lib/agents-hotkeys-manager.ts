@@ -114,7 +114,9 @@ export interface AgentsHotkeysManagerConfig {
   setSettingsActiveTab?: (tab: SettingsTab) => void
   setFileSearchDialogOpen?: (open: boolean) => void
   toggleChatSearch?: () => void
+  openProjectPickerForNewWorkspace?: () => Promise<void> | void
   selectedChatId?: string | null
+  hasSelectedProject?: boolean
   customHotkeysConfig?: CustomHotkeysConfig
   // Feature flags
   betaKanbanEnabled?: boolean
@@ -170,7 +172,9 @@ export function useAgentsHotkeys(
       setSettingsActiveTab: config.setSettingsActiveTab,
       setFileSearchDialogOpen: config.setFileSearchDialogOpen,
       toggleChatSearch: config.toggleChatSearch,
+      openProjectPickerForNewWorkspace: config.openProjectPickerForNewWorkspace,
       selectedChatId: config.selectedChatId,
+      hasSelectedProject: config.hasSelectedProject,
       isLocalOnly,
     }),
     [
@@ -182,7 +186,9 @@ export function useAgentsHotkeys(
       config.setSettingsActiveTab,
       config.setFileSearchDialogOpen,
       config.toggleChatSearch,
+      config.openProjectPickerForNewWorkspace,
       config.selectedChatId,
+      config.hasSelectedProject,
       isLocalOnly,
     ],
   )

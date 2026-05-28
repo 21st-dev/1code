@@ -121,6 +121,7 @@ export function AgentsLayout() {
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
+  const utils = trpc.useUtils()
   const { data: subChatTitleProviderData } =
     trpc.localApiProviderConfig.get.useQuery({ purpose: "sub_chat_title" })
   const { data: commitMessageProviderData } =
@@ -137,6 +138,52 @@ export function AgentsLayout() {
     const exists = projects.some((p) => p.id === selectedProject.id)
     return exists ? selectedProject : null
   }, [selectedProject, projects, isLoadingProjects])
+
+  const openFolder = trpc.projects.openFolder.useMutation({
+    onSuccess: (project) => {
+      if (!project) return
+
+      utils.projects.list.setData(undefined, (oldData) => {
+        if (!oldData) return [project]
+        const exists = oldData.some((p) => p.id === project.id)
+        if (exists) {
+          return oldData.map((p) =>
+            p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+          )
+        }
+        return [project, ...oldData]
+      })
+
+      setSelectedProject({
+        id: project.id,
+        name: project.name,
+        path: project.path,
+        gitRemoteUrl: project.gitRemoteUrl,
+        gitProvider: project.gitProvider as
+          | "github"
+          | "gitlab"
+          | "bitbucket"
+          | null,
+        gitOwner: project.gitOwner,
+        gitRepo: project.gitRepo,
+      })
+    },
+  })
+
+  const openProjectPickerForNewWorkspace = useCallback(async () => {
+    if (validatedProject || openFolder.isPending) return
+
+    try {
+      const project = await openFolder.mutateAsync()
+      if (!project) {
+        toast.info(t("chat.selectRepoCancelled"))
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("chat.selectRepoFailed"),
+      )
+    }
+  }, [validatedProject, openFolder, t])
 
   const openHelperApisSettings = useCallback(() => {
     setSettingsActiveTab("models")
@@ -328,7 +375,9 @@ export function AgentsLayout() {
     setSettingsActiveTab,
     setFileSearchDialogOpen,
     toggleChatSearch,
+    openProjectPickerForNewWorkspace,
     selectedChatId,
+    hasSelectedProject: Boolean(validatedProject),
     customHotkeysConfig,
     betaKanbanEnabled,
   })
@@ -371,7 +420,11 @@ export function AgentsLayout() {
           {isSettingsView ? (
             <SettingsSidebar />
           ) : (
-            <AgentsSidebar onToggleSidebar={handleCloseSidebar} />
+            <AgentsSidebar
+              onToggleSidebar={handleCloseSidebar}
+              onNewWorkspaceProjectPicker={openProjectPickerForNewWorkspace}
+              isNewWorkspaceProjectPickerPending={openFolder.isPending}
+            />
           )}
         </ResizableSidebar>
 

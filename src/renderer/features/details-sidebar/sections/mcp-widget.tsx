@@ -92,7 +92,7 @@ export const McpWidget = memo(function McpWidget() {
     return (
       <div className="px-2 py-2">
         <div className="text-xs text-muted-foreground">
-          {t("settings.mcp.noneConfigured")}
+          {t("details.mcp.noneLoaded")}
         </div>
       </div>
     )
