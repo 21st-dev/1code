@@ -10,6 +10,7 @@ import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
 
 export interface AgentMessageMetadata {
+  provider?: "claude-code" | "codex"
   model?: string
   sessionId?: string
   totalCostUsd?: number
@@ -64,6 +65,7 @@ export const AgentMessageUsage = memo(function AgentMessageUsage({
   if (!metadata || isStreaming) return null
 
   const {
+    provider,
     model,
     inputTokens = 0,
     outputTokens = 0,
@@ -79,7 +81,9 @@ export const AgentMessageUsage = memo(function AgentMessageUsage({
 
   const normalizedModel = typeof model === "string" ? model.toLowerCase() : ""
   const isCodexModel =
-    normalizedModel.includes("codex") || normalizedModel.startsWith("gpt-")
+    provider === "codex" ||
+    normalizedModel.includes("codex") ||
+    normalizedModel.startsWith("gpt-")
   const displayTokens = isCodexModel
     ? inputTokens + outputTokens
     : totalTokens || inputTokens + outputTokens

@@ -1437,13 +1437,6 @@ function preprocessCodexModelName(params: {
   return params.modelId
 }
 
-function codexProviderProfileModelId(modelId: string): string {
-  if (/\/(none|minimal|low|medium|high|xhigh)$/.test(modelId)) {
-    return modelId
-  }
-  return `${modelId}/none`
-}
-
 function getAuthFingerprint(authConfig?: { apiKey: string }): string | null {
   const apiKey = authConfig?.apiKey?.trim()
   if (!apiKey) return null
@@ -2056,7 +2049,6 @@ export const codexRouter = router({
                   name: string
                   baseUrl: string
                   token: string
-                  model: string
                 }
               | undefined
             if (input.providerProfileId) {
@@ -2076,11 +2068,9 @@ export const codexRouter = router({
                 name: profile.name,
                 baseUrl: gateway.baseUrl,
                 token: gateway.token,
-                model: codexProviderProfileModelId(profile.defaultModel),
               }
             }
             const requestedModelId =
-              codexProviderProfile?.model ||
               extractCodexModelId(input.model) ||
               DEFAULT_CODEX_MODEL
             const selectedModelId = preprocessCodexModelName({
@@ -2149,7 +2139,7 @@ export const codexRouter = router({
                   input.images,
                   input.longTextAttachments,
                 ),
-                metadata: { model: metadataModel },
+                metadata: { model: metadataModel, provider: "codex" },
               }
 
               messagesForStream = [...existingMessages, userMessage]
@@ -2280,6 +2270,7 @@ export const codexRouter = router({
 
                 if (part.type === "finish") {
                   return {
+                    provider: "codex",
                     model: metadataModel,
                     sessionId,
                     durationMs: Date.now() - startedAt,
@@ -2289,12 +2280,13 @@ export const codexRouter = router({
 
                 if (sessionId) {
                   return {
+                    provider: "codex",
                     model: metadataModel,
                     sessionId,
                   }
                 }
 
-                return { model: metadataModel }
+                return { provider: "codex", model: metadataModel }
               },
               onFinish: async ({ responseMessage, isContinuation }) => {
                 try {

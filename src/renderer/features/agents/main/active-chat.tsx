@@ -5359,6 +5359,11 @@ Make sure to preserve all functionality from both branches when resolving confli
       }
 
       for (const message of messages) {
+        const provider = (message as any)?.metadata?.provider
+        if (provider === "codex") {
+          return "codex"
+        }
+
         const model = (message as any)?.metadata?.model
         if (typeof model !== "string") continue
         const normalizedModel = model.toLowerCase()

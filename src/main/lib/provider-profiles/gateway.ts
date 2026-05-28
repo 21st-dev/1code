@@ -37,6 +37,15 @@ const CODEX_REASONING_SUFFIXES = new Set([
   "xhigh",
 ])
 
+const CODEX_GATEWAY_MODEL_IDS = new Set([
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+  "gpt-5.2",
+])
+
 let serverState:
   | {
       server: ReturnType<typeof createServer>
@@ -153,6 +162,15 @@ function resolveProviderModel(
   }
 
   const normalized = requestedModel.trim()
+  const [baseModel, reasoningSuffix] = normalized.split("/")
+  if (
+    baseModel &&
+    CODEX_GATEWAY_MODEL_IDS.has(baseModel) &&
+    (!reasoningSuffix || CODEX_REASONING_SUFFIXES.has(reasoningSuffix))
+  ) {
+    return profile.defaultModel
+  }
+
   for (const suffix of CODEX_REASONING_SUFFIXES) {
     if (normalized === `${profile.defaultModel}/${suffix}`) {
       return profile.defaultModel
