@@ -50,6 +50,21 @@ type ActiveCredentialRow = {
   legacy: typeof claudeCodeCredentials.$inferSelect | null
 }
 
+const LOCAL_CLAUDE_CODE_DISPLAY_NAME = "Local Claude Code"
+
+function isLocalClaudeCodeSource(
+  source: ClaudeCodeCredentialEnvelope["source"],
+): boolean {
+  return (
+    source === "macos_keychain" ||
+    source === "windows_credentials_file" ||
+    source === "linux_secret_service" ||
+    source === "linux_pass" ||
+    source === "credentials_file" ||
+    source === "manual"
+  )
+}
+
 function encryptSecret(value: string): string {
   return encryptStringForStorage(value)
 }
@@ -172,24 +187,44 @@ function persistCredentialEnvelope(
   const db = getDatabase()
   const encrypted = encryptClaudeCodeCredential(envelope)
   const now = new Date()
-  const accountId = options.accountId ?? createId()
   const displayName =
     options.displayName ||
     (envelope.source === "legacy_db"
       ? "Claude Code Legacy Token"
-      : "Local Claude Code")
+      : LOCAL_CLAUDE_CODE_DISPLAY_NAME)
 
-  const existing = db
+  const reusableAccount = !options.accountId
+    ? db
+      .select()
+      .from(anthropicAccounts)
+      .all()
+      .find((account) => {
+        if (options.email && account.email?.toLowerCase() === options.email.toLowerCase()) {
+          return true
+        }
+        return (
+          displayName === LOCAL_CLAUDE_CODE_DISPLAY_NAME &&
+          account.displayName === LOCAL_CLAUDE_CODE_DISPLAY_NAME &&
+          !account.email &&
+          isLocalClaudeCodeSource(envelope.source)
+        )
+      }) ?? null
+    : null
+
+  const accountId = options.accountId ?? reusableAccount?.id ?? createId()
+
+  const existing = reusableAccount ?? db
     .select()
     .from(anthropicAccounts)
     .where(eq(anthropicAccounts.id, accountId))
     .get()
+  const effectiveDisplayName = existing?.displayName ?? displayName
 
   db.insert(anthropicAccounts)
     .values({
       id: accountId,
       email: options.email ?? existing?.email ?? null,
-      displayName,
+      displayName: effectiveDisplayName,
       oauthToken: encrypted,
       connectedAt: options.connectedAt ?? existing?.connectedAt ?? now,
       lastUsedAt: now,
@@ -199,7 +234,7 @@ function persistCredentialEnvelope(
       target: anthropicAccounts.id,
       set: {
         email: options.email ?? existing?.email ?? null,
-        displayName,
+        displayName: effectiveDisplayName,
         oauthToken: encrypted,
         lastUsedAt: now,
         desktopUserId: existing?.desktopUserId ?? null,
@@ -277,7 +312,7 @@ export function storeClaudeCodeOAuthCredential(
   )
   const accountId = persistCredentialEnvelope(envelope, {
     setAsActive: options.setAsActive,
-    displayName: options.displayName ?? "Local Claude Code",
+    displayName: options.displayName ?? LOCAL_CLAUDE_CODE_DISPLAY_NAME,
   })
 
   return {
@@ -299,7 +334,7 @@ export function importLocalClaudeCodeCredential(): {
 
   const envelope = createClaudeCodeCredentialEnvelope(credential)
   const accountId = persistCredentialEnvelope(envelope, {
-    displayName: "Local Claude Code",
+    displayName: LOCAL_CLAUDE_CODE_DISPLAY_NAME,
     setAsActive: true,
   })
 

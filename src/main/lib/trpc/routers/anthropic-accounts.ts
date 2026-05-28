@@ -11,11 +11,67 @@ import { encryptStringForStorage } from "../../secure-storage"
 import { publicProcedure, router } from "../index"
 import { clearClaudeCaches } from "./claude"
 
+const LOCAL_CLAUDE_CODE_DISPLAY_NAME = "Local Claude Code"
+
 /**
  * Encrypt token using Electron's safeStorage
  */
 function encryptToken(token: string): string {
   return encryptStringForStorage(token)
+}
+
+function accountTimestamp(account: {
+  lastUsedAt: Date | null
+  connectedAt: Date | null
+}): number {
+  return account.lastUsedAt?.getTime() ?? account.connectedAt?.getTime() ?? 0
+}
+
+function compactDuplicateLocalClaudeCodeAccounts(): void {
+  const db = getDatabase()
+
+  const accounts = db.select().from(anthropicAccounts).all()
+  const duplicates = accounts.filter(
+    (account) =>
+      account.displayName === LOCAL_CLAUDE_CODE_DISPLAY_NAME &&
+      !account.email,
+  )
+
+  if (duplicates.length <= 1) return
+
+  const settings = db
+    .select()
+    .from(anthropicSettings)
+    .where(eq(anthropicSettings.id, "singleton"))
+    .get()
+
+  const activeDuplicate = duplicates.find(
+    (account) => account.id === settings?.activeAccountId,
+  )
+  const keep = activeDuplicate ?? [...duplicates].sort(
+    (a, b) => accountTimestamp(b) - accountTimestamp(a),
+  )[0]
+  if (!keep) return
+
+  const deleteIds = duplicates
+    .filter((account) => account.id !== keep.id)
+    .map((account) => account.id)
+
+  for (const id of deleteIds) {
+    db.delete(anthropicAccounts)
+      .where(eq(anthropicAccounts.id, id))
+      .run()
+  }
+
+  if (settings?.activeAccountId && deleteIds.includes(settings.activeAccountId)) {
+    db.update(anthropicSettings)
+      .set({
+        activeAccountId: keep.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(anthropicSettings.id, "singleton"))
+      .run()
+  }
 }
 
 /**
@@ -29,6 +85,7 @@ export const anthropicAccountsRouter = router({
     const db = getDatabase()
 
     try {
+      compactDuplicateLocalClaudeCodeAccounts()
       const accounts = db
         .select({
           id: anthropicAccounts.id,
@@ -108,6 +165,7 @@ export const anthropicAccountsRouter = router({
     const db = getDatabase()
 
     try {
+      compactDuplicateLocalClaudeCodeAccounts()
       const settings = db
         .select()
         .from(anthropicSettings)
@@ -394,6 +452,7 @@ export const anthropicAccountsRouter = router({
    */
   hasAccounts: publicProcedure.query(() => {
     const db = getDatabase()
+    compactDuplicateLocalClaudeCodeAccounts()
     const countResult = db
       .select({ count: sql<number>`count(*)` })
       .from(anthropicAccounts)
