@@ -946,6 +946,10 @@ interface SimpleIsolatedGroupProps {
   toolRegistry: Record<string, ToolMeta>
 }
 
+function isImageMessagePart(part: any) {
+  return part?.type === "data-image" || part?.type === "attachment-image"
+}
+
 function areSimpleGroupPropsEqual(
   prev: SimpleIsolatedGroupProps,
   next: SimpleIsolatedGroupProps
@@ -994,7 +998,7 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
     .map((p: any) => p.text)
     .join("\n") || ""
 
-  const imageParts = userMsg.parts?.filter((p: any) => p.type === "data-image") || []
+  const imageParts = userMsg.parts?.filter(isImageMessagePart) || []
   const longTextParts = userMsg.parts?.filter((p: any) => p.type === "long-text-attachment") || []
 
   // Extract text mentions (quote/diff) to render separately above sticky block

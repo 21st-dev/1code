@@ -1479,6 +1479,11 @@ export const en = {
   "agent.image.next": "Next image (→)",
   "agent.image.copy": "Copy Image",
   "agent.image.save": "Save Image",
+  "agent.attachments.imagesUnsupportedTitle": "Images are not supported",
+  "agent.attachments.imagesUnsupportedOffline":
+    "The current offline Ollama model cannot process image attachments.",
+  "agent.attachments.remoteDisclosure":
+    "Images stay local until send, then go to {provider}.",
   "agent.search.placeholder": "Search...",
   "agent.search.count": "{current} of {total}",
   "agent.search.previousMatch": "Previous match (Shift+Enter)",
@@ -3928,6 +3933,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.image.next": "下一张图片 (→)",
   "agent.image.copy": "复制图片",
   "agent.image.save": "保存图片",
+  "agent.attachments.imagesUnsupportedTitle": "当前模型不支持图片",
+  "agent.attachments.imagesUnsupportedOffline":
+    "当前离线 Ollama 模型不能处理图片附件。",
+  "agent.attachments.remoteDisclosure":
+    "图片会保持本地，发送时才交给 {provider} 处理。",
   "agent.search.placeholder": "搜索...",
   "agent.search.count": "{current} / {total}",
   "agent.search.previousMatch": "上一个结果（Shift+Enter）",

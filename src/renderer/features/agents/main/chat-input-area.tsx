@@ -80,6 +80,7 @@ import {
   isProviderProfileSource,
   parseProviderProfileSource,
 } from "../../../../shared/provider-profile-types"
+import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
@@ -780,6 +781,30 @@ export const ChatInputArea = memo(function ChatInputArea({
     selectedModel,
     t,
   ])
+  const readyImageCount = images.filter(
+    (image) => !image.isLoading && !image.error && (image.localRef || image.url),
+  ).length
+  const imageAttachmentCapability = useMemo(
+    () =>
+      getChatImageAttachmentCapability({
+        provider,
+        offlineModeEnabled:
+          provider === "claude-code" &&
+          availableModels.isOffline &&
+          availableModels.hasOllama,
+      }),
+    [availableModels.hasOllama, availableModels.isOffline, provider],
+  )
+  const imageAttachmentBlocked =
+    readyImageCount > 0 && !imageAttachmentCapability.supportsImages
+  const imageAttachmentNotice =
+    readyImageCount === 0
+      ? null
+      : imageAttachmentBlocked
+        ? t("agent.attachments.imagesUnsupportedOffline")
+        : t("agent.attachments.remoteDisclosure", {
+            provider: selectedModelLabel,
+          })
   const canSwitchProvider =
     messageTokenData.messageCount === 0 && !isStreaming
 
@@ -1146,7 +1171,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const handleEditorSubmit = useCallback(async () => {
     const inputValue = editorRef.current?.getValue() || ""
     const hasText = inputValue.trim().length > 0
-    const hasAttachments = images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0
+    const hasAttachments = readyImageCount > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0
 
     if (!hasText && !hasAttachments && queueLength > 0 && onSendFromQueue && firstQueueItemId) {
       // Input empty, queue has items - stop stream and send from queue
@@ -1155,7 +1180,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     } else {
       onSend()
     }
-  }, [editorRef, images, files, textContexts, diffTextContexts, queueLength, onSendFromQueue, firstQueueItemId, onStop, onSend])
+  }, [editorRef, readyImageCount, files, textContexts, diffTextContexts, queueLength, onSendFromQueue, firstQueueItemId, onStop, onSend])
 
   // Mention select handler
   const handleMentionSelect = useCallback((mention: FileMentionOption) => {
@@ -1420,17 +1445,41 @@ export const ChatInputArea = memo(function ChatInputArea({
     [editorRef, projectPath, onCacheFileContent, onAddAttachments, trpcUtils],
   )
 
-  const stablePromptSubmit = useStableCallback(onSend)
-  const stableEditorSubmit = useStableCallback(onSubmitWithQuestionAnswer || handleEditorSubmit)
-  const stableForceSend = useStableCallback(onForceSend)
+  const blockUnsupportedImageSend = useCallback(() => {
+    if (!imageAttachmentBlocked) return false
+    toast.error(t("agent.attachments.imagesUnsupportedTitle"), {
+      description: t("agent.attachments.imagesUnsupportedOffline"),
+    })
+    return true
+  }, [imageAttachmentBlocked, t])
+  const guardedSend = useCallback(() => {
+    if (blockUnsupportedImageSend()) return
+    onSend()
+  }, [blockUnsupportedImageSend, onSend])
+  const guardedEditorSubmit = useCallback(() => {
+    if (blockUnsupportedImageSend()) return
+    if (onSubmitWithQuestionAnswer) {
+      onSubmitWithQuestionAnswer()
+    } else {
+      void handleEditorSubmit()
+    }
+  }, [blockUnsupportedImageSend, handleEditorSubmit, onSubmitWithQuestionAnswer])
+  const guardedForceSend = useCallback(() => {
+    if (blockUnsupportedImageSend()) return
+    onForceSend()
+  }, [blockUnsupportedImageSend, onForceSend])
+  const stablePromptSubmit = useStableCallback(guardedSend)
+  const stableEditorSubmit = useStableCallback(guardedEditorSubmit)
+  const stableForceSend = useStableCallback(guardedForceSend)
   const handlePromptContainerClick = useCallback(() => {
     editorRef.current?.focus()
   }, [editorRef])
   const handleSendButtonClick = useCallback(() => {
+    if (blockUnsupportedImageSend()) return
     // If input is empty and queue has items, send first queue item
     if (
       !hasContent &&
-      images.length === 0 &&
+      readyImageCount === 0 &&
       files.length === 0 &&
       queueLength > 0 &&
       onSendFromQueue &&
@@ -1440,7 +1489,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     } else {
       onSend()
     }
-  }, [firstQueueItemId, files.length, hasContent, images.length, onSend, onSendFromQueue, queueLength])
+  }, [blockUnsupportedImageSend, firstQueueItemId, files.length, hasContent, onSend, onSendFromQueue, queueLength, readyImageCount])
 
   return (
     <div
@@ -1502,6 +1551,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           filename={img.filename}
                           url={img.url || ""}
                           isLoading={img.isLoading}
+                          error={img.error}
                           onRemove={() => onRemoveImage(img.id)}
                           allImages={allImages}
                           imageIndex={idx}
@@ -1554,6 +1604,18 @@ export const ChatInputArea = memo(function ChatInputArea({
               }
             >
               <PromptInputContextItems />
+              {imageAttachmentNotice && (
+                <div
+                  className={cn(
+                    "px-1 pb-1 text-[11px] leading-4",
+                    imageAttachmentBlocked
+                      ? "text-destructive"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {imageAttachmentNotice}
+                </div>
+              )}
               <AgentContextRecommendations
                 draftText={draftText}
                 projectPath={projectPath}
@@ -1889,14 +1951,21 @@ export const ChatInputArea = memo(function ChatInputArea({
                       isSubmitting={false}
                       disabled={
                         (!hasContent &&
-                          images.length === 0 &&
+                          readyImageCount === 0 &&
                           files.length === 0 &&
                           textContexts.length === 0 &&
                           (diffTextContexts?.length ?? 0) === 0 &&
                           queueLength === 0) ||
-                        isUploading
+                        isUploading ||
+                        imageAttachmentBlocked
                       }
-                      hasContent={hasContent || images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0}
+                      hasContent={
+                        hasContent ||
+                        readyImageCount > 0 ||
+                        files.length > 0 ||
+                        textContexts.length > 0 ||
+                        (diffTextContexts?.length ?? 0) > 0
+                      }
                       onClick={handleSendButtonClick}
                       onStop={onStop}
                       mode={subChatMode}

@@ -10,6 +10,7 @@ import {
   toDraftImage,
 } from "../src/renderer/features/agents/lib/drafts"
 import type { UploadedImage } from "../src/renderer/features/agents/hooks/use-agents-file-upload"
+import { getChatImageAttachmentCapability } from "../src/shared/chat-attachment-capabilities"
 
 const UNIQUE_IMAGE_BODY = "UNIQUE_BASE64_IMAGE_BODY_SHOULD_NOT_PERSIST"
 
@@ -113,5 +114,24 @@ describe("rich chat attachment send pipeline", () => {
     expect(ipc).toContain("normalizeChatImageAttachmentPart(part)")
     expect(acp).toContain("normalizeChatImageAttachmentPart(part)")
     expect(authRetry).toContain('type: "attachment-image"')
+  })
+
+  test("provider capability model blocks offline Ollama image sends", () => {
+    expect(
+      getChatImageAttachmentCapability({
+        provider: "claude-code",
+        offlineModeEnabled: true,
+      }),
+    ).toMatchObject({
+      supportsImages: false,
+      blockReasonKey: "offline-ollama",
+    })
+
+    expect(
+      getChatImageAttachmentCapability({
+        provider: "codex",
+        offlineModeEnabled: true,
+      }).supportsImages,
+    ).toBe(true)
   })
 })

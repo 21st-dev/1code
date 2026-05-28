@@ -69,6 +69,32 @@ interface IsolatedMessageGroupProps {
   toolRegistry: Record<string, ToolMeta>
 }
 
+function isImageMessagePart(part: any) {
+  return part?.type === "data-image" || part?.type === "attachment-image"
+}
+
+function getImagePartDisplayData(img: any) {
+  if (img?.type === "attachment-image") {
+    return {
+      filename: img.filename || "image",
+      url: "",
+      localRef: img.localRef,
+      mediaType: img.mediaType,
+    }
+  }
+
+  const data = img?.data || {}
+  return {
+    filename: data.filename || "image",
+    url:
+      data.base64Data && data.mediaType
+        ? `data:${data.mediaType};base64,${data.base64Data}`
+        : data.url || "",
+    localRef: undefined,
+    mediaType: data.mediaType,
+  }
+}
+
 function areGroupPropsEqual(
   prev: IsolatedMessageGroupProps,
   next: IsolatedMessageGroupProps
@@ -133,7 +159,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
       .join("\n") || ""
 
   const imageParts =
-    userMsg?.parts?.filter((p: any) => p.type === "data-image") || []
+    userMsg?.parts?.filter(isImageMessagePart) || []
   const longTextParts =
     userMsg?.parts?.filter((p: any) => p.type === "long-text-attachment") || []
 
@@ -172,27 +198,32 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
       {((!isImageOnlyMessage && imageParts.length > 0) || textMentions.length > 0 || longTextParts.length > 0) && (
         <div className="mb-2 pointer-events-auto flex flex-wrap items-end gap-1.5">
           {imageParts.length > 0 && !isImageOnlyMessage && (() => {
-            const resolveImgUrl = (img: any) =>
-              img.data?.base64Data && img.data?.mediaType
-                ? `data:${img.data.mediaType};base64,${img.data.base64Data}`
-                : img.data?.url || ""
             const allImages = imageParts
-              .filter((img: any) => img.data?.url || img.data?.base64Data)
-              .map((img: any, idx: number) => ({
-                id: `${userMsgId}-img-${idx}`,
-                filename: img.data?.filename || "image",
-                url: resolveImgUrl(img),
-              }))
-            return imageParts.map((img: any, idx: number) => (
-              <AgentImageItem
-                key={`${userMsgId}-img-${idx}`}
-                id={`${userMsgId}-img-${idx}`}
-                filename={img.data?.filename || "image"}
-                url={resolveImgUrl(img)}
-                allImages={allImages}
-                imageIndex={idx}
-              />
-            ))
+              .map((img: any, idx: number) => {
+                const display = getImagePartDisplayData(img)
+                return {
+                  id: `${userMsgId}-img-${idx}`,
+                  filename: display.filename,
+                  url: display.url,
+                  localRef: display.localRef,
+                  mediaType: display.mediaType,
+                }
+              })
+            return imageParts.map((img: any, idx: number) => {
+              const display = getImagePartDisplayData(img)
+              return (
+                <AgentImageItem
+                  key={`${userMsgId}-img-${idx}`}
+                  id={`${userMsgId}-img-${idx}`}
+                  filename={display.filename}
+                  url={display.url}
+                  localRef={display.localRef}
+                  mediaType={display.mediaType}
+                  allImages={allImages}
+                  imageIndex={idx}
+                />
+              )
+            })
           })()}
           {textMentions.map((mention, idx) => (
             <TextMentionBlock key={`mention-${idx}`} mention={mention} />

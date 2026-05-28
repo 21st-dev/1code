@@ -8,17 +8,17 @@ In progress. The user explicitly resumed `add-rich-chat-attachments`.
 - [x] 1.4 Preserve compatibility with existing `data-image` message parts during migration.
 
 ## 2. Input UI
-- [ ] 2.1 Make new-chat and active-chat inputs share the same image acceptance rules.
+- [x] 2.1 Make new-chat and active-chat inputs share the same image acceptance rules.
 - [x] 2.2 Support file picker, drag-and-drop, and clipboard paste for images in both input surfaces.
-- [ ] 2.3 Allow image-only sends in new chats, active chats, queued sends, and force sends.
-- [ ] 2.4 Add attachment preview, remove, loading, failed, size, and unsupported-type states.
-- [ ] 2.5 Keep file mentions and small text-file context behavior working alongside image attachments.
+- [x] 2.3 Allow image-only sends in new chats, active chats, queued sends, and force sends.
+- [x] 2.4 Add attachment preview, remove, loading, failed, size, and unsupported-type states.
+- [x] 2.5 Keep file mentions and small text-file context behavior working alongside image attachments.
 
 ## 3. Provider Capability and Disclosure
-- [ ] 3.1 Add a provider/model image-capability map.
-- [ ] 3.2 Disable or block send with a clear message when the selected provider/model cannot process images.
-- [ ] 3.3 Show concise disclosure when images will be sent to a remote provider.
-- [ ] 3.4 Re-check attachment capability when provider or model selection changes.
+- [x] 3.1 Add a provider/model image-capability map.
+- [x] 3.2 Disable or block send with a clear message when the selected provider/model cannot process images.
+- [x] 3.3 Show concise disclosure when images will be sent to a remote provider.
+- [x] 3.4 Re-check attachment capability when provider or model selection changes.
 
 ## 4. Send Pipeline
 - [x] 4.1 Resolve staged image refs into Claude image payloads in the main process.
@@ -27,10 +27,10 @@ In progress. The user explicitly resumed `add-rich-chat-attachments`.
 - [x] 4.4 Ensure transport/server logs never include base64 image bytes.
 
 ## 5. Message Rendering and Drafts
-- [ ] 5.1 Render sent image attachments from local refs in user bubbles.
-- [ ] 5.2 Restore image attachments from drafts without losing preview/remove controls.
-- [ ] 5.3 Clean up unsent staged attachments after draft deletion or configured retention.
-- [ ] 5.4 Keep attachment-only summary text accurate and localized-ready.
+- [x] 5.1 Render sent image attachments from local refs in user bubbles.
+- [x] 5.2 Restore image attachments from drafts without losing preview/remove controls.
+- [x] 5.3 Clean up unsent staged attachments after draft deletion or configured retention.
+- [x] 5.4 Keep attachment-only summary text accurate and localized-ready.
 
 ## 6. Verification
 - [ ] 6.1 Verify new chat can send an image-only message.

@@ -11,18 +11,24 @@ import {
   ContextMenuItem,
 } from "../../../components/ui/context-menu"
 import { useI18n } from "../../../lib/i18n"
+import { trpcClient } from "../../../lib/trpc"
 
 interface ImageData {
   id: string
   filename: string
   url: string
+  localRef?: string
+  mediaType?: string
 }
 
 interface AgentImageItemProps {
   id: string
   filename: string
   url: string
+  localRef?: string
+  mediaType?: string
   isLoading?: boolean
+  error?: string
   onRemove?: () => void
   /** All images in the group for gallery navigation */
   allImages?: ImageData[]
@@ -34,22 +40,52 @@ export function AgentImageItem({
   id,
   filename,
   url,
+  localRef,
+  mediaType,
   isLoading = false,
+  error,
   onRemove,
   allImages,
   imageIndex = 0,
 }: AgentImageItemProps) {
   const { t } = useI18n()
   const [isHovered, setIsHovered] = useState(false)
-  const [hasError, setHasError] = useState(false)
+  const [hasError, setHasError] = useState(Boolean(error))
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(imageIndex)
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false)
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({})
 
   // Use allImages if provided, otherwise create single-image array
-  const images = allImages || [{ id, filename, url }]
+  const images = allImages || [{ id, filename, url, localRef, mediaType }]
+  useEffect(() => {
+    for (const image of images) {
+      if (image.url || !image.localRef || resolvedUrls[image.id]) continue
+      void trpcClient.chatAttachments.getImageDataUrl
+        .query({ localRef: image.localRef, mediaType: image.mediaType })
+        .then((dataUrl) => {
+          setResolvedUrls((prev) => ({ ...prev, [image.id]: dataUrl }))
+        })
+        .catch(() => {
+          if (image.id === id) {
+            setHasError(true)
+          }
+        })
+    }
+  }, [id, images, resolvedUrls])
+  const displayImages = images.map((image) => ({
+    ...image,
+    url: image.url || resolvedUrls[image.id] || "",
+  }))
   const hasMultipleImages = images.length > 1
-  const currentImage = images[currentIndex] || images[0]
+  const currentImage = displayImages[currentIndex] || displayImages[0]
+  const thumbnailUrl = displayImages[imageIndex]?.url || url || resolvedUrls[id] || ""
+
+  useEffect(() => {
+    if (error) {
+      setHasError(true)
+    }
+  }, [error])
 
   const handleImageError = () => {
     console.warn("[AgentImageItem] Failed to load image:", filename, url)
@@ -77,7 +113,7 @@ export function AgentImageItem({
 
   const handleCopyImage = useCallback(async () => {
     try {
-      const imgUrl = (images[currentIndex] || images[0])?.url
+      const imgUrl = (displayImages[currentIndex] || displayImages[0])?.url
       if (!imgUrl) return
 
       const img = new Image()
@@ -106,11 +142,11 @@ export function AgentImageItem({
     } catch (err) {
       console.error("[AgentImageItem] Failed to copy image:", err)
     }
-  }, [images, currentIndex])
+  }, [displayImages, currentIndex])
 
   const handleSaveImage = useCallback(async () => {
     try {
-      const image = images[currentIndex] || images[0]
+      const image = displayImages[currentIndex] || displayImages[0]
       if (!image?.url) return
 
       // Use canvas to extract image data (avoids CSP issues with blob: URLs)
@@ -143,7 +179,7 @@ export function AgentImageItem({
     } catch (err) {
       console.error("[AgentImageItem] Failed to save image:", err)
     }
-  }, [images, currentIndex])
+  }, [displayImages, currentIndex])
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -182,12 +218,12 @@ export function AgentImageItem({
             <IconSpinner className="size-4 text-muted-foreground" />
           </div>
         ) : hasError ? (
-          <div className="w-full h-full flex items-center justify-center bg-muted/50 rounded border border-destructive/20" title={t("agent.image.failedLoad")}>
+          <div className="w-full h-full flex items-center justify-center bg-muted/50 rounded border border-destructive/20" title={error || t("agent.image.failedLoad")}>
             <ImageOff className="size-4 text-destructive/50" />
           </div>
-        ) : url ? (
+        ) : thumbnailUrl ? (
           <img
-            src={url}
+            src={thumbnailUrl}
             alt={filename}
             className="w-full h-full object-cover rounded cursor-pointer"
             onClick={openFullscreen}

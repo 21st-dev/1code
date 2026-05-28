@@ -109,6 +109,7 @@ import {
   isProviderProfileSource,
   parseProviderProfileSource,
 } from "../../../../shared/provider-profile-types"
+import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -119,6 +120,10 @@ import {
   generateDraftId,
   deleteNewChatDraft,
   markDraftVisible,
+  toDraftImage,
+  fromDraftImage,
+  toDraftPastedText,
+  fromDraftPastedText,
   type DraftProject,
 } from "../lib/drafts"
 import { buildAgentMessageParts } from "../lib/message-parts"
@@ -558,7 +563,6 @@ export function NewChatForm({
     selectedModel,
     t,
   ])
-
   useEffect(() => {
     if (selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig) {
       setSelectedClaudeModelSource("claude-oauth")
@@ -633,8 +637,35 @@ export function NewChatForm({
     removeFile,
     clearImages,
     clearFiles,
+    clearAll,
     isUploading,
+    setImagesFromDraft,
   } = useAgentsFileUpload({ subChatId: tempAttachmentScopeRef.current })
+
+  const readyImageCount = images.filter(
+    (image) => !image.isLoading && !image.error && (image.localRef || image.url),
+  ).length
+  const imageAttachmentCapability = useMemo(
+    () =>
+      getChatImageAttachmentCapability({
+        provider: selectedAgent.id as "claude-code" | "codex",
+        offlineModeEnabled:
+          selectedAgent.id === "claude-code" &&
+          availableModels.isOffline &&
+          availableModels.hasOllama,
+      }),
+    [availableModels.hasOllama, availableModels.isOffline, selectedAgent.id],
+  )
+  const imageAttachmentBlocked =
+    readyImageCount > 0 && !imageAttachmentCapability.supportsImages
+  const imageAttachmentNotice =
+    readyImageCount === 0
+      ? null
+      : imageAttachmentBlocked
+        ? t("agent.attachments.imagesUnsupportedOffline")
+        : t("agent.attachments.remoteDisclosure", {
+            provider: selectedModelLabel,
+          })
 
   // Pasted text files - use a stable temp ID for new chat
   const tempPastedIdRef = useRef(`new-chat-${Date.now()}`)
@@ -643,6 +674,7 @@ export function NewChatForm({
     addPastedText,
     removePastedText,
     clearPastedTexts,
+    setPastedTextsFromDraft,
   } = usePastedTextFiles(tempPastedIdRef.current)
 
   // File contents cache - stores content for file mentions (keyed by mentionId)
@@ -1029,6 +1061,8 @@ export function NewChatForm({
           editorRef.current.clear()
           setHasContent(false)
         }
+        clearAll()
+        clearPastedTexts()
 
         // Fetch remote branches in background when starting new workspace
         if (validatedProject?.path) {
@@ -1040,24 +1074,47 @@ export function NewChatForm({
 
     const globalDrafts = loadGlobalDrafts()
     const draft = globalDrafts[selectedDraftId]
-    if (draft?.text) {
+    if (draft) {
       currentDraftIdRef.current = selectedDraftId
-      lastSavedTextRef.current = draft.text // Initialize to prevent immediate re-save
+      lastSavedTextRef.current = JSON.stringify({
+        text: draft.text || "",
+        images: draft.images ?? [],
+        pastedTexts: draft.pastedTexts ?? [],
+      }) // Initialize to prevent immediate re-save
 
       // Try to set value immediately if editor is ready
       if (editorRef.current) {
-        editorRef.current.setValue(draft.text)
-        setHasContent(true)
+        editorRef.current.setValue(draft.text || "")
+        setHasContent(Boolean(draft.text?.trim()))
       } else {
         // Fallback: wait for editor to initialize (rare case)
         const timeoutId = setTimeout(() => {
-          editorRef.current?.setValue(draft.text)
-          setHasContent(true)
+          editorRef.current?.setValue(draft.text || "")
+          setHasContent(Boolean(draft.text?.trim()))
         }, 50)
-        return () => clearTimeout(timeoutId)
+        setTimeout(() => clearTimeout(timeoutId), 60)
       }
+
+      const draftImages =
+        draft.images
+          ?.map(fromDraftImage)
+          .filter((img): img is NonNullable<ReturnType<typeof fromDraftImage>> => img !== null) ?? []
+      setImagesFromDraft(draftImages)
+
+      const draftPastedTexts =
+        draft.pastedTexts
+          ?.map(fromDraftPastedText)
+          .filter((text): text is NonNullable<ReturnType<typeof fromDraftPastedText>> => text !== null) ?? []
+      setPastedTextsFromDraft(draftPastedTexts)
     }
-  }, [selectedDraftId, validatedProject?.path])
+  }, [
+    clearAll,
+    clearPastedTexts,
+    selectedDraftId,
+    setImagesFromDraft,
+    setPastedTextsFromDraft,
+    validatedProject?.path,
+  ])
 
   // Mark draft as visible when component unmounts (user navigates away)
   // This ensures the draft only appears in the sidebar after leaving the form
@@ -1177,6 +1234,12 @@ export function NewChatForm({
     if ((!hasText && !hasImages && !hasFiles && !hasPastedTexts) || !projectForChat) {
       return
     }
+    if (imageAttachmentBlocked) {
+      toast.error(t("agent.attachments.imagesUnsupportedTitle"), {
+        description: t("agent.attachments.imagesUnsupportedOffline"),
+      })
+      return
+    }
 
     message = await expandCustomSlashCommand(message, projectForChat.path)
 
@@ -1214,6 +1277,8 @@ export function NewChatForm({
     pastedTexts,
     selectedChatModel,
     agentMode,
+    imageAttachmentBlocked,
+    t,
   ])
 
   const handleMentionSelect = useCallback((mention: FileMentionOption) => {
@@ -1259,16 +1324,29 @@ export function NewChatForm({
       setHasContent(hasContent)
       const text = editorRef.current?.getValue() || ""
       setDraftText(text)
+      const draftImages =
+        images
+          .map(toDraftImage)
+          .filter((img): img is NonNullable<ReturnType<typeof toDraftImage>> => img !== null)
+      const draftPastedTexts = pastedTexts.map(toDraftPastedText)
+      const snapshot = JSON.stringify({
+        text,
+        images: draftImages,
+        pastedTexts: draftPastedTexts,
+      })
 
-      // Skip if text hasn't changed
-      if (text === lastSavedTextRef.current) {
+      // Skip if text and metadata attachments haven't changed
+      if (snapshot === lastSavedTextRef.current) {
         return
       }
-      lastSavedTextRef.current = text
+      lastSavedTextRef.current = snapshot
 
       const globalDrafts = loadGlobalDrafts()
 
-      if (text.trim() && validatedProject) {
+      if (
+        (text.trim() || draftImages.length > 0 || draftPastedTexts.length > 0) &&
+        validatedProject
+      ) {
         // If no current draft ID, create a new one
         if (!currentDraftIdRef.current) {
           currentDraftIdRef.current = generateDraftId()
@@ -1286,6 +1364,8 @@ export function NewChatForm({
             gitRepo: validatedProject.gitRepo,
             gitProvider: validatedProject.gitProvider,
           },
+          ...(draftImages.length > 0 && { images: draftImages }),
+          ...(draftPastedTexts.length > 0 && { pastedTexts: draftPastedTexts }),
         }
         saveGlobalDrafts(globalDrafts)
       } else if (currentDraftIdRef.current) {
@@ -1294,8 +1374,15 @@ export function NewChatForm({
         currentDraftIdRef.current = null
       }
     },
-    [validatedProject],
+    [images, pastedTexts, validatedProject],
   )
+
+  useEffect(() => {
+    if (!validatedProject) return
+    const text = editorRef.current?.getValue() || ""
+    if (!text.trim() && images.length === 0 && pastedTexts.length === 0) return
+    handleContentChange(Boolean(text.trim()))
+  }, [handleContentChange, images, pastedTexts, validatedProject])
 
   // Clear current draft when chat is created
   const clearCurrentDraft = useCallback(() => {
@@ -1553,6 +1640,7 @@ export function NewChatForm({
               filename={img.filename}
               url={img.url}
               isLoading={img.isLoading}
+              error={img.error}
               onRemove={() => removeImage(img.id)}
               allImages={allImages}
               imageIndex={idx}
@@ -1583,6 +1671,12 @@ export function NewChatForm({
         ))}
       </div>
     ) : null
+
+  const hasSendableContent =
+    hasContent ||
+    readyImageCount > 0 ||
+    files.length > 0 ||
+    pastedTexts.length > 0
 
   // Handle container click to focus editor
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
@@ -1667,6 +1761,18 @@ export function NewChatForm({
                   contextItems={contextItems}
                 >
                   <PromptInputContextItems />
+                  {imageAttachmentNotice && (
+                    <div
+                      className={cn(
+                        "px-1 pb-1 text-[11px] leading-4",
+                        imageAttachmentBlocked
+                          ? "text-destructive"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {imageAttachmentNotice}
+                    </div>
+                  )}
                   <AgentContextRecommendations
                     draftText={draftText}
                     projectPath={validatedProject?.path}
@@ -1971,11 +2077,14 @@ export function NewChatForm({
                             createChatMutation.isPending || isUploading
                           }
                           disabled={Boolean(
-                            !hasContent || !projectForChat || isUploading,
+                            !hasSendableContent ||
+                              !projectForChat ||
+                              isUploading ||
+                              imageAttachmentBlocked,
                           )}
                           onClick={handleSend}
                           mode={agentMode}
-                          hasContent={hasContent}
+                          hasContent={hasSendableContent}
                           showVoiceInput={isVoiceAvailable}
                           isRecording={isVoiceRecording}
                           isTranscribing={isTranscribing}

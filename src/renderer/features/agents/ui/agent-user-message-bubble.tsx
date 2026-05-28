@@ -17,6 +17,12 @@ interface AgentUserMessageBubbleProps {
   messageId: string
   textContent: string
 	imageParts?: Array<{
+    type?: string
+    attachmentId?: string
+    localRef?: string
+    filename?: string
+    mediaType?: string
+    sizeBytes?: number
 	  data?: {
 	    filename?: string
 	    url?: string
@@ -26,6 +32,28 @@ interface AgentUserMessageBubbleProps {
 	}>
   /** If true, renders only images and text - no TextMentionBlocks (they're rendered by parent) */
   skipTextMentionBlocks?: boolean
+}
+
+function getImagePartDisplayData(img: any) {
+  if (img?.type === "attachment-image") {
+    return {
+      filename: img.filename || "image",
+      url: "",
+      localRef: img.localRef,
+      mediaType: img.mediaType,
+    }
+  }
+
+  const data = img?.data || {}
+  return {
+    filename: data.filename || "image",
+    url:
+      data.base64Data && data.mediaType
+        ? `data:${data.mediaType};base64,${data.base64Data}`
+        : data.url || "",
+    localRef: undefined,
+    mediaType: data.mediaType,
+  }
 }
 
 // Helper function to highlight text in DOM using TreeWalker
@@ -195,28 +223,33 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
             <div className="flex flex-wrap items-center gap-1.5">
               {(() => {
                 // Build allImages array for gallery navigation
-                const resolveImgUrl = (img: any) =>
-                  img.data?.base64Data && img.data?.mediaType
-                    ? `data:${img.data.mediaType};base64,${img.data.base64Data}`
-                    : img.data?.url || ""
                 const allImages = imageParts
-                  .filter((img) => img.data?.url || img.data?.base64Data)
-                  .map((img, idx) => ({
-                    id: `${messageId}-img-${idx}`,
-                    filename: img.data?.filename || "image",
-                    url: resolveImgUrl(img),
-                  }))
+                  .map((img, idx) => {
+                    const display = getImagePartDisplayData(img)
+                    return {
+                      id: `${messageId}-img-${idx}`,
+                      filename: display.filename,
+                      url: display.url,
+                      localRef: display.localRef,
+                      mediaType: display.mediaType,
+                    }
+                  })
 
-                return imageParts.map((img, idx) => (
-                  <AgentImageItem
-                    key={`${messageId}-img-${idx}`}
-                    id={`${messageId}-img-${idx}`}
-                    filename={img.data?.filename || "image"}
-                    url={resolveImgUrl(img)}
-                    allImages={allImages}
-                    imageIndex={idx}
-                  />
-                ))
+                return imageParts.map((img, idx) => {
+                  const display = getImagePartDisplayData(img)
+                  return (
+                    <AgentImageItem
+                      key={`${messageId}-img-${idx}`}
+                      id={`${messageId}-img-${idx}`}
+                      filename={display.filename}
+                      url={display.url}
+                      localRef={display.localRef}
+                      mediaType={display.mediaType}
+                      allImages={allImages}
+                      imageIndex={idx}
+                    />
+                  )
+                })
               })()}
             </div>
           )}
