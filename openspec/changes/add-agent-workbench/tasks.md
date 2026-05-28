@@ -20,9 +20,9 @@
 ## 4. Actions and Workflow Integration
 - [x] 4.1 Wire Open/Continue to existing chat and sub-chat selection.
 - [x] 4.2 Wire Review Diff to existing diff sidebar/filter behavior where available.
-- [ ] 4.3 Wire Open PR and Create PR through existing GitHub workflow surfaces and confirmations.
-- [ ] 4.4 Add disabled reasons for unavailable actions.
-- [ ] 4.5 Commit the action-integration slice.
+- [x] 4.3 Wire Open PR and Create PR through existing GitHub workflow surfaces and confirmations.
+- [x] 4.4 Add disabled reasons for unavailable actions.
+- [x] 4.5 Commit the action-integration slice.
 
 ## 5. Verification
 - [ ] 5.1 Run focused Bun tests.

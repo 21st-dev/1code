@@ -108,6 +108,18 @@ function getStatusClassName(status: WorkbenchTaskStatus): string {
   return "text-muted-foreground"
 }
 
+function getReviewDisabledReason(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"]) {
+  if (task.actions.canReviewDiff) return null
+  if (!task.worktreePath) return t("workbench.noWorkspacePath")
+  return t("workbench.noReviewableDiff")
+}
+
+function getPreparePrHint(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"]) {
+  if (!task.worktreePath) return t("workbench.noWorkspacePath")
+  if (!task.actions.canCreatePr) return t("workbench.preparePrUnavailable")
+  return t("workbench.preparePrHint")
+}
+
 function formatUpdatedAt(value: Date | string | null): string {
   if (!value) return ""
   const date = value instanceof Date ? value : new Date(value)
@@ -137,6 +149,8 @@ function TaskCard({
   const diffHasLines = task.diff.additions !== null || task.diff.deletions !== null
   const diffSidebarAtom = useMemo(() => diffSidebarOpenAtomFamily(task.id), [task.id])
   const setDiffSidebarOpen = useSetAtom(diffSidebarAtom)
+  const reviewDisabledReason = getReviewDisabledReason(task, t)
+  const preparePrHint = getPreparePrHint(task, t)
   const handleReview = useCallback(
     () => onReview(task, setDiffSidebarOpen),
     [onReview, setDiffSidebarOpen, task],
@@ -245,8 +259,8 @@ function TaskCard({
               </Button>
             </span>
           </TooltipTrigger>
-          {!task.actions.canReviewDiff && (
-            <TooltipContent>{t("workbench.noReviewableDiff")}</TooltipContent>
+          {reviewDisabledReason && (
+            <TooltipContent>{reviewDisabledReason}</TooltipContent>
           )}
         </Tooltip>
         {task.pr?.url ? (
@@ -275,7 +289,7 @@ function TaskCard({
                 </Button>
               </span>
             </TooltipTrigger>
-            <TooltipContent>{t("workbench.preparePrHint")}</TooltipContent>
+            <TooltipContent>{preparePrHint}</TooltipContent>
           </Tooltip>
         )}
       </div>

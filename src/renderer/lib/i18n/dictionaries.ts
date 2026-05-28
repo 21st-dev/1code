@@ -1374,7 +1374,9 @@ export const en = {
   "workbench.openPr": "Open PR",
   "workbench.createPr": "Create PR",
   "workbench.preparePr": "Prepare PR",
-  "workbench.preparePrHint": "Review the local diff before creating a pull request.",
+  "workbench.preparePrHint": "Open the existing Changes panel to review and create a draft PR with confirmation.",
+  "workbench.preparePrUnavailable": "PR preparation is unavailable for this task.",
+  "workbench.noWorkspacePath": "No workspace path is available.",
 
   "chat.new.title": "What do you want to get done?",
   "chat.defaultTitle": "New Chat",
@@ -3814,7 +3816,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "workbench.openPr": "打开 PR",
   "workbench.createPr": "创建 PR",
   "workbench.preparePr": "准备 PR",
-  "workbench.preparePrHint": "先审查本地 diff，再创建 Pull Request。",
+  "workbench.preparePrHint": "打开现有 Changes 面板，审查后通过确认弹窗创建 PR 草稿。",
+  "workbench.preparePrUnavailable": "这个任务暂时不能准备 PR。",
+  "workbench.noWorkspacePath": "没有可用的工作区路径。",
 
   "chat.new.title": "你想完成什么？",
   "chat.defaultTitle": "新对话",
