@@ -27,7 +27,7 @@ import {
   CustomAgentIcon,
   OriginalMCPIcon,
 } from "../../../components/ui/icons"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Eye, EyeOff } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
@@ -553,6 +553,33 @@ function matchesMultiWordSearch(target: string, searchLower: string): boolean {
   return searchWords.every(word => targetLower.includes(word))
 }
 
+const ALLOWED_HIDDEN_MENTION_FILES = new Set([
+  ".editorconfig",
+  ".eslintignore",
+  ".gitattributes",
+  ".gitignore",
+  ".prettierignore",
+  ".prettierrc",
+])
+
+const SENSITIVE_MENTION_FILE_EXTENSIONS = new Set([".key", ".pem", ".p12", ".pfx"])
+
+function isHiddenOrSensitiveMentionPath(filePath: string): boolean {
+  const fileName = filePath.split("/").pop()?.toLowerCase() || filePath.toLowerCase()
+  const extension = fileName.includes(".") ? `.${fileName.split(".").pop()}` : ""
+
+  return (
+    (fileName.startsWith(".") && !ALLOWED_HIDDEN_MENTION_FILES.has(fileName)) ||
+    fileName === ".env" ||
+    fileName === ".envrc" ||
+    fileName === ".netrc" ||
+    fileName === ".npmrc" ||
+    fileName === ".pypirc" ||
+    fileName.startsWith(".env.") ||
+    SENSITIVE_MENTION_FILE_EXTENSIONS.has(extension)
+  )
+}
+
 /**
  * Sort files by relevance to search query
  * Priority: exact match > starts with > shorter match > contains in filename > alphabetical
@@ -703,6 +730,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const placementRef = useRef<"above" | "below" | null>(null)
   const [debouncedSearchText, setDebouncedSearchText] = useState(searchText)
+  const [includeHiddenAndSensitive, setIncludeHiddenAndSensitive] = useState(false)
 
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
 
@@ -754,6 +782,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       projectPath: projectPath || "",
       query: apiSearchQuery,
       limit: 50,
+      includeHiddenAndSensitive,
     },
     {
       enabled: isOpen && !!projectPath,
@@ -772,6 +801,10 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       .filter((file) =>
         // Multi-word search: all words must match in file path
         matchesMultiWordSearch(file.filePath, searchLower),
+      )
+      .filter((file) =>
+        includeHiddenAndSensitive ||
+        !isHiddenOrSensitiveMentionPath(file.displayPath || file.filePath),
       )
       .map((file) => {
         // Use displayPath (relative path) for UI display, filePath only for internal ID
@@ -793,7 +826,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
 
     // Sort by relevance using shared function
     return sortFilesByRelevance(mapped, debouncedSearchText)
-  }, [changedFiles, debouncedSearchText, repository])
+  }, [changedFiles, debouncedSearchText, includeHiddenAndSensitive, repository])
 
   // Convert API results to options with truncated path
   // Exclude files that are already in changedFileOptions
@@ -923,6 +956,11 @@ export const AgentsFileMention = memo(function AgentsFileMention({
 
   // Determine if we're in a subpage view (or showing files directly when no skills/agents/tools)
   const isInSubpage = showingFilesList || showingSkillsList || showingAgentsList || showingToolsList || hasOnlyFiles
+  const canToggleHiddenAndSensitive = Boolean(projectPath) && (
+    showingFilesList ||
+    hasOnlyFiles ||
+    (!showingSkillsList && !showingAgentsList && !showingToolsList)
+  )
 
   // Filter category options based on available data
   const availableCategoryOptions = useMemo(() => {
@@ -1225,6 +1263,38 @@ export const AgentsFileMention = memo(function AgentsFileMention({
                     </span>
                     {isFetching && !isLoading && (
                       <IconSpinner className="h-2.5 w-2.5" />
+                    )}
+                    {canToggleHiddenAndSensitive && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setIncludeHiddenAndSensitive((value) => !value)
+                        }}
+                        className="ml-auto inline-flex h-5 items-center gap-1 rounded px-1.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        aria-label={
+                          includeHiddenAndSensitive
+                            ? t("agent.mention.hideHiddenSensitive")
+                            : t("agent.mention.showHiddenSensitive")
+                        }
+                        title={
+                          includeHiddenAndSensitive
+                            ? t("agent.mention.hideHiddenSensitive")
+                            : t("agent.mention.showHiddenSensitive")
+                        }
+                      >
+                        {includeHiddenAndSensitive ? (
+                          <EyeOff className="h-3 w-3" />
+                        ) : (
+                          <Eye className="h-3 w-3" />
+                        )}
+                        <span>
+                          {includeHiddenAndSensitive
+                            ? t("agent.mention.hideHiddenSensitive")
+                            : t("agent.mention.showHiddenSensitive")}
+                        </span>
+                      </button>
                     )}
                   </div>
                 )}

@@ -19,6 +19,9 @@ const IGNORED_DIRS = new Set([
   "dist",
   "build",
   "release",
+  "target",
+  "test-results",
+  "playwright-report",
   ".next",
   ".nuxt",
   ".output",
@@ -33,6 +36,11 @@ const IGNORED_DIRS = new Set([
   "out",
   ".svelte-kit",
   ".astro",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+  ".tox",
+  ".gradle",
 ])
 
 // Files to ignore
@@ -41,6 +49,44 @@ const IGNORED_FILES = new Set([
   "Thumbs.db",
   ".gitkeep",
 ])
+
+const ALLOWED_HIDDEN_FILES = new Set([
+  ".editorconfig",
+  ".eslintignore",
+  ".gitattributes",
+  ".gitignore",
+  ".prettierignore",
+  ".prettierrc",
+])
+
+const SENSITIVE_FILE_NAMES = new Set([
+  ".env",
+  ".envrc",
+  ".netrc",
+  ".npmrc",
+  ".pypirc",
+])
+
+const SENSITIVE_FILE_EXTENSIONS = new Set([
+  ".key",
+  ".pem",
+  ".p12",
+  ".pfx",
+])
+
+function isHiddenFile(name: string): boolean {
+  return name.startsWith(".") && !ALLOWED_HIDDEN_FILES.has(name)
+}
+
+function isSensitiveFile(name: string): boolean {
+  const lower = name.toLowerCase()
+  const ext = extname(lower)
+  return (
+    SENSITIVE_FILE_NAMES.has(lower) ||
+    lower.startsWith(".env.") ||
+    SENSITIVE_FILE_EXTENSIONS.has(ext)
+  )
+}
 
 // File extensions to ignore
 const IGNORED_EXTENSIONS = new Set([
@@ -115,7 +161,8 @@ async function scanDirectory(
   rootPath: string,
   currentPath: string = rootPath,
   depth: number = 0,
-  maxDepth: number = 15
+  maxDepth: number = 15,
+  options: { includeHiddenAndSensitive?: boolean } = {},
 ): Promise<FileEntry[]> {
   if (depth > maxDepth) return []
 
@@ -132,17 +179,26 @@ async function scanDirectory(
         // Skip ignored directories
         if (IGNORED_DIRS.has(entry.name)) continue
         // Skip hidden directories (except .github, .vscode, etc.)
-        if (entry.name.startsWith(".") && !entry.name.startsWith(".github") && !entry.name.startsWith(".vscode")) continue
+        if (
+          !options.includeHiddenAndSensitive &&
+          entry.name.startsWith(".") &&
+          !entry.name.startsWith(".github") &&
+          !entry.name.startsWith(".vscode")
+        ) continue
 
         // Add the folder itself to results
         entries.push({ path: relativePath, type: "folder" })
 
         // Recurse into subdirectory
-        const subEntries = await scanDirectory(rootPath, fullPath, depth + 1, maxDepth)
+        const subEntries = await scanDirectory(rootPath, fullPath, depth + 1, maxDepth, options)
         entries.push(...subEntries)
       } else if (entry.isFile()) {
         // Skip ignored files
         if (IGNORED_FILES.has(entry.name)) continue
+        if (
+          !options.includeHiddenAndSensitive &&
+          (isHiddenFile(entry.name) || isSensitiveFile(entry.name))
+        ) continue
 
         // Check extension
         const ext = entry.name.includes(".") ? "." + entry.name.split(".").pop()?.toLowerCase() : ""
@@ -165,15 +221,19 @@ async function scanDirectory(
 /**
  * Get cached entry list or scan directory
  */
-async function getEntryList(projectPath: string): Promise<FileEntry[]> {
-  const cached = fileListCache.get(projectPath)
+async function getEntryList(
+  projectPath: string,
+  options: { includeHiddenAndSensitive?: boolean } = {},
+): Promise<FileEntry[]> {
+  const cacheKey = `${projectPath}:${options.includeHiddenAndSensitive ? "all" : "safe"}`
+  const cached = fileListCache.get(cacheKey)
   const now = Date.now()
 
   if (cached && now - cached.timestamp < CACHE_TTL) {
     return cached.entries
   }
 
-  const entries = await scanDirectory(projectPath)
+  const entries = await scanDirectory(projectPath, projectPath, 0, 15, options)
 
   // Evict oldest entries if cache is full
   if (fileListCache.size >= MAX_CACHE_ENTRIES) {
@@ -188,7 +248,7 @@ async function getEntryList(projectPath: string): Promise<FileEntry[]> {
     if (oldest) fileListCache.delete(oldest)
   }
 
-  fileListCache.set(projectPath, { entries, timestamp: now })
+  fileListCache.set(cacheKey, { entries, timestamp: now })
   return entries
 }
 
@@ -277,10 +337,11 @@ export const filesRouter = router({
         query: z.string().default(""),
         limit: z.number().min(1).max(5000).default(50),
         typeFilter: z.enum(["file", "folder"]).optional(),
+        includeHiddenAndSensitive: z.boolean().default(false),
       })
     )
     .query(async ({ input }) => {
-      const { projectPath, query, limit, typeFilter } = input
+      const { projectPath, query, limit, typeFilter, includeHiddenAndSensitive } = input
 
       if (!projectPath) {
         return []
@@ -295,7 +356,7 @@ export const filesRouter = router({
         }
 
         // Get entry list (cached or fresh scan)
-        const entries = await getEntryList(projectPath)
+        const entries = await getEntryList(projectPath, { includeHiddenAndSensitive })
 
         // Filter and sort by query
         return filterEntries(entries, query, limit, typeFilter)
@@ -311,7 +372,8 @@ export const filesRouter = router({
   clearCache: publicProcedure
     .input(z.object({ projectPath: z.string() }))
     .mutation(({ input }) => {
-      fileListCache.delete(input.projectPath)
+      fileListCache.delete(`${input.projectPath}:safe`)
+      fileListCache.delete(`${input.projectPath}:all`)
       return { success: true }
     }),
 
