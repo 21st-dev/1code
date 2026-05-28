@@ -1894,6 +1894,16 @@ export const en = {
   "githubWorkflow.draftPr.createDisabledHint":
     "Creation will be enabled after the confirmation step is wired.",
   "githubWorkflow.draftPr.failed": "Failed to prepare draft PR",
+  "githubWorkflow.draftPr.noWorktreeMessage":
+    "This chat is not associated with a local worktree yet.",
+  "githubWorkflow.draftPr.notGithubRepoMessage":
+    "Connect this workspace to a GitHub origin remote before creating a PR.",
+  "githubWorkflow.draftPr.ghMissingMessage":
+    "GitHub CLI is not installed or is not available on PATH.",
+  "githubWorkflow.draftPr.ghNotAuthenticatedMessage":
+    "GitHub CLI is not authenticated. Run gh auth login before creating a PR.",
+  "githubWorkflow.draftPr.githubUnavailableMessage":
+    "GitHub workflow context is unavailable. Check GitHub CLI output and network access.",
   "githubWorkflow.draftPr.dirtyWorktreeMessage":
     "Commit or stash local changes before creating a PR. Draft PR creation only includes committed branch changes.",
   "githubWorkflow.draftPr.branchMismatchMessage":
@@ -4332,6 +4342,16 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "githubWorkflow.draftPr.createDisabledHint":
     "接入用户确认后才会启用创建。",
   "githubWorkflow.draftPr.failed": "准备 PR 草稿失败",
+  "githubWorkflow.draftPr.noWorktreeMessage":
+    "这个对话还没有关联本地 worktree。",
+  "githubWorkflow.draftPr.notGithubRepoMessage":
+    "创建 PR 前，请先把这个工作区连接到 GitHub origin remote。",
+  "githubWorkflow.draftPr.ghMissingMessage":
+    "GitHub CLI 未安装，或当前 PATH 中不可用。",
+  "githubWorkflow.draftPr.ghNotAuthenticatedMessage":
+    "GitHub CLI 尚未登录。创建 PR 前请先运行 gh auth login。",
+  "githubWorkflow.draftPr.githubUnavailableMessage":
+    "GitHub 工作流上下文不可用。请检查 GitHub CLI 输出和网络访问。",
   "githubWorkflow.draftPr.dirtyWorktreeMessage":
     "创建 PR 前先提交或 stash 本地改动。草稿 PR 只会包含已经提交到分支上的改动。",
   "githubWorkflow.draftPr.branchMismatchMessage":

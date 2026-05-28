@@ -31,6 +31,11 @@ export type GitHubWorkflowStatusMessageKey =
   | "githubWorkflow.status.unavailableMessage"
 
 export type GitHubDraftPrUnavailableMessageKey =
+  | "githubWorkflow.draftPr.noWorktreeMessage"
+  | "githubWorkflow.draftPr.notGithubRepoMessage"
+  | "githubWorkflow.draftPr.ghMissingMessage"
+  | "githubWorkflow.draftPr.ghNotAuthenticatedMessage"
+  | "githubWorkflow.draftPr.githubUnavailableMessage"
   | "githubWorkflow.draftPr.dirtyWorktreeMessage"
   | "githubWorkflow.draftPr.branchMismatchMessage"
   | "githubWorkflow.draftPr.noCommittedChangesMessage"
@@ -143,6 +148,21 @@ export function canSendGitHubReviewComments(
 export function getGitHubDraftPrUnavailableMessageKey(
   reason: GitHubDraftPullRequestUnavailableReason,
 ): GitHubDraftPrUnavailableMessageKey | null {
+  if (reason === "no_worktree") {
+    return "githubWorkflow.draftPr.noWorktreeMessage"
+  }
+  if (reason === "not_github_repo") {
+    return "githubWorkflow.draftPr.notGithubRepoMessage"
+  }
+  if (reason === "gh_missing") {
+    return "githubWorkflow.draftPr.ghMissingMessage"
+  }
+  if (reason === "gh_not_authenticated") {
+    return "githubWorkflow.draftPr.ghNotAuthenticatedMessage"
+  }
+  if (reason === "github_unavailable") {
+    return "githubWorkflow.draftPr.githubUnavailableMessage"
+  }
   if (reason === "dirty_worktree") {
     return "githubWorkflow.draftPr.dirtyWorktreeMessage"
   }

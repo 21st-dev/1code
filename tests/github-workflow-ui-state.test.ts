@@ -115,6 +115,21 @@ describe("GitHub workflow UI state", () => {
   })
 
   test("maps draft PR blocking reasons to inline message keys", () => {
+    expect(getGitHubDraftPrUnavailableMessageKey("no_worktree")).toBe(
+      "githubWorkflow.draftPr.noWorktreeMessage",
+    )
+    expect(getGitHubDraftPrUnavailableMessageKey("not_github_repo")).toBe(
+      "githubWorkflow.draftPr.notGithubRepoMessage",
+    )
+    expect(getGitHubDraftPrUnavailableMessageKey("gh_missing")).toBe(
+      "githubWorkflow.draftPr.ghMissingMessage",
+    )
+    expect(getGitHubDraftPrUnavailableMessageKey("gh_not_authenticated")).toBe(
+      "githubWorkflow.draftPr.ghNotAuthenticatedMessage",
+    )
+    expect(getGitHubDraftPrUnavailableMessageKey("github_unavailable")).toBe(
+      "githubWorkflow.draftPr.githubUnavailableMessage",
+    )
     expect(getGitHubDraftPrUnavailableMessageKey("dirty_worktree")).toBe(
       "githubWorkflow.draftPr.dirtyWorktreeMessage",
     )
