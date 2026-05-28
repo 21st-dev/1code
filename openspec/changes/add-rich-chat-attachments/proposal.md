@@ -1,7 +1,7 @@
 # Change: Add rich chat attachments
 
 ## Status
-In progress. The user explicitly resumed this change for implementation.
+Complete. Implementation, automated verification, and local Electron UI smoke checks have passed.
 
 ## Why
 Agent Code for Me already has a basic image attachment path, but the experience is not yet consistent across new chats, active chats, queued sends, drafts, and provider capability differences. To feel closer to Codex app and IDE-extension workflows, image and screenshot sharing should be reliable, visible, local-first, and clear about what context will be sent.

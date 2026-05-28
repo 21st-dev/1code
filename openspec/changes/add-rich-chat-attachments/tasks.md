@@ -1,5 +1,5 @@
 ## Status
-In progress. The user explicitly resumed `add-rich-chat-attachments`.
+Complete. Implementation, automated verification, and local Electron UI smoke checks have passed.
 
 ## 1. Attachment Model and Storage
 - [x] 1.1 Define shared attachment metadata types for renderer and main-process boundaries.
@@ -33,10 +33,17 @@ In progress. The user explicitly resumed `add-rich-chat-attachments`.
 - [x] 5.4 Keep attachment-only summary text accurate and localized-ready.
 
 ## 6. Verification
-- [ ] 6.1 Verify new chat can send an image-only message.
-- [ ] 6.2 Verify active chat can send text plus image and image-only messages.
-- [ ] 6.3 Verify drag-and-drop and clipboard screenshot paste both stage images.
-- [ ] 6.4 Verify queued image messages send after the active stream finishes.
-- [ ] 6.5 Verify unsupported provider/model paths show a clear blocking message.
-- [ ] 6.6 Verify no long-lived localStorage or SQLite message JSON contains base64 image bytes for new attachments.
-- [ ] 6.7 Run `openspec validate add-rich-chat-attachments --strict --no-interactive`.
+- [x] 6.1 Verify new chat can send an image-only message.
+- [x] 6.2 Verify active chat can send text plus image and image-only messages.
+- [x] 6.3 Verify drag-and-drop and clipboard screenshot paste both stage images.
+- [x] 6.4 Verify queued image messages send after the active stream finishes.
+- [x] 6.5 Verify unsupported provider/model paths show a clear blocking message.
+- [x] 6.6 Verify no long-lived localStorage or SQLite message JSON contains base64 image bytes for new attachments.
+- [x] 6.7 Run `openspec validate add-rich-chat-attachments --strict --no-interactive`.
+
+Evidence:
+- Automated: `bun test tests` passed, including attachment storage, draft/queue/auth retry, transport/router, capability, and i18n coverage.
+- Static/build: `bun run ts:check` and `bun run build` passed.
+- Spec: `openspec validate add-rich-chat-attachments --strict --no-interactive` passed.
+- Real UI smoke: launched Electron with an isolated `LOCUS_USER_DATA_DIR`, clicked through onboarding/workspace selection, used the native file picker to attach PNG images, visually confirmed thumbnail rendering, local-first disclosure text, typed input, and enabled send button state.
+- Storage smoke: confirmed staged image bytes under `chat-image-attachments/.../*.png`, `sub_chats.messages` remained `[]` before send, and grep found no `data:image`, `base64Data`, `iVBOR`, or `/9j/` matches in the isolated profile outside Electron cache directories.
