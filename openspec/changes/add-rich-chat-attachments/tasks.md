@@ -1,9 +1,9 @@
 ## Status
-Deferred / backlog. Keep this checklist as planning material only; do not begin implementation or mark tasks complete until the user explicitly resumes `add-rich-chat-attachments`.
+In progress. The user explicitly resumed `add-rich-chat-attachments`.
 
 ## 1. Attachment Model and Storage
-- [ ] 1.1 Define shared attachment metadata types for renderer and main-process boundaries.
-- [ ] 1.2 Add a main-process attachment staging service with validation, local storage, and cleanup.
+- [x] 1.1 Define shared attachment metadata types for renderer and main-process boundaries.
+- [x] 1.2 Add a main-process attachment staging service with validation, local storage, and cleanup.
 - [ ] 1.3 Store draft/message attachment references without long-lived base64 payloads.
 - [ ] 1.4 Preserve compatibility with existing `data-image` message parts during migration.
 
