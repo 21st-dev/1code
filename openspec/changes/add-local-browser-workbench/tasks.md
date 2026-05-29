@@ -1,5 +1,5 @@
 ## Status
-In progress.
+Complete.
 
 ## 1. Spec and Guardrails
 - [x] 1.1 Add OpenSpec proposal, design, tasks, and capability delta.
