@@ -2128,7 +2128,7 @@ export const en = {
   "agent.model.info.latency.fastest": "Fastest",
   "agent.model.info.latency.medium": "Medium",
   "agent.model.info.latency.nearInstant": "Near-instant",
-  "agent.model.info.summary.claudeOpus47":
+  "agent.model.info.summary.claudeOpus48":
     "Most capable Claude model for complex reasoning and agentic coding.",
   "agent.model.info.summary.claudeSonnet46":
     "Best balance of speed and intelligence in the current Claude lineup.",
@@ -2144,7 +2144,7 @@ export const en = {
     "Text-only research preview optimized for near-instant coding iteration.",
   "agent.model.info.summary.gpt53Codex":
     "Specialized Codex model for complex software engineering.",
-  "agent.model.info.bestFor.claudeOpus47":
+  "agent.model.info.bestFor.claudeOpus48":
     "Hard refactors, deep debugging, architecture review, and long agent runs.",
   "agent.model.info.bestFor.claudeSonnet46":
     "Daily coding, multi-file edits, planning, and high-quality agent work.",
@@ -4606,7 +4606,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.model.info.latency.fastest": "最快",
   "agent.model.info.latency.medium": "中等",
   "agent.model.info.latency.nearInstant": "接近实时",
-  "agent.model.info.summary.claudeOpus47":
+  "agent.model.info.summary.claudeOpus48":
     "Claude 里最强的复杂推理和智能体编码模型。",
   "agent.model.info.summary.claudeSonnet46":
     "当前 Claude 系列里速度和智能最均衡的模型。",
@@ -4622,7 +4622,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "纯文本研究预览版，优化接近实时的编码迭代。",
   "agent.model.info.summary.gpt53Codex":
     "专门面向复杂软件工程的 Codex 模型。",
-  "agent.model.info.bestFor.claudeOpus47":
+  "agent.model.info.bestFor.claudeOpus48":
     "困难重构、深度调试、架构审查、长时间智能体任务。",
   "agent.model.info.bestFor.claudeSonnet46":
     "日常编码、多文件修改、规划和高质量智能体工作。",

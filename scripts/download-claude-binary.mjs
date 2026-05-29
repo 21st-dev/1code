@@ -146,7 +146,7 @@ async function getLatestVersion() {
   }
 
   // Fallback to known version (should be updated periodically)
-  return "2.1.153"
+  return "2.1.156"
 }
 
 /**

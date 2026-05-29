@@ -26,8 +26,8 @@ For local Windows packaging:
 
 ```bash
 bun install
-node scripts/download-claude-binary.mjs --version=2.1.143 --platform win32-x64
-node scripts/download-codex-binary.mjs --version=0.130.0 --platform win32-x64
+node scripts/download-claude-binary.mjs --version=2.1.156 --platform win32-x64
+node scripts/download-codex-binary.mjs --version=0.134.0 --platform win32-x64
 bun run build
 bun run package:win -- --x64
 ```

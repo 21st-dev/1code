@@ -13,10 +13,10 @@ export const CLAUDE_MODELS = [
   {
     id: "opus",
     name: "Opus",
-    version: "4.7",
+    version: "4.8",
     info: {
-      summaryKey: "agent.model.info.summary.claudeOpus47",
-      bestForKey: "agent.model.info.bestFor.claudeOpus47",
+      summaryKey: "agent.model.info.summary.claudeOpus48",
+      bestForKey: "agent.model.info.bestFor.claudeOpus48",
       tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
       contextWindow: "1M",
       maxOutput: "128K",
