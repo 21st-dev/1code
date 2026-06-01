@@ -23,4 +23,3 @@ Observed result:
 - UI showed `claude` and `codex` target runtime chips for the profile.
 - The profile used `auth_mode=none`, no encrypted token, and only redacted metadata headers.
 - A secret grep across smoke evidence and isolated user data found no seeded smoke token strings.
-
