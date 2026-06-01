@@ -24,4 +24,4 @@
 - [x] 4.3 Run `openspec validate add-provider-diagnostics --strict --no-interactive`.
 - [x] 4.4 Run targeted Bun tests for provider profiles and credential storage.
 - [x] 4.5 Run `bun run ts:check`, `bun run build`, and `git diff --check`.
-- [ ] 4.6 Capture local desktop smoke evidence for the diagnostics UI.
+- [x] 4.6 Capture local desktop smoke evidence for the diagnostics UI.
