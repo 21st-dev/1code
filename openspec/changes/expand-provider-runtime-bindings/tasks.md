@@ -30,5 +30,5 @@
 - [x] 4.3 Run targeted provider/runtime/security regression tests.
 - [x] 4.4 Run `bun run ts:check`, `bun run build`, full `bun test tests`, and
       `git diff --check`.
-- [ ] 4.5 Capture local desktop smoke evidence for provider-profile runtime
+- [x] 4.5 Capture local desktop smoke evidence for provider-profile runtime
       binding status.
