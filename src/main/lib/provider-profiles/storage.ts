@@ -35,6 +35,20 @@ import {
 const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
 const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
 const LEGACY_CLAUDE_PROFILE_ID = "legacy-claude-provider"
+const SAFE_METADATA_HEADER_NAMES = new Set([
+  "anthropic-beta",
+  "anthropic-version",
+  "http-referer",
+  "openai-organization",
+  "openai-project",
+  "referer",
+  "user-agent",
+  "x-title",
+])
+const SECRET_HEADER_NAME_REGEX =
+  /(^|[-_])(authorization|api[-_]?key|auth|bearer|credential|key|password|secret|token)([-_]|$)/i
+const SECRET_HEADER_VALUE_REGEX =
+  /(sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._~+/=-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|token)=\S+)/i
 
 export const providerProfileProtocolSchema = z.enum(providerProfileProtocols)
 export const providerProfileAuthModeSchema = z.enum(providerProfileAuthModes)
@@ -114,15 +128,32 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
-function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+function sanitizeHeaders(
+  headers: Record<string, string>,
+  options: { strict: boolean },
+): Record<string, string> {
   const result: Record<string, string> = {}
   for (const [rawKey, rawValue] of Object.entries(headers || {})) {
     const key = rawKey.trim()
     const value = String(rawValue).trim()
     if (!key || !value) continue
-    if (/^(authorization|x-api-key|api-key|anthropic-api-key)$/i.test(key)) {
+
+    const normalizedKey = key.toLowerCase()
+    const allowed = SAFE_METADATA_HEADER_NAMES.has(normalizedKey)
+    const unsafe =
+      !allowed ||
+      SECRET_HEADER_NAME_REGEX.test(key) ||
+      SECRET_HEADER_VALUE_REGEX.test(value)
+
+    if (unsafe) {
+      if (options.strict) {
+        throw new Error(
+          `Provider profile header "${key}" is not allowed. Store credentials in the profile auth mode instead.`,
+        )
+      }
       continue
     }
+
     result[key] = value
   }
   return result
@@ -138,8 +169,12 @@ export function providerHeadersJsonForSave(
   headers: Record<string, string> | undefined,
   existingHeadersJson?: string | null,
 ): string {
-  if (headers === undefined) return existingHeadersJson ?? "{}"
-  return JSON.stringify(sanitizeHeaders(headers))
+  if (headers === undefined) {
+    return JSON.stringify(sanitizeHeaders(parseJson(existingHeadersJson, {}), {
+      strict: false,
+    }))
+  }
+  return JSON.stringify(sanitizeHeaders(headers, { strict: true }))
 }
 
 function parseTestStatus(value: string | null | undefined): ProviderProfileTestStatus | null {

@@ -243,7 +243,8 @@ function AppContent() {
         },
         onError: (error) => {
           console.warn("[App] Failed to migrate legacy Claude provider config:", error)
-          legacyProviderMigrationAttemptedRef.current = false
+          setLegacyCustomClaudeConfig({ model: "", token: "", baseUrl: "" })
+          toast.error(t("toast.models.failedToMigrateLegacyClaudeProvider"))
         },
       }
     )
@@ -254,6 +255,7 @@ function AppContent() {
     setApiKeyOnboardingCompleted,
     setBillingMethod,
     setLegacyCustomClaudeConfig,
+    t,
   ])
 
   // Fetch projects to validate selectedProject exists

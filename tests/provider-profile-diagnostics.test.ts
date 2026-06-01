@@ -128,10 +128,10 @@ describe("provider diagnostics", () => {
     expect(redacted).toContain("***")
   })
 
-  test("stores structured success diagnostics without exposing custom headers", async () => {
+  test("stores structured success diagnostics without exposing metadata headers", async () => {
     const provider = await createProviderServer(({ req, res, body }) => {
       expect(req.headers.authorization).toBe("Bearer provider-token-123")
-      expect(req.headers["x-custom-secret"]).toBe("custom-header-secret")
+      expect(req.headers["http-referer"]).toBe("https://locus.local/diagnostics")
       const parsed = JSON.parse(body || "{}") as { stream?: boolean }
       if (parsed.stream) {
         res.writeHead(200, { "content-type": "text/event-stream" })
@@ -157,7 +157,7 @@ describe("provider diagnostics", () => {
         defaultModel: "test-model",
         authMode: "bearer",
         token: "provider-token-123",
-        headers: { "x-custom-secret": "custom-header-secret" },
+        headers: { "HTTP-Referer": "https://locus.local/diagnostics" },
         targetRuntimes: ["codex", "helpers"],
         capabilities: { codex: true, helpers: true, streaming: true },
       } as const
@@ -184,22 +184,25 @@ describe("provider diagnostics", () => {
       })
 
       expect(storageModule.headersForRenderer(runtimeProfile.headers)).toEqual({
-        "x-custom-secret": "<redacted>",
+        "HTTP-Referer": "<redacted>",
       })
       expect(JSON.stringify(status)).not.toContain("provider-token-123")
-      expect(JSON.stringify(status)).not.toContain("custom-header-secret")
+      expect(JSON.stringify(status)).not.toContain("https://locus.local/diagnostics")
     } finally {
       await provider.close()
     }
   })
 
-  test("keeps legacy statuses and preserves headers when edit payload omits them", () => {
+  test("keeps legacy statuses and preserves safe headers when edit payload omits them", () => {
     const legacyStatus = storageModule.providerProfileTestStatusSchema.parse({
       ok: false,
       checkedAt: "2026-06-01T00:00:00.000Z",
       message: "Legacy failure",
     })
     const existingHeadersJson = JSON.stringify({
+      "HTTP-Referer": "https://locus.local",
+    })
+    const dangerousHeadersJson = JSON.stringify({
       "x-custom-secret": "custom-header-secret",
     })
 
@@ -211,14 +214,23 @@ describe("provider diagnostics", () => {
     expect(
       storageModule.providerHeadersJsonForSave(undefined, existingHeadersJson),
     ).toBe(existingHeadersJson)
+    expect(
+      storageModule.providerHeadersJsonForSave(undefined, dangerousHeadersJson),
+    ).toBe("{}")
     expect(storageModule.providerHeadersJsonForSave({}, existingHeadersJson)).toBe(
       "{}",
     )
     expect(
       storageModule.headersForRenderer(JSON.parse(existingHeadersJson)),
     ).toEqual({
-      "x-custom-secret": "<redacted>",
+      "HTTP-Referer": "<redacted>",
     })
+    expect(() =>
+      storageModule.providerHeadersJsonForSave(
+        { "x-custom-secret": "custom-header-secret" },
+        existingHeadersJson,
+      ),
+    ).toThrow("Store credentials in the profile auth mode instead")
   })
 
   test("redacts failed diagnostic messages before returning and persisting", async () => {
@@ -228,7 +240,7 @@ describe("provider diagnostics", () => {
         JSON.stringify({
           error: {
             message:
-              "rejected provider-token-abc Bearer provider-token-abc custom-header-secret",
+              "rejected provider-token-abc Bearer provider-token-abc https://locus.local/rejected",
           },
         }),
       )
@@ -244,7 +256,7 @@ describe("provider diagnostics", () => {
         defaultModel: "test-model",
         authMode: "bearer",
         token: "provider-token-abc",
-        headers: { "x-custom-secret": "custom-header-secret" },
+        headers: { "HTTP-Referer": "https://locus.local/rejected" },
         targetRuntimes: ["codex"],
         capabilities: { codex: true },
       } as const
@@ -256,7 +268,7 @@ describe("provider diagnostics", () => {
         category: "auth_failed",
       })
       expect(JSON.stringify(status)).not.toContain("provider-token-abc")
-      expect(JSON.stringify(status)).not.toContain("custom-header-secret")
+      expect(JSON.stringify(status)).not.toContain("https://locus.local/rejected")
     } finally {
       await provider.close()
     }

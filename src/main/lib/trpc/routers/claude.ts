@@ -883,14 +883,6 @@ export const claudeRouter = router({
         sessionId: z.string().optional(),
         model: z.string().optional(),
         modelSource: z.string().optional(),
-        customConfig: z
-          .object({
-            model: z.string().min(1),
-            token: z.string().min(1),
-            baseUrl: z.string().min(1),
-            authMode: z.enum(["api_key", "auth_token"]).optional(),
-          })
-          .optional(),
         maxThinkingTokens: z.number().optional(), // Enable extended thinking
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
         longTextAttachments: z.array(longTextAttachmentSchema).optional(),
@@ -1096,9 +1088,6 @@ export const claudeRouter = router({
                 .run()
             }
 
-            const legacyProviderConfig = input.customConfig
-              ? normalizeRuntimeProviderConfig(input.customConfig)
-              : undefined
             let providerConfig: ClaudeProviderRuntimeConfig | undefined
 
             const selectedProviderProfileId = parseProviderProfileSource(
@@ -1144,8 +1133,7 @@ export const claudeRouter = router({
 
               providerConfig =
                 providerConfig ||
-                getActiveClaudeProviderConfig() ||
-                legacyProviderConfig
+                getActiveClaudeProviderConfig()
 
               if (!providerConfig) {
                 emitError(

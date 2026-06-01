@@ -9,7 +9,6 @@ import {
   responsesToChatCompletions,
 } from "../../../shared/provider-profile-transforms"
 import {
-  hasProviderGatewayAuthHeader,
   redactProviderSecrets,
 } from "../../../shared/provider-profile-security"
 import type {
@@ -35,6 +34,11 @@ type GatewayEndpoint = {
   providerId: string
 }
 
+type GatewayTokenScope = {
+  providerId: string
+  kind: GatewayEndpointKind
+}
+
 const CODEX_REASONING_SUFFIXES = new Set([
   "none",
   "minimal",
@@ -57,7 +61,7 @@ let serverState:
   | {
       server: ReturnType<typeof createServer>
       origin: string
-      token: string
+      tokens: Map<string, GatewayTokenScope>
     }
   | null = null
 
@@ -221,8 +225,36 @@ function responseHeadersToRecord(headers: Headers): Record<string, string> {
   return result
 }
 
-function hasGatewayAuth(req: IncomingMessage, token: string): boolean {
-  return hasProviderGatewayAuthHeader(req.headers, token)
+function readGatewayAuthToken(req: IncomingMessage): string | null {
+  const authorization = req.headers.authorization
+  const xApiKey = req.headers["x-api-key"]
+  const authorizationValues = Array.isArray(authorization)
+    ? authorization
+    : authorization
+      ? [authorization]
+      : []
+  for (const value of authorizationValues) {
+    const match = value.match(/^Bearer\s+(.+)$/i)
+    if (match?.[1]?.trim()) return match[1].trim()
+  }
+  if (typeof xApiKey === "string" && xApiKey.trim()) return xApiKey.trim()
+  if (Array.isArray(xApiKey)) {
+    const value = xApiKey.find((item) => item.trim())
+    if (value) return value.trim()
+  }
+  return null
+}
+
+function hasScopedGatewayAuth(params: {
+  req: IncomingMessage
+  tokens: Map<string, GatewayTokenScope>
+  providerId: string
+  kind: GatewayEndpointKind
+}): boolean {
+  const token = readGatewayAuthToken(params.req)
+  if (!token) return false
+  const scope = params.tokens.get(token)
+  return scope?.providerId === params.providerId && scope.kind === params.kind
 }
 
 function appendPath(baseUrl: string, path: string): string {
@@ -1146,11 +1178,6 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     return
   }
 
-  if (!hasGatewayAuth(req, current.token)) {
-    sendJson(res, 401, { error: "Unauthorized provider gateway request" })
-    return
-  }
-
   try {
     const url = new URL(req.url || "/", current.origin)
     const match = url.pathname.match(
@@ -1162,7 +1189,21 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const [, profileId, kind, endpoint] = match
-    const profile = getProviderProfileRuntimeConfig(decodeURIComponent(profileId))
+    const decodedProfileId = decodeURIComponent(profileId)
+    const gatewayKind = kind as GatewayEndpointKind
+    if (
+      !hasScopedGatewayAuth({
+        req,
+        tokens: current.tokens,
+        providerId: decodedProfileId,
+        kind: gatewayKind,
+      })
+    ) {
+      sendJson(res, 401, { error: "Unauthorized provider gateway request" })
+      return
+    }
+
+    const profile = getProviderProfileRuntimeConfig(decodedProfileId)
     if (!profile) {
       sendJson(res, 404, { error: "Provider profile not found" })
       return
@@ -1174,11 +1215,11 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const body = await readBody(req)
-    if (kind === "anthropic" && endpoint === "messages") {
+    if (gatewayKind === "anthropic" && endpoint === "messages") {
       await handleAnthropicRequest(profile, body, res)
       return
     }
-    if (kind === "responses" && endpoint === "responses") {
+    if (gatewayKind === "responses" && endpoint === "responses") {
       await handleResponsesRequest(profile, body, res)
       return
     }
@@ -1191,7 +1232,6 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
 async function ensureProviderGateway() {
   if (serverState) return serverState
 
-  const token = randomBytes(32).toString("hex")
   const server = createServer((req, res) => {
     void handleGatewayRequest(req, res)
   })
@@ -1213,7 +1253,7 @@ async function ensureProviderGateway() {
   serverState = {
     server,
     origin: `http://127.0.0.1:${address.port}`,
-    token,
+    tokens: new Map(),
   }
   return serverState
 }
@@ -1223,9 +1263,11 @@ export async function getProviderGatewayEndpoint(
   kind: GatewayEndpointKind,
 ): Promise<GatewayEndpoint> {
   const gateway = await ensureProviderGateway()
+  const token = randomBytes(32).toString("hex")
+  gateway.tokens.set(token, { providerId, kind })
   return {
     baseUrl: `${gateway.origin}/profile/${encodeURIComponent(providerId)}/${kind}/v1`,
-    token: gateway.token,
+    token,
     providerId,
   }
 }

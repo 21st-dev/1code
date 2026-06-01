@@ -55,6 +55,13 @@ import {
   saveCodexApiKey as saveStoredCodexApiKey,
 } from "../../codex/api-key-store"
 import {
+  buildCodexProviderEnv,
+  buildCodexProviderProfileArgs,
+  getCodexAuthMethodId,
+  redactCodexProviderProfileArgs,
+  type CodexProviderProfileBinding,
+} from "../../codex/provider-runtime-binding"
+import {
   createCodexAskUserQuestionTools,
   installCodexAskUserQuestionAcpResultNormalizer,
   type CodexAskUserQuestionApproval,
@@ -350,8 +357,6 @@ type CodexAcpSpawnProbeStatus = {
   stderrPreview: string
   durationMs: number
 }
-
-type CodexAuthMethodId = "chatgpt" | "codex-api-key"
 
 function getCodexPackageName(): string {
   const platform = process.platform
@@ -1651,70 +1656,6 @@ function getAuthFingerprint(appManagedApiKey?: string | null): string | null {
   return createHash("sha256").update(appManagedApiKey).digest("hex")
 }
 
-function buildCodexProviderEnv(params?: {
-  appManagedApiKey?: string | null
-  providerGatewayToken?: string
-}): Record<string, string> {
-  // Prefer shell-derived values (notably PATH) so stdio MCP dependencies
-  // like pipx/npx resolve the same way as in MCP tool probing.
-  const env: Record<string, string> = {}
-
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string") {
-      env[key] = value
-    }
-  }
-
-  const shellEnv = getClaudeShellEnvironment()
-  for (const [key, value] of Object.entries(shellEnv)) {
-    if (typeof value === "string") {
-      env[key] = value
-    }
-  }
-
-  delete env.CODEX_API_KEY
-  delete env.OPENAI_API_KEY
-
-  const apiKey = params?.appManagedApiKey?.trim()
-  if (!apiKey) {
-    return {
-      ...env,
-      ...(params?.providerGatewayToken
-        ? { LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN: params.providerGatewayToken }
-        : {}),
-    }
-  }
-
-  return {
-    ...env,
-    CODEX_API_KEY: apiKey,
-    ...(params?.providerGatewayToken
-      ? { LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN: params.providerGatewayToken }
-      : {}),
-  }
-}
-
-function getCodexAuthMethodId(params?: {
-  appManagedApiKey?: string | null
-  providerProfile?: {
-    id: string
-  }
-}): CodexAuthMethodId | undefined {
-  if (params?.providerProfile) {
-    return undefined
-  }
-
-  const apiKey = params?.appManagedApiKey?.trim()
-
-  // codex-acp advertises auth methods:
-  // - chatgpt
-  // - codex-api-key
-  // - openai-api-key
-  // Official ChatGPT and app-managed API key paths should be explicit so a
-  // stale custom provider profile cannot affect the next ACP session.
-  return apiKey ? "codex-api-key" : "chatgpt"
-}
-
 function buildUserParts(
   prompt: string,
   images:
@@ -1801,12 +1742,7 @@ function getOrCreateProvider(params: {
   mcpFingerprint: string
   existingSessionId?: string
   appManagedApiKey?: string | null
-  providerProfile?: {
-    id: string
-    name: string
-    baseUrl: string
-    token: string
-  }
+  providerProfile?: CodexProviderProfileBinding
 }): ACPProvider {
   const authFingerprint = getAuthFingerprint(params.appManagedApiKey)
   const existing = providerSessions.get(params.subChatId)
@@ -1834,18 +1770,7 @@ function getOrCreateProvider(params: {
     : params.existingSessionId
   const command = resolveCodexAcpBinaryPath()
   const providerProfileArgs = params.providerProfile
-    ? [
-        "-c",
-        `model_provider=${JSON.stringify("locus_profile")}`,
-        "-c",
-        `model_providers.locus_profile.name=${JSON.stringify(params.providerProfile.name)}`,
-        "-c",
-        `model_providers.locus_profile.base_url=${JSON.stringify(params.providerProfile.baseUrl)}`,
-        "-c",
-        `model_providers.locus_profile.env_key=${JSON.stringify("LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN")}`,
-        "-c",
-        `model_providers.locus_profile.wire_api=${JSON.stringify("responses")}`,
-      ]
+    ? buildCodexProviderProfileArgs(params.providerProfile)
     : undefined
   const authMethodId = getCodexAuthMethodId({
     appManagedApiKey: params.appManagedApiKey,
@@ -1868,15 +1793,7 @@ function getOrCreateProvider(params: {
     commandError: commandStatus.error,
     cwd: params.cwd,
     cwdExists: existsSync(params.cwd),
-    args: providerProfileArgs
-      ? providerProfileArgs.map((arg) =>
-          arg.includes("model_providers.locus_profile.name=")
-            ? "model_providers.locus_profile.name=<configured>"
-            : arg.includes("model_providers.locus_profile.base_url=")
-              ? "model_providers.locus_profile.base_url=<configured>"
-              : arg,
-        )
-      : [],
+    args: providerProfileArgs ? redactCodexProviderProfileArgs(providerProfileArgs) : [],
     authMethodId: authMethodId ?? null,
     providerSource,
     hasExistingSessionId: Boolean(existingSessionIdForProvider),
@@ -1886,6 +1803,8 @@ function getOrCreateProvider(params: {
   const provider = createACPProvider({
     command,
     env: buildCodexProviderEnv({
+      processEnv: process.env,
+      shellEnv: getClaudeShellEnvironment(),
       appManagedApiKey: params.appManagedApiKey,
       providerGatewayToken: params.providerProfile?.token,
     }),

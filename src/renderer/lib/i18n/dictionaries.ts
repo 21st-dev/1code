@@ -1281,6 +1281,8 @@ export const en = {
   "toast.models.failedToSaveCodexApiKey": "Failed to save Codex API key",
   "toast.models.failedToMigrateCodexApiKey":
     "Failed to migrate saved Codex API key. Please save it again.",
+  "toast.models.failedToMigrateLegacyClaudeProvider":
+    "Failed to migrate saved Claude provider token. Please save the provider again.",
   "toast.models.failedToRemoveCodexApiKey": "Failed to remove Codex API key",
   "toast.models.failedToSaveOpenaiApiKey": "Failed to save OpenAI API key",
   "toast.models.failedToRemoveOpenaiApiKey": "Failed to remove OpenAI API key",
@@ -3788,6 +3790,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.failedToSaveCodexApiKey": "保存 Codex API 密钥失败",
   "toast.models.failedToMigrateCodexApiKey":
     "迁移已保存的 Codex API 密钥失败，请重新保存。",
+  "toast.models.failedToMigrateLegacyClaudeProvider":
+    "迁移已保存的 Claude 提供方令牌失败，请重新保存提供方配置。",
   "toast.models.failedToRemoveCodexApiKey": "移除 Codex API 密钥失败",
   "toast.models.failedToSaveOpenaiApiKey": "保存 OpenAI API 密钥失败",
   "toast.models.failedToRemoveOpenaiApiKey": "移除 OpenAI API 密钥失败",
