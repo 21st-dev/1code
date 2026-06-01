@@ -1,9 +1,13 @@
 "use client"
 
 import { useAtomValue } from "jotai"
-import { Check, Copy, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react"
+import { Check, Copy, FileSearch, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
+import {
+  type McpImportPreview,
+  type McpImportRedactedField,
+} from "../../../../shared/mcp-import-preview"
 import {
   lastSelectedAgentIdAtom,
   selectedProjectAtom,
@@ -786,6 +790,174 @@ function CreateMcpServerForm({
   )
 }
 
+function RedactedFieldChips({ fields }: { fields: McpImportRedactedField[] }) {
+  const { t } = useI18n()
+  return (
+    <div className="flex flex-wrap gap-1">
+      {fields.map((field) => (
+        <span
+          key={`${field.key}:${field.valueSourceKey ?? ""}`}
+          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text"
+          title={field.valueSourceKey ? `${field.key} (${field.valueSourceKey})` : field.key}
+        >
+          {field.valueSourceKey ? `${field.key} (${field.valueSourceKey})` : field.key}
+          {field.hasValue ? ` ${t("settings.mcp.redacted")}` : ""}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function McpImportPreviewPanel({
+  preview,
+  onClose,
+}: {
+  preview: McpImportPreview | null
+  onClose: () => void
+}) {
+  const { t } = useI18n()
+  const requestedEnabled =
+    preview?.requestedEnabled === null
+      ? t("settings.mcp.notRequested")
+      : preview?.requestedEnabled
+        ? t("settings.mcp.enabled")
+        : t("common.disabled")
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                {t("settings.mcp.importPreviewTitle")}
+              </h3>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {t("settings.mcp.previewOnlyBadge")}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settings.mcp.previewOnlyDescription")}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("common.close")}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        {!preview ? (
+          <div className="rounded-md border border-border bg-background px-4 py-8 text-center">
+            <FileSearch className="mx-auto h-7 w-7 text-muted-foreground/60" />
+            <p className="mt-3 text-sm font-medium text-foreground">
+              {t("settings.mcp.noImportPreview")}
+            </p>
+            <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+              {t("settings.mcp.noImportPreviewDescription")}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <SummaryItem label={t("settings.mcp.name")} value={preview.serverName} />
+              <SummaryItem label={t("settings.mcp.provider")} value={preview.runtime === "codex" ? "Codex" : "Claude Code"} />
+              <SummaryItem label={t("settings.mcp.scope")} value={preview.scope} />
+              <SummaryItem label={t("settings.mcp.transport")} value={preview.transport} />
+              <SummaryItem label={t("settings.mcp.requestedEnabled")} value={requestedEnabled} />
+              <SummaryItem label={t("settings.mcp.effectiveState")} value={t("settings.mcp.pendingDisabled")} />
+            </div>
+
+            <div>
+              <h5 className="text-xs font-medium text-foreground mb-2">
+                {t("settings.mcp.connection")}
+              </h5>
+              <div className="rounded-md border border-border bg-background overflow-hidden">
+                <div className="divide-y divide-border">
+                  {preview.url && <ConnectionRow label="URL" value={preview.url} />}
+                  {preview.command && (
+                    <ConnectionRow label={t("settings.mcp.command")} value={preview.command} />
+                  )}
+                  {preview.args.length > 0 && (
+                    <ConnectionRow
+                      label={t("settings.mcp.args")}
+                      copyValue={preview.args.map((arg) => arg.value).join(" ")}
+                    >
+                      <div className="flex flex-wrap gap-1">
+                        {preview.args.map((arg, index) => (
+                          <span
+                            key={`${arg.value}:${index}`}
+                            className={cn(
+                              "text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text break-all",
+                              arg.redacted && "text-red-300",
+                            )}
+                          >
+                            {arg.value}
+                          </span>
+                        ))}
+                      </div>
+                    </ConnectionRow>
+                  )}
+                  {preview.cwd && <ConnectionRow label="Cwd" value={preview.cwd} />}
+                  {preview.env.length > 0 && (
+                    <ConnectionRow label={t("settings.mcp.envKeys")}>
+                      <RedactedFieldChips fields={preview.env} />
+                    </ConnectionRow>
+                  )}
+                  {preview.headers.length > 0 && (
+                    <ConnectionRow label={t("settings.mcp.headerKeys")}>
+                      <RedactedFieldChips fields={preview.headers} />
+                    </ConnectionRow>
+                  )}
+                  {preview.oauthFields.length > 0 && (
+                    <ConnectionRow label={t("settings.mcp.oauthFields")}>
+                      <RedactedFieldChips fields={preview.oauthFields} />
+                    </ConnectionRow>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <h5 className="text-xs font-medium text-foreground mb-2">
+                  {t("settings.mcp.wouldWrite")}
+                </h5>
+                <div className="rounded-md border border-border bg-background px-3 py-2">
+                  <div className="flex flex-wrap gap-1">
+                    {preview.wouldWritePaths.map((path) => (
+                      <span
+                        key={path}
+                        className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text"
+                      >
+                        {path}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {preview.warnings.length > 0 && (
+                <div>
+                  <h5 className="text-xs font-medium text-foreground mb-2">
+                    {t("settings.mcp.warnings")}
+                  </h5>
+                  <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
+                    <ul className="space-y-1">
+                      {preview.warnings.map((warning) => (
+                        <li key={warning} className="text-xs text-yellow-200">
+                          {warning}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // --- Main Component ---
 export function AgentsMcpTab() {
   const { t } = useI18n()
@@ -800,6 +972,8 @@ export function AgentsMcpTab() {
   const [selectedServerKey, setSelectedServerKey] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showImportPreviewPanel, setShowImportPreviewPanel] = useState(false)
+  const [importPreview, setImportPreview] = useState<McpImportPreview | null>(null)
   const [deletingServer, setDeletingServer] = useState<{
     provider: McpProvider
     server: McpServer
@@ -828,6 +1002,29 @@ export function AgentsMcpTab() {
     document.addEventListener("keydown", handler)
     return () => document.removeEventListener("keydown", handler)
   }, [])
+
+  const showImportPreview = showImportPreviewPanel || !!importPreview
+
+  const openImportPreview = useCallback((preview: McpImportPreview) => {
+    setImportPreview(preview)
+    setShowImportPreviewPanel(true)
+    setShowAddForm(false)
+    setSelectedServerKey(null)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void window.desktopApi.getPendingMcpImportPreview().then((preview) => {
+      if (!cancelled && preview) {
+        openImportPreview(preview)
+      }
+    })
+    const unsubscribe = window.desktopApi.onMcpImportPreview(openImportPreview)
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [openImportPreview])
 
   const claudeMcpQuery = trpc.claude.getAllMcpConfig.useQuery(undefined, {
     staleTime: 10 * 60 * 1000,
@@ -933,12 +1130,12 @@ export function AgentsMcpTab() {
 
   // Auto-select first server when data loads (sorted, so connected first)
   useEffect(() => {
-    if (selectedServerKey || isLoadingConfig) return
+    if (selectedServerKey || isLoadingConfig || showImportPreview) return
     const firstServer = allListedServers[0]
     if (firstServer) {
       setSelectedServerKey(firstServer.key)
     }
-  }, [allListedServers, selectedServerKey, isLoadingConfig])
+  }, [allListedServers, selectedServerKey, isLoadingConfig, showImportPreview])
 
   // Find selected server
   const selectedServer = useMemo<ListedServer | null>(() => {
@@ -1134,11 +1331,27 @@ export function AgentsMcpTab() {
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none mr-1.5"
             />
             <button
-              onClick={() => { setShowAddForm(true); setSelectedServerKey(null) }}
+              onClick={() => {
+                setShowAddForm(true)
+                setShowImportPreviewPanel(false)
+                setSelectedServerKey(null)
+              }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
               title={t("settings.mcp.addServer")}
             >
               <Plus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => {
+                setShowImportPreviewPanel(true)
+                setShowAddForm(false)
+                setSelectedServerKey(null)
+              }}
+              className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
+              title={t("settings.mcp.previewImport")}
+              aria-label={t("settings.mcp.previewImport")}
+            >
+              <FileSearch className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => { void handleRefresh() }}
@@ -1168,7 +1381,10 @@ export function AgentsMcpTab() {
                   variant="outline"
                   size="sm"
                   className="mt-1"
-                  onClick={() => setShowAddForm(true)}
+                  onClick={() => {
+                    setShowAddForm(true)
+                    setShowImportPreviewPanel(false)
+                  }}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1.5" />
                   {t("settings.mcp.addServer")}
@@ -1200,7 +1416,10 @@ export function AgentsMcpTab() {
                         <button
                           key={key}
                           data-item-id={key}
-                          onClick={() => setSelectedServerKey(key)}
+                          onClick={() => {
+                            setShowImportPreviewPanel(false)
+                            setSelectedServerKey(key)
+                          }}
                           className={cn(
                             "w-full text-left py-1.5 pl-2 pr-2 rounded-md cursor-pointer group relative",
                             "transition-colors duration-75",
@@ -1267,6 +1486,15 @@ export function AgentsMcpTab() {
             defaultProvider={defaultAddProvider}
             projectPath={selectedProject?.path}
             projectName={selectedProject?.name}
+          />
+        ) : showImportPreview ? (
+          <McpImportPreviewPanel
+            preview={importPreview}
+            onClose={() => {
+              void window.desktopApi.clearPendingMcpImportPreview()
+              setShowImportPreviewPanel(false)
+              setImportPreview(null)
+            }}
           />
         ) : selectedServer ? (
           <McpServerDetail
@@ -1335,7 +1563,10 @@ export function AgentsMcpTab() {
                   variant="outline"
                   size="sm"
                   className="mt-3"
-                  onClick={() => setShowAddForm(true)}
+                  onClick={() => {
+                    setShowAddForm(true)
+                    setShowImportPreviewPanel(false)
+                  }}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1.5" />
                   {t("settings.mcp.addFirstServer")}

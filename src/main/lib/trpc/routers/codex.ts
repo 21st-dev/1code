@@ -24,6 +24,7 @@ import {
   createCodexRuntimeComponent,
   createCodexRuntimeBlocker,
 } from "../../../../shared/codex-runtime-status"
+import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
 import {
   buildCodexRuntimeCapabilityErrorChunk,
   getCodexRunRequiredCapability,
@@ -1419,7 +1420,7 @@ async function resolveCodexMcpSnapshot(params: {
           status,
           tools,
           needsAuth: authState.needsAuth,
-          config: settingsConfig,
+          config: sanitizeMcpConfigForRenderer(settingsConfig),
         } satisfies CodexMcpServerForSettings,
       }
     }),

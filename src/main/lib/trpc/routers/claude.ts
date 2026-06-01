@@ -75,6 +75,7 @@ import type {
   AgentScopeExpansion,
   AgentScopePath,
 } from "../../../../shared/agent-scope-contracts"
+import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
 import {
   getApprovedPluginMcpServers,
   getEnabledPlugins,
@@ -557,7 +558,9 @@ export async function getAllMcpConfigHandler() {
 
       const results = await Promise.all(
         Object.entries(servers).map(async ([name, serverConfig]) => {
-          const configObj = serverConfig as Record<string, unknown>
+          const configObj = sanitizeMcpConfigForRenderer(
+            serverConfig as Record<string, unknown>,
+          )
           let status = getServerStatusFromConfig(serverConfig)
           const headers = serverConfig.headers as
             | Record<string, string>
@@ -774,7 +777,9 @@ export async function getAllMcpConfigHandler() {
                 // Skip servers that have been promoted to ~/.claude.json (e.g., after OAuth)
                 if (globalServerNames.includes(name)) return null
 
-                const configObj = serverConfig as Record<string, unknown>
+                const configObj = sanitizeMcpConfigForRenderer(
+                  serverConfig as Record<string, unknown>,
+                )
                 const identifier = `${pluginConfig.pluginSource}:${name}`
                 const isApproved = approvedServers.includes(identifier)
 
@@ -3087,9 +3092,11 @@ ${prompt}
         // Convert to array format - determine status from config (no caching)
         const mcpServers = Object.entries(merged).map(
           ([name, serverConfig]) => {
-            const configObj = serverConfig as Record<string, unknown>
-            const status = getServerStatusFromConfig(configObj)
-            const hasUrl = !!configObj.url
+            const configObj = sanitizeMcpConfigForRenderer(
+              serverConfig as Record<string, unknown>,
+            )
+            const status = getServerStatusFromConfig(serverConfig)
+            const hasUrl = !!serverConfig.url
 
             return {
               name,
@@ -3562,7 +3569,9 @@ ${prompt}
               pluginSource: pluginConfig.pluginSource,
               serverName: name,
               identifier,
-              config: serverConfig as Record<string, unknown>,
+              config: sanitizeMcpConfigForRenderer(
+                serverConfig as Record<string, unknown>,
+              ),
             })
           }
         }
