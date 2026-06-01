@@ -1,0 +1,95 @@
+## ADDED Requirements
+
+### Requirement: Runtime Capability Manifest
+The system SHALL expose each supported coding-agent runtime through an explicit capability manifest instead of inferring behavior from provider or runtime names.
+
+#### Scenario: Runtime manifest is requested
+- **WHEN** a desktop, CLI, job, protocol, or main-process caller requests runtime metadata
+- **THEN** the system returns a manifest for each registered runtime
+- **AND** each manifest includes runtime ID, display metadata, capability IDs, capability state, capability scope, non-secret reason text, and optional remediation hints
+- **AND** the renderer receives no provider secrets, OAuth tokens, raw request headers, or plaintext credential material
+
+#### Scenario: Runtime is missing
+- **WHEN** a caller requests a runtime that is not registered or not available in the current environment
+- **THEN** the system returns a normalized unavailable-runtime diagnostic before starting provider work
+- **AND** the diagnostic does not fall back to another runtime silently
+
+### Requirement: Capability States
+The system SHALL model runtime capabilities with explicit `supported`, `degraded`, and `unsupported` states.
+
+#### Scenario: Capability is supported
+- **WHEN** a runtime marks a capability as `supported`
+- **THEN** the runtime adapter or a Locus-owned shared layer provides the behavior through code
+- **AND** tests or smoke evidence cover the behavior before the implementation checklist is completed
+- **AND** prompt-only instructions, UI labels, indexed documentation, and post-run audit alone do not satisfy the support claim
+
+#### Scenario: Capability is degraded
+- **WHEN** a runtime can provide only partial, read-only, prompt-assisted, discovery-only, or post-run-audited behavior
+- **THEN** the capability state is `degraded`
+- **AND** callers can display the partial behavior with a clear limitation reason
+- **AND** callers do not treat the capability as fully supported for safety, mutation, execution, or automation decisions
+
+#### Scenario: Capability is unsupported
+- **WHEN** a runtime has no stable primitive and no Locus-owned shared layer for a capability
+- **THEN** the capability state is `unsupported`
+- **AND** callers disable, hide, or reject behavior that depends on that capability before provider work starts
+- **AND** the manifest includes a concise reason when practical
+
+### Requirement: Capability Scopes
+The system SHALL distinguish runtime-neutral capabilities from runtime-specific capabilities.
+
+#### Scenario: Capability is runtime-neutral
+- **WHEN** a feature is presented as runtime-neutral
+- **THEN** every runtime allowed to use that feature reports `supported` for the required capability set
+- **AND** callers apply the same safety, event, cancellation, and result semantics across those runtimes
+- **AND** a runtime with `degraded` or `unsupported` state is gated out or shown with explicit downgrade behavior
+
+#### Scenario: Capability is runtime-specific
+- **WHEN** a capability is available only for Claude Code, Codex, or another selected runtime
+- **THEN** the system may expose it as a first-class runtime-specific capability
+- **AND** UI, CLI, jobs, and protocol surfaces label it with its owning runtime
+- **AND** other runtimes are not required to emulate it for the owning runtime's feature to ship
+
+#### Scenario: Runtime-specific capability is requested for the wrong runtime
+- **WHEN** a caller requests a runtime-specific capability for a runtime that does not own or support it
+- **THEN** the system rejects or disables the request before provider work starts
+- **AND** returns a normalized unsupported-capability diagnostic
+
+### Requirement: Capability-Driven Runtime Surfaces
+The system SHALL gate runtime-dependent UI, CLI, job, and protocol behavior from capability manifests.
+
+#### Scenario: Desktop renders runtime controls
+- **WHEN** the desktop UI renders controls for rollback, fork, tools, MCP, plugins, commands, workflows, App Agents, skills, attachments, or provider profiles
+- **THEN** it uses the selected runtime's capability manifest to enable, disable, warn, or hide those controls
+- **AND** it does not assume Claude Code and Codex are feature-equivalent
+- **AND** it does not assume a runtime lacks a feature solely from the runtime name
+
+#### Scenario: CLI or job starts runtime work
+- **WHEN** a CLI, job, schedule, or protocol caller requests runtime work with options that require specific capabilities
+- **THEN** the caller validates the requested options against the selected runtime's manifest before provider work starts
+- **AND** unsupported required capabilities produce normalized diagnostics and non-zero command/job failure where applicable
+
+#### Scenario: Capability changes over time
+- **WHEN** a runtime CLI, SDK, ACP layer, or Locus-owned shared layer adds or removes a stable primitive
+- **THEN** the runtime manifest is updated through a reviewed change
+- **AND** tests or smoke evidence are updated for every capability state changed to `supported`
+
+### Requirement: Cross-Runtime Parity Boundary
+The system SHALL NOT require Claude Code and Codex to reach feature-for-feature parity before either runtime can expose truthful first-class capabilities.
+
+#### Scenario: Claude supports a capability that Codex does not
+- **WHEN** Claude Code exposes a stable CLI, SDK, or Locus adapter primitive for a capability
+- **AND** Codex has no equivalent stable primitive or shared Locus layer
+- **THEN** Locus may expose the capability for Claude as runtime-specific or runtime-neutral only where other selected runtimes also support it
+- **AND** Codex reports `degraded` or `unsupported` with a reason instead of emulating the capability through prompt-only behavior
+
+#### Scenario: Codex supports a capability that Claude does not
+- **WHEN** Codex or ACP exposes a stable primitive for a capability
+- **AND** Claude Code has no equivalent stable primitive or shared Locus layer
+- **THEN** Locus may expose the capability for Codex as runtime-specific or runtime-neutral only where other selected runtimes also support it
+- **AND** Claude reports `degraded` or `unsupported` with a reason instead of hiding the Codex capability behind a lowest-common-denominator surface
+
+#### Scenario: Shared Locus layer provides parity
+- **WHEN** Locus implements a shared layer that safely provides the same capability semantics across multiple runtimes
+- **THEN** those runtimes may report the capability as `supported`
+- **AND** tests cover the shared layer and each runtime adapter path that depends on it
