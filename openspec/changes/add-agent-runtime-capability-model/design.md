@@ -12,7 +12,7 @@ Goals:
 - Provide a clear dependency boundary for `add-headless-agent-jobs`.
 
 Non-goals:
-- Implement the runtime registry, job runner, CLI, or UI changes.
+- Implement the full agent runner, job runner, `locus run` CLI, protocol server, or a complete runtime capability center UI.
 - Add provider presets or provider diagnostics.
 - Force Codex to match Claude Code feature-for-feature.
 - Force Claude Code to match Codex feature-for-feature.
@@ -55,7 +55,7 @@ Why: Locus is a multi-runtime platform, not a feature equalizer. The right outco
 4. Update `add-headless-agent-jobs` to consume this spec.
 5. Keep existing runtime-specific code paths working while gradually replacing provider-name gates with capability gates.
 
-## Open Questions
-- Should capability IDs be globally fixed in one shared enum immediately, or versioned by feature group?
-- Should runtime-specific features appear in the same manifest as runtime-neutral features, or in a nested `extensions` section?
-- How much renderer copy belongs in the manifest versus the i18n dictionaries?
+## Resolved Implementation Choices
+- Capability IDs are fixed in one shared enum for this first implementation.
+- Runtime-neutral, runtime-specific, and unavailable capabilities appear in the same manifest with explicit scope and state.
+- Manifest copy is limited to non-secret labels, reasons, and remediation hints; broader localized UI copy remains outside the manifest.

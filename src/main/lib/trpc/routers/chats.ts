@@ -4,6 +4,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
+import { buildAgentRuntimeCapabilityDiagnostic } from "../../../../shared/agent-runtime-capabilities"
 import {
   trackPRCreated,
   trackWorkspaceArchived,
@@ -58,6 +59,16 @@ function isCodexBackedMessage(message: unknown): boolean {
 
 function hasCodexBackedMessages(messages: unknown[]): boolean {
   return messages.some(isCodexBackedMessage)
+}
+
+function getCodexRollbackUnsupportedMessage(): string {
+  const diagnostic = buildAgentRuntimeCapabilityDiagnostic({
+    runtime: "codex",
+    capabilityId: "rollback",
+  })
+  return diagnostic.hint
+    ? `${diagnostic.message} ${diagnostic.hint}`
+    : diagnostic.message
 }
 
 function sendWorktreeSetupFailure(
@@ -1222,7 +1233,7 @@ export const chatsRouter = router({
       const messagesToFork = allMessages.slice(0, cutoffIndex + 1)
       if (hasCodexBackedMessages(messagesToFork)) {
         throw new Error(
-          "Codex rollback/fork is unsupported until Codex exposes durable per-message resume and fork references.",
+          getCodexRollbackUnsupportedMessage(),
         )
       }
 
@@ -1389,8 +1400,7 @@ export const chatsRouter = router({
       if (hasCodexBackedMessages(messages)) {
         return {
           success: false,
-          error:
-            "Codex rollback/fork is unsupported until Codex exposes durable per-message resume and fork references.",
+          error: getCodexRollbackUnsupportedMessage(),
         }
       }
 

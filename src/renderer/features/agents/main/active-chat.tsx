@@ -56,6 +56,7 @@ import {
 import { flushSync } from "react-dom"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
+import { isRuntimeCapabilitySupported } from "../../../../shared/agent-runtime-capabilities"
 import type { FileStatus } from "../../../../shared/changes-types"
 import { isProviderProfileSource } from "../../../../shared/provider-profile-types"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
@@ -4088,6 +4089,7 @@ const ChatViewInner = memo(function ChatViewInner({
     [isStreaming, messages, subChatId, parentChatId, subChatMode, onProviderChange, t],
   )
   const stableHandleContinueWithProvider = useStableCallback(handleContinueWithProvider)
+  const canRollbackOrFork = isRuntimeCapabilitySupported(provider, "rollback")
 
   return (
     <SearchHighlightProvider>
@@ -4200,8 +4202,8 @@ const ChatViewInner = memo(function ChatViewInner({
               ToolCallComponent={AgentToolCall}
               MessageGroupWrapper={MessageGroup}
               toolRegistry={AgentToolRegistry}
-              onRollback={provider === "codex" ? undefined : handleRollback}
-              onFork={provider === "codex" ? undefined : handleForkFromMessage}
+              onRollback={canRollbackOrFork ? handleRollback : undefined}
+              onFork={canRollbackOrFork ? handleForkFromMessage : undefined}
             />
           </div>
         </div>

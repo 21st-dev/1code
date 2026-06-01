@@ -25,6 +25,7 @@ import {
 } from "../../db"
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { publicProcedure, router } from "../index"
+import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
 
 type ClaudeCodeLocalLoginSessionState =
   | "running"
@@ -228,6 +229,7 @@ export const claudeCodeRouter = router({
         getBundledClaudeBinaryPath(),
         hint,
       ),
+      capabilities: getRegisteredAgentRuntimeManifest("claude-code").capabilities,
     }
   }),
 

@@ -6,11 +6,11 @@
 - [ ] 1.3 Commit the proposal as its own planning slice.
 
 ## 2. Runtime Core Extraction
-- [ ] 2.1 Add `src/main/lib/agent-runtime/contract.ts` with `AgentRuntime`, runtime IDs, capability statuses, run request/result/session types, and observer/cancellation contracts.
-- [ ] 2.2 Add `src/main/lib/agent-runtime/runtime-registry.ts` to register Claude and Codex drivers and expose non-secret capability summaries to main-process callers and renderer-facing routers.
+- [ ] 2.1 Add `src/main/lib/agent-runtime/contract.ts` with `AgentRuntime`, run request/result/session types, and observer/cancellation contracts; consume runtime IDs and capability manifests from `add-agent-runtime-capability-model`.
+- [ ] 2.2 Extend `src/main/lib/agent-runtime/runtime-registry.ts` to register Claude and Codex drivers/run entry points while reusing the shared non-secret capability manifest registry.
 - [ ] 2.3 Add normalized event helpers for assistant output, reasoning, tool calls, status updates, permission requests, scope expansion, AskUserQuestion, errors, and completion.
-- [ ] 2.4 Extract a narrow Claude adapter from the existing Claude router without changing renderer behavior, including an honest capability manifest for the behaviors the adapter actually enforces.
-- [ ] 2.5 Extract a narrow Codex adapter from the existing Codex router without changing renderer behavior, including the same capability names as Claude but allowing `degraded` or `unsupported` states when behavior parity is not yet implemented.
+- [ ] 2.4 Extract a narrow Claude adapter from the existing Claude router without changing renderer behavior, and keep its declared support aligned with the shared capability manifest.
+- [ ] 2.5 Extract a narrow Codex adapter from the existing Codex router without changing renderer behavior, and keep missing behavior represented as `degraded` or `unsupported` through the shared capability manifest.
 - [ ] 2.6 Add focused tests for runtime registry lookup, capability manifests, event normalization, adapter cancellation behavior, and declared-capability enforcement.
 - [ ] 2.7 Keep existing `claude` and `codex` tRPC subscriptions working while migrated behavior routes through the new core where practical.
 

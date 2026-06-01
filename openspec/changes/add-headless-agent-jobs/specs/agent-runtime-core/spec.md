@@ -5,13 +5,13 @@ The system SHALL define an explicit `AgentRuntime` contract implemented by every
 
 #### Scenario: Runtime is registered
 - **WHEN** the application starts or runtime services initialize
-- **THEN** each supported runtime registers a runtime ID, display metadata, capability manifest, run entry point, cancellation behavior, and session-reference behavior
+- **THEN** each supported runtime registers a runtime ID, display metadata, a capability manifest sourced from `agent-runtime-capabilities`, run entry point, cancellation behavior, and session-reference behavior
 - **AND** the registry rejects duplicate runtime IDs
 - **AND** the renderer receives only non-secret runtime metadata and capability summaries
 
 #### Scenario: Caller requests runtime capabilities
 - **WHEN** a desktop, CLI, or main-process caller requests available runtime capabilities
-- **THEN** the system returns capability states for each registered runtime
+- **THEN** the system returns the shared capability states for each registered runtime
 - **AND** each capability state is explicit as `supported`, `degraded`, or `unsupported`
 - **AND** degraded or unsupported states include a short reason when practical
 
@@ -27,6 +27,7 @@ The system SHALL model runtime behavior through capabilities rather than hard-co
 - **WHEN** runtime capabilities are resolved
 - **THEN** the capability set includes hard tool guard, plan mode enforcement, scope expansion approval, AskUserQuestion, rollback/fork, MCP auth, MCP configuration scope, provider profiles, attachments, usage metadata, runtime plugins, runtime commands, runtime workflows, and App Agents/skills
 - **AND** additional capabilities can be added without changing existing capability semantics
+- **AND** the capability IDs, states, scopes, reasons, and remediation hints remain owned by `add-agent-runtime-capability-model`
 
 #### Scenario: UI gates behavior
 - **WHEN** the desktop UI renders runtime-specific controls

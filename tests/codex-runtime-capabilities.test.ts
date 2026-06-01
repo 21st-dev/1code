@@ -34,11 +34,17 @@ describe("Codex runtime capabilities", () => {
     expect(
       capabilities.every((capability) => capability.reason.trim().length > 0),
     ).toBe(true)
+    expect(
+      capabilities
+        .filter((capability) => capability.status === "supported")
+        .every((capability) => capability.support?.references.length),
+    ).toBe(true)
   })
 
   test("marks implemented core safety capabilities supported through enforced runtime paths", () => {
     expect(getCodexRuntimeCapability("hardToolGuard")).toMatchObject({
       status: "supported",
+      scope: "runtime-neutral",
     })
     expect(getCodexRuntimeCapability("planMode")).toMatchObject({
       status: "supported",
@@ -69,6 +75,7 @@ describe("Codex runtime capabilities", () => {
   test("keeps unfinished feature surfaces honest", () => {
     expect(getCodexRuntimeCapability("mcpConfiguration")).toMatchObject({
       status: "degraded",
+      scope: "runtime-specific",
     })
     expect(getCodexRuntimeCapability("runtimePlugins")).toMatchObject({
       status: "unsupported",

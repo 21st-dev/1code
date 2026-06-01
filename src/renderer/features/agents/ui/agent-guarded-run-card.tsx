@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, ShieldCheck, ShieldOff, X } from "lucide-react"
 
+import { isRuntimeCapabilitySupported } from "../../../../shared/agent-runtime-capabilities"
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { Textarea } from "../../../components/ui/textarea"
@@ -77,6 +78,10 @@ export function AgentGuardedRunCard({
     )
   }
 
+  const guardModeLabel = isRuntimeCapabilitySupported(provider, "hardToolGuard")
+    ? "hard"
+    : "audit"
+
   return (
     <div
       className="border-b border-border/70 bg-muted/25 px-2 py-2"
@@ -131,7 +136,7 @@ export function AgentGuardedRunCard({
                 {approved ? "approved" : "draft"}
               </Badge>
               <Badge variant="outline" className="rounded-sm px-1.5 py-0 text-[10px]">
-                {provider === "codex" ? "audit" : "hard"}
+                {guardModeLabel}
               </Badge>
             </div>
             {suggestedLabels.slice(0, 4).map((label) => (

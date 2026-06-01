@@ -1,0 +1,792 @@
+export const AGENT_RUNTIME_IDS = ["claude-code", "codex"] as const
+
+export type AgentRuntimeId = (typeof AGENT_RUNTIME_IDS)[number]
+export type AgentRuntimeAlias = AgentRuntimeId | "claude"
+
+export const AGENT_RUNTIME_CAPABILITY_IDS = [
+  "hardToolGuard",
+  "planMode",
+  "scopeExpansion",
+  "askUserQuestion",
+  "rollback",
+  "mcpAuth",
+  "mcpConfiguration",
+  "providerProfiles",
+  "attachments",
+  "usageMetadata",
+  "runtimePlugins",
+  "runtimeCommands",
+  "runtimeWorkflows",
+  "appAgents",
+] as const
+
+export type AgentRuntimeCapabilityId =
+  (typeof AGENT_RUNTIME_CAPABILITY_IDS)[number]
+
+export type AgentRuntimeCapabilityStatus =
+  | "supported"
+  | "degraded"
+  | "unsupported"
+
+export type AgentRuntimeCapabilityScope =
+  | "runtime-neutral"
+  | "runtime-specific"
+  | "unavailable"
+
+export type AgentRuntimeCapabilitySupportKind =
+  | "runtime-code"
+  | "stable-runtime-primitive"
+  | "locus-shared-layer"
+
+export type AgentRuntimeCapabilitySupport = {
+  kind: AgentRuntimeCapabilitySupportKind
+  references: string[]
+}
+
+export type AgentRuntimeCapability = {
+  id: AgentRuntimeCapabilityId
+  label: string
+  status: AgentRuntimeCapabilityStatus
+  scope: AgentRuntimeCapabilityScope
+  reason: string
+  hint: string | null
+  support: AgentRuntimeCapabilitySupport | null
+}
+
+export type AgentRuntimeCapabilityManifest = {
+  runtimeId: AgentRuntimeId
+  label: string
+  description: string
+  capabilities: AgentRuntimeCapability[]
+}
+
+export type AgentRuntimeCapabilityDiagnostic = {
+  type: "unsupported-capability"
+  runtimeId: AgentRuntimeId
+  capability: AgentRuntimeCapabilityId
+  status: AgentRuntimeCapabilityStatus
+  scope: AgentRuntimeCapabilityScope
+  message: string
+  reason: string
+  hint: string | null
+}
+
+export type AgentRuntimeUnavailableDiagnostic = {
+  type: "unavailable-runtime"
+  runtimeId: string
+  message: string
+  hint: string | null
+}
+
+export type AgentRuntimeManifestLookup =
+  | {
+      ok: true
+      runtimeId: AgentRuntimeId
+      manifest: AgentRuntimeCapabilityManifest
+    }
+  | {
+      ok: false
+      runtimeId: string
+      diagnostic: AgentRuntimeUnavailableDiagnostic
+    }
+
+export type AgentRuntimeCapabilityGate =
+  | {
+      ok: true
+      runtimeId: AgentRuntimeId
+      capability: AgentRuntimeCapability
+    }
+  | {
+      ok: false
+      runtimeId: AgentRuntimeId
+      capability: AgentRuntimeCapability
+      diagnostic: AgentRuntimeCapabilityDiagnostic
+    }
+
+export type AgentRuntimeCapabilityLookup =
+  | AgentRuntimeCapabilityGate
+  | {
+      ok: false
+      runtimeId: string
+      diagnostic: AgentRuntimeUnavailableDiagnostic
+    }
+
+const SECRET_TEXT_PATTERNS = [
+  /(^|[^A-Za-z0-9_])sk-[A-Za-z0-9_-]{20,}/,
+  /access_token/i,
+  /authorization/i,
+  /bearer\s+[A-Za-z0-9._-]+/i,
+  /refresh_token/i,
+]
+
+const CAPABILITY_LABELS: Record<AgentRuntimeCapabilityId, string> = {
+  hardToolGuard: "Hard tool guard",
+  planMode: "Plan mode enforcement",
+  scopeExpansion: "Scope expansion approval",
+  askUserQuestion: "Ask user question",
+  rollback: "Rollback and fork",
+  mcpAuth: "MCP auth",
+  mcpConfiguration: "MCP configuration",
+  providerProfiles: "Provider profiles",
+  attachments: "Attachments",
+  usageMetadata: "Usage metadata",
+  runtimePlugins: "Runtime plugins",
+  runtimeCommands: "Runtime commands",
+  runtimeWorkflows: "Runtime workflows",
+  appAgents: "App Agents and skills",
+}
+
+function assertNoSecretText(value: string, context: string): void {
+  if (SECRET_TEXT_PATTERNS.some((pattern) => pattern.test(value))) {
+    throw new Error(`Runtime capability ${context} contains secret-like text.`)
+  }
+}
+
+function cloneCapability(
+  capability: AgentRuntimeCapability,
+): AgentRuntimeCapability {
+  return {
+    ...capability,
+    support: capability.support
+      ? {
+          ...capability.support,
+          references: [...capability.support.references],
+        }
+      : null,
+  }
+}
+
+function cloneManifest(
+  manifest: AgentRuntimeCapabilityManifest,
+): AgentRuntimeCapabilityManifest {
+  return {
+    ...manifest,
+    capabilities: manifest.capabilities.map(cloneCapability),
+  }
+}
+
+function capability(input: {
+  id: AgentRuntimeCapabilityId
+  status: AgentRuntimeCapabilityStatus
+  scope: AgentRuntimeCapabilityScope
+  reason: string
+  hint: string | null
+  support?: AgentRuntimeCapabilitySupport | null
+}): AgentRuntimeCapability {
+  const normalized: AgentRuntimeCapability = {
+    id: input.id,
+    label: CAPABILITY_LABELS[input.id],
+    status: input.status,
+    scope: input.scope,
+    reason: input.reason,
+    hint: input.hint,
+    support: input.support ?? null,
+  }
+
+  validateAgentRuntimeCapability(normalized)
+  return normalized
+}
+
+function manifest(
+  input: AgentRuntimeCapabilityManifest,
+): AgentRuntimeCapabilityManifest {
+  validateAgentRuntimeCapabilityManifest(input)
+  return input
+}
+
+export function toAgentRuntimeId(
+  runtime: AgentRuntimeAlias | string | null | undefined,
+): AgentRuntimeId | null {
+  if (runtime === "claude" || runtime === "claude-code") return "claude-code"
+  if (runtime === "codex") return "codex"
+  return null
+}
+
+export function validateAgentRuntimeCapability(
+  capability: AgentRuntimeCapability,
+): void {
+  if (!capability.reason.trim()) {
+    throw new Error(`Runtime capability ${capability.id} must include a reason.`)
+  }
+
+  assertNoSecretText(capability.label, `${capability.id} label`)
+  assertNoSecretText(capability.reason, `${capability.id} reason`)
+  if (capability.hint) {
+    assertNoSecretText(capability.hint, `${capability.id} hint`)
+  }
+
+  if (capability.status === "supported") {
+    if (!capability.support) {
+      throw new Error(
+        `Runtime capability ${capability.id} cannot be supported without code or runtime evidence.`,
+      )
+    }
+    if (capability.scope === "unavailable") {
+      throw new Error(
+        `Runtime capability ${capability.id} cannot be both supported and unavailable.`,
+      )
+    }
+    if (capability.support.references.length === 0) {
+      throw new Error(
+        `Runtime capability ${capability.id} supported evidence needs at least one reference.`,
+      )
+    }
+    for (const reference of capability.support.references) {
+      assertNoSecretText(reference, `${capability.id} support reference`)
+    }
+  }
+}
+
+export function validateAgentRuntimeCapabilityManifest(
+  manifest: AgentRuntimeCapabilityManifest,
+): void {
+  const runtimeId = toAgentRuntimeId(manifest.runtimeId)
+  if (!runtimeId || runtimeId !== manifest.runtimeId) {
+    throw new Error(`Unknown runtime manifest id: ${manifest.runtimeId}`)
+  }
+
+  assertNoSecretText(manifest.label, `${manifest.runtimeId} label`)
+  assertNoSecretText(manifest.description, `${manifest.runtimeId} description`)
+
+  const ids = manifest.capabilities.map((item) => item.id)
+  const duplicate = ids.find((id, index) => ids.indexOf(id) !== index)
+  if (duplicate) {
+    throw new Error(
+      `Runtime manifest ${manifest.runtimeId} declares ${duplicate} more than once.`,
+    )
+  }
+
+  if (ids.length !== AGENT_RUNTIME_CAPABILITY_IDS.length) {
+    throw new Error(
+      `Runtime manifest ${manifest.runtimeId} must declare every known capability.`,
+    )
+  }
+
+  for (const id of AGENT_RUNTIME_CAPABILITY_IDS) {
+    if (!ids.includes(id)) {
+      throw new Error(
+        `Runtime manifest ${manifest.runtimeId} is missing capability ${id}.`,
+      )
+    }
+  }
+
+  for (const item of manifest.capabilities) {
+    validateAgentRuntimeCapability(item)
+  }
+}
+
+const CLAUDE_RUNTIME_MANIFEST = manifest({
+  runtimeId: "claude-code",
+  label: "Claude Code",
+  description:
+    "Claude Code runtime support through Locus's Claude SDK adapter and shared local safety layers.",
+  capabilities: [
+    capability({
+      id: "hardToolGuard",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Locus routes Claude tool requests through the guarded canUseTool path before allowing mutating operations.",
+      hint: "Guarded Claude runs use the same local scope contract before tool approval.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/trpc/routers/claude.ts",
+          "src/main/lib/agent-guard",
+        ],
+      },
+    }),
+    capability({
+      id: "planMode",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Claude plan-mode chats use read-only permission semantics and require explicit approval before agent-mode work.",
+      hint: "Plan-mode writes remain gated until the plan is approved.",
+      support: {
+        kind: "runtime-code",
+        references: ["src/main/lib/trpc/routers/claude.ts"],
+      },
+    }),
+    capability({
+      id: "scopeExpansion",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Claude guarded runs emit scope-expansion events and deny out-of-scope tool use until the user approves the expanded scope.",
+      hint: "Approve the requested scope expansion, then retry the guarded operation.",
+      support: {
+        kind: "locus-shared-layer",
+        references: [
+          "src/main/lib/agent-guard",
+          "src/main/lib/trpc/routers/claude.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "askUserQuestion",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Claude tool/question flows are bridged through the shared desktop question UI contract.",
+      hint: "Question requests block until the user answers, skips, or the request expires.",
+      support: {
+        kind: "runtime-code",
+        references: ["src/main/lib/trpc/routers/claude.ts"],
+      },
+    }),
+    capability({
+      id: "rollback",
+      status: "supported",
+      scope: "runtime-specific",
+      reason:
+        "Claude session metadata is wired through resume/fork support and message rollback paths.",
+      hint: "Rollback and fork remain Claude-specific until another runtime exposes equivalent durable references.",
+      support: {
+        kind: "stable-runtime-primitive",
+        references: [
+          "src/main/lib/trpc/routers/claude.ts",
+          "src/main/lib/trpc/routers/chats.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "mcpAuth",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Locus checks Claude MCP auth state and can start OAuth before provider work depends on authenticated servers.",
+      hint: "Authenticate the reported MCP server, then retry the Claude run.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/trpc/routers/claude.ts",
+          "src/main/lib/mcp-auth.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "mcpConfiguration",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Claude MCP configuration is visible and editable, but not every runtime-scoped operation has a shared capability contract yet.",
+      hint: "Keep Claude MCP configuration actions tied to explicit runtime capability state.",
+    }),
+    capability({
+      id: "providerProfiles",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Claude provider profiles are resolved in the main process and renderer callers pass only safe profile IDs.",
+      hint: "Renderer callers should pass only the provider profile ID.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/trpc/routers/claude.ts",
+          "src/main/lib/provider-profiles",
+        ],
+      },
+    }),
+    capability({
+      id: "attachments",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Claude resolves image and long-text attachments through local main-process attachment stores before runtime injection.",
+      hint: "Unsupported attachment references fail before provider work starts.",
+      support: {
+        kind: "locus-shared-layer",
+        references: [
+          "src/main/lib/chat-attachments.ts",
+          "src/main/lib/long-text-attachments.ts",
+          "src/main/lib/trpc/routers/claude.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "usageMetadata",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Claude usage and context metadata are surfaced when available, but exact provider quota semantics are still runtime-specific.",
+      hint: "Do not treat missing Claude usage fields as zero usage.",
+    }),
+    capability({
+      id: "runtimePlugins",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Claude plugin discovery and approval surfaces exist, but full lifecycle and execution semantics are not yet normalized.",
+      hint: "Keep plugin enablement, MCP approval, and execution boundaries explicit.",
+    }),
+    capability({
+      id: "runtimeCommands",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Claude command discovery exists through the command guide, but runtime-owned command execution is not fully modeled.",
+      hint: "Separate documentation indexing, prompt-template commands, and runtime command execution.",
+    }),
+    capability({
+      id: "runtimeWorkflows",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Claude Dynamic Workflows have an OpenSpec proposal, but the runtime adapter is not implemented yet.",
+      hint: "Do not expose dynamic workflow execution until the dedicated proposal is implemented.",
+    }),
+    capability({
+      id: "appAgents",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Locus App Agent mentions can be prompt-prepared for Claude, but runtime-native agent execution is incomplete.",
+      hint: "Do not count prompt preparation alone as full App Agent runtime support.",
+    }),
+  ],
+})
+
+const CODEX_RUNTIME_MANIFEST = manifest({
+  runtimeId: "codex",
+  label: "Codex",
+  description:
+    "Codex runtime support through Locus's ACP adapter and shared local safety layers.",
+  capabilities: [
+    capability({
+      id: "hardToolGuard",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Locus installs an ACP permission handler before Codex prompts and maps permission requests to guarded-run decisions.",
+      hint: "Guarded Codex runs fail closed if the ACP permission handler cannot be attached.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/codex/acp-permission.ts",
+          "src/main/lib/trpc/routers/codex.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "planMode",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Locus maps Codex plan runs to ACP read-only mode and denies edit, move, delete, and execute permission requests before execution.",
+      hint: "Plan-mode writes and shell commands are rejected through ACP permission handling.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/codex/acp-permission.ts",
+          "src/main/lib/trpc/routers/codex.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "scopeExpansion",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Out-of-scope Codex guarded operations emit a scope-expansion event and are denied before the permission request is approved.",
+      hint: "Approve the requested scope expansion, then retry the guarded run.",
+      support: {
+        kind: "locus-shared-layer",
+        references: [
+          "src/main/lib/agent-guard",
+          "src/main/lib/codex/acp-permission.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "askUserQuestion",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Locus registers a Codex ACP host-side AskUserQuestion tool and bridges pending, answer, timeout, and denial events through the shared desktop question UI contract.",
+      hint: "Codex question requests remain a blocking host tool call until the user answers, skips, or the request times out.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/codex/ask-user-question.ts",
+          "src/main/lib/trpc/routers/codex.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "rollback",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Codex session IDs are persisted, but rollback and fork are not wired through durable shared session references.",
+      hint: "Do not expose Codex rollback or fork as runtime-neutral behavior yet.",
+    }),
+    capability({
+      id: "mcpAuth",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Codex runs preflight MCP needs-auth checks and blocks affected runs before provider work starts.",
+      hint: "Authenticate the reported MCP server, then retry the Codex run.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/trpc/routers/codex.ts",
+          "src/main/lib/mcp-auth.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "mcpConfiguration",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Codex can resolve app/global and project MCP state, but parity for all shared configuration operations is incomplete.",
+      hint: "Keep Codex MCP configuration surfaces tied to explicit capability state.",
+    }),
+    capability({
+      id: "providerProfiles",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Codex accepts renderer-safe provider profile IDs, resolves gateway tokens in the main process, and redacts provider secrets from errors and logs.",
+      hint: "Renderer callers should pass only the provider profile ID.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/provider-profiles",
+          "src/main/lib/trpc/routers/codex.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "attachments",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Codex resolves image attachments in the main process, prepends long-text attachments through the shared local attachment store, and includes file-content parts in the prompt.",
+      hint: "Unsupported attachment references fail before provider work starts.",
+      support: {
+        kind: "locus-shared-layer",
+        references: [
+          "src/main/lib/chat-attachments.ts",
+          "src/main/lib/long-text-attachments.ts",
+          "src/main/lib/trpc/routers/codex.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "usageMetadata",
+      status: "supported",
+      scope: "runtime-specific",
+      reason:
+        "Codex polls session token_count events and emits normalized token and context metadata when available without inventing missing values.",
+      hint: "Missing Codex usage fields are omitted rather than reported as zero.",
+      support: {
+        kind: "runtime-code",
+        references: ["src/main/lib/trpc/routers/codex.ts"],
+      },
+    }),
+    capability({
+      id: "runtimePlugins",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Codex plugin entries are not yet executable through a runtime-native or shared Locus plugin layer.",
+      hint: "Do not show plugin execute controls for Codex until an execution path exists.",
+    }),
+    capability({
+      id: "runtimeCommands",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Codex runtime command invocation is not yet implemented for command-guide or chat command surfaces.",
+      hint: "Disable Codex command execution controls until command parity is implemented.",
+    }),
+    capability({
+      id: "runtimeWorkflows",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Claude Dynamic Workflows have no Codex-equivalent adapter or shared workflow layer yet.",
+      hint: "Keep workflow parity out of Codex until implemented or explicitly rescoped.",
+    }),
+    capability({
+      id: "appAgents",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Codex App Agent mentions are prompt-prepared, but runtime-neutral execution and limitation reporting are incomplete.",
+      hint: "Do not count prompt injection alone as App Agent parity.",
+    }),
+  ],
+})
+
+const AGENT_RUNTIME_MANIFESTS: Record<
+  AgentRuntimeId,
+  AgentRuntimeCapabilityManifest
+> = {
+  "claude-code": CLAUDE_RUNTIME_MANIFEST,
+  codex: CODEX_RUNTIME_MANIFEST,
+}
+
+export function getAgentRuntimeCapabilityManifests(): AgentRuntimeCapabilityManifest[] {
+  return AGENT_RUNTIME_IDS.map((runtimeId) =>
+    cloneManifest(AGENT_RUNTIME_MANIFESTS[runtimeId]),
+  )
+}
+
+export function getAgentRuntimeCapabilityManifest(
+  runtime: AgentRuntimeAlias,
+): AgentRuntimeCapabilityManifest {
+  const runtimeId = toAgentRuntimeId(runtime)
+  if (!runtimeId) {
+    throw new Error(`Unknown agent runtime: ${runtime}`)
+  }
+  return cloneManifest(AGENT_RUNTIME_MANIFESTS[runtimeId])
+}
+
+export function resolveAgentRuntimeCapabilityManifest(
+  runtime: AgentRuntimeAlias | string | null | undefined,
+): AgentRuntimeManifestLookup {
+  const runtimeId = toAgentRuntimeId(runtime)
+  if (!runtimeId) {
+    const diagnostic = buildAgentRuntimeUnavailableDiagnostic(
+      runtime ?? "unknown",
+    )
+    return {
+      ok: false,
+      runtimeId: diagnostic.runtimeId,
+      diagnostic,
+    }
+  }
+
+  return {
+    ok: true,
+    runtimeId,
+    manifest: cloneManifest(AGENT_RUNTIME_MANIFESTS[runtimeId]),
+  }
+}
+
+export function getAgentRuntimeCapability(
+  runtime: AgentRuntimeAlias,
+  capabilityId: AgentRuntimeCapabilityId,
+): AgentRuntimeCapability {
+  const manifest = getAgentRuntimeCapabilityManifest(runtime)
+  const capability = manifest.capabilities.find(
+    (candidate) => candidate.id === capabilityId,
+  )
+  if (!capability) {
+    throw new Error(
+      `Unknown ${manifest.runtimeId} runtime capability: ${capabilityId}`,
+    )
+  }
+  return cloneCapability(capability)
+}
+
+export function buildAgentRuntimeCapabilityDiagnostic(input: {
+  runtime: AgentRuntimeAlias
+  capabilityId: AgentRuntimeCapabilityId
+  message?: string
+  hint?: string | null
+}): AgentRuntimeCapabilityDiagnostic {
+  const runtimeId = toAgentRuntimeId(input.runtime)
+  if (!runtimeId) {
+    throw new Error(`Unknown agent runtime: ${input.runtime}`)
+  }
+  const capability = getAgentRuntimeCapability(runtimeId, input.capabilityId)
+  const message =
+    input.message ||
+    `${AGENT_RUNTIME_MANIFESTS[runtimeId].label} ${capability.label} is ${capability.status}. ${capability.reason}`
+
+  assertNoSecretText(message, `${runtimeId} ${capability.id} diagnostic message`)
+
+  return {
+    type: "unsupported-capability",
+    runtimeId,
+    capability: capability.id,
+    status: capability.status,
+    scope: capability.scope,
+    message,
+    reason: capability.reason,
+    hint: input.hint ?? capability.hint,
+  }
+}
+
+export function buildAgentRuntimeUnavailableDiagnostic(
+  runtimeId: string,
+): AgentRuntimeUnavailableDiagnostic {
+  return {
+    type: "unavailable-runtime",
+    runtimeId,
+    message: `Agent runtime ${runtimeId} is not registered.`,
+    hint: "Choose a registered runtime and retry.",
+  }
+}
+
+export function checkAgentRuntimeCapability(input: {
+  runtime: AgentRuntimeAlias
+  capabilityId: AgentRuntimeCapabilityId
+}): AgentRuntimeCapabilityGate {
+  const runtimeId = toAgentRuntimeId(input.runtime)
+  if (!runtimeId) {
+    throw new Error(`Unknown agent runtime: ${input.runtime}`)
+  }
+  const capability = getAgentRuntimeCapability(runtimeId, input.capabilityId)
+  if (capability.status === "supported") {
+    return {
+      ok: true,
+      runtimeId,
+      capability,
+    }
+  }
+
+  return {
+    ok: false,
+    runtimeId,
+    capability,
+    diagnostic: buildAgentRuntimeCapabilityDiagnostic({
+      runtime: runtimeId,
+      capabilityId: input.capabilityId,
+    }),
+  }
+}
+
+export function resolveAgentRuntimeCapability(input: {
+  runtime: AgentRuntimeAlias | string | null | undefined
+  capabilityId: AgentRuntimeCapabilityId
+}): AgentRuntimeCapabilityLookup {
+  const runtimeId = toAgentRuntimeId(input.runtime)
+  if (!runtimeId) {
+    const diagnostic = buildAgentRuntimeUnavailableDiagnostic(
+      input.runtime ?? "unknown",
+    )
+    return {
+      ok: false,
+      runtimeId: diagnostic.runtimeId,
+      diagnostic,
+    }
+  }
+
+  return checkAgentRuntimeCapability({
+    runtime: runtimeId,
+    capabilityId: input.capabilityId,
+  })
+}
+
+export function isRuntimeCapabilitySupported(
+  runtime: AgentRuntimeAlias,
+  capabilityId: AgentRuntimeCapabilityId,
+): boolean {
+  return checkAgentRuntimeCapability({ runtime, capabilityId }).ok
+}
+
+export function getAgentRunRequiredCapabilityIds(input: {
+  mode?: "plan" | "agent"
+  hasScopeContract?: boolean
+}): AgentRuntimeCapabilityId[] {
+  const ids: AgentRuntimeCapabilityId[] = []
+  if (input.hasScopeContract) ids.push("hardToolGuard")
+  if (input.mode === "plan") ids.push("planMode")
+  return [...new Set(ids)]
+}

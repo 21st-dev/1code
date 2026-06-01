@@ -26,7 +26,6 @@ import {
 } from "../../../../shared/codex-runtime-status"
 import {
   buildCodexRuntimeCapabilityErrorChunk,
-  getCodexRuntimeCapabilities,
   getCodexRunRequiredCapability,
 } from "../../../../shared/codex-runtime-capabilities"
 import { preparePromptWithAppAgents } from "../../app-agents/prompt"
@@ -60,6 +59,7 @@ import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import { isLocalOnlyMode } from "../../local-only"
+import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
 import {
   fetchMcpTools,
   fetchMcpToolsStdio,
@@ -688,7 +688,7 @@ async function getCodexRuntimeStatus() {
     acp: resolvedAcp,
     components: availability.components,
     blockers: availability.blockers,
-    capabilities: getCodexRuntimeCapabilities(),
+    capabilities: getRegisteredAgentRuntimeManifest("codex").capabilities,
   }
 }
 
@@ -2857,7 +2857,6 @@ export const codexRouter = router({
               ...getCodexErrorDiagnostics(error),
               message: normalized.message,
             })
-            console.error("[codex] chat stream error:", error)
             if (isCodexAuthError(normalized)) {
               safeEmit({ type: "auth-error", errorText: normalized.message })
             } else {

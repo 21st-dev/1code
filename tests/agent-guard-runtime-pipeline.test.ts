@@ -70,6 +70,8 @@ describe("agent guard runtime pipeline", () => {
     expect(acp).toContain('chunk.type === "ask-user-question"')
     expect(acp).toContain('chunk.type === "ask-user-question-timeout"')
     expect(acp).toContain('chunk.type === "ask-user-question-result"')
+    expect(codex).toContain("getCodexErrorDiagnostics(error)")
+    expect(codex).not.toContain('console.error("[codex] chat stream error:", error)')
   })
 
   test("Codex desktop route is wired to normalized runtime status before provider work", () => {
@@ -83,7 +85,7 @@ describe("agent guard runtime pipeline", () => {
     expect(codex).toContain("buildCodexRuntimeAvailabilityFromComponents")
     expect(codex).toContain("buildCodexRuntimeStatusChunk")
     expect(codex).toContain("buildCodexCapabilityErrorChunk")
-    expect(codex).toContain("getCodexRuntimeCapabilities()")
+    expect(codex).toContain('getRegisteredAgentRuntimeManifest("codex")')
     expect(codex).toContain("const runtimeStatus = await getCodexRuntimeStatus()")
     expect(codex).toContain("const integration = await getCodexIntegrationStatus()")
     expect(codex).toContain('id: "login"')
@@ -103,12 +105,16 @@ describe("agent guard runtime pipeline", () => {
 
     expect(chats).toContain("hasCodexBackedMessages(messagesToFork)")
     expect(chats).toContain("hasCodexBackedMessages(messages)")
-    expect(chats).toContain("Codex rollback/fork is unsupported")
+    expect(chats).toContain("getCodexRollbackUnsupportedMessage()")
+    expect(chats).toContain('capabilityId: "rollback"')
     expect(activeChat).toContain(
-      'onRollback={provider === "codex" ? undefined : handleRollback}',
+      'const canRollbackOrFork = isRuntimeCapabilitySupported(provider, "rollback")',
     )
     expect(activeChat).toContain(
-      'onFork={provider === "codex" ? undefined : handleForkFromMessage}',
+      "onRollback={canRollbackOrFork ? handleRollback : undefined}",
+    )
+    expect(activeChat).toContain(
+      "onFork={canRollbackOrFork ? handleForkFromMessage : undefined}",
     )
   })
 })

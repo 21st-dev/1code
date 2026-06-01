@@ -43,10 +43,15 @@ Reference links:
 
 ## Proposed Architecture
 
+Capability vocabulary, runtime IDs, static Claude/Codex manifests, and generic
+capability gating helpers are owned by
+`add-agent-runtime-capability-model`. This headless jobs change consumes that
+model instead of redefining capability states or deciding Claude/Codex parity.
+
 ### Layer 1: Agent Runtime Core
 Add `src/main/lib/agent-runtime/` with:
-- `contract.ts`: the `AgentRuntime` interface, runtime IDs, capability manifest, run request, observer, result, status, session reference, and cancellation types.
-- `runtime-registry.ts`: registration and lookup for Claude and Codex drivers, including capability summaries safe to expose to the renderer.
+- `contract.ts`: the `AgentRuntime` interface, shared capability manifest references, run request, observer, result, status, session reference, and cancellation types.
+- `runtime-registry.ts`: registration and lookup for Claude and Codex drivers, reusing capability summaries safe to expose to the renderer.
 - `types.ts`: shared runtime-neutral event, result, status, and serialization types when those grow beyond the contract file.
 - `runner.ts`: common `runAgentTask(request, observer, abortSignal)` entry point.
 - `claude-adapter.ts`: adapter around existing Claude Code execution.
@@ -72,7 +77,7 @@ The contract must be capability-first, not provider-name-first. A runtime driver
 - `runtimeWorkflows`: whether dynamic workflow execution is runtime-neutral or has a runtime-native equivalent for the selected runtime.
 - `appAgents`: whether App Agent instructions, registry sources, and runtime-specific agent/skill imports are normalized for the selected runtime.
 
-Each capability should have an explicit status such as `supported`, `unsupported`, or `degraded`, plus an optional reason. UI and CLI surfaces must use this manifest to decide which controls are visible, disabled, or warned about. They must not infer support from runtime name alone.
+Each capability status, scope, reason, and remediation hint comes from the shared runtime capability model. UI and CLI surfaces must use that manifest to decide which controls are visible, disabled, or warned about. They must not infer support from runtime name alone.
 
 ### Codex Capability Honesty Boundary
 This change registers Codex through the same `AgentRuntime` registry and event contract as Claude, but it does not require Codex to reach Claude Code behavior parity before local headless jobs can ship.

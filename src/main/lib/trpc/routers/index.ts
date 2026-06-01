@@ -25,6 +25,7 @@ import { appUpdatesRouter } from "./app-updates"
 import { githubWorkflowRouter } from "./github-workflow"
 import { agentWorkbenchRouter } from "./agent-workbench"
 import { chatAttachmentsRouter } from "./chat-attachments"
+import { agentRuntimeRouter } from "./agent-runtime"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -60,6 +61,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     githubWorkflow: githubWorkflowRouter,
     agentWorkbench: agentWorkbenchRouter,
     chatAttachments: chatAttachmentsRouter,
+    agentRuntime: agentRuntimeRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })
