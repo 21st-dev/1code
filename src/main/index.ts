@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage } from "electron"
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage } from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
@@ -25,6 +25,12 @@ import {
   getAllWindows,
   setIsQuitting,
 } from "./windows/main"
+import {
+  parseMcpImportLink,
+  sanitizeDeepLinkForLog,
+  sanitizeProcessArgForLog,
+  type McpImportPreview,
+} from "../shared/mcp-import-preview"
 
 import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
 
@@ -66,18 +72,46 @@ app.commandLine.appendSwitch("js-flags", "--max-old-space-size=8192")
 
 // Auth manager singleton (use the one from auth-manager module)
 let authManager: AuthManager
+let pendingMcpImportPreview: McpImportPreview | null = null
 
 export function getAuthManager(): AuthManager {
   // First try to get from module, fallback to local variable for backwards compat
   return getAuthManagerFromModule() || authManager
 }
 
+ipcMain.handle("mcp-import:get-pending-preview", () => pendingMcpImportPreview)
+ipcMain.handle("mcp-import:clear-pending-preview", () => {
+  pendingMcpImportPreview = null
+  return { success: true }
+})
+
+function publishMcpImportPreview(preview: McpImportPreview): void {
+  pendingMcpImportPreview = preview
+  for (const window of getAllWindows()) {
+    window.webContents.send("mcp-import:preview", preview)
+  }
+}
+
 // Handle deep link
 function handleDeepLink(url: string): void {
-  console.log("[DeepLink] Received:", url)
+  console.log("[DeepLink] Received:", sanitizeDeepLinkForLog(url))
 
   try {
     const parsed = new URL(url)
+    const importResult = parseMcpImportLink(url)
+    if (importResult.ok) {
+      publishMcpImportPreview(importResult.preview)
+      console.log("[DeepLink] MCP import preview queued")
+      return
+    }
+    if (importResult.code !== "unsupported-link") {
+      console.warn(
+        "[DeepLink] MCP import rejected:",
+        importResult.message,
+        importResult.sanitizedUrl,
+      )
+      return
+    }
 
     // Handle MCP OAuth callback: locus://mcp-oauth?code=xxx&state=yyy
     if (parsed.pathname === "/mcp-oauth" || parsed.host === "mcp-oauth") {
@@ -99,7 +133,7 @@ console.log("[Protocol] Primary protocol:", PROTOCOL)
 console.log("[Protocol] Legacy protocol:", LEGACY_PROTOCOL)
 console.log("[Protocol] Is dev mode (process.defaultApp):", process.defaultApp)
 console.log("[Protocol] process.execPath:", process.execPath)
-console.log("[Protocol] process.argv:", process.argv)
+console.log("[Protocol] process.argv:", process.argv.map(sanitizeProcessArgForLog))
 
 /**
  * Register the app as the handler for our custom protocol.
@@ -418,7 +452,7 @@ if (gotTheLock) {
 
     // Handle deep link on macOS (app already running)
     app.on("open-url", (event, url) => {
-      console.log("[Protocol] open-url event received:", url)
+      console.log("[Protocol] open-url event received:", sanitizeDeepLinkForLog(url))
       event.preventDefault()
       handleDeepLink(url)
     })

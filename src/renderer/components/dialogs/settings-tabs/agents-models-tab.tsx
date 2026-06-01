@@ -1,5 +1,17 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { CheckCircle2, ChevronDown, MoreHorizontal, Plus, Trash2, XCircle } from "lucide-react"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  XCircle,
+} from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -11,6 +23,8 @@ import {
   type ProviderProfileDefaultPurpose,
   type ProviderProfileProtocol,
   type ProviderProfileTarget,
+  type ProviderDiagnosticCheckId,
+  type ProviderDiagnosticStatus,
 } from "../../../../shared/provider-profile-types"
 import {
   agentsLoginModalOpenAtom,
@@ -51,6 +65,7 @@ import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { Switch } from "../../ui/switch"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
+import { cn } from "../../../lib/utils"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -147,7 +162,12 @@ function AccountRow({
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost" className="h-7 w-7">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label={t("common.moreOptions")}
+            >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -332,6 +352,109 @@ function purposeMatchesProfile(
   }
 }
 
+const PROVIDER_TARGET_LABEL_KEYS: Record<ProviderProfileTarget, TranslationKey> = {
+  claude: "settings.models.providerProfiles.targetClaude",
+  codex: "settings.models.providerProfiles.targetCodex",
+  helpers: "settings.models.providerProfiles.targetHelpers",
+  local: "settings.models.providerProfiles.targetLocal",
+}
+
+const PROVIDER_AUTH_MODE_LABEL_KEYS: Record<ProviderProfileAuthMode, TranslationKey> = {
+  bearer: "settings.models.providerProfiles.authBearer",
+  "x-api-key": "settings.models.providerProfiles.authXApiKey",
+  none: "settings.models.providerProfiles.authNone",
+}
+
+const DIAGNOSTIC_CHECK_LABEL_KEYS: Record<ProviderDiagnosticCheckId, TranslationKey> = {
+  endpoint: "settings.models.providerProfiles.diagnostic.endpoint",
+  auth: "settings.models.providerProfiles.diagnostic.auth",
+  model: "settings.models.providerProfiles.diagnostic.model",
+  protocol: "settings.models.providerProfiles.diagnostic.protocol",
+  streaming: "settings.models.providerProfiles.diagnostic.streaming",
+  tools: "settings.models.providerProfiles.diagnostic.tools",
+  vision: "settings.models.providerProfiles.diagnostic.vision",
+  gateway: "settings.models.providerProfiles.diagnostic.gateway",
+  runtime: "settings.models.providerProfiles.diagnostic.runtime",
+}
+
+const DIAGNOSTIC_STATUS_LABEL_KEYS: Record<ProviderDiagnosticStatus, TranslationKey> = {
+  ok: "settings.models.providerProfiles.statusOk",
+  failed: "settings.models.providerProfiles.statusFailed",
+  unsupported: "settings.models.providerProfiles.statusUnsupported",
+  skipped: "settings.models.providerProfiles.statusSkipped",
+}
+
+function getProviderTargetLabel(
+  target: ProviderProfileTarget,
+  t: (key: TranslationKey) => string,
+) {
+  return t(PROVIDER_TARGET_LABEL_KEYS[target])
+}
+
+function getProviderAuthModeLabel(
+  mode: ProviderProfileAuthMode,
+  t: (key: TranslationKey) => string,
+) {
+  return t(PROVIDER_AUTH_MODE_LABEL_KEYS[mode])
+}
+
+function getDiagnosticCheckLabel(
+  id: ProviderDiagnosticCheckId,
+  t: (key: TranslationKey) => string,
+) {
+  return t(DIAGNOSTIC_CHECK_LABEL_KEYS[id])
+}
+
+function getDiagnosticStatusLabel(
+  status: ProviderDiagnosticStatus,
+  t: (key: TranslationKey) => string,
+) {
+  return t(DIAGNOSTIC_STATUS_LABEL_KEYS[status])
+}
+
+function getPresetRegionLabel(region: string, t: (key: TranslationKey) => string) {
+  switch (region) {
+    case "china":
+      return t("settings.models.providerProfiles.regionChina")
+    case "global":
+      return t("settings.models.providerProfiles.regionGlobal")
+    case "local":
+      return t("settings.models.providerProfiles.regionLocal")
+    default:
+      return t("settings.models.providerProfiles.regionGeneric")
+  }
+}
+
+function getProviderInitials(name: string) {
+  const initials = name
+    .split(/\s+|\/|-/)
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+  return initials || "AI"
+}
+
+function diagnosticStatusClassName(status: ProviderDiagnosticStatus) {
+  switch (status) {
+    case "ok":
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "failed":
+      return "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
+    case "unsupported":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+    case "skipped":
+      return "border-border bg-muted text-muted-foreground"
+  }
+}
+
+function profileStatusClassName(ok: boolean) {
+  return ok
+    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
+}
+
 function ProviderProfilesSettingsSection() {
   const { t } = useI18n()
   const setLastSelectedClaudeModelSource = useSetAtom(
@@ -367,6 +490,7 @@ function ProviderProfilesSettingsSection() {
     "codex",
     "helpers",
   ])
+  const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
 
   const selectedPreset = useMemo(
     () => presets.find((preset) => preset.id === presetId),
@@ -375,6 +499,21 @@ function ProviderProfilesSettingsSection() {
   const editingProfile = useMemo(
     () => profiles.find((profile) => profile.id === editingId),
     [editingId, profiles],
+  )
+  const formIdPrefix = editingId
+    ? `provider-profile-${editingId}`
+    : "provider-profile-new"
+  const destinationChanged = Boolean(
+    editingProfile &&
+      (editingProfile.baseUrl !== baseUrl.trim() ||
+        editingProfile.protocol !== protocol ||
+        editingProfile.authMode !== authMode),
+  )
+  const tokenRefreshRequired = Boolean(
+    editingProfile?.hasToken &&
+      destinationChanged &&
+      authMode !== "none" &&
+      !token.trim(),
   )
 
   const applyPreset = useCallback(
@@ -420,11 +559,7 @@ function ProviderProfilesSettingsSection() {
     setDefaultModel(profile.defaultModel)
     setAuthMode(profile.authMode)
     setToken("")
-    setHeadersText(
-      Object.keys(profile.headers).length > 0
-        ? JSON.stringify(profile.headers, null, 2)
-        : "",
-    )
+    setHeadersText("")
     setTargetRuntimes([...profile.targetRuntimes])
   }
 
@@ -441,11 +576,17 @@ function ProviderProfilesSettingsSection() {
     baseUrl.trim() &&
     defaultModel.trim() &&
     targetRuntimes.length > 0 &&
-    (authMode === "none" || token.trim() || editingProfile?.hasToken),
+    (authMode === "none" || token.trim() || editingProfile?.hasToken) &&
+    !tokenRefreshRequired,
   )
 
   const handleSaveProfile = () => {
-    let headers: Record<string, string> = {}
+    if (tokenRefreshRequired) {
+      toast.error(t("settings.models.providerProfiles.tokenRefreshRequired"))
+      return
+    }
+
+    let headers: Record<string, string> | undefined
     if (headersText.trim()) {
       try {
         const parsed = JSON.parse(headersText) as unknown
@@ -474,7 +615,7 @@ function ProviderProfilesSettingsSection() {
         defaultModel: defaultModel.trim(),
         authMode,
         ...(token.trim() ? { token: token.trim() } : {}),
-        headers,
+        ...(headers !== undefined ? { headers } : {}),
         targetRuntimes,
         capabilities: {
           ...(selectedPreset?.capabilities ?? editingProfile?.capabilities ?? {}),
@@ -525,6 +666,7 @@ function ProviderProfilesSettingsSection() {
   }
 
   const handleTestProfile = (profileId: string) => {
+    setTestingProfileId(profileId)
     testProfileMutation.mutate(
       { id: profileId },
       {
@@ -538,6 +680,9 @@ function ProviderProfilesSettingsSection() {
         },
         onError: (error) => {
           toast.error(error.message || t("toast.models.providerProfileTestFailed"))
+        },
+        onSettled: () => {
+          setTestingProfileId((current) => (current === profileId ? null : current))
         },
       },
     )
@@ -580,69 +725,109 @@ function ProviderProfilesSettingsSection() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="pb-1">
-        <h4 className="text-sm font-medium text-foreground">
-          {t("settings.models.providerProfiles.title")}
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.models.providerProfiles.description")}
-        </p>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-sm font-semibold text-foreground">
+              {t("settings.models.providerProfiles.title")}
+            </h4>
+            <Badge variant="outline" className="text-xs">
+              {profiles.length}
+            </Badge>
+          </div>
+          <p className="max-w-3xl text-xs leading-relaxed text-muted-foreground">
+            {t("settings.models.providerProfiles.description")}
+          </p>
+        </div>
       </div>
 
-      <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
-        <div className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+      <div className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="grid gap-5 border-b border-border p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium">
-                  {t("settings.models.providerProfiles.preset")}
-                </Label>
-                <select
-                  value={presetId}
-                  onChange={(event) => applyPreset(event.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
-                >
-                  {presets.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.name}
-                    </option>
-                  ))}
-                </select>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                {t("settings.models.providerProfiles.preset")}
+              </Label>
+              <div className="flex flex-wrap gap-2" role="listbox">
+                {presets.map((preset) => {
+                  const selected = presetId === preset.id
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyPreset(preset.id)}
+                      aria-pressed={selected}
+                      className={cn(
+                        "inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/70",
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                          : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <span>{preset.name}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                          selected
+                            ? "bg-primary-foreground/20 text-primary-foreground"
+                            : "bg-background text-muted-foreground",
+                        )}
+                      >
+                        {getPresetRegionLabel(preset.region, t)}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium">
-                  {t("settings.models.providerProfiles.name")}
-                </Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                {t("settings.models.providerProfiles.presetHint")}
+              </p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
+                <Label htmlFor={`${formIdPrefix}-name`} className="text-sm font-medium">
+                  {t("settings.models.providerProfiles.name")}
+                </Label>
                 <Input
+                  id={`${formIdPrefix}-name`}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${formIdPrefix}-base-url`} className="text-sm font-medium">
+                  {t("common.baseUrl")}
+                </Label>
+                <Input
+                  id={`${formIdPrefix}-base-url`}
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   placeholder="https://api.example.com/v1"
                 />
               </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">
+                <Label htmlFor={`${formIdPrefix}-model`} className="text-sm font-medium">
                   {t("onboarding.customModel.modelName")}
                 </Label>
                 <Input
+                  id={`${formIdPrefix}-model`}
                   value={defaultModel}
                   onChange={(e) => setDefaultModel(e.target.value)}
                   placeholder="model-id"
                 />
               </div>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">{t("common.protocol")}</Label>
+                <Label htmlFor={`${formIdPrefix}-protocol`} className="text-sm font-medium">
+                  {t("common.protocol")}
+                </Label>
                 <select
+                  id={`${formIdPrefix}-protocol`}
                   value={protocol}
                   onChange={(event) =>
                     setProtocol(event.target.value as ProviderProfileProtocol)
@@ -656,9 +841,15 @@ function ProviderProfilesSettingsSection() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">{t("common.auth")}</Label>
+                <Label htmlFor={`${formIdPrefix}-auth`} className="text-sm font-medium">
+                  {t("common.auth")}
+                </Label>
                 <select
+                  id={`${formIdPrefix}-auth`}
                   value={authMode}
                   onChange={(event) =>
                     setAuthMode(event.target.value as ProviderProfileAuthMode)
@@ -667,14 +858,17 @@ function ProviderProfilesSettingsSection() {
                 >
                   {providerProfileAuthModes.map((item) => (
                     <option key={item} value={item}>
-                      {item}
+                      {getProviderAuthModeLabel(item, t)}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">{t("common.apiKey")}</Label>
+                <Label htmlFor={`${formIdPrefix}-token`} className="text-sm font-medium">
+                  {t("common.apiKey")}
+                </Label>
                 <Input
+                  id={`${formIdPrefix}-token`}
                   type="password"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
@@ -683,6 +877,11 @@ function ProviderProfilesSettingsSection() {
                   }
                   disabled={authMode === "none"}
                 />
+                {tokenRefreshRequired && (
+                  <p className="text-xs text-amber-600 dark:text-amber-300">
+                    {t("settings.models.providerProfiles.tokenRefreshRequired")}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -696,42 +895,75 @@ function ProviderProfilesSettingsSection() {
                     key={target}
                     type="button"
                     onClick={() => toggleTarget(target)}
+                    aria-pressed={targetRuntimes.includes(target)}
                     className={[
-                      "rounded-md border px-2 py-1 text-xs transition-colors",
+                      "min-h-8 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/70",
                       targetRuntimes.includes(target)
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border text-muted-foreground hover:text-foreground",
                     ].join(" ")}
                   >
-                    {target}
+                    {getProviderTargetLabel(target, t)}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium">
+              <Label htmlFor={`${formIdPrefix}-headers`} className="text-sm font-medium">
                 {t("settings.models.providerProfiles.headers")}
               </Label>
               <Input
+                id={`${formIdPrefix}-headers`}
                 value={headersText}
                 onChange={(e) => setHeadersText(e.target.value)}
                 placeholder='{"HTTP-Referer":"https://example.com"}'
               />
+              <p className="text-xs text-muted-foreground">
+                {t("settings.models.providerProfiles.headersHint")}
+              </p>
             </div>
           </div>
 
           <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
             <div className="space-y-1">
-              <div className="text-sm font-medium">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
                 {editingId
                   ? t("settings.models.providerProfiles.editing")
                   : t("settings.models.providerProfiles.create")}
               </div>
               <div className="text-xs text-muted-foreground">
                 {selectedPreset?.region
-                  ? `${selectedPreset.name} · ${selectedPreset.region}`
+                  ? `${selectedPreset.name} · ${getPresetRegionLabel(selectedPreset.region, t)}`
                   : t("settings.models.providerProfiles.customPreset")}
+              </div>
+            </div>
+            <div className="grid gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>{t("common.protocol")}</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {protocol}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>{t("common.auth")}</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {authMode === "none"
+                    ? getProviderAuthModeLabel(authMode, t)
+                    : token.trim() || editingProfile?.hasToken
+                      ? t("common.savedToken")
+                      : t("settings.models.providerProfiles.noToken")}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>{t("settings.models.providerProfiles.targets")}</span>
+                <span className="text-right">
+                  {targetRuntimes
+                    .map((target) => getProviderTargetLabel(target, t))
+                    .join(", ")}
+                </span>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -754,63 +986,149 @@ function ProviderProfilesSettingsSection() {
           </div>
         </div>
 
-        <div className="divide-y divide-border">
+        <div className="grid gap-2 p-3">
           {profiles.length === 0 ? (
-            <div className="p-4 text-sm text-muted-foreground">
-              {t("settings.models.providerProfiles.empty")}
+            <div className="flex min-h-24 flex-col items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
+              <ShieldCheck className="mb-2 h-6 w-6 text-muted-foreground/50" />
+              <div className="text-sm font-medium text-foreground">
+                {t("settings.models.providerProfiles.empty")}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {t("settings.models.providerProfiles.emptyHint")}
+              </div>
             </div>
           ) : (
             profiles.map((profile) => {
               const status = profile.lastTestStatus
+              const isTestingProfile = testingProfileId === profile.id
               return (
-                <div key={profile.id} className="space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">
-                          {profile.name}
-                        </span>
-                        <Badge variant="outline" className="text-xs">
-                          {profile.protocol}
-                        </Badge>
-                        {status && (
-                          <Badge
-                            variant={status.ok ? "secondary" : "outline"}
-                            className="gap-1 text-xs"
-                          >
-                            {status.ok ? (
-                              <CheckCircle2 className="h-3 w-3" />
-                            ) : (
-                              <XCircle className="h-3 w-3" />
-                            )}
-                            {status.ok ? "OK" : "Failed"}
+                <article
+                  key={profile.id}
+                  className={cn(
+                    "group relative overflow-hidden rounded-lg border border-border bg-card p-3 transition-colors",
+                    "hover:border-primary/30 hover:bg-muted/20",
+                    status?.ok === true && "border-emerald-500/20",
+                    status?.ok === false && "border-red-500/20",
+                  )}
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex min-w-0 flex-1 gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold text-muted-foreground">
+                        {getProviderInitials(profile.name)}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-semibold text-foreground">
+                            {profile.name}
+                          </span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {profile.protocol}
                           </Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            {profile.authMode === "none"
+                              ? getProviderAuthModeLabel(profile.authMode, t)
+                              : profile.hasToken
+                                ? t("common.savedToken")
+                                : t("settings.models.providerProfiles.noToken")}
+                          </Badge>
+                          {status ? (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "gap-1 text-[10px]",
+                                profileStatusClassName(status.ok),
+                              )}
+                            >
+                              {status.ok ? (
+                                <CheckCircle2 className="h-3 w-3" />
+                              ) : (
+                                <XCircle className="h-3 w-3" />
+                              )}
+                              {status.ok
+                                ? t("settings.models.providerProfiles.statusOk")
+                                : t("settings.models.providerProfiles.statusFailed")}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
+                              <AlertTriangle className="h-3 w-3" />
+                              {t("settings.models.providerProfiles.statusUntested")}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="grid gap-1 text-xs text-muted-foreground md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                          <div className="truncate">
+                            <span className="font-medium text-foreground/70">
+                              {t("onboarding.customModel.modelName")}:
+                            </span>{" "}
+                            {profile.defaultModel}
+                          </div>
+                          <div className="truncate">
+                            <span className="font-medium text-foreground/70">
+                              {t("common.baseUrl")}:
+                            </span>{" "}
+                            {profile.baseUrl}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {profile.targetRuntimes.map((target) => (
+                            <Badge
+                              key={target}
+                              variant="secondary"
+                              className="text-[10px]"
+                            >
+                              {getProviderTargetLabel(target, t)}
+                            </Badge>
+                          ))}
+                        </div>
+
+                        {status?.message && (
+                          <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+                            {status.ok ? (
+                              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                            ) : (
+                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+                            )}
+                            <div className="min-w-0">
+                              <div className="break-words">{status.message}</div>
+                              {status.checkedAt && (
+                                <div className="mt-0.5 text-[10px] text-muted-foreground/80">
+                                  {t("settings.models.providerProfiles.checkedAt")}:{" "}
+                                  {new Date(status.checkedAt).toLocaleString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {profile.defaultModel} · {profile.baseUrl}
-                      </div>
-                      {status?.message && (
-                        <div className="text-xs text-muted-foreground">
-                          {status.message}
-                        </div>
-                      )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
+
+                    <div className="flex shrink-0 flex-wrap items-center gap-1 lg:justify-end">
                       <Button
-                        size="sm"
+                        size="icon"
                         variant="ghost"
                         onClick={() => editProfile(profile)}
+                        aria-label={t("settings.models.providerProfiles.edit")}
+                        title={t("settings.models.providerProfiles.edit")}
                       >
-                        {t("settings.models.providerProfiles.edit")}
+                        <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleTestProfile(profile.id)}
-                        disabled={testProfileMutation.isPending}
+                        disabled={isTestingProfile}
+                        className="gap-1"
                       >
-                        {t("settings.models.providerProfiles.test")}
+                        {isTestingProfile ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                        {isTestingProfile
+                          ? t("settings.models.providerProfiles.testing")
+                          : t("settings.models.providerProfiles.test")}
                       </Button>
                       <Button
                         size="icon"
@@ -825,15 +1143,7 @@ function ProviderProfilesSettingsSection() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {profile.targetRuntimes.map((target) => (
-                      <Badge key={target} variant="secondary" className="text-xs">
-                        {target}
-                      </Badge>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {PROVIDER_DEFAULT_PURPOSES.map((purpose) => {
                       const active = defaults?.[purpose]?.profileId === profile.id
                       const supported = purposeMatchesProfile(
@@ -847,14 +1157,44 @@ function ProviderProfilesSettingsSection() {
                           variant={active ? "secondary" : "outline"}
                           onClick={() => handleSetDefault(purpose, profile.id)}
                           disabled={!supported || setDefaultMutation.isPending}
-                          className="text-xs"
+                          aria-pressed={active}
+                          className="h-7 text-xs"
                         >
                           {getProviderPurposeLabel(purpose, t)}
                         </Button>
                       )
                     })}
                   </div>
-                </div>
+
+                  {status?.checks && status.checks.length > 0 && (
+                    <div className="mt-3 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                      {status.checks.map((check) => (
+                        <div
+                          key={check.id}
+                          className="flex min-w-0 items-start justify-between gap-2 rounded-md border border-border/70 bg-background px-2 py-1.5 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-foreground/80">
+                              {getDiagnosticCheckLabel(check.id, t)}
+                            </div>
+                            <div className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+                              {check.message}
+                            </div>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "shrink-0 text-[10px]",
+                              diagnosticStatusClassName(check.status),
+                            )}
+                          >
+                            {getDiagnosticStatusLabel(check.status, t)}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </article>
               )
             })
           )}
@@ -1099,7 +1439,7 @@ export function AgentsModelsTab() {
   const [model, setModel] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
   const [token, setToken] = useState("")
-  const [isAdvancedRoutingOpen, setIsAdvancedRoutingOpen] = useState(false)
+  const [isAdvancedRoutingOpen, setIsAdvancedRoutingOpen] = useState(true)
   const helperApisSectionRef = useRef<HTMLDivElement | null>(null)
   const [modelsSettingsTarget, setModelsSettingsTarget] = useAtom(
     modelsSettingsTargetAtom,
@@ -1487,6 +1827,9 @@ export function AgentsModelsTab() {
                   <Switch
                     checked={isEnabled}
                     onCheckedChange={() => toggleModelVisibility(m.id)}
+                    aria-label={t("settings.models.visibilityToggle", {
+                      model: m.name,
+                    })}
                   />
                 </div>
               )
@@ -1569,7 +1912,7 @@ export function AgentsModelsTab() {
                       disabled={codexLogoutMutation.isPending}
                     >
                       {codexLogoutMutation.isPending
-                        ? "..."
+                        ? t("common.loading")
                         : t("settings.models.codex.logout")}
                     </Button>
                   ) : (

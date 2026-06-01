@@ -1,5 +1,9 @@
 type HeaderValue = string | string[] | undefined
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 export function hasProviderGatewayAuthHeader(
   headers: Record<string, HeaderValue>,
   token: string,
@@ -16,9 +20,21 @@ export function hasProviderGatewayAuthHeader(
   return false
 }
 
-export function redactProviderSecrets(value: unknown): string {
+export function redactProviderSecrets(
+  value: unknown,
+  exactSecrets: Array<string | null | undefined> = [],
+): string {
   const text = value instanceof Error ? value.message : String(value)
-  return text
+  const exactRedacted = exactSecrets
+    .map((secret) => secret?.trim())
+    .filter((secret): secret is string => Boolean(secret && secret.length >= 4))
+    .reduce(
+      (current, secret) =>
+        current.replace(new RegExp(escapeRegExp(secret), "g"), "***"),
+      text,
+    )
+
+  return exactRedacted
     .replace(/sk-[A-Za-z0-9_-]+/g, "sk-***")
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer ***")
     .replace(

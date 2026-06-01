@@ -84,9 +84,12 @@ export function SettingsContent() {
     )
   }
 
+  const contentWidthClassName =
+    activeTab === "models" ? "w-full max-w-6xl mx-auto" : "w-full max-w-2xl mx-auto"
+
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-2xl mx-auto">
+      <div className={contentWidthClassName}>
         {renderTabContent()}
       </div>
     </div>

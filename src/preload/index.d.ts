@@ -1,3 +1,5 @@
+import type { McpImportPreview } from "../shared/mcp-import-preview"
+
 export interface DesktopUser {
   id: string
   email: string
@@ -58,6 +60,9 @@ export interface DesktopApi {
   getUser: () => Promise<DesktopUser | null>
   isAuthenticated: () => Promise<boolean>
   logout: () => Promise<void>
+  getPendingMcpImportPreview: () => Promise<McpImportPreview | null>
+  clearPendingMcpImportPreview: () => Promise<{ success: boolean }>
+  onMcpImportPreview: (callback: (preview: McpImportPreview) => void) => () => void
 
   // Multi-window
   newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<{ blocked: boolean } | void>

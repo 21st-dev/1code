@@ -8,6 +8,9 @@ import {
 import { createId } from "../db/utils"
 import {
   providerProfileAuthModes,
+  providerDiagnosticCategories,
+  providerDiagnosticCheckIds,
+  providerDiagnosticStatuses,
   providerProfileDefaultPurposes,
   providerProfileProtocols,
   providerProfileTargets,
@@ -32,6 +35,20 @@ import {
 const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
 const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
 const LEGACY_CLAUDE_PROFILE_ID = "legacy-claude-provider"
+const SAFE_METADATA_HEADER_NAMES = new Set([
+  "anthropic-beta",
+  "anthropic-version",
+  "http-referer",
+  "openai-organization",
+  "openai-project",
+  "referer",
+  "user-agent",
+  "x-title",
+])
+const SECRET_HEADER_NAME_REGEX =
+  /(^|[-_])(authorization|api[-_]?key|auth|bearer|credential|key|password|secret|token)([-_]|$)/i
+const SECRET_HEADER_VALUE_REGEX =
+  /(sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._~+/=-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|token)=\S+)/i
 
 export const providerProfileProtocolSchema = z.enum(providerProfileProtocols)
 export const providerProfileAuthModeSchema = z.enum(providerProfileAuthModes)
@@ -50,11 +67,21 @@ export const providerProfileCapabilitiesSchema = z.object({
   vision: z.boolean().optional(),
 })
 
+const providerDiagnosticCheckSchema = z.object({
+  id: z.enum(providerDiagnosticCheckIds),
+  status: z.enum(providerDiagnosticStatuses),
+  message: z.string(),
+  category: z.enum(providerDiagnosticCategories).optional(),
+})
+
 export const providerProfileTestStatusSchema = z.object({
   ok: z.boolean(),
   checkedAt: z.string(),
   message: z.string(),
   capabilities: providerProfileCapabilitiesSchema.optional(),
+  diagnosticVersion: z.literal(1).optional(),
+  category: z.enum(providerDiagnosticCategories).optional(),
+  checks: z.array(providerDiagnosticCheckSchema).optional(),
 })
 
 export type ProviderProfileRuntimeConfig = {
@@ -101,18 +128,53 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
-function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+function sanitizeHeaders(
+  headers: Record<string, string>,
+  options: { strict: boolean },
+): Record<string, string> {
   const result: Record<string, string> = {}
   for (const [rawKey, rawValue] of Object.entries(headers || {})) {
     const key = rawKey.trim()
     const value = String(rawValue).trim()
     if (!key || !value) continue
-    if (/^(authorization|x-api-key|api-key|anthropic-api-key)$/i.test(key)) {
+
+    const normalizedKey = key.toLowerCase()
+    const allowed = SAFE_METADATA_HEADER_NAMES.has(normalizedKey)
+    const unsafe =
+      !allowed ||
+      SECRET_HEADER_NAME_REGEX.test(key) ||
+      SECRET_HEADER_VALUE_REGEX.test(value)
+
+    if (unsafe) {
+      if (options.strict) {
+        throw new Error(
+          `Provider profile header "${key}" is not allowed. Store credentials in the profile auth mode instead.`,
+        )
+      }
       continue
     }
+
     result[key] = value
   }
   return result
+}
+
+export function headersForRenderer(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.keys(headers || {}).map((key) => [key, "<redacted>"]),
+  )
+}
+
+export function providerHeadersJsonForSave(
+  headers: Record<string, string> | undefined,
+  existingHeadersJson?: string | null,
+): string {
+  if (headers === undefined) {
+    return JSON.stringify(sanitizeHeaders(parseJson(existingHeadersJson, {}), {
+      strict: false,
+    }))
+  }
+  return JSON.stringify(sanitizeHeaders(headers, { strict: true }))
 }
 
 function parseTestStatus(value: string | null | undefined): ProviderProfileTestStatus | null {
@@ -135,7 +197,7 @@ function rowToMetadata(
     defaultModel: row.defaultModel,
     authMode: providerProfileAuthModeSchema.parse(row.authMode),
     hasToken: Boolean(row.encryptedToken),
-    headers: parseJson(row.headersJson, {}),
+    headers: headersForRenderer(parseJson(row.headersJson, {})),
     targetRuntimes: parseJson(row.targetRuntimesJson, []).filter((target) =>
       providerProfileTargetSchema.safeParse(target).success,
     ),
@@ -215,6 +277,34 @@ export function getLegacyClaudeProviderProfileId(): string | null {
   return getProviderProfileMetadata(LEGACY_CLAUDE_PROFILE_ID)?.id ?? null
 }
 
+export function getProviderProfileTokenRequirement(input: {
+  authMode: ProviderProfileAuthMode
+  protocol: ProviderProfileProtocol
+  baseUrl: string
+  token?: string | null
+  existingEncryptedToken?: string | null
+  existingBaseUrl?: string | null
+  existingProtocol?: string | null
+  existingAuthMode?: string | null
+}): "none" | "missing" | "destination_changed" {
+  const authMode = providerProfileAuthModeSchema.parse(input.authMode)
+  if (authMode === "none") return "none"
+  if (input.token?.trim()) return "none"
+
+  const protocol = providerProfileProtocolSchema.parse(input.protocol)
+  const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
+  const destinationChanged = Boolean(
+    input.existingEncryptedToken &&
+      (input.existingBaseUrl !== baseUrl ||
+        input.existingProtocol !== protocol ||
+        input.existingAuthMode !== authMode),
+  )
+
+  if (destinationChanged) return "destination_changed"
+  if (!input.existingEncryptedToken) return "missing"
+  return "none"
+}
+
 export function saveProviderProfile(input: {
   id?: string
   name: string
@@ -239,11 +329,27 @@ export function saveProviderProfile(input: {
         .get()
     : undefined
   const authMode = providerProfileAuthModeSchema.parse(input.authMode)
+  const protocol = providerProfileProtocolSchema.parse(input.protocol)
+  const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
   const token =
     input.token && input.token.trim() ? normalizeProviderToken(input.token) : undefined
+  const tokenRequirement = getProviderProfileTokenRequirement({
+    authMode,
+    protocol,
+    baseUrl,
+    token,
+    existingEncryptedToken: existing?.encryptedToken,
+    existingBaseUrl: existing?.baseUrl,
+    existingProtocol: existing?.protocol,
+    existingAuthMode: existing?.authMode,
+  })
 
-  if (authMode !== "none" && !token && !existing?.encryptedToken) {
-    throw new Error("Token is required for this provider")
+  if (tokenRequirement !== "none") {
+    throw new Error(
+      tokenRequirement === "destination_changed"
+        ? "Token is required when changing provider endpoint, protocol, or auth mode"
+        : "Token is required for this provider",
+    )
   }
 
   const encryptedToken = token
@@ -256,12 +362,12 @@ export function saveProviderProfile(input: {
     id,
     name: input.name.trim(),
     presetId: input.presetId || null,
-    protocol: providerProfileProtocolSchema.parse(input.protocol),
-    baseUrl: normalizeProviderBaseUrl(input.baseUrl),
+    protocol,
+    baseUrl,
     defaultModel: input.defaultModel.trim(),
     authMode,
     encryptedToken,
-    headersJson: JSON.stringify(sanitizeHeaders(input.headers || {})),
+    headersJson: providerHeadersJsonForSave(input.headers, existing?.headersJson),
     targetRuntimesJson: JSON.stringify(
       input.targetRuntimes.filter((target) =>
         providerProfileTargetSchema.safeParse(target).success,

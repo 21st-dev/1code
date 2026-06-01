@@ -113,6 +113,10 @@ describe("provider credential storage hardening", () => {
       join(process.cwd(), "src/main/lib/trpc/routers/codex.ts"),
       "utf-8",
     )
+    const codexProviderBindingSource = readFileSync(
+      join(process.cwd(), "src/main/lib/codex/provider-runtime-binding.ts"),
+      "utf-8",
+    )
 
     expect(atomsSource).not.toContain("codexApiKeyAtom")
     expect(atomsSource).not.toContain("onboarding:codex-api-key")
@@ -120,8 +124,10 @@ describe("provider credential storage hardening", () => {
     expect(transportSource).not.toContain("apiKey:")
     expect(codexRouterSource).not.toContain("authConfig")
     expect(codexRouterSource).toContain("codexAuthMethod")
-    expect(codexRouterSource).toContain("delete env.CODEX_API_KEY")
-    expect(codexRouterSource).toContain("delete env.OPENAI_API_KEY")
+    expect(codexRouterSource).toContain("buildCodexProviderEnv")
+    expect(codexProviderBindingSource).toContain("\"CODEX_API_KEY\"")
+    expect(codexProviderBindingSource).toContain("\"OPENAI_API_KEY\"")
+    expect(codexProviderBindingSource).toContain("LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN")
   })
 
   test("Codex chat input rejects legacy authConfig API key payloads", () => {

@@ -9,10 +9,16 @@ import {
   responsesToChatCompletions,
 } from "../../../shared/provider-profile-transforms"
 import {
-  hasProviderGatewayAuthHeader,
   redactProviderSecrets,
 } from "../../../shared/provider-profile-security"
-import type { ProviderProfileTestStatus } from "../../../shared/provider-profile-types"
+import type {
+  ProviderDiagnosticCategory,
+  ProviderDiagnosticCheck,
+  ProviderDiagnosticCheckId,
+  ProviderDiagnosticStatus,
+  ProviderProfileCapabilities,
+  ProviderProfileTestStatus,
+} from "../../../shared/provider-profile-types"
 import {
   getProviderProfileRuntimeConfig,
   normalizeProviderBaseUrl,
@@ -26,6 +32,11 @@ type GatewayEndpoint = {
   baseUrl: string
   token: string
   providerId: string
+}
+
+type GatewayTokenScope = {
+  providerId: string
+  kind: GatewayEndpointKind
 }
 
 const CODEX_REASONING_SUFFIXES = new Set([
@@ -50,7 +61,7 @@ let serverState:
   | {
       server: ReturnType<typeof createServer>
       origin: string
-      token: string
+      tokens: Map<string, GatewayTokenScope>
     }
   | null = null
 
@@ -214,8 +225,36 @@ function responseHeadersToRecord(headers: Headers): Record<string, string> {
   return result
 }
 
-function hasGatewayAuth(req: IncomingMessage, token: string): boolean {
-  return hasProviderGatewayAuthHeader(req.headers, token)
+function readGatewayAuthToken(req: IncomingMessage): string | null {
+  const authorization = req.headers.authorization
+  const xApiKey = req.headers["x-api-key"]
+  const authorizationValues = Array.isArray(authorization)
+    ? authorization
+    : authorization
+      ? [authorization]
+      : []
+  for (const value of authorizationValues) {
+    const match = value.match(/^Bearer\s+(.+)$/i)
+    if (match?.[1]?.trim()) return match[1].trim()
+  }
+  if (typeof xApiKey === "string" && xApiKey.trim()) return xApiKey.trim()
+  if (Array.isArray(xApiKey)) {
+    const value = xApiKey.find((item) => item.trim())
+    if (value) return value.trim()
+  }
+  return null
+}
+
+function hasScopedGatewayAuth(params: {
+  req: IncomingMessage
+  tokens: Map<string, GatewayTokenScope>
+  providerId: string
+  kind: GatewayEndpointKind
+}): boolean {
+  const token = readGatewayAuthToken(params.req)
+  if (!token) return false
+  const scope = params.tokens.get(token)
+  return scope?.providerId === params.providerId && scope.kind === params.kind
 }
 
 function appendPath(baseUrl: string, path: string): string {
@@ -243,8 +282,24 @@ function upstreamHeaders(profile: ProviderProfileRuntimeConfig): Record<string, 
   return headers
 }
 
-function sanitizeError(error: unknown): string {
-  return redactProviderSecrets(error)
+function getProviderRedactionValues(
+  profile: ProviderProfileRuntimeConfig,
+  extra: Array<string | null | undefined> = [],
+): string[] {
+  const values = [
+    profile.token,
+    profile.token ? `Bearer ${profile.token}` : null,
+    ...Object.values(profile.headers || {}),
+    ...extra,
+  ]
+  return values.filter((value): value is string => Boolean(value?.trim()))
+}
+
+function sanitizeError(
+  error: unknown,
+  exactSecrets: Array<string | null | undefined> = [],
+): string {
+  return redactProviderSecrets(error, exactSecrets)
 }
 
 async function forwardJson(params: {
@@ -267,6 +322,216 @@ async function forwardJson(params: {
     json = { error: text || response.statusText }
   }
   return { response, json }
+}
+
+function providerDiagnosticCheck(
+  id: ProviderDiagnosticCheckId,
+  status: ProviderDiagnosticStatus,
+  message: string,
+  category?: ProviderDiagnosticCategory,
+): ProviderDiagnosticCheck {
+  return {
+    id,
+    status,
+    message,
+    ...(category ? { category } : {}),
+  }
+}
+
+function getProviderProbe(profile: ProviderProfileRuntimeConfig) {
+  const model = profile.defaultModel
+  if (profile.protocol === "anthropic") {
+    return {
+      url: appendPath(profile.baseUrl, "/messages"),
+      body: {
+        model,
+        max_tokens: 16,
+        messages: [{ role: "user", content: "Reply OK." }],
+      },
+    }
+  }
+  if (profile.protocol === "openai-responses") {
+    return {
+      url: appendPath(profile.baseUrl, "/responses"),
+      body: {
+        model,
+        input: "Reply OK.",
+        max_output_tokens: 16,
+      },
+    }
+  }
+  return {
+    url: appendPath(profile.baseUrl, "/chat/completions"),
+    body: buildProviderChatCompletionBody(profile, {
+      model,
+      messages: [{ role: "user", content: "Reply OK." }],
+      max_tokens: 16,
+    }),
+  }
+}
+
+function getErrorText(json: any, fallback: string): string {
+  const error = json?.error
+  if (typeof error === "string") return error
+  if (typeof error?.message === "string") return error.message
+  if (typeof error?.type === "string") return error.type
+  return fallback
+}
+
+export function classifyProviderDiagnosticFailure(input: {
+  status?: number
+  message?: string
+  errorName?: string
+}): ProviderDiagnosticCategory {
+  const message = input.message?.toLowerCase() ?? ""
+  const status = input.status
+  const errorName = input.errorName?.toLowerCase() ?? ""
+
+  if (errorName === "aborterror" || /timeout|timed out|fetch failed|econnrefused|enotfound|network/.test(message)) {
+    return "endpoint_unreachable"
+  }
+  if (status === 401) return "auth_failed"
+  if (status === 403) {
+    if (/model|permission|access|denied|unauthorized|not authorized/.test(message)) {
+      return "model_denied"
+    }
+    return "auth_failed"
+  }
+  if (status === 404) {
+    if (/model|not found|does not exist/.test(message)) return "model_denied"
+    return "protocol_mismatch"
+  }
+  if (status === 400 || status === 422) {
+    if (/model|not found|does not exist|permission|denied|authorized/.test(message)) {
+      return "model_denied"
+    }
+    if (/stream|streaming/.test(message)) return "streaming_unsupported"
+    return "protocol_mismatch"
+  }
+  if (/stream|streaming/.test(message)) return "streaming_unsupported"
+  if (/model|not found|does not exist|permission|denied|authorized/.test(message)) {
+    return "model_denied"
+  }
+  return "gateway_failed"
+}
+
+function failureCheckId(category: ProviderDiagnosticCategory): ProviderDiagnosticCheckId {
+  switch (category) {
+    case "endpoint_unreachable":
+      return "endpoint"
+    case "auth_failed":
+      return "auth"
+    case "model_denied":
+      return "model"
+    case "protocol_mismatch":
+      return "protocol"
+    case "streaming_unsupported":
+      return "streaming"
+    case "tools_unsupported":
+      return "tools"
+    case "vision_unsupported":
+      return "vision"
+    case "runtime_unavailable":
+      return "runtime"
+    case "gateway_failed":
+    default:
+      return "gateway"
+  }
+}
+
+function buildFailureChecks(
+  category: ProviderDiagnosticCategory,
+  message: string,
+): ProviderDiagnosticCheck[] {
+  const failedId = failureCheckId(category)
+  const ids = [
+    "endpoint",
+    "auth",
+    "model",
+    "protocol",
+    "streaming",
+    "tools",
+    "vision",
+    "gateway",
+    "runtime",
+  ] as const
+  const failedIndex = ids.indexOf(failedId)
+  const checks: ProviderDiagnosticCheck[] = []
+  for (const [index, id] of ids.entries()) {
+    if (id === failedId) {
+      checks.push(providerDiagnosticCheck(id, "failed", message, category))
+    } else {
+      checks.push(
+        providerDiagnosticCheck(
+          id,
+          index < failedIndex ? "ok" : "skipped",
+          index < failedIndex
+            ? "Passed before the failed diagnostic."
+            : "Skipped after the first failed required diagnostic.",
+        ),
+      )
+    }
+  }
+  return checks
+}
+
+function inferredCapabilities(profile: ProviderProfileRuntimeConfig): ProviderProfileCapabilities {
+  return {
+    claude: profile.targetRuntimes.includes("claude"),
+    codex: profile.targetRuntimes.includes("codex"),
+    helpers: profile.targetRuntimes.includes("helpers"),
+    local: profile.targetRuntimes.includes("local"),
+    streaming: profile.capabilities.streaming ?? true,
+    tools: profile.capabilities.tools,
+    vision: profile.capabilities.vision,
+  }
+}
+
+async function runStreamingDiagnostic(
+  profile: ProviderProfileRuntimeConfig,
+  signal: AbortSignal,
+): Promise<ProviderDiagnosticCheck> {
+  if (profile.capabilities.streaming === false) {
+    return providerDiagnosticCheck(
+      "streaming",
+      "unsupported",
+      "Streaming is marked unsupported for this profile.",
+      "streaming_unsupported",
+    )
+  }
+
+  const probe = getProviderProbe(profile)
+  const response = await fetch(probe.url, {
+    method: "POST",
+    headers: upstreamHeaders(profile),
+    body: JSON.stringify({ ...probe.body, stream: true }),
+    signal,
+  })
+
+  if (response.ok && response.body) {
+    await response.body.cancel().catch(() => undefined)
+    return providerDiagnosticCheck("streaming", "ok", "Streaming endpoint accepted a probe request.")
+  }
+
+  const text = await response.text().catch(() => response.statusText)
+  const category = classifyProviderDiagnosticFailure({
+    status: response.status,
+    message: text || response.statusText,
+  })
+  if (category === "streaming_unsupported" || response.status === 400 || response.status === 422) {
+    return providerDiagnosticCheck(
+      "streaming",
+      "unsupported",
+      "Streaming probe was not accepted by this provider.",
+      "streaming_unsupported",
+    )
+  }
+  return providerDiagnosticCheck(
+    "streaming",
+    "failed",
+    `Streaming probe failed: ${response.statusText || response.status}`,
+    category,
+  )
 }
 
 async function streamChatAsAnthropic(params: {
@@ -913,11 +1178,6 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     return
   }
 
-  if (!hasGatewayAuth(req, current.token)) {
-    sendJson(res, 401, { error: "Unauthorized provider gateway request" })
-    return
-  }
-
   try {
     const url = new URL(req.url || "/", current.origin)
     const match = url.pathname.match(
@@ -929,7 +1189,21 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const [, profileId, kind, endpoint] = match
-    const profile = getProviderProfileRuntimeConfig(decodeURIComponent(profileId))
+    const decodedProfileId = decodeURIComponent(profileId)
+    const gatewayKind = kind as GatewayEndpointKind
+    if (
+      !hasScopedGatewayAuth({
+        req,
+        tokens: current.tokens,
+        providerId: decodedProfileId,
+        kind: gatewayKind,
+      })
+    ) {
+      sendJson(res, 401, { error: "Unauthorized provider gateway request" })
+      return
+    }
+
+    const profile = getProviderProfileRuntimeConfig(decodedProfileId)
     if (!profile) {
       sendJson(res, 404, { error: "Provider profile not found" })
       return
@@ -941,11 +1215,11 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const body = await readBody(req)
-    if (kind === "anthropic" && endpoint === "messages") {
+    if (gatewayKind === "anthropic" && endpoint === "messages") {
       await handleAnthropicRequest(profile, body, res)
       return
     }
-    if (kind === "responses" && endpoint === "responses") {
+    if (gatewayKind === "responses" && endpoint === "responses") {
       await handleResponsesRequest(profile, body, res)
       return
     }
@@ -958,7 +1232,6 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
 async function ensureProviderGateway() {
   if (serverState) return serverState
 
-  const token = randomBytes(32).toString("hex")
   const server = createServer((req, res) => {
     void handleGatewayRequest(req, res)
   })
@@ -980,7 +1253,7 @@ async function ensureProviderGateway() {
   serverState = {
     server,
     origin: `http://127.0.0.1:${address.port}`,
-    token,
+    tokens: new Map(),
   }
   return serverState
 }
@@ -990,103 +1263,154 @@ export async function getProviderGatewayEndpoint(
   kind: GatewayEndpointKind,
 ): Promise<GatewayEndpoint> {
   const gateway = await ensureProviderGateway()
+  const token = randomBytes(32).toString("hex")
+  gateway.tokens.set(token, { providerId, kind })
   return {
     baseUrl: `${gateway.origin}/profile/${encodeURIComponent(providerId)}/${kind}/v1`,
-    token: gateway.token,
+    token,
     providerId,
+  }
+}
+
+export async function runProviderProfileDiagnostics(
+  profile: ProviderProfileRuntimeConfig,
+): Promise<ProviderProfileTestStatus> {
+  const checkedAt = new Date().toISOString()
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 15_000)
+  const redactionValues = getProviderRedactionValues(profile)
+
+  try {
+    const probe = getProviderProbe(profile)
+    const { response, json } = await forwardJson({
+      profile,
+      url: probe.url,
+      body: probe.body,
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const errorMessage = getErrorText(json, response.statusText)
+      const category = classifyProviderDiagnosticFailure({
+        status: response.status,
+        message: errorMessage,
+      })
+      const message = sanitizeError(errorMessage, redactionValues)
+      const status = {
+        ok: false,
+        checkedAt,
+        message,
+        diagnosticVersion: 1 as const,
+        category,
+        checks: buildFailureChecks(category, message),
+        capabilities: profile.capabilities,
+      }
+      return status
+    }
+
+    const capabilities = inferredCapabilities(profile)
+    const checks: ProviderDiagnosticCheck[] = [
+      providerDiagnosticCheck("endpoint", "ok", "Endpoint accepted a diagnostic request."),
+      providerDiagnosticCheck("auth", "ok", "Authentication was accepted."),
+      providerDiagnosticCheck("model", "ok", "Model accepted a diagnostic request."),
+      providerDiagnosticCheck("protocol", "ok", `${profile.protocol} protocol probe succeeded.`),
+    ]
+
+    const streamingCheck = await runStreamingDiagnostic(profile, controller.signal)
+    checks.push(streamingCheck)
+    checks.push(
+      profile.capabilities.tools
+        ? providerDiagnosticCheck("tools", "ok", "Tool calling is advertised for this profile.")
+        : providerDiagnosticCheck(
+            "tools",
+            "unsupported",
+            "Tool calling is not advertised for this profile.",
+            "tools_unsupported",
+          ),
+    )
+    checks.push(
+      profile.capabilities.vision
+        ? providerDiagnosticCheck("vision", "ok", "Vision is advertised for this profile.")
+        : providerDiagnosticCheck(
+            "vision",
+            "unsupported",
+            "Vision is not advertised for this profile.",
+            "vision_unsupported",
+          ),
+    )
+
+    if (profile.targetRuntimes.some((target) => target === "claude" || target === "codex")) {
+      const gateway = await ensureProviderGateway()
+      checks.push(
+        providerDiagnosticCheck(
+          "gateway",
+          "ok",
+          `Local provider gateway is available on ${gateway.origin}.`,
+        ),
+      )
+    } else {
+      checks.push(
+        providerDiagnosticCheck(
+          "gateway",
+          "skipped",
+          "Gateway check skipped because no Claude or Codex runtime target is selected.",
+        ),
+      )
+    }
+
+    checks.push(
+      providerDiagnosticCheck(
+        "runtime",
+        "ok",
+        `Runtime targets: ${profile.targetRuntimes.join(", ")}.`,
+      ),
+    )
+
+    const failedCheck = checks.find((check) => check.status === "failed")
+    const category = failedCheck?.category
+    const ok = !failedCheck
+
+    const status = {
+      ok,
+      checkedAt,
+      message: ok
+        ? "Provider diagnostics completed"
+        : failedCheck?.message ?? "Provider diagnostics failed",
+      diagnosticVersion: 1 as const,
+      ...(category ? { category } : {}),
+      checks,
+      capabilities,
+    }
+    return status
+  } catch (error) {
+    const category = classifyProviderDiagnosticFailure({
+      message: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : undefined,
+    })
+    const message = sanitizeError(error, redactionValues)
+    const status = {
+      ok: false,
+      checkedAt,
+      message,
+      diagnosticVersion: 1 as const,
+      category,
+      checks: buildFailureChecks(category, message),
+      capabilities: profile.capabilities,
+    }
+    return status
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
 export async function testProviderProfile(
   profile: ProviderProfileRuntimeConfig,
 ): Promise<ProviderProfileTestStatus> {
-  const checkedAt = new Date().toISOString()
-  const model = profile.defaultModel
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 15_000)
-
-  try {
-    if (profile.protocol === "anthropic") {
-      const { response, json } = await forwardJson({
-        profile,
-        url: appendPath(profile.baseUrl, "/messages"),
-        body: {
-          model,
-          max_tokens: 16,
-          messages: [{ role: "user", content: "Reply OK." }],
-        },
-        signal: controller.signal,
-      })
-      if (!response.ok) {
-        throw new Error(json?.error?.message || json?.error || response.statusText)
-      }
-    } else if (profile.protocol === "openai-responses") {
-      const { response, json } = await forwardJson({
-        profile,
-        url: appendPath(profile.baseUrl, "/responses"),
-        body: {
-          model,
-          input: "Reply OK.",
-          max_output_tokens: 16,
-        },
-        signal: controller.signal,
-      })
-      if (!response.ok) {
-        throw new Error(json?.error?.message || json?.error || response.statusText)
-      }
-    } else {
-      const { response, json } = await forwardJson({
-        profile,
-        url: appendPath(profile.baseUrl, "/chat/completions"),
-        body: buildProviderChatCompletionBody(profile, {
-          model,
-          messages: [{ role: "user", content: "Reply OK." }],
-          max_tokens: 16,
-        }),
-        signal: controller.signal,
-      })
-      if (!response.ok) {
-        throw new Error(json?.error?.message || json?.error || response.statusText)
-      }
-    }
-
-    const capabilities = {
-      claude: profile.targetRuntimes.includes("claude"),
-      codex: profile.targetRuntimes.includes("codex"),
-      helpers: profile.targetRuntimes.includes("helpers"),
-      local: profile.targetRuntimes.includes("local"),
-      streaming: profile.capabilities.streaming ?? true,
-      tools: profile.capabilities.tools,
-      vision: profile.capabilities.vision,
-    }
-
-    const status = {
-      ok: true,
-      checkedAt,
-      message: "Provider test succeeded",
-      capabilities,
-    }
-    saveProviderProfile({
-      ...profile,
-      token: profile.token || undefined,
-      capabilities,
-      lastTestStatus: status,
-    })
-    return status
-  } catch (error) {
-    const status = {
-      ok: false,
-      checkedAt,
-      message: sanitizeError(error),
-      capabilities: profile.capabilities,
-    }
-    saveProviderProfile({
-      ...profile,
-      token: profile.token || undefined,
-      lastTestStatus: status,
-    })
-    return status
-  } finally {
-    clearTimeout(timeoutId)
-  }
+  const status = await runProviderProfileDiagnostics(profile)
+  saveProviderProfile({
+    ...profile,
+    token: profile.token || undefined,
+    ...(status.capabilities ? { capabilities: status.capabilities } : {}),
+    lastTestStatus: status,
+  })
+  return status
 }

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
 import { exposeElectronTRPC } from "trpc-electron/main"
+import type { McpImportPreview } from "../shared/mcp-import-preview"
 
 // Expose tRPC IPC bridge for type-safe communication
 exposeElectronTRPC()
@@ -89,6 +90,17 @@ contextBridge.exposeInMainWorld("desktopApi", {
   getUser: () => ipcRenderer.invoke("auth:get-user"),
   isAuthenticated: () => ipcRenderer.invoke("auth:is-authenticated"),
   logout: () => ipcRenderer.invoke("auth:logout"),
+
+  // MCP import preview
+  getPendingMcpImportPreview: () =>
+    ipcRenderer.invoke("mcp-import:get-pending-preview") as Promise<McpImportPreview | null>,
+  clearPendingMcpImportPreview: () =>
+    ipcRenderer.invoke("mcp-import:clear-pending-preview") as Promise<{ success: boolean }>,
+  onMcpImportPreview: (callback: (preview: McpImportPreview) => void) => {
+    const handler = (_event: unknown, preview: McpImportPreview) => callback(preview)
+    ipcRenderer.on("mcp-import:preview", handler)
+    return () => ipcRenderer.removeListener("mcp-import:preview", handler)
+  },
 
   // Stream event listeners
   onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => {
@@ -228,6 +240,9 @@ export interface DesktopApi {
   } | null>
   isAuthenticated: () => Promise<boolean>
   logout: () => Promise<void>
+  getPendingMcpImportPreview: () => Promise<McpImportPreview | null>
+  clearPendingMcpImportPreview: () => Promise<{ success: boolean }>
+  onMcpImportPreview: (callback: (preview: McpImportPreview) => void) => () => void
   onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => () => void
   onStreamDone: (streamId: string, callback: () => void) => () => void
   onStreamError: (streamId: string, callback: (error: string) => void) => () => void

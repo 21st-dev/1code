@@ -37,11 +37,58 @@ export type ProviderProfileCapabilities = {
   vision?: boolean
 }
 
+export const providerDiagnosticCheckIds = [
+  "endpoint",
+  "auth",
+  "model",
+  "protocol",
+  "streaming",
+  "tools",
+  "vision",
+  "gateway",
+  "runtime",
+] as const
+export type ProviderDiagnosticCheckId =
+  (typeof providerDiagnosticCheckIds)[number]
+
+export const providerDiagnosticStatuses = [
+  "ok",
+  "failed",
+  "unsupported",
+  "skipped",
+] as const
+export type ProviderDiagnosticStatus =
+  (typeof providerDiagnosticStatuses)[number]
+
+export const providerDiagnosticCategories = [
+  "endpoint_unreachable",
+  "auth_failed",
+  "model_denied",
+  "protocol_mismatch",
+  "streaming_unsupported",
+  "tools_unsupported",
+  "vision_unsupported",
+  "gateway_failed",
+  "runtime_unavailable",
+] as const
+export type ProviderDiagnosticCategory =
+  (typeof providerDiagnosticCategories)[number]
+
+export type ProviderDiagnosticCheck = {
+  id: ProviderDiagnosticCheckId
+  status: ProviderDiagnosticStatus
+  message: string
+  category?: ProviderDiagnosticCategory
+}
+
 export type ProviderProfileTestStatus = {
   ok: boolean
   checkedAt: string
   message: string
   capabilities?: ProviderProfileCapabilities
+  diagnosticVersion?: 1
+  category?: ProviderDiagnosticCategory
+  checks?: ProviderDiagnosticCheck[]
 }
 
 export type ProviderProfilePreset = {
