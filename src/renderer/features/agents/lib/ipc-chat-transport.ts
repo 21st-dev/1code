@@ -24,7 +24,11 @@ import {
   compactingSubChatsAtom,
   expiredUserQuestionsAtom,
   MODEL_ID_MAP,
+  approvedGuardedRunContractsAtom,
   pendingAuthRetryMessageAtom,
+  guardedRunAuditsAtom,
+  guardedRunEventsAtom,
+  pendingScopeExpansionRequestsAtom,
   pendingUserQuestionsAtom,
   subChatClaudeModelSourceAtomFamily,
   subChatModelIdAtomFamily,
@@ -225,6 +229,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
           {
             subChatId: this.config.subChatId,
             chatId: this.config.chatId,
+            runId: crypto.randomUUID(),
             prompt,
             cwd: this.config.cwd,
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
@@ -239,6 +244,13 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             enableTasks,
             ...(images.length > 0 && { images }),
             ...(longTextAttachments.length > 0 ? { longTextAttachments } : {}),
+            ...(appStore.get(approvedGuardedRunContractsAtom).get(this.config.subChatId)
+              ? {
+                  scopeContract: appStore
+                    .get(approvedGuardedRunContractsAtom)
+                    .get(this.config.subChatId),
+                }
+              : {}),
           },
           {
             onData: (chunk: UIMessageChunk) => {
@@ -290,6 +302,37 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 const newResults = new Map(currentResults)
                 newResults.set(chunk.toolUseId, chunk.result)
                 appStore.set(askUserQuestionResultsAtom, newResults)
+              }
+
+              if (chunk.type === "guard-event") {
+                const currentEvents = appStore.get(guardedRunEventsAtom)
+                const nextEvents = new Map(currentEvents)
+                const events = nextEvents.get(this.config.subChatId) ?? []
+                nextEvents.set(this.config.subChatId, [...events, chunk.event])
+                appStore.set(guardedRunEventsAtom, nextEvents)
+
+                if (chunk.event?.type === "scope-expansion-request") {
+                  const currentRequests = appStore.get(pendingScopeExpansionRequestsAtom)
+                  const nextRequests = new Map(currentRequests)
+                  nextRequests.set(this.config.subChatId, {
+                    subChatId: this.config.subChatId,
+                    parentChatId: this.config.chatId,
+                    toolUseId: chunk.event.toolUseId,
+                    contractId: chunk.event.contractId,
+                    path: chunk.event.path,
+                    paths: chunk.event.paths,
+                    toolName: chunk.event.toolName,
+                    reason: chunk.event.reason,
+                  })
+                  appStore.set(pendingScopeExpansionRequestsAtom, nextRequests)
+                }
+              }
+
+              if (chunk.type === "guard-audit") {
+                const currentAudits = appStore.get(guardedRunAuditsAtom)
+                const nextAudits = new Map(currentAudits)
+                nextAudits.set(this.config.subChatId, chunk.audit)
+                appStore.set(guardedRunAuditsAtom, nextAudits)
               }
 
               // Handle compacting status - track in atom for UI display
@@ -377,6 +420,15 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 console.log(`[SD] R:AUTH_ERR sub=${subId}`)
                 controller.error(new Error("Authentication required"))
                 return
+              }
+
+              if (chunk.type === "finish") {
+                const approvedContracts = appStore.get(approvedGuardedRunContractsAtom)
+                if (approvedContracts.has(this.config.subChatId)) {
+                  const nextContracts = new Map(approvedContracts)
+                  nextContracts.delete(this.config.subChatId)
+                  appStore.set(approvedGuardedRunContractsAtom, nextContracts)
+                }
               }
 
               // Handle retry notification - show friendly toast instead of scary error

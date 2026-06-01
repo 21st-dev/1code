@@ -60,6 +60,22 @@ import { discoverPluginMcpServers } from "../../plugins"
 import { publicProcedure, router } from "../index"
 import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import {
+  agentScopeContractInputSchema,
+  buildGuardedRunAudit,
+  captureGuardedGitStatus,
+  decideClaudeToolUse,
+  formatScopeValidationError,
+  toClaudePermissionResult,
+  validateAgentScopeContract,
+  type GuardedGitStatusSnapshot,
+  type ValidatedAgentScopeContract,
+} from "../../agent-guard"
+import type {
+  AgentGuardEvent,
+  AgentScopeExpansion,
+  AgentScopePath,
+} from "../../../../shared/agent-scope-contracts"
+import {
   getApprovedPluginMcpServers,
   getEnabledPlugins,
 } from "./claude-settings"
@@ -277,6 +293,7 @@ const pendingToolApprovals = new Map<
     }) => void
   }
 >()
+const activeGuardedContracts = new Map<string, ValidatedAgentScopeContract>()
 
 const PLAN_MODE_BLOCKED_TOOLS = new Set(["Bash", "NotebookEdit"])
 
@@ -853,6 +870,7 @@ export const claudeRouter = router({
       z.object({
         subChatId: z.string(),
         chatId: z.string(),
+        runId: z.string().optional(),
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
@@ -874,6 +892,7 @@ export const claudeRouter = router({
         historyEnabled: z.boolean().optional(),
         offlineModeEnabled: z.boolean().optional(), // Whether offline mode (Ollama) is enabled in settings
         enableTasks: z.boolean().optional(), // Enable task management tools (TodoWrite, Task agents)
+        scopeContract: agentScopeContractInputSchema.optional(),
       }),
     )
     .subscription(({ input }) => {
@@ -949,8 +968,39 @@ export const claudeRouter = router({
           } as UIMessageChunk)
         }
 
+        let guardedContract: ValidatedAgentScopeContract | null = null
+        let guardedPreRunStatus: GuardedGitStatusSnapshot | null = null
+        const guardEvents: AgentGuardEvent[] = []
+        const guardedRunStartedAt = new Date().toISOString()
+
         ;(async () => {
           try {
+            if (input.scopeContract) {
+              try {
+                const validated = await validateAgentScopeContract(input.scopeContract, {
+                  cwd: input.cwd,
+                  projectPath: input.projectPath,
+                  chatId: input.chatId,
+                  subChatId: input.subChatId,
+                  runId: input.runId,
+                })
+                guardedContract = {
+                  ...validated,
+                  runId: validated.runId ?? input.runId ?? streamId,
+                }
+                activeGuardedContracts.set(guardedContract.id, guardedContract)
+                guardedPreRunStatus = await captureGuardedGitStatus(input.cwd)
+              } catch (guardError) {
+                emitError(
+                  new Error(formatScopeValidationError(guardError)),
+                  "Guarded run contract rejected",
+                )
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return
+              }
+            }
+
             const db = getDatabase()
 
             // 1. Get existing messages from DB
@@ -1201,7 +1251,49 @@ export const claudeRouter = router({
             // 4. Setup accumulation state
             const parts: any[] = []
             let currentText = ""
-            let metadata: any = {}
+            let metadata: any = guardedContract
+              ? {
+                  guardedRun: {
+                    contractId: guardedContract.id,
+                    runId: guardedContract.runId ?? guardedContract.id,
+                    runtime: "claude",
+                    enforcementMode: "hard",
+                  },
+                }
+              : {}
+
+            const finalizeGuardMetadata = async (
+              currentMetadata: any,
+              options: { failed?: boolean; stopped?: boolean } = {},
+            ) => {
+              if (!guardedContract || !guardedPreRunStatus) {
+                return currentMetadata
+              }
+
+              const finalContract =
+                activeGuardedContracts.get(guardedContract.id) ?? guardedContract
+              const postRunStatus = await captureGuardedGitStatus(input.cwd)
+              const audit = buildGuardedRunAudit({
+                contract: finalContract,
+                runtime: "claude",
+                enforcementMode: "hard",
+                preRunStatus: guardedPreRunStatus,
+                postRunStatus,
+                guardEvents,
+                startedAt: guardedRunStartedAt,
+                failed: options.failed,
+                stopped: options.stopped,
+              })
+              activeGuardedContracts.delete(guardedContract.id)
+              safeEmit({ type: "guard-audit", audit })
+              return {
+                ...currentMetadata,
+                guardedRun: {
+                  ...(currentMetadata?.guardedRun ?? {}),
+                  audit,
+                },
+              }
+            }
 
             // Capture stderr from Claude process for debugging
             const stderrLines: string[] = []
@@ -2048,6 +2140,27 @@ ${prompt}
                       }
                     }
                   }
+                  if (
+                    guardedContract &&
+                    input.mode !== "plan" &&
+                    toolName !== "AskUserQuestion"
+                  ) {
+                    const currentGuardedContract =
+                      activeGuardedContracts.get(guardedContract.id) ??
+                      guardedContract
+                    const decision = decideClaudeToolUse({
+                      contract: currentGuardedContract,
+                      toolName,
+                      toolInput,
+                      toolUseId: options.toolUseID,
+                    })
+                    guardEvents.push(decision.event)
+                    safeEmit({
+                      type: "guard-event",
+                      event: decision.event,
+                    })
+                    return toClaudePermissionResult(decision)
+                  }
                   if (toolName === "AskUserQuestion") {
                     const { toolUseID } = options
                     // Emit to UI (safely in case observer is closed)
@@ -2736,6 +2849,10 @@ ${prompt}
                 if (currentText.trim()) {
                   parts.push({ type: "text", text: currentText })
                 }
+                metadata = await finalizeGuardMetadata(metadata, {
+                  failed: !abortController.signal.aborted,
+                  stopped: abortController.signal.aborted,
+                })
                 if (parts.length > 0) {
                   const assistantMessage = {
                     id: crypto.randomUUID(),
@@ -2814,6 +2931,10 @@ ${prompt}
               parts.push({ type: "text", text: currentText })
             }
 
+            metadata = await finalizeGuardMetadata(metadata, {
+              stopped: abortController.signal.aborted,
+            })
+
             const savedSessionId = metadata.sessionId
 
             if (parts.length > 0) {
@@ -2880,6 +3001,9 @@ ${prompt}
             safeComplete()
           } finally {
             activeSessions.delete(input.subChatId)
+            if (guardedContract) {
+              activeGuardedContracts.delete(guardedContract.id)
+            }
           }
         })()
 
@@ -2891,6 +3015,9 @@ ${prompt}
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()
           activeSessions.delete(input.subChatId)
+          if (guardedContract) {
+            activeGuardedContracts.delete(guardedContract.id)
+          }
           clearPendingApprovals("Session ended.", input.subChatId)
 
           // Clear streamId since we're no longer streaming.
@@ -3040,6 +3167,75 @@ ${prompt}
       })
       pendingToolApprovals.delete(input.toolUseId)
       return { ok: true }
+    }),
+  respondScopeExpansion: publicProcedure
+    .input(
+      z.object({
+        contractId: z.string(),
+        toolUseId: z.string(),
+        approved: z.boolean(),
+        path: z.string().optional(),
+        paths: z.array(z.string()).optional(),
+        reason: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const current = activeGuardedContracts.get(input.contractId)
+      if (!current) {
+        return { ok: false as const, error: "Guarded run is no longer active." }
+      }
+
+      const requestedPaths = [
+        ...(input.paths && input.paths.length > 0 ? input.paths : []),
+        ...(input.path ? [input.path] : []),
+      ].filter((item, index, all) => item && all.indexOf(item) === index)
+
+      if (requestedPaths.length === 0) {
+        return { ok: false as const, error: "No scope path was requested." }
+      }
+
+      const now = new Date().toISOString()
+      const expansionPaths: AgentScopePath[] = requestedPaths.map((scopePath) => ({
+        path: scopePath,
+        kind: "file",
+        source: "user",
+        reason: input.reason || "Approved during guarded run.",
+      }))
+      const expansion: AgentScopeExpansion = {
+        id: crypto.randomUUID(),
+        requestedAt: now,
+        requestedByToolUseId: input.toolUseId,
+        paths: expansionPaths,
+        reason: input.reason || "Scope expansion requested by runtime tool use.",
+        ...(input.approved ? { approvedAt: now } : { rejectedAt: now }),
+      }
+
+      try {
+        const updated = await validateAgentScopeContract(
+          {
+            ...current,
+            status: input.approved ? "expanded" : current.status,
+            editableScope: input.approved
+              ? [...current.editableScope, ...expansionPaths]
+              : current.editableScope,
+            expansions: [...current.expansions, expansion],
+          },
+          {
+            cwd: current.cwd,
+            projectPath: current.projectPath,
+            chatId: current.chatId,
+            subChatId: current.subChatId,
+            runId: current.runId,
+          },
+        )
+        activeGuardedContracts.set(input.contractId, updated)
+        return { ok: true as const, contract: updated }
+      } catch (error) {
+        return {
+          ok: false as const,
+          error: formatScopeValidationError(error),
+        }
+      }
     }),
 
   /**

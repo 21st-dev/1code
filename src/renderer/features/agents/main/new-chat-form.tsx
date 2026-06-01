@@ -259,6 +259,7 @@ export function NewChatForm({
       staleTime: 30_000,
     })
   const providerProfiles = providerProfilesData?.profiles ?? []
+  const providerConfigKnown = providerConfigData !== undefined
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   const [selectedClaudeModelSource, setSelectedClaudeModelSource] = useAtom(
     lastSelectedClaudeModelSourceAtom,
@@ -279,7 +280,9 @@ export function NewChatForm({
   const effectiveClaudeModelSource =
     selectedClaudeModelSource === "auto"
       ? "claude-oauth"
-      : selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig
+      : selectedClaudeModelSource === "custom-provider" &&
+          providerConfigKnown &&
+          !hasCustomClaudeConfig
         ? "claude-oauth"
         : selectedClaudeProfileId &&
             !selectedClaudeProviderProfile &&
@@ -564,7 +567,11 @@ export function NewChatForm({
     t,
   ])
   useEffect(() => {
-    if (selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig) {
+    if (
+      selectedClaudeModelSource === "custom-provider" &&
+      providerConfigKnown &&
+      !hasCustomClaudeConfig
+    ) {
       setSelectedClaudeModelSource("claude-oauth")
       return
     }
@@ -577,6 +584,7 @@ export function NewChatForm({
     }
   }, [
     hasCustomClaudeConfig,
+    providerConfigKnown,
     selectedClaudeModelSource,
     selectedClaudeProviderProfile,
     selectedClaudeProfileIsPending,

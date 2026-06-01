@@ -8,6 +8,7 @@ import {
 } from "../../../components/ui/hover-card"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
+import type { GuardedRunAudit } from "../../../../shared/agent-scope-contracts"
 
 export interface AgentMessageMetadata {
   provider?: "claude-code" | "codex"
@@ -20,6 +21,13 @@ export interface AgentMessageMetadata {
   finalTextId?: string
   durationMs?: number
   resultSubtype?: string
+  guardedRun?: {
+    contractId: string
+    runId?: string
+    runtime: "claude" | "codex"
+    enforcementMode: "hard" | "contract-and-audit"
+    audit?: GuardedRunAudit
+  }
 }
 
 interface AgentMessageUsageProps {

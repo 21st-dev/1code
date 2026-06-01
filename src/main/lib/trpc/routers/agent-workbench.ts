@@ -198,6 +198,7 @@ export const agentWorkbenchRouter = router({
             latestSubChat?.pendingUserQuestion === true || isClientBlocked,
           hasPendingPlanApproval: latestSubChat?.pendingPlanApproval === true,
           runtimeError: diff.error || latestSubChat?.errorText || null,
+          guardedRunStatus: latestSubChat?.guardedRunStatus,
           diff,
           prUrl: chat.prUrl,
           prNumber: chat.prNumber,

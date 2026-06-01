@@ -122,6 +122,14 @@ function parseCodexToolDescriptor(rawToolName: string): CodexToolDescriptor | nu
   const normalizedName = rawToolName.trim()
   if (!normalizedName) return null
 
+  if (normalizedName === "AskUserQuestion") {
+    return {
+      canonicalToolName: "AskUserQuestion",
+      detail: "",
+      isMcp: false,
+    }
+  }
+
   if (normalizedName.startsWith("Tool:")) {
     const payload = normalizedName.slice("Tool:".length).trim()
     const separatorIndex = payload.indexOf("/")
@@ -130,6 +138,17 @@ function parseCodexToolDescriptor(rawToolName: string): CodexToolDescriptor | nu
     const serverName = payload.slice(0, separatorIndex).trim()
     const toolName = payload.slice(separatorIndex + 1).trim().replaceAll("/", "__")
     if (!serverName || !toolName) return null
+
+    if (
+      serverName === "acp-ai-sdk-tools" &&
+      toolName === "AskUserQuestion"
+    ) {
+      return {
+        canonicalToolName: "AskUserQuestion",
+        detail: "",
+        isMcp: false,
+      }
+    }
 
     return {
       canonicalToolName: `mcp__${serverName}__${toolName}`,
@@ -163,6 +182,34 @@ function stripExecutionBookkeeping(input: AnyRecord): AnyRecord {
   delete cleaned.server
   delete cleaned.tool
   return cleaned
+}
+
+function getContentText(item: unknown): string {
+  if (!isRecord(item)) return ""
+  if (typeof item.text === "string") return item.text
+  if (isRecord(item.content) && typeof item.content.text === "string") {
+    return item.content.text
+  }
+  return ""
+}
+
+function normalizeAskUserQuestionResult(value: unknown): unknown {
+  const content = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.content)
+      ? value.content
+      : []
+  const firstText = content
+    .map(getContentText)
+    .find((text) => text.trim().length > 0)
+
+  if (!firstText) return value
+
+  try {
+    return JSON.parse(firstText)
+  } catch {
+    return firstText
+  }
 }
 
 function normalizeCodexToolInput(
@@ -332,8 +379,16 @@ export function normalizeCodexToolPart(
       : hasCodexArgsWrapper
         ? normalizeCodexToolInput(part.input, fallbackDescriptor)
         : part.input
-  const normalizedOutput = part.output !== undefined ? part.output : part.result
-  const normalizedResult = part.result !== undefined ? part.result : part.output
+  const rawOutput = part.output !== undefined ? part.output : part.result
+  const rawResult = part.result !== undefined ? part.result : part.output
+  const normalizedOutput =
+    fallbackDescriptor.canonicalToolName === "AskUserQuestion"
+      ? normalizeAskUserQuestionResult(rawOutput)
+      : rawOutput
+  const normalizedResult =
+    fallbackDescriptor.canonicalToolName === "AskUserQuestion"
+      ? normalizeAskUserQuestionResult(rawResult)
+      : rawResult
   const outputPayload =
     normalizedOutput !== undefined ? normalizedOutput : normalizedResult
   const outputEnrichedInput =

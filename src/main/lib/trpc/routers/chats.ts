@@ -48,6 +48,18 @@ type WorktreeSetupFailurePayload = {
   }
 }
 
+function isCodexBackedMessage(message: unknown): boolean {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    (message as any).metadata?.provider === "codex"
+  )
+}
+
+function hasCodexBackedMessages(messages: unknown[]): boolean {
+  return messages.some(isCodexBackedMessage)
+}
+
 function sendWorktreeSetupFailure(
   windowId: number | null,
   payload: WorktreeSetupFailurePayload,
@@ -1208,6 +1220,11 @@ export const chatsRouter = router({
 
       // 3. Slice messages up to and including the target
       const messagesToFork = allMessages.slice(0, cutoffIndex + 1)
+      if (hasCodexBackedMessages(messagesToFork)) {
+        throw new Error(
+          "Codex rollback/fork is unsupported until Codex exposes durable per-message resume and fork references.",
+        )
+      }
 
       // 4. Find sdkMessageUuid of last assistant message (for resumeSessionAt)
       const lastAssistant = [...messagesToFork]
@@ -1368,6 +1385,13 @@ export const chatsRouter = router({
 
       if (targetIndex === -1) {
         return { success: false, error: "Message not found" }
+      }
+      if (hasCodexBackedMessages(messages)) {
+        return {
+          success: false,
+          error:
+            "Codex rollback/fork is unsupported until Codex exposes durable per-message resume and fork references.",
+        }
       }
 
       // 3. Get the parent chat for worktreePath

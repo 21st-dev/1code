@@ -19,7 +19,14 @@ import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
 import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
+  approvedGuardedRunContractsAtom,
+  askUserQuestionResultsAtom,
+  expiredUserQuestionsAtom,
+  guardedRunAuditsAtom,
+  guardedRunEventsAtom,
+  pendingUserQuestionsAtom,
   pendingAuthRetryMessageAtom,
+  pendingScopeExpansionRequestsAtom,
   subChatCodexModelIdAtomFamily,
   subChatCodexModelSourceAtomFamily,
   subChatCodexThinkingAtomFamily,
@@ -183,6 +190,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
         let sub: { unsubscribe: () => void } | null = null
         let didUnsubscribe = false
         let forcedUnsubscribeTimer: ReturnType<typeof setTimeout> | null = null
+        let lastRuntimeStatusError: string | null = null
 
         const clearForcedUnsubscribeTimer = () => {
           if (!forcedUnsubscribeTimer) return
@@ -213,6 +221,13 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
             ...(forceNewSession ? { forceNewSession: true } : {}),
             ...(images.length > 0 ? { images } : {}),
             ...(longTextAttachments.length > 0 ? { longTextAttachments } : {}),
+            ...(appStore.get(approvedGuardedRunContractsAtom).get(this.config.subChatId)
+              ? {
+                  scopeContract: appStore
+                    .get(approvedGuardedRunContractsAtom)
+                    .get(this.config.subChatId),
+                }
+              : {}),
             ...(providerProfileId ? { providerProfileId } : {}),
             ...(codexApiKey
               ? {
@@ -281,9 +296,102 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               }
 
               if (chunk.type === "error") {
+                if (!chunk.errorText || chunk.errorText !== lastRuntimeStatusError) {
+                  toast.error(tr("agent.transport.codexError"), {
+                    description: chunk.errorText || tr("agent.transport.unexpectedCodexError"),
+                  })
+                }
+              }
+
+              if (chunk.type === "runtime-status" && chunk.ok === false) {
+                lastRuntimeStatusError = chunk.blocker?.message || null
+                const description =
+                  chunk.blocker?.hint && chunk.blocker?.message
+                    ? `${chunk.blocker.message} ${chunk.blocker.hint}`
+                    : chunk.blocker?.message || tr("agent.transport.unexpectedCodexError")
                 toast.error(tr("agent.transport.codexError"), {
-                  description: chunk.errorText || tr("agent.transport.unexpectedCodexError"),
+                  description,
                 })
+              }
+
+              if (chunk.type === "capability-error") {
+                lastRuntimeStatusError = chunk.errorText || null
+                toast.error(tr("agent.transport.codexError"), {
+                  description:
+                    chunk.errorText || tr("agent.transport.unexpectedCodexError"),
+                })
+              }
+
+              if (chunk.type === "ask-user-question") {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                const newMap = new Map(currentMap)
+                newMap.set(this.config.subChatId, {
+                  subChatId: this.config.subChatId,
+                  parentChatId: this.config.chatId,
+                  toolUseId: chunk.toolUseId,
+                  questions: chunk.questions,
+                })
+                appStore.set(pendingUserQuestionsAtom, newMap)
+
+                const currentExpired = appStore.get(expiredUserQuestionsAtom)
+                if (currentExpired.has(this.config.subChatId)) {
+                  const newExpiredMap = new Map(currentExpired)
+                  newExpiredMap.delete(this.config.subChatId)
+                  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
+                }
+              }
+
+              if (chunk.type === "ask-user-question-timeout") {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                const pending = currentMap.get(this.config.subChatId)
+                if (pending && pending.toolUseId === chunk.toolUseId) {
+                  const newPendingMap = new Map(currentMap)
+                  newPendingMap.delete(this.config.subChatId)
+                  appStore.set(pendingUserQuestionsAtom, newPendingMap)
+
+                  const currentExpired = appStore.get(expiredUserQuestionsAtom)
+                  const newExpiredMap = new Map(currentExpired)
+                  newExpiredMap.set(this.config.subChatId, pending)
+                  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
+                }
+              }
+
+              if (chunk.type === "ask-user-question-result") {
+                const currentResults = appStore.get(askUserQuestionResultsAtom)
+                const newResults = new Map(currentResults)
+                newResults.set(chunk.toolUseId, chunk.result)
+                appStore.set(askUserQuestionResultsAtom, newResults)
+              }
+
+              if (chunk.type === "guard-event") {
+                const currentEvents = appStore.get(guardedRunEventsAtom)
+                const nextEvents = new Map(currentEvents)
+                const events = nextEvents.get(this.config.subChatId) ?? []
+                nextEvents.set(this.config.subChatId, [...events, chunk.event])
+                appStore.set(guardedRunEventsAtom, nextEvents)
+
+                if (chunk.event?.type === "scope-expansion-request") {
+                  const currentRequests = appStore.get(pendingScopeExpansionRequestsAtom)
+                  const nextRequests = new Map(currentRequests)
+                  nextRequests.set(this.config.subChatId, {
+                    subChatId: this.config.subChatId,
+                    parentChatId: this.config.chatId,
+                    toolUseId: chunk.event.toolUseId,
+                    contractId: chunk.event.contractId,
+                    path: chunk.event.path,
+                    paths: chunk.event.paths,
+                    toolName: chunk.event.toolName,
+                    reason: chunk.event.reason,
+                  })
+                  appStore.set(pendingScopeExpansionRequestsAtom, nextRequests)
+                }
+              }
+
+              if (chunk.type === "guard-audit") {
+                const currentAudits = appStore.get(guardedRunAuditsAtom)
+                const nextAudits = new Map(currentAudits)
+                nextAudits.set(this.config.subChatId, chunk.audit)
+                appStore.set(guardedRunAuditsAtom, nextAudits)
               }
 
               try {
@@ -294,6 +402,12 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               }
 
               if (chunk.type === "finish") {
+                const approvedContracts = appStore.get(approvedGuardedRunContractsAtom)
+                if (approvedContracts.has(this.config.subChatId)) {
+                  const nextContracts = new Map(approvedContracts)
+                  nextContracts.delete(this.config.subChatId)
+                  appStore.set(approvedGuardedRunContractsAtom, nextContracts)
+                }
                 try {
                   controller.close()
                 } catch {

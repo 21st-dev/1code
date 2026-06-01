@@ -2545,6 +2545,22 @@ const ChatViewInner = memo(function ChatViewInner({
     })
   }, [])
 
+  const respondUserQuestionApproval = useCallback(
+    async (input: {
+      toolUseId: string
+      approved: boolean
+      message?: string
+      updatedInput?: unknown
+    }) => {
+      if (provider === "codex") {
+        await trpcClient.codex.respondToolApproval.mutate(input)
+        return
+      }
+      await trpcClient.claude.respondToolApproval.mutate(input)
+    },
+    [provider],
+  )
+
   // Handle answering questions
   const handleQuestionsAnswer = useCallback(
     async (answers: Record<string, string>) => {
@@ -2556,7 +2572,7 @@ const ChatViewInner = memo(function ChatViewInner({
         await sendUserMessage(formatAnswersAsText(answers))
       } else {
         // Question is still live - use tool approval path
-        await trpcClient.claude.respondToolApproval.mutate({
+        await respondUserQuestionApproval({
           toolUseId: displayQuestions.toolUseId,
           approved: true,
           updatedInput: { questions: displayQuestions.questions, answers },
@@ -2564,7 +2580,7 @@ const ChatViewInner = memo(function ChatViewInner({
         clearPendingQuestionCallback()
       }
     },
-    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, sendUserMessage, formatAnswersAsText],
+    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, sendUserMessage, formatAnswersAsText, respondUserQuestionApproval],
   )
 
   // Handle skipping questions
@@ -2585,7 +2601,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     // Try to notify backend (may fail if already aborted - that's ok)
     try {
-      await trpcClient.claude.respondToolApproval.mutate({
+      await respondUserQuestionApproval({
         toolUseId,
         approved: false,
         message: QUESTIONS_SKIPPED_MESSAGE,
@@ -2593,7 +2609,7 @@ const ChatViewInner = memo(function ChatViewInner({
     } catch {
       // Stream likely already aborted - ignore
     }
-  }, [displayQuestions, isQuestionExpired, clearPendingQuestionCallback])
+  }, [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, respondUserQuestionApproval])
 
   // Ref to prevent double submit of question answer
   const isSubmittingQuestionAnswerRef = useRef(false)
@@ -2638,7 +2654,7 @@ const ChatViewInner = memo(function ChatViewInner({
           await sendUserMessage(customText)
         } else {
           // Live: use existing tool approval flow
-          await trpcClient.claude.respondToolApproval.mutate({
+          await respondUserQuestionApproval({
             toolUseId: displayQuestions.toolUseId,
             approved: true,
             updatedInput: {
@@ -2662,7 +2678,7 @@ const ChatViewInner = memo(function ChatViewInner({
         isSubmittingQuestionAnswerRef.current = false
       }
     },
-    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, clearInputAndDraft, sendUserMessage, formatAnswersAsText, subChatId],
+    [displayQuestions, isQuestionExpired, clearPendingQuestionCallback, clearInputAndDraft, sendUserMessage, formatAnswersAsText, subChatId, respondUserQuestionApproval],
   )
 
   // Memoize the callback to prevent ChatInputArea re-renders
@@ -4184,8 +4200,8 @@ const ChatViewInner = memo(function ChatViewInner({
               ToolCallComponent={AgentToolCall}
               MessageGroupWrapper={MessageGroup}
               toolRegistry={AgentToolRegistry}
-              onRollback={handleRollback}
-              onFork={handleForkFromMessage}
+              onRollback={provider === "codex" ? undefined : handleRollback}
+              onFork={provider === "codex" ? undefined : handleForkFromMessage}
             />
           </div>
         </div>

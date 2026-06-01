@@ -12,6 +12,7 @@ const cleanInput = {
   hasPendingUserQuestion: false,
   hasPendingPlanApproval: false,
   runtimeError: null,
+  guardedRunStatus: null,
   diff: { fileCount: 0, additions: 0, deletions: 0 },
   prUrl: null,
   prNumber: null,
@@ -84,6 +85,44 @@ describe("agent workbench status", () => {
     expect(summary.pendingPlanApproval).toBe(true)
     expect(summary.pendingUserQuestion).toBe(true)
     expect(summary.lastMessageRole).toBe("assistant")
+  })
+
+  test("maps guarded-run audits into workbench status", () => {
+    const summary = summarizeLatestSubChat({
+      id: "sub-guard",
+      name: "Guarded",
+      mode: "agent",
+      sessionId: "session-1",
+      streamId: null,
+      updatedAt: new Date("2026-05-29T00:00:00.000Z"),
+      messages: JSON.stringify([
+        {
+          role: "assistant",
+          metadata: {
+            guardedRun: {
+              audit: { status: "drifted" },
+            },
+          },
+        },
+      ]),
+    })
+
+    expect(summary.guardedRunStatus).toBe("drifted")
+    expect(
+      classifyAgentWorkbenchStatus({
+        ...cleanInput,
+        guardedRunStatus: "drifted",
+      }),
+    ).toEqual({
+      status: "needs-review",
+      reason: "Guarded run needs review",
+    })
+    expect(
+      classifyAgentWorkbenchStatus({
+        ...cleanInput,
+        guardedRunStatus: "blocked",
+      }).status,
+    ).toBe("blocked")
   })
 
   test("matches workbench filters", () => {

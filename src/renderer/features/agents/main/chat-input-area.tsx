@@ -60,6 +60,8 @@ import {
   lastSelectedCodexThinkingAtom,
   lastSelectedClaudeModelSourceAtom,
   lastSelectedModelIdAtom,
+  approvedGuardedRunContractsAtom,
+  pendingScopeExpansionRequestsAtom,
   subChatClaudeModelSourceAtomFamily,
   subChatCodexModelIdAtomFamily,
   subChatCodexModelSourceAtomFamily,
@@ -70,6 +72,7 @@ import {
   type AgentMode,
   type SubChatFileChange,
 } from "../atoms"
+import type { AgentScopeContract } from "../../../../shared/agent-scope-contracts"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import {
@@ -105,12 +108,18 @@ import {
 import { AgentContextIndicator, type MessageTokenData } from "../ui/agent-context-indicator"
 import { AgentDiffTextContextItem } from "../ui/agent-diff-text-context-item"
 import { AgentFileItem } from "../ui/agent-file-item"
+import { AgentGuardedRunCard } from "../ui/agent-guarded-run-card"
 import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
 import { McpStatusDot } from "../../../components/dialogs/settings-tabs/agents-mcp-tab"
 import { handlePasteEvent } from "../utils/paste-text"
+import {
+  buildGuardedRunDraftSeed,
+  parseScopePathLines,
+  serializeScopePaths,
+} from "../lib/agent-guard-draft"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import {
   useVoiceRecording,
@@ -439,6 +448,22 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [draftText, setDraftText] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [guardEnabled, setGuardEnabled] = useState(false)
+  const [guardApproved, setGuardApproved] = useState(false)
+  const [editableScopeText, setEditableScopeText] = useState("")
+  const [readOnlyEvidenceText, setReadOnlyEvidenceText] = useState("")
+  const [successChecksText, setSuccessChecksText] = useState("")
+  const setApprovedGuardedRunContracts = useSetAtom(
+    approvedGuardedRunContractsAtom,
+  )
+  const pendingScopeExpansionRequests = useAtomValue(
+    pendingScopeExpansionRequestsAtom,
+  )
+  const setPendingScopeExpansionRequests = useSetAtom(
+    pendingScopeExpansionRequestsAtom,
+  )
+  const respondScopeExpansionMutation =
+    trpc.claude.respondScopeExpansion.useMutation()
 
   // Mention dropdown state
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
@@ -663,6 +688,7 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
+  const providerConfigKnown = providerConfigData !== undefined
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   const selectedClaudeProfileId = parseProviderProfileSource(
     selectedClaudeModelSource,
@@ -680,7 +706,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   const effectiveClaudeModelSource =
     selectedClaudeModelSource === "auto"
       ? "claude-oauth"
-      : selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig
+      : selectedClaudeModelSource === "custom-provider" &&
+          providerConfigKnown &&
+          !hasCustomClaudeConfig
         ? "claude-oauth"
         : selectedClaudeProfileId &&
             !selectedClaudeProviderProfile &&
@@ -699,7 +727,11 @@ export const ChatInputArea = memo(function ChatInputArea({
     )
 
   useEffect(() => {
-    if (selectedClaudeModelSource === "custom-provider" && !hasCustomClaudeConfig) {
+    if (
+      selectedClaudeModelSource === "custom-provider" &&
+      providerConfigKnown &&
+      !hasCustomClaudeConfig
+    ) {
       setSelectedClaudeModelSource("claude-oauth")
       setLastSelectedClaudeModelSource("claude-oauth")
       return
@@ -714,6 +746,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     }
   }, [
     hasCustomClaudeConfig,
+    providerConfigKnown,
     selectedClaudeModelSource,
     selectedClaudeProviderProfile,
     selectedClaudeProfileIsPending,
@@ -805,6 +838,193 @@ export const ChatInputArea = memo(function ChatInputArea({
         : t("agent.attachments.remoteDisclosure", {
             provider: selectedModelLabel,
           })
+  const pendingScopeExpansion = pendingScopeExpansionRequests.get(subChatId)
+  const guardedRunDraftSeed = useMemo(
+    () =>
+      buildGuardedRunDraftSeed({
+        changedFiles,
+        textContexts,
+        diffTextContexts: diffTextContexts ?? [],
+        draftText,
+      }),
+    [changedFiles, diffTextContexts, draftText, textContexts],
+  )
+  const guardedRunSuggestedLabels = useMemo(
+    () => [...new Set(Object.values(guardedRunDraftSeed.sourceLabels))],
+    [guardedRunDraftSeed.sourceLabels],
+  )
+  const clearApprovedGuardedRun = useCallback(() => {
+    setApprovedGuardedRunContracts((current) => {
+      const next = new Map(current)
+      next.delete(subChatId)
+      return next
+    })
+  }, [setApprovedGuardedRunContracts, subChatId])
+  const resetGuardedRunSuggestions = useCallback(() => {
+    setEditableScopeText(serializeScopePaths(guardedRunDraftSeed.editableScope))
+    setReadOnlyEvidenceText(
+      serializeScopePaths(guardedRunDraftSeed.readOnlyEvidence),
+    )
+    setSuccessChecksText("")
+    setGuardApproved(false)
+    clearApprovedGuardedRun()
+  }, [clearApprovedGuardedRun, guardedRunDraftSeed])
+  const enableGuardedRun = useCallback(() => {
+    setGuardEnabled(true)
+    setGuardApproved(false)
+    if (!editableScopeText.trim()) {
+      setEditableScopeText(serializeScopePaths(guardedRunDraftSeed.editableScope))
+    }
+    if (!readOnlyEvidenceText.trim()) {
+      setReadOnlyEvidenceText(
+        serializeScopePaths(guardedRunDraftSeed.readOnlyEvidence),
+      )
+    }
+    clearApprovedGuardedRun()
+  }, [
+    clearApprovedGuardedRun,
+    editableScopeText,
+    guardedRunDraftSeed,
+    readOnlyEvidenceText,
+  ])
+  const runWithoutGuard = useCallback(() => {
+    setGuardEnabled(false)
+    setGuardApproved(false)
+    clearApprovedGuardedRun()
+    toast.info("Guarded Run disabled for the next message.")
+  }, [clearApprovedGuardedRun])
+  const parseGuardedRunChecks = useCallback(() => {
+    return successChecksText
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+      .filter(Boolean)
+      .map((command) => ({ command, allowShellControl: false as const }))
+  }, [successChecksText])
+  const approveGuardedRunDraft = useCallback(() => {
+    if (!projectPath) {
+      toast.error("Guarded Run needs a local project path.")
+      return false
+    }
+
+    const editableScope = parseScopePathLines(editableScopeText)
+    if (editableScope.length === 0) {
+      toast.error("Guarded Run needs at least one editable scope path.")
+      return false
+    }
+
+    const now = new Date().toISOString()
+    const contract: AgentScopeContract = {
+      id: crypto.randomUUID(),
+      version: 1,
+      status: "approved",
+      createdAt: now,
+      approvedAt: now,
+      source: "manual",
+      chatId: parentChatId,
+      subChatId,
+      cwd: projectPath,
+      projectPath,
+      editableScope,
+      readOnlyEvidence: parseScopePathLines(readOnlyEvidenceText),
+      successChecks: parseGuardedRunChecks(),
+      blockedPaths: [],
+      expansions: [],
+    }
+
+    setApprovedGuardedRunContracts((current) => {
+      const next = new Map(current)
+      next.set(subChatId, contract)
+      return next
+    })
+    setGuardEnabled(true)
+    setGuardApproved(true)
+    toast.success("Guarded Run approved.")
+    return true
+  }, [
+    editableScopeText,
+    parentChatId,
+    parseGuardedRunChecks,
+    projectPath,
+    readOnlyEvidenceText,
+    setApprovedGuardedRunContracts,
+    subChatId,
+  ])
+  const markGuardDraftChanged = useCallback(() => {
+    setGuardApproved(false)
+    clearApprovedGuardedRun()
+  }, [clearApprovedGuardedRun])
+  const handleEditableScopeChange = useCallback(
+    (value: string) => {
+      setEditableScopeText(value)
+      markGuardDraftChanged()
+    },
+    [markGuardDraftChanged],
+  )
+  const handleReadOnlyEvidenceChange = useCallback(
+    (value: string) => {
+      setReadOnlyEvidenceText(value)
+      markGuardDraftChanged()
+    },
+    [markGuardDraftChanged],
+  )
+  const handleSuccessChecksChange = useCallback(
+    (value: string) => {
+      setSuccessChecksText(value)
+      markGuardDraftChanged()
+    },
+    [markGuardDraftChanged],
+  )
+  const ensureGuardedRunReady = useCallback(() => {
+    if (!guardEnabled) return true
+    if (guardApproved) return true
+    toast.error("Approve the Guarded Run before sending.", {
+      description: "Use No guard to send this message without a scope contract.",
+    })
+    return false
+  }, [guardApproved, guardEnabled])
+  const clearPendingScopeExpansion = useCallback(() => {
+    setPendingScopeExpansionRequests((current) => {
+      const next = new Map(current)
+      next.delete(subChatId)
+      return next
+    })
+  }, [setPendingScopeExpansionRequests, subChatId])
+  const approveScopeExpansion = useCallback(
+    async (request: NonNullable<typeof pendingScopeExpansion>) => {
+      const result = await respondScopeExpansionMutation.mutateAsync({
+        contractId: request.contractId,
+        toolUseId: request.toolUseId,
+        approved: true,
+        path: request.path,
+        paths: request.paths,
+        reason: request.reason,
+      })
+      if (!result.ok) {
+        toast.error("Scope expansion failed.", {
+          description: result.error,
+        })
+        return
+      }
+      clearPendingScopeExpansion()
+      toast.success("Scope expansion approved. The runtime can retry.")
+    },
+    [clearPendingScopeExpansion, respondScopeExpansionMutation],
+  )
+  const rejectScopeExpansion = useCallback(
+    async (request: NonNullable<typeof pendingScopeExpansion>) => {
+      await respondScopeExpansionMutation.mutateAsync({
+        contractId: request.contractId,
+        toolUseId: request.toolUseId,
+        approved: false,
+        path: request.path,
+        paths: request.paths,
+        reason: request.reason,
+      })
+      clearPendingScopeExpansion()
+      toast.info("Scope expansion rejected.")
+    },
+    [clearPendingScopeExpansion, respondScopeExpansionMutation],
+  )
   const canSwitchProvider =
     messageTokenData.messageCount === 0 && !isStreaming
 
@@ -1454,20 +1674,23 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [imageAttachmentBlocked, t])
   const guardedSend = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (!ensureGuardedRunReady()) return
     onSend()
-  }, [blockUnsupportedImageSend, onSend])
+  }, [blockUnsupportedImageSend, ensureGuardedRunReady, onSend])
   const guardedEditorSubmit = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (!ensureGuardedRunReady()) return
     if (onSubmitWithQuestionAnswer) {
       onSubmitWithQuestionAnswer()
     } else {
       void handleEditorSubmit()
     }
-  }, [blockUnsupportedImageSend, handleEditorSubmit, onSubmitWithQuestionAnswer])
+  }, [blockUnsupportedImageSend, ensureGuardedRunReady, handleEditorSubmit, onSubmitWithQuestionAnswer])
   const guardedForceSend = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (!ensureGuardedRunReady()) return
     onForceSend()
-  }, [blockUnsupportedImageSend, onForceSend])
+  }, [blockUnsupportedImageSend, ensureGuardedRunReady, onForceSend])
   const stablePromptSubmit = useStableCallback(guardedSend)
   const stableEditorSubmit = useStableCallback(guardedEditorSubmit)
   const stableForceSend = useStableCallback(guardedForceSend)
@@ -1476,6 +1699,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [editorRef])
   const handleSendButtonClick = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (!ensureGuardedRunReady()) return
     // If input is empty and queue has items, send first queue item
     if (
       !hasContent &&
@@ -1489,7 +1713,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     } else {
       onSend()
     }
-  }, [blockUnsupportedImageSend, firstQueueItemId, files.length, hasContent, onSend, onSendFromQueue, queueLength, readyImageCount])
+  }, [blockUnsupportedImageSend, ensureGuardedRunReady, firstQueueItemId, files.length, hasContent, onSend, onSendFromQueue, queueLength, readyImageCount])
 
   return (
     <div
@@ -1603,6 +1827,26 @@ export const ChatInputArea = memo(function ChatInputArea({
                 ) : null
               }
             >
+              <AgentGuardedRunCard
+                enabled={guardEnabled}
+                approved={guardApproved}
+                editableScopeText={editableScopeText}
+                readOnlyEvidenceText={readOnlyEvidenceText}
+                successChecksText={successChecksText}
+                suggestedLabels={guardedRunSuggestedLabels}
+                hasDirtyBaseline={changedFiles.length > 0}
+                pendingExpansion={pendingScopeExpansion}
+                provider={provider}
+                onEnable={enableGuardedRun}
+                onApprove={approveGuardedRunDraft}
+                onRunWithoutGuard={runWithoutGuard}
+                onResetSuggestions={resetGuardedRunSuggestions}
+                onEditableScopeChange={handleEditableScopeChange}
+                onReadOnlyEvidenceChange={handleReadOnlyEvidenceChange}
+                onSuccessChecksChange={handleSuccessChecksChange}
+                onApproveExpansion={approveScopeExpansion}
+                onRejectExpansion={rejectScopeExpansion}
+              />
               <PromptInputContextItems />
               {imageAttachmentNotice && (
                 <div

@@ -339,6 +339,11 @@ describe("provider profile gateway security helpers", () => {
         "upstream rejected sk-abc123_DEF and Bearer local-gateway-token",
       ),
     ).toBe("upstream rejected sk-*** and Bearer ***")
+    expect(
+      redactProviderSecrets(
+        'code=oauth-code state=oauth-state {"access_token":"secret"} jwt eyJabc.def.ghi',
+      ),
+    ).toBe('code=*** state=*** {"access_token":"***"} jwt jwt-***')
   })
 })
 

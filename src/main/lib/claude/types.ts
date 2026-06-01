@@ -1,3 +1,8 @@
+import type {
+  AgentGuardEvent,
+  GuardedRunAudit,
+} from "../../../shared/agent-scope-contracts"
+
 // AI SDK UIMessageChunk format
 export type UIMessageChunk =
   // Message lifecycle
@@ -42,6 +47,8 @@ export type UIMessageChunk =
     }
   | { type: "ask-user-question-timeout"; toolUseId: string }
   | { type: "ask-user-question-result"; toolUseId: string; result: unknown }
+  | { type: "guard-event"; event: AgentGuardEvent }
+  | { type: "guard-audit"; audit: GuardedRunAudit }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
   // Session initialization (MCP servers, plugins, tools)
   | {

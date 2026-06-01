@@ -20,6 +20,7 @@ import { AgentAskUserQuestionTool } from "../ui/agent-ask-user-question-tool"
 import { AgentBashTool } from "../ui/agent-bash-tool"
 import { AgentEditTool } from "../ui/agent-edit-tool"
 import { AgentExploringGroup } from "../ui/agent-exploring-group"
+import { AgentGuardedRunAudit } from "../ui/agent-guarded-run-audit"
 import { AgentTaskToolsGroup } from "../ui/agent-task-tools"
 import { AgentPlanFileTool } from "../ui/agent-plan-file-tool"
 import { isPlanFile } from "../ui/agent-tool-utils"
@@ -950,6 +951,10 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         )}
 
       </div>
+
+      {(!isStreaming || !isLastMessage) && msgMetadata?.guardedRun?.audit && (
+        <AgentGuardedRunAudit audit={msgMetadata.guardedRun.audit} />
+      )}
 
       {hasTextContent && (!isStreaming || !isLastMessage) && (
         <div className="flex justify-between items-center h-6 px-2 mt-1">

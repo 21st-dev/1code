@@ -7,6 +7,11 @@ import type {
   LongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
 import type { ChatImageAttachmentSendInput } from "../../../../shared/chat-attachments"
+import type {
+  AgentGuardEvent,
+  AgentScopeContract,
+  GuardedRunAudit,
+} from "../../../../shared/agent-scope-contracts"
 
 // Agent mode type - extensible for future modes like "debug"
 export type AgentMode = "agent" | "plan"
@@ -848,6 +853,35 @@ export const pendingBuildPlanSubChatIdAtom = atom<string | null>(null)
 // Store AskUserQuestion results by toolUseId for real-time updates
 // Map<toolUseId, result>
 export const askUserQuestionResultsAtom = atom<Map<string, unknown>>(new Map())
+
+export type PendingScopeExpansionRequest = {
+  subChatId: string
+  parentChatId: string
+  toolUseId: string
+  contractId: string
+  path?: string
+  paths?: string[]
+  toolName?: string
+  reason: string
+}
+
+// Approved guarded-run contracts keyed by sub-chat. The transport reads this
+// at send time and clears the entry when the stream finishes.
+export const approvedGuardedRunContractsAtom = atom<Map<string, AgentScopeContract>>(
+  new Map(),
+)
+
+export const guardedRunEventsAtom = atom<Map<string, AgentGuardEvent[]>>(
+  new Map(),
+)
+
+export const guardedRunAuditsAtom = atom<Map<string, GuardedRunAudit>>(
+  new Map(),
+)
+
+export const pendingScopeExpansionRequestsAtom = atom<
+  Map<string, PendingScopeExpansionRequest>
+>(new Map())
 
 // Unified undo stack for workspace and sub-chat archivation
 // Supports Cmd+Z to restore the last archived item (workspace or sub-chat)

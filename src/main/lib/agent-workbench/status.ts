@@ -32,6 +32,7 @@ export type AgentWorkbenchLatestSubChat = {
   pendingPlanApproval: boolean
   pendingUserQuestion: boolean
   errorText: string | null
+  guardedRunStatus: string | null
 }
 
 export type AgentWorkbenchStatusInput = {
@@ -41,6 +42,7 @@ export type AgentWorkbenchStatusInput = {
   hasPendingUserQuestion: boolean
   hasPendingPlanApproval: boolean
   runtimeError: string | null
+  guardedRunStatus?: string | null
   diff: AgentWorkbenchDiffSummary
   prUrl: string | null
   prNumber: number | null
@@ -147,6 +149,21 @@ function getLastRuntimeError(messages: StoredMessage[]): string | null {
   return null
 }
 
+function getLastGuardedRunAuditStatus(messages: StoredMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (!message || message.role !== "assistant") continue
+
+    const metadata = readObject(message.metadata)
+    const guardedRun = readObject(metadata.guardedRun)
+    const audit = readObject(guardedRun.audit)
+    const status = readString(audit.status)
+    if (status) return status
+  }
+
+  return null
+}
+
 export function parseWorkbenchMessages(rawMessages: string | null | undefined): StoredMessage[] {
   if (!rawMessages) return []
 
@@ -182,6 +199,7 @@ export function summarizeLatestSubChat(input: {
     pendingPlanApproval: hasCompletedExitPlanMode(messages, mode),
     pendingUserQuestion: hasPendingAskUserQuestion(messages),
     errorText: getLastRuntimeError(messages),
+    guardedRunStatus: getLastGuardedRunAuditStatus(messages),
   }
 }
 
@@ -210,6 +228,17 @@ export function classifyAgentWorkbenchStatus(
 
   if (input.hasActiveStream) {
     return { status: "running", reason: "Agent is running" }
+  }
+
+  if (input.guardedRunStatus === "blocked") {
+    return { status: "blocked", reason: "Guarded run blocked an action" }
+  }
+
+  if (
+    input.guardedRunStatus === "drifted" ||
+    input.guardedRunStatus === "needs-review"
+  ) {
+    return { status: "needs-review", reason: "Guarded run needs review" }
   }
 
   if (input.diff.fileCount > 0) {

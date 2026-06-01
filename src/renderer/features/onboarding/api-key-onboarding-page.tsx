@@ -15,6 +15,7 @@ import {
   billingMethodAtom,
   type ClaudeProviderAuthMode,
 } from "../../lib/atoms"
+import { lastSelectedClaudeModelSourceAtom } from "../agents/atoms"
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
@@ -30,6 +31,9 @@ export function ApiKeyOnboardingPage() {
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
+  const setLastSelectedClaudeModelSource = useSetAtom(
+    lastSelectedClaudeModelSourceAtom,
+  )
   const trpcUtils = trpc.useUtils()
   const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
   const saveProviderConfig = trpc.claudeProviderConfig.save.useMutation()
@@ -81,6 +85,7 @@ export function ApiKeyOnboardingPage() {
       {
         onSuccess: async () => {
           await trpcUtils.claudeProviderConfig.get.invalidate()
+          setLastSelectedClaudeModelSource("custom-provider")
           setApiKeyOnboardingCompleted(true)
         },
         onSettled: () => setIsSubmitting(false),
@@ -125,6 +130,7 @@ export function ApiKeyOnboardingPage() {
       }
 
       await trpcUtils.claudeProviderConfig.get.invalidate()
+      setLastSelectedClaudeModelSource("custom-provider")
       setApiKeyOnboardingCompleted(true)
     } finally {
       setIsSubmitting(false)
