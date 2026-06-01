@@ -8,6 +8,9 @@ import {
 import { createId } from "../db/utils"
 import {
   providerProfileAuthModes,
+  providerDiagnosticCategories,
+  providerDiagnosticCheckIds,
+  providerDiagnosticStatuses,
   providerProfileDefaultPurposes,
   providerProfileProtocols,
   providerProfileTargets,
@@ -50,11 +53,21 @@ export const providerProfileCapabilitiesSchema = z.object({
   vision: z.boolean().optional(),
 })
 
+const providerDiagnosticCheckSchema = z.object({
+  id: z.enum(providerDiagnosticCheckIds),
+  status: z.enum(providerDiagnosticStatuses),
+  message: z.string(),
+  category: z.enum(providerDiagnosticCategories).optional(),
+})
+
 export const providerProfileTestStatusSchema = z.object({
   ok: z.boolean(),
   checkedAt: z.string(),
   message: z.string(),
   capabilities: providerProfileCapabilitiesSchema.optional(),
+  diagnosticVersion: z.literal(1).optional(),
+  category: z.enum(providerDiagnosticCategories).optional(),
+  checks: z.array(providerDiagnosticCheckSchema).optional(),
 })
 
 export type ProviderProfileRuntimeConfig = {
@@ -115,6 +128,20 @@ function sanitizeHeaders(headers: Record<string, string>): Record<string, string
   return result
 }
 
+export function headersForRenderer(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.keys(headers || {}).map((key) => [key, "<redacted>"]),
+  )
+}
+
+export function providerHeadersJsonForSave(
+  headers: Record<string, string> | undefined,
+  existingHeadersJson?: string | null,
+): string {
+  if (headers === undefined) return existingHeadersJson ?? "{}"
+  return JSON.stringify(sanitizeHeaders(headers))
+}
+
 function parseTestStatus(value: string | null | undefined): ProviderProfileTestStatus | null {
   if (!value) return null
   const parsed = providerProfileTestStatusSchema.safeParse(
@@ -135,7 +162,7 @@ function rowToMetadata(
     defaultModel: row.defaultModel,
     authMode: providerProfileAuthModeSchema.parse(row.authMode),
     hasToken: Boolean(row.encryptedToken),
-    headers: parseJson(row.headersJson, {}),
+    headers: headersForRenderer(parseJson(row.headersJson, {})),
     targetRuntimes: parseJson(row.targetRuntimesJson, []).filter((target) =>
       providerProfileTargetSchema.safeParse(target).success,
     ),
@@ -261,7 +288,7 @@ export function saveProviderProfile(input: {
     defaultModel: input.defaultModel.trim(),
     authMode,
     encryptedToken,
-    headersJson: JSON.stringify(sanitizeHeaders(input.headers || {})),
+    headersJson: providerHeadersJsonForSave(input.headers, existing?.headersJson),
     targetRuntimesJson: JSON.stringify(
       input.targetRuntimes.filter((target) =>
         providerProfileTargetSchema.safeParse(target).success,

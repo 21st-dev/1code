@@ -11,6 +11,8 @@ import {
   type ProviderProfileDefaultPurpose,
   type ProviderProfileProtocol,
   type ProviderProfileTarget,
+  type ProviderDiagnosticCheckId,
+  type ProviderDiagnosticStatus,
 } from "../../../../shared/provider-profile-types"
 import {
   agentsLoginModalOpenAtom,
@@ -332,6 +334,14 @@ function purposeMatchesProfile(
   }
 }
 
+function formatDiagnosticCheckId(id: ProviderDiagnosticCheckId): string {
+  return id.replace(/_/g, " ")
+}
+
+function diagnosticStatusVariant(status: ProviderDiagnosticStatus) {
+  return status === "ok" ? "secondary" : "outline"
+}
+
 function ProviderProfilesSettingsSection() {
   const { t } = useI18n()
   const setLastSelectedClaudeModelSource = useSetAtom(
@@ -420,11 +430,7 @@ function ProviderProfilesSettingsSection() {
     setDefaultModel(profile.defaultModel)
     setAuthMode(profile.authMode)
     setToken("")
-    setHeadersText(
-      Object.keys(profile.headers).length > 0
-        ? JSON.stringify(profile.headers, null, 2)
-        : "",
-    )
+    setHeadersText("")
     setTargetRuntimes([...profile.targetRuntimes])
   }
 
@@ -445,7 +451,7 @@ function ProviderProfilesSettingsSection() {
   )
 
   const handleSaveProfile = () => {
-    let headers: Record<string, string> = {}
+    let headers: Record<string, string> | undefined
     if (headersText.trim()) {
       try {
         const parsed = JSON.parse(headersText) as unknown
@@ -474,7 +480,7 @@ function ProviderProfilesSettingsSection() {
         defaultModel: defaultModel.trim(),
         authMode,
         ...(token.trim() ? { token: token.trim() } : {}),
-        headers,
+        ...(headers !== undefined ? { headers } : {}),
         targetRuntimes,
         capabilities: {
           ...(selectedPreset?.capabilities ?? editingProfile?.capabilities ?? {}),
@@ -793,6 +799,27 @@ function ProviderProfilesSettingsSection() {
                       {status?.message && (
                         <div className="text-xs text-muted-foreground">
                           {status.message}
+                        </div>
+                      )}
+                      {status?.checks && status.checks.length > 0 && (
+                        <div className="grid gap-1 pt-1 sm:grid-cols-2">
+                          {status.checks.map((check) => (
+                            <div
+                              key={check.id}
+                              className="flex min-w-0 items-center justify-between gap-2 rounded border border-border/70 px-2 py-1 text-xs"
+                              title={check.message}
+                            >
+                              <span className="truncate capitalize text-muted-foreground">
+                                {formatDiagnosticCheckId(check.id)}
+                              </span>
+                              <Badge
+                                variant={diagnosticStatusVariant(check.status)}
+                                className="shrink-0 text-[10px]"
+                              >
+                                {check.status}
+                              </Badge>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
