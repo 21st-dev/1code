@@ -24,6 +24,15 @@ The system SHALL summarize saved provider profiles with renderer-safe status, ru
 - **THEN** each profile shows its name, protocol, auth state, default model, base URL, runtime targets, diagnostic status, and available default bindings
 - **AND** token values, custom header values, gateway tokens, and raw upstream diagnostic payloads are not rendered
 
+### Requirement: Provider Destination Token Re-entry
+The system SHALL require token re-entry before a saved provider profile token can be reused with a changed endpoint, protocol, or auth mode.
+
+#### Scenario: User edits a credentialed provider destination
+- **WHEN** a saved provider profile has a stored token
+- **AND** the profile endpoint, protocol, or auth mode changes
+- **THEN** the save path requires a new token before preserving credentialed runtime use
+- **AND** the previous token is not silently reused for the changed destination
+
 ### Requirement: Bilingual Provider Routing UX
 The system SHALL localize app-authored provider routing labels in English and Simplified Chinese.
 
