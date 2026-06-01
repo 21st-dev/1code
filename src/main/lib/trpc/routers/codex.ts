@@ -30,7 +30,6 @@ import {
 } from "../../../../shared/codex-runtime-capabilities"
 import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import {
-  agentScopeContractInputSchema,
   buildGuardedRunAudit,
   buildGuardedRunPromptBlock,
   captureGuardedGitStatus,
@@ -43,6 +42,17 @@ import {
   createCodexAcpPermissionHandler,
   installCodexAcpPermissionHandler,
 } from "../../codex/acp-permission"
+import {
+  codexChatInputSchema,
+  imageAttachmentSchema,
+  longTextAttachmentSchema,
+} from "../../codex/chat-input-schema"
+import {
+  getCodexApiKeyStatus,
+  readCodexApiKey,
+  removeCodexApiKey as removeStoredCodexApiKey,
+  saveCodexApiKey as saveStoredCodexApiKey,
+} from "../../codex/api-key-store"
 import {
   createCodexAskUserQuestionTools,
   installCodexAskUserQuestionAcpResultNormalizer,
@@ -66,28 +76,6 @@ import {
   type McpToolInfo,
 } from "../../mcp-auth"
 import { publicProcedure, router } from "../index"
-
-const imageAttachmentSchema = z.object({
-  base64Data: z.string().optional(),
-  localRef: z.string().optional(),
-  attachmentId: z.string().optional(),
-  mediaType: z.string(),
-  filename: z.string().optional(),
-  sizeBytes: z.number().int().nonnegative().optional(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  sha256: z.string().optional(),
-})
-
-const longTextAttachmentSchema = z.object({
-  type: z.literal("long-text-attachment").optional(),
-  attachmentId: z.string(),
-  localRef: z.string(),
-  filename: z.string(),
-  byteLength: z.number().int().nonnegative(),
-  preview: z.string().optional(),
-  kind: z.enum(["pasted", "chatHistory"]),
-})
 
 function buildLongTextAttachmentParts(
   attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
@@ -1643,10 +1631,9 @@ function extractCodexModelId(rawModel: unknown): string | undefined {
 
 function preprocessCodexModelName(params: {
   modelId: string
-  authConfig?: { apiKey: string }
+  hasAppManagedApiKey?: boolean
 }): string {
-  const hasAppManagedApiKey = Boolean(params.authConfig?.apiKey?.trim())
-  if (!hasAppManagedApiKey) {
+  if (!params.hasAppManagedApiKey) {
     return params.modelId
   }
 
@@ -1658,14 +1645,13 @@ function getCodexAcpModeId(mode: "plan" | "agent"): string {
   return mode === "plan" ? "read-only" : "auto"
 }
 
-function getAuthFingerprint(authConfig?: { apiKey: string }): string | null {
-  const apiKey = authConfig?.apiKey?.trim()
-  if (!apiKey) return null
-  return createHash("sha256").update(apiKey).digest("hex")
+function getAuthFingerprint(appManagedApiKey?: string | null): string | null {
+  if (!appManagedApiKey) return null
+  return createHash("sha256").update(appManagedApiKey).digest("hex")
 }
 
 function buildCodexProviderEnv(params?: {
-  authConfig?: { apiKey: string }
+  appManagedApiKey?: string | null
   providerGatewayToken?: string
 }): Record<string, string> {
   // Prefer shell-derived values (notably PATH) so stdio MCP dependencies
@@ -1685,7 +1671,10 @@ function buildCodexProviderEnv(params?: {
     }
   }
 
-  const apiKey = params?.authConfig?.apiKey?.trim()
+  delete env.CODEX_API_KEY
+  delete env.OPENAI_API_KEY
+
+  const apiKey = params?.appManagedApiKey?.trim()
   if (!apiKey) {
     return {
       ...env,
@@ -1705,9 +1694,7 @@ function buildCodexProviderEnv(params?: {
 }
 
 function getCodexAuthMethodId(params?: {
-  authConfig?: {
-    apiKey: string
-  }
+  appManagedApiKey?: string | null
   providerProfile?: {
     id: string
   }
@@ -1716,7 +1703,7 @@ function getCodexAuthMethodId(params?: {
     return undefined
   }
 
-  const apiKey = params?.authConfig?.apiKey?.trim()
+  const apiKey = params?.appManagedApiKey?.trim()
 
   // codex-acp advertises auth methods:
   // - chatgpt
@@ -1812,9 +1799,7 @@ function getOrCreateProvider(params: {
   mcpServers: CodexMcpServerForSession[]
   mcpFingerprint: string
   existingSessionId?: string
-  authConfig?: {
-    apiKey: string
-  }
+  appManagedApiKey?: string | null
   providerProfile?: {
     id: string
     name: string
@@ -1822,7 +1807,7 @@ function getOrCreateProvider(params: {
     token: string
   }
 }): ACPProvider {
-  const authFingerprint = getAuthFingerprint(params.authConfig)
+  const authFingerprint = getAuthFingerprint(params.appManagedApiKey)
   const existing = providerSessions.get(params.subChatId)
 
   if (
@@ -1840,7 +1825,7 @@ function getOrCreateProvider(params: {
     providerSessions.delete(params.subChatId)
   }
 
-  const hasAppManagedApiKey = Boolean(params.authConfig?.apiKey?.trim())
+  const hasAppManagedApiKey = Boolean(params.appManagedApiKey?.trim())
   // When app-managed key auth is used, avoid resuming older persisted session IDs.
   // Those can be tied to unauthenticated/CLI-auth state and trigger auth loops.
   const existingSessionIdForProvider = hasAppManagedApiKey
@@ -1862,7 +1847,7 @@ function getOrCreateProvider(params: {
       ]
     : undefined
   const authMethodId = getCodexAuthMethodId({
-    authConfig: params.authConfig,
+    appManagedApiKey: params.appManagedApiKey,
     providerProfile: params.providerProfile,
   })
   const providerSource = params.providerProfile
@@ -1900,7 +1885,7 @@ function getOrCreateProvider(params: {
   const provider = createACPProvider({
     command,
     env: buildCodexProviderEnv({
-      authConfig: params.authConfig,
+      appManagedApiKey: params.appManagedApiKey,
       providerGatewayToken: params.providerProfile?.token,
     }),
     ...(providerProfileArgs ? { args: providerProfileArgs } : {}),
@@ -1934,10 +1919,33 @@ function cleanupProvider(subChatId: string): void {
   providerSessions.delete(subChatId)
 }
 
+function cleanupAllProviders(): void {
+  for (const existing of providerSessions.values()) {
+    existing.provider.cleanup()
+  }
+  providerSessions.clear()
+}
+
 export const codexRouter = router({
   getRuntimeStatus: publicProcedure.query(() => getCodexRuntimeStatus()),
 
   getIntegration: publicProcedure.query(() => getCodexIntegrationStatus()),
+
+  getCodexApiKeyStatus: publicProcedure.query(() => getCodexApiKeyStatus()),
+
+  saveCodexApiKey: publicProcedure
+    .input(z.object({ apiKey: z.string().min(1) }))
+    .mutation(({ input }) => {
+      const status = saveStoredCodexApiKey(input.apiKey)
+      cleanupAllProviders()
+      return status
+    }),
+
+  removeCodexApiKey: publicProcedure.mutation(() => {
+    const status = removeStoredCodexApiKey()
+    cleanupAllProviders()
+    return status
+  }),
 
   logout: publicProcedure.mutation(async () => {
     const logoutResult = await runCodexCli(["logout"])
@@ -2193,29 +2201,7 @@ export const codexRouter = router({
     }),
 
   chat: publicProcedure
-    .input(
-      z.object({
-        subChatId: z.string(),
-        chatId: z.string(),
-        runId: z.string(),
-        prompt: z.string(),
-        model: z.string().optional(),
-        cwd: z.string(),
-        projectPath: z.string().optional(),
-        mode: z.enum(["plan", "agent"]).default("agent"),
-        sessionId: z.string().optional(),
-        forceNewSession: z.boolean().optional(),
-        images: z.array(imageAttachmentSchema).optional(),
-        longTextAttachments: z.array(longTextAttachmentSchema).optional(),
-        authConfig: z
-          .object({
-            apiKey: z.string().min(1),
-          })
-          .optional(),
-        providerProfileId: z.string().optional(),
-        scopeContract: agentScopeContractInputSchema.optional(),
-      }),
-    )
+    .input(codexChatInputSchema)
     .subscription(({ input }) => {
       return observable<any>((emit) => {
         const existingStream = activeStreams.get(input.subChatId)
@@ -2370,6 +2356,10 @@ export const codexRouter = router({
                   token: string
                 }
               | undefined
+            let appManagedCodexApiKey: string | null = null
+            const wantsAppManagedCodexApiKey =
+              input.codexAuthMethod === "api_key" && !input.providerProfileId
+
             if (input.providerProfileId) {
               const profile = getProviderProfileRuntimeConfig(input.providerProfileId)
               if (!profile || !profile.targetRuntimes.includes("codex")) {
@@ -2398,7 +2388,28 @@ export const codexRouter = router({
                 baseUrl: gateway.baseUrl,
                 token: gateway.token,
               }
-            } else if (!input.authConfig?.apiKey?.trim()) {
+            } else if (wantsAppManagedCodexApiKey) {
+              appManagedCodexApiKey = readCodexApiKey()
+              if (!appManagedCodexApiKey) {
+                const blocker = createCodexRuntimeBlocker({
+                  id: "login",
+                  label: "Codex API key",
+                  status: "needs-auth",
+                  ok: false,
+                  message: "Saved Codex API key is required.",
+                  hint: "Save a Codex API key again from onboarding or Settings > Models.",
+                })
+                safeEmit(buildCodexRuntimeStatusChunk(blocker))
+                safeEmit(buildCodexCapabilityErrorChunk(blocker))
+                safeEmit({
+                  type: "auth-error",
+                  errorText: blocker.message,
+                })
+                safeEmit({ type: "finish" })
+                safeComplete()
+                return
+              }
+            } else {
               const integration = await getCodexIntegrationStatus()
               if (!integration.isConnected) {
                 const blocker = createCodexRuntimeBlocker({
@@ -2425,7 +2436,7 @@ export const codexRouter = router({
               DEFAULT_CODEX_MODEL
             const selectedModelId = preprocessCodexModelName({
               modelId: requestedModelId,
-              authConfig: codexProviderProfile ? undefined : input.authConfig,
+              hasAppManagedApiKey: Boolean(appManagedCodexApiKey),
             })
             const metadataModel = selectedModelId
 
@@ -2579,7 +2590,9 @@ export const codexRouter = router({
                 input.forceNewSession
                   ? undefined
                   : input.sessionId ?? getLastSessionId(existingMessages),
-              authConfig: codexProviderProfile ? undefined : input.authConfig,
+              appManagedApiKey: codexProviderProfile
+                ? null
+                : appManagedCodexApiKey,
               providerProfile: codexProviderProfile,
             })
 

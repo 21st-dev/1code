@@ -42,6 +42,10 @@ describe("agent guard runtime pipeline", () => {
 
   test("Codex guarded and plan-mode runs install ACP permission enforcement", () => {
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const codexChatInputSchema = readFileSync(
+      "src/main/lib/codex/chat-input-schema.ts",
+      "utf8",
+    )
     const acp = readFileSync(
       "src/renderer/features/agents/lib/acp-chat-transport.ts",
       "utf8",
@@ -51,7 +55,8 @@ describe("agent guard runtime pipeline", () => {
     expect(acp).toContain("scopeContract")
     expect(acp).toContain('chunk.type === "guard-event"')
     expect(acp).toContain('chunk.type === "capability-error"')
-    expect(codex).toContain(
+    expect(codex).toContain("codexChatInputSchema")
+    expect(codexChatInputSchema).toContain(
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
     expect(codex).toContain("getCodexRunRequiredCapability")

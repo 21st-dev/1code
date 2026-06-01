@@ -1,7 +1,7 @@
 import { Provider as JotaiProvider, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
 import { useEffect, useMemo, useRef } from "react"
-import { Toaster } from "sonner"
+import { Toaster, toast } from "sonner"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
 import { WindowProvider, getInitialWindowParams } from "./contexts/WindowContext"
@@ -20,12 +20,15 @@ import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
+  codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
+  LEGACY_CODEX_API_KEY_STORAGE_KEY,
+  normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
   repoOnboardingSkippedAtom,
 } from "./lib/atoms"
-import { I18nProvider } from "./lib/i18n"
+import { I18nProvider, useI18n } from "./lib/i18n"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
 import { trpc } from "./lib/trpc"
@@ -49,6 +52,7 @@ function ThemedToaster() {
  * Main content router - decides which page to show based on onboarding state
  */
 function AppContent() {
+  const { t } = useI18n()
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const { isLocalOnly, isResolved: isLocalOnlyResolved } =
@@ -63,13 +67,18 @@ function AppContent() {
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
+  const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
+  const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
   const repoOnboardingSkipped = useAtomValue(repoOnboardingSkippedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
   const legacyProviderMigrationAttemptedRef = useRef(false)
+  const legacyCodexApiKeyMigrationAttemptedRef = useRef(false)
   const importLegacyProviderConfig =
     trpc.claudeProviderConfig.importLegacy.useMutation()
+  const saveCodexApiKeyMutation = trpc.codex.saveCodexApiKey.useMutation()
+  const trpcUtils = trpc.useUtils()
 
   // Apply initial window params (chatId/subChatId) when opening via "Open in new window"
   useEffect(() => {
@@ -164,6 +173,45 @@ function AppContent() {
     secureProviderConfig?.config,
     setApiKeyOnboardingCompleted,
     setBillingMethod,
+  ])
+
+  useEffect(() => {
+    if (legacyCodexApiKeyMigrationAttemptedRef.current) return
+    if (typeof window === "undefined") return
+
+    const legacyValue = window.localStorage.getItem(
+      LEGACY_CODEX_API_KEY_STORAGE_KEY,
+    )
+    if (legacyValue === null) return
+
+    legacyCodexApiKeyMigrationAttemptedRef.current = true
+    window.localStorage.removeItem(LEGACY_CODEX_API_KEY_STORAGE_KEY)
+
+    const normalized = normalizeCodexApiKey(legacyValue)
+    if (!normalized) return
+
+    saveCodexApiKeyMutation.mutate(
+      { apiKey: normalized },
+      {
+        onSuccess: async () => {
+          setCodexOnboardingAuthMethod("api_key")
+          setCodexOnboardingCompleted(true)
+          await trpcUtils.codex.getCodexApiKeyStatus.invalidate()
+          await trpcUtils.codex.getIntegration.invalidate()
+        },
+        onError: (error) => {
+          console.warn("[App] Failed to migrate legacy Codex API key:", error)
+          toast.error(t("toast.models.failedToMigrateCodexApiKey"))
+        },
+      },
+    )
+  }, [
+    saveCodexApiKeyMutation,
+    setCodexOnboardingAuthMethod,
+    setCodexOnboardingCompleted,
+    t,
+    trpcUtils.codex.getCodexApiKeyStatus,
+    trpcUtils.codex.getIntegration,
   ])
 
   // Migrate the legacy renderer-stored custom Claude token into secure

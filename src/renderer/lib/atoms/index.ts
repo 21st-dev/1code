@@ -2,6 +2,11 @@ import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import { desktopViewAtom as _desktopViewAtom } from "../../features/agents/atoms"
 
+export {
+  LEGACY_CODEX_API_KEY_STORAGE_KEY,
+  normalizeCodexApiKey,
+} from "../../../shared/codex-api-key"
+
 // ============================================
 // RE-EXPORT FROM FEATURES/AGENTS/ATOMS (source of truth)
 // ============================================
@@ -763,14 +768,6 @@ export const codexOnboardingAuthMethodAtom =
     { getOnInit: true },
   )
 
-// App-managed Codex API key (separate from voice OpenAI key)
-export const codexApiKeyAtom = atomWithStorage<string>(
-  "onboarding:codex-api-key",
-  "",
-  undefined,
-  { getOnInit: true },
-)
-
 export type UsageBudgetConfig = {
   weeklyTokenBudget: number
 }
@@ -783,13 +780,6 @@ export const usageBudgetAtom = atomWithStorage<UsageBudgetConfig>(
   undefined,
   { getOnInit: true },
 )
-
-export function normalizeCodexApiKey(apiKey: string): string | null {
-  const trimmed = apiKey.trim()
-  if (!trimmed) return null
-  if (!trimmed.startsWith("sk-")) return null
-  return trimmed
-}
 
 // ============================================
 // MODEL VISIBILITY (hide specific models from selector)

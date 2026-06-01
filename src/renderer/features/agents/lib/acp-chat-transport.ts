@@ -8,11 +8,9 @@ import {
 import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import {
-  codexApiKeyAtom,
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
-  normalizeCodexApiKey,
   sessionInfoAtom,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
@@ -73,12 +71,19 @@ type ImageAttachment = {
 // When a sub-chat hits auth-error, force one fresh Codex ACP session on next send.
 const forceFreshSessionSubChats = new Set<string>()
 const DEFAULT_CODEX_MODEL = "gpt-5.5/high"
-function getStoredCodexCredentials(): {
+async function getStoredCodexCredentials(): Promise<{
   hasApiKey: boolean
   hasSubscription: boolean
   hasAny: boolean
-} {
-  const hasApiKey = Boolean(normalizeCodexApiKey(appStore.get(codexApiKeyAtom)))
+}> {
+  let hasApiKey = false
+  try {
+    const status = await trpcClient.codex.getCodexApiKeyStatus.query()
+    hasApiKey = Boolean(status.hasApiKey)
+  } catch {
+    hasApiKey = false
+  }
+
   const hasSubscription =
     appStore.get(codexOnboardingCompletedAtom) &&
     appStore.get(codexOnboardingAuthMethodAtom) === "chatgpt"
@@ -95,7 +100,7 @@ async function resolveCodexCredentialsForAuthError(): Promise<{
   hasSubscription: boolean
   hasAny: boolean
 }> {
-  const snapshot = getStoredCodexCredentials()
+  const snapshot = await getStoredCodexCredentials()
 
   let hasSubscription = false
   try {
@@ -172,16 +177,19 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     const selectedCodexModelSource = appStore.get(
       subChatCodexModelSourceAtomFamily(this.config.subChatId),
     )
-    const storedCodexApiKey = normalizeCodexApiKey(appStore.get(codexApiKeyAtom))
+    const selectedCodexAuthMethod = appStore.get(codexOnboardingAuthMethodAtom)
+    const codexCredentials = await getStoredCodexCredentials()
     const effectiveCodexModelSource =
-      selectedCodexModelSource === "chatgpt" &&
-      appStore.get(codexOnboardingAuthMethodAtom) === "api_key" &&
-      storedCodexApiKey
-        ? "openai-api-key"
-        : selectedCodexModelSource
+      selectedCodexModelSource === "openai-api-key" && !codexCredentials.hasApiKey
+        ? "chatgpt"
+        : selectedCodexModelSource === "chatgpt" &&
+            selectedCodexAuthMethod === "api_key" &&
+            codexCredentials.hasApiKey
+          ? "openai-api-key"
+          : selectedCodexModelSource
     const providerProfileId = parseProviderProfileSource(effectiveCodexModelSource)
-    const codexApiKey =
-      effectiveCodexModelSource === "openai-api-key" ? storedCodexApiKey : ""
+    const codexAuthMethod =
+      effectiveCodexModelSource === "openai-api-key" ? "api_key" : "chatgpt"
     const selectedModel = getSelectedCodexModel(this.config.subChatId)
 
     return new ReadableStream({
@@ -229,13 +237,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                 }
               : {}),
             ...(providerProfileId ? { providerProfileId } : {}),
-            ...(codexApiKey
-              ? {
-                  authConfig: {
-                    apiKey: codexApiKey,
-                  },
-                }
-              : {}),
+            ...(providerProfileId ? {} : { codexAuthMethod }),
           },
           {
             onData: (chunk: UIMessageChunk) => {

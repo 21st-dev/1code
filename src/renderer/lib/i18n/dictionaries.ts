@@ -365,7 +365,8 @@ export const en = {
   "settings.models.codex.loadingAccount": "Loading account...",
   "settings.models.codex.logout": "Logout",
   "settings.models.apiKeys": "API Keys",
-  "settings.models.codexApiKey.priority": "Takes priority over subscription",
+  "settings.models.codexApiKey.priority":
+    "Stored in system secure storage and takes priority over subscription",
   "settings.models.openaiApiKey.description":
     "Required for voice transcription (Whisper API)",
   "settings.models.advancedRouting.title": "Advanced model routing",
@@ -1257,6 +1258,8 @@ export const en = {
   "toast.models.codexApiKeyRemovedLogoutFailed":
     "Codex API key removed, but failed to log out Codex CLI",
   "toast.models.failedToSaveCodexApiKey": "Failed to save Codex API key",
+  "toast.models.failedToMigrateCodexApiKey":
+    "Failed to migrate saved Codex API key. Please save it again.",
   "toast.models.failedToRemoveCodexApiKey": "Failed to remove Codex API key",
   "toast.models.failedToSaveOpenaiApiKey": "Failed to save OpenAI API key",
   "toast.models.failedToRemoveOpenaiApiKey": "Failed to remove OpenAI API key",
@@ -2855,7 +2858,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.codex.loadingAccount": "账号加载中...",
   "settings.models.codex.logout": "退出登录",
   "settings.models.apiKeys": "API 密钥",
-  "settings.models.codexApiKey.priority": "优先级高于订阅",
+  "settings.models.codexApiKey.priority":
+    "保存在系统安全存储中，优先级高于订阅",
   "settings.models.openaiApiKey.description":
     "语音转写需要使用（Whisper API）",
   "settings.models.advancedRouting.title": "高级模型路由",
@@ -3740,6 +3744,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.codexApiKeyRemovedLogoutFailed":
     "Codex API 密钥已移除，但退出 Codex CLI 失败",
   "toast.models.failedToSaveCodexApiKey": "保存 Codex API 密钥失败",
+  "toast.models.failedToMigrateCodexApiKey":
+    "迁移已保存的 Codex API 密钥失败，请重新保存。",
   "toast.models.failedToRemoveCodexApiKey": "移除 Codex API 密钥失败",
   "toast.models.failedToSaveOpenaiApiKey": "保存 OpenAI API 密钥失败",
   "toast.models.failedToRemoveOpenaiApiKey": "移除 OpenAI API 密钥失败",

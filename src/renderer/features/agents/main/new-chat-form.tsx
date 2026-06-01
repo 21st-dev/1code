@@ -55,12 +55,10 @@ import {
   agentsSettingsDialogActiveTabAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
-  codexApiKeyAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
-  normalizeCodexApiKey,
   repoOnboardingSkippedAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
@@ -401,8 +399,11 @@ export function NewChatForm({
     }
   }, [lastSelectedModelId])
 
-  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
-  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
+  const { data: codexApiKeyStatus } =
+    trpc.codex.getCodexApiKeyStatus.useQuery(undefined, {
+      staleTime: 30_000,
+    })
+  const hasAppCodexApiKey = Boolean(codexApiKeyStatus?.hasApiKey)
   const hiddenModels = useAtomValue(hiddenModelsAtom)
   const shouldUseCodexApiKeyModels =
     lastSelectedCodexModelSource === "openai-api-key" ||

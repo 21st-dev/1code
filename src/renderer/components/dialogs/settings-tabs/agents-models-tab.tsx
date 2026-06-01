@@ -15,7 +15,6 @@ import {
 import {
   agentsLoginModalOpenAtom,
   claudeLoginModalConfigAtom,
-  codexApiKeyAtom,
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
@@ -1119,13 +1118,16 @@ export function AgentsModelsTab() {
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
   const { data: codexIntegration, isLoading: isCodexLoading } =
     trpc.codex.getIntegration.useQuery()
+  const { data: codexApiKeyStatus } =
+    trpc.codex.getCodexApiKeyStatus.useQuery()
 
   // OpenAI API key state
-  const [storedCodexApiKey, setStoredCodexApiKey] = useAtom(codexApiKeyAtom)
-  const [codexApiKey, setCodexApiKey] = useState(storedCodexApiKey)
+  const [codexApiKey, setCodexApiKey] = useState("")
   const [isSavingCodexApiKey, setIsSavingCodexApiKey] = useState(false)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
+  const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
+  const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const setLastSelectedCodexModelSource = useSetAtom(
     lastSelectedCodexModelSourceAtom,
   )
@@ -1133,6 +1135,8 @@ export function AgentsModelsTab() {
   const [openaiKey, setOpenaiKey] = useState(storedOpenAIKey)
   const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
   const codexLogoutMutation = trpc.codex.logout.useMutation()
+  const saveCodexApiKeyMutation = trpc.codex.saveCodexApiKey.useMutation()
+  const removeCodexApiKeyMutation = trpc.codex.removeCodexApiKey.useMutation()
   const trpcUtils = trpc.useUtils()
   const saveProviderConfigMutation = trpc.claudeProviderConfig.save.useMutation()
   const clearProviderConfigMutation = trpc.claudeProviderConfig.clear.useMutation()
@@ -1150,10 +1154,6 @@ export function AgentsModelsTab() {
   useEffect(() => {
     setOpenaiKey(storedOpenAIKey)
   }, [storedOpenAIKey])
-
-  useEffect(() => {
-    setCodexApiKey(storedCodexApiKey)
-  }, [storedCodexApiKey])
 
   useEffect(() => {
     if (modelsSettingsTarget !== "helper-apis") return
@@ -1295,8 +1295,7 @@ export function AgentsModelsTab() {
     }
   }
 
-  const normalizedStoredCodexApiKey = normalizeCodexApiKey(storedCodexApiKey)
-  const hasAppCodexApiKey = Boolean(normalizedStoredCodexApiKey)
+  const hasAppCodexApiKey = Boolean(codexApiKeyStatus?.hasApiKey)
   const hasLocalCodexSubscription =
     codexOnboardingCompleted && codexOnboardingAuthMethod === "chatgpt"
   const isCodexSubscriptionConnected =
@@ -1332,25 +1331,31 @@ export function AgentsModelsTab() {
   const handleCodexApiKeyBlur = async () => {
     const trimmedKey = codexApiKey.trim()
 
-    if (trimmedKey === storedCodexApiKey) return
     if (!trimmedKey) return
 
     const normalized = normalizeCodexApiKey(trimmedKey)
     if (!normalized) {
       toast.error(t("toast.models.invalidCodexApiKey"))
-      setCodexApiKey(storedCodexApiKey)
+      setCodexApiKey("")
       return
     }
 
     setIsSavingCodexApiKey(true)
     try {
-      setStoredCodexApiKey(normalized)
-      setCodexApiKey(normalized)
+      await saveCodexApiKeyMutation.mutateAsync({ apiKey: normalized })
+      setCodexApiKey("")
+      setCodexOnboardingAuthMethod("api_key")
+      setCodexOnboardingCompleted(true)
       setLastSelectedCodexModelSource("openai-api-key")
+      await trpcUtils.codex.getCodexApiKeyStatus.invalidate()
       await trpcUtils.codex.getIntegration.invalidate()
       toast.success(t("toast.models.codexApiKeySaved"))
-    } catch {
-      toast.error(t("toast.models.failedToSaveCodexApiKey"))
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("toast.models.failedToSaveCodexApiKey"),
+      )
     } finally {
       setIsSavingCodexApiKey(false)
     }
@@ -1359,8 +1364,9 @@ export function AgentsModelsTab() {
   const handleRemoveCodexApiKey = async () => {
     setIsSavingCodexApiKey(true)
     try {
-      setStoredCodexApiKey("")
+      await removeCodexApiKeyMutation.mutateAsync()
       setCodexApiKey("")
+      setCodexOnboardingAuthMethod("chatgpt")
       setLastSelectedCodexModelSource("chatgpt")
 
       if (codexIntegration?.state === "connected_api_key") {
@@ -1369,10 +1375,15 @@ export function AgentsModelsTab() {
         })
       }
 
+      await trpcUtils.codex.getCodexApiKeyStatus.invalidate()
       await trpcUtils.codex.getIntegration.invalidate()
       toast.success(t("toast.models.codexApiKeyRemoved"))
-    } catch {
-      toast.error(t("toast.models.failedToRemoveCodexApiKey"))
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("toast.models.failedToRemoveCodexApiKey"),
+      )
     } finally {
       setIsSavingCodexApiKey(false)
     }
@@ -1673,8 +1684,12 @@ export function AgentsModelsTab() {
                   value={codexApiKey}
                   onChange={(e) => setCodexApiKey(e.target.value)}
                   onBlur={handleCodexApiKeyBlur}
+                  disabled={
+                    isSavingCodexApiKey ||
+                    codexApiKeyStatus?.encryptionAvailable === false
+                  }
                   className="w-full font-mono"
-                  placeholder="sk-..."
+                  placeholder={hasAppCodexApiKey ? t("common.savedToken") : "sk-..."}
                 />
                 {hasAppCodexApiKey && (
                   <Button

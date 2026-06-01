@@ -24,7 +24,7 @@ export interface AuthData {
 /**
  * Storage for desktop authentication tokens
  * Uses Electron's safeStorage API to encrypt sensitive data using OS keychain
- * Falls back to plaintext only if encryption is unavailable (rare edge case)
+ * and refuses new writes when encryption is unavailable.
  */
 export class AuthStore {
   private filePath: string
@@ -53,14 +53,14 @@ export class AuthStore {
       const jsonData = JSON.stringify(data)
       
       const encrypted = encryptStringToBuffer(jsonData)
-      if (encrypted) {
-        // Encrypt using OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
-        writeFileSync(this.filePath, encrypted)
-      } else {
-        // Fallback: store with warning (should rarely happen)
-        console.warn("safeStorage not available - storing auth data without encryption")
-        writeFileSync(this.filePath + ".json", jsonData, "utf-8")
+      if (!encrypted) {
+        throw new Error(
+          "System secure storage is unavailable. Refusing to store desktop auth data unencrypted.",
+        )
       }
+
+      // Encrypt using OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
+      writeFileSync(this.filePath, encrypted)
     } catch (error) {
       console.error("Failed to save auth data:", error)
       throw error
@@ -87,15 +87,20 @@ export class AuthStore {
       // Fallback: try unencrypted file (for migration or when encryption unavailable)
       const fallbackPath = this.filePath + ".json"
       if (existsSync(fallbackPath)) {
+        if (!this.isEncryptionAvailable()) {
+          console.warn(
+            "Plaintext auth fallback exists but secure storage is unavailable; continuing unauthenticated",
+          )
+          return null
+        }
+
         const content = readFileSync(fallbackPath, "utf-8")
         const data = JSON.parse(content)
         
-        // Migrate to encrypted storage if now available
-        if (this.isEncryptionAvailable()) {
-          this.save(data)
-          if (existsSync(this.filePath)) {
-            unlinkSync(fallbackPath) // Remove unencrypted file after migration
-          }
+        // Migrate to encrypted storage if now available.
+        this.save(data)
+        if (existsSync(this.filePath)) {
+          unlinkSync(fallbackPath) // Remove unencrypted file after migration
         }
         
         return data
@@ -104,6 +109,13 @@ export class AuthStore {
       // Legacy: check for old auth.json file and migrate
       const legacyPath = join(dirname(this.filePath), "auth.json")
       if (existsSync(legacyPath)) {
+        if (!this.isEncryptionAvailable()) {
+          console.warn(
+            "Legacy plaintext auth file exists but secure storage is unavailable; continuing unauthenticated",
+          )
+          return null
+        }
+
         const content = readFileSync(legacyPath, "utf-8")
         const data = JSON.parse(content)
         
