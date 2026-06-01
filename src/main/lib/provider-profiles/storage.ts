@@ -277,6 +277,34 @@ export function getLegacyClaudeProviderProfileId(): string | null {
   return getProviderProfileMetadata(LEGACY_CLAUDE_PROFILE_ID)?.id ?? null
 }
 
+export function getProviderProfileTokenRequirement(input: {
+  authMode: ProviderProfileAuthMode
+  protocol: ProviderProfileProtocol
+  baseUrl: string
+  token?: string | null
+  existingEncryptedToken?: string | null
+  existingBaseUrl?: string | null
+  existingProtocol?: string | null
+  existingAuthMode?: string | null
+}): "none" | "missing" | "destination_changed" {
+  const authMode = providerProfileAuthModeSchema.parse(input.authMode)
+  if (authMode === "none") return "none"
+  if (input.token?.trim()) return "none"
+
+  const protocol = providerProfileProtocolSchema.parse(input.protocol)
+  const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
+  const destinationChanged = Boolean(
+    input.existingEncryptedToken &&
+      (input.existingBaseUrl !== baseUrl ||
+        input.existingProtocol !== protocol ||
+        input.existingAuthMode !== authMode),
+  )
+
+  if (destinationChanged) return "destination_changed"
+  if (!input.existingEncryptedToken) return "missing"
+  return "none"
+}
+
 export function saveProviderProfile(input: {
   id?: string
   name: string
@@ -301,11 +329,27 @@ export function saveProviderProfile(input: {
         .get()
     : undefined
   const authMode = providerProfileAuthModeSchema.parse(input.authMode)
+  const protocol = providerProfileProtocolSchema.parse(input.protocol)
+  const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
   const token =
     input.token && input.token.trim() ? normalizeProviderToken(input.token) : undefined
+  const tokenRequirement = getProviderProfileTokenRequirement({
+    authMode,
+    protocol,
+    baseUrl,
+    token,
+    existingEncryptedToken: existing?.encryptedToken,
+    existingBaseUrl: existing?.baseUrl,
+    existingProtocol: existing?.protocol,
+    existingAuthMode: existing?.authMode,
+  })
 
-  if (authMode !== "none" && !token && !existing?.encryptedToken) {
-    throw new Error("Token is required for this provider")
+  if (tokenRequirement !== "none") {
+    throw new Error(
+      tokenRequirement === "destination_changed"
+        ? "Token is required when changing provider endpoint, protocol, or auth mode"
+        : "Token is required for this provider",
+    )
   }
 
   const encryptedToken = token
@@ -318,8 +362,8 @@ export function saveProviderProfile(input: {
     id,
     name: input.name.trim(),
     presetId: input.presetId || null,
-    protocol: providerProfileProtocolSchema.parse(input.protocol),
-    baseUrl: normalizeProviderBaseUrl(input.baseUrl),
+    protocol,
+    baseUrl,
     defaultModel: input.defaultModel.trim(),
     authMode,
     encryptedToken,

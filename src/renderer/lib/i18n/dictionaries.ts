@@ -341,7 +341,7 @@ export const en = {
   "settings.keyboard.actions.openFileInEditor": "Open file in editor",
 
   "settings.models.title": "Models",
-  "settings.models.searchPlaceholder": "Add or search model",
+  "settings.models.searchPlaceholder": "Search built-in models",
   "settings.models.noModelsFound": "No models found",
   "settings.models.anthropicAccounts.title": "Anthropic Accounts",
   "settings.models.anthropicAccounts.description":
@@ -369,9 +369,10 @@ export const en = {
     "Stored in system secure storage and takes priority over subscription",
   "settings.models.openaiApiKey.description":
     "Required for voice transcription (Whisper API)",
-  "settings.models.advancedRouting.title": "Advanced model routing",
+  "settings.models.visibilityToggle": "Show {model} in model selectors",
+  "settings.models.advancedRouting.title": "Provider profiles and helper APIs",
   "settings.models.advancedRouting.description":
-    "Provider Profiles and Helper APIs for custom routing, local endpoints, and helper generation.",
+    "Configure provider profiles for runtime routing and optional helper APIs.",
   "settings.models.helperApis.title": "Helper APIs",
   "settings.models.helperApis.description":
     "Optional OpenAI-compatible providers for lightweight helpers. These are independent from Claude Code OAuth.",
@@ -379,17 +380,27 @@ export const en = {
   "settings.models.providerProfiles.description":
     "Shared provider profiles for Claude Code, Codex, helper APIs, and local endpoints.",
   "settings.models.providerProfiles.preset": "Preset",
+  "settings.models.providerProfiles.presetHint":
+    "Choose a preset to prefill protocol, endpoint, model, auth mode, and runtime targets.",
   "settings.models.providerProfiles.name": "Profile name",
   "settings.models.providerProfiles.targets": "Target runtimes",
   "settings.models.providerProfiles.headers": "Optional headers",
+  "settings.models.providerProfiles.headersHint":
+    "Only safe metadata headers are accepted. Store credentials in the API key field.",
   "settings.models.providerProfiles.create": "Create Provider Profile",
   "settings.models.providerProfiles.editing": "Editing Provider Profile",
   "settings.models.providerProfiles.customPreset": "Custom preset",
   "settings.models.providerProfiles.secretNotice":
     "API keys are stored by the main process and are not exposed to the renderer.",
   "settings.models.providerProfiles.empty": "No Provider Profiles yet.",
+  "settings.models.providerProfiles.emptyHint":
+    "Pick a preset above, enter a token if needed, then save and run diagnostics.",
   "settings.models.providerProfiles.edit": "Edit",
   "settings.models.providerProfiles.test": "Test",
+  "settings.models.providerProfiles.testing": "Testing...",
+  "settings.models.providerProfiles.noToken": "No token",
+  "settings.models.providerProfiles.tokenRefreshRequired":
+    "Re-enter the API key after changing endpoint, protocol, or auth mode.",
   "settings.models.providerProfiles.invalidHeaders":
     "Headers must be a JSON object.",
   "settings.models.providerProfiles.deleteConfirm":
@@ -398,6 +409,32 @@ export const en = {
   "settings.models.providerProfiles.defaultCodex": "Codex default",
   "settings.models.providerProfiles.defaultTitle": "Title helper",
   "settings.models.providerProfiles.defaultCommit": "Commit helper",
+  "settings.models.providerProfiles.targetClaude": "Claude",
+  "settings.models.providerProfiles.targetCodex": "Codex",
+  "settings.models.providerProfiles.targetHelpers": "Helpers",
+  "settings.models.providerProfiles.targetLocal": "Local",
+  "settings.models.providerProfiles.authBearer": "Bearer token",
+  "settings.models.providerProfiles.authXApiKey": "x-api-key",
+  "settings.models.providerProfiles.authNone": "No auth",
+  "settings.models.providerProfiles.regionChina": "China",
+  "settings.models.providerProfiles.regionGlobal": "Global",
+  "settings.models.providerProfiles.regionLocal": "Local",
+  "settings.models.providerProfiles.regionGeneric": "Generic",
+  "settings.models.providerProfiles.statusOk": "OK",
+  "settings.models.providerProfiles.statusFailed": "Failed",
+  "settings.models.providerProfiles.statusUnsupported": "Unsupported",
+  "settings.models.providerProfiles.statusSkipped": "Skipped",
+  "settings.models.providerProfiles.statusUntested": "Untested",
+  "settings.models.providerProfiles.checkedAt": "Checked",
+  "settings.models.providerProfiles.diagnostic.endpoint": "Endpoint",
+  "settings.models.providerProfiles.diagnostic.auth": "Auth",
+  "settings.models.providerProfiles.diagnostic.model": "Model",
+  "settings.models.providerProfiles.diagnostic.protocol": "Protocol",
+  "settings.models.providerProfiles.diagnostic.streaming": "Streaming",
+  "settings.models.providerProfiles.diagnostic.tools": "Tools",
+  "settings.models.providerProfiles.diagnostic.vision": "Vision",
+  "settings.models.providerProfiles.diagnostic.gateway": "Gateway",
+  "settings.models.providerProfiles.diagnostic.runtime": "Runtime target",
   "settings.models.subChatTitle.title": "Sub-chat Title API",
   "settings.models.subChatTitle.description":
     "Optional OpenAI-compatible API for naming sub-chats. Ollama is tried first.",
@@ -2859,7 +2896,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.keyboard.actions.openFileInEditor": "在编辑器中打开文件",
 
   "settings.models.title": "模型",
-  "settings.models.searchPlaceholder": "添加或搜索模型",
+  "settings.models.searchPlaceholder": "筛选内置模型",
   "settings.models.noModelsFound": "没有找到模型",
   "settings.models.anthropicAccounts.title": "Anthropic 账号",
   "settings.models.anthropicAccounts.description": "管理本地 Claude Code 凭证",
@@ -2885,9 +2922,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "保存在系统安全存储中，优先级高于订阅",
   "settings.models.openaiApiKey.description":
     "语音转写需要使用（Whisper API）",
-  "settings.models.advancedRouting.title": "高级模型路由",
+  "settings.models.visibilityToggle": "在模型选择器中显示 {model}",
+  "settings.models.advancedRouting.title": "提供方配置与辅助 API",
   "settings.models.advancedRouting.description":
-    "提供方配置和辅助 API 用于自定义路由、本地端点和轻量辅助生成。",
+    "配置运行时路由使用的提供方配置，以及可选的轻量辅助 API。",
   "settings.models.helperApis.title": "辅助 API",
   "settings.models.helperApis.description":
     "可选的兼容 OpenAI 的提供方，用于轻量辅助生成；它们独立于 Claude Code OAuth。",
@@ -2895,17 +2933,27 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.providerProfiles.description":
     "给 Claude Code、Codex、辅助 API 和本地端点复用的提供方配置。",
   "settings.models.providerProfiles.preset": "预设",
+  "settings.models.providerProfiles.presetHint":
+    "选择预设会填入协议、端点、模型、认证方式和目标运行时。",
   "settings.models.providerProfiles.name": "配置名称",
   "settings.models.providerProfiles.targets": "目标运行时",
   "settings.models.providerProfiles.headers": "可选请求头",
+  "settings.models.providerProfiles.headersHint":
+    "只接受安全的元数据请求头。凭证请放在 API 密钥字段。",
   "settings.models.providerProfiles.create": "创建提供方配置",
   "settings.models.providerProfiles.editing": "正在编辑提供方配置",
   "settings.models.providerProfiles.customPreset": "自定义预设",
   "settings.models.providerProfiles.secretNotice":
     "API 密钥只由主进程保存，不会暴露给渲染进程。",
   "settings.models.providerProfiles.empty": "还没有提供方配置。",
+  "settings.models.providerProfiles.emptyHint":
+    "先选择上方预设，需要时输入密钥，然后保存并运行诊断。",
   "settings.models.providerProfiles.edit": "编辑",
   "settings.models.providerProfiles.test": "测试",
+  "settings.models.providerProfiles.testing": "测试中...",
+  "settings.models.providerProfiles.noToken": "没有密钥",
+  "settings.models.providerProfiles.tokenRefreshRequired":
+    "修改端点、协议或认证方式后，请重新输入 API 密钥。",
   "settings.models.providerProfiles.invalidHeaders":
     "请求头必须是 JSON 对象。",
   "settings.models.providerProfiles.deleteConfirm":
@@ -2914,6 +2962,32 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.providerProfiles.defaultCodex": "Codex 默认",
   "settings.models.providerProfiles.defaultTitle": "标题辅助",
   "settings.models.providerProfiles.defaultCommit": "提交信息辅助",
+  "settings.models.providerProfiles.targetClaude": "Claude",
+  "settings.models.providerProfiles.targetCodex": "Codex",
+  "settings.models.providerProfiles.targetHelpers": "辅助",
+  "settings.models.providerProfiles.targetLocal": "本地",
+  "settings.models.providerProfiles.authBearer": "Bearer 令牌",
+  "settings.models.providerProfiles.authXApiKey": "x-api-key",
+  "settings.models.providerProfiles.authNone": "无认证",
+  "settings.models.providerProfiles.regionChina": "国内",
+  "settings.models.providerProfiles.regionGlobal": "全球",
+  "settings.models.providerProfiles.regionLocal": "本地",
+  "settings.models.providerProfiles.regionGeneric": "通用",
+  "settings.models.providerProfiles.statusOk": "正常",
+  "settings.models.providerProfiles.statusFailed": "失败",
+  "settings.models.providerProfiles.statusUnsupported": "不支持",
+  "settings.models.providerProfiles.statusSkipped": "已跳过",
+  "settings.models.providerProfiles.statusUntested": "未测试",
+  "settings.models.providerProfiles.checkedAt": "检查时间",
+  "settings.models.providerProfiles.diagnostic.endpoint": "端点",
+  "settings.models.providerProfiles.diagnostic.auth": "认证",
+  "settings.models.providerProfiles.diagnostic.model": "模型",
+  "settings.models.providerProfiles.diagnostic.protocol": "协议",
+  "settings.models.providerProfiles.diagnostic.streaming": "流式",
+  "settings.models.providerProfiles.diagnostic.tools": "工具",
+  "settings.models.providerProfiles.diagnostic.vision": "视觉",
+  "settings.models.providerProfiles.diagnostic.gateway": "网关",
+  "settings.models.providerProfiles.diagnostic.runtime": "运行时目标",
   "settings.models.subChatTitle.title": "子对话标题 API",
   "settings.models.subChatTitle.description":
     "可选的兼容 OpenAI 的 API，用于给子对话命名。会优先尝试 Ollama。",
