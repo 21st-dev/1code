@@ -3,7 +3,8 @@
 ## 1. Proposal and Scope
 - [x] 1.1 Create the OpenSpec proposal, design, and multiple capability deltas for headless agent jobs.
 - [x] 1.2 Validate the OpenSpec change strictly.
-- [ ] 1.3 Commit the proposal as its own planning slice.
+- [x] 1.3 Clarify phase 0 boundaries for macOS/Windows CLI, GUI single-instance separation, cross-process cancellation, worker heartbeat/interruption, SQLite concurrency, stdout/stderr, and job/chat linking.
+- [x] 1.4 Commit the proposal as its own planning slice.
 
 ## 2. Runtime Core Extraction
 - [ ] 2.1 Add `src/main/lib/agent-runtime/contract.ts` with `AgentRuntime`, run request/result/session types, and observer/cancellation contracts; consume runtime IDs and capability manifests from `add-agent-runtime-capability-model`.
@@ -17,19 +18,22 @@
 ## 3. Durable Job Store
 - [ ] 3.1 Add Drizzle schema and migration for `agent_jobs`.
 - [ ] 3.2 Add Drizzle schema and migration for `agent_job_events`.
-- [ ] 3.3 Implement job creation, status transitions, event append, event pagination, and interrupted-job cleanup.
-- [ ] 3.4 Add tests for status transitions and append-only event ordering.
-- [ ] 3.5 Ensure provider secrets are never stored in job rows or event payloads.
+- [ ] 3.3 Add worker lease fields for worker ID, worker PID, heartbeat, cancel requests, and stale-worker interruption.
+- [ ] 3.4 Implement job creation, status transitions, event append, event pagination, cancellation request, heartbeat, retry, and interrupted-job cleanup.
+- [ ] 3.5 Add tests for status transitions, append-only event ordering, cross-process cancel semantics, heartbeat interruption, and retry linkage.
+- [ ] 3.6 Ensure provider secrets are never stored in job rows or event payloads.
 
 ## 4. One-Shot CLI Runner
-- [ ] 4.1 Upgrade `resources/cli/locus` to support `open`, `run`, and `jobs` command dispatch on macOS/Linux.
-- [ ] 4.2 Upgrade `resources/cli/locus.cmd` with equivalent Windows command dispatch or a documented first-slice limitation.
+- [ ] 4.1 Upgrade `resources/cli/locus` to support `open`, `run`, and `jobs` command dispatch on macOS without using `open -a` for headless commands.
+- [ ] 4.2 Upgrade `resources/cli/locus.cmd` with equivalent synchronous Windows command dispatch without detached `start` for headless commands.
 - [ ] 4.3 Add headless CLI argument handling in the Electron main process before BrowserWindow creation.
 - [ ] 4.4 Implement `locus run` by launching the Electron main process in headless CLI mode, not by duplicating runtime logic in a standalone Node script.
-- [ ] 4.5 Support `--cwd`, `--runtime`, `--mode`, `--prompt`, stdin, and output format options.
-- [ ] 4.6 Support `text`, `json`, and `stream-json` output formats with documented exit codes.
-- [ ] 4.7 Persist one-shot runs as local jobs linked to project/chat/sub-chat where possible.
-- [ ] 4.8 Add CLI parsing tests and local smoke commands.
+- [ ] 4.5 Ensure headless CLI mode bypasses GUI single-instance focus/window behavior while preserving normal GUI single-instance behavior for `locus open`.
+- [ ] 4.6 Support `--cwd`, `--runtime`, `--mode`, `--prompt`, stdin, and output format options.
+- [ ] 4.7 Support `text`, `json`, and `stream-json` output formats with documented exit codes.
+- [ ] 4.8 Keep stdout JSON-only in structured modes and route diagnostics to stderr.
+- [ ] 4.9 Persist one-shot runs as local jobs linked to project/chat/sub-chat where cheap and unambiguous, without requiring chat/sub-chat creation.
+- [ ] 4.10 Add CLI parsing tests and local smoke commands for macOS and Windows shims.
 
 ## 5. Job Management CLI
 - [ ] 5.1 Implement `locus jobs list` with text and JSON output.
@@ -47,8 +51,9 @@
 - [ ] 6.5 Reuse existing GitHub confirmation and diff/review surfaces instead of adding parallel write paths.
 - [ ] 6.6 Gate runtime-specific UI controls from the `AgentRuntime` capability manifest instead of provider-name checks where capability behavior matters.
 - [ ] 6.7 Show degraded/unsupported runtime capabilities clearly and link Codex parity gaps to the separate `upgrade-codex-runtime-parity` change instead of hiding them behind provider-specific branches.
-- [ ] 6.8 Run a real desktop smoke where a CLI-created job appears in the app.
-- [ ] 6.9 Run real desktop chat smoke verifying supported runtime behavior still works and unsupported/degraded runtime capabilities are visible instead of falsely enabled.
+- [ ] 6.8 Keep ordinary desktop chat streaming on the existing chat/sub-chat path until a later explicit migration phase.
+- [ ] 6.9 Run a real desktop smoke where a CLI-created job appears in the app.
+- [ ] 6.10 Run real desktop chat smoke verifying supported runtime behavior still works and unsupported/degraded runtime capabilities are visible instead of falsely enabled.
 
 ## 7. Verification
 - [ ] 7.1 Run `openspec validate add-headless-agent-jobs --strict --no-interactive`.

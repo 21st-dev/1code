@@ -9,6 +9,12 @@ The system SHALL define an explicit `AgentRuntime` contract implemented by every
 - **AND** the registry rejects duplicate runtime IDs
 - **AND** the renderer receives only non-secret runtime metadata and capability summaries
 
+#### Scenario: Runtime-specific behavior is not forced into the contract
+- **WHEN** a runtime lacks rollback, fork, workflows, plugins, runtime commands, or runtime-specific session operations
+- **THEN** the `AgentRuntime` contract still allows the runtime to register for basic runs
+- **AND** unsupported behavior remains behind capability gates
+- **AND** callers do not require provider-specific features to satisfy the shared job contract
+
 #### Scenario: Caller requests runtime capabilities
 - **WHEN** a desktop, CLI, or main-process caller requests available runtime capabilities
 - **THEN** the system returns the shared capability states for each registered runtime
@@ -38,6 +44,12 @@ The system SHALL model runtime behavior through capabilities rather than hard-co
 - **WHEN** a CLI caller requests a mode or option that depends on a runtime capability
 - **THEN** the CLI validates the option against the selected runtime capability state before starting the run
 - **AND** returns a normalized unsupported-capability error if the runtime cannot provide the requested behavior
+
+#### Scenario: Capability is unsupported before job start
+- **WHEN** a CLI or desktop job request includes options that require unsupported runtime behavior
+- **THEN** the runner rejects the request before provider work starts
+- **AND** no job is marked `running`
+- **AND** any created job is marked `failed` with an unsupported-capability error or the request is rejected before job creation
 
 ### Requirement: Capability Honesty
 The runtime core SHALL distinguish supported behavior from degraded or unsupported behavior.
@@ -121,6 +133,12 @@ The system SHALL support cancellation through a shared abort mechanism across su
 - **THEN** the runner signals the runtime adapter to stop work
 - **AND** emits a canceled terminal event
 - **AND** releases runtime resources associated with the run
+
+#### Scenario: Cancellation is requested from another process
+- **WHEN** a different local process requests cancellation for an active job
+- **THEN** the active runner observes the persisted cancel request
+- **AND** aborts the runtime through the shared abort mechanism when possible
+- **AND** emits a canceled terminal event only after the runtime stop path completes
 
 #### Scenario: Caller cancels completed run
 - **WHEN** a caller cancels a run that already reached a terminal status

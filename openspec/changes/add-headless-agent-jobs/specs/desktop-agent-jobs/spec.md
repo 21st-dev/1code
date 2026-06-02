@@ -14,6 +14,12 @@ The desktop app SHALL show active and recent local agent jobs in the agents/work
 - **THEN** the desktop job overview includes that job after refresh or subscription reconnect
 - **AND** the user can inspect its event history from the desktop app
 
+#### Scenario: Ordinary desktop chat is not migrated yet
+- **WHEN** the first headless job implementation is complete
+- **THEN** ordinary desktop chat streaming may continue to use the existing chat and sub-chat persistence model
+- **AND** the job overview distinguishes CLI/headless jobs from ordinary chat history
+- **AND** desktop chat migration to `source=desktop` jobs requires a later explicit implementation phase
+
 ### Requirement: Desktop Job Detail and Logs
 The desktop app SHALL provide a job detail view that replays persisted job events and follows live updates when available.
 
@@ -38,7 +44,7 @@ The desktop app SHALL expose safe local actions for jobs while reusing existing 
 #### Scenario: User cancels running job
 - **WHEN** the user cancels a running job from the desktop app
 - **THEN** the app calls the same job cancellation path used by the CLI
-- **AND** the UI reflects cancellation progress and final status
+- **AND** the UI reflects cancellation as requested until the worker confirms `canceled` or recovery marks `interrupted`
 
 #### Scenario: User retries failed job
 - **WHEN** the user retries a failed, canceled, or interrupted job from the desktop app

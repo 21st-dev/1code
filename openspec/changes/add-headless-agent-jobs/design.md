@@ -10,6 +10,17 @@ This change implements Phase 1 and Phase 2 only:
 
 Daemon, schedules, and `locus acp` remain future follow-up proposals. This OpenSpec may describe their compatibility boundaries, but they are not required to complete or archive this change.
 
+The first implementation must support both macOS and Windows. If a platform
+cannot pass the same `locus run` / `locus jobs` smoke contract, the change is
+not complete. Linux support may follow the macOS shell-shim pattern where the
+packaging target exists, but the required first-slice platforms are macOS and
+Windows.
+
+The first implementation must not migrate ordinary desktop chat streaming into
+`agent_jobs`. CLI/headless jobs are the first persisted job source. Desktop chat
+may read and show headless jobs, and may later become `source=desktop` in a
+separate migration phase after the first headless smoke evidence is stable.
+
 ## Reference Integration Strategy
 The reference projects influence separate layers:
 
@@ -59,6 +70,19 @@ Add `src/main/lib/agent-runtime/` with:
 - `events.ts`: normalized event helpers and serialization.
 
 The first implementation should extract narrow seams from the existing routers instead of moving all router code at once. The routers may remain as callers while the core stabilizes.
+
+The shared contract is intentionally small. It unifies job management, not
+runtime behavior. The required cross-runtime surface is:
+- runtime ID and capability manifest
+- `run(request, observer, abortSignal)`
+- normalized events and result status
+- best-effort cancellation through the shared abort signal
+
+The shared contract must not require every runtime to implement rollback, fork,
+dynamic workflows, runtime plugins, runtime commands, full MCP configuration,
+or runtime-specific session semantics. Those behaviors remain capability-gated
+and runtime-specific until a runtime reports `supported` with implementation
+evidence.
 
 The contract must be capability-first, not provider-name-first. A runtime driver describes what it can actually enforce:
 
@@ -121,6 +145,12 @@ Suggested job fields:
 - `error_code`
 - `error_message`
 - `created_by_version`
+- `worker_id`
+- `worker_pid`
+- `worker_started_at`
+- `heartbeat_at`
+- `cancel_requested_at`
+- `cancel_requested_by`
 
 Suggested event fields:
 - `id`
@@ -145,6 +175,29 @@ Suggested event types:
 
 Each event payload should include only sanitized runtime data. File paths should be absolute in persisted payloads when practical, while renderers may derive project-relative labels. Provider tokens, OAuth credentials, API keys, and raw request headers must not be stored in event payloads.
 
+SQLite is shared by the GUI process and headless CLI processes in this slice.
+The job store must use WAL, a non-zero busy timeout, short write
+transactions, and append-only event writes. Event sequence numbers must be
+monotonic per job and protected by a unique `(job_id, sequence)` constraint or
+an equivalent transaction-safe allocator.
+
+Cancellation is a persisted request before it is a terminal status:
+- `cancel_requested_at` means a user or caller has asked the worker to stop.
+- `canceled` means the active worker observed the request and stopped the runtime.
+- `interrupted` means the worker disappeared, the process exited unexpectedly,
+  or a running job lost its heartbeat.
+- `failed` means the runtime or job runner reached a normal error path.
+
+The job runner must heartbeat active jobs and mark stale `running` jobs as
+`interrupted` during startup or explicit recovery. This worker lease shape is
+required before a daemon is introduced so daemon work can reuse it instead of
+inventing a second recovery model.
+
+CLI-created jobs may link to an existing project, chat, or sub-chat when the
+mapping is cheap and unambiguous, but the first slice must not require CLI jobs
+to create or mutate chat/sub-chat records. The durable job record is the source
+of truth for headless history.
+
 ### Layer 3: CLI Front Door
 Upgrade `resources/cli/locus` and Windows equivalent into a command dispatcher:
 - `locus open [dir]`: current launcher behavior.
@@ -162,8 +215,30 @@ For development, an equivalent script may launch Electron with the same headless
 
 The first slice runs directly in one-shot headless Electron mode without daemon handoff. Daemon enqueue becomes a later phase after job persistence is proven.
 
+Headless CLI mode must be detected before normal GUI single-instance behavior,
+menu construction, BrowserWindow creation, updater startup, auth callback
+server startup, and GUI-only MCP warmup. GUI launches keep the existing
+single-instance behavior. Headless launches must not focus or create a GUI
+window merely because another GUI instance is already running.
+
+On macOS, `locus run` and `locus jobs` must not use `open -a` because that
+route can detach from the terminal and/or forward arguments to an existing GUI
+instance. The shim should resolve and execute the packaged app binary directly
+with a private headless marker argument, preserving stdout, stderr, stdin, and
+exit code.
+
+On Windows, `locus run` and `locus jobs` must not use `start` because it
+detaches from the calling terminal. The `.cmd` shim must synchronously invoke
+the packaged executable with the same private headless marker argument and
+return the process exit code to the caller.
+
 ### CLI Output and Exit Codes
 `text` output may render human-readable assistant and tool progress. `json` output returns a single final object with `job`, `status`, `result`, and `error` fields. `stream-json` writes one newline-delimited JSON object per job event and a final result object. In JSON modes, stdout is reserved for structured payloads and diagnostics go to stderr.
+
+In `json` and `stream-json` modes, stdout must contain only the declared JSON
+payloads. App diagnostics, migration logs, provider setup messages, warning
+text, and smoke/debug output must be routed to stderr or suppressed. This is a
+scriptability requirement, not a presentation preference.
 
 Exit codes:
 - `0`: job succeeded
@@ -210,15 +285,41 @@ Decision: `locus run` uses the Electron main process in a headless CLI mode inst
 
 Why: this repo's database path, encrypted credential access, packaged binaries, local-only guard behavior, and runtime setup live in the main process. A Node-only CLI would either duplicate that behavior or drift from the desktop app.
 
+### Headless Mode Before GUI Single-Instance
+Decision: headless CLI mode is parsed before the GUI single-instance lock and
+window lifecycle.
+
+Why: `locus run` is a terminal command with stdout, stderr, stdin, and exit-code
+semantics. Treating it as a second GUI launch would either quit under the
+existing single-instance guard or focus the desktop app instead of running the
+requested job.
+
 ### SQLite as Source of Truth
 Decision: persist jobs and events in the existing app SQLite database.
 
 Why: Locus already uses local SQLite for projects, chats, sub-chats, provider config, and app agents. A second storage path would split local truth and make desktop/CLI consistency harder.
 
+### Worker Lease Before Daemon
+Decision: add worker identity, process ID, heartbeat, cancel request, and stale
+worker interruption semantics in the first job-store implementation.
+
+Why: GUI and headless CLI processes can already overlap before a daemon exists.
+Adding daemon later without a persisted worker lease would force a second
+recovery model and make cancellation ambiguous.
+
 ### Runtime Core Before CLI Behavior
 Decision: extract a small runner core before making `resources/cli/locus` directly execute agent work.
 
 Why: CLI should not duplicate Claude/Codex runtime logic or bypass settings, local-only guard behavior, provider profiles, MCP setup, or cancellation semantics.
+
+### Job Platform, Not Runtime Merger
+Decision: Locus unifies job creation, status, event persistence, cancellation
+requests, retries, and visibility. It does not merge Claude Code and Codex into
+one runtime behavior model.
+
+Why: Claude and Codex have different CLI/SDK/ACP primitives. The adapter layer
+normalizes only the job-facing contract and leaves runtime-specific behavior
+behind capability gates.
 
 ### Capability-Driven UI Before Provider Branching
 Decision: desktop and CLI controls should consume registered runtime capabilities instead of branching directly on `provider === "claude-code"` or `provider === "codex"` for feature availability.
@@ -251,6 +352,10 @@ Why: Locus is already a local desktop app with local git/worktree and terminal b
   - Mitigation: append events to SQLite before notifying observers; desktop subscriptions can reconnect from the last sequence.
 - CLI can accidentally expose secrets through shell history.
   - Mitigation: forbid provider tokens in CLI flags; use existing encrypted provider/profile storage and environment-backed runtime behavior only where already supported.
+- GUI and headless processes can contend for SQLite writes.
+  - Mitigation: use WAL, busy timeout, short write transactions, and per-job event sequence constraints.
+- Detached platform shims can break structured output.
+  - Mitigation: macOS and Windows shims must synchronously execute the packaged binary for headless commands and preserve stdout, stderr, stdin, and exit codes.
 - Daemon startup can introduce lifecycle bugs.
   - Mitigation: keep one-shot direct execution as Phase 1; add daemon only after durable jobs and CLI smoke pass.
 - Job events can grow without bound.
@@ -264,3 +369,13 @@ Why: Locus is already a local desktop app with local git/worktree and terminal b
 - Phase 3 is complete when a local daemon can enqueue and run jobs without a renderer window while preserving crash/interrupted states.
 - Phase 4 is complete when schedules can create visible local jobs with clear pause/delete controls.
 - Phase 5 is complete when `locus acp` can serve a minimal ACP-compatible stdio session backed by the same runner core.
+
+For this implementation pass, "complete the first four steps" means:
+- Phase 0 planning boundary is updated and validated.
+- Job database/state-machine foundation is implemented and tested.
+- macOS and Windows CLI/headless startup paths are implemented and tested.
+- Claude and Codex basic headless runs use the shared job platform.
+- Desktop job visibility/actions are implemented for CLI/headless jobs.
+
+It does not mean daemon, schedule, ACP server, or ordinary desktop chat
+migration are complete.

@@ -18,6 +18,26 @@ The system SHALL persist agent work as local jobs with append-only event history
 - **THEN** the system records a terminal status, finish timestamp, and normalized exit/error metadata
 - **AND** the job no longer accepts non-diagnostic runtime events
 
+#### Scenario: Worker heartbeat is lost
+- **WHEN** the app starts, the CLI starts, or recovery runs
+- **AND** a job is marked `running` without a recent worker heartbeat
+- **THEN** the system marks the job `interrupted`
+- **AND** preserves the existing event history
+- **AND** exposes retry only through the normal retry path
+
+#### Scenario: User requests cancellation
+- **WHEN** a desktop or CLI caller cancels a running job
+- **THEN** the system records a persisted cancel request before changing terminal status
+- **AND** the active worker observes the cancel request and stops the runtime when possible
+- **AND** the job becomes `canceled` only after the worker confirms cancellation
+- **AND** a worker that disappears before confirming cancellation leaves the job `interrupted`, not `canceled`
+
+#### Scenario: Multiple local processes write job state
+- **WHEN** the GUI process and one or more headless CLI processes access local job state
+- **THEN** writes use the existing app SQLite database with WAL, a busy timeout, and short transactions
+- **AND** event sequence numbers are monotonic per job
+- **AND** duplicate sequence numbers for one job are rejected or retried safely
+
 ### Requirement: One-Shot Headless Run
 The system SHALL provide a one-shot headless run command for local agent work without requiring a visible desktop window.
 
@@ -42,6 +62,36 @@ The system SHALL provide a one-shot headless run command for local agent work wi
 - **WHEN** the packaged CLI cannot launch or connect to the Locus Electron main process in headless CLI mode
 - **THEN** the command exits with a local process failure code
 - **AND** prints a diagnostic to stderr without writing partial structured output to stdout
+
+#### Scenario: macOS headless command starts
+- **WHEN** the user runs `locus run` or `locus jobs` on macOS
+- **THEN** the CLI shim synchronously executes the packaged Locus binary with a private headless marker
+- **AND** preserves stdin, stdout, stderr, and the process exit code
+- **AND** does not use `open -a` for the headless command
+
+#### Scenario: Windows headless command starts
+- **WHEN** the user runs `locus run` or `locus jobs` on Windows
+- **THEN** the CLI shim synchronously executes the packaged Locus executable with a private headless marker
+- **AND** preserves stdin, stdout, stderr, and the process exit code
+- **AND** does not use a detached `start` invocation for the headless command
+
+#### Scenario: Headless command runs while GUI is open
+- **WHEN** the desktop app is already running
+- **AND** the user starts a headless CLI command
+- **THEN** the headless process handles the command without creating or focusing a BrowserWindow
+- **AND** the command is not rejected merely because the GUI single-instance lock is held
+- **AND** shared job visibility and cancellation are coordinated through the durable job store
+
+#### Scenario: Structured output is requested
+- **WHEN** the user selects `json` or `stream-json` output
+- **THEN** stdout contains only documented JSON payloads
+- **AND** diagnostics, migration messages, runtime setup logs, and warnings are written to stderr or suppressed
+
+#### Scenario: CLI job has no chat link
+- **WHEN** a CLI job is created for a cwd that does not map cleanly to an existing chat or sub-chat
+- **THEN** the job is still created and runnable
+- **AND** linked chat fields remain empty
+- **AND** job history is read from `agent_jobs` and `agent_job_events`
 
 ### Requirement: Job Management CLI
 The system SHALL provide CLI commands for inspecting and managing local jobs.
