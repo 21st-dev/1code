@@ -1,44 +1,51 @@
 # app-update-check Specification
 
 ## Purpose
-Define the manual GitHub Releases update check for Locus without enabling automatic hosted update feeds.
+Define packaged-app update checks for Locus through this fork's GitHub Releases feed while preserving user control over download and installation.
+
 ## Requirements
-### Requirement: Manual GitHub Release Check
-The system SHALL provide a manual update check for Locus releases without automatic download or installation.
+### Requirement: Automatic GitHub Release Check
+The system SHALL provide packaged-app update checks for Locus releases through this fork's GitHub Releases feed while preserving user control over download and installation.
 
-#### Scenario: User checks for updates
-- **WHEN** the user clicks "Check for updates" from Settings > About
-- **THEN** the app requests the fork-owned GitHub Releases latest endpoint
-- **AND** compares the latest release tag with the installed app version
-- **AND** displays whether a newer version is available
+#### Scenario: Packaged app starts on a supported install target
+- **WHEN** Locus starts as a packaged macOS app or Windows NSIS install
+- **AND** automatic checks are enabled
+- **THEN** the app checks this fork's GitHub Releases update feed after startup
+- **AND** it compares the available release version with the installed app version
+- **AND** it displays update status in Settings > About
 
-#### Scenario: User opens release page
-- **WHEN** an update check result includes a GitHub Release URL
-- **THEN** the user can open that release page in the system browser
-- **AND** any download or installation remains manual outside the app
+#### Scenario: User checks for updates manually
+- **WHEN** the user clicks "Check now" from Settings > About
+- **THEN** the app requests this fork's GitHub Releases update feed
+- **AND** it displays whether a newer version is available
 
-#### Scenario: No release has been published
-- **WHEN** the fork-owned GitHub Releases latest endpoint reports no latest release
-- **THEN** the app displays that no GitHub Release has been published yet
-- **AND** the app links to the repository releases page without treating the result as an updater failure
+#### Scenario: Unsupported update target
+- **WHEN** Locus runs in development, Linux, or Windows portable mode
+- **THEN** automatic update installation is disabled
+- **AND** Settings > About keeps a GitHub Releases link for manual download
 
-### Requirement: No Automatic Update Installation
-The system SHALL NOT auto-download, auto-install, or silently apply app updates as part of the manual release check.
+### Requirement: User-Controlled Update Installation
+The system SHALL NOT silently download, install, or restart for app updates.
 
-#### Scenario: App starts
-- **WHEN** Locus starts
-- **THEN** it does not automatically check GitHub Releases for app updates
-- **AND** it does not initialize `electron-updater` or a hosted updater feed
+#### Scenario: Update is available
+- **WHEN** the updater finds a newer release
+- **THEN** the app shows an update-available state
+- **AND** it waits for the user to click "Download update"
 
-#### Scenario: Manual check completes
-- **WHEN** the manual check finds a newer release
-- **THEN** the app shows a notification or settings result
-- **AND** it does not download release assets automatically
+#### Scenario: Download completes
+- **WHEN** the user-triggered update download completes
+- **THEN** the app shows a restart-to-install action
+- **AND** it waits for the user to click "Restart to install"
+
+#### Scenario: User disables automatic checks
+- **WHEN** the user disables automatic update checks in Settings > About
+- **THEN** startup and focus-triggered checks stop
+- **AND** manual "Check now" remains available on supported install targets
 
 ### Requirement: Minimal Update Check Data
 The system SHALL avoid sending local project, chat, file, provider, or credential information during update checks.
 
-#### Scenario: Release endpoint request runs
-- **WHEN** the manual update check requests the GitHub Releases latest endpoint
-- **THEN** the request includes only normal HTTP metadata needed to fetch the public release record
+#### Scenario: Update feed request runs
+- **WHEN** an automatic or manual update check requests this fork's GitHub Releases update feed
+- **THEN** the request includes only normal updater metadata needed to fetch public release records and artifacts
 - **AND** it does not include local project paths, chat content, provider keys, or user credentials

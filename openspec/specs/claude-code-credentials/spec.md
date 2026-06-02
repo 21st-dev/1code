@@ -2,7 +2,6 @@
 
 ## Purpose
 Define the local Claude Code credential import, login, refresh, and runtime invocation behavior for Locus so Claude Code subscription usage works without hosted 21st authentication in local-only mode.
-
 ## Requirements
 ### Requirement: Local Claude Code Credential Import
 The system SHALL allow users to import existing Claude Code credentials from local system credential stores or Claude credential files without using hosted 21st authentication.
@@ -91,16 +90,24 @@ The system SHALL keep Claude Code local credential import and runtime separate f
 - **AND** local credential import remains available as an alternative
 
 ### Requirement: Claude Code Runtime Invocation
-The system SHALL invoke Claude Code using the active valid local Claude Code credential unless a custom Claude-compatible provider configuration is active.
+The system SHALL invoke Claude Code using the explicitly selected Claude source for the run.
 
-#### Scenario: Claude Code subscription credential is active
+#### Scenario: Claude Code OAuth is selected
 - **WHEN** a user sends a Claude Code agent message
-- **AND** no custom Claude-compatible provider configuration is active
+- **AND** the selected Claude source is `claude-oauth`
 - **AND** a valid local Claude Code credential exists
 - **THEN** the main process passes the valid access token to the Claude Code runtime environment
+- **AND** saved provider profiles or legacy custom provider configuration do not override the OAuth run
 - **AND** the renderer does not pass a raw credential in the chat request
 
-#### Scenario: Custom provider configuration is active
-- **WHEN** a custom Claude-compatible provider configuration is active
-- **THEN** the custom provider configuration takes precedence according to the existing provider-config behavior
-- **AND** local Claude Code subscription credentials are not injected into that custom provider run
+#### Scenario: Provider profile is selected
+- **WHEN** a user sends a Claude Code agent message
+- **AND** the selected Claude source is a provider profile
+- **THEN** the main process routes the run through the local provider gateway
+- **AND** local Claude Code subscription credentials are not injected into that provider-profile run
+
+#### Scenario: Legacy custom provider source is selected
+- **WHEN** a legacy `custom-provider` source is selected
+- **AND** a migrated legacy provider profile exists
+- **THEN** the app resolves the run to that provider profile
+- **AND** does not treat the mere existence of that profile as the default for unrelated Claude OAuth runs
