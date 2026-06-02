@@ -16,12 +16,12 @@
 - [ ] 2.7 Keep existing `claude` and `codex` tRPC subscriptions working while migrated behavior routes through the new core where practical.
 
 ## 3. Durable Job Store
-- [ ] 3.1 Add Drizzle schema and migration for `agent_jobs`.
-- [ ] 3.2 Add Drizzle schema and migration for `agent_job_events`.
-- [ ] 3.3 Add worker lease fields for worker ID, worker PID, heartbeat, cancel requests, and stale-worker interruption.
-- [ ] 3.4 Implement job creation, status transitions, event append, event pagination, cancellation request, heartbeat, retry, and interrupted-job cleanup.
-- [ ] 3.5 Add tests for status transitions, append-only event ordering, cross-process cancel semantics, heartbeat interruption, and retry linkage.
-- [ ] 3.6 Ensure provider secrets are never stored in job rows or event payloads.
+- [x] 3.1 Add Drizzle schema and migration for `agent_jobs`.
+- [x] 3.2 Add Drizzle schema and migration for `agent_job_events`.
+- [x] 3.3 Add worker lease fields for worker ID, worker PID, heartbeat, cancel requests, and stale-worker interruption.
+- [x] 3.4 Implement job creation, status transitions, event append, event pagination, cancellation request, heartbeat, retry, and interrupted-job cleanup.
+- [x] 3.5 Add tests for status transitions, append-only event ordering, cross-process cancel semantics, heartbeat interruption, and retry linkage.
+- [x] 3.6 Ensure provider secrets are never stored in job rows or event payloads.
 
 ## 4. One-Shot CLI Runner
 - [ ] 4.1 Upgrade `resources/cli/locus` to support `open`, `run`, and `jobs` command dispatch on macOS without using `open -a` for headless commands.

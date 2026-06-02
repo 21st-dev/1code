@@ -1,0 +1,499 @@
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm"
+import { drizzle } from "drizzle-orm/better-sqlite3"
+import type * as schema from "../db/schema"
+import {
+  agentJobEvents,
+  agentJobs,
+  type AgentJob,
+  type AgentJobEvent,
+} from "../db/schema"
+import { createId } from "../db/utils"
+import {
+  AGENT_JOB_EVENT_TYPES,
+  AGENT_JOB_MODES,
+  AGENT_JOB_SOURCES,
+  AGENT_JOB_STATUSES,
+  isTerminalAgentJobStatus,
+  type AgentJobEventType,
+  type AgentJobMode,
+  type AgentJobRuntime,
+  type AgentJobSource,
+  type AgentJobStatus,
+} from "../../../shared/agent-jobs"
+import { AGENT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
+
+export type AgentJobDatabase = ReturnType<typeof drizzle<typeof schema>>
+
+export type CreateAgentJobInput = {
+  source: AgentJobSource
+  runtime: AgentJobRuntime
+  mode: AgentJobMode
+  cwd: string
+  prompt: string
+  projectId?: string | null
+  chatId?: string | null
+  subChatId?: string | null
+  createdByVersion?: string | null
+}
+
+export type StartAgentJobInput = {
+  jobId: string
+  workerId: string
+  workerPid?: number | null
+  now?: Date
+}
+
+export type AppendAgentJobEventInput = {
+  jobId: string
+  type: AgentJobEventType
+  payload?: unknown
+  now?: Date
+}
+
+export type CompleteAgentJobInput = {
+  jobId: string
+  status: Exclude<AgentJobStatus, "queued" | "running">
+  exitCode?: number | null
+  errorCode?: string | null
+  errorMessage?: string | null
+  result?: unknown
+  now?: Date
+}
+
+export type ListAgentJobsInput = {
+  limit?: number
+  status?: AgentJobStatus
+}
+
+const MAX_PROMPT_PREVIEW_LENGTH = 240
+
+function assertOneOf<T extends readonly string[]>(
+  values: T,
+  value: string,
+  label: string,
+): asserts value is T[number] {
+  if (!(values as readonly string[]).includes(value)) {
+    throw new Error(`Unsupported ${label}: ${value}`)
+  }
+}
+
+function redactSecretText(value: string): string {
+  return value
+    .replace(/sk-[A-Za-z0-9_-]{20,}/g, "[redacted]")
+    .replace(/bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]")
+    .replace(
+      /((?:access_token|refresh_token)["'=:\s]+)[A-Za-z0-9._-]+/gi,
+      "$1[redacted]",
+    )
+}
+
+function sanitizeForStorage(value: unknown): unknown {
+  if (typeof value === "string") return redactSecretText(value)
+  if (Array.isArray(value)) return value.map(sanitizeForStorage)
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => {
+        if (
+          /token|authorization|api[-_]?key|secret|password/i.test(key) &&
+          item !== null &&
+          item !== undefined
+        ) {
+          return [key, "[redacted]"]
+        }
+        return [key, sanitizeForStorage(item)]
+      }),
+    )
+  }
+  return value
+}
+
+function toJson(value: unknown): string {
+  return JSON.stringify(sanitizeForStorage(value ?? {}))
+}
+
+function promptPreview(prompt: string): string {
+  const compact = prompt.replace(/\s+/g, " ").trim()
+  const truncated =
+    compact.length > MAX_PROMPT_PREVIEW_LENGTH
+      ? `${compact.slice(0, MAX_PROMPT_PREVIEW_LENGTH - 1)}...`
+      : compact
+  return redactSecretText(truncated)
+}
+
+function assertNonTerminal(job: AgentJob): void {
+  if (isTerminalAgentJobStatus(job.status as AgentJobStatus)) {
+    throw new Error(`Job ${job.id} is already terminal: ${job.status}`)
+  }
+}
+
+export function createAgentJob(
+  db: AgentJobDatabase,
+  input: CreateAgentJobInput,
+): AgentJob {
+  assertOneOf(AGENT_JOB_SOURCES, input.source, "job source")
+  assertOneOf(AGENT_RUNTIME_IDS, input.runtime, "job runtime")
+  assertOneOf(AGENT_JOB_MODES, input.mode, "job mode")
+
+  const id = createId()
+  const now = new Date()
+  db.insert(agentJobs)
+    .values({
+      id,
+      source: input.source,
+      runtime: input.runtime,
+      status: "queued",
+      mode: input.mode,
+      cwd: input.cwd,
+      promptPreview: promptPreview(input.prompt),
+      projectId: input.projectId ?? null,
+      chatId: input.chatId ?? null,
+      subChatId: input.subChatId ?? null,
+      createdByVersion: input.createdByVersion ?? null,
+      createdAt: now,
+    })
+    .run()
+
+  const job = getAgentJob(db, id)
+  if (!job) throw new Error(`Failed to create job ${id}`)
+  appendAgentJobEvent(db, {
+    jobId: id,
+    type: "job_created",
+    payload: {
+      source: input.source,
+      runtime: input.runtime,
+      mode: input.mode,
+      cwd: input.cwd,
+    },
+    now,
+  })
+  return getAgentJob(db, id) ?? job
+}
+
+export function getAgentJob(
+  db: AgentJobDatabase,
+  jobId: string,
+): AgentJob | null {
+  return db.select().from(agentJobs).where(eq(agentJobs.id, jobId)).get() ?? null
+}
+
+export function listAgentJobs(
+  db: AgentJobDatabase,
+  input: ListAgentJobsInput = {},
+): AgentJob[] {
+  const limit = Math.max(1, Math.min(input.limit ?? 50, 200))
+  if (input.status) {
+    return db
+      .select()
+      .from(agentJobs)
+      .where(eq(agentJobs.status, input.status))
+      .orderBy(desc(agentJobs.createdAt))
+      .limit(limit)
+      .all()
+  }
+  return db
+    .select()
+    .from(agentJobs)
+    .orderBy(desc(agentJobs.createdAt))
+    .limit(limit)
+    .all()
+}
+
+export function startAgentJob(
+  db: AgentJobDatabase,
+  input: StartAgentJobInput,
+): AgentJob {
+  const now = input.now ?? new Date()
+  const job = getAgentJob(db, input.jobId)
+  if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+  assertNonTerminal(job)
+  if (job.status !== "queued") {
+    throw new Error(`Job ${job.id} cannot start from status ${job.status}`)
+  }
+
+  db.update(agentJobs)
+    .set({
+      status: "running",
+      startedAt: now,
+      workerId: input.workerId,
+      workerPid: input.workerPid ?? null,
+      workerStartedAt: now,
+      heartbeatAt: now,
+    })
+    .where(eq(agentJobs.id, input.jobId))
+    .run()
+  appendAgentJobEvent(db, {
+    jobId: input.jobId,
+    type: "job_started",
+    payload: {
+      workerId: input.workerId,
+      workerPid: input.workerPid ?? null,
+    },
+    now,
+  })
+  return getAgentJob(db, input.jobId) ?? job
+}
+
+export function appendAgentJobEvent(
+  db: AgentJobDatabase,
+  input: AppendAgentJobEventInput,
+): AgentJobEvent {
+  assertOneOf(AGENT_JOB_EVENT_TYPES, input.type, "job event type")
+  const now = input.now ?? new Date()
+  const eventId = createId()
+
+  return db.transaction((tx) => {
+    const job = tx
+      .select()
+      .from(agentJobs)
+      .where(eq(agentJobs.id, input.jobId))
+      .get()
+    if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+    assertNonTerminal(job)
+
+    const latest = tx
+      .select({
+        maxSequence: sql<number>`coalesce(max(${agentJobEvents.sequence}), 0)`,
+      })
+      .from(agentJobEvents)
+      .where(eq(agentJobEvents.jobId, input.jobId))
+      .get()
+    const sequence = (latest?.maxSequence ?? 0) + 1
+
+    tx.insert(agentJobEvents)
+      .values({
+        id: eventId,
+        jobId: input.jobId,
+        sequence,
+        type: input.type,
+        payloadJson: toJson(input.payload),
+        createdAt: now,
+      })
+      .run()
+
+    const event = tx
+      .select()
+      .from(agentJobEvents)
+      .where(eq(agentJobEvents.id, eventId))
+      .get()
+    if (!event) throw new Error(`Failed to append event ${eventId}`)
+    return event
+  })
+}
+
+export function listAgentJobEvents(
+  db: AgentJobDatabase,
+  jobId: string,
+  afterSequence = 0,
+): AgentJobEvent[] {
+  return db
+    .select()
+    .from(agentJobEvents)
+    .where(
+      and(
+        eq(agentJobEvents.jobId, jobId),
+        gtSequence(agentJobEvents.sequence, afterSequence),
+      ),
+    )
+    .orderBy(agentJobEvents.sequence)
+    .all()
+}
+
+function gtSequence(column: typeof agentJobEvents.sequence, value: number) {
+  return sql`${column} > ${value}`
+}
+
+export function heartbeatAgentJob(
+  db: AgentJobDatabase,
+  jobId: string,
+  workerId: string,
+  now = new Date(),
+): AgentJob {
+  const job = getAgentJob(db, jobId)
+  if (!job) throw new Error(`Unknown job: ${jobId}`)
+  if (job.status !== "running") {
+    throw new Error(`Job ${job.id} cannot heartbeat from status ${job.status}`)
+  }
+  if (job.workerId !== workerId) {
+    throw new Error(`Job ${job.id} is owned by another worker`)
+  }
+
+  db.update(agentJobs)
+    .set({ heartbeatAt: now })
+    .where(eq(agentJobs.id, jobId))
+    .run()
+  return getAgentJob(db, jobId) ?? job
+}
+
+export function requestCancelAgentJob(
+  db: AgentJobDatabase,
+  jobId: string,
+  requestedBy: string,
+  now = new Date(),
+): AgentJob {
+  const job = getAgentJob(db, jobId)
+  if (!job) throw new Error(`Unknown job: ${jobId}`)
+  if (isTerminalAgentJobStatus(job.status as AgentJobStatus)) return job
+
+  db.update(agentJobs)
+    .set({
+      cancelRequestedAt: job.cancelRequestedAt ?? now,
+      cancelRequestedBy: job.cancelRequestedBy ?? requestedBy,
+    })
+    .where(eq(agentJobs.id, jobId))
+    .run()
+  appendAgentJobEvent(db, {
+    jobId,
+    type: "status",
+    payload: { status: "cancel_requested", requestedBy },
+    now,
+  })
+  return getAgentJob(db, jobId) ?? job
+}
+
+export function completeAgentJob(
+  db: AgentJobDatabase,
+  input: CompleteAgentJobInput,
+): AgentJob {
+  assertOneOf(AGENT_JOB_STATUSES, input.status, "job status")
+  const now = input.now ?? new Date()
+  const job = getAgentJob(db, input.jobId)
+  if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+  assertNonTerminal(job)
+
+  db.update(agentJobs)
+    .set({
+      status: input.status,
+      finishedAt: now,
+      exitCode: input.exitCode ?? null,
+      errorCode: input.errorCode ?? null,
+      errorMessage: input.errorMessage
+        ? redactSecretText(input.errorMessage)
+        : null,
+      resultJson: input.result === undefined ? null : toJson(input.result),
+      heartbeatAt: now,
+    })
+    .where(eq(agentJobs.id, input.jobId))
+    .run()
+
+  db.insert(agentJobEvents)
+    .values({
+      id: createId(),
+      jobId: input.jobId,
+      sequence: nextEventSequence(db, input.jobId),
+      type: "completed",
+      payloadJson: toJson({
+        status: input.status,
+        exitCode: input.exitCode ?? null,
+        errorCode: input.errorCode ?? null,
+        errorMessage: input.errorMessage ?? null,
+        result: input.result ?? null,
+      }),
+      createdAt: now,
+    })
+    .run()
+
+  return getAgentJob(db, input.jobId) ?? job
+}
+
+function nextEventSequence(db: AgentJobDatabase, jobId: string): number {
+  const latest = db
+    .select({
+      maxSequence: sql<number>`coalesce(max(${agentJobEvents.sequence}), 0)`,
+    })
+    .from(agentJobEvents)
+    .where(eq(agentJobEvents.jobId, jobId))
+    .get()
+  return (latest?.maxSequence ?? 0) + 1
+}
+
+export function interruptStaleAgentJobs(
+  db: AgentJobDatabase,
+  staleBefore: Date,
+  now = new Date(),
+): AgentJob[] {
+  const staleJobs = db
+    .select()
+    .from(agentJobs)
+    .where(
+      and(
+        eq(agentJobs.status, "running"),
+        or(isNull(agentJobs.heartbeatAt), lt(agentJobs.heartbeatAt, staleBefore)),
+      ),
+    )
+    .all()
+
+  for (const job of staleJobs) {
+    db.update(agentJobs)
+      .set({
+        status: "interrupted",
+        finishedAt: now,
+        errorCode: "worker_interrupted",
+        errorMessage: "Worker heartbeat was lost.",
+      })
+      .where(eq(agentJobs.id, job.id))
+      .run()
+    db.insert(agentJobEvents)
+      .values({
+        id: createId(),
+        jobId: job.id,
+        sequence: nextEventSequence(db, job.id),
+        type: "error",
+        payloadJson: toJson({
+          status: "interrupted",
+          errorCode: "worker_interrupted",
+        }),
+        createdAt: now,
+      })
+      .run()
+  }
+
+  return staleJobs.map((job) => getAgentJob(db, job.id)).filter(Boolean) as AgentJob[]
+}
+
+export function retryAgentJob(
+  db: AgentJobDatabase,
+  jobId: string,
+  now = new Date(),
+): AgentJob {
+  const job = getAgentJob(db, jobId)
+  if (!job) throw new Error(`Unknown job: ${jobId}`)
+  if (
+    job.status !== "failed" &&
+    job.status !== "canceled" &&
+    job.status !== "interrupted"
+  ) {
+    throw new Error(`Job ${job.id} cannot be retried from status ${job.status}`)
+  }
+
+  const retryId = createId()
+  db.insert(agentJobs)
+    .values({
+      id: retryId,
+      retryOfJobId: job.id,
+      attempt: job.attempt + 1,
+      source: job.source,
+      runtime: job.runtime,
+      status: "queued",
+      mode: job.mode,
+      cwd: job.cwd,
+      projectId: job.projectId,
+      chatId: job.chatId,
+      subChatId: job.subChatId,
+      promptPreview: job.promptPreview,
+      createdAt: now,
+      createdByVersion: job.createdByVersion,
+    })
+    .run()
+  appendAgentJobEvent(db, {
+    jobId: retryId,
+    type: "job_created",
+    payload: {
+      retryOfJobId: job.id,
+      attempt: job.attempt + 1,
+    },
+    now,
+  })
+  const retry = getAgentJob(db, retryId)
+  if (!retry) throw new Error(`Failed to create retry job ${retryId}`)
+  return retry
+}

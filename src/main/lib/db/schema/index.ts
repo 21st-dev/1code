@@ -1,4 +1,4 @@
-import { index, sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
+import { index, sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { relations } from "drizzle-orm"
 import { createId } from "../utils"
 
@@ -216,6 +216,105 @@ export const appAgents = sqliteTable("app_agents", {
   ),
 })
 
+// ============ HEADLESS AGENT JOBS ============
+export const agentJobs = sqliteTable("agent_jobs", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  retryOfJobId: text("retry_of_job_id"),
+  attempt: integer("attempt").notNull().default(1),
+  source: text("source").notNull(),
+  runtime: text("runtime").notNull(),
+  status: text("status").notNull().default("queued"),
+  mode: text("mode").notNull().default("agent"),
+  cwd: text("cwd").notNull(),
+  projectId: text("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  chatId: text("chat_id").references(() => chats.id, {
+    onDelete: "set null",
+  }),
+  subChatId: text("sub_chat_id").references(() => subChats.id, {
+    onDelete: "set null",
+  }),
+  promptPreview: text("prompt_preview"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  startedAt: integer("started_at", { mode: "timestamp" }),
+  finishedAt: integer("finished_at", { mode: "timestamp" }),
+  exitCode: integer("exit_code"),
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  resultJson: text("result_json"),
+  createdByVersion: text("created_by_version"),
+  workerId: text("worker_id"),
+  workerPid: integer("worker_pid"),
+  workerStartedAt: integer("worker_started_at", { mode: "timestamp" }),
+  heartbeatAt: integer("heartbeat_at", { mode: "timestamp" }),
+  cancelRequestedAt: integer("cancel_requested_at", { mode: "timestamp" }),
+  cancelRequestedBy: text("cancel_requested_by"),
+}, (table) => [
+  index("agent_jobs_status_idx").on(table.status),
+  index("agent_jobs_source_idx").on(table.source),
+  index("agent_jobs_runtime_idx").on(table.runtime),
+  index("agent_jobs_cwd_idx").on(table.cwd),
+  index("agent_jobs_created_at_idx").on(table.createdAt),
+  index("agent_jobs_heartbeat_at_idx").on(table.heartbeatAt),
+])
+
+export const agentJobEvents = sqliteTable("agent_job_events", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  jobId: text("job_id")
+    .notNull()
+    .references(() => agentJobs.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(),
+  type: text("type").notNull(),
+  payloadJson: text("payload_json").notNull().default("{}"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+}, (table) => [
+  uniqueIndex("agent_job_events_job_sequence_idx").on(
+    table.jobId,
+    table.sequence,
+  ),
+  index("agent_job_events_job_created_at_idx").on(table.jobId, table.createdAt),
+])
+
+export const agentJobsRelations = relations(agentJobs, ({ one, many }) => ({
+  retryOfJob: one(agentJobs, {
+    fields: [agentJobs.retryOfJobId],
+    references: [agentJobs.id],
+    relationName: "agent_job_retry",
+  }),
+  retryJobs: many(agentJobs, {
+    relationName: "agent_job_retry",
+  }),
+  project: one(projects, {
+    fields: [agentJobs.projectId],
+    references: [projects.id],
+  }),
+  chat: one(chats, {
+    fields: [agentJobs.chatId],
+    references: [chats.id],
+  }),
+  subChat: one(subChats, {
+    fields: [agentJobs.subChatId],
+    references: [subChats.id],
+  }),
+  events: many(agentJobEvents),
+}))
+
+export const agentJobEventsRelations = relations(agentJobEvents, ({ one }) => ({
+  job: one(agentJobs, {
+    fields: [agentJobEvents.jobId],
+    references: [agentJobs.id],
+  }),
+}))
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -238,3 +337,7 @@ export type AgentProviderDefault = typeof agentProviderDefaults.$inferSelect
 export type NewAgentProviderDefault = typeof agentProviderDefaults.$inferInsert
 export type AppAgent = typeof appAgents.$inferSelect
 export type NewAppAgent = typeof appAgents.$inferInsert
+export type AgentJob = typeof agentJobs.$inferSelect
+export type NewAgentJob = typeof agentJobs.$inferInsert
+export type AgentJobEvent = typeof agentJobEvents.$inferSelect
+export type NewAgentJobEvent = typeof agentJobEvents.$inferInsert
