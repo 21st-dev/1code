@@ -128,7 +128,6 @@ interface PluginComponentPathsResolution {
 // Cache for plugin discovery results
 let pluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
 let codexPluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
-let mcpCache: { configs: PluginMcpConfig[]; timestamp: number } | null = null
 const CACHE_TTL_MS = 30000 // 30 seconds - plugins don't change often during a session
 const CLAUDE_MARKETPLACES_DIR = path.join(os.homedir(), ".claude", "plugins", "marketplaces")
 const CODEX_PLUGIN_CACHE_DIR = path.join(os.homedir(), ".codex", "plugins", "cache")
@@ -139,7 +138,6 @@ const CODEX_PLUGIN_CACHE_DIR = path.join(os.homedir(), ".codex", "plugins", "cac
 export function clearPluginCache() {
   pluginCache = null
   codexPluginCache = null
-  mcpCache = null
 }
 
 function getString(value: unknown): string | undefined {
@@ -622,14 +620,10 @@ export function getPluginComponentPaths(plugin: PluginInfo) {
 /**
  * Discover MCP server configs from all installed plugins
  * Reads .mcp.json from each plugin directory
- * Results are cached for 30 seconds to avoid repeated filesystem scans
+ * Recomputes review gates on each call so stale plugin fingerprints cannot
+ * reuse cached runtime decisions.
  */
 export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
-  // Return cached result if still valid
-  if (mcpCache && Date.now() - mcpCache.timestamp < CACHE_TTL_MS) {
-    return mcpCache.configs
-  }
-
   const plugins = await discoverInstalledPlugins()
   const configs: PluginMcpConfig[] = []
 
@@ -697,7 +691,5 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
     }
   }
 
-  // Cache the result
-  mcpCache = { configs, timestamp: Date.now() }
   return configs
 }

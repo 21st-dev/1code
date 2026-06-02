@@ -5,6 +5,7 @@ import { BrowserWindow } from 'electron';
 import {
   getMcpServerConfig,
   GLOBAL_MCP_PATH,
+  getLocusPluginMcpProvenance,
   readClaudeConfig,
   updateClaudeConfigAtomic,
   updateMcpServerConfig,
@@ -202,6 +203,9 @@ export async function startMcpOAuth(
   // 1. Read server config from ~/.claude.json
   const config = await readClaudeConfig();
   let serverConfig = getMcpServerConfig(config, projectPath, serverName);
+  if (getLocusPluginMcpProvenance(serverConfig)) {
+    serverConfig = undefined;
+  }
 
   // Fallback: check plugin MCP servers if not found in ~/.claude.json
   if (!serverConfig?.url) {
@@ -230,6 +234,12 @@ export async function startMcpOAuth(
             url: serverConfig!.url,
             type: serverConfig!.url?.endsWith('/sse') ? 'sse' : 'http',
             authType: 'oauth',
+            _locusPluginMcp: {
+              pluginSource: pluginConfig.pluginSource,
+              pluginReviewKey: pluginConfig.pluginReviewKey,
+              serverName,
+              approvalIdentifier: identifier,
+            },
           });
         });
         break;

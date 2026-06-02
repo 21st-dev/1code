@@ -20,6 +20,7 @@ import {
 import {
   getMergedGlobalMcpServers,
   getMergedLocalProjectMcpServers,
+  getMatchingLocusPluginMcpServerConfig,
   GLOBAL_MCP_PATH,
   readClaudeConfig,
   readClaudeDirConfig,
@@ -56,7 +57,7 @@ import {
   type McpToolInfo,
 } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
-import { discoverPluginMcpServers } from "../../plugins"
+import { discoverPluginMcpServers, type PluginMcpConfig } from "../../plugins"
 import { getPluginSafeModeState } from "../../plugins/update-review-state"
 import { publicProcedure, router } from "../index"
 import { preparePromptWithAppAgents } from "../../app-agents/prompt"
@@ -87,6 +88,28 @@ function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "review-required") return "pending-review"
   if (gate.status === "read-only") return "read-only"
   return "pending-approval"
+}
+
+function getEffectivePluginMcpServerConfig(input: {
+  claudeConfig: ClaudeConfig
+  pluginConfig: PluginMcpConfig
+  serverName: string
+  serverConfig: McpServerConfig
+}): McpServerConfig {
+  const identifier = input.pluginConfig.approvalIdentifiers[input.serverName]
+  if (!identifier) return input.serverConfig
+
+  const promotedConfig = getMatchingLocusPluginMcpServerConfig({
+    servers: input.claudeConfig.mcpServers,
+    serverName: input.serverName,
+    pluginSource: input.pluginConfig.pluginSource,
+    pluginReviewKey: input.pluginConfig.pluginReviewKey,
+    approvalIdentifier: identifier,
+  })
+
+  return promotedConfig
+    ? { ...input.serverConfig, ...promotedConfig }
+    : input.serverConfig
 }
 
 /**
@@ -785,13 +808,19 @@ export async function getAllMcpConfigHandler() {
                 // Skip servers that have been promoted to ~/.claude.json (e.g., after OAuth)
                 if (globalServerNames.includes(name)) return null
 
-                const configObj = sanitizeMcpConfigForRenderer(
-                  serverConfig as Record<string, unknown>,
-                )
                 const identifier = pluginConfig.approvalIdentifiers[name]
                 const passesReviewGate = pluginConfig.reviewGate.canUseMcp
                 const isApproved = passesReviewGate && Boolean(
                   identifier && approvedServers.includes(identifier),
+                )
+                const effectiveServerConfig = getEffectivePluginMcpServerConfig({
+                  claudeConfig: config,
+                  pluginConfig,
+                  serverName: name,
+                  serverConfig,
+                })
+                const configObj = sanitizeMcpConfigForRenderer(
+                  effectiveServerConfig as Record<string, unknown>,
                 )
 
                 if (!passesReviewGate) {
@@ -817,15 +846,15 @@ export async function getAllMcpConfigHandler() {
                 }
 
                 // Try to get status and tools for approved servers
-                let status = getServerStatusFromConfig(serverConfig)
-                const headers = serverConfig.headers as
+                let status = getServerStatusFromConfig(effectiveServerConfig)
+                const headers = effectiveServerConfig.headers as
                   | Record<string, string>
                   | undefined
                 let tools: McpToolInfo[] = []
                 let needsAuth = false
 
                 try {
-                  tools = await fetchToolsForServer(serverConfig)
+                  tools = await fetchToolsForServer(effectiveServerConfig)
                 } catch (error) {
                   console.error(
                     `[MCP] Failed to fetch tools for plugin ${name}:`,
@@ -837,9 +866,9 @@ export async function getAllMcpConfigHandler() {
                   status = "connected"
                 } else {
                   // Same OAuth detection logic as regular MCP servers
-                  if (serverConfig.url) {
+                  if (effectiveServerConfig.url) {
                     try {
-                      const baseUrl = getMcpBaseUrl(serverConfig.url)
+                      const baseUrl = getMcpBaseUrl(effectiveServerConfig.url)
                       const metadata = await fetchOAuthMetadata(baseUrl)
                       needsAuth =
                         !!metadata && !!metadata.authorization_endpoint
@@ -847,8 +876,8 @@ export async function getAllMcpConfigHandler() {
                       // If probe fails, assume no auth needed
                     }
                   } else if (
-                    serverConfig.authType === "oauth" ||
-                    serverConfig.authType === "bearer"
+                    effectiveServerConfig.authType === "oauth" ||
+                    effectiveServerConfig.authType === "bearer"
                   ) {
                     needsAuth = true
                   }
@@ -1448,7 +1477,6 @@ export const claudeRouter = router({
                 const commandsTarget = path.join(isolatedConfigDir, "commands")
                 const agentsSource = path.join(homeClaudeDir, "agents")
                 const agentsTarget = path.join(isolatedConfigDir, "agents")
-                const pluginsSource = path.join(homeClaudeDir, "plugins")
                 const pluginsTarget = path.join(isolatedConfigDir, "plugins")
                 const settingsSource = path.join(homeClaudeDir, "settings.json")
                 const settingsTarget = path.join(
@@ -1535,16 +1563,10 @@ export const claudeRouter = router({
                   "agents directory",
                   "dir",
                 )
-                if (pluginSafeMode.enabled) {
-                  await removeManagedSymlink(pluginsTarget, "plugins directory")
-                } else {
-                  await ensureSymlink(
-                    pluginsSource,
-                    pluginsTarget,
-                    "plugins directory",
-                    "dir",
-                  )
-                }
+                // Do not expose the whole Claude plugin directory to Locus-managed
+                // runs. Reviewed plugin MCP servers are injected explicitly below;
+                // commands/skills/agents need a future allowlisted mount design.
+                await removeManagedSymlink(pluginsTarget, "plugins directory")
                 await ensureSymlink(
                   settingsSource,
                   settingsTarget,
@@ -1552,7 +1574,7 @@ export const claudeRouter = router({
                   "file",
                 )
 
-                if (symlinkSetupComplete && !pluginSafeMode.enabled) {
+                if (symlinkSetupComplete) {
                   symlinksCreated.add(cacheKey)
                 } else if (symlinkSetupHadErrors) {
                   console.warn(
@@ -1629,7 +1651,12 @@ export const claudeRouter = router({
                       if (!globalServers[name] && !projectServers[name]) {
                         const identifier = pConfig.approvalIdentifiers[name]
                         if (identifier && approvedServers.includes(identifier)) {
-                          pluginServers[name] = serverConfig
+                          pluginServers[name] = getEffectivePluginMcpServerConfig({
+                            claudeConfig,
+                            pluginConfig: pConfig,
+                            serverName: name,
+                            serverConfig,
+                          })
                         }
                       }
                     }
@@ -3124,7 +3151,12 @@ ${prompt}
             if (!merged[name]) {
               const identifier = pluginConfig.approvalIdentifiers[name]
               if (identifier && approvedServers.includes(identifier)) {
-                merged[name] = serverConfig
+                merged[name] = getEffectivePluginMcpServerConfig({
+                  claudeConfig: config,
+                  pluginConfig,
+                  serverName: name,
+                  serverConfig,
+                })
               }
             }
           }

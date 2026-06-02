@@ -19,6 +19,10 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/mcp-auth.ts"),
     "utf8",
   )
+  const claudeConfigSource = readFileSync(
+    join(process.cwd(), "src/main/lib/claude-config.ts"),
+    "utf8",
+  )
   const pluginsRouterSource = readFileSync(
     join(process.cwd(), "src/main/lib/trpc/routers/plugins.ts"),
     "utf8",
@@ -48,6 +52,7 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginIndexSource).toContain("recordPluginReviewScans")
     expect(pluginIndexSource).toContain("reviewGate")
     expect(pluginIndexSource).toContain("buildPluginSafetyGate")
+    expect(pluginIndexSource).not.toContain("mcpCache")
   })
 
   test("gates plugin MCP runtime inclusion on reviewGate", () => {
@@ -60,6 +65,7 @@ describe("plugin safe mode runtime source guards", () => {
     expect(claudeRouterSource).toContain("getPluginSafeModeState")
     expect(claudeRouterSource).toContain("removeManagedSymlink(pluginsTarget")
     expect(claudeRouterSource).toContain("pluginSafeMode.enabled")
+    expect(claudeRouterSource).not.toContain("ensureSymlink(\n                    pluginsSource")
   })
 
   test("gates plugin enablement and MCP approval in Claude settings", () => {
@@ -73,6 +79,10 @@ describe("plugin safe mode runtime source guards", () => {
     expect(mcpAuthSource).toContain("enabledPluginSources.includes(pluginConfig.pluginSource)")
     expect(mcpAuthSource).toContain("pluginConfig.reviewGate.canUseMcp")
     expect(mcpAuthSource).toContain("approvedPluginMcpServers.includes(identifier)")
+    expect(mcpAuthSource).toContain("_locusPluginMcp")
+    expect(claudeRouterSource).toContain("getEffectivePluginMcpServerConfig")
+    expect(claudeConfigSource).toContain("filterLocusPluginMcpServers")
+    expect(claudeConfigSource).toContain("getMatchingLocusPluginMcpServerConfig")
   })
 
   test("exposes safe mode state and per-plugin gates through the plugins API", () => {
