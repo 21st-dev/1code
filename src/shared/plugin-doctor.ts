@@ -213,7 +213,7 @@ export function buildPluginDoctorReport(input: {
   const storeCandidates = (input.storeCandidates ?? []).map(buildStoreCandidateDebug)
   const runtimeMarketplaces = input.runtimeMarketplaces ?? []
   const runtimeMarketplaceChecks = runtimeMarketplaces.flatMap(
-    buildRuntimeMarketplaceChecks,
+    (snapshot) => buildRuntimeMarketplaceChecks(snapshot, input.sources),
   )
   const checks = [
     reviewStateCheck,
@@ -657,6 +657,7 @@ function buildStoreCandidateChecks(
 
 function buildRuntimeMarketplaceChecks(
   snapshot: RuntimePluginMarketplaceSnapshot,
+  sources: PluginDoctorSourceInput[],
 ): PluginDoctorCheck[] {
   const checks: PluginDoctorCheck[] = [{
     code: "runtime-marketplace",
@@ -694,8 +695,66 @@ function buildRuntimeMarketplaceChecks(
       },
     })
   }
+  for (const diagnostic of buildRuntimeFilesystemFallbackDiagnostics(snapshot, sources)) {
+    checks.push({
+      code: "runtime-marketplace-diagnostic",
+      status: getRuntimeMarketplaceDiagnosticStatus(diagnostic),
+      subject: diagnostic.command ?? `${snapshot.runtime}-marketplace`,
+      runtime: snapshot.runtime,
+      details: {
+        code: diagnostic.code,
+        message: diagnostic.message,
+        severity: diagnostic.severity,
+        exitCode: diagnostic.exitCode ?? 0,
+      },
+    })
+  }
 
   return checks
+}
+
+function buildRuntimeFilesystemFallbackDiagnostics(
+  snapshot: RuntimePluginMarketplaceSnapshot,
+  sources: PluginDoctorSourceInput[],
+): RuntimeMarketplaceDiagnostic[] {
+  const runtimeSources = sources.filter((source) =>
+    source.runtime === snapshot.runtime &&
+    source.status === "available" &&
+    source.pluginCount > 0
+  )
+  if (runtimeSources.length === 0) return []
+
+  const filesystemPluginCount = runtimeSources.reduce(
+    (total, source) => total + source.pluginCount,
+    0,
+  )
+  const installedRuntimePluginCount = snapshot.plugins.filter((plugin) => plugin.installed).length
+
+  if (snapshot.marketplaces.length === 0) {
+    return [{
+      code: "filesystem-fallback",
+      severity: "info",
+      runtime: snapshot.runtime,
+      command: `${snapshot.runtime}-filesystem-fallback`,
+      message:
+        "Filesystem fallback found local plugin packages while the runtime marketplace read reported no marketplace rows.",
+    }]
+  }
+
+  if (
+    installedRuntimePluginCount !== filesystemPluginCount
+  ) {
+    return [{
+      code: "source-conflict",
+      severity: "warning",
+      runtime: snapshot.runtime,
+      command: `${snapshot.runtime}-source-conflict`,
+      message:
+        "Runtime-owned plugin inventory differs from local filesystem fallback counts; runtime output remains authoritative.",
+    }]
+  }
+
+  return []
 }
 
 function getRuntimeMarketplaceDiagnosticStatus(

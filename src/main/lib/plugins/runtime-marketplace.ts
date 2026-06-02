@@ -21,6 +21,7 @@ export interface RuntimeCommandRunner {
   (command: string, args: string[], options: {
     timeoutMs: number
     maxBuffer: number
+    env: Record<string, string>
   }): Promise<{ stdout: string; stderr: string }>
 }
 
@@ -121,10 +122,15 @@ export async function runRuntimePluginCommand(
   const runner = options.runner ?? defaultRuntimeCommandRunner
   const commandText = [command, ...args].join(" ")
   try {
-    const result = await runner(resolveRuntimeCommandPath(command), args, {
-      timeoutMs: options.timeoutMs ?? DEFAULT_RUNTIME_MARKETPLACE_TIMEOUT_MS,
-      maxBuffer: MAX_RUNTIME_MARKETPLACE_BUFFER,
-    })
+    const result = await runner(
+      options.runner ? command : resolveBundledRuntimeCommandPath(command),
+      args,
+      {
+        timeoutMs: options.timeoutMs ?? DEFAULT_RUNTIME_MARKETPLACE_TIMEOUT_MS,
+        maxBuffer: MAX_RUNTIME_MARKETPLACE_BUFFER,
+        env: buildRuntimePluginCommandEnv(),
+      },
+    )
     return {
       stdout: cleanCommandOutput(result.stdout),
       stderr: cleanCommandOutput(result.stderr),
@@ -142,7 +148,7 @@ export async function runRuntimePluginCommand(
 async function defaultRuntimeCommandRunner(
   command: string,
   args: string[],
-  options: { timeoutMs: number; maxBuffer: number },
+  options: { timeoutMs: number; maxBuffer: number; env: Record<string, string> },
 ): Promise<{ stdout: string; stderr: string }> {
   const result = await execFileAsync(command, args, {
     encoding: "utf8",
@@ -150,11 +156,7 @@ async function defaultRuntimeCommandRunner(
     maxBuffer: options.maxBuffer,
     shell: false,
     windowsHide: true,
-    env: {
-      ...process.env,
-      NO_COLOR: "1",
-      FORCE_COLOR: "0",
-    },
+    env: options.env,
   })
   return {
     stdout: result.stdout,
@@ -162,7 +164,7 @@ async function defaultRuntimeCommandRunner(
   }
 }
 
-function resolveRuntimeCommandPath(command: string): string {
+function resolveBundledRuntimeCommandPath(command: string): string {
   const binaryName = process.platform === "win32" ? `${command}.exe` : command
   const packagedResourcesPath = typeof process.resourcesPath === "string"
     ? path.join(process.resourcesPath, "bin", binaryName)
@@ -182,11 +184,88 @@ function resolveRuntimeCommandPath(command: string): string {
     return devResourcesPath
   }
 
-  return command
+  const error = Object.assign(
+    new Error(`${command} bundled CLI is not available.`),
+    { code: "ENOENT" },
+  )
+  throw error
+}
+
+const RUNTIME_PLUGIN_COMMAND_ENV_ALLOWLIST = new Set([
+  "APPDATA",
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_HOME",
+  "CODEX_HOME",
+  "COMSPEC",
+  "FORCE_COLOR",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "LOCALAPPDATA",
+  "LOGNAME",
+  "NO_COLOR",
+  "PATH",
+  "PROGRAMDATA",
+  "SHELL",
+  "SYSTEMROOT",
+  "TEMP",
+  "TERM",
+  "TMP",
+  "TMPDIR",
+  "USER",
+  "USERPROFILE",
+  "WINDIR",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+])
+
+export function buildRuntimePluginCommandEnv(
+  sourceEnv: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const key of RUNTIME_PLUGIN_COMMAND_ENV_ALLOWLIST) {
+    const value = sourceEnv[key]
+    if (typeof value === "string" && value.length > 0) {
+      env[key] = value
+    }
+  }
+  env.NO_COLOR = "1"
+  env.FORCE_COLOR = "0"
+  return env
 }
 
 function cleanCommandOutput(value: string): string {
-  return stripVTControlCharacters(value).replace(/\r/g, "").trim()
+  return redactRuntimeMarketplaceText(
+    stripVTControlCharacters(value).replace(/\r/g, "").trim(),
+  )
+}
+
+export function redactRuntimeMarketplaceText(value: string): string {
+  return value
+    .replace(
+      /\b([a-z][a-z0-9+.-]*:\/\/)([^/\s:@]+):([^/\s@]+)@/gi,
+      "$1[redacted]@",
+    )
+    .replace(
+      /([?&][^=\s&]*(?:token|secret|password|passwd|authorization|auth|api[_-]?key|access[_-]?token|refresh[_-]?token|code)[^=\s&]*=)[^&\s]+/gi,
+      "$1[redacted]",
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "sk-[redacted]")
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]{8,}\b/g, "gh[token-redacted]")
+    .replace(/\bgithub_pat_[A-Za-z0-9_]{8,}\b/g, "github_pat_[redacted]")
+    .replace(
+      /\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|AUTH)[A-Z0-9_]*=)([^\s,;]+)/g,
+      "$1[redacted]",
+    )
+}
+
+function cleanRuntimeField(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const cleaned = redactRuntimeMarketplaceText(stripVTControlCharacters(value).trim())
+  return cleaned || undefined
 }
 
 function diagnosticFromCommandError(
@@ -199,7 +278,9 @@ function diagnosticFromCommandError(
   const killed = typeof record.killed === "boolean" ? record.killed : false
   const signal = typeof record.signal === "string" ? record.signal : undefined
   const exitCode = typeof record.code === "number" ? record.code : undefined
-  const message = error instanceof Error ? error.message : "Runtime command failed."
+  const message = error instanceof Error
+    ? redactRuntimeMarketplaceText(error.message)
+    : "Runtime command failed."
 
   if (code === "ENOENT") {
     return {
@@ -226,7 +307,7 @@ function diagnosticFromCommandError(
     runtime: commandToRuntime(command),
     command: commandText,
     exitCode,
-    message,
+    message: "Runtime CLI marketplace read failed.",
   }
 }
 
@@ -308,7 +389,7 @@ export function parseCodexPluginList(output: string): {
       : parts.length >= 4
         ? parts[2]
         : undefined
-    const path = status.installed
+    const pluginPath = status.installed
       ? parts.slice(3).join("  ") || undefined
       : parts.length >= 4
         ? parts.slice(3).join("  ") || undefined
@@ -324,7 +405,7 @@ export function parseCodexPluginList(output: string): {
       statusText,
       installed: status.installed,
       enabled: status.enabled,
-      path,
+      path: cleanRuntimeField(pluginPath),
       componentSummary: { unknown: true },
       diagnostics: [],
     })
@@ -361,7 +442,7 @@ export function parseClaudeMarketplaceList(output: string): {
     const parts = splitColumns(line)
     const name = parts[0]
     if (!name) return []
-    const source = parts.slice(1).join("  ") || undefined
+    const source = cleanRuntimeField(parts.slice(1).join("  ") || undefined)
     return [{
       runtime: "claude" as const,
       name,
@@ -522,7 +603,10 @@ function splitPluginMarketplaceId(
 }
 
 function splitColumns(line: string): string[] {
-  return line.trim().split(/\s{2,}/).map((part) => part.trim()).filter(Boolean)
+  return line.trim()
+    .split(/\s{2,}/)
+    .map((part) => cleanRuntimeField(part))
+    .filter((part): part is string => Boolean(part))
 }
 
 function nonEmptyLines(output: string): string[] {
@@ -571,7 +655,9 @@ function normalizeComponentSummary(record: Record<string, unknown>) {
 }
 
 function getString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined
+  return typeof value === "string" && value.trim()
+    ? cleanRuntimeField(value)
+    : undefined
 }
 
 function getBoolean(value: unknown): boolean | undefined {

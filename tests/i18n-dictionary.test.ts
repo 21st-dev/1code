@@ -54,7 +54,7 @@ describe("i18n dictionary parity", () => {
       "settings.mcp.searchPlaceholder": "搜索服务器...",
       "settings.mcp.scopeClaudeGlobal": "全局 (~/.claude.json)",
       "settings.plugins.viewSources": "来源",
-      "settings.plugins.viewStore": "商店",
+      "settings.plugins.viewStore": "Locus 商店",
       "settings.plugins.storeApproveExact": "批准精确候选",
       "settings.commands.officialSnapshotLastUpdated": "上次更新",
       "agent.pastedText.pastChat": "历史对话",

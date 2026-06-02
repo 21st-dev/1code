@@ -100,13 +100,17 @@ export function getRuntimeMarketplaceTrust(input: {
   name: string
   source?: string
 }): RuntimeMarketplaceTrust {
-  const text = `${input.name} ${input.source ?? ""}`.toLowerCase()
-  if (input.runtime === "codex" && text.includes("openai")) return "official"
-  if (input.runtime === "claude" && text.includes("anthropic")) return "official"
-  if (text.startsWith("/") || text.startsWith(".") || text.includes("localhost")) {
+  const source = input.source?.trim().toLowerCase() ?? ""
+  if (
+    source.startsWith("/") ||
+    source.startsWith(".") ||
+    source.startsWith("~") ||
+    /^[a-z]:[\\/]/i.test(source) ||
+    source.includes("localhost")
+  ) {
     return "local"
   }
-  return input.source?.startsWith("file:") ? "local" : "external"
+  return source.startsWith("file:") ? "local" : "external"
 }
 
 export function normalizeRuntimePluginStatus(statusText: string): {

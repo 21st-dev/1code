@@ -3,11 +3,13 @@ import {
   normalizeRuntimePluginStatus,
 } from "../src/shared/runtime-plugin-marketplace"
 import {
+  buildRuntimePluginCommandEnv,
   getRuntimePluginMarketplaceSnapshot,
   parseClaudeMarketplaceList,
   parseClaudePluginJson,
   parseCodexMarketplaceList,
   parseCodexPluginList,
+  redactRuntimeMarketplaceText,
   runRuntimePluginCommand,
   type RuntimeCommandRunner,
 } from "../src/main/lib/plugins/runtime-marketplace"
@@ -55,7 +57,7 @@ describe("runtime plugin marketplace adapters", () => {
       runtime: "codex",
       name: "openai-primary-runtime",
       sourceKind: "runtime-cli",
-      trust: "official",
+      trust: "local",
       status: "available",
       path: "/Users/me/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime",
     })
@@ -110,7 +112,7 @@ describe("runtime plugin marketplace adapters", () => {
       name: "team",
       source: "anthropic/plugins",
       sourceKind: "runtime-cli",
-      trust: "official",
+      trust: "external",
       pluginCount: 2,
     })
   })
@@ -205,6 +207,56 @@ describe("runtime plugin marketplace adapters", () => {
       runtime: "claude",
       command: "claude plugin list --json",
     }))
+  })
+
+  test("passes only a minimal non-secret environment to runtime plugin reads", () => {
+    const env = buildRuntimePluginCommandEnv({
+      HOME: "/Users/me",
+      PATH: "/usr/bin",
+      CODEX_HOME: "/Users/me/.codex",
+      OPENAI_API_KEY: "sk-secretsecret",
+      ANTHROPIC_AUTH_TOKEN: "secret-token",
+      GITHUB_TOKEN: "ghp_secret",
+      FORCE_COLOR: "1",
+    })
+
+    expect(env).toMatchObject({
+      HOME: "/Users/me",
+      PATH: "/usr/bin",
+      CODEX_HOME: "/Users/me/.codex",
+      NO_COLOR: "1",
+      FORCE_COLOR: "0",
+    })
+    expect(env).not.toHaveProperty("OPENAI_API_KEY")
+    expect(env).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN")
+    expect(env).not.toHaveProperty("GITHUB_TOKEN")
+  })
+
+  test("redacts runtime output and returns generic command failure diagnostics", async () => {
+    expect(redactRuntimeMarketplaceText(
+      "https://user:password@example.com/plugins?token=sk-secretsecret Bearer abc.def OPENAI_API_KEY=sk-secretsecret ghp_secretsecret",
+    )).not.toContain("password")
+    expect(redactRuntimeMarketplaceText("ghp_secretsecret")).not.toContain("ghp_secretsecret")
+
+    const parsed = parseClaudePluginJson(JSON.stringify([{
+      name: "secret-source",
+      marketplace: "team",
+      source: "https://user:password@example.com/plugins?access_token=sk-secretsecret",
+    }]), "available")
+    expect(JSON.stringify(parsed)).not.toContain("password")
+    expect(JSON.stringify(parsed)).not.toContain("sk-secretsecret")
+
+    const failed = await runRuntimePluginCommand("codex", ["plugin", "list"], {
+      runner: async () => {
+        throw new Error("failed with OPENAI_API_KEY=sk-secretsecret and Bearer abc.def")
+      },
+    })
+    expect(failed.diagnostics).toContainEqual(expect.objectContaining({
+      code: "runtime-cli-error",
+      message: "Runtime CLI marketplace read failed.",
+    }))
+    expect(JSON.stringify(failed)).not.toContain("sk-secretsecret")
+    expect(JSON.stringify(failed)).not.toContain("Bearer abc.def")
   })
 
   test("builds a Codex snapshot through injected read-only commands", async () => {

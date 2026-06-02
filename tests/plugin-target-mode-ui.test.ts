@@ -251,8 +251,10 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("settings.plugins.viewMarketplaces")
     expect(pluginsTabSource).toContain("settings.plugins.viewLocusStore")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReadOnlyHint")
+    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReportedPlugins")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplacePluginSummary")
     expect(pluginsTabSource).toContain("getRuntimePluginListingStatusLabel(plugin.status, t)")
+    expect(pluginsTabSource).toContain("runtime-reported-plugins")
     expect(pluginsTabSource).not.toContain("installRuntimePlugin")
     expect(pluginsTabSource).not.toContain("updateRuntimePlugin")
     expect(pluginsTabSource).not.toContain("removeRuntimePlugin")
@@ -267,6 +269,7 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.runtimeMarketplacesDescription",
       "settings.plugins.runtimeMarketplacesEmptyDescription",
       "settings.plugins.runtimeMarketplaceReadOnlyHint",
+      "settings.plugins.runtimeMarketplaceReportedPlugins",
       "settings.plugins.runtimePluginStatusInstalledEnabled",
       "settings.plugins.runtimePluginStatusNotInstalled",
       "settings.plugins.marketplaceRuntimeEmptyTitle",

@@ -3648,12 +3648,16 @@ export function AgentsPluginsTab() {
   }, [pluginSources, runtimeFilter, searchQuery])
 
   const runtimeMarketplaceItems = useMemo((): RuntimeMarketplaceListItem[] => {
-    return runtimeMarketplaceSnapshots.flatMap((snapshot) =>
-      snapshot.marketplaces.map((marketplace) => {
+    return runtimeMarketplaceSnapshots.flatMap((snapshot) => {
+      const matchedPluginIds = new Set<string>()
+      const marketplaceItems = snapshot.marketplaces.map((marketplace) => {
         const plugins = snapshot.plugins.filter((plugin) =>
           plugin.marketplace === marketplace.name ||
           plugin.id.endsWith(`@${marketplace.name}`)
         )
+        for (const plugin of plugins) {
+          matchedPluginIds.add(plugin.id)
+        }
         return {
           ...marketplace,
           id: `${marketplace.runtime}:${marketplace.name}`,
@@ -3663,8 +3667,26 @@ export function AgentsPluginsTab() {
           refreshedAt: snapshot.refreshedAt,
         }
       })
-    )
-  }, [runtimeMarketplaceSnapshots])
+      const unmatchedPlugins = snapshot.plugins.filter((plugin) => !matchedPluginIds.has(plugin.id))
+      if (unmatchedPlugins.length === 0) return marketplaceItems
+      return [
+        ...marketplaceItems,
+        {
+          runtime: snapshot.runtime,
+          name: t("settings.plugins.runtimeMarketplaceReportedPlugins"),
+          sourceKind: "runtime-cli" as const,
+          trust: "external" as const,
+          status: "available" as const,
+          diagnostics: [],
+          id: `${snapshot.runtime}:runtime-reported-plugins`,
+          pluginCount: unmatchedPlugins.length,
+          plugins: unmatchedPlugins,
+          snapshotDiagnostics: snapshot.diagnostics,
+          refreshedAt: snapshot.refreshedAt,
+        },
+      ]
+    })
+  }, [runtimeMarketplaceSnapshots, t])
 
   const filteredMarketplaces = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"

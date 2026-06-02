@@ -324,7 +324,7 @@ describe("plugin doctor report", () => {
           source: "/Users/me/.codex/.tmp/plugins",
           path: "/Users/me/.codex/.tmp/plugins",
           sourceKind: "runtime-cli",
-          trust: "official",
+          trust: "local",
           status: "available",
           pluginCount: 100,
           diagnostics: [],
@@ -369,6 +369,87 @@ describe("plugin doctor report", () => {
       code: "runtime-marketplace-diagnostic",
       status: "warning",
       runtime: "codex",
+    }))
+  })
+
+  test("reports runtime marketplace filesystem fallback and source conflicts", () => {
+    const fallbackReport = buildPluginDoctorReport({
+      now: new Date("2026-06-03T00:00:00Z"),
+      reviewStatePath: "/userData/plugin-review-state.json",
+      safeMode: { enabled: false },
+      developerMode: { enabled: false },
+      sources: [{
+        id: "codex-cache",
+        runtime: "codex",
+        status: "available",
+        path: "/Users/me/.codex/plugins/cache",
+        pluginCount: 2,
+      }],
+      plugins: [],
+      runtimeMarketplaces: [{
+        runtime: "codex",
+        refreshedAt: "2026-06-03T00:00:00.000Z",
+        marketplaces: [],
+        plugins: [],
+        diagnostics: [],
+      }],
+    })
+
+    expect(fallbackReport.checks).toContainEqual(expect.objectContaining({
+      code: "runtime-marketplace-diagnostic",
+      status: "info",
+      runtime: "codex",
+      details: expect.objectContaining({
+        code: "filesystem-fallback",
+      }),
+    }))
+
+    const conflictReport = buildPluginDoctorReport({
+      now: new Date("2026-06-03T00:00:00Z"),
+      reviewStatePath: "/userData/plugin-review-state.json",
+      safeMode: { enabled: false },
+      developerMode: { enabled: false },
+      sources: [{
+        id: "claude-marketplace",
+        runtime: "claude",
+        status: "available",
+        path: "/Users/me/.claude/plugins/marketplaces/team",
+        pluginCount: 2,
+      }],
+      plugins: [],
+      runtimeMarketplaces: [{
+        runtime: "claude",
+        refreshedAt: "2026-06-03T00:00:00.000Z",
+        marketplaces: [{
+          runtime: "claude",
+          name: "team",
+          source: "team/plugins",
+          sourceKind: "runtime-cli",
+          trust: "external",
+          status: "available",
+          diagnostics: [],
+        }],
+        plugins: [{
+          runtime: "claude",
+          id: "repo-tools@team",
+          marketplace: "team",
+          name: "repo-tools",
+          status: "installed",
+          installed: true,
+          componentSummary: { unknown: true },
+          diagnostics: [],
+        }],
+        diagnostics: [],
+      }],
+    })
+
+    expect(conflictReport.checks).toContainEqual(expect.objectContaining({
+      code: "runtime-marketplace-diagnostic",
+      status: "warning",
+      runtime: "claude",
+      details: expect.objectContaining({
+        code: "source-conflict",
+      }),
     }))
   })
 })
