@@ -16,8 +16,8 @@
 ## 4. Verification
 - [x] 4.1 Add unit tests for command mapping, unsupported action blocking, confirmation tokens, redaction, and injected runner execution.
 - [x] 4.2 Add UI source-guard tests for runtime write controls and no cross-runtime conversion.
-- [ ] 4.3 Run targeted tests after each implementation checkpoint and commit each checkpoint.
-- [ ] 4.4 Run `bun run test`, `bun run ts:check`, `openspec validate add-runtime-plugin-write-actions --strict --no-interactive`, and `git diff --check`.
-- [ ] 4.5 Run a local desktop UI smoke for Settings > Plugins runtime marketplace actions.
-- [ ] 4.6 Record the smoke test and save the video evidence path.
-- [ ] 4.7 Do a UI/UX pass and fix any problems found during the smoke.
+- [x] 4.3 Run targeted tests after each implementation checkpoint and commit each checkpoint.
+- [x] 4.4 Run `bun run test`, `bun run ts:check`, `openspec validate add-runtime-plugin-write-actions --strict --no-interactive`, and `git diff --check`.
+- [x] 4.5 Run a local desktop UI smoke for Settings > Plugins runtime marketplace actions.
+- [x] 4.6 Record the smoke test and save the video evidence path.
+- [x] 4.7 Do a UI/UX pass and fix any problems found during the smoke.
