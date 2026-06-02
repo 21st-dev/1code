@@ -3,7 +3,8 @@ import { router, publicProcedure } from "../index"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
-import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getPluginComponentPaths } from "../../plugins"
+import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
 import { isDirentDirectory } from "../../fs/dirent"
 import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import { getEnabledPlugins } from "./claude-settings"
@@ -142,14 +143,10 @@ const listSkillsProcedure = publicProcedure
     }
 
     // Discover plugin skills
-    const [enabledPluginSources, installedPlugins] = await Promise.all([
-      getEnabledPlugins(),
-      discoverInstalledPlugins(),
-    ])
-    const enabledPlugins = installedPlugins.filter(
-      (p) => enabledPluginSources.includes(p.source),
-    )
-    const pluginSkillsPromises = enabledPlugins.map(async (plugin) => {
+    const enabledPluginSources = await getEnabledPlugins()
+    const allowedPluginComponents =
+      await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
+    const pluginSkillsPromises = allowedPluginComponents.map(async ({ plugin }) => {
       const paths = getPluginComponentPaths(plugin)
       try {
         const skills = await scanSkillsDirectory(paths.skills, "plugin")

@@ -10,7 +10,8 @@ import {
   type AgentModel,
   type FileAgent,
 } from "./agent-utils"
-import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getPluginComponentPaths } from "../../plugins"
+import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
 import { getEnabledPlugins } from "./claude-settings"
 import { isCustomAgentModel } from "../../../../shared/custom-agent-models"
 
@@ -36,14 +37,10 @@ const listAgentsProcedure = publicProcedure
     }
 
     // Discover plugin agents
-    const [enabledPluginSources, installedPlugins] = await Promise.all([
-      getEnabledPlugins(),
-      discoverInstalledPlugins(),
-    ])
-    const enabledPlugins = installedPlugins.filter(
-      (p) => enabledPluginSources.includes(p.source),
-    )
-    const pluginAgentsPromises = enabledPlugins.map(async (plugin) => {
+    const enabledPluginSources = await getEnabledPlugins()
+    const allowedPluginComponents =
+      await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
+    const pluginAgentsPromises = allowedPluginComponents.map(async ({ plugin }) => {
       const paths = getPluginComponentPaths(plugin)
       try {
         const agents = await scanAgentsDirectory(paths.agents, "plugin")
@@ -115,14 +112,10 @@ export const agentsRouter = router({
       }
 
       // Search in plugin directories
-      const [enabledPluginSources, installedPlugins] = await Promise.all([
-        getEnabledPlugins(),
-        discoverInstalledPlugins(),
-      ])
-      const enabledPlugins = installedPlugins.filter(
-        (p) => enabledPluginSources.includes(p.source),
-      )
-      for (const plugin of enabledPlugins) {
+      const enabledPluginSources = await getEnabledPlugins()
+      const allowedPluginComponents =
+        await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
+      for (const { plugin } of allowedPluginComponents) {
         const paths = getPluginComponentPaths(plugin)
         const agentPath = path.join(paths.agents, `${input.name}.md`)
         try {

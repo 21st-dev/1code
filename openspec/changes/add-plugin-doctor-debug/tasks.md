@@ -9,10 +9,10 @@
 - [x] 2.3 Expose Doctor/Debug data through the plugins tRPC router without raw secret values.
 
 ## 3. Runtime Gate Consistency
-- [ ] 3.1 Add a main-process helper for allowed Claude plugin runtime components.
-- [ ] 3.2 Gate plugin commands on enabled source, safe mode, and reviewed fingerprint.
-- [ ] 3.3 Gate plugin skills on enabled source, safe mode, and reviewed fingerprint.
-- [ ] 3.4 Gate plugin agents and agent loading on enabled source, safe mode, and reviewed fingerprint.
+- [x] 3.1 Add a main-process helper for allowed Claude plugin runtime components.
+- [x] 3.2 Gate plugin commands on enabled source, safe mode, and reviewed fingerprint.
+- [x] 3.3 Gate plugin skills on enabled source, safe mode, and reviewed fingerprint.
+- [x] 3.4 Gate plugin agents and agent loading on enabled source, safe mode, and reviewed fingerprint.
 
 ## 4. UI/UX
 - [ ] 4.1 Add a compact Doctor summary to Settings > Plugins.

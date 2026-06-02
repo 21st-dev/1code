@@ -23,6 +23,26 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/trpc/routers/plugins.ts"),
     "utf8",
   )
+  const commandsRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/commands.ts"),
+    "utf8",
+  )
+  const skillsRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/skills.ts"),
+    "utf8",
+  )
+  const agentsRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/agents.ts"),
+    "utf8",
+  )
+  const agentUtilsSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/agent-utils.ts"),
+    "utf8",
+  )
+  const runtimeGatesSource = readFileSync(
+    join(process.cwd(), "src/main/lib/plugins/runtime-gates.ts"),
+    "utf8",
+  )
 
   test("discovers plugin MCP servers with review gates derived in main", () => {
     expect(pluginIndexSource).toContain("recordPluginReviewScans")
@@ -59,5 +79,19 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginsRouterSource).toContain("safeMode: publicProcedure.query")
     expect(pluginsRouterSource).toContain("setSafeMode: publicProcedure")
     expect(pluginsRouterSource).toContain("safetyGate")
+  })
+
+  test("gates plugin commands, skills, and agents before runtime discovery", () => {
+    expect(runtimeGatesSource).toContain("discoverAllowedClaudePluginRuntimeComponents")
+    expect(runtimeGatesSource).toContain("safetyGate.status !== \"allowed\"")
+    expect(runtimeGatesSource).toContain("recordPluginReviewScans")
+    expect(commandsRouterSource).toContain("discoverAllowedClaudePluginRuntimeComponents")
+    expect(skillsRouterSource).toContain("discoverAllowedClaudePluginRuntimeComponents")
+    expect(agentsRouterSource).toContain("discoverAllowedClaudePluginRuntimeComponents")
+    expect(agentUtilsSource).toContain("discoverAllowedClaudePluginRuntimeComponents")
+    expect(commandsRouterSource).not.toContain("discoverInstalledPlugins")
+    expect(skillsRouterSource).not.toContain("discoverInstalledPlugins")
+    expect(agentsRouterSource).not.toContain("discoverInstalledPlugins")
+    expect(agentUtilsSource).not.toContain("discoverInstalledPlugins")
   })
 })
