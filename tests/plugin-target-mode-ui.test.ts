@@ -124,6 +124,7 @@ describe("plugin target mode UI source guards", () => {
   test("renders plugin Doctor and Debug facts without sandbox claims", () => {
     expect(pluginsTabSource).toContain("PluginDoctorSummaryPanel")
     expect(pluginsTabSource).toContain("PluginDebugPanel")
+    expect(pluginsTabSource).toContain("getWorstDoctorStatus")
     expect(pluginsTabSource).toContain("trpc.plugins.doctor.useQuery")
     expect(pluginsTabSource).toContain("doctorReport?.plugins.find")
     expect(pluginsTabSource).toContain("settings.plugins.doctor")

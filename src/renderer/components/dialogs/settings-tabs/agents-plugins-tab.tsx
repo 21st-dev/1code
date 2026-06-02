@@ -528,6 +528,13 @@ function getDoctorStatusClass(status: PluginDoctorCheckStatus): string {
   }
 }
 
+function getWorstDoctorStatus(checks: PluginDoctorCheck[]): PluginDoctorCheckStatus {
+  if (checks.some((check) => check.status === "blocked")) return "blocked"
+  if (checks.some((check) => check.status === "warning")) return "warning"
+  if (checks.some((check) => check.status === "info")) return "info"
+  return "pass"
+}
+
 function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof useI18n>["t"]): string {
   switch (code) {
     case "source-available":
@@ -623,6 +630,7 @@ function PluginDebugPanel({
 
   const approvalCount = Object.keys(debug.mcpApprovalIdentifiers).length
   const visibleChecks = debug.checks.slice(0, 8)
+  const debugStatus = getWorstDoctorStatus(debug.checks)
 
   return (
     <div className="rounded-md border border-border bg-background p-3 space-y-3">
@@ -635,11 +643,9 @@ function PluginDebugPanel({
         </div>
         <span className={cn(
           "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-          getDoctorStatusClass(debug.checks.some((check) => check.status === "blocked") ? "blocked" : "pass"),
+          getDoctorStatusClass(debugStatus),
         )}>
-          {debug.checks.some((check) => check.status === "blocked")
-            ? getDoctorStatusLabel("blocked", t)
-            : getDoctorStatusLabel("pass", t)}
+          {getDoctorStatusLabel(debugStatus, t)}
         </span>
       </div>
 
