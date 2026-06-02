@@ -6,7 +6,7 @@
 - [ ] 0.3 Run real Windows smoke for `locus run`, `locus jobs list`, `locus jobs logs`, and structured stdout/exit-code behavior.
 - [x] 0.4 Keep ordinary desktop chat migration, daemon, schedule, and `locus acp` out of this first-slice implementation.
 
-Current status is **local implementation complete, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
+Current status is **macOS local implementation complete through Phase 5, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
 
 ## 1. Proposal and Scope
 - [x] 1.1 Create the OpenSpec proposal, design, and multiple capability deltas for headless agent jobs.
@@ -21,7 +21,7 @@ Current status is **local implementation complete, pending Windows acceptance**.
 - [x] 2.4 Implement a Claude Code headless adapter using non-interactive print mode.
 - [x] 2.5 Implement a Codex headless adapter using `codex exec`.
 - [x] 2.6 Add focused tests for adapter arguments, process cancellation, auth failure classification, and stderr filtering.
-- [ ] 2.7 Wrap ordinary desktop chat streaming with linked `source=desktop` jobs while preserving the existing chat/sub-chat message, session, and stream behavior.
+- [x] 2.7 Wrap ordinary desktop chat streaming with linked `source=desktop` jobs while preserving the existing chat/sub-chat message, session, and stream behavior.
 
 ## 3. Durable Job Store
 - [x] 3.1 Add Drizzle schema and migration for `agent_jobs`.
@@ -63,7 +63,7 @@ Current status is **local implementation complete, pending Windows acceptance**.
 - [x] 6.7 Show runtime/auth/process failures as job status and event data without claiming runtime parity.
 - [x] 6.8 Keep ordinary desktop chat streaming on the existing chat/sub-chat path until a later explicit migration phase.
 - [x] 6.9 Run a real desktop smoke where a CLI-created job appears in the app.
-- [ ] 6.10 Run real desktop chat migration smoke after `source=desktop` job migration is designed and implemented.
+- [x] 6.10 Run real desktop chat migration smoke after `source=desktop` job migration is designed and implemented.
 
 ## 7. Verification
 - [x] 7.1 Run `openspec validate add-headless-agent-jobs --strict --no-interactive`.
@@ -78,16 +78,16 @@ Current status is **local implementation complete, pending Windows acceptance**.
 
 ## 8. Phase 5: Desktop Chat as `source=desktop` Jobs
 - [x] 8.1 Update OpenSpec design/spec boundaries for ordinary desktop chat job migration.
-- [ ] 8.2 Add a main-process desktop job lifecycle wrapper for existing Claude Code and Codex desktop chat streams.
-- [ ] 8.3 Create linked `source=desktop` jobs with project, chat, sub-chat, cwd, runtime, mode, and sanitized prompt preview.
-- [ ] 8.4 Mark desktop chat jobs running, succeeded, failed, canceled, or interrupted from the existing stream lifecycle.
-- [ ] 8.5 Route Workbench cancellation to the exact active desktop chat job without canceling a newer stream in the same sub-chat.
-- [ ] 8.6 Preserve existing `sub_chats.messages`, `session_id`, `stream_id`, attachments, guarded-run, rollback, tool approval, and provider-auth behavior.
-- [ ] 8.7 Show desktop chat jobs in Agent Workbench without labeling them as CLI jobs.
-- [ ] 8.8 Disable or redirect generic retry for `source=desktop` jobs until chat-safe retry semantics are implemented.
-- [ ] 8.9 Add focused tests for desktop job lifecycle, cancellation routing, UI source grouping, and desktop retry gating.
-- [ ] 8.10 Run real desktop smoke proving chat still works and the same run appears as a linked `source=desktop` job.
-- [ ] 8.11 Save video/screenshot/smoke-summary artifacts for the Phase 5 desktop migration.
+- [x] 8.2 Add a main-process desktop job lifecycle wrapper for existing Claude Code and Codex desktop chat streams.
+- [x] 8.3 Create linked `source=desktop` jobs with project, chat, sub-chat, cwd, runtime, mode, and sanitized prompt preview.
+- [x] 8.4 Mark desktop chat jobs running, succeeded, failed, canceled, or interrupted from the existing stream lifecycle.
+- [x] 8.5 Route Workbench cancellation to the exact active desktop chat job without canceling a newer stream in the same sub-chat.
+- [x] 8.6 Preserve existing `sub_chats.messages`, `session_id`, `stream_id`, attachments, guarded-run, rollback, tool approval, and provider-auth behavior.
+- [x] 8.7 Show desktop chat jobs in Agent Workbench without labeling them as CLI jobs.
+- [x] 8.8 Disable or redirect generic retry for `source=desktop` jobs until chat-safe retry semantics are implemented.
+- [x] 8.9 Add focused tests for desktop job lifecycle, cancellation routing, UI source grouping, and desktop retry gating.
+- [x] 8.10 Run real desktop smoke proving ordinary chat sends create linked `source=desktop` jobs and Workbench can navigate back to the chat.
+- [x] 8.11 Save video/screenshot/smoke-summary artifacts for the Phase 5 desktop migration.
 
 ## Future Follow-Up Proposals
 These items are intentionally not implementation tasks for this change:

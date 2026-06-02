@@ -4,23 +4,27 @@ Date: 2026-06-03
 
 ## Current Status
 
-The first four requested steps are implemented and verified locally on macOS:
+The first four requested steps and Phase 5 desktop-chat job migration are
+implemented and verified locally on macOS:
 
 - Phase 0: OpenSpec boundary and non-goals clarified.
 - Phase 1: Durable job database, state machine, heartbeat, cancellation, retry, and interruption handling implemented and tested.
 - Phase 2: Headless CLI dispatcher and macOS/Windows shims implemented; macOS smoke completed.
 - Phase 3: Claude Code and Codex basic headless adapters implemented through the shared job platform.
 - Phase 4: CLI/headless jobs are visible and actionable in Agent Workbench.
+- Phase 5: Ordinary desktop chat streams are wrapped as linked `source=desktop`
+  jobs without replacing existing chat/sub-chat message, session, and stream
+  storage.
 
 This change is **not release-ready or archive-ready yet** because the OpenSpec requires both macOS and Windows first-slice support, and Windows has not had a real host smoke.
 
 ## Verified Locally On macOS
 
-Commands run after the final implementation commits:
+Commands run after the Phase 5 implementation and smoke:
 
 ```text
 bun test tests
-358 pass, 0 fail, 1728 expect() calls
+371 pass, 0 fail, 1782 expect() calls
 
 bun run ts:check
 pass
@@ -99,6 +103,55 @@ finalTextHasPrompt: true
 videoBytes: 14032690
 ```
 
+## Phase 5 Desktop Chat Smoke
+
+A real Electron desktop window was opened with a temporary user data directory.
+The smoke sent a normal desktop chat message through the existing chat UI and
+verified that the same run appeared as a linked `source=desktop` job in Agent
+Workbench.
+
+Final artifact directory:
+
+```text
+/Users/ethan/Documents/Locus-smoke-artifacts/desktop-source-jobs-2026-06-03/
+```
+
+Artifacts:
+
+```text
+desktop-source-jobs.mov
+desktop-source-job-summary.json
+01-chat-before-send.png
+02-chat-after-send.png
+03-workbench-desktop-job.png
+04-workbench-events.png
+05-open-linked-chat.png
+```
+
+The final smoke summary recorded:
+
+```text
+beforeJobs: 0
+jobId: mpx8ov2clniiembt
+source: desktop
+runtime: claude-code
+mode: agent
+status: canceled
+errorCode: desktop_chat_canceled
+workbenchHasStartedInChat: true
+workbenchHasAgentRuns: true
+videoBytes: 126648628
+```
+
+The smoke intentionally does not claim a successful Claude model response.
+This machine opened the Claude auth modal during the run, and the smoke closed
+the modal/window after proving the linked job, Workbench visibility, event log,
+and Open chat navigation. That terminal state is valid cancellation evidence
+for the desktop job wrapper, not successful provider execution evidence.
+
+The checked desktop viewport showed no obvious overlap or button crowding in
+the chat page, Workbench card, event dialog, or Open chat return path.
+
 ## Windows Evidence Still Required
 
 Implemented and test-covered:
@@ -120,9 +173,9 @@ Until this Windows evidence exists, the accurate status is:
 ```text
 macOS local implementation + smoke complete
 headless/job/desktop visibility implemented and verified locally
+desktop chat source=desktop migration implemented and smoked locally
 Windows shim implemented and source-tested
 Windows real smoke pending
-ordinary desktop chat migration deferred
 daemon, schedule, and locus acp deferred
 ```
 
@@ -130,8 +183,10 @@ daemon, schedule, and locus acp deferred
 
 These are not part of the current first-slice completion:
 
-- Ordinary desktop chat as `source=desktop` jobs.
 - Local daemon queue.
 - Local schedules.
 - `locus acp`.
 - Full Codex behavior parity with Claude Code.
+- Generic safe retry semantics for `source=desktop` chat jobs. Generic retry is
+  intentionally disabled for desktop chat jobs until chat-specific retry can
+  preserve session/message semantics.
