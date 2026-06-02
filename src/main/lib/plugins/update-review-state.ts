@@ -16,6 +16,13 @@ import {
   type PluginUpdateReviewStatus,
 } from "../../../shared/plugin-update-review"
 import type { PluginSafeModeState } from "../../../shared/plugin-safety-gates"
+import {
+  buildDeveloperTrustedAcknowledgement,
+  getDeveloperTrustedStatus,
+  type PluginDeveloperModeState,
+  type PluginDeveloperTrustedAcknowledgement,
+  type PluginDeveloperTrustedStatus,
+} from "../../../shared/plugin-developer-trusted"
 import type { McpServerConfig } from "../claude-config"
 
 const PLUGIN_REVIEW_STATE_VERSION = 1
@@ -35,6 +42,15 @@ interface PluginReviewState {
   schemaVersion: 1
   plugins: Record<string, PluginReviewStateRecord>
   safeMode?: PluginSafeModeState
+  developerMode?: PluginDeveloperModeState
+  developerSources?: PluginDeveloperSourceRecord[]
+  developerTrustedPlugins?: Record<string, PluginDeveloperTrustedAcknowledgement>
+}
+
+export interface PluginDeveloperSourceRecord {
+  id: string
+  path: string
+  addedAt: string
 }
 
 export interface PluginReviewScanInput {
@@ -166,6 +182,9 @@ export async function readPluginReviewState(
       schemaVersion: PLUGIN_REVIEW_STATE_VERSION,
       plugins: state.plugins,
       safeMode: normalizeSafeModeState(state.safeMode),
+      developerMode: normalizeDeveloperModeState(state.developerMode),
+      developerSources: normalizeDeveloperSources(state.developerSources),
+      developerTrustedPlugins: normalizeDeveloperTrustedPlugins(state.developerTrustedPlugins),
     }
   } catch {
     return { schemaVersion: PLUGIN_REVIEW_STATE_VERSION, plugins: {} }
@@ -188,11 +207,27 @@ export function normalizeSafeModeState(
   }
 }
 
+export function normalizeDeveloperModeState(
+  value: PluginDeveloperModeState | undefined,
+): PluginDeveloperModeState {
+  return {
+    enabled: value?.enabled === true,
+    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
+  }
+}
+
 export async function getPluginSafeModeState(
   filePath = getPluginReviewStatePath(),
 ): Promise<PluginSafeModeState> {
   const state = await readPluginReviewState(filePath)
   return normalizeSafeModeState(state.safeMode)
+}
+
+export async function getPluginDeveloperModeState(
+  filePath = getPluginReviewStatePath(),
+): Promise<PluginDeveloperModeState> {
+  const state = await readPluginReviewState(filePath)
+  return normalizeDeveloperModeState(state.developerMode)
 }
 
 export async function setPluginSafeModeEnabled(
@@ -209,6 +244,122 @@ export async function setPluginSafeModeEnabled(
   return state.safeMode
 }
 
+export async function setPluginDeveloperModeEnabled(
+  enabled: boolean,
+  filePath = getPluginReviewStatePath(),
+  now = new Date(),
+): Promise<PluginDeveloperModeState> {
+  const state = await readPluginReviewState(filePath)
+  state.developerMode = {
+    enabled,
+    updatedAt: now.toISOString(),
+  }
+  await writePluginReviewState(state, filePath)
+  return state.developerMode
+}
+
+export async function getDeveloperPluginSources(
+  filePath = getPluginReviewStatePath(),
+): Promise<PluginDeveloperSourceRecord[]> {
+  const state = await readPluginReviewState(filePath)
+  return normalizeDeveloperSources(state.developerSources)
+}
+
+export async function addDeveloperPluginSource(
+  sourcePath: string,
+  filePath = getPluginReviewStatePath(),
+  now = new Date(),
+): Promise<PluginDeveloperSourceRecord> {
+  const realSourcePath = await resolveDeveloperSourcePath(sourcePath)
+  const source: PluginDeveloperSourceRecord = {
+    id: buildDeveloperSourceId(realSourcePath),
+    path: realSourcePath,
+    addedAt: now.toISOString(),
+  }
+  const state = await readPluginReviewState(filePath)
+  const sources = normalizeDeveloperSources(state.developerSources)
+  state.developerSources = [
+    ...sources.filter((candidate) => candidate.id !== source.id),
+    source,
+  ].sort((a, b) => a.path.localeCompare(b.path))
+  await writePluginReviewState(state, filePath)
+  return source
+}
+
+export async function removeDeveloperPluginSource(
+  sourceId: string,
+  filePath = getPluginReviewStatePath(),
+): Promise<{ removed: boolean }> {
+  const state = await readPluginReviewState(filePath)
+  const sources = normalizeDeveloperSources(state.developerSources)
+  const nextSources = sources.filter((source) => source.id !== sourceId)
+  state.developerSources = nextSources
+  await writePluginReviewState(state, filePath)
+  return { removed: nextSources.length !== sources.length }
+}
+
+export async function trustDeveloperPluginFingerprint(
+  input: {
+    pluginReviewKey: string
+    pluginFingerprint: string
+    manifestId: string
+    entryPath: string
+    entryContentHash: string
+    sourcePath: string
+  },
+  filePath = getPluginReviewStatePath(),
+  now = new Date(),
+): Promise<PluginDeveloperTrustedAcknowledgement> {
+  const state = await readPluginReviewState(filePath)
+  const trust = buildDeveloperTrustedAcknowledgement({
+    ...input,
+    trustedAt: now.toISOString(),
+  })
+  state.developerTrustedPlugins = {
+    ...normalizeDeveloperTrustedPlugins(state.developerTrustedPlugins),
+    [input.pluginReviewKey]: trust,
+  }
+  await writePluginReviewState(state, filePath)
+  return trust
+}
+
+export async function revokeDeveloperPluginTrust(
+  pluginReviewKey: string,
+  filePath = getPluginReviewStatePath(),
+): Promise<{ revoked: boolean }> {
+  const state = await readPluginReviewState(filePath)
+  const trustedPlugins = normalizeDeveloperTrustedPlugins(state.developerTrustedPlugins)
+  const revoked = Boolean(trustedPlugins[pluginReviewKey])
+  delete trustedPlugins[pluginReviewKey]
+  state.developerTrustedPlugins = trustedPlugins
+  await writePluginReviewState(state, filePath)
+  return { revoked }
+}
+
+export async function getDeveloperPluginTrustStatus(
+  input: {
+    pluginReviewKey: string
+    pluginFingerprint: string
+    manifestId: string
+    entryPath: string
+    entryContentHash: string
+    sourcePath: string
+  },
+  filePath = getPluginReviewStatePath(),
+): Promise<{
+  status: PluginDeveloperTrustedStatus
+  acknowledgement?: PluginDeveloperTrustedAcknowledgement
+}> {
+  const state = await readPluginReviewState(filePath)
+  const acknowledgement = normalizeDeveloperTrustedPlugins(
+    state.developerTrustedPlugins,
+  )[input.pluginReviewKey]
+  return {
+    acknowledgement,
+    status: getDeveloperTrustedStatus(acknowledgement, input),
+  }
+}
+
 export async function recordPluginReviewScans(
   inputs: PluginReviewScanInput[],
   filePath = getPluginReviewStatePath(),
@@ -216,6 +367,11 @@ export async function recordPluginReviewScans(
 ): Promise<PluginReviewScanResult> {
   const state = await readPluginReviewState(filePath)
   const safeMode = normalizeSafeModeState(state.safeMode)
+  state.developerMode = normalizeDeveloperModeState(state.developerMode)
+  state.developerSources = normalizeDeveloperSources(state.developerSources)
+  state.developerTrustedPlugins = normalizeDeveloperTrustedPlugins(
+    state.developerTrustedPlugins,
+  )
   const metadataByPluginKey: Record<string, PluginUpdateReviewMetadata> = {}
   const seenAt = now.toISOString()
 
@@ -298,6 +454,69 @@ function getPluginUpdateReviewStatus(
   if (previousRecord.lastReviewedFingerprint) return "changed"
   if (previousRecord.fingerprint === currentFingerprint) return "unchanged"
   return "changed"
+}
+
+function normalizeDeveloperSources(
+  value: PluginDeveloperSourceRecord[] | undefined,
+): PluginDeveloperSourceRecord[] {
+  if (!Array.isArray(value)) return []
+  const byId = new Map<string, PluginDeveloperSourceRecord>()
+  for (const source of value) {
+    if (
+      !source ||
+      typeof source.id !== "string" ||
+      source.id.trim().length === 0 ||
+      typeof source.path !== "string" ||
+      source.path.trim().length === 0
+    ) {
+      continue
+    }
+    byId.set(source.id, {
+      id: source.id,
+      path: source.path,
+      addedAt: typeof source.addedAt === "string" ? source.addedAt : "",
+    })
+  }
+  return Array.from(byId.values()).sort((a, b) => a.path.localeCompare(b.path))
+}
+
+function normalizeDeveloperTrustedPlugins(
+  value: Record<string, PluginDeveloperTrustedAcknowledgement> | undefined,
+): Record<string, PluginDeveloperTrustedAcknowledgement> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const normalized: Record<string, PluginDeveloperTrustedAcknowledgement> = {}
+  for (const [key, trust] of Object.entries(value)) {
+    if (
+      !trust ||
+      typeof trust !== "object" ||
+      typeof trust.pluginReviewKey !== "string" ||
+      trust.pluginReviewKey !== key ||
+      typeof trust.pluginFingerprint !== "string" ||
+      typeof trust.manifestId !== "string" ||
+      typeof trust.entryPath !== "string" ||
+      typeof trust.entryContentHash !== "string" ||
+      typeof trust.sourcePath !== "string" ||
+      typeof trust.trustedAt !== "string"
+    ) {
+      continue
+    }
+    normalized[key] = trust
+  }
+  return normalized
+}
+
+async function resolveDeveloperSourcePath(sourcePath: string): Promise<string> {
+  const resolved = path.resolve(sourcePath)
+  const realSourcePath = await fs.realpath(resolved)
+  const stat = await fs.stat(realSourcePath)
+  if (!stat.isDirectory()) {
+    throw new Error("Developer plugin source must be a directory.")
+  }
+  return realSourcePath
+}
+
+function buildDeveloperSourceId(sourcePath: string): string {
+  return createHash("sha256").update(sourcePath).digest("hex").slice(0, 16)
 }
 
 export async function extractCodexSourcePins(

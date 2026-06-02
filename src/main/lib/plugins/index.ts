@@ -4,6 +4,7 @@ import * as path from "path"
 import * as os from "os"
 import {
   getManifestOnlyPluginTargetMode,
+  getDeveloperTrustedPluginTargetMode,
   getPluginSourceDiagnostics,
   type PluginDiagnostic,
   type PluginExecutionStatus,
@@ -15,14 +16,16 @@ import type { McpServerConfig } from "../claude-config"
 import { isDirentDirectory } from "../fs/dirent"
 import {
   buildCurrentPluginMcpApprovalIdentifier,
+  getDeveloperPluginSources,
   extractCodexSourcePins,
   recordPluginReviewScans,
 } from "./update-review-state"
 import { scanPluginReviewDocument } from "./review-scan"
 import { buildPluginSafetyGate, type PluginSafetyGate } from "../../../shared/plugin-safety-gates"
+import { parseDeveloperTrustedManifest } from "../../../shared/plugin-developer-trusted"
 
 export type PluginRuntime = "claude" | "codex"
-export type PluginSourceKind = "local-marketplace" | "cache"
+export type PluginSourceKind = "local-marketplace" | "cache" | "developer-local"
 export type PluginSourceTrust = "official" | "local" | "external"
 export type PluginSourceStatus = "available" | "empty" | "missing"
 
@@ -293,15 +296,66 @@ function getSourceDescription(runtime: PluginRuntime): string {
     : "Codex plugin cache collection managed by Codex."
 }
 
+function getSourceDescriptionForKind(kind: PluginSourceKind, runtime: PluginRuntime): string {
+  if (kind === "developer-local") return "Local developer plugin source selected by the user."
+  return getSourceDescription(runtime)
+}
+
 function getSourceInstallHint(runtime: PluginRuntime): string {
   return runtime === "claude"
     ? "Install Claude plugin marketplaces under ~/.claude/plugins/marketplaces/."
     : "Codex manages this cache; install or update plugins through Codex, then refresh."
 }
 
+function getSourceInstallHintForKind(kind: PluginSourceKind, runtime: PluginRuntime): string {
+  if (kind === "developer-local") {
+    return "Register local developer plugin directories explicitly. Developer plugins are full local code trust."
+  }
+  return getSourceInstallHint(runtime)
+}
+
 function getSourceKind(runtime: PluginRuntime): PluginSourceKind {
   return runtime === "claude" ? "local-marketplace" : "cache"
 }
+
+async function discoverDeveloperTrustedPlugins(): Promise<PluginInfo[]> {
+  const sources = await getDeveloperPluginSources()
+  const plugins: PluginInfo[] = []
+
+  for (const source of sources) {
+    const manifestPath = path.join(source.path, ".locus-plugin", "developer.json")
+    let parsedManifest: ReturnType<typeof parseDeveloperTrustedManifest> | undefined
+    try {
+      parsedManifest = parseDeveloperTrustedManifest(
+        JSON.parse(await fs.readFile(manifestPath, "utf-8")) as unknown,
+      )
+    } catch {
+      parsedManifest = undefined
+    }
+    const manifest = parsedManifest?.manifest
+    plugins.push({
+      runtime: "claude",
+      reviewKey: `developer:${source.id}`,
+      name: manifest?.name ?? path.basename(source.path),
+      version: manifest?.version ?? "0.0.0",
+      description: manifest?.description,
+      path: source.path,
+      installRoot: source.path,
+      sourceRoot: source.path,
+      source: `developer:${source.id}`,
+      marketplace: `developer:${source.id}`,
+      category: "Developer",
+      sourceKind: "developer-local",
+      sourceTrust: "local",
+      diagnostics: [],
+      sourcePins: [],
+      ...getDeveloperTrustedPluginTargetMode(),
+    })
+  }
+
+  return plugins
+}
+
 
 /**
  * Discover all installed plugins from ~/.claude/plugins/marketplaces/
@@ -512,11 +566,12 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
 }
 
 export async function discoverAllRuntimePlugins(): Promise<PluginInfo[]> {
-  const [claudePlugins, codexPlugins] = await Promise.all([
+  const [claudePlugins, codexPlugins, developerPlugins] = await Promise.all([
     discoverInstalledPlugins(),
     discoverCodexInstalledPlugins(),
+    discoverDeveloperTrustedPlugins(),
   ])
-  return [...claudePlugins, ...codexPlugins]
+  return [...claudePlugins, ...codexPlugins, ...developerPlugins]
 }
 
 export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
@@ -531,6 +586,7 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
     marketplace: string
     path: string
     pluginCount: number
+    kind: PluginSourceKind
   }>()
 
   for (const plugin of plugins) {
@@ -545,6 +601,7 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
       marketplace: plugin.marketplace,
       path: plugin.sourceRoot ?? plugin.installRoot,
       pluginCount: 1,
+      kind: plugin.sourceKind,
     })
   }
 
@@ -554,13 +611,13 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
       id: `${source.runtime}:${source.marketplace}`,
       runtime: source.runtime,
       name: formatSourceName(source.marketplace),
-      description: getSourceDescription(source.runtime),
-      kind: getSourceKind(source.runtime),
+      description: getSourceDescriptionForKind(source.kind, source.runtime),
+      kind: source.kind,
       trust: getSourceTrust(source.runtime, source.marketplace),
       status,
       path: source.path,
       pluginCount: source.pluginCount,
-      installHint: getSourceInstallHint(source.runtime),
+      installHint: getSourceInstallHintForKind(source.kind, source.runtime),
       diagnostics: getPluginSourceDiagnostics({ status }),
     }
   })

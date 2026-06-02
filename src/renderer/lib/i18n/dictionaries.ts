@@ -1116,6 +1116,7 @@ export const en = {
   "settings.plugins.executionLocusControlled": "Locus-controlled surface",
   "settings.plugins.executionLocusControlledPlanned": "Locus surface required",
   "settings.plugins.executionTrustedCodePlanned": "Trusted code only",
+  "settings.plugins.executionDeveloperTrustedCode": "Trusted local code",
   "settings.plugins.reviewStatus": "Review",
   "settings.plugins.reviewMetadataOnly": "No execution",
   "settings.plugins.reviewMcpRequired": "MCP review required",
@@ -1293,6 +1294,8 @@ export const en = {
     "Source directory is missing or cannot be read.",
   "settings.plugins.diagnosticSourceReadOnlyRefresh":
     "Refresh updates metadata only and does not install, update, or execute plugins.",
+  "settings.plugins.diagnosticDeveloperTrustedCodeFullTrust":
+    "Developer plugin mode runs trusted local code on this machine. It is not a security sandbox.",
   "settings.plugins.commandsCount": "Commands ({count})",
   "settings.plugins.skillsCount": "Skills ({count})",
   "settings.plugins.agentsCount": "Agents ({count})",
@@ -1360,6 +1363,7 @@ export const en = {
   "settings.plugins.sourceKind": "Source Type",
   "settings.plugins.sourceKindLocalMarketplace": "Local Marketplace",
   "settings.plugins.sourceKindCache": "Cache",
+  "settings.plugins.sourceKindDeveloperLocal": "Developer Local",
   "settings.plugins.sourceTrust": "Trust",
   "settings.plugins.sourceTrustOfficial": "Official",
   "settings.plugins.sourceTrustLocal": "Local",
@@ -3866,6 +3870,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.executionLocusControlled": "Locus 受控界面",
   "settings.plugins.executionLocusControlledPlanned": "需要 Locus 扩展入口",
   "settings.plugins.executionTrustedCodePlanned": "仅可信代码",
+  "settings.plugins.executionDeveloperTrustedCode": "可信本地代码",
   "settings.plugins.reviewStatus": "复审状态",
   "settings.plugins.reviewMetadataOnly": "不执行代码",
   "settings.plugins.reviewMcpRequired": "需要 MCP 复审",
@@ -4043,6 +4048,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "来源目录不存在或无法读取。",
   "settings.plugins.diagnosticSourceReadOnlyRefresh":
     "刷新只更新元数据，不安装、更新或执行插件。",
+  "settings.plugins.diagnosticDeveloperTrustedCodeFullTrust":
+    "开发者插件模式会在本机运行可信代码，不是安全沙箱。",
   "settings.plugins.commandsCount": "命令（{count}）",
   "settings.plugins.skillsCount": "技能（{count}）",
   "settings.plugins.agentsCount": "智能体（{count}）",
@@ -4110,6 +4117,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.sourceKind": "来源类型",
   "settings.plugins.sourceKindLocalMarketplace": "本地 Marketplace",
   "settings.plugins.sourceKindCache": "缓存",
+  "settings.plugins.sourceKindDeveloperLocal": "开发者本地",
   "settings.plugins.sourceTrust": "可信级别",
   "settings.plugins.sourceTrustOfficial": "官方",
   "settings.plugins.sourceTrustLocal": "本地",

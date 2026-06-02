@@ -31,12 +31,12 @@ interface PluginComponent {
 type PluginRuntime = "claude" | "codex"
 type RuntimeFilter = "all" | PluginRuntime
 type PluginViewMode = "installed" | "sources"
-type PluginSourceKind = "local-marketplace" | "cache"
+type PluginSourceKind = "local-marketplace" | "cache" | "developer-local"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
 const CONTROLLED_UI_SELECT_UNSET_VALUE = "__locus_controlled_ui_unset__"
 type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-code"
-type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled" | "locus-controlled-planned" | "trusted-code-planned"
+type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled" | "locus-controlled-planned" | "trusted-code-planned" | "developer-trusted-code"
 type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
 type PluginUpdatePosture = "advisory-only" | "review-before-enable"
 type PluginUpdateReviewStatus = "new" | "unchanged" | "changed" | "reviewed"
@@ -75,6 +75,7 @@ type PluginDiagnosticCode =
   | "source-empty"
   | "source-missing"
   | "source-read-only-refresh"
+  | "developer-trusted-code-full-trust"
 
 interface PluginDiagnostic {
   code: PluginDiagnosticCode
@@ -357,6 +358,8 @@ function getSourceKindLabel(kind: PluginSourceKind, t: ReturnType<typeof useI18n
       return t("settings.plugins.sourceKindLocalMarketplace")
     case "cache":
       return t("settings.plugins.sourceKindCache")
+    case "developer-local":
+      return t("settings.plugins.sourceKindDeveloperLocal")
   }
 }
 
@@ -437,6 +440,8 @@ function getExecutionStatusLabel(status: PluginExecutionStatus, t: ReturnType<ty
       return t("settings.plugins.executionLocusControlledPlanned")
     case "trusted-code-planned":
       return t("settings.plugins.executionTrustedCodePlanned")
+    case "developer-trusted-code":
+      return t("settings.plugins.executionDeveloperTrustedCode")
   }
 }
 
@@ -712,6 +717,8 @@ function getDiagnosticLabel(code: PluginDiagnosticCode, t: ReturnType<typeof use
       return t("settings.plugins.diagnosticSourceMissing")
     case "source-read-only-refresh":
       return t("settings.plugins.diagnosticSourceReadOnlyRefresh")
+    case "developer-trusted-code-full-trust":
+      return t("settings.plugins.diagnosticDeveloperTrustedCodeFullTrust")
   }
 }
 

@@ -59,6 +59,11 @@ export interface PluginDeveloperTrustedReviewDocument {
   ignoredUnknownFields: string[]
 }
 
+export interface PluginDeveloperModeState {
+  enabled: boolean
+  updatedAt?: string
+}
+
 export type PluginDeveloperTrustedGateReason =
   | "developer-mode-disabled"
   | "safe-mode"

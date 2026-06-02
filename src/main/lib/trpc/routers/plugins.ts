@@ -13,16 +13,33 @@ import {
   type PluginInfo,
 } from "../../plugins"
 import {
+  addDeveloperPluginSource,
+  getDeveloperPluginTrustStatus,
+  getPluginDeveloperModeState,
   getPluginReviewStatePath,
   getPluginSafeModeState,
   markPluginFingerprintReviewed,
   recordPluginReviewScans,
+  removeDeveloperPluginSource,
+  revokeDeveloperPluginTrust,
+  setPluginDeveloperModeEnabled,
   setPluginSafeModeEnabled,
+  trustDeveloperPluginFingerprint,
+  type PluginDeveloperSourceRecord,
 } from "../../plugins/update-review-state"
 import {
   scanPluginReviewDocument,
   type PluginComponent,
 } from "../../plugins/review-scan"
+import {
+  buildPluginDeveloperTrustedGate,
+  type PluginDeveloperModeState,
+  type PluginDeveloperTrustedDiagnostic,
+  type PluginDeveloperTrustedGate,
+  type PluginDeveloperTrustedManifest,
+  type PluginDeveloperTrustedStatus,
+  type PluginDeveloperTrustedAcknowledgement,
+} from "../../../../shared/plugin-developer-trusted"
 import {
   buildPluginControlledUiGate,
   getControlledUiActionPermissionId,
@@ -95,6 +112,19 @@ export interface PluginWithComponents {
     settingsValues: Record<string, Record<string, PluginControlledUiSettingValue>>
     gate: PluginControlledUiGate
   }
+  developerTrusted: {
+    manifestPresent: boolean
+    manifestPath?: string
+    manifest?: PluginDeveloperTrustedManifest
+    diagnostics: PluginDeveloperTrustedDiagnostic[]
+    ignoredUnknownFields: string[]
+    entryPath?: string
+    entryRealPath?: string
+    entryContentHash?: string
+    trustStatus: PluginDeveloperTrustedStatus
+    acknowledgement?: PluginDeveloperTrustedAcknowledgement
+    gate: PluginDeveloperTrustedGate
+  }
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -115,6 +145,7 @@ interface ScannedPlugin {
   updatePosture: PluginUpdatePosture
   components: PluginWithComponents["components"]
   controlledUi: Awaited<ReturnType<typeof scanPluginReviewDocument>>["controlledUi"]
+  developerTrusted: Awaited<ReturnType<typeof scanPluginReviewDocument>>["developerTrusted"]
   mcpApprovalIdentifiers: Record<string, string>
   reviewDocument: Awaited<ReturnType<typeof scanPluginReviewDocument>>["reviewDocument"]
 }
@@ -144,6 +175,7 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
       getPluginMcpApprovalIdentifiers(plugin),
     ])
   const { components, controlledUi, reviewDocument, targetModeSummary } = reviewScan
+  const { developerTrusted } = reviewScan
   const { commands, skills, agents, mcpServers } = components
 
   const reviewStatus = getPluginReviewStatus({
@@ -165,6 +197,7 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
     updatePosture: targetModeSummary.updatePosture,
     components,
     controlledUi,
+    developerTrusted,
     mcpApprovalIdentifiers,
     reviewDocument,
   }
@@ -221,6 +254,7 @@ async function toPluginWithComponents(input: {
   enabledPlugins: string[]
   updateReview?: PluginUpdateReviewMetadata
   safeMode: PluginSafeModeState
+  developerMode: PluginDeveloperModeState
 }): Promise<PluginWithComponents> {
   const { plugin } = input.scanned
   const updateReview = input.updateReview ?? makeEmptyUpdateReviewMetadata(plugin)
@@ -254,6 +288,25 @@ async function toPluginWithComponents(input: {
       ? grantValues.every((status) => status === "current")
       : undefined,
     permissionStale: grantValues.some((status) => status === "stale"),
+  })
+  const developerTrustContext = getDeveloperTrustContext({
+    plugin,
+    scanned: input.scanned,
+    updateReview,
+  })
+  const developerTrustStatus = developerTrustContext
+    ? await getDeveloperPluginTrustStatus(developerTrustContext)
+    : { status: "missing" as const, acknowledgement: undefined }
+  const developerTrustedGate = buildPluginDeveloperTrustedGate({
+    runtime: plugin.runtime,
+    targetMode: input.scanned.targetMode,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: input.safeMode.enabled,
+    developerModeEnabled: input.developerMode.enabled,
+    isLocalDeveloperSource: plugin.sourceKind === "developer-local",
+    hasValidManifest: Boolean(input.scanned.developerTrusted.manifest),
+    entryContained: Boolean(input.scanned.developerTrusted.entryRealPath && input.scanned.developerTrusted.entryContentHash),
+    trustStatus: developerTrustStatus.status,
   })
 
   return {
@@ -289,10 +342,44 @@ async function toPluginWithComponents(input: {
       settingsValues,
       gate: controlledUiGate,
     },
-    isDisabled: plugin.runtime === "claude" ? !input.enabledPlugins.includes(plugin.source) : false,
-    canToggle: plugin.runtime === "claude",
+    developerTrusted: {
+      manifestPresent: Boolean(input.scanned.developerTrusted.manifest),
+      manifestPath: input.scanned.developerTrusted.manifestPath,
+      manifest: input.scanned.developerTrusted.manifest,
+      diagnostics: input.scanned.developerTrusted.diagnostics,
+      ignoredUnknownFields: input.scanned.developerTrusted.ignoredUnknownFields,
+      entryPath: input.scanned.developerTrusted.entryPath,
+      entryRealPath: input.scanned.developerTrusted.entryRealPath,
+      entryContentHash: input.scanned.developerTrusted.entryContentHash,
+      trustStatus: developerTrustStatus.status,
+      acknowledgement: developerTrustStatus.acknowledgement,
+      gate: developerTrustedGate,
+    },
+    isDisabled: plugin.runtime === "claude" && plugin.sourceKind !== "developer-local"
+      ? !input.enabledPlugins.includes(plugin.source)
+      : false,
+    canToggle: plugin.runtime === "claude" && plugin.sourceKind !== "developer-local",
     components: input.scanned.components,
     mcpApprovalIdentifiers: input.scanned.mcpApprovalIdentifiers,
+  }
+}
+
+function getDeveloperTrustContext(input: {
+  plugin: PluginInfo
+  scanned: ScannedPlugin
+  updateReview: PluginUpdateReviewMetadata
+}) {
+  const manifest = input.scanned.developerTrusted.manifest
+  const entryRealPath = input.scanned.developerTrusted.entryRealPath
+  const entryContentHash = input.scanned.developerTrusted.entryContentHash
+  if (!manifest || !entryRealPath || !entryContentHash) return undefined
+  return {
+    pluginReviewKey: input.plugin.reviewKey,
+    pluginFingerprint: input.updateReview.fingerprint,
+    manifestId: manifest.id,
+    entryPath: entryRealPath,
+    entryContentHash,
+    sourcePath: input.plugin.path,
   }
 }
 
@@ -485,6 +572,13 @@ export const pluginsRouter = router({
   }),
 
   /**
+   * Get local Developer Plugin Mode state.
+   */
+  developerMode: publicProcedure.query(async (): Promise<PluginDeveloperModeState> => {
+    return getPluginDeveloperModeState()
+  }),
+
+  /**
    * Toggle local plugin safe mode without deleting packages or review metadata.
    */
   setSafeMode: publicProcedure
@@ -495,13 +589,52 @@ export const pluginsRouter = router({
     }),
 
   /**
+   * Toggle Developer Plugin Mode. This does not trust or load any plugin by
+   * itself; per-plugin review and trust gates still apply.
+   */
+  setDeveloperMode: publicProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ input }): Promise<PluginDeveloperModeState> => {
+      clearPluginCache()
+      return setPluginDeveloperModeEnabled(input.enabled)
+    }),
+
+  /**
+   * Register a local developer plugin directory. Main validates that the path
+   * resolves to a directory; remote store/cache packages are not accepted here.
+   */
+  addDeveloperSource: publicProcedure
+    .input(z.object({ path: z.string().min(1) }))
+    .mutation(async ({ input }): Promise<PluginDeveloperSourceRecord> => {
+      clearPluginCache()
+      try {
+        return await addDeveloperPluginSource(input.path)
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: error instanceof Error
+            ? error.message
+            : "Developer plugin source could not be registered.",
+        })
+      }
+    }),
+
+  removeDeveloperSource: publicProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      clearPluginCache()
+      return removeDeveloperPluginSource(input.id)
+    }),
+
+  /**
    * List all installed runtime plugins with their components and disabled status.
    */
   list: publicProcedure.query(async (): Promise<PluginWithComponents[]> => {
-    const [installedPlugins, enabledPlugins, safeMode] = await Promise.all([
+    const [installedPlugins, enabledPlugins, safeMode, developerMode] = await Promise.all([
       discoverAllRuntimePlugins(),
       getEnabledPlugins(),
       getPluginSafeModeState(),
+      getPluginDeveloperModeState(),
     ])
 
     const scannedPlugins = await Promise.all(
@@ -519,6 +652,7 @@ export const pluginsRouter = router({
       enabledPlugins,
       updateReview: reviewResult.metadataByPluginKey[scanned.plugin.reviewKey],
       safeMode,
+      developerMode,
     })))
   }),
 
@@ -605,10 +739,11 @@ export const pluginsRouter = router({
   markReviewed: publicProcedure
     .input(z.object({ reviewKey: z.string() }))
     .mutation(async ({ input }) => {
-      const [installedPlugins, enabledPlugins, safeMode] = await Promise.all([
+      const [installedPlugins, enabledPlugins, safeMode, developerMode] = await Promise.all([
         discoverAllRuntimePlugins(),
         getEnabledPlugins(),
         getPluginSafeModeState(),
+        getPluginDeveloperModeState(),
       ])
       const plugin = installedPlugins.find((candidate) => candidate.reviewKey === input.reviewKey)
       if (!plugin) {
@@ -629,8 +764,71 @@ export const pluginsRouter = router({
         enabledPlugins,
         updateReview,
         safeMode,
+        developerMode,
       })
   }),
+
+  trustDeveloperPlugin: publicProcedure
+    .input(z.object({ reviewKey: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const [installedPlugins, enabledPlugins] = await Promise.all([
+        discoverAllRuntimePlugins(),
+        getEnabledPlugins(),
+      ])
+      const plugin = installedPlugins.find((candidate) => candidate.reviewKey === input.reviewKey)
+      if (!plugin) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Plugin is not currently discovered.",
+        })
+      }
+
+      const scanned = await scanPluginWithComponents(plugin)
+      const reviewResult = await recordPluginReviewScans([{
+        pluginKey: plugin.reviewKey,
+        document: scanned.reviewDocument,
+      }])
+      const updateReview =
+        reviewResult.metadataByPluginKey[plugin.reviewKey] ??
+        makeEmptyUpdateReviewMetadata(plugin)
+      const developerMode = await getPluginDeveloperModeState()
+      const trustContext = getDeveloperTrustContext({ plugin, scanned, updateReview })
+      const gate = buildPluginDeveloperTrustedGate({
+        runtime: plugin.runtime,
+        targetMode: scanned.targetMode,
+        updateReviewStatus: updateReview.status,
+        safeModeEnabled: reviewResult.safeMode.enabled,
+        developerModeEnabled: developerMode.enabled,
+        isLocalDeveloperSource: plugin.sourceKind === "developer-local",
+        hasValidManifest: Boolean(scanned.developerTrusted.manifest),
+        entryContained: Boolean(scanned.developerTrusted.entryRealPath && scanned.developerTrusted.entryContentHash),
+        trustStatus: "current",
+      })
+      if (!trustContext || !gate.canTrustCurrentFingerprint) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Developer plugin cannot be trusted for the current state.",
+        })
+      }
+
+      const acknowledgement = await trustDeveloperPluginFingerprint(trustContext)
+      return toPluginWithComponents({
+        scanned,
+        enabledPlugins,
+        updateReview,
+        safeMode: reviewResult.safeMode,
+        developerMode,
+      }).then((pluginWithComponents) => ({
+        plugin: pluginWithComponents,
+        acknowledgement,
+      }))
+    }),
+
+  revokeDeveloperPluginTrust: publicProcedure
+    .input(z.object({ reviewKey: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      return revokeDeveloperPluginTrust(input.reviewKey)
+    }),
 
   /**
    * Persist a Locus-owned controlled UI setting value. The field is validated

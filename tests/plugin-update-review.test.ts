@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -291,6 +291,76 @@ describe("plugin update review state", () => {
 
     expect(scan.safeMode.enabled).toBe(true)
     expect(scan.metadataByPluginKey[pluginKey].status).toBe("reviewed")
+  })
+
+  test("persists developer mode, local sources, and fingerprint-bound trust", async () => {
+    const statePath = join(userDataDir, "plugin-review-state.json")
+    const sourcePath = await mkdtemp(join(tmpdir(), "locus-developer-source-"))
+    try {
+      const canonicalSourcePath = await realpath(sourcePath)
+      const developerMode = await reviewState.setPluginDeveloperModeEnabled(
+        true,
+        statePath,
+        new Date("2026-06-02T00:04:00Z"),
+      )
+      expect(developerMode).toEqual({
+        enabled: true,
+        updatedAt: "2026-06-02T00:04:00.000Z",
+      })
+      expect(await reviewState.getPluginDeveloperModeState(statePath)).toEqual(developerMode)
+
+      const source = await reviewState.addDeveloperPluginSource(
+        sourcePath,
+        statePath,
+        new Date("2026-06-02T00:05:00Z"),
+      )
+      expect(source.path).toBe(canonicalSourcePath)
+      expect(source.id).toMatch(/^[a-f0-9]{16}$/)
+      expect(await reviewState.getDeveloperPluginSources(statePath)).toEqual([source])
+
+      const replacedSource = await reviewState.addDeveloperPluginSource(
+        sourcePath,
+        statePath,
+        new Date("2026-06-02T00:06:00Z"),
+      )
+      expect(replacedSource.id).toBe(source.id)
+      expect(await reviewState.getDeveloperPluginSources(statePath)).toHaveLength(1)
+
+      const trustInput = {
+        pluginReviewKey: `developer:${source.id}`,
+        pluginFingerprint: "fingerprint-a",
+        manifestId: "local.example.dev",
+        entryPath: join(source.path, "dist", "index.js"),
+        entryContentHash: "entry-hash-a",
+        sourcePath: source.path,
+      }
+      const acknowledgement = await reviewState.trustDeveloperPluginFingerprint(
+        trustInput,
+        statePath,
+        new Date("2026-06-02T00:07:00Z"),
+      )
+      expect(acknowledgement).toMatchObject({
+        ...trustInput,
+        trustedAt: "2026-06-02T00:07:00.000Z",
+      })
+      expect(await reviewState.getDeveloperPluginTrustStatus(trustInput, statePath))
+        .toMatchObject({ status: "current", acknowledgement })
+      expect(await reviewState.getDeveloperPluginTrustStatus({
+        ...trustInput,
+        entryContentHash: "entry-hash-b",
+      }, statePath)).toMatchObject({ status: "stale" })
+
+      expect(await reviewState.revokeDeveloperPluginTrust(trustInput.pluginReviewKey, statePath))
+        .toEqual({ revoked: true })
+      expect(await reviewState.getDeveloperPluginTrustStatus(trustInput, statePath))
+        .toEqual({ status: "missing", acknowledgement: undefined })
+
+      expect(await reviewState.removeDeveloperPluginSource(source.id, statePath))
+        .toEqual({ removed: true })
+      expect(await reviewState.getDeveloperPluginSources(statePath)).toEqual([])
+    } finally {
+      await rm(sourcePath, { recursive: true, force: true })
+    }
   })
 
   test("extracts cache versions and lock source refs as advisory pins", async () => {
