@@ -196,4 +196,42 @@ describe("plugin target mode UI source guards", () => {
     expect(dictionarySource).toContain("This is not a sandbox or trust certificate")
     expect(dictionarySource).toContain("不是沙箱或可信证书")
   })
+
+  test("renders developer trusted plugin controls without renderer path or code execution", () => {
+    expect(pluginsTabSource).toContain("PluginDeveloperModeControl")
+    expect(pluginsTabSource).toContain("PluginDeveloperTrustPanel")
+    expect(pluginsTabSource).toContain("trpc.plugins.developerMode.useQuery")
+    expect(pluginsTabSource).toContain("trpc.plugins.setDeveloperMode.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.chooseDeveloperSourceDirectory.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.removeDeveloperSource.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.trustDeveloperPlugin.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.revokeDeveloperPluginTrust.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.loadDeveloperPlugin.useMutation")
+    expect(pluginsTabSource).toContain("developer.gate.canTrustCurrentFingerprint")
+    expect(pluginsTabSource).toContain("developer.gate.canLoadTrustedCode")
+    expect(pluginsTabSource).not.toContain("trpc.plugins.addDeveloperSource")
+    expect(pluginsTabSource).not.toContain("showOpenDialog")
+    expect(pluginsTabSource).not.toContain("import(")
+    expect(pluginsTabSource).not.toContain("require(")
+    expect(pluginsTabSource).not.toContain("new Function")
+
+    for (const key of [
+      "settings.plugins.developerMode",
+      "settings.plugins.developerModeHint",
+      "settings.plugins.addDeveloperSource",
+      "settings.plugins.developerTrustedCode",
+      "settings.plugins.developerTrustedHint",
+      "settings.plugins.trustDeveloperPlugin",
+      "settings.plugins.loadDeveloperPlugin",
+      "settings.plugins.revokeDeveloperTrust",
+      "settings.plugins.developerGateBlocksAction",
+      "settings.plugins.removeDeveloperSource",
+      "settings.plugins.toast.developerPluginLoaded",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+
+    expect(dictionarySource).toContain("This can run local plugin code on this machine")
+    expect(dictionarySource).toContain("这会在本机运行本地插件代码")
+  })
 })

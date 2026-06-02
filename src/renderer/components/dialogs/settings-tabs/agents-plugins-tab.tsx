@@ -6,7 +6,7 @@ import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../li
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope } from "lucide-react"
+import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope, Code2, FolderPlus, Play, ShieldOff, Trash2 } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
@@ -782,8 +782,105 @@ function getControlledUiContributionStatusClass(plugin: PluginData, surface: Plu
   return "border-border bg-background text-muted-foreground"
 }
 
+function getDeveloperTrustStatusLabel(
+  status: PluginDeveloperTrustedStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (status) {
+    case "current":
+      return t("settings.plugins.developerTrustCurrent")
+    case "stale":
+      return t("settings.plugins.developerTrustStale")
+    case "missing":
+      return t("settings.plugins.developerTrustMissing")
+    case "mismatch":
+      return t("settings.plugins.developerTrustMismatch")
+  }
+}
+
+function getDeveloperLoadStatusLabel(
+  status: PluginDeveloperTrustedLoadStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (status) {
+    case "not-loaded":
+      return t("settings.plugins.developerLoadNotLoaded")
+    case "blocked":
+      return t("settings.plugins.developerLoadBlocked")
+    case "loaded":
+      return t("settings.plugins.developerLoadLoaded")
+    case "failed":
+      return t("settings.plugins.developerLoadFailed")
+  }
+}
+
+function getDeveloperTrustStatusClass(status: PluginDeveloperTrustedStatus): string {
+  switch (status) {
+    case "current":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "stale":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "missing":
+    case "mismatch":
+      return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+  }
+}
+
+function getDeveloperLoadStatusClass(status: PluginDeveloperTrustedLoadStatus): string {
+  switch (status) {
+    case "loaded":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "blocked":
+    case "failed":
+      return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+    case "not-loaded":
+      return "border-border bg-background text-muted-foreground"
+  }
+}
+
+function getDeveloperGateReasonLabel(
+  reason: PluginDeveloperTrustedGateReason,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (reason) {
+    case "developer-mode-disabled":
+      return t("settings.plugins.developerReasonModeDisabled")
+    case "safe-mode":
+      return t("settings.plugins.developerReasonSafeMode")
+    case "review-required":
+      return t("settings.plugins.developerReasonReviewRequired")
+    case "review-changed":
+      return t("settings.plugins.developerReasonReviewChanged")
+    case "review-unreviewed":
+      return t("settings.plugins.developerReasonReviewUnreviewed")
+    case "trust-missing":
+      return t("settings.plugins.developerReasonTrustMissing")
+    case "trust-stale":
+      return t("settings.plugins.developerReasonTrustStale")
+    case "invalid-developer-manifest":
+      return t("settings.plugins.developerReasonInvalidManifest")
+    case "entry-outside-root":
+      return t("settings.plugins.developerReasonEntryOutsideRoot")
+    case "unsupported-source":
+      return t("settings.plugins.developerReasonUnsupportedSource")
+    case "unsupported-runtime":
+      return t("settings.plugins.developerReasonUnsupportedRuntime")
+    case "unsupported-target-mode":
+      return t("settings.plugins.developerReasonUnsupportedTarget")
+    case "codex-read-only-cache":
+      return t("settings.plugins.developerReasonCodexReadOnly")
+  }
+}
+
 function shortFingerprint(fingerprint: string): string {
   return fingerprint ? fingerprint.slice(0, 12) : "none"
+}
+
+function formatBundleSize(bytes: number | undefined): string {
+  if (typeof bytes !== "number") return "0 B"
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function formatReviewTimestamp(value: string | undefined, t: ReturnType<typeof useI18n>["t"]): string {
@@ -1048,7 +1145,7 @@ function PluginDebugPanel({
               "rounded border px-1.5 py-0.5 text-[10px] font-medium",
               getDoctorStatusClass(debug.developerTrusted.gate.canLoadTrustedCode ? "pass" : "blocked"),
             )}>
-              {debug.developerTrusted.loadState.status}
+              {getDeveloperLoadStatusLabel(debug.developerTrusted.loadState.status, t)}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -1057,7 +1154,7 @@ function PluginDebugPanel({
                 {t("settings.plugins.doctorDeveloperTrustStatus")}
               </p>
               <p className="font-medium text-amber-950 dark:text-amber-50">
-                {debug.developerTrusted.trustStatus}
+                {getDeveloperTrustStatusLabel(debug.developerTrusted.trustStatus, t)}
               </p>
             </div>
             <div className="space-y-1">
@@ -1065,7 +1162,7 @@ function PluginDebugPanel({
                 {t("settings.plugins.doctorDeveloperLoadStatus")}
               </p>
               <p className="font-medium text-amber-950 dark:text-amber-50">
-                {debug.developerTrusted.loadState.status}
+                {getDeveloperLoadStatusLabel(debug.developerTrusted.loadState.status, t)}
               </p>
             </div>
             <div className="space-y-1">
@@ -1084,7 +1181,9 @@ function PluginDebugPanel({
                 {t("settings.plugins.doctorDeveloperGateReasons")}
               </p>
               <p className="truncate text-amber-950 dark:text-amber-50" title={developerGateReasons}>
-                {developerGateReasons || "-"}
+                {debug.developerTrusted.gate.reasons.length > 0
+                  ? debug.developerTrusted.gate.reasons.map((reason) => getDeveloperGateReasonLabel(reason, t)).join(", ")
+                  : "-"}
               </p>
             </div>
           </div>
@@ -1186,6 +1285,75 @@ function PluginSafeModeControl({
           onCheckedChange={onToggle}
           disabled={isToggling}
         />
+      </div>
+    </div>
+  )
+}
+
+function PluginDeveloperModeControl({
+  developerMode,
+  onToggle,
+  onChooseSource,
+  isToggling,
+  isChoosingSource,
+}: {
+  developerMode: PluginDeveloperModeState
+  onToggle: (enabled: boolean) => void
+  onChooseSource: () => void
+  isToggling: boolean
+  isChoosingSource: boolean
+}) {
+  const { t } = useI18n()
+  return (
+    <div className={cn(
+      "rounded-lg border px-2.5 py-2",
+      developerMode.enabled
+        ? "border-amber-500/30 bg-amber-500/10"
+        : "border-border bg-background"
+    )}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-2">
+          <Code2 className={cn(
+            "mt-0.5 h-3.5 w-3.5 shrink-0",
+            developerMode.enabled ? "text-amber-500" : "text-muted-foreground"
+          )} />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-foreground">
+              {t("settings.plugins.developerMode")}
+            </p>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              {developerMode.enabled
+                ? t("settings.plugins.developerModeEnabledShort")
+                : t("settings.plugins.developerModeDisabledShort")}
+            </p>
+          </div>
+        </div>
+        <Switch
+          checked={developerMode.enabled}
+          onCheckedChange={onToggle}
+          disabled={isToggling}
+        />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="min-w-0 text-[10px] leading-snug text-muted-foreground">
+          {t("settings.plugins.developerModeHint")}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-6 shrink-0 px-1.5 text-[10px]"
+          onClick={onChooseSource}
+          disabled={isChoosingSource}
+        >
+          {isChoosingSource ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <>
+              <FolderPlus className="mr-1 h-3 w-3" />
+              {t("settings.plugins.addDeveloperSource")}
+            </>
+          )}
+        </Button>
       </div>
     </div>
   )
@@ -1474,6 +1642,179 @@ function PluginControlledUiPanel({
   )
 }
 
+function PluginDeveloperTrustPanel({
+  plugin,
+  onTrust,
+  onRevokeTrust,
+  onLoad,
+  isTrusting,
+  isRevoking,
+  isLoadingPlugin,
+}: {
+  plugin: PluginData
+  onTrust: () => void
+  onRevokeTrust: () => void
+  onLoad: () => void
+  isTrusting: boolean
+  isRevoking: boolean
+  isLoadingPlugin: boolean
+}) {
+  const { t } = useI18n()
+  const developer = plugin.developerTrusted
+  const isDeveloperPlugin =
+    plugin.sourceKind === "developer-local" ||
+    plugin.targetMode === "developer-trusted-code" ||
+    developer.manifestPresent
+
+  if (!isDeveloperPlugin) return null
+
+  const manifest = developer.manifest
+  const canTrust =
+    developer.gate.canTrustCurrentFingerprint &&
+    developer.trustStatus !== "current"
+  const canLoad =
+    developer.gate.canLoadTrustedCode &&
+    developer.loadState.status !== "loaded"
+  const canRevoke = developer.trustStatus !== "missing"
+  const visibleReasons = developer.gate.reasons.slice(0, 5)
+
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.developerTrustedCode")}</Label>
+          <p className="text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80">
+            {t("settings.plugins.developerTrustedHint")}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+          <span className={cn(
+            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+            getDeveloperTrustStatusClass(developer.trustStatus),
+          )}>
+            {getDeveloperTrustStatusLabel(developer.trustStatus, t)}
+          </span>
+          <span className={cn(
+            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+            getDeveloperLoadStatusClass(developer.loadState.status),
+          )}>
+            {getDeveloperLoadStatusLabel(developer.loadState.status, t)}
+          </span>
+        </div>
+      </div>
+
+      {manifest ? (
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="space-y-1">
+            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerManifestId")}</p>
+            <p className="font-mono text-amber-950 dark:text-amber-50 break-all">{manifest.id}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.version")}</p>
+            <p className="font-mono text-amber-950 dark:text-amber-50">{manifest.version}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerEntryHash")}</p>
+            <p className="font-mono text-amber-950 dark:text-amber-50" title={developer.entryContentHash}>
+              sha256:{shortFingerprint(developer.entryContentHash ?? "")}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerBundleHash")}</p>
+            <p className="font-mono text-amber-950 dark:text-amber-50" title={developer.bundleContentHash}>
+              sha256:{shortFingerprint(developer.bundleContentHash ?? "")}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerBundleSize")}</p>
+            <p className="text-amber-950 dark:text-amber-50">
+              {developer.bundleFileCount ?? 0} / {formatBundleSize(developer.bundleByteCount)}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerPermissions")}</p>
+            <p className="truncate text-amber-950 dark:text-amber-50" title={manifest.permissions.join(", ")}>
+              {manifest.permissions.length > 0 ? manifest.permissions.join(", ") : "-"}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded border border-amber-500/30 bg-background/70 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+          {t("settings.plugins.noDeveloperManifest")}
+        </div>
+      )}
+
+      {(visibleReasons.length > 0 || developer.diagnostics.length > 0) && (
+        <div className="space-y-1.5">
+          {visibleReasons.map((reason) => (
+            <div key={reason} className="rounded border border-amber-500/30 bg-background/70 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+              {getDeveloperGateReasonLabel(reason, t)}
+            </div>
+          ))}
+          {developer.diagnostics.slice(0, 3).map((diagnostic, index) => (
+            <div key={`${diagnostic.code}-${index}`} className="rounded border border-amber-500/30 bg-background/70 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+              {diagnostic.message ?? diagnostic.code}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={onTrust}
+          disabled={!canTrust || isTrusting}
+          title={!canTrust ? t("settings.plugins.developerGateBlocksAction") : undefined}
+        >
+          {isTrusting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+              {t("settings.plugins.trustDeveloperPlugin")}
+            </>
+          )}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={onLoad}
+          disabled={!canLoad || isLoadingPlugin}
+          title={!canLoad ? t("settings.plugins.developerGateBlocksAction") : undefined}
+        >
+          {isLoadingPlugin ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              {t("settings.plugins.loadDeveloperPlugin")}
+            </>
+          )}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={onRevokeTrust}
+          disabled={!canRevoke || isRevoking}
+        >
+          {isRevoking ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <ShieldOff className="mr-1.5 h-3.5 w-3.5" />
+              {t("settings.plugins.revokeDeveloperTrust")}
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function PluginUpdateReviewPanel({
   plugin,
   onMarkReviewed,
@@ -1605,6 +1946,12 @@ function PluginDetail({
   isSavingControlledSetting,
   isGrantingControlledAction,
   isInvokingControlledAction,
+  onTrustDeveloperPlugin,
+  onRevokeDeveloperTrust,
+  onLoadDeveloperPlugin,
+  isTrustingDeveloperPlugin,
+  isRevokingDeveloperTrust,
+  isLoadingDeveloperPlugin,
 }: {
   plugin: PluginData
   pluginDebug?: PluginDoctorPluginDebug
@@ -1628,6 +1975,12 @@ function PluginDetail({
   isSavingControlledSetting: boolean
   isGrantingControlledAction: boolean
   isInvokingControlledAction: boolean
+  onTrustDeveloperPlugin: () => void
+  onRevokeDeveloperTrust: () => void
+  onLoadDeveloperPlugin: () => void
+  isTrustingDeveloperPlugin: boolean
+  isRevokingDeveloperTrust: boolean
+  isLoadingDeveloperPlugin: boolean
 }) {
   const { t } = useI18n()
   const componentCount =
@@ -1728,6 +2081,15 @@ function PluginDetail({
             isSavingSetting={isSavingControlledSetting}
             isGranting={isGrantingControlledAction}
             isInvoking={isInvokingControlledAction}
+          />
+          <PluginDeveloperTrustPanel
+            plugin={plugin}
+            onTrust={onTrustDeveloperPlugin}
+            onRevokeTrust={onRevokeDeveloperTrust}
+            onLoad={onLoadDeveloperPlugin}
+            isTrusting={isTrustingDeveloperPlugin}
+            isRevoking={isRevokingDeveloperTrust}
+            isLoadingPlugin={isLoadingDeveloperPlugin}
           />
           <PluginDebugPanel plugin={plugin} debug={pluginDebug} />
 
@@ -2110,13 +2472,18 @@ function PluginSourceListItem({
 function PluginSourceDetail({
   source,
   onRefresh,
+  onRemoveDeveloperSource,
   isRefreshing,
+  isRemovingDeveloperSource,
 }: {
   source: PluginSourceData
   onRefresh: () => void
+  onRemoveDeveloperSource: () => void
   isRefreshing: boolean
+  isRemovingDeveloperSource: boolean
 }) {
   const { t } = useI18n()
+  const canRemoveDeveloperSource = source.kind === "developer-local"
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
@@ -2128,16 +2495,36 @@ function PluginSourceDetail({
                 {getRuntimeLabel(source.runtime, t)}
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs shrink-0"
-              onClick={onRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
-              {t("settings.plugins.refresh")}
-            </Button>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs shrink-0"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+                {t("settings.plugins.refresh")}
+              </Button>
+              {canRemoveDeveloperSource ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs shrink-0"
+                  onClick={onRemoveDeveloperSource}
+                  disabled={isRemovingDeveloperSource}
+                >
+                  {isRemovingDeveloperSource ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      {t("settings.plugins.removeDeveloperSource")}
+                    </>
+                  )}
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <p className="text-sm text-muted-foreground">{getSourceDescriptionLabel(source.runtime, t)}</p>
@@ -2192,7 +2579,9 @@ function PluginSourceDetail({
           )}
 
           <p className="text-xs leading-relaxed text-muted-foreground/70">
-            {t("settings.plugins.sourcesReadOnlyHint")}
+            {source.kind === "developer-local"
+              ? t("settings.plugins.developerSourceHint")
+              : t("settings.plugins.sourcesReadOnlyHint")}
           </p>
         </div>
       </div>
@@ -2232,6 +2621,9 @@ export function AgentsPluginsTab() {
     staleTime: 5 * 60 * 1000,
   })
   const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } = trpc.plugins.safeMode.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
+  const { data: developerMode = { enabled: false }, refetch: refetchDeveloperMode } = trpc.plugins.developerMode.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
   const { data: doctorReport, isLoading: isLoadingDoctor, refetch: refetchDoctor } = trpc.plugins.doctor.useQuery(undefined, {
@@ -2275,6 +2667,12 @@ export function AgentsPluginsTab() {
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
   const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
   const setSafeModeMutation = trpc.plugins.setSafeMode.useMutation()
+  const setDeveloperModeMutation = trpc.plugins.setDeveloperMode.useMutation()
+  const chooseDeveloperSourceMutation = trpc.plugins.chooseDeveloperSourceDirectory.useMutation()
+  const removeDeveloperSourceMutation = trpc.plugins.removeDeveloperSource.useMutation()
+  const trustDeveloperPluginMutation = trpc.plugins.trustDeveloperPlugin.useMutation()
+  const revokeDeveloperTrustMutation = trpc.plugins.revokeDeveloperPluginTrust.useMutation()
+  const loadDeveloperPluginMutation = trpc.plugins.loadDeveloperPlugin.useMutation()
   const setControlledSettingMutation = trpc.plugins.setControlledSetting.useMutation()
   const grantControlledActionMutation = trpc.plugins.grantControlledAction.useMutation()
   const invokeControlledActionMutation = trpc.plugins.invokeControlledAction.useMutation()
@@ -2570,6 +2968,91 @@ export function AgentsPluginsTab() {
     }
   }, [setSafeModeMutation, refetchSafeMode, refetch, refetchDoctor, refetchMcp, t])
 
+  const handleToggleDeveloperMode = useCallback(async (enabled: boolean) => {
+    try {
+      await setDeveloperModeMutation.mutateAsync({ enabled })
+      toast.success(enabled
+        ? t("settings.plugins.toast.developerModeEnabled")
+        : t("settings.plugins.toast.developerModeDisabled"))
+      await Promise.all([refetchDeveloperMode(), refetch(), refetchDoctor()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [setDeveloperModeMutation, refetchDeveloperMode, refetch, refetchDoctor, t])
+
+  const handleChooseDeveloperSource = useCallback(async () => {
+    try {
+      const source = await chooseDeveloperSourceMutation.mutateAsync()
+      if (!source) return
+      toast.success(t("settings.plugins.toast.developerSourceAdded"))
+      await Promise.all([refetchSources(), refetch(), refetchDoctor()])
+      setViewMode("sources")
+      setSelectedSourceId(source.id)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [chooseDeveloperSourceMutation, refetchSources, refetch, refetchDoctor, t])
+
+  const handleRemoveDeveloperSource = useCallback(async (source: PluginSourceData) => {
+    if (source.kind !== "developer-local") return
+    try {
+      await removeDeveloperSourceMutation.mutateAsync({ id: source.id })
+      toast.success(t("settings.plugins.toast.developerSourceRemoved"))
+      await Promise.all([refetchSources(), refetch(), refetchDoctor()])
+      setSelectedSourceId(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [removeDeveloperSourceMutation, refetchSources, refetch, refetchDoctor, t])
+
+  const handleTrustDeveloperPlugin = useCallback(async (plugin: PluginData) => {
+    try {
+      await trustDeveloperPluginMutation.mutateAsync({ reviewKey: plugin.reviewKey })
+      toast.success(t("settings.plugins.toast.developerTrusted"), {
+        description: formatPluginName(plugin.name),
+      })
+      await Promise.all([refetch(), refetchDoctor()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [trustDeveloperPluginMutation, refetch, refetchDoctor, t])
+
+  const handleRevokeDeveloperTrust = useCallback(async (plugin: PluginData) => {
+    try {
+      await revokeDeveloperTrustMutation.mutateAsync({ reviewKey: plugin.reviewKey })
+      toast.success(t("settings.plugins.toast.developerTrustRevoked"), {
+        description: formatPluginName(plugin.name),
+      })
+      await Promise.all([refetch(), refetchDoctor()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [revokeDeveloperTrustMutation, refetch, refetchDoctor, t])
+
+  const handleLoadDeveloperPlugin = useCallback(async (plugin: PluginData) => {
+    try {
+      const result = await loadDeveloperPluginMutation.mutateAsync({ reviewKey: plugin.reviewKey })
+      if (result.status === "loaded") {
+        toast.success(t("settings.plugins.toast.developerPluginLoaded"), {
+          description: formatPluginName(plugin.name),
+        })
+      } else {
+        toast.error(result.errorMessage ?? t("settings.plugins.toast.developerPluginBlocked"), {
+          description: formatPluginName(plugin.name),
+        })
+      }
+      await Promise.all([refetch(), refetchDoctor()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [loadDeveloperPluginMutation, refetch, refetchDoctor, t])
+
   const isRefreshingPlugins = isLoading || isLoadingSources || clearPluginCacheMutation.isPending
 
   return (
@@ -2612,6 +3095,15 @@ export function AgentsPluginsTab() {
               safeMode={safeMode}
               onToggle={handleToggleSafeMode}
               isToggling={setSafeModeMutation.isPending}
+            />
+          </div>
+          <div className="px-2 pt-2 flex-shrink-0">
+            <PluginDeveloperModeControl
+              developerMode={developerMode}
+              onToggle={handleToggleDeveloperMode}
+              onChooseSource={handleChooseDeveloperSource}
+              isToggling={setDeveloperModeMutation.isPending}
+              isChoosingSource={chooseDeveloperSourceMutation.isPending}
             />
           </div>
           <div className="px-2 pt-2 flex-shrink-0">
@@ -2780,6 +3272,12 @@ export function AgentsPluginsTab() {
               isSavingControlledSetting={setControlledSettingMutation.isPending}
               isGrantingControlledAction={grantControlledActionMutation.isPending}
               isInvokingControlledAction={invokeControlledActionMutation.isPending}
+              onTrustDeveloperPlugin={() => handleTrustDeveloperPlugin(selectedPlugin)}
+              onRevokeDeveloperTrust={() => handleRevokeDeveloperTrust(selectedPlugin)}
+              onLoadDeveloperPlugin={() => handleLoadDeveloperPlugin(selectedPlugin)}
+              isTrustingDeveloperPlugin={trustDeveloperPluginMutation.isPending}
+              isRevokingDeveloperTrust={revokeDeveloperTrustMutation.isPending}
+              isLoadingDeveloperPlugin={loadDeveloperPluginMutation.isPending}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -2810,7 +3308,9 @@ export function AgentsPluginsTab() {
           <PluginSourceDetail
             source={selectedSource}
             onRefresh={() => { void handleRefreshPlugins() }}
+            onRemoveDeveloperSource={() => handleRemoveDeveloperSource(selectedSource)}
             isRefreshing={isRefreshingPlugins}
+            isRemovingDeveloperSource={removeDeveloperSourceMutation.isPending}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">

@@ -28,10 +28,10 @@
 - [x] 4.6 Add source-guard tests that no developer plugin loads from remote URLs, Codex cache, or marketplace packages.
 
 ## 5. Renderer UI
-- [ ] 5.1 Add Settings > Plugins developer mode controls near safe mode.
-- [ ] 5.2 Add a developer trust panel for local developer plugins only.
-- [ ] 5.3 Show full-trust warnings and current fingerprint trust state.
-- [ ] 5.4 Add English and Simplified Chinese copy.
+- [x] 5.1 Add Settings > Plugins developer mode controls near safe mode.
+- [x] 5.2 Add a developer trust panel for local developer plugins only.
+- [x] 5.3 Show full-trust warnings and current fingerprint trust state.
+- [x] 5.4 Add English and Simplified Chinese copy.
 - [ ] 5.5 Review UI after smoke and fix clarity/layout issues.
 
 ## 6. Tests and Verification
