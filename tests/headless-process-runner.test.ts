@@ -98,6 +98,32 @@ describe("headless process runner", () => {
     expect(events.map((event) => event.type)).toContain("command_finished")
   })
 
+  test("can filter known stderr noise before events and final results", async () => {
+    const controller = new AbortController()
+    const { observer, events } = createObserver()
+    const result = await runProcessAgentTask({
+      request: request(controller.signal),
+      observer,
+      executable: process.execPath,
+      args: [
+        "-e",
+        "console.error('drop me'); console.error('keep me')",
+      ],
+      stderrFilter: (text) => text.replace("drop me\n", ""),
+      label: "node",
+    })
+
+    expect(result.status).toBe("succeeded")
+    expect(result.result).toMatchObject({
+      stderr: "keep me",
+    })
+    expect(
+      events
+        .filter((event) => event.type === "command_output")
+        .map((event) => event.payload),
+    ).toEqual([{ stream: "stderr", text: "keep me\n" }])
+  })
+
   test("cancels a running child process when the signal aborts", async () => {
     const controller = new AbortController()
     const { observer } = createObserver()

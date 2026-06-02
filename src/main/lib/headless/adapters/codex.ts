@@ -29,6 +29,10 @@ function buildCodexEnv(request: AgentRuntimeRunRequest): NodeJS.ProcessEnv {
   }
 }
 
+function filterCodexStderr(text: string): string {
+  return text.replace(/^Reading additional input from stdin\.\.\.\n?/gm, "")
+}
+
 export async function runCodexHeadlessTask(
   request: AgentRuntimeRunRequest,
   observer: AgentRuntimeObserver,
@@ -39,10 +43,12 @@ export async function runCodexHeadlessTask(
     executable: resolveBundledCodexCliPath(),
     args: buildCodexArgs(request),
     env: buildCodexEnv(request),
+    stderrFilter: filterCodexStderr,
     label: "Codex",
   })
 }
 
 export const __testCodexHeadless = {
   buildCodexArgs,
+  filterCodexStderr,
 }

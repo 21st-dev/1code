@@ -13,6 +13,7 @@ export type ProcessAgentTaskInput = {
   args: string[]
   stdin?: string | null
   env?: NodeJS.ProcessEnv
+  stderrFilter?: (text: string) => string
   label: string
 }
 
@@ -141,7 +142,9 @@ export async function runProcessAgentTask(
     })
 
     child.stderr?.on("data", (chunk: Buffer) => {
-      const text = chunk.toString("utf-8")
+      const rawText = chunk.toString("utf-8")
+      const text = input.stderrFilter ? input.stderrFilter(rawText) : rawText
+      if (!text) return
       stderr += text
       observer.appendEvent("command_output", { stream: "stderr", text })
     })

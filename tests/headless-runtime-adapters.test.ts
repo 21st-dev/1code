@@ -62,4 +62,15 @@ describe("headless runtime adapters", () => {
       "workspace-write",
     )
   })
+
+  test("Codex adapter drops the non-TTY stdin notice but keeps real stderr", () => {
+    expect(
+      __testCodexHeadless.filterCodexStderr(
+        "Reading additional input from stdin...\nreal warning\n",
+      ),
+    ).toBe("real warning\n")
+    expect(__testCodexHeadless.filterCodexStderr("real warning\n")).toBe(
+      "real warning\n",
+    )
+  })
 })
