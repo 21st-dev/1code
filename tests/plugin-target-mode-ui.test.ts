@@ -170,6 +170,10 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("doctorReport?.plugins.find")
     expect(pluginsTabSource).toContain("settings.plugins.doctor")
     expect(pluginsTabSource).toContain("settings.plugins.debug")
+    expect(pluginsTabSource).toContain("debug.developerTrusted.trustStatus")
+    expect(pluginsTabSource).toContain("debug.developerTrusted.loadState.status")
+    expect(pluginsTabSource).toContain("debug.developerTrusted.bundleContentHash")
+    expect(pluginsTabSource).toContain("settings.plugins.doctorDeveloperTrust")
     expect(pluginsTabSource).not.toContain("installPluginUpdate")
     expect(pluginsTabSource).not.toContain("executeCodexPlugin")
 
@@ -181,6 +185,10 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.doctorCheckRuntimeGate",
       "settings.plugins.doctorCheckCodexReadOnly",
       "settings.plugins.doctorCheckMcpApprovalFingerprint",
+      "settings.plugins.doctorCheckDeveloperMode",
+      "settings.plugins.doctorCheckDeveloperTrustedGate",
+      "settings.plugins.doctorCheckDeveloperTrustedLoad",
+      "settings.plugins.doctorDeveloperBundleHash",
     ]) {
       expect(dictionarySource).toContain(`"${key}"`)
     }

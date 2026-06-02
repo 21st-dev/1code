@@ -731,9 +731,10 @@ export const pluginsRouter = router({
    * declarations. This is diagnostic-only and does not execute plugin code.
    */
   doctor: publicProcedure.query(async (): Promise<PluginDoctorReport> => {
-    const [installedPlugins, sources] = await Promise.all([
+    const [installedPlugins, sources, developerMode] = await Promise.all([
       discoverAllRuntimePlugins(),
       discoverPluginSources(),
+      getPluginDeveloperModeState(),
     ])
 
     const scannedPlugins = await Promise.all(
@@ -746,8 +747,93 @@ export const pluginsRouter = router({
       })),
     )
 
+    const doctorPlugins = await Promise.all(scannedPlugins.map(async (scanned) => {
+      const plugin = scanned.plugin
+      const updateReview =
+        reviewResult.metadataByPluginKey[plugin.reviewKey] ??
+        makeEmptyUpdateReviewMetadata(plugin)
+      const safetyGate = buildPluginSafetyGate({
+        runtime: plugin.runtime,
+        hasMcpServers: scanned.components.mcpServers.length > 0,
+        updateReviewStatus: updateReview.status,
+        safeModeEnabled: reviewResult.safeMode.enabled,
+      })
+      const developerTrustContext = getDeveloperTrustContext({
+        plugin,
+        scanned,
+        updateReview,
+      })
+      const developerTrustStatus = developerTrustContext
+        ? await getDeveloperPluginTrustStatus(developerTrustContext)
+        : { status: "missing" as const, acknowledgement: undefined }
+      const developerTrustedGate = buildPluginDeveloperTrustedGate({
+        runtime: plugin.runtime,
+        targetMode: scanned.targetMode,
+        updateReviewStatus: updateReview.status,
+        safeModeEnabled: reviewResult.safeMode.enabled,
+        developerModeEnabled: developerMode.enabled,
+        isLocalDeveloperSource: plugin.sourceKind === "developer-local",
+        hasValidManifest: Boolean(scanned.developerTrusted.manifest),
+        entryContained: Boolean(
+          scanned.developerTrusted.entryRealPath &&
+          scanned.developerTrusted.entryContentHash &&
+          scanned.developerTrusted.bundleContentHash,
+        ),
+        trustStatus: developerTrustStatus.status,
+      })
+      return {
+        runtime: plugin.runtime,
+        reviewKey: plugin.reviewKey,
+        name: plugin.name,
+        source: plugin.source,
+        path: plugin.path,
+        updateReview,
+        safetyGate,
+        sourcePins: plugin.sourcePins ?? [],
+        diagnostics: scanned.diagnostics,
+        componentCounts: {
+          commands: scanned.components.commands.length,
+          skills: scanned.components.skills.length,
+          agents: scanned.components.agents.length,
+          mcpServers: scanned.components.mcpServers.length,
+        },
+        controlledUi: {
+          manifestPresent: Boolean(scanned.controlledUi.manifest),
+          manifest: scanned.controlledUi.manifest,
+          diagnostics: scanned.controlledUi.diagnostics,
+          ignoredUnknownFields: scanned.controlledUi.ignoredUnknownFields,
+          gate: buildPluginControlledUiGate({
+            runtime: plugin.runtime,
+            targetMode: scanned.targetMode,
+            updateReviewStatus: updateReview.status,
+            safeModeEnabled: reviewResult.safeMode.enabled,
+            hasValidManifest: Boolean(scanned.controlledUi.manifest),
+          }),
+        },
+        developerTrusted: {
+          isDeveloperSource: plugin.sourceKind === "developer-local",
+          manifestPresent: Boolean(scanned.developerTrusted.manifest),
+          manifest: scanned.developerTrusted.manifest,
+          diagnostics: scanned.developerTrusted.diagnostics,
+          ignoredUnknownFields: scanned.developerTrusted.ignoredUnknownFields,
+          entryPath: scanned.developerTrusted.entryPath,
+          entryRealPath: scanned.developerTrusted.entryRealPath,
+          entryContentHash: scanned.developerTrusted.entryContentHash,
+          bundleContentHash: scanned.developerTrusted.bundleContentHash,
+          bundleFileCount: scanned.developerTrusted.bundleFileCount,
+          bundleByteCount: scanned.developerTrusted.bundleByteCount,
+          trustStatus: developerTrustStatus.status,
+          gate: developerTrustedGate,
+          loadState: getDeveloperPluginLoadState(plugin.reviewKey),
+        },
+        mcpServers: scanned.components.mcpServers,
+        mcpApprovalIdentifiers: scanned.mcpApprovalIdentifiers,
+      }
+    }))
+
     return buildPluginDoctorReport({
       safeMode: reviewResult.safeMode,
+      developerMode,
       reviewStatePath: getPluginReviewStatePath(),
       sources: sources.map((source) => ({
         id: source.id,
@@ -756,50 +842,7 @@ export const pluginsRouter = router({
         path: source.path,
         pluginCount: source.pluginCount,
       })),
-      plugins: scannedPlugins.map((scanned) => {
-        const plugin = scanned.plugin
-        const updateReview =
-          reviewResult.metadataByPluginKey[plugin.reviewKey] ??
-          makeEmptyUpdateReviewMetadata(plugin)
-        const safetyGate = buildPluginSafetyGate({
-          runtime: plugin.runtime,
-          hasMcpServers: scanned.components.mcpServers.length > 0,
-          updateReviewStatus: updateReview.status,
-          safeModeEnabled: reviewResult.safeMode.enabled,
-        })
-        return {
-          runtime: plugin.runtime,
-          reviewKey: plugin.reviewKey,
-          name: plugin.name,
-          source: plugin.source,
-          path: plugin.path,
-          updateReview,
-          safetyGate,
-          sourcePins: plugin.sourcePins ?? [],
-          diagnostics: scanned.diagnostics,
-          componentCounts: {
-            commands: scanned.components.commands.length,
-            skills: scanned.components.skills.length,
-            agents: scanned.components.agents.length,
-            mcpServers: scanned.components.mcpServers.length,
-          },
-          controlledUi: {
-            manifestPresent: Boolean(scanned.controlledUi.manifest),
-            manifest: scanned.controlledUi.manifest,
-            diagnostics: scanned.controlledUi.diagnostics,
-            ignoredUnknownFields: scanned.controlledUi.ignoredUnknownFields,
-            gate: buildPluginControlledUiGate({
-              runtime: plugin.runtime,
-              targetMode: scanned.targetMode,
-              updateReviewStatus: updateReview.status,
-              safeModeEnabled: reviewResult.safeMode.enabled,
-              hasValidManifest: Boolean(scanned.controlledUi.manifest),
-            }),
-          },
-          mcpServers: scanned.components.mcpServers,
-          mcpApprovalIdentifiers: scanned.mcpApprovalIdentifiers,
-        }
-      }),
+      plugins: doctorPlugins,
     })
   }),
 

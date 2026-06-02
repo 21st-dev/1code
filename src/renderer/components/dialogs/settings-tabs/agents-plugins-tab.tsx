@@ -63,6 +63,22 @@ type PluginControlledUiGateReason =
   | "codex-read-only-cache"
 type PluginControlledUiGrantStatus = "current" | "stale" | "mismatch"
 type PluginControlledUiSettingValue = string | boolean
+type PluginDeveloperTrustedStatus = "current" | "stale" | "missing" | "mismatch"
+type PluginDeveloperTrustedLoadStatus = "not-loaded" | "blocked" | "loaded" | "failed"
+type PluginDeveloperTrustedGateReason =
+  | "developer-mode-disabled"
+  | "safe-mode"
+  | "review-required"
+  | "review-changed"
+  | "review-unreviewed"
+  | "trust-missing"
+  | "trust-stale"
+  | "invalid-developer-manifest"
+  | "entry-outside-root"
+  | "unsupported-source"
+  | "unsupported-runtime"
+  | "unsupported-target-mode"
+  | "codex-read-only-cache"
 type PluginDiagnosticSeverity = "info" | "warning"
 type PluginDiagnosticCode =
   | "metadata-only-no-execution"
@@ -187,6 +203,51 @@ interface PluginSafeModeState {
   updatedAt?: string
 }
 
+interface PluginDeveloperModeState {
+  enabled: boolean
+  updatedAt?: string
+}
+
+interface PluginDeveloperTrustedManifest {
+  schemaVersion: 1
+  id: string
+  name: string
+  version: string
+  entry: string
+  description?: string
+  author?: string
+  minLocusVersion?: string
+  permissions: string[]
+  capabilities: string[]
+}
+
+interface PluginDeveloperTrustedDiagnostic {
+  code: string
+  severity: "info" | "warning" | "blocked"
+  path?: string
+  message?: string
+}
+
+interface PluginDeveloperTrustedGate {
+  canTrustCurrentFingerprint: boolean
+  canLoadTrustedCode: boolean
+  reasons: PluginDeveloperTrustedGateReason[]
+}
+
+interface PluginDeveloperTrustedLoadState {
+  pluginReviewKey: string
+  status: PluginDeveloperTrustedLoadStatus
+  entryPath?: string
+  entryContentHash?: string
+  bundleContentHash?: string
+  loadedAt?: string
+  failedAt?: string
+  blockedAt?: string
+  errorCode?: string
+  errorMessage?: string
+  gate?: PluginDeveloperTrustedGate
+}
+
 type PluginDoctorCheckStatus = "pass" | "info" | "warning" | "blocked"
 type PluginDoctorCheckCode =
   | "source-available"
@@ -205,6 +266,12 @@ type PluginDoctorCheckCode =
   | "controlled-ui-declared"
   | "controlled-ui-gate"
   | "controlled-ui-diagnostic"
+  | "developer-mode"
+  | "developer-trusted-declared"
+  | "developer-trusted-gate"
+  | "developer-trusted-trust"
+  | "developer-trusted-load"
+  | "developer-trusted-diagnostic"
   | "component-path-warning"
   | "review-state"
 
@@ -235,6 +302,29 @@ interface PluginDoctorPluginDebug {
     agents: number
     mcpServers: number
   }
+  controlledUi: {
+    manifestPresent: boolean
+    manifest?: PluginControlledUiManifest
+    diagnostics: PluginControlledUiDiagnostic[]
+    ignoredUnknownFields: string[]
+    gate: PluginControlledUiGate
+  }
+  developerTrusted: {
+    isDeveloperSource: boolean
+    manifestPresent: boolean
+    manifest?: PluginDeveloperTrustedManifest
+    diagnostics: PluginDeveloperTrustedDiagnostic[]
+    ignoredUnknownFields: string[]
+    entryPath?: string
+    entryRealPath?: string
+    entryContentHash?: string
+    bundleContentHash?: string
+    bundleFileCount?: number
+    bundleByteCount?: number
+    trustStatus: PluginDeveloperTrustedStatus
+    gate: PluginDeveloperTrustedGate
+    loadState: PluginDeveloperTrustedLoadState
+  }
   mcpServers: string[]
   mcpApprovalIdentifiers: Record<string, string>
   checks: PluginDoctorCheck[]
@@ -243,6 +333,7 @@ interface PluginDoctorPluginDebug {
 interface PluginDoctorReport {
   generatedAt: string
   safeMode: PluginSafeModeState
+  developerMode: PluginDeveloperModeState
   reviewStatePath?: string
   summary: {
     totalChecks: number
@@ -290,6 +381,22 @@ interface PluginData {
     actionGrantStatuses: Record<string, PluginControlledUiGrantStatus>
     settingsValues: Record<string, Record<string, PluginControlledUiSettingValue>>
     gate: PluginControlledUiGate
+  }
+  developerTrusted: {
+    manifestPresent: boolean
+    manifestPath?: string
+    manifest?: PluginDeveloperTrustedManifest
+    diagnostics: PluginDeveloperTrustedDiagnostic[]
+    ignoredUnknownFields: string[]
+    entryPath?: string
+    entryRealPath?: string
+    entryContentHash?: string
+    bundleContentHash?: string
+    bundleFileCount?: number
+    bundleByteCount?: number
+    trustStatus: PluginDeveloperTrustedStatus
+    gate: PluginDeveloperTrustedGate
+    loadState: PluginDeveloperTrustedLoadState
   }
   isDisabled: boolean
   canToggle: boolean
@@ -795,6 +902,18 @@ function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof u
       return t("settings.plugins.doctorCheckControlledUiGate")
     case "controlled-ui-diagnostic":
       return t("settings.plugins.doctorCheckControlledUiDiagnostic")
+    case "developer-mode":
+      return t("settings.plugins.doctorCheckDeveloperMode")
+    case "developer-trusted-declared":
+      return t("settings.plugins.doctorCheckDeveloperTrustedDeclared")
+    case "developer-trusted-gate":
+      return t("settings.plugins.doctorCheckDeveloperTrustedGate")
+    case "developer-trusted-trust":
+      return t("settings.plugins.doctorCheckDeveloperTrustedTrust")
+    case "developer-trusted-load":
+      return t("settings.plugins.doctorCheckDeveloperTrustedLoad")
+    case "developer-trusted-diagnostic":
+      return t("settings.plugins.doctorCheckDeveloperTrustedDiagnostic")
     case "component-path-warning":
       return t("settings.plugins.doctorCheckComponentPathWarning")
     case "review-state":
@@ -863,6 +982,12 @@ function PluginDebugPanel({
   const approvalCount = Object.keys(debug.mcpApprovalIdentifiers).length
   const visibleChecks = debug.checks.slice(0, 8)
   const debugStatus = getWorstDoctorStatus(debug.checks)
+  const showDeveloperTrustedFacts =
+    debug.developerTrusted.isDeveloperSource ||
+    debug.developerTrusted.manifestPresent ||
+    debug.developerTrusted.loadState.status !== "not-loaded" ||
+    debug.developerTrusted.trustStatus !== "missing"
+  const developerGateReasons = debug.developerTrusted.gate.reasons.join(", ")
 
   return (
     <div className="rounded-md border border-border bg-background p-3 space-y-3">
@@ -912,6 +1037,59 @@ function PluginDebugPanel({
           </p>
         </div>
       </div>
+
+      {showDeveloperTrustedFacts ? (
+        <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="font-medium text-amber-900 dark:text-amber-100">
+              {t("settings.plugins.doctorDeveloperTrust")}
+            </p>
+            <span className={cn(
+              "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+              getDoctorStatusClass(debug.developerTrusted.gate.canLoadTrustedCode ? "pass" : "blocked"),
+            )}>
+              {debug.developerTrusted.loadState.status}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <p className="text-amber-900/70 dark:text-amber-100/70">
+                {t("settings.plugins.doctorDeveloperTrustStatus")}
+              </p>
+              <p className="font-medium text-amber-950 dark:text-amber-50">
+                {debug.developerTrusted.trustStatus}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-amber-900/70 dark:text-amber-100/70">
+                {t("settings.plugins.doctorDeveloperLoadStatus")}
+              </p>
+              <p className="font-medium text-amber-950 dark:text-amber-50">
+                {debug.developerTrusted.loadState.status}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-amber-900/70 dark:text-amber-100/70">
+                {t("settings.plugins.doctorDeveloperBundleHash")}
+              </p>
+              <p
+                className="font-mono text-amber-950 dark:text-amber-50"
+                title={debug.developerTrusted.bundleContentHash}
+              >
+                sha256:{shortFingerprint(debug.developerTrusted.bundleContentHash ?? "")}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-amber-900/70 dark:text-amber-100/70">
+                {t("settings.plugins.doctorDeveloperGateReasons")}
+              </p>
+              <p className="truncate text-amber-950 dark:text-amber-50" title={developerGateReasons}>
+                {developerGateReasons || "-"}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-1.5">
         <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.doctorChecks")}</p>

@@ -15,6 +15,14 @@ import type {
   PluginControlledUiGate,
   PluginControlledUiManifest,
 } from "./plugin-controlled-ui"
+import type {
+  PluginDeveloperModeState,
+  PluginDeveloperTrustedDiagnostic,
+  PluginDeveloperTrustedGate,
+  PluginDeveloperTrustedLoadState,
+  PluginDeveloperTrustedManifest,
+  PluginDeveloperTrustedStatus,
+} from "./plugin-developer-trusted"
 
 export type PluginDoctorCheckStatus =
   | "pass"
@@ -39,6 +47,12 @@ export type PluginDoctorCheckCode =
   | "controlled-ui-declared"
   | "controlled-ui-gate"
   | "controlled-ui-diagnostic"
+  | "developer-mode"
+  | "developer-trusted-declared"
+  | "developer-trusted-gate"
+  | "developer-trusted-trust"
+  | "developer-trusted-load"
+  | "developer-trusted-diagnostic"
   | "component-path-warning"
   | "review-state"
 
@@ -82,6 +96,22 @@ export interface PluginDoctorPluginInput {
     ignoredUnknownFields: string[]
     gate: PluginControlledUiGate
   }
+  developerTrusted: {
+    isDeveloperSource: boolean
+    manifestPresent: boolean
+    manifest?: PluginDeveloperTrustedManifest
+    diagnostics: PluginDeveloperTrustedDiagnostic[]
+    ignoredUnknownFields: string[]
+    entryPath?: string
+    entryRealPath?: string
+    entryContentHash?: string
+    bundleContentHash?: string
+    bundleFileCount?: number
+    bundleByteCount?: number
+    trustStatus: PluginDeveloperTrustedStatus
+    gate: PluginDeveloperTrustedGate
+    loadState: PluginDeveloperTrustedLoadState
+  }
   mcpServers: string[]
   mcpApprovalIdentifiers: Record<string, string>
 }
@@ -100,6 +130,7 @@ export interface PluginDoctorPluginDebug {
   diagnostics: PluginDiagnostic[]
   componentCounts: PluginDoctorPluginInput["componentCounts"]
   controlledUi: PluginDoctorPluginInput["controlledUi"]
+  developerTrusted: PluginDoctorPluginInput["developerTrusted"]
   mcpServers: string[]
   mcpApprovalIdentifiers: Record<string, string>
   checks: PluginDoctorCheck[]
@@ -108,6 +139,7 @@ export interface PluginDoctorPluginDebug {
 export interface PluginDoctorReport {
   generatedAt: string
   safeMode: PluginSafeModeState
+  developerMode: PluginDeveloperModeState
   reviewStatePath?: string
   summary: {
     totalChecks: number
@@ -127,14 +159,17 @@ export function buildPluginDoctorReport(input: {
   sources: PluginDoctorSourceInput[]
   plugins: PluginDoctorPluginInput[]
   safeMode: PluginSafeModeState
+  developerMode: PluginDeveloperModeState
   reviewStatePath?: string
   now?: Date
 }): PluginDoctorReport {
   const sourceChecks = input.sources.map(buildSourceCheck)
   const reviewStateCheck = buildReviewStateCheck(input.reviewStatePath)
+  const developerModeCheck = buildDeveloperModeCheck(input.developerMode)
   const plugins = input.plugins.map(buildPluginDebug)
   const checks = [
     reviewStateCheck,
+    developerModeCheck,
     ...sourceChecks,
     ...plugins.flatMap((plugin) => plugin.checks),
   ]
@@ -143,6 +178,7 @@ export function buildPluginDoctorReport(input: {
   return {
     generatedAt: (input.now ?? new Date()).toISOString(),
     safeMode: input.safeMode,
+    developerMode: input.developerMode,
     reviewStatePath: input.reviewStatePath,
     summary,
     checks,
@@ -198,6 +234,20 @@ function buildReviewStateCheck(reviewStatePath: string | undefined): PluginDocto
   }
 }
 
+function buildDeveloperModeCheck(
+  developerMode: PluginDeveloperModeState,
+): PluginDoctorCheck {
+  return {
+    code: "developer-mode",
+    status: developerMode.enabled ? "warning" : "pass",
+    subject: "developer-plugin-mode",
+    details: {
+      enabled: developerMode.enabled,
+      updatedAt: developerMode.updatedAt ?? "",
+    },
+  }
+}
+
 function buildPluginDebug(plugin: PluginDoctorPluginInput): PluginDoctorPluginDebug {
   const checks = buildPluginChecks(plugin)
   return {
@@ -214,6 +264,7 @@ function buildPluginDebug(plugin: PluginDoctorPluginInput): PluginDoctorPluginDe
     diagnostics: plugin.diagnostics,
     componentCounts: plugin.componentCounts,
     controlledUi: plugin.controlledUi,
+    developerTrusted: plugin.developerTrusted,
     mcpServers: plugin.mcpServers,
     mcpApprovalIdentifiers: plugin.mcpApprovalIdentifiers,
     checks,
@@ -371,6 +422,82 @@ function buildPluginChecks(plugin: PluginDoctorPluginInput): PluginDoctorCheck[]
     })
   }
 
+  if (hasDeveloperTrustedFacts(plugin.developerTrusted)) {
+    const manifestPermissions = plugin.developerTrusted.manifest?.permissions.length ?? 0
+    const manifestCapabilities = plugin.developerTrusted.manifest?.capabilities.length ?? 0
+    checks.push({
+      code: "developer-trusted-declared",
+      status: plugin.developerTrusted.manifestPresent ? "warning" : "blocked",
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        permissionCount: manifestPermissions,
+        capabilityCount: manifestCapabilities,
+        diagnosticCount: plugin.developerTrusted.diagnostics.length,
+        ignoredUnknownFieldCount: plugin.developerTrusted.ignoredUnknownFields.length,
+        bundleFileCount: plugin.developerTrusted.bundleFileCount ?? 0,
+        bundleByteCount: plugin.developerTrusted.bundleByteCount ?? 0,
+        bundleContentHash: plugin.developerTrusted.bundleContentHash ?? "",
+        entryContentHash: plugin.developerTrusted.entryContentHash ?? "",
+      },
+    })
+
+    checks.push({
+      code: "developer-trusted-trust",
+      status: getDeveloperTrustedTrustCheckStatus(plugin.developerTrusted.trustStatus),
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        trustStatus: plugin.developerTrusted.trustStatus,
+      },
+    })
+
+    checks.push({
+      code: "developer-trusted-gate",
+      status: plugin.developerTrusted.gate.canLoadTrustedCode ? "pass" : "blocked",
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        canTrustCurrentFingerprint: plugin.developerTrusted.gate.canTrustCurrentFingerprint,
+        canLoadTrustedCode: plugin.developerTrusted.gate.canLoadTrustedCode,
+        reasonCount: plugin.developerTrusted.gate.reasons.length,
+        reasons: plugin.developerTrusted.gate.reasons.join(","),
+      },
+    })
+
+    checks.push({
+      code: "developer-trusted-load",
+      status: getDeveloperTrustedLoadCheckStatus(plugin.developerTrusted.loadState),
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        loadStatus: plugin.developerTrusted.loadState.status,
+        entryContentHash: plugin.developerTrusted.loadState.entryContentHash ?? "",
+        bundleContentHash: plugin.developerTrusted.loadState.bundleContentHash ?? "",
+        errorCode: plugin.developerTrusted.loadState.errorCode ?? "",
+      },
+    })
+  }
+
+  if (plugin.developerTrusted.diagnostics.some((diagnostic) => diagnostic.severity === "blocked")) {
+    checks.push({
+      code: "developer-trusted-diagnostic",
+      status: "blocked",
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        blockedDiagnosticCount: plugin.developerTrusted.diagnostics.filter(
+          (diagnostic) => diagnostic.severity === "blocked",
+        ).length,
+      },
+    })
+  }
+
   if (plugin.diagnostics.some((diagnostic) => diagnostic.code === "component-path-outside-root")) {
     checks.push({
       code: "component-path-warning",
@@ -382,6 +509,32 @@ function buildPluginChecks(plugin: PluginDoctorPluginInput): PluginDoctorCheck[]
   }
 
   return checks
+}
+
+function hasDeveloperTrustedFacts(
+  developerTrusted: PluginDoctorPluginInput["developerTrusted"],
+): boolean {
+  return developerTrusted.isDeveloperSource ||
+    developerTrusted.manifestPresent ||
+    developerTrusted.trustStatus !== "missing" ||
+    developerTrusted.loadState.status !== "not-loaded" ||
+    developerTrusted.diagnostics.length > 0
+}
+
+function getDeveloperTrustedTrustCheckStatus(
+  trustStatus: PluginDeveloperTrustedStatus,
+): PluginDoctorCheckStatus {
+  if (trustStatus === "current") return "pass"
+  if (trustStatus === "stale") return "warning"
+  return "blocked"
+}
+
+function getDeveloperTrustedLoadCheckStatus(
+  loadState: PluginDeveloperTrustedLoadState,
+): PluginDoctorCheckStatus {
+  if (loadState.status === "loaded") return "pass"
+  if (loadState.status === "not-loaded") return "info"
+  return "blocked"
 }
 
 function getControlledUiGateCheckStatus(

@@ -17,7 +17,7 @@
 - [x] 3.3 Include developer manifest facts in plugin review scans and change diffs.
 - [x] 3.4 Add mutations to enable Developer Plugin Mode and trust/revoke a current plugin fingerprint.
 - [x] 3.5 Recompute gates, realpaths, and executable content hashes in main process before every trust, load, and invocation action.
-- [ ] 3.6 Add Doctor/Debug facts for developer source, trust, gate, and load state.
+- [x] 3.6 Add Doctor/Debug facts for developer source, trust, gate, and load state.
 
 ## 4. Trusted Runtime Loader
 - [x] 4.1 Add a minimal developer plugin loader that imports only contained local entrypoints after all gates pass.

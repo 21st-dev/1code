@@ -203,6 +203,10 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginReviewStateSource).toContain("getDeveloperPluginTrustStatus")
     expect(pluginReviewStateSource).toContain("revokeDeveloperPluginTrust")
 
+    expect(pluginsRouterSource).toContain("getPluginDeveloperModeState")
+    expect(pluginsRouterSource).toContain("developerTrustedGate")
+    expect(pluginsRouterSource).toContain("getDeveloperPluginLoadState")
+    expect(pluginsRouterSource).toContain("bundleContentHash")
     expect(pluginsRouterSource).toContain("developerMode: publicProcedure.query")
     expect(pluginsRouterSource).toContain("setDeveloperMode: publicProcedure")
     expect(pluginsRouterSource).toContain("chooseDeveloperSourceDirectory: publicProcedure")
