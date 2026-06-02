@@ -82,6 +82,13 @@ import {
   getApprovedPluginMcpServers,
   getEnabledPlugins,
 } from "./claude-settings"
+import {
+  completeDesktopAgentJobSafely,
+  createAndStartDesktopAgentJob,
+  registerActiveDesktopAgentJob,
+  requestCancelDesktopAgentJob,
+  unregisterActiveDesktopAgentJob,
+} from "../../desktop-agent-jobs"
 
 function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "safe-mode") return "blocked-safe-mode"
@@ -963,6 +970,10 @@ export const claudeRouter = router({
         let lastChunkType = ""
         // Shared sessionId for cleanup to save on abort
         let currentSessionId: string | null = null
+        let desktopJobId: string | null = null
+        let desktopJobSawError = false
+        let desktopJobReachedNaturalFinish = false
+        let desktopJobDb: ReturnType<typeof getDatabase> | null = null
         console.log(
           `[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`,
         )
@@ -972,6 +983,15 @@ export const claudeRouter = router({
 
         // Helper to safely emit (no-op if already unsubscribed)
         const safeEmit = (chunk: UIMessageChunk) => {
+          const observedChunk = chunk as any
+          if (
+            observedChunk?.type === "error" ||
+            observedChunk?.type === "auth-error" ||
+            observedChunk?.type === "capability-error" ||
+            (observedChunk?.type === "runtime-status" && observedChunk?.ok === false)
+          ) {
+            desktopJobSawError = true
+          }
           if (!isObservableActive) return false
           try {
             emit.next(chunk)
@@ -1050,6 +1070,27 @@ export const claudeRouter = router({
             }
 
             const db = getDatabase()
+            desktopJobDb = db
+            const desktopJob = createAndStartDesktopAgentJob(db, {
+              runtime: "claude-code",
+              mode: input.mode,
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              cwd: input.cwd,
+              prompt: input.prompt,
+              runId: input.runId ?? streamId,
+            })
+            desktopJobId = desktopJob.job.id
+            registerActiveDesktopAgentJob({
+              jobId: desktopJobId,
+              runtime: "claude-code",
+              subChatId: input.subChatId,
+              runId: input.runId ?? streamId,
+              cancel: () => {
+                abortController.abort()
+                clearPendingApprovals("Session cancelled.", input.subChatId)
+              },
+            })
 
             // 1. Get existing messages from DB
             const existing = db
@@ -3054,6 +3095,8 @@ ${prompt}
             console.log(
               `[SD] M:END sub=${subId} reason=ok n=${chunkCount} last=${lastChunkType} t=${duration}s`,
             )
+            desktopJobReachedNaturalFinish =
+              !abortController.signal.aborted && !desktopJobSawError
             if (pendingFinishChunk) {
               safeEmit(pendingFinishChunk)
             } else {
@@ -3070,6 +3113,39 @@ ${prompt}
             safeEmit({ type: "finish" } as UIMessageChunk)
             safeComplete()
           } finally {
+            if (desktopJobId) {
+              const jobDb = desktopJobDb ?? getDatabase()
+              const wasCanceled =
+                abortController.signal.aborted && !desktopJobReachedNaturalFinish
+              const status = wasCanceled
+                ? "canceled"
+                : desktopJobSawError
+                  ? "failed"
+                  : "succeeded"
+              completeDesktopAgentJobSafely(jobDb, {
+                jobId: desktopJobId,
+                status,
+                exitCode: status === "succeeded" ? 0 : status === "canceled" ? 5 : 1,
+                errorCode:
+                  status === "failed"
+                    ? "desktop_chat_failed"
+                    : status === "canceled"
+                      ? "desktop_chat_canceled"
+                      : null,
+                errorMessage:
+                  status === "failed"
+                    ? "Desktop Claude chat stream failed."
+                    : status === "canceled"
+                      ? "Desktop Claude chat stream was canceled."
+                      : null,
+                result: {
+                  runtime: "claude-code",
+                  subChatId: input.subChatId,
+                  chatId: input.chatId,
+                },
+              })
+              unregisterActiveDesktopAgentJob(desktopJobId)
+            }
             activeSessions.delete(input.subChatId)
             if (guardedContract) {
               activeGuardedContracts.delete(guardedContract.id)
@@ -3095,6 +3171,13 @@ ${prompt}
           // handles it (saves on normal completion, clears on abort). This avoids
           // a redundant DB write that the cancel mutation would then overwrite.
           const db = getDatabase()
+          if (desktopJobId && !desktopJobSawError && !desktopJobReachedNaturalFinish) {
+            try {
+              requestCancelDesktopAgentJob(db, desktopJobId, "desktop-chat")
+            } catch {
+              // Job may already be terminal if cleanup raced with stream finish.
+            }
+          }
           db.update(subChats)
             .set({ streamId: null })
             .where(eq(subChats.id, input.subChatId))

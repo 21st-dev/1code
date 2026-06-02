@@ -17,6 +17,7 @@ import {
   serializeAgentJob,
   serializeAgentJobEvent,
 } from "../../headless/cli-output"
+import { requestCancelDesktopAgentJob } from "../../desktop-agent-jobs"
 import { getDatabase } from "../../db"
 import { publicProcedure, router } from "../index"
 
@@ -78,7 +79,10 @@ export const agentJobsRouter = router({
       const db = getDatabase()
       const job = getAgentJob(db, input.jobId)
       if (!job) throw new Error(`Unknown job: ${input.jobId}`)
-      let updated = requestCancelAgentJob(db, input.jobId, "desktop")
+      let updated =
+        job.source === "desktop"
+          ? requestCancelDesktopAgentJob(db, input.jobId, "desktop").job
+          : requestCancelAgentJob(db, input.jobId, "desktop")
       if (updated.status === "queued") {
         updated = completeAgentJob(db, {
           jobId: input.jobId,
@@ -97,6 +101,11 @@ export const agentJobsRouter = router({
       const db = getDatabase()
       const job = getAgentJob(db, input.jobId)
       if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+      if (job.source === "desktop") {
+        throw new Error(
+          "Desktop chat jobs must be retried from their linked chat.",
+        )
+      }
       if (!isTerminalAgentJobStatus(job.status as AgentJobStatus)) {
         throw new Error(`Job ${job.id} is not finished yet.`)
       }

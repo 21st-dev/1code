@@ -88,6 +88,13 @@ import {
   type McpToolInfo,
 } from "../../mcp-auth"
 import { publicProcedure, router } from "../index"
+import {
+  completeDesktopAgentJobSafely,
+  createAndStartDesktopAgentJob,
+  registerActiveDesktopAgentJob,
+  requestCancelDesktopAgentJob,
+  unregisterActiveDesktopAgentJob,
+} from "../../desktop-agent-jobs"
 
 function buildLongTextAttachmentParts(
   attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
@@ -2115,8 +2122,20 @@ export const codexRouter = router({
         })
 
         let isActive = true
+        let desktopJobId: string | null = null
+        let desktopJobSawError = false
+        let desktopJobReachedNaturalFinish = false
+        let desktopJobDb: ReturnType<typeof getDatabase> | null = null
 
         const safeEmit = (chunk: any) => {
+          if (
+            chunk?.type === "error" ||
+            chunk?.type === "auth-error" ||
+            chunk?.type === "capability-error" ||
+            (chunk?.type === "runtime-status" && chunk?.ok === false)
+          ) {
+            desktopJobSawError = true
+          }
           if (!isActive) return
           try {
             emit.next(chunk)
@@ -2187,6 +2206,32 @@ export const codexRouter = router({
               safeComplete()
             }
 
+            const db = getDatabase()
+            desktopJobDb = db
+            const desktopJob = createAndStartDesktopAgentJob(db, {
+              runtime: "codex",
+              mode: input.mode,
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              cwd: input.cwd,
+              prompt: input.prompt,
+              runId: input.runId,
+            })
+            desktopJobId = desktopJob.job.id
+            registerActiveDesktopAgentJob({
+              jobId: desktopJobId,
+              runtime: "codex",
+              subChatId: input.subChatId,
+              runId: input.runId,
+              cancel: () => {
+                const activeStream = activeStreams.get(input.subChatId)
+                if (activeStream?.runId !== input.runId) return
+                activeStream.cancelRequested = true
+                activeStream.controller.abort()
+                clearPendingCodexApprovals("Session cancelled.", input.subChatId)
+              },
+            })
+
             const runtimeStatus = await getCodexRuntimeStatus()
             if (!runtimeStatus.ok) {
               const blocker =
@@ -2210,8 +2255,6 @@ export const codexRouter = router({
               safeComplete()
               return
             }
-
-            const db = getDatabase()
 
             const existingSubChat = db
               .select()
@@ -2756,6 +2799,8 @@ export const codexRouter = router({
               safeEmit({ type: "finish" })
             }
 
+            desktopJobReachedNaturalFinish =
+              !abortController.signal.aborted && !desktopJobSawError
             safeComplete()
           } catch (error) {
             const normalized = extractCodexError(error)
@@ -2773,6 +2818,40 @@ export const codexRouter = router({
             safeEmit({ type: "finish" })
             safeComplete()
           } finally {
+            if (desktopJobId) {
+              const jobDb = desktopJobDb ?? getDatabase()
+              const wasCanceled =
+                abortController.signal.aborted && !desktopJobReachedNaturalFinish
+              const status = wasCanceled
+                ? "canceled"
+                : desktopJobSawError
+                  ? "failed"
+                  : "succeeded"
+              completeDesktopAgentJobSafely(jobDb, {
+                jobId: desktopJobId,
+                status,
+                exitCode: status === "succeeded" ? 0 : status === "canceled" ? 5 : 1,
+                errorCode:
+                  status === "failed"
+                    ? "desktop_chat_failed"
+                    : status === "canceled"
+                      ? "desktop_chat_canceled"
+                      : null,
+                errorMessage:
+                  status === "failed"
+                    ? "Desktop Codex chat stream failed."
+                    : status === "canceled"
+                      ? "Desktop Codex chat stream was canceled."
+                      : null,
+                result: {
+                  runtime: "codex",
+                  subChatId: input.subChatId,
+                  chatId: input.chatId,
+                  runId: input.runId,
+                },
+              })
+              unregisterActiveDesktopAgentJob(desktopJobId)
+            }
             const activeStream = activeStreams.get(input.subChatId)
             if (activeStream?.runId === input.runId) {
               const shouldCleanupProvider =
@@ -2788,6 +2867,17 @@ export const codexRouter = router({
 
         return () => {
           isActive = false
+          if (desktopJobId && !desktopJobSawError && !desktopJobReachedNaturalFinish) {
+            try {
+              requestCancelDesktopAgentJob(
+                desktopJobDb ?? getDatabase(),
+                desktopJobId,
+                "desktop-chat",
+              )
+            } catch {
+              // Job may already be terminal if cleanup raced with stream finish.
+            }
+          }
           abortController.abort()
 
           const activeStream = activeStreams.get(input.subChatId)
