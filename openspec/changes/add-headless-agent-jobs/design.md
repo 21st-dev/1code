@@ -16,10 +16,17 @@ not complete. Linux support may follow the macOS shell-shim pattern where the
 packaging target exists, but the required first-slice platforms are macOS and
 Windows.
 
-The first implementation must not migrate ordinary desktop chat streaming into
-`agent_jobs`. CLI/headless jobs are the first persisted job source. Desktop chat
-may read and show headless jobs, and may later become `source=desktop` in a
-separate migration phase after the first headless smoke evidence is stable.
+The first implementation did not migrate ordinary desktop chat streaming into
+`agent_jobs`; CLI/headless jobs were the first persisted job source. Phase 5
+adds ordinary desktop chat as `source=desktop` jobs after the headless slice is
+stable enough on macOS. This phase still must not describe the first slice as
+release-ready until the Windows headless smoke evidence is collected.
+
+Phase 5 migrates the outer job lifecycle only. It must preserve the existing
+desktop chat message, session, stream, rollback, guarded-run, attachment, and
+runtime-specific behavior. Claude Code and Codex keep their current chat
+routers and transports; the job platform records and controls each desktop chat
+run around those existing paths.
 
 ## Reference Integration Strategy
 The reference projects influence separate layers:
@@ -262,7 +269,58 @@ Add a job-aware surface inside the existing agents/workbench area:
 
 This should reuse the existing Agent Workbench where practical rather than creating a separate top-level product island.
 
-### Layer 5: Daemon, Schedule, Protocol
+### Layer 5: Desktop Chat Job Migration
+Phase 5 turns ordinary desktop chat sends into `source=desktop` jobs without
+replacing the chat engine.
+
+The intended shape is:
+
+```text
+Desktop chat UI
+  -> existing Claude/Codex chat transport
+  -> existing main-process Claude/Codex chat router
+  -> source=desktop agent job wrapper
+  -> existing runtime-specific execution path
+```
+
+The job wrapper owns only:
+- creating a linked `agent_jobs` row for each desktop chat run
+- starting and completing that job around the existing stream lifecycle
+- appending sanitized lifecycle events
+- linking job rows to `project_id`, `chat_id`, and `sub_chat_id`
+- routing Workbench/job cancellation to the matching active desktop stream
+- marking a run `canceled`, `failed`, `succeeded`, or `interrupted` from the
+  actual stream outcome
+
+The job wrapper must not own:
+- chat transcript rendering or message persistence
+- Claude Code session IDs or Codex ACP session IDs
+- stream IDs used by the current desktop chat UI
+- rollback/fork internals
+- guarded-run enforcement internals
+- runtime plugin, MCP, provider-profile, or tool-call semantics
+
+The existing `sub_chats.messages`, `sub_chats.session_id`, and
+`sub_chats.stream_id` records remain the source of truth for ordinary chat
+transcripts in this phase. The linked `agent_jobs` row is the source of truth
+for cross-entrypoint status, audit events, cancel requests, and later daemon or
+protocol compatibility.
+
+Desktop job retry is intentionally narrower than CLI retry. A failed desktop
+chat job may remain inspectable, but generic job retry must not blindly append
+another user message or create an orphan run. Until chat-safe retry semantics
+are implemented, the desktop UI should send the user back to the linked chat to
+retry manually.
+
+Desktop cancellation has two entry points:
+- the existing chat stop control
+- Agent Workbench job cancellation
+
+Both must converge on the same active stream and persisted job cancellation
+request. A Workbench cancellation should not cancel a newer stream in the same
+sub-chat merely because an older job row shares the same chat IDs.
+
+### Layer 6: Daemon, Schedule, Protocol
 After one-shot and durable jobs are stable:
 - Local daemon: accepts enqueue/cancel/log follow requests over a local-only channel.
 - Schedule: opt-in local schedules that create jobs; disabled by default and visible in the app.
@@ -321,6 +379,16 @@ Why: Claude and Codex have different CLI/SDK/ACP primitives. The adapter layer
 normalizes only the job-facing contract and leaves runtime-specific behavior
 behind capability gates.
 
+### Desktop Chat Uses Job Wrapper, Not Router Replacement
+Decision: ordinary desktop chat becomes `source=desktop` by wrapping the
+existing Claude/Codex stream routers with job lifecycle calls.
+
+Why: the desktop chat path already owns UI streaming, transcript persistence,
+session IDs, tool approval, rollback, guarded-run, attachments, and runtime
+specific error handling. Replacing those internals in one step would risk
+breaking normal chat. The job wrapper gives later daemon/schedule/protocol work
+a common audit and cancellation surface while preserving today UI behavior.
+
 ### Capability-Driven UI Before Provider Branching
 Decision: desktop and CLI controls should consume registered runtime capabilities instead of branching directly on `provider === "claude-code"` or `provider === "codex"` for feature availability.
 
@@ -360,15 +428,21 @@ Why: Locus is already a local desktop app with local git/worktree and terminal b
   - Mitigation: keep one-shot direct execution as Phase 1; add daemon only after durable jobs and CLI smoke pass.
 - Job events can grow without bound.
   - Mitigation: store compact structured events, cap list queries, and add cleanup/export behavior in a later maintenance slice.
+- Desktop job retry can duplicate chat history if treated like CLI retry.
+  - Mitigation: keep generic retry disabled for `source=desktop` jobs until
+    chat-safe retry is designed; direct users to the linked chat instead.
+- Workbench cancellation can target the wrong desktop stream if it only uses
+  `sub_chat_id`.
+  - Mitigation: register active desktop job IDs in memory and cancel by active
+    job ownership, not only by chat or sub-chat identity.
 - Schedule can create surprising autonomous edits.
   - Mitigation: schedule is opt-in, local-only, visible, pausable, and defaults to plan/review-oriented modes unless the user explicitly selects agent mode.
 
 ## Phase Gates
-- Phase 1 is complete when `locus run` can execute one task, stream output, return an exit code, and persist a job/event transcript.
-- Phase 2 is complete when `locus jobs` can list/show/logs/cancel/retry persisted jobs and desktop can display CLI-created jobs.
-- Phase 3 is complete when a local daemon can enqueue and run jobs without a renderer window while preserving crash/interrupted states.
-- Phase 4 is complete when schedules can create visible local jobs with clear pause/delete controls.
-- Phase 5 is complete when `locus acp` can serve a minimal ACP-compatible stdio session backed by the same runner core.
+- First-slice gate is complete when `locus run` can execute one task, stream output, return an exit code, persist a job/event transcript, `locus jobs` can list/show/logs/cancel/retry persisted jobs, and desktop can display CLI-created jobs.
+- User-roadmap Step 5 is complete when ordinary desktop chat runs are visible as linked `source=desktop` jobs without regressing existing chat behavior.
+- User-roadmap Step 6 is complete when a local daemon can enqueue and run jobs without a renderer window while preserving crash/interrupted states.
+- User-roadmap Step 7 is complete when schedules can create visible local jobs and `locus acp` can serve a minimal ACP-compatible stdio session backed by the same runner core.
 
 For this implementation pass, "complete the first four steps" means:
 - Phase 0 planning boundary is updated and validated.
@@ -379,3 +453,15 @@ For this implementation pass, "complete the first four steps" means:
 
 It does not mean daemon, schedule, ACP server, or ordinary desktop chat
 migration are complete.
+
+For the later Phase 5 desktop-chat implementation pass, "complete desktop chat
+migration" means:
+- ordinary Claude Code desktop sends create linked `source=desktop` jobs
+- ordinary Codex desktop sends create linked `source=desktop` jobs
+- current chat messages, sessions, stream IDs, attachments, guarded-run, and
+  runtime-specific UI behavior continue to use the existing paths
+- Workbench shows desktop chat runs separately from CLI/headless jobs
+- Workbench cancellation reaches the exact active desktop run
+- generic retry is not exposed for desktop chat jobs until chat-safe retry is
+  implemented
+- tests and smoke evidence prove both normal chat behavior and job visibility
