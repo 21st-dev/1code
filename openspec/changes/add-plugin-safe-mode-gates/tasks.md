@@ -3,9 +3,9 @@
 - [x] 1.2 Validate the change with strict OpenSpec checks.
 
 ## 2. Shared Gate Model
-- [ ] 2.1 Add shared safe-mode and review-gate types.
-- [ ] 2.2 Add deterministic gate helpers for safe mode, review status, runtime, and MCP presence.
-- [ ] 2.3 Add unit tests for gate decisions.
+- [x] 2.1 Add shared safe-mode and review-gate types.
+- [x] 2.2 Add deterministic gate helpers for safe mode, review status, runtime, and MCP presence.
+- [x] 2.3 Add unit tests for gate decisions.
 
 ## 3. Main Process Enforcement
 - [ ] 3.1 Persist and read local plugin safe-mode state.
