@@ -32,6 +32,10 @@ type PluginViewMode = "installed" | "sources"
 type PluginSourceKind = "local-marketplace" | "cache"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
+type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-code"
+type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled-planned" | "trusted-code-planned"
+type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
+type PluginUpdatePosture = "advisory-only" | "review-before-enable"
 
 interface PluginData {
   runtime: PluginRuntime
@@ -45,6 +49,12 @@ interface PluginData {
   category?: string
   homepage?: string
   tags?: string[]
+  sourceKind: PluginSourceKind
+  sourceTrust: PluginSourceTrust
+  targetMode: PluginTargetMode
+  executionStatus: PluginExecutionStatus
+  reviewStatus: PluginReviewStatus
+  updatePosture: PluginUpdatePosture
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -146,6 +156,81 @@ function getSourceStatusClass(status: PluginSourceStatus): string {
   }
 }
 
+function getTargetModeLabel(mode: PluginTargetMode, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (mode) {
+    case "manifest-only":
+      return t("settings.plugins.targetModeManifestOnly")
+    case "controlled-ui":
+      return t("settings.plugins.targetModeControlledUi")
+    case "developer-trusted-code":
+      return t("settings.plugins.targetModeDeveloperTrustedCode")
+  }
+}
+
+function getTargetModeDescription(mode: PluginTargetMode, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (mode) {
+    case "manifest-only":
+      return t("settings.plugins.targetModeManifestOnlyDescription")
+    case "controlled-ui":
+      return t("settings.plugins.targetModeControlledUiDescription")
+    case "developer-trusted-code":
+      return t("settings.plugins.targetModeDeveloperTrustedCodeDescription")
+  }
+}
+
+function getExecutionStatusLabel(status: PluginExecutionStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "not-run-by-locus":
+      return t("settings.plugins.executionNotRunByLocus")
+    case "locus-controlled-planned":
+      return t("settings.plugins.executionLocusControlledPlanned")
+    case "trusted-code-planned":
+      return t("settings.plugins.executionTrustedCodePlanned")
+  }
+}
+
+function getReviewStatusLabel(status: PluginReviewStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "metadata-only":
+      return t("settings.plugins.reviewMetadataOnly")
+    case "mcp-review-required":
+      return t("settings.plugins.reviewMcpRequired")
+    case "read-only-cache":
+      return t("settings.plugins.reviewReadOnlyCache")
+  }
+}
+
+function getUpdatePostureLabel(posture: PluginUpdatePosture, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (posture) {
+    case "advisory-only":
+      return t("settings.plugins.updateAdvisoryOnly")
+    case "review-before-enable":
+      return t("settings.plugins.updateReviewBeforeEnable")
+  }
+}
+
+function getTargetModeClass(mode: PluginTargetMode): string {
+  switch (mode) {
+    case "manifest-only":
+      return "border-border bg-muted text-muted-foreground"
+    case "controlled-ui":
+      return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+    case "developer-trusted-code":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  }
+}
+
+function getReviewStatusClass(status: PluginReviewStatus): string {
+  switch (status) {
+    case "metadata-only":
+      return "text-muted-foreground"
+    case "mcp-review-required":
+      return "text-amber-600 dark:text-amber-300"
+    case "read-only-cache":
+      return "text-sky-700 dark:text-sky-300"
+  }
+}
+
 // --- Detail Panel ---
 function PluginDetail({
   plugin,
@@ -232,8 +317,50 @@ function PluginDetail({
               : t("settings.plugins.codexPackageHint")}
           </p>
 
+          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                getTargetModeClass(plugin.targetMode)
+              )}>
+                {getTargetModeLabel(plugin.targetMode, t)}
+              </span>
+              <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {getExecutionStatusLabel(plugin.executionStatus, t)}
+              </span>
+              <span className={cn("rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium", getReviewStatusClass(plugin.reviewStatus))}>
+                {getReviewStatusLabel(plugin.reviewStatus, t)}
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {getTargetModeDescription(plugin.targetMode, t)}
+            </p>
+          </div>
+
           {/* Info */}
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.targetMode")}</Label>
+              <p className="text-sm text-foreground">{getTargetModeLabel(plugin.targetMode, t)}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.executionStatus")}</Label>
+              <p className="text-sm text-foreground">{getExecutionStatusLabel(plugin.executionStatus, t)}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.reviewStatus")}</Label>
+              <p className={cn("text-sm font-medium", getReviewStatusClass(plugin.reviewStatus))}>
+                {getReviewStatusLabel(plugin.reviewStatus, t)}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.updatePosture")}</Label>
+              <p className="text-sm text-foreground">{getUpdatePostureLabel(plugin.updatePosture, t)}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.sourceTrust")}</Label>
+              <p className="text-sm text-foreground">{getSourceTrustLabel(plugin.sourceTrust, t)}</p>
+            </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.runtime")}</Label>
               <p className="text-sm text-foreground">{runtimeLabel}</p>
@@ -272,6 +399,16 @@ function PluginDetail({
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3 space-y-2">
+            <Label>{t("settings.plugins.updateHandling")}</Label>
+            <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+              <p>{t("settings.plugins.pluginUpdateGuidance")}</p>
+              <p>{t("settings.plugins.codexReferenceUpdateGuidance")}</p>
+              <p>{t("settings.plugins.codexDesktopUpdateGuidance")}</p>
+              <p>{t("settings.plugins.codexRuntimeUpdateGuidance")}</p>
+            </div>
           </div>
 
           {/* Components — clickable when the runtime exposes them to shared tabs */}
@@ -487,6 +624,12 @@ function PluginListItem({
         <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
           {plugin.runtime === "claude" ? "Claude" : "Codex"}
         </span>
+        <span className={cn(
+          "shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium",
+          getTargetModeClass(plugin.targetMode)
+        )}>
+          {getTargetModeLabel(plugin.targetMode, t)}
+        </span>
       </div>
       {plugin.description && (
         <div className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
@@ -616,6 +759,11 @@ function PluginSourceDetail({
           <div className="space-y-1.5">
             <Label>{t("settings.plugins.sourceInstallHint")}</Label>
             <p className="text-sm text-muted-foreground">{source.installHint}</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("settings.plugins.updateHandling")}</Label>
+            <p className="text-sm text-muted-foreground">{t("settings.plugins.sourceUpdateGuidance")}</p>
           </div>
 
           {source.homepage && (

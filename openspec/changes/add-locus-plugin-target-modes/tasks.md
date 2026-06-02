@@ -15,13 +15,13 @@
 
 ## 3. Settings UI
 
-- [ ] 3.1 Add compact target-mode, runtime, trust, and execution-status badges to plugin list/detail.
-- [ ] 3.2 Add a detail section explaining what Locus will and will not do for the selected target mode.
-- [ ] 3.3 Add update-handling copy for plugin updates, Codex++ reference updates, Codex Desktop updates, and Codex CLI/runtime updates.
-- [ ] 3.4 Keep Codex plugin controls read-only and avoid fake enable/update buttons.
-- [ ] 3.5 Add English and Chinese localization strings.
-- [ ] 3.6 Add UI source tests for copy, labels, and no fake Codex execution controls.
-- [ ] 3.7 Commit the UI slice separately.
+- [x] 3.1 Add compact target-mode, runtime, trust, and execution-status badges to plugin list/detail.
+- [x] 3.2 Add a detail section explaining what Locus will and will not do for the selected target mode.
+- [x] 3.3 Add update-handling copy for plugin updates, Codex++ reference updates, Codex Desktop updates, and Codex CLI/runtime updates.
+- [x] 3.4 Keep Codex plugin controls read-only and avoid fake enable/update buttons.
+- [x] 3.5 Add English and Chinese localization strings.
+- [x] 3.6 Add UI source tests for copy, labels, and no fake Codex execution controls.
+- [x] 3.7 Commit the UI slice separately.
 
 ## 4. Diagnostics And Safe Mode Planning
 

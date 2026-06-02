@@ -1101,6 +1101,38 @@ export const en = {
   "settings.plugins.viewSources": "Sources",
   "settings.plugins.capabilities": "Capabilities",
   "settings.plugins.capabilityCount": "{count} capabilities",
+  "settings.plugins.targetMode": "Target mode",
+  "settings.plugins.targetModeManifestOnly": "Metadata only",
+  "settings.plugins.targetModeControlledUi": "Controlled UI (planned)",
+  "settings.plugins.targetModeDeveloperTrustedCode": "Trusted local code (planned)",
+  "settings.plugins.targetModeManifestOnlyDescription":
+    "Locus reads this package metadata and component declarations only. It does not execute plugin JavaScript.",
+  "settings.plugins.targetModeControlledUiDescription":
+    "Controlled UI plugins require a future Locus-owned extension surface before they can run.",
+  "settings.plugins.targetModeDeveloperTrustedCodeDescription":
+    "Trusted local code would be equivalent to running code on this machine and is not available in normal plugin mode.",
+  "settings.plugins.executionStatus": "Execution",
+  "settings.plugins.executionNotRunByLocus": "Not run by Locus",
+  "settings.plugins.executionLocusControlledPlanned": "Locus surface required",
+  "settings.plugins.executionTrustedCodePlanned": "Trusted code only",
+  "settings.plugins.reviewStatus": "Review",
+  "settings.plugins.reviewMetadataOnly": "No execution",
+  "settings.plugins.reviewMcpRequired": "MCP review required",
+  "settings.plugins.reviewReadOnlyCache": "Read-only cache",
+  "settings.plugins.updatePosture": "Update posture",
+  "settings.plugins.updateAdvisoryOnly": "Advisory only",
+  "settings.plugins.updateReviewBeforeEnable": "Review before enablement",
+  "settings.plugins.updateHandling": "Update handling",
+  "settings.plugins.pluginUpdateGuidance":
+    "Plugin updates are reviewed through metadata changes; new permissions, MCP declarations, native hooks, filesystem, network, or shell capabilities stay untrusted until reviewed.",
+  "settings.plugins.codexReferenceUpdateGuidance":
+    "Codex++ repository updates are treated as reference input only and do not change Locus execution behavior.",
+  "settings.plugins.codexDesktopUpdateGuidance":
+    "Codex Desktop updates should not affect Locus plugin behavior because Locus does not depend on Codex++ patch repair.",
+  "settings.plugins.codexRuntimeUpdateGuidance":
+    "Codex CLI/runtime updates require capability review before new plugin actions are shown.",
+  "settings.plugins.sourceUpdateGuidance":
+    "Refresh re-scans local metadata only. Install and update actions remain outside this read-only source browser.",
   "settings.plugins.commandsCount": "Commands ({count})",
   "settings.plugins.skillsCount": "Skills ({count})",
   "settings.plugins.agentsCount": "Agents ({count})",
@@ -3648,6 +3680,38 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.viewSources": "来源",
   "settings.plugins.capabilities": "能力",
   "settings.plugins.capabilityCount": "{count} 个能力",
+  "settings.plugins.targetMode": "目标模式",
+  "settings.plugins.targetModeManifestOnly": "仅元数据",
+  "settings.plugins.targetModeControlledUi": "受控 UI（规划中）",
+  "settings.plugins.targetModeDeveloperTrustedCode": "可信本地代码（规划中）",
+  "settings.plugins.targetModeManifestOnlyDescription":
+    "Locus 只读取这个包的元数据和组件声明，不执行插件 JavaScript。",
+  "settings.plugins.targetModeControlledUiDescription":
+    "受控 UI 插件需要未来由 Locus 拥有的扩展入口，批准后才可以运行。",
+  "settings.plugins.targetModeDeveloperTrustedCodeDescription":
+    "可信本地代码等同于在这台机器上运行代码，普通插件模式下不可用。",
+  "settings.plugins.executionStatus": "执行状态",
+  "settings.plugins.executionNotRunByLocus": "Locus 不运行",
+  "settings.plugins.executionLocusControlledPlanned": "需要 Locus 扩展入口",
+  "settings.plugins.executionTrustedCodePlanned": "仅可信代码",
+  "settings.plugins.reviewStatus": "复审状态",
+  "settings.plugins.reviewMetadataOnly": "不执行代码",
+  "settings.plugins.reviewMcpRequired": "需要 MCP 复审",
+  "settings.plugins.reviewReadOnlyCache": "只读缓存",
+  "settings.plugins.updatePosture": "更新处理",
+  "settings.plugins.updateAdvisoryOnly": "仅提示",
+  "settings.plugins.updateReviewBeforeEnable": "启用前复审",
+  "settings.plugins.updateHandling": "更新处理",
+  "settings.plugins.pluginUpdateGuidance":
+    "插件更新只按元数据变化复审；新增权限、MCP 声明、native hook、文件系统、网络或 shell 能力在复审前都不视为可信。",
+  "settings.plugins.codexReferenceUpdateGuidance":
+    "Codex++ 仓库更新只作为参考输入，不会直接改变 Locus 的插件执行行为。",
+  "settings.plugins.codexDesktopUpdateGuidance":
+    "Codex Desktop 更新不应影响 Locus 插件行为，因为 Locus 不依赖 Codex++ 的补丁修复链路。",
+  "settings.plugins.codexRuntimeUpdateGuidance":
+    "Codex CLI/运行时更新需要先复审能力状态，之后才显示新的插件动作。",
+  "settings.plugins.sourceUpdateGuidance":
+    "刷新只会重新扫描本地元数据。安装和更新动作仍不放在这个只读来源浏览器里。",
   "settings.plugins.commandsCount": "命令（{count}）",
   "settings.plugins.skillsCount": "技能（{count}）",
   "settings.plugins.agentsCount": "智能体（{count}）",
