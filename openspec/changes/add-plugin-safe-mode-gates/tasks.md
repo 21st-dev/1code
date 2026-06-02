@@ -16,11 +16,11 @@
 - [x] 3.6 Add targeted tests for enablement, safe mode, and MCP gate behavior.
 
 ## 4. UI / UX
-- [ ] 4.1 Add visible safe-mode controls in Settings > Plugins.
-- [ ] 4.2 Show per-plugin gate state and blocked reasons.
-- [ ] 4.3 Disable or explain enable/MCP actions when gates block capability.
-- [ ] 4.4 Localize all new copy in English and Simplified Chinese.
-- [ ] 4.5 Add UI source-guard tests.
+- [x] 4.1 Add visible safe-mode controls in Settings > Plugins.
+- [x] 4.2 Show per-plugin gate state and blocked reasons.
+- [x] 4.3 Disable or explain enable/MCP actions when gates block capability.
+- [x] 4.4 Localize all new copy in English and Simplified Chinese.
+- [x] 4.5 Add UI source-guard tests.
 
 ## 5. Verification
 - [ ] 5.1 Run targeted plugin and i18n tests.

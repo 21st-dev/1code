@@ -6,7 +6,7 @@ import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../li
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2 } from "lucide-react"
+import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
 import { Label } from "../../ui/label"
@@ -37,6 +37,14 @@ type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled-planned" | "
 type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
 type PluginUpdatePosture = "advisory-only" | "review-before-enable"
 type PluginUpdateReviewStatus = "new" | "unchanged" | "changed" | "reviewed"
+type PluginSafetyGateStatus = "allowed" | "safe-mode" | "review-required" | "read-only"
+type PluginSafetyGateReason =
+  | "global-safe-mode"
+  | "review-new"
+  | "review-changed"
+  | "review-unreviewed"
+  | "codex-read-only-cache"
+  | "no-mcp-servers"
 type PluginDiagnosticSeverity = "info" | "warning"
 type PluginDiagnosticCode =
   | "metadata-only-no-execution"
@@ -80,6 +88,19 @@ interface PluginUpdateReviewMetadata {
   changes: PluginReviewChange[]
 }
 
+interface PluginSafetyGate {
+  status: PluginSafetyGateStatus
+  canEnable: boolean
+  canApproveMcp: boolean
+  canUseMcp: boolean
+  reasons: PluginSafetyGateReason[]
+}
+
+interface PluginSafeModeState {
+  enabled: boolean
+  updatedAt?: string
+}
+
 interface PluginData {
   runtime: PluginRuntime
   reviewKey: string
@@ -100,6 +121,7 @@ interface PluginData {
   reviewStatus: PluginReviewStatus
   updatePosture: PluginUpdatePosture
   updateReview: PluginUpdateReviewMetadata
+  safetyGate: PluginSafetyGate
   sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
   isDisabled: boolean
@@ -318,6 +340,49 @@ function getUpdateReviewStatusClass(status: PluginUpdateReviewStatus): string {
   }
 }
 
+function getSafetyGateStatusLabel(status: PluginSafetyGateStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "allowed":
+      return t("settings.plugins.safetyGateAllowed")
+    case "safe-mode":
+      return t("settings.plugins.safetyGateSafeMode")
+    case "review-required":
+      return t("settings.plugins.safetyGateReviewRequired")
+    case "read-only":
+      return t("settings.plugins.safetyGateReadOnly")
+  }
+}
+
+function getSafetyGateReasonLabel(reason: PluginSafetyGateReason, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (reason) {
+    case "global-safe-mode":
+      return t("settings.plugins.safetyReasonGlobalSafeMode")
+    case "review-new":
+      return t("settings.plugins.safetyReasonReviewNew")
+    case "review-changed":
+      return t("settings.plugins.safetyReasonReviewChanged")
+    case "review-unreviewed":
+      return t("settings.plugins.safetyReasonReviewUnreviewed")
+    case "codex-read-only-cache":
+      return t("settings.plugins.safetyReasonCodexReadOnly")
+    case "no-mcp-servers":
+      return t("settings.plugins.safetyReasonNoMcp")
+  }
+}
+
+function getSafetyGateStatusClass(status: PluginSafetyGateStatus): string {
+  switch (status) {
+    case "allowed":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "safe-mode":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "review-required":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "read-only":
+      return "border-border bg-background text-muted-foreground"
+  }
+}
+
 function shortFingerprint(fingerprint: string): string {
   return fingerprint ? fingerprint.slice(0, 12) : "none"
 }
@@ -392,6 +457,105 @@ function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) 
             <span>{getDiagnosticLabel(diagnostic.code, t)}</span>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function PluginSafeModeControl({
+  safeMode,
+  onToggle,
+  isToggling,
+}: {
+  safeMode: PluginSafeModeState
+  onToggle: (enabled: boolean) => void
+  isToggling: boolean
+}) {
+  const { t } = useI18n()
+  return (
+    <div className={cn(
+      "rounded-lg border px-2.5 py-2",
+      safeMode.enabled
+        ? "border-amber-500/30 bg-amber-500/10"
+        : "border-border bg-background"
+    )}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <ShieldAlert className={cn(
+            "h-3.5 w-3.5 shrink-0",
+            safeMode.enabled ? "text-amber-500" : "text-muted-foreground"
+          )} />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-foreground">
+              {t("settings.plugins.safeMode")}
+            </p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {safeMode.enabled
+                ? t("settings.plugins.safeModeEnabledShort")
+                : t("settings.plugins.safeModeDisabledShort")}
+            </p>
+          </div>
+        </div>
+        <Switch
+          checked={safeMode.enabled}
+          onCheckedChange={onToggle}
+          disabled={isToggling}
+        />
+      </div>
+    </div>
+  )
+}
+
+function PluginSafetyGatePanel({ plugin }: { plugin: PluginData }) {
+  const { t } = useI18n()
+  const gate = plugin.safetyGate
+  const visibleReasons = gate.reasons.filter((reason) => reason !== "no-mcp-servers")
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <Label>{t("settings.plugins.safetyGate")}</Label>
+        <span className={cn(
+          "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+          getSafetyGateStatusClass(gate.status),
+        )}>
+          {getSafetyGateStatusLabel(gate.status, t)}
+        </span>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {t("settings.plugins.safetyGateHint")}
+      </p>
+      {visibleReasons.length > 0 && (
+        <div className="space-y-1.5">
+          {visibleReasons.map((reason) => (
+            <div
+              key={reason}
+              className="rounded border border-border bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground"
+            >
+              {getSafetyGateReasonLabel(reason, t)}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div>
+          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanEnable")}</p>
+          <p className="text-xs font-medium text-foreground">
+            {gate.canEnable ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanApproveMcp")}</p>
+          <p className="text-xs font-medium text-foreground">
+            {gate.canApproveMcp ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanUseMcp")}</p>
+          <p className="text-xs font-medium text-foreground">
+            {gate.canUseMcp ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+          </p>
+        </div>
       </div>
     </div>
   )
@@ -546,8 +710,13 @@ function PluginDetail({
     plugin.runtime === "claude" &&
     !plugin.isDisabled &&
     plugin.components.mcpServers.length > 0 &&
+    plugin.safetyGate.canApproveMcp &&
     !!onApproveMcpServers
-  const canNavigateCapabilities = plugin.runtime === "claude" && !plugin.isDisabled
+  const canNavigateCapabilities =
+    plugin.runtime === "claude" &&
+    !plugin.isDisabled &&
+    plugin.safetyGate.status === "allowed"
+  const isEnableBlocked = plugin.canToggle && plugin.isDisabled && !plugin.safetyGate.canEnable
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -574,7 +743,7 @@ function PluginDetail({
                   <Switch
                     checked={!plugin.isDisabled}
                     onCheckedChange={onToggleEnabled}
-                    disabled={isTogglingEnabled}
+                    disabled={isTogglingEnabled || isEnableBlocked}
                   />
                 ) : (
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -619,6 +788,7 @@ function PluginDetail({
           </div>
 
           <DiagnosticsPanel diagnostics={plugin.diagnostics} />
+          <PluginSafetyGatePanel plugin={plugin} />
 
           <PluginUpdateReviewPanel
             plugin={plugin}
@@ -808,13 +978,14 @@ function PluginDetail({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">
                 <Label>{t("settings.plugins.mcpServersCount", { count: plugin.components.mcpServers.length })}</Label>
-                {canApproveMcp && (
+                {plugin.runtime === "claude" && plugin.components.mcpServers.length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[11px] shrink-0"
-                    disabled={isApprovingMcpServers}
+                    disabled={!canApproveMcp || isApprovingMcpServers}
                     onClick={onApproveMcpServers}
+                    title={!canApproveMcp ? t("settings.plugins.safetyGateBlocksAction") : undefined}
                   >
                     {isApprovingMcpServers ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -858,8 +1029,9 @@ function PluginDetail({
                           variant="secondary"
                           size="sm"
                           className="h-6 px-2 text-[11px] shrink-0"
-                          disabled={isAuthenticating}
+                          disabled={isAuthenticating || !plugin.safetyGate.canUseMcp}
                           onClick={() => onMcpAuth(serverName)}
+                          title={!plugin.safetyGate.canUseMcp ? t("settings.plugins.safetyGateBlocksAction") : undefined}
                         >
                           {isAuthenticating ? <Loader2 className="h-3 w-3 animate-spin" /> : t("settings.plugins.signIn")}
                         </Button>
@@ -903,6 +1075,9 @@ function PluginListItem({
     plugin.components.skills.length +
     plugin.components.agents.length +
     plugin.components.mcpServers.length
+  const statusLabel = plugin.safetyGate.status === "allowed"
+    ? getPluginStatusLabel(plugin, t)
+    : getSafetyGateStatusLabel(plugin.safetyGate.status, t)
 
   return (
     <button
@@ -938,9 +1113,11 @@ function PluginListItem({
         </span>
         <span className={cn(
           "shrink-0",
-          plugin.canToggle && plugin.isDisabled ? "text-muted-foreground/60" : "text-emerald-500/80",
+          plugin.safetyGate.status === "allowed" && !(plugin.canToggle && plugin.isDisabled)
+            ? "text-emerald-500/80"
+            : "text-muted-foreground/60",
         )}>
-          {getPluginStatusLabel(plugin, t)}
+          {statusLabel}
         </span>
       </div>
     </button>
@@ -1113,6 +1290,9 @@ export function AgentsPluginsTab() {
   const { data: pluginSources = [], isLoading: isLoadingSources, refetch: refetchSources } = trpc.plugins.sources.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
+  const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } = trpc.plugins.safeMode.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
 
   // MCP server statuses for showing auth state in plugin detail
   const { data: allMcpConfig, refetch: refetchMcp } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
@@ -1150,6 +1330,7 @@ export function AgentsPluginsTab() {
   const setPluginEnabledMutation = trpc.claudeSettings.setPluginEnabled.useMutation()
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
   const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
+  const setSafeModeMutation = trpc.plugins.setSafeMode.useMutation()
 
   const filteredPlugins = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"
@@ -1345,9 +1526,6 @@ export function AgentsPluginsTab() {
       await approveAllMutation.mutateAsync({
         pluginSource: plugin.source,
         serverNames: plugin.components.mcpServers,
-        identifiers: plugin.components.mcpServers
-          .map((serverName) => plugin.mcpApprovalIdentifiers[serverName])
-          .filter((identifier): identifier is string => typeof identifier === "string"),
       })
       toast.success(t("settings.plugins.toast.mcpApproved"), {
         description: formatPluginName(plugin.name),
@@ -1368,6 +1546,19 @@ export function AgentsPluginsTab() {
       toast.error(message)
     }
   }, [clearPluginCacheMutation, refetch, refetchSources, t])
+
+  const handleToggleSafeMode = useCallback(async (enabled: boolean) => {
+    try {
+      await setSafeModeMutation.mutateAsync({ enabled })
+      toast.success(enabled
+        ? t("settings.plugins.toast.safeModeEnabled")
+        : t("settings.plugins.toast.safeModeDisabled"))
+      await Promise.all([refetchSafeMode(), refetch(), refetchMcp()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [setSafeModeMutation, refetchSafeMode, refetch, refetchMcp, t])
 
   const isRefreshingPlugins = isLoading || isLoadingSources || clearPluginCacheMutation.isPending
 
@@ -1405,6 +1596,13 @@ export function AgentsPluginsTab() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="px-2 pt-2 flex-shrink-0">
+            <PluginSafeModeControl
+              safeMode={safeMode}
+              onToggle={handleToggleSafeMode}
+              isToggling={setSafeModeMutation.isPending}
+            />
           </div>
           {/* Search */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">

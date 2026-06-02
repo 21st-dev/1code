@@ -1152,7 +1152,36 @@ export const en = {
     "Refresh re-scans local metadata only. Install and update actions remain outside this read-only source browser.",
   "settings.plugins.safeModePlanning": "Safe mode",
   "settings.plugins.safeModePlanningGuidance":
-    "Safe mode is a future recovery rule for approved Locus extension surfaces. This change still does not run arbitrary plugin code.",
+    "Safe mode blocks plugin-provided runtime capabilities while keeping metadata, source pins, and review history visible.",
+  "settings.plugins.safeMode": "Plugin safe mode",
+  "settings.plugins.safeModeEnabledShort": "Plugin capabilities are blocked",
+  "settings.plugins.safeModeDisabledShort": "Reviewed capabilities may run",
+  "settings.plugins.safetyGate": "Capability gate",
+  "settings.plugins.safetyGateHint":
+    "This gate controls whether plugin-provided capabilities may enter a Locus runtime path. Local review is not a safety certification.",
+  "settings.plugins.safetyGateAllowed": "Allowed",
+  "settings.plugins.safetyGateSafeMode": "Safe mode",
+  "settings.plugins.safetyGateReviewRequired": "Needs review",
+  "settings.plugins.safetyGateReadOnly": "Read-only",
+  "settings.plugins.safetyReasonGlobalSafeMode":
+    "Plugin safe mode is on, so plugin-provided capabilities are blocked.",
+  "settings.plugins.safetyReasonReviewNew":
+    "This plugin is new and its current manifest fingerprint has not been locally reviewed.",
+  "settings.plugins.safetyReasonReviewChanged":
+    "This plugin changed after the last local review. Review the current fingerprint before enabling capabilities.",
+  "settings.plugins.safetyReasonReviewUnreviewed":
+    "This manifest has been seen but not locally reviewed.",
+  "settings.plugins.safetyReasonCodexReadOnly":
+    "Codex cache packages remain read-only in Locus.",
+  "settings.plugins.safetyReasonNoMcp":
+    "No MCP servers are declared by this plugin.",
+  "settings.plugins.safetyCanEnable": "Enable",
+  "settings.plugins.safetyCanApproveMcp": "Approve MCP",
+  "settings.plugins.safetyCanUseMcp": "Use MCP",
+  "settings.plugins.gateYes": "Yes",
+  "settings.plugins.gateNo": "No",
+  "settings.plugins.safetyGateBlocksAction":
+    "Review gates or safe mode currently block this action.",
   "settings.plugins.diagnostics": "Diagnostics",
   "settings.plugins.diagnosticMetadataOnlyNoExecution":
     "Metadata and component declarations only; plugin JavaScript is not executed.",
@@ -1204,6 +1233,8 @@ export const en = {
   "settings.plugins.toast.disabled": "Plugin disabled",
   "settings.plugins.toast.reviewed": "Plugin review recorded",
   "settings.plugins.toast.mcpApproved": "Plugin MCP servers approved",
+  "settings.plugins.toast.safeModeEnabled": "Plugin safe mode enabled",
+  "settings.plugins.toast.safeModeDisabled": "Plugin safe mode disabled",
   "settings.plugins.toast.failedToUpdate": "Failed to update plugin",
   "settings.plugins.searchPlaceholder": "Search plugins...",
   "settings.plugins.searchSourcesPlaceholder": "Search sources...",
@@ -3781,7 +3812,36 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "刷新只会重新扫描本地元数据。安装和更新动作仍不放在这个只读来源浏览器里。",
   "settings.plugins.safeModePlanning": "安全模式",
   "settings.plugins.safeModePlanningGuidance":
-    "安全模式是未来 Locus 自有扩展入口的恢复规则。本次改动仍然不执行任意插件代码。",
+    "安全模式会阻断插件提供的运行时能力，但仍保留元数据、来源 pin 和复审历史展示。",
+  "settings.plugins.safeMode": "插件安全模式",
+  "settings.plugins.safeModeEnabledShort": "插件能力已阻断",
+  "settings.plugins.safeModeDisabledShort": "已复审能力可进入运行路径",
+  "settings.plugins.safetyGate": "能力门禁",
+  "settings.plugins.safetyGateHint":
+    "这个门禁只控制插件能力能否进入 Locus 运行路径。本地复审不是安全认证。",
+  "settings.plugins.safetyGateAllowed": "允许",
+  "settings.plugins.safetyGateSafeMode": "安全模式",
+  "settings.plugins.safetyGateReviewRequired": "需要复审",
+  "settings.plugins.safetyGateReadOnly": "只读",
+  "settings.plugins.safetyReasonGlobalSafeMode":
+    "插件安全模式已开启，因此插件提供的能力被阻断。",
+  "settings.plugins.safetyReasonReviewNew":
+    "这是新发现的插件，当前清单 fingerprint 还没有本地复审。",
+  "settings.plugins.safetyReasonReviewChanged":
+    "这个插件在上次本地复审后发生变化。启用能力前需要复审当前 fingerprint。",
+  "settings.plugins.safetyReasonReviewUnreviewed":
+    "这个清单已经被扫描到，但还没有本地复审。",
+  "settings.plugins.safetyReasonCodexReadOnly":
+    "Codex 缓存包在 Locus 中保持只读。",
+  "settings.plugins.safetyReasonNoMcp":
+    "这个插件没有声明 MCP 服务器。",
+  "settings.plugins.safetyCanEnable": "启用",
+  "settings.plugins.safetyCanApproveMcp": "批准 MCP",
+  "settings.plugins.safetyCanUseMcp": "使用 MCP",
+  "settings.plugins.gateYes": "是",
+  "settings.plugins.gateNo": "否",
+  "settings.plugins.safetyGateBlocksAction":
+    "当前复审门禁或安全模式正在阻断这个动作。",
   "settings.plugins.diagnostics": "诊断",
   "settings.plugins.diagnosticMetadataOnlyNoExecution":
     "只读取元数据和组件声明，不执行插件 JavaScript。",
@@ -3833,6 +3893,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.toast.disabled": "插件已禁用",
   "settings.plugins.toast.reviewed": "插件复审已记录",
   "settings.plugins.toast.mcpApproved": "插件 MCP 服务器已批准",
+  "settings.plugins.toast.safeModeEnabled": "插件安全模式已开启",
+  "settings.plugins.toast.safeModeDisabled": "插件安全模式已关闭",
   "settings.plugins.toast.failedToUpdate": "更新插件失败",
   "settings.plugins.searchPlaceholder": "搜索插件...",
   "settings.plugins.searchSourcesPlaceholder": "搜索来源...",

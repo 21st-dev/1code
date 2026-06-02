@@ -97,4 +97,27 @@ describe("plugin target mode UI source guards", () => {
       expect(dictionarySource).toContain(`"${key}"`)
     }
   })
+
+  test("renders enforceable safe mode gates without trusting renderer approvals", () => {
+    expect(pluginsTabSource).toContain("PluginSafeModeControl")
+    expect(pluginsTabSource).toContain("PluginSafetyGatePanel")
+    expect(pluginsTabSource).toContain("trpc.plugins.safeMode.useQuery")
+    expect(pluginsTabSource).toContain("trpc.plugins.setSafeMode.useMutation")
+    expect(pluginsTabSource).toContain("plugin.safetyGate.canApproveMcp")
+    expect(pluginsTabSource).toContain("plugin.safetyGate.canUseMcp")
+    expect(pluginsTabSource).not.toContain("identifiers: plugin.components.mcpServers")
+
+    for (const key of [
+      "settings.plugins.safeMode",
+      "settings.plugins.safetyGate",
+      "settings.plugins.safetyGateHint",
+      "settings.plugins.safetyGateReviewRequired",
+      "settings.plugins.safetyReasonReviewChanged",
+      "settings.plugins.safetyGateBlocksAction",
+      "settings.plugins.toast.safeModeEnabled",
+      "settings.plugins.toast.safeModeDisabled",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
 })
