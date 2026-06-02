@@ -30,7 +30,7 @@ interface PluginComponent {
 
 type PluginRuntime = "claude" | "codex"
 type RuntimeFilter = "all" | PluginRuntime
-type PluginViewMode = "installed" | "sources" | "store"
+type PluginViewMode = "installed" | "sources" | "marketplaces" | "store"
 type PluginSourceKind = "local-marketplace" | "cache" | "developer-local"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
@@ -631,6 +631,13 @@ interface PluginSourceData {
   homepage?: string
 }
 
+interface RuntimeMarketplaceListItem extends RuntimePluginMarketplace {
+  id: string
+  plugins: RuntimePluginListing[]
+  snapshotDiagnostics: RuntimeMarketplaceDiagnostic[]
+  refreshedAt: string
+}
+
 interface McpServerStatus {
   status: string
   needsAuth: boolean
@@ -658,12 +665,13 @@ function getPluginStatusLabel(plugin: PluginData, t: ReturnType<typeof useI18n>[
 }
 
 const RUNTIME_FILTERS: RuntimeFilter[] = ["all", "claude", "codex"]
-const VIEW_MODES: PluginViewMode[] = ["installed", "sources", "store"]
+const VIEW_MODES: PluginViewMode[] = ["installed", "sources", "marketplaces", "store"]
 
 function getViewModeLabel(viewMode: PluginViewMode, t: ReturnType<typeof useI18n>["t"]): string {
   if (viewMode === "installed") return t("settings.plugins.viewInstalled")
   if (viewMode === "sources") return t("settings.plugins.viewSources")
-  return t("settings.plugins.viewStore")
+  if (viewMode === "marketplaces") return t("settings.plugins.viewMarketplaces")
+  return t("settings.plugins.viewLocusStore")
 }
 
 function getSourceKindLabel(kind: PluginSourceKind, t: ReturnType<typeof useI18n>["t"]): string {
@@ -719,6 +727,71 @@ function getSourceStatusClass(status: PluginSourceStatus): string {
       return "text-amber-500"
     case "missing":
       return "text-muted-foreground"
+  }
+}
+
+function getRuntimeMarketplaceStatusLabel(
+  status: RuntimeMarketplaceInventoryStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (status) {
+    case "available":
+      return t("settings.plugins.runtimeMarketplaceStatusAvailable")
+    case "empty":
+      return t("settings.plugins.runtimeMarketplaceStatusEmpty")
+    case "missing":
+      return t("settings.plugins.runtimeMarketplaceStatusMissing")
+    case "unavailable":
+      return t("settings.plugins.runtimeMarketplaceStatusUnavailable")
+    case "degraded":
+      return t("settings.plugins.runtimeMarketplaceStatusDegraded")
+  }
+}
+
+function getRuntimeMarketplaceStatusClass(status: RuntimeMarketplaceInventoryStatus): string {
+  switch (status) {
+    case "available":
+      return "text-emerald-500"
+    case "empty":
+    case "degraded":
+      return "text-amber-500"
+    case "missing":
+    case "unavailable":
+      return "text-muted-foreground"
+  }
+}
+
+function getRuntimePluginListingStatusLabel(
+  status: RuntimePluginListingStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (status) {
+    case "available":
+      return t("settings.plugins.runtimePluginStatusAvailable")
+    case "not-installed":
+      return t("settings.plugins.runtimePluginStatusNotInstalled")
+    case "installed":
+      return t("settings.plugins.runtimePluginStatusInstalled")
+    case "installed-enabled":
+      return t("settings.plugins.runtimePluginStatusInstalledEnabled")
+    case "installed-disabled":
+      return t("settings.plugins.runtimePluginStatusInstalledDisabled")
+    case "unknown":
+      return t("settings.plugins.runtimePluginStatusUnknown")
+  }
+}
+
+function getRuntimePluginListingStatusClass(status: RuntimePluginListingStatus): string {
+  switch (status) {
+    case "installed-enabled":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "installed":
+    case "installed-disabled":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "not-installed":
+    case "available":
+    case "unknown":
+      return "border-border bg-muted/20 text-muted-foreground"
   }
 }
 
@@ -2768,6 +2841,54 @@ function PluginSourceListItem({
   )
 }
 
+function RuntimeMarketplaceListItem({
+  marketplace,
+  isSelected,
+  onSelect,
+}: {
+  marketplace: RuntimeMarketplaceListItem
+  isSelected: boolean
+  onSelect: (id: string) => void
+}) {
+  const { t } = useI18n()
+  const installedCount = marketplace.plugins.filter((plugin) => plugin.installed).length
+  const availableCount = marketplace.plugins.length - installedCount
+  return (
+    <button
+      data-item-id={marketplace.id}
+      onClick={() => onSelect(marketplace.id)}
+      className={cn(
+        "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+        isSelected
+          ? "bg-foreground/5 text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+      )}
+    >
+      <div className="flex items-center gap-1.5 min-w-0">
+        <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <div className="text-sm leading-tight truncate">{marketplace.name}</div>
+        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
+          {marketplace.runtime === "claude" ? "Claude" : "Codex"}
+        </span>
+      </div>
+      <div className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
+        {marketplace.source ?? marketplace.path ?? t("settings.plugins.runtimeMarketplaceRuntimeOwned")}
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
+        <span className="truncate">
+          {t("settings.plugins.runtimeMarketplacePluginSummary", {
+            installed: installedCount,
+            available: availableCount,
+          })}
+        </span>
+        <span className={cn("shrink-0", getRuntimeMarketplaceStatusClass(marketplace.status))}>
+          {getRuntimeMarketplaceStatusLabel(marketplace.status, t)}
+        </span>
+      </div>
+    </button>
+  )
+}
+
 function PluginStoreListItem({
   entry,
   isSelected,
@@ -3178,12 +3299,166 @@ function PluginSourceDetail({
   )
 }
 
+function RuntimeMarketplaceDetail({
+  marketplace,
+  onRefresh,
+  isRefreshing,
+}: {
+  marketplace: RuntimeMarketplaceListItem
+  onRefresh: () => void
+  isRefreshing: boolean
+}) {
+  const { t } = useI18n()
+  const installedCount = marketplace.plugins.filter((plugin) => plugin.installed).length
+  const availableCount = marketplace.plugins.length - installedCount
+  const diagnostics = [
+    ...marketplace.diagnostics,
+    ...marketplace.snapshotDiagnostics,
+  ]
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto p-6 space-y-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-foreground">{marketplace.name}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {getRuntimeLabel(marketplace.runtime, t)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs shrink-0"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+              {t("settings.plugins.refresh")}
+            </Button>
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3">
+            <div className="flex items-start gap-2">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t("settings.plugins.runtimeMarketplaceReadOnlyHint")}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.runtimeMarketplaceStatus")}</Label>
+              <p className={cn("text-sm font-medium", getRuntimeMarketplaceStatusClass(marketplace.status))}>
+                {getRuntimeMarketplaceStatusLabel(marketplace.status, t)}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.runtimeMarketplaceInventory")}</Label>
+              <p className="text-sm text-foreground">
+                {t("settings.plugins.runtimeMarketplacePluginSummary", {
+                  installed: installedCount,
+                  available: availableCount,
+                })}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.sourceTrust")}</Label>
+              <p className="text-sm text-foreground">{getSourceTrustLabel(marketplace.trust, t)}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.plugins.runtimeMarketplaceSourceKind")}</Label>
+              <p className="text-sm text-foreground">{t("settings.plugins.runtimeMarketplaceSourceRuntimeCli")}</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("settings.plugins.sourcePath")}</Label>
+            <p className="text-sm text-foreground font-mono break-all">
+              {marketplace.path ?? marketplace.source ?? "-"}
+            </p>
+          </div>
+
+          {diagnostics.length > 0 ? (
+            <div className="space-y-2">
+              <Label>{t("settings.plugins.diagnostics")}</Label>
+              <div className="space-y-1">
+                {diagnostics.map((diagnostic, index) => (
+                  <div
+                    key={`${diagnostic.code}-${diagnostic.command ?? "runtime"}-${index}`}
+                    className={cn(
+                      "rounded border px-2 py-1.5 text-xs leading-relaxed",
+                      diagnostic.severity === "blocked"
+                        ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+                        : diagnostic.severity === "warning"
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                          : "border-border bg-muted/20 text-muted-foreground",
+                    )}
+                  >
+                    <span className="font-medium">{diagnostic.code}</span>
+                    <span className="mx-1">·</span>
+                    <span>{diagnostic.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label>{t("settings.plugins.runtimeMarketplacePlugins")}</Label>
+              <span className="text-[11px] text-muted-foreground">
+                {t("settings.plugins.runtimeMarketplaceRefreshed", {
+                  date: formatReviewTimestamp(marketplace.refreshedAt, t),
+                })}
+              </span>
+            </div>
+            {marketplace.plugins.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+                {t("settings.plugins.runtimeMarketplaceNoPlugins")}
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-md border border-border bg-background">
+                {marketplace.plugins.map((plugin) => (
+                  <div
+                    key={plugin.id}
+                    className="grid grid-cols-[minmax(0,1.4fr)_8.5rem_6.5rem_minmax(0,1fr)] items-center gap-3 border-b border-border/70 px-3 py-2 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-foreground">{plugin.name}</p>
+                      <p className="truncate text-[10px] text-muted-foreground/70">{plugin.id}</p>
+                    </div>
+                    <span className={cn(
+                      "w-fit rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                      getRuntimePluginListingStatusClass(plugin.status),
+                    )}>
+                      {getRuntimePluginListingStatusLabel(plugin.status, t)}
+                    </span>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {plugin.version ?? "-"}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-muted-foreground/70" title={plugin.path ?? plugin.source}>
+                      {plugin.path ?? plugin.source ?? "-"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Main Component ---
 export function AgentsPluginsTab() {
   const { t } = useI18n()
   const [viewMode, setViewMode] = useState<PluginViewMode>("installed")
   const [selectedPluginKey, setSelectedPluginKey] = useState<string | null>(null)
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string | null>(null)
   const [selectedStoreEntryId, setSelectedStoreEntryId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all")
@@ -3211,6 +3486,13 @@ export function AgentsPluginsTab() {
     staleTime: 5 * 60 * 1000,
   })
   const { data: storeEntries = [], isLoading: isLoadingStore, refetch: refetchStoreCatalog } = trpc.plugins.storeCatalog.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
+  const {
+    data: runtimeMarketplaceSnapshots = [],
+    isLoading: isLoadingRuntimeMarketplaces,
+    refetch: refetchRuntimeMarketplaces,
+  } = trpc.plugins.runtimeMarketplaces.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
   const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } = trpc.plugins.safeMode.useQuery(undefined, {
@@ -3365,6 +3647,53 @@ export function AgentsPluginsTab() {
     })
   }, [pluginSources, runtimeFilter, searchQuery])
 
+  const runtimeMarketplaceItems = useMemo((): RuntimeMarketplaceListItem[] => {
+    return runtimeMarketplaceSnapshots.flatMap((snapshot) =>
+      snapshot.marketplaces.map((marketplace) => {
+        const plugins = snapshot.plugins.filter((plugin) =>
+          plugin.marketplace === marketplace.name ||
+          plugin.id.endsWith(`@${marketplace.name}`)
+        )
+        return {
+          ...marketplace,
+          id: `${marketplace.runtime}:${marketplace.name}`,
+          pluginCount: marketplace.pluginCount ?? plugins.length,
+          plugins,
+          snapshotDiagnostics: snapshot.diagnostics,
+          refreshedAt: snapshot.refreshedAt,
+        }
+      })
+    )
+  }, [runtimeMarketplaceSnapshots])
+
+  const filteredMarketplaces = useMemo(() => {
+    const runtimeFiltered = runtimeFilter === "all"
+      ? runtimeMarketplaceItems
+      : runtimeMarketplaceItems.filter((marketplace) => marketplace.runtime === runtimeFilter)
+
+    if (!searchQuery.trim()) return runtimeFiltered
+    const q = searchQuery.toLowerCase()
+    const qNoDashes = q.replace(/-/g, " ")
+    const qWithDashes = q.replace(/ /g, "-")
+    return runtimeFiltered.filter((marketplace) => {
+      const name = marketplace.name.toLowerCase()
+      if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (marketplace.runtime.includes(q)) return true
+      if (marketplace.status.includes(q)) return true
+      if (marketplace.trust.includes(q)) return true
+      if (marketplace.source?.toLowerCase().includes(q)) return true
+      if (marketplace.path?.toLowerCase().includes(q)) return true
+      if (marketplace.plugins.some((plugin) =>
+        plugin.name.toLowerCase().includes(q) ||
+        plugin.id.toLowerCase().includes(q) ||
+        plugin.version?.toLowerCase().includes(q) ||
+        plugin.path?.toLowerCase().includes(q) ||
+        plugin.source?.toLowerCase().includes(q)
+      )) return true
+      return false
+    })
+  }, [runtimeMarketplaceItems, runtimeFilter, searchQuery])
+
   const sourceGroups = useMemo(() => {
     const groups: Array<{ id: string; label: string; sources: PluginSourceData[] }> = []
     for (const runtime of ["claude", "codex"] as const) {
@@ -3378,6 +3707,20 @@ export function AgentsPluginsTab() {
     }
     return groups
   }, [filteredSources, t])
+
+  const marketplaceGroups = useMemo(() => {
+    const groups: Array<{ id: string; label: string; marketplaces: RuntimeMarketplaceListItem[] }> = []
+    for (const runtime of ["claude", "codex"] as const) {
+      const runtimeMarketplaces = filteredMarketplaces.filter((marketplace) => marketplace.runtime === runtime)
+      if (runtimeMarketplaces.length === 0) continue
+      groups.push({
+        id: runtime,
+        label: `${getRuntimeLabel(runtime, t)} · ${t("settings.plugins.viewMarketplaces")}`,
+        marketplaces: runtimeMarketplaces,
+      })
+    }
+    return groups
+  }, [filteredMarketplaces, t])
 
   const filteredStoreEntries = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"
@@ -3424,6 +3767,10 @@ export function AgentsPluginsTab() {
     () => sourceGroups.flatMap((group) => group.sources.map((source) => source.id)),
     [sourceGroups]
   )
+  const allMarketplaceIds = useMemo(
+    () => marketplaceGroups.flatMap((group) => group.marketplaces.map((marketplace) => marketplace.id)),
+    [marketplaceGroups]
+  )
   const allStoreEntryIds = useMemo(
     () => storeGroups.flatMap((group) => group.entries.map((entry) => entry.id)),
     [storeGroups]
@@ -3434,17 +3781,23 @@ export function AgentsPluginsTab() {
       ? allPluginKeys
       : viewMode === "sources"
         ? allSourceIds
-        : allStoreEntryIds,
+        : viewMode === "marketplaces"
+          ? allMarketplaceIds
+          : allStoreEntryIds,
     selectedItem: viewMode === "installed"
       ? selectedPluginKey
       : viewMode === "sources"
         ? selectedSourceId
-        : selectedStoreEntryId,
+        : viewMode === "marketplaces"
+          ? selectedMarketplaceId
+          : selectedStoreEntryId,
     onSelect: (id) => {
       if (viewMode === "installed") {
         setSelectedPluginKey(id)
       } else if (viewMode === "sources") {
         setSelectedSourceId(id)
+      } else if (viewMode === "marketplaces") {
+        setSelectedMarketplaceId(id)
       } else {
         setSelectedStoreEntryId(id)
       }
@@ -3453,6 +3806,7 @@ export function AgentsPluginsTab() {
 
   const selectedPlugin = plugins.find((p) => getPluginKey(p) === selectedPluginKey) || null
   const selectedSource = pluginSources.find((source) => source.id === selectedSourceId) || null
+  const selectedMarketplace = runtimeMarketplaceItems.find((marketplace) => marketplace.id === selectedMarketplaceId) || null
   const selectedStoreEntry = storeEntries.find((entry) => entry.id === selectedStoreEntryId) || null
   const selectedPluginDebug = selectedPlugin
     ? doctorReport?.plugins.find((debug) => debug.reviewKey === selectedPlugin.reviewKey)
@@ -3483,6 +3837,24 @@ export function AgentsPluginsTab() {
     const first = sourceGroups[0]?.sources[0]
     setSelectedSourceId(first?.id ?? null)
   }, [filteredSources, isLoadingSources, selectedSource, selectedSourceId, sourceGroups, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== "marketplaces") return
+    if (selectedMarketplace && filteredMarketplaces.includes(selectedMarketplace)) return
+    if (isLoadingRuntimeMarketplaces || filteredMarketplaces.length === 0) {
+      if (selectedMarketplaceId && filteredMarketplaces.length === 0) setSelectedMarketplaceId(null)
+      return
+    }
+    const first = marketplaceGroups[0]?.marketplaces[0]
+    setSelectedMarketplaceId(first?.id ?? null)
+  }, [
+    filteredMarketplaces,
+    isLoadingRuntimeMarketplaces,
+    marketplaceGroups,
+    selectedMarketplace,
+    selectedMarketplaceId,
+    viewMode,
+  ])
 
   useEffect(() => {
     if (viewMode !== "store") return
@@ -3653,6 +4025,7 @@ export function AgentsPluginsTab() {
       await Promise.all([
         refetch(),
         refetchSources(),
+        refetchRuntimeMarketplaces(),
         refetchStoreCatalog(),
         selectedStoreEntryId ? refetchStorePreview() : Promise.resolve(),
         refetchDoctor(),
@@ -3661,7 +4034,17 @@ export function AgentsPluginsTab() {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [clearPluginCacheMutation, refetch, refetchSources, refetchStoreCatalog, refetchStorePreview, refetchDoctor, selectedStoreEntryId, t])
+  }, [
+    clearPluginCacheMutation,
+    refetch,
+    refetchSources,
+    refetchRuntimeMarketplaces,
+    refetchStoreCatalog,
+    refetchStorePreview,
+    refetchDoctor,
+    selectedStoreEntryId,
+    t,
+  ])
 
   const handleToggleSafeMode = useCallback(async (enabled: boolean) => {
     try {
@@ -3761,7 +4144,12 @@ export function AgentsPluginsTab() {
     }
   }, [loadDeveloperPluginMutation, refetch, refetchDoctor, t])
 
-  const isRefreshingPlugins = isLoading || isLoadingSources || isLoadingStore || clearPluginCacheMutation.isPending
+  const isRefreshingPlugins =
+    isLoading ||
+    isLoadingSources ||
+    isLoadingRuntimeMarketplaces ||
+    isLoadingStore ||
+    clearPluginCacheMutation.isPending
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -3780,14 +4168,14 @@ export function AgentsPluginsTab() {
       >
         <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
           <div className="px-2 pt-2 flex-shrink-0">
-            <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-0.5">
+            <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-0.5">
               {VIEW_MODES.map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setViewMode(mode)}
                   className={cn(
-                    "h-6 rounded-md px-1.5 text-[11px] font-medium transition-colors",
+                    "h-6 rounded-md px-1 text-[10px] font-medium transition-colors",
                     viewMode === mode
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -3828,7 +4216,9 @@ export function AgentsPluginsTab() {
                 ? t("settings.plugins.searchPlaceholder")
                 : viewMode === "sources"
                   ? t("settings.plugins.searchSourcesPlaceholder")
-                  : t("settings.plugins.searchStorePlaceholder")}
+                  : viewMode === "marketplaces"
+                    ? t("settings.plugins.searchMarketplacesPlaceholder")
+                    : t("settings.plugins.searchStorePlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
@@ -3949,6 +4339,52 @@ export function AgentsPluginsTab() {
                             source={source}
                             isSelected={selectedSourceId === source.id}
                             onSelect={setSelectedSourceId}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : viewMode === "marketplaces" ? (
+              isLoadingRuntimeMarketplaces ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                </div>
+              ) : runtimeMarketplaceItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                  <Terminal className="h-8 w-8 text-border mb-3" />
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {t("settings.plugins.noRuntimeMarketplaces")}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/70">
+                    {t("settings.plugins.runtimeMarketplacesEmptyDescription")}
+                  </p>
+                </div>
+              ) : filteredMarketplaces.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                  <p className="text-xs font-medium text-foreground">
+                    {searchQuery.trim()
+                      ? t("settings.plugins.noResults")
+                      : t("settings.plugins.marketplaceRuntimeEmptyTitle", {
+                          runtime: getRuntimeFilterLabel(runtimeFilter, t),
+                        })}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {marketplaceGroups.map((group) => (
+                    <div key={group.id}>
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
+                        {group.label}
+                      </p>
+                      <div className="space-y-0.5">
+                        {group.marketplaces.map((marketplace) => (
+                          <RuntimeMarketplaceListItem
+                            key={marketplace.id}
+                            marketplace={marketplace}
+                            isSelected={selectedMarketplaceId === marketplace.id}
+                            onSelect={setSelectedMarketplaceId}
                           />
                         ))}
                       </div>
@@ -4081,6 +4517,38 @@ export function AgentsPluginsTab() {
                 {pluginSources.length === 0
                   ? t("settings.plugins.sourcesEmptyDescription")
                   : t("settings.plugins.sourcesDescription")}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 h-7 px-2 text-xs"
+                onClick={() => { void handleRefreshPlugins() }}
+                disabled={isRefreshingPlugins}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+                {t("settings.plugins.refresh")}
+              </Button>
+            </div>
+          )
+        ) : viewMode === "marketplaces" ? (
+          selectedMarketplace ? (
+            <RuntimeMarketplaceDetail
+              marketplace={selectedMarketplace}
+              onRefresh={() => { void handleRefreshPlugins() }}
+              isRefreshing={isRefreshingPlugins}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <Terminal className="h-12 w-12 text-border mb-4" />
+              <p className="text-sm font-medium text-foreground">
+                {runtimeMarketplaceItems.length > 0
+                  ? t("settings.plugins.selectMarketplaceToView")
+                  : t("settings.plugins.noRuntimeMarketplaces")}
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+                {runtimeMarketplaceItems.length === 0
+                  ? t("settings.plugins.runtimeMarketplacesEmptyDescription")
+                  : t("settings.plugins.runtimeMarketplacesDescription")}
               </p>
               <Button
                 variant="outline"

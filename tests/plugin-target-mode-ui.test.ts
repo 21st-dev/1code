@@ -243,6 +243,43 @@ describe("plugin target mode UI source guards", () => {
     expect(lowerDictionary).not.toContain("safety certificate for store")
   })
 
+  test("renders runtime marketplaces separately from Locus store without cross-runtime actions", () => {
+    expect(pluginsTabSource).toContain("RuntimeMarketplaceListItem")
+    expect(pluginsTabSource).toContain("RuntimeMarketplaceDetail")
+    expect(pluginsTabSource).toContain("trpc.plugins.runtimeMarketplaces.useQuery")
+    expect(pluginsTabSource).toContain("viewMode === \"marketplaces\"")
+    expect(pluginsTabSource).toContain("settings.plugins.viewMarketplaces")
+    expect(pluginsTabSource).toContain("settings.plugins.viewLocusStore")
+    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReadOnlyHint")
+    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplacePluginSummary")
+    expect(pluginsTabSource).toContain("getRuntimePluginListingStatusLabel(plugin.status, t)")
+    expect(pluginsTabSource).not.toContain("installRuntimePlugin")
+    expect(pluginsTabSource).not.toContain("updateRuntimePlugin")
+    expect(pluginsTabSource).not.toContain("removeRuntimePlugin")
+    expect(pluginsTabSource).not.toContain("convertCodexPlugin")
+    expect(pluginsTabSource).not.toContain("convertClaudePlugin")
+
+    for (const key of [
+      "settings.plugins.viewMarketplaces",
+      "settings.plugins.viewLocusStore",
+      "settings.plugins.searchMarketplacesPlaceholder",
+      "settings.plugins.noRuntimeMarketplaces",
+      "settings.plugins.runtimeMarketplacesDescription",
+      "settings.plugins.runtimeMarketplacesEmptyDescription",
+      "settings.plugins.runtimeMarketplaceReadOnlyHint",
+      "settings.plugins.runtimePluginStatusInstalledEnabled",
+      "settings.plugins.runtimePluginStatusNotInstalled",
+      "settings.plugins.marketplaceRuntimeEmptyTitle",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+
+    expect(dictionarySource).toContain("Locus Store")
+    expect(dictionarySource).toContain("Locus 商店")
+    expect(dictionarySource).toContain("does not install, update, remove, enable, disable")
+    expect(dictionarySource).toContain("不会在这里安装、更新、删除、启用、禁用")
+  })
+
   test("renders developer trusted plugin controls without renderer path or code execution", () => {
     expect(pluginsTabSource).toContain("PluginDeveloperModeControl")
     expect(pluginsTabSource).toContain("PluginDeveloperTrustPanel")
