@@ -5,6 +5,7 @@ import type {
   PluginUpdatePosture,
 } from "./plugin-target-modes"
 import type { PluginControlledUiReviewDocument } from "./plugin-controlled-ui"
+import type { PluginDeveloperTrustedReviewDocument } from "./plugin-developer-trusted"
 
 export type PluginUpdateReviewStatus =
   | "new"
@@ -50,6 +51,7 @@ export interface PluginManifestReviewDocument {
     mcpServers: string[]
   }
   controlledUi: PluginControlledUiReviewDocument
+  developerTrusted: PluginDeveloperTrustedReviewDocument
   sourcePins: PluginSourcePin[]
 }
 
@@ -108,10 +110,11 @@ function normalizePins(pins: PluginSourcePin[] | undefined): PluginSourcePin[] {
 }
 
 export function buildPluginManifestReviewDocument(
-  input: Omit<PluginManifestReviewDocument, "schemaVersion" | "tags" | "components" | "controlledUi" | "sourcePins"> & {
+  input: Omit<PluginManifestReviewDocument, "schemaVersion" | "tags" | "components" | "controlledUi" | "developerTrusted" | "sourcePins"> & {
     tags?: string[]
     components?: Partial<PluginManifestReviewDocument["components"]>
     controlledUi?: PluginControlledUiReviewDocument
+    developerTrusted?: PluginDeveloperTrustedReviewDocument
     sourcePins?: PluginSourcePin[]
   },
 ): PluginManifestReviewDocument {
@@ -141,6 +144,7 @@ export function buildPluginManifestReviewDocument(
       mcpServers: normalizeList(input.components?.mcpServers),
     },
     controlledUi: normalizeControlledUi(input.controlledUi),
+    developerTrusted: normalizeDeveloperTrusted(input.developerTrusted),
     sourcePins: normalizePins(input.sourcePins),
   }
 }
@@ -169,9 +173,47 @@ export function diffPluginManifestReviewDocuments(
   addChange("agents", previous.components.agents, current.components.agents)
   addChange("mcpServers", previous.components.mcpServers, current.components.mcpServers)
   addChange("controlledUi", previous.controlledUi, current.controlledUi)
+  addChange("developerTrusted", previous.developerTrusted, current.developerTrusted)
   addChange("sourcePins", previous.sourcePins, current.sourcePins)
 
   return changes
+}
+
+function normalizeDeveloperTrusted(
+  value: PluginDeveloperTrustedReviewDocument | undefined,
+): PluginDeveloperTrustedReviewDocument {
+  if (!value) {
+    return {
+      manifestPresent: false,
+      permissions: [],
+      capabilities: [],
+      diagnostics: [],
+      ignoredUnknownFields: [],
+    }
+  }
+  return {
+    manifestPresent: value.manifestPresent,
+    id: value.id,
+    name: value.name,
+    version: value.version,
+    entry: value.entry,
+    entryContentHash: value.entryContentHash,
+    entryRealPath: value.entryRealPath,
+    permissions: normalizeList(value.permissions),
+    capabilities: normalizeList(value.capabilities),
+    diagnostics: [...value.diagnostics]
+      .map((diagnostic) => ({
+        code: diagnostic.code,
+        severity: diagnostic.severity,
+        path: diagnostic.path,
+      }))
+      .sort((a, b) => {
+        const byCode = a.code.localeCompare(b.code)
+        if (byCode !== 0) return byCode
+        return (a.path ?? "").localeCompare(b.path ?? "")
+      }),
+    ignoredUnknownFields: normalizeList(value.ignoredUnknownFields),
+  }
 }
 
 function normalizeControlledUi(

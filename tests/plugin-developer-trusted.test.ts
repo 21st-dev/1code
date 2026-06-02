@@ -1,4 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import type { PluginInfo } from "../src/main/lib/plugins"
 import {
   buildDeveloperTrustedAcknowledgement,
   buildDeveloperTrustedReviewDocument,
@@ -7,6 +11,42 @@ import {
   parseDeveloperTrustedManifest,
 } from "../src/shared/plugin-developer-trusted"
 import { getDeveloperTrustedPluginTargetMode, getPluginDiagnostics } from "../src/shared/plugin-target-modes"
+import { diffPluginManifestReviewDocuments } from "../src/shared/plugin-update-review"
+
+let userDataDir = ""
+
+mock.module("electron", () => ({
+  app: {
+    getPath(name: string) {
+      if (name !== "userData") {
+        throw new Error(`unexpected app path request: ${name}`)
+      }
+      return userDataDir
+    },
+  },
+}))
+
+const { scanPluginReviewDocument } = await import("../src/main/lib/plugins/review-scan")
+
+function pluginInfo(root: string): PluginInfo {
+  return {
+    runtime: "claude",
+    reviewKey: "developer:local.example",
+    name: "Local Example",
+    version: "0.1.0",
+    path: root,
+    installRoot: root,
+    source: "developer:local.example",
+    marketplace: "developer",
+    sourceKind: "local-marketplace",
+    sourceTrust: "local",
+    targetMode: "developer-trusted-code",
+    executionStatus: "developer-trusted-code",
+    updatePosture: "review-before-enable",
+    diagnostics: [],
+    sourcePins: [],
+  }
+}
 
 describe("developer trusted plugin manifest schema", () => {
   test("parses bounded local developer plugin manifests without execution fields", () => {
@@ -117,6 +157,107 @@ describe("developer trusted plugin manifest schema", () => {
       diagnostics: [],
       ignoredUnknownFields: [],
     })
+  })
+})
+
+describe("developer trusted main-process review scan", () => {
+  test("includes canonical entry content hashes in plugin review documents", async () => {
+    const root = await mkdtemp(join(tmpdir(), "locus-developer-plugin-"))
+    userDataDir = await mkdtemp(join(tmpdir(), "locus-developer-userdata-"))
+    try {
+      await mkdir(join(root, ".locus-plugin"))
+      await mkdir(join(root, "dist"))
+      await writeFile(join(root, "dist", "index.js"), "export default { name: 'first' }\n")
+      await writeFile(join(root, ".locus-plugin", "developer.json"), JSON.stringify({
+        schemaVersion: 1,
+        id: "local.example.hash",
+        name: "Hash",
+        version: "0.1.0",
+        entry: "./dist/index.js",
+        permissions: ["local-code"],
+        capabilities: ["settings-panel"],
+      }))
+
+      const scan = await scanPluginReviewDocument(pluginInfo(root))
+
+      expect(scan.targetModeSummary).toEqual({
+        targetMode: "developer-trusted-code",
+        executionStatus: "developer-trusted-code",
+        updatePosture: "review-before-enable",
+      })
+      expect(scan.developerTrusted.manifest?.id).toBe("local.example.hash")
+      expect(scan.developerTrusted.entryContentHash).toMatch(/^[a-f0-9]{64}$/)
+      expect(scan.reviewDocument.developerTrusted.entryContentHash).toBe(
+        scan.developerTrusted.entryContentHash,
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(userDataDir, { recursive: true, force: true })
+      userDataDir = ""
+    }
+  })
+
+  test("diffs developer trusted entry content changes as review metadata", async () => {
+    const root = await mkdtemp(join(tmpdir(), "locus-developer-plugin-"))
+    try {
+      await mkdir(join(root, ".locus-plugin"))
+      await mkdir(join(root, "dist"))
+      const entryPath = join(root, "dist", "index.js")
+      await writeFile(entryPath, "export default { name: 'first' }\n")
+      await writeFile(join(root, ".locus-plugin", "developer.json"), JSON.stringify({
+        schemaVersion: 1,
+        id: "local.example.diff",
+        name: "Diff",
+        version: "0.1.0",
+        entry: "./dist/index.js",
+      }))
+
+      const first = await scanPluginReviewDocument(pluginInfo(root))
+      await writeFile(entryPath, "export default { name: 'second' }\n")
+      const second = await scanPluginReviewDocument(pluginInfo(root))
+
+      expect(first.reviewDocument.developerTrusted.entryContentHash).not.toBe(
+        second.reviewDocument.developerTrusted.entryContentHash,
+      )
+      expect(diffPluginManifestReviewDocuments(
+        first.reviewDocument,
+        second.reviewDocument,
+      )).toContainEqual(expect.objectContaining({
+        field: "developerTrusted",
+      }))
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("blocks developer entry symlinks that escape the plugin root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "locus-developer-plugin-"))
+    const outside = await mkdtemp(join(tmpdir(), "locus-developer-outside-"))
+    try {
+      await mkdir(join(root, ".locus-plugin"))
+      await mkdir(join(root, "dist"))
+      const outsideEntry = join(outside, "index.js")
+      await writeFile(outsideEntry, "export default {}\n")
+      await symlink(outsideEntry, join(root, "dist", "index.js"))
+      await writeFile(join(root, ".locus-plugin", "developer.json"), JSON.stringify({
+        schemaVersion: 1,
+        id: "local.example.escape",
+        name: "Escape",
+        version: "0.1.0",
+        entry: "./dist/index.js",
+      }))
+
+      const scan = await scanPluginReviewDocument(pluginInfo(root))
+
+      expect(scan.developerTrusted.diagnostics).toContainEqual(expect.objectContaining({
+        code: "developer-entry-outside-root",
+        severity: "blocked",
+      }))
+      expect(scan.developerTrusted.entryContentHash).toBeUndefined()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(outside, { recursive: true, force: true })
+    }
   })
 })
 

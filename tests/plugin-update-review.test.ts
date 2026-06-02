@@ -53,6 +53,7 @@ function reviewDocument(overrides: Partial<PluginManifestReviewDocument> = {}) {
       repo: "figma/mcp-server-guide",
       path: "skills/figma-use",
     }],
+    developerTrusted: overrides.developerTrusted,
   })
 }
 
@@ -101,6 +102,50 @@ describe("plugin update review documents", () => {
         current: "{\"kind\":\"cache-version\",\"value\":\"next-pin\"}",
       },
     ])
+  })
+
+  test("serializes and diffs developer trusted executable metadata", () => {
+    const previous = reviewDocument({
+      targetMode: "developer-trusted-code",
+      executionStatus: "developer-trusted-code",
+      updatePosture: "review-before-enable",
+      developerTrusted: {
+        manifestPresent: true,
+        id: "local.example.dev",
+        name: "Dev",
+        version: "0.1.0",
+        entry: "dist/index.js",
+        entryRealPath: "/tmp/plugin/dist/index.js",
+        entryContentHash: "hash-a",
+        permissions: ["local-code"],
+        capabilities: ["settings-panel"],
+        diagnostics: [],
+        ignoredUnknownFields: [],
+      },
+    })
+    const current = reviewDocument({
+      targetMode: "developer-trusted-code",
+      executionStatus: "developer-trusted-code",
+      updatePosture: "review-before-enable",
+      developerTrusted: {
+        manifestPresent: true,
+        id: "local.example.dev",
+        name: "Dev",
+        version: "0.1.0",
+        entry: "dist/index.js",
+        entryRealPath: "/tmp/plugin/dist/index.js",
+        entryContentHash: "hash-b",
+        permissions: ["local-code"],
+        capabilities: ["settings-panel"],
+        diagnostics: [],
+        ignoredUnknownFields: [],
+      },
+    })
+
+    expect(stableJsonStringify(previous)).toContain("entryContentHash")
+    expect(diffPluginManifestReviewDocuments(previous, current)).toContainEqual(expect.objectContaining({
+      field: "developerTrusted",
+    }))
   })
 
   test("builds MCP approval identifiers from redacted current config metadata", () => {
