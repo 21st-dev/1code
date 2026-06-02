@@ -330,7 +330,6 @@ function formatReviewTimestamp(value: string | undefined, t: ReturnType<typeof u
 }
 
 function getSourcePinLabel(pin: PluginSourcePin, t: ReturnType<typeof useI18n>["t"]): string {
-  if (pin.label) return pin.label
   switch (pin.kind) {
     case "cache-version":
       return t("settings.plugins.sourcePinCacheVersion")

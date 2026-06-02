@@ -33,11 +33,11 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Run targeted tests for plugin update review and i18n.
-- [ ] 5.2 Run `bun run test`.
-- [ ] 5.3 Run `bun run ts:check`.
-- [ ] 5.4 Run `git diff --check`.
-- [ ] 5.5 Start the local app/dev server.
-- [ ] 5.6 Use desktop verification to inspect Settings > Plugins update review UI.
-- [ ] 5.7 Capture screenshot and recording/video evidence.
-- [ ] 5.8 Review UI/UX issues after the real smoke and fix any found issues in a separate commit.
+- [x] 5.1 Run targeted tests for plugin update review and i18n.
+- [x] 5.2 Run `bun run test`.
+- [x] 5.3 Run `bun run ts:check`.
+- [x] 5.4 Run `git diff --check`.
+- [x] 5.5 Start the local app/dev server.
+- [x] 5.6 Use desktop verification to inspect Settings > Plugins update review UI.
+- [x] 5.7 Capture screenshot and recording/video evidence.
+- [x] 5.8 Review UI/UX issues after the real smoke and fix any found issues in a separate commit.
