@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server"
+import { dialog } from "electron"
 import { router, publicProcedure } from "../index"
 import { z } from "zod"
 import {
@@ -39,6 +40,7 @@ import {
   type PluginDeveloperTrustedManifest,
   type PluginDeveloperTrustedStatus,
   type PluginDeveloperTrustedAcknowledgement,
+  type PluginDeveloperTrustedLoadState,
 } from "../../../../shared/plugin-developer-trusted"
 import {
   buildPluginControlledUiGate,
@@ -70,6 +72,11 @@ import {
   buildPluginDoctorReport,
   type PluginDoctorReport,
 } from "../../../../shared/plugin-doctor"
+import {
+  getDeveloperPluginLoadState,
+  getDeveloperPluginLoadStates,
+  loadDeveloperTrustedPlugin,
+} from "../../plugins/developer-loader"
 import { getEnabledPlugins } from "./claude-settings"
 import {
   getControlledUiPermissionGrantStatus,
@@ -121,9 +128,13 @@ export interface PluginWithComponents {
     entryPath?: string
     entryRealPath?: string
     entryContentHash?: string
+    bundleContentHash?: string
+    bundleFileCount?: number
+    bundleByteCount?: number
     trustStatus: PluginDeveloperTrustedStatus
     acknowledgement?: PluginDeveloperTrustedAcknowledgement
     gate: PluginDeveloperTrustedGate
+    loadState: PluginDeveloperTrustedLoadState
   }
   isDisabled: boolean
   canToggle: boolean
@@ -305,7 +316,11 @@ async function toPluginWithComponents(input: {
     developerModeEnabled: input.developerMode.enabled,
     isLocalDeveloperSource: plugin.sourceKind === "developer-local",
     hasValidManifest: Boolean(input.scanned.developerTrusted.manifest),
-    entryContained: Boolean(input.scanned.developerTrusted.entryRealPath && input.scanned.developerTrusted.entryContentHash),
+    entryContained: Boolean(
+      input.scanned.developerTrusted.entryRealPath &&
+      input.scanned.developerTrusted.entryContentHash &&
+      input.scanned.developerTrusted.bundleContentHash,
+    ),
     trustStatus: developerTrustStatus.status,
   })
 
@@ -351,9 +366,13 @@ async function toPluginWithComponents(input: {
       entryPath: input.scanned.developerTrusted.entryPath,
       entryRealPath: input.scanned.developerTrusted.entryRealPath,
       entryContentHash: input.scanned.developerTrusted.entryContentHash,
+      bundleContentHash: input.scanned.developerTrusted.bundleContentHash,
+      bundleFileCount: input.scanned.developerTrusted.bundleFileCount,
+      bundleByteCount: input.scanned.developerTrusted.bundleByteCount,
       trustStatus: developerTrustStatus.status,
       acknowledgement: developerTrustStatus.acknowledgement,
       gate: developerTrustedGate,
+      loadState: getDeveloperPluginLoadState(plugin.reviewKey),
     },
     isDisabled: plugin.runtime === "claude" && plugin.sourceKind !== "developer-local"
       ? !input.enabledPlugins.includes(plugin.source)
@@ -372,14 +391,50 @@ function getDeveloperTrustContext(input: {
   const manifest = input.scanned.developerTrusted.manifest
   const entryRealPath = input.scanned.developerTrusted.entryRealPath
   const entryContentHash = input.scanned.developerTrusted.entryContentHash
-  if (!manifest || !entryRealPath || !entryContentHash) return undefined
+  const bundleContentHash = input.scanned.developerTrusted.bundleContentHash
+  if (!manifest || !entryRealPath || !entryContentHash || !bundleContentHash) return undefined
   return {
     pluginReviewKey: input.plugin.reviewKey,
     pluginFingerprint: input.updateReview.fingerprint,
     manifestId: manifest.id,
     entryPath: entryRealPath,
     entryContentHash,
+    bundleContentHash,
     sourcePath: input.plugin.path,
+  }
+}
+
+async function confirmDeveloperPluginTrust(input: {
+  plugin: PluginInfo
+  updateReview: PluginUpdateReviewMetadata
+  manifest: PluginDeveloperTrustedManifest
+  entryPath: string
+  entryContentHash: string
+  bundleContentHash: string
+}): Promise<void> {
+  const result = await dialog.showMessageBox({
+    type: "warning",
+    buttons: ["Trust local code", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    title: "Trust developer plugin?",
+    message: `Trust ${input.plugin.name} as local code?`,
+    detail: [
+      "This is not a security sandbox. The plugin may run as local code on this machine.",
+      "",
+      `Manifest id: ${input.manifest.id}`,
+      `Plugin path: ${input.plugin.path}`,
+      `Entry path: ${input.entryPath}`,
+      `Review fingerprint: ${input.updateReview.fingerprint}`,
+      `Entry hash: ${input.entryContentHash}`,
+      `Bundle hash: ${input.bundleContentHash}`,
+    ].join("\n"),
+  })
+  if (result.response !== 0) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Developer plugin trust was not confirmed.",
+    })
   }
 }
 
@@ -600,15 +655,20 @@ export const pluginsRouter = router({
     }),
 
   /**
-   * Register a local developer plugin directory. Main validates that the path
-   * resolves to a directory; remote store/cache packages are not accepted here.
+   * Register a local developer plugin directory selected through a main-owned
+   * native picker. The renderer never supplies an arbitrary source path.
    */
-  addDeveloperSource: publicProcedure
-    .input(z.object({ path: z.string().min(1) }))
-    .mutation(async ({ input }): Promise<PluginDeveloperSourceRecord> => {
+  chooseDeveloperSourceDirectory: publicProcedure
+    .mutation(async (): Promise<PluginDeveloperSourceRecord | undefined> => {
+      const result = await dialog.showOpenDialog({
+        title: "Choose developer plugin directory",
+        message: "Choose a local developer plugin directory. This may later run trusted local code.",
+        properties: ["openDirectory"],
+      })
+      if (result.canceled || !result.filePaths[0]) return undefined
       clearPluginCache()
       try {
-        return await addDeveloperPluginSource(input.path)
+        return await addDeveloperPluginSource(result.filePaths[0])
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -624,6 +684,16 @@ export const pluginsRouter = router({
     .mutation(async ({ input }) => {
       clearPluginCache()
       return removeDeveloperPluginSource(input.id)
+    }),
+
+  developerLoadStates: publicProcedure.query(async (): Promise<PluginDeveloperTrustedLoadState[]> => {
+    return getDeveloperPluginLoadStates()
+  }),
+
+  loadDeveloperPlugin: publicProcedure
+    .input(z.object({ reviewKey: z.string().min(1) }))
+    .mutation(async ({ input }): Promise<PluginDeveloperTrustedLoadState> => {
+      return loadDeveloperTrustedPlugin(input.reviewKey)
     }),
 
   /**
@@ -793,6 +863,7 @@ export const pluginsRouter = router({
         makeEmptyUpdateReviewMetadata(plugin)
       const developerMode = await getPluginDeveloperModeState()
       const trustContext = getDeveloperTrustContext({ plugin, scanned, updateReview })
+      const manifest = scanned.developerTrusted.manifest
       const gate = buildPluginDeveloperTrustedGate({
         runtime: plugin.runtime,
         targetMode: scanned.targetMode,
@@ -801,16 +872,28 @@ export const pluginsRouter = router({
         developerModeEnabled: developerMode.enabled,
         isLocalDeveloperSource: plugin.sourceKind === "developer-local",
         hasValidManifest: Boolean(scanned.developerTrusted.manifest),
-        entryContained: Boolean(scanned.developerTrusted.entryRealPath && scanned.developerTrusted.entryContentHash),
+        entryContained: Boolean(
+          scanned.developerTrusted.entryRealPath &&
+          scanned.developerTrusted.entryContentHash &&
+          scanned.developerTrusted.bundleContentHash,
+        ),
         trustStatus: "current",
       })
-      if (!trustContext || !gate.canTrustCurrentFingerprint) {
+      if (!trustContext || !manifest || !gate.canTrustCurrentFingerprint) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Developer plugin cannot be trusted for the current state.",
         })
       }
 
+      await confirmDeveloperPluginTrust({
+        plugin,
+        updateReview,
+        manifest,
+        entryPath: trustContext.entryPath,
+        entryContentHash: trustContext.entryContentHash,
+        bundleContentHash: trustContext.bundleContentHash,
+      })
       const acknowledgement = await trustDeveloperPluginFingerprint(trustContext)
       return toPluginWithComponents({
         scanned,

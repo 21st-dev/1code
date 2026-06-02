@@ -332,6 +332,7 @@ describe("plugin update review state", () => {
         manifestId: "local.example.dev",
         entryPath: join(source.path, "dist", "index.js"),
         entryContentHash: "entry-hash-a",
+        bundleContentHash: "bundle-hash-a",
         sourcePath: source.path,
       }
       const acknowledgement = await reviewState.trustDeveloperPluginFingerprint(
@@ -348,6 +349,10 @@ describe("plugin update review state", () => {
       expect(await reviewState.getDeveloperPluginTrustStatus({
         ...trustInput,
         entryContentHash: "entry-hash-b",
+      }, statePath)).toMatchObject({ status: "stale" })
+      expect(await reviewState.getDeveloperPluginTrustStatus({
+        ...trustInput,
+        bundleContentHash: "bundle-hash-b",
       }, statePath)).toMatchObject({ status: "stale" })
 
       expect(await reviewState.revokeDeveloperPluginTrust(trustInput.pluginReviewKey, statePath))

@@ -49,6 +49,9 @@ export interface PluginDeveloperTrustedReviewDocument {
   entry?: string
   entryContentHash?: string
   entryRealPath?: string
+  bundleContentHash?: string
+  bundleFileCount?: number
+  bundleByteCount?: number
   permissions: string[]
   capabilities: string[]
   diagnostics: Array<{
@@ -91,6 +94,7 @@ export interface PluginDeveloperTrustedAcknowledgement {
   manifestId: string
   entryPath: string
   entryContentHash: string
+  bundleContentHash: string
   sourcePath: string
   trustedAt: string
 }
@@ -100,6 +104,26 @@ export type PluginDeveloperTrustedStatus =
   | "stale"
   | "missing"
   | "mismatch"
+
+export type PluginDeveloperTrustedLoadStatus =
+  | "not-loaded"
+  | "blocked"
+  | "loaded"
+  | "failed"
+
+export interface PluginDeveloperTrustedLoadState {
+  pluginReviewKey: string
+  status: PluginDeveloperTrustedLoadStatus
+  entryPath?: string
+  entryContentHash?: string
+  bundleContentHash?: string
+  loadedAt?: string
+  failedAt?: string
+  blockedAt?: string
+  errorCode?: string
+  errorMessage?: string
+  gate?: PluginDeveloperTrustedGate
+}
 
 const MAX_ID_LENGTH = 96
 const MAX_NAME_LENGTH = 120
@@ -217,6 +241,9 @@ export function buildDeveloperTrustedReviewDocument(input: {
   parseResult: PluginDeveloperTrustedParseResult
   entryContentHash?: string
   entryRealPath?: string
+  bundleContentHash?: string
+  bundleFileCount?: number
+  bundleByteCount?: number
 }): PluginDeveloperTrustedReviewDocument {
   const manifest = input.parseResult.manifest
   return {
@@ -227,6 +254,9 @@ export function buildDeveloperTrustedReviewDocument(input: {
     entry: manifest?.entry,
     entryContentHash: input.entryContentHash,
     entryRealPath: input.entryRealPath,
+    bundleContentHash: input.bundleContentHash,
+    bundleFileCount: input.bundleFileCount,
+    bundleByteCount: input.bundleByteCount,
     permissions: [...(manifest?.permissions ?? [])].sort(),
     capabilities: [...(manifest?.capabilities ?? [])].sort(),
     diagnostics: input.parseResult.diagnostics.map((diagnostic) => ({
@@ -288,6 +318,7 @@ export function buildDeveloperTrustedAcknowledgement(input: {
   manifestId: string
   entryPath: string
   entryContentHash: string
+  bundleContentHash: string
   sourcePath: string
   trustedAt?: string
 }): PluginDeveloperTrustedAcknowledgement {
@@ -297,6 +328,7 @@ export function buildDeveloperTrustedAcknowledgement(input: {
     manifestId: input.manifestId,
     entryPath: input.entryPath,
     entryContentHash: input.entryContentHash,
+    bundleContentHash: input.bundleContentHash,
     sourcePath: input.sourcePath,
     trustedAt: input.trustedAt ?? new Date().toISOString(),
   }
@@ -310,6 +342,7 @@ export function getDeveloperTrustedStatus(
     manifestId: string
     entryPath: string
     entryContentHash: string
+    bundleContentHash: string
     sourcePath: string
   },
 ): PluginDeveloperTrustedStatus {
@@ -323,7 +356,8 @@ export function getDeveloperTrustedStatus(
     return "mismatch"
   }
   return acknowledgement.pluginFingerprint === input.pluginFingerprint &&
-    acknowledgement.entryContentHash === input.entryContentHash
+    acknowledgement.entryContentHash === input.entryContentHash &&
+    acknowledgement.bundleContentHash === input.bundleContentHash
     ? "current"
     : "stale"
 }

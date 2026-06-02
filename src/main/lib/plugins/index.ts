@@ -134,6 +134,7 @@ let codexPluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
 const CACHE_TTL_MS = 30000 // 30 seconds - plugins don't change often during a session
 const CLAUDE_MARKETPLACES_DIR = path.join(os.homedir(), ".claude", "plugins", "marketplaces")
 const CODEX_PLUGIN_CACHE_DIR = path.join(os.homedir(), ".codex", "plugins", "cache")
+const MAX_DEVELOPER_DISCOVERY_MANIFEST_BYTES = 64 * 1024
 
 /**
  * Clear plugin caches (for testing/manual invalidation)
@@ -326,6 +327,10 @@ async function discoverDeveloperTrustedPlugins(): Promise<PluginInfo[]> {
     const manifestPath = path.join(source.path, ".locus-plugin", "developer.json")
     let parsedManifest: ReturnType<typeof parseDeveloperTrustedManifest> | undefined
     try {
+      const stat = await fs.stat(manifestPath)
+      if (!stat.isFile() || stat.size > MAX_DEVELOPER_DISCOVERY_MANIFEST_BYTES) {
+        throw new Error("Developer plugin discovery manifest is not a bounded file.")
+      }
       parsedManifest = parseDeveloperTrustedManifest(
         JSON.parse(await fs.readFile(manifestPath, "utf-8")) as unknown,
       )

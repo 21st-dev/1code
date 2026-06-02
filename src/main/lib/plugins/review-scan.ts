@@ -1,5 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
+import type { Dirent } from "fs"
 import { createHash } from "crypto"
 import { buildPluginManifestReviewDocument } from "../../../shared/plugin-update-review"
 import { getControlledUiPluginTargetMode, getDeveloperTrustedPluginTargetMode } from "../../../shared/plugin-target-modes"
@@ -53,6 +54,9 @@ export interface ScannedPluginReviewDocument {
     entryPath?: string
     entryRealPath?: string
     entryContentHash?: string
+    bundleContentHash?: string
+    bundleFileCount?: number
+    bundleByteCount?: number
   }
   reviewDocument: ReturnType<typeof buildPluginManifestReviewDocument>
 }
@@ -62,6 +66,33 @@ const DEVELOPER_MANIFEST_RELATIVE_PATH = path.join(".locus-plugin", "developer.j
 const MAX_CONTROLLED_UI_MANIFEST_BYTES = 64 * 1024
 const MAX_DEVELOPER_MANIFEST_BYTES = 64 * 1024
 const MAX_DEVELOPER_ENTRY_BYTES = 2 * 1024 * 1024
+const MAX_DEVELOPER_BUNDLE_BYTES = 4 * 1024 * 1024
+const MAX_DEVELOPER_BUNDLE_FILES = 128
+const DEVELOPER_BUNDLE_EXTENSIONS = new Set([
+  ".cjs",
+  ".cts",
+  ".js",
+  ".json",
+  ".mjs",
+  ".mts",
+  ".node",
+  ".ts",
+  ".tsx",
+  ".wasm",
+])
+const DEVELOPER_BUNDLE_ROOT_FILES = [
+  "bun.lock",
+  "bun.lockb",
+  "package-lock.json",
+  "package.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+]
+const DEVELOPER_BUNDLE_SKIP_DIRS = new Set([
+  ".git",
+  ".locus-plugin",
+  "node_modules",
+])
 
 function getPluginComponentPaths(plugin: PluginInfo) {
   return {
@@ -376,7 +407,14 @@ async function scanDeveloperTrustedManifest(pluginRoot: string): Promise<Scanned
     }
 
     const entryScan = await scanDeveloperEntry(pluginRoot, parsed.manifest.entry)
-    const diagnostics = [...parsed.diagnostics, ...entryScan.diagnostics]
+    const bundleScan = entryScan.entryRealPath
+      ? await scanDeveloperBundle(pluginRoot, entryScan.entryRealPath)
+      : { diagnostics: [] }
+    const diagnostics = [
+      ...parsed.diagnostics,
+      ...entryScan.diagnostics,
+      ...bundleScan.diagnostics,
+    ]
     return {
       manifest: parsed.manifest,
       reviewDocument: buildDeveloperTrustedReviewDocument({
@@ -387,6 +425,9 @@ async function scanDeveloperTrustedManifest(pluginRoot: string): Promise<Scanned
         },
         entryContentHash: entryScan.entryContentHash,
         entryRealPath: entryScan.entryRealPath,
+        bundleContentHash: bundleScan.bundleContentHash,
+        bundleFileCount: bundleScan.bundleFileCount,
+        bundleByteCount: bundleScan.bundleByteCount,
       }),
       diagnostics,
       ignoredUnknownFields: parsed.ignoredUnknownFields,
@@ -394,6 +435,9 @@ async function scanDeveloperTrustedManifest(pluginRoot: string): Promise<Scanned
       entryPath: entryScan.entryPath,
       entryRealPath: entryScan.entryRealPath,
       entryContentHash: entryScan.entryContentHash,
+      bundleContentHash: bundleScan.bundleContentHash,
+      bundleFileCount: bundleScan.bundleFileCount,
+      bundleByteCount: bundleScan.bundleByteCount,
     }
   } catch (error) {
     const diagnostics: PluginDeveloperTrustedDiagnostic[] = [{
@@ -491,6 +535,198 @@ async function scanDeveloperEntry(
         message: "Developer plugin entry could not be read.",
       }],
     }
+  }
+}
+
+async function scanDeveloperBundle(
+  pluginRoot: string,
+  entryRealPath: string,
+): Promise<{
+  bundleContentHash?: string
+  bundleFileCount?: number
+  bundleByteCount?: number
+  diagnostics: PluginDeveloperTrustedDiagnostic[]
+}> {
+  const diagnostics: PluginDeveloperTrustedDiagnostic[] = []
+  const files = new Map<string, { relativePath: string; size: number }>()
+
+  try {
+    const realRoot = await fs.realpath(pluginRoot)
+    const entryBundleRoot = path.dirname(entryRealPath)
+    if (!isPathInside(realRoot, entryBundleRoot)) {
+      return {
+        diagnostics: [{
+          code: "developer-entry-outside-root",
+          severity: "blocked",
+          path: "entry",
+          message: "Developer plugin bundle root escapes the plugin root.",
+        }],
+      }
+    }
+
+    await collectDeveloperBundleFiles({
+      realRoot,
+      dir: entryBundleRoot,
+      files,
+      diagnostics,
+    })
+
+    for (const fileName of DEVELOPER_BUNDLE_ROOT_FILES) {
+      const candidate = path.join(realRoot, fileName)
+      await addDeveloperBundleFile({
+        realRoot,
+        filePath: candidate,
+        files,
+        diagnostics,
+        optional: true,
+      })
+    }
+
+    const fileEntries = Array.from(files.values())
+      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    const totalBytes = fileEntries.reduce((sum, file) => sum + file.size, 0)
+    if (fileEntries.length > MAX_DEVELOPER_BUNDLE_FILES) {
+      diagnostics.push({
+        code: "developer-manifest-limit-exceeded",
+        severity: "blocked",
+        path: "entry",
+        message: `Developer plugin review bundle may include at most ${MAX_DEVELOPER_BUNDLE_FILES} files.`,
+      })
+    }
+    if (totalBytes > MAX_DEVELOPER_BUNDLE_BYTES) {
+      diagnostics.push({
+        code: "developer-manifest-limit-exceeded",
+        severity: "blocked",
+        path: "entry",
+        message: `Developer plugin review bundle must be ${MAX_DEVELOPER_BUNDLE_BYTES} bytes or less.`,
+      })
+    }
+    if (diagnostics.some((diagnostic) => diagnostic.severity === "blocked")) {
+      return { diagnostics }
+    }
+
+    const hash = createHash("sha256")
+    for (const file of fileEntries) {
+      const content = await fs.readFile(path.join(realRoot, file.relativePath))
+      hash.update(file.relativePath)
+      hash.update("\0")
+      hash.update(createHash("sha256").update(content).digest("hex"))
+      hash.update("\0")
+    }
+
+    return {
+      bundleContentHash: hash.digest("hex"),
+      bundleFileCount: fileEntries.length,
+      bundleByteCount: totalBytes,
+      diagnostics,
+    }
+  } catch {
+    return {
+      diagnostics: [{
+        code: "developer-manifest-invalid",
+        severity: "blocked",
+        path: "entry",
+        message: "Developer plugin review bundle could not be hashed.",
+      }],
+    }
+  }
+}
+
+async function collectDeveloperBundleFiles(input: {
+  realRoot: string
+  dir: string
+  files: Map<string, { relativePath: string; size: number }>
+  diagnostics: PluginDeveloperTrustedDiagnostic[]
+}): Promise<void> {
+  let entries: Dirent[]
+  try {
+    entries = await fs.readdir(input.dir, { withFileTypes: true })
+  } catch {
+    input.diagnostics.push({
+      code: "developer-manifest-invalid",
+      severity: "blocked",
+      path: "entry",
+      message: "Developer plugin bundle directory could not be read.",
+    })
+    return
+  }
+
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || DEVELOPER_BUNDLE_SKIP_DIRS.has(entry.name)) continue
+    const candidate = path.join(input.dir, entry.name)
+    if (entry.isDirectory()) {
+      const realDir = await safeRealpath(candidate)
+      if (!realDir || !isPathInside(input.realRoot, realDir)) {
+        input.diagnostics.push({
+          code: "developer-entry-outside-root",
+          severity: "blocked",
+          path: "entry",
+          message: "Developer plugin bundle directory escapes the plugin root.",
+        })
+        continue
+      }
+      await collectDeveloperBundleFiles({
+        ...input,
+        dir: realDir,
+      })
+      continue
+    }
+
+    await addDeveloperBundleFile({
+      realRoot: input.realRoot,
+      filePath: candidate,
+      files: input.files,
+      diagnostics: input.diagnostics,
+      optional: false,
+    })
+  }
+}
+
+async function addDeveloperBundleFile(input: {
+  realRoot: string
+  filePath: string
+  files: Map<string, { relativePath: string; size: number }>
+  diagnostics: PluginDeveloperTrustedDiagnostic[]
+  optional: boolean
+}): Promise<void> {
+  const extension = path.extname(input.filePath)
+  if (!DEVELOPER_BUNDLE_EXTENSIONS.has(extension) && !DEVELOPER_BUNDLE_ROOT_FILES.includes(path.basename(input.filePath))) {
+    return
+  }
+
+  const realFilePath = await safeRealpath(input.filePath)
+  if (!realFilePath) {
+    if (!input.optional) {
+      input.diagnostics.push({
+        code: "developer-manifest-invalid",
+        severity: "blocked",
+        path: "entry",
+        message: "Developer plugin bundle file could not be read.",
+      })
+    }
+    return
+  }
+  if (!isPathInside(input.realRoot, realFilePath)) {
+    input.diagnostics.push({
+      code: "developer-entry-outside-root",
+      severity: "blocked",
+      path: "entry",
+      message: "Developer plugin bundle file escapes the plugin root.",
+    })
+    return
+  }
+
+  const stat = await fs.stat(realFilePath)
+  if (!stat.isFile()) return
+  const relativePath = path.relative(input.realRoot, realFilePath)
+  input.files.set(realFilePath, { relativePath, size: stat.size })
+}
+
+async function safeRealpath(targetPath: string): Promise<string | undefined> {
+  try {
+    return await fs.realpath(targetPath)
+  } catch {
+    return undefined
   }
 }
 

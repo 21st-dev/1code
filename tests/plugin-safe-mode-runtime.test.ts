@@ -31,6 +31,10 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/plugins/review-scan.ts"),
     "utf8",
   )
+  const pluginDeveloperLoaderSource = readFileSync(
+    join(process.cwd(), "src/main/lib/plugins/developer-loader.ts"),
+    "utf8",
+  )
   const pluginControlledUiSource = readFileSync(
     join(process.cwd(), "src/shared/plugin-controlled-ui.ts"),
     "utf8",
@@ -164,15 +168,27 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginIndexSource).toContain("discoverDeveloperTrustedPlugins")
     expect(pluginIndexSource).toContain("getDeveloperPluginSources")
     expect(pluginIndexSource).toContain("parseDeveloperTrustedManifest")
+    expect(pluginIndexSource).toContain("MAX_DEVELOPER_DISCOVERY_MANIFEST_BYTES")
     expect(pluginIndexSource).toContain("sourceKind: \"developer-local\"")
     expect(pluginIndexSource).toContain("getDeveloperTrustedPluginTargetMode")
 
     expect(pluginReviewScanSource).toContain("scanDeveloperTrustedManifest")
     expect(pluginReviewScanSource).toContain("scanDeveloperEntry")
     expect(pluginReviewScanSource).toContain("entryContentHash")
+    expect(pluginReviewScanSource).toContain("bundleContentHash")
+    expect(pluginReviewScanSource).toContain("MAX_DEVELOPER_BUNDLE_BYTES")
     expect(pluginReviewScanSource).toContain("fs.realpath")
     expect(pluginReviewScanSource).not.toContain("new Function")
     expect(pluginReviewScanSource).not.toContain("require(")
+
+    expect(pluginDeveloperLoaderSource).toContain("loadDeveloperTrustedPlugin")
+    expect(pluginDeveloperLoaderSource).toContain("recordPluginReviewScans")
+    expect(pluginDeveloperLoaderSource).toContain("getPluginDeveloperModeState")
+    expect(pluginDeveloperLoaderSource).toContain("getDeveloperPluginTrustStatus")
+    expect(pluginDeveloperLoaderSource).toContain("buildPluginDeveloperTrustedGate")
+    expect(pluginDeveloperLoaderSource).toContain("pathToFileURL")
+    expect(pluginDeveloperLoaderSource).toContain("import(url.href)")
+    expect(pluginDeveloperLoaderSource).not.toContain("child_process")
 
     expect(pluginDeveloperTrustedSource).toContain("canTrustCurrentFingerprint")
     expect(pluginDeveloperTrustedSource).toContain("canLoadTrustedCode")
@@ -189,10 +205,14 @@ describe("plugin safe mode runtime source guards", () => {
 
     expect(pluginsRouterSource).toContain("developerMode: publicProcedure.query")
     expect(pluginsRouterSource).toContain("setDeveloperMode: publicProcedure")
-    expect(pluginsRouterSource).toContain("addDeveloperSource: publicProcedure")
+    expect(pluginsRouterSource).toContain("chooseDeveloperSourceDirectory: publicProcedure")
+    expect(pluginsRouterSource).toContain("dialog.showOpenDialog")
+    expect(pluginsRouterSource).toContain("dialog.showMessageBox")
     expect(pluginsRouterSource).toContain("trustDeveloperPlugin: publicProcedure")
+    expect(pluginsRouterSource).toContain("loadDeveloperPlugin: publicProcedure")
     expect(pluginsRouterSource).toContain("buildPluginDeveloperTrustedGate")
     expect(pluginsRouterSource).toContain("getDeveloperPluginTrustStatus")
     expect(pluginsRouterSource).toContain("recordPluginReviewScans")
+    expect(pluginsRouterSource).not.toContain("addDeveloperSource: publicProcedure")
   })
 })

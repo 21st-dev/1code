@@ -199,6 +199,9 @@ function normalizeDeveloperTrusted(
     entry: value.entry,
     entryContentHash: value.entryContentHash,
     entryRealPath: value.entryRealPath,
+    bundleContentHash: value.bundleContentHash,
+    bundleFileCount: value.bundleFileCount,
+    bundleByteCount: value.bundleByteCount,
     permissions: normalizeList(value.permissions),
     capabilities: normalizeList(value.capabilities),
     diagnostics: [...value.diagnostics]

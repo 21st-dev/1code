@@ -12,20 +12,20 @@
 - [x] 2.5 Add unit tests for valid manifests, invalid manifests, path escape, stale trust, and gate decisions.
 
 ## 3. Main Process Discovery and State
-- [ ] 3.1 Add local developer source registry state without touching remote marketplace sources.
-- [ ] 3.2 Discover developer plugin directories and parse `.locus-plugin/developer.json` without executing code.
-- [ ] 3.3 Include developer manifest facts in plugin review scans and change diffs.
-- [ ] 3.4 Add mutations to enable Developer Plugin Mode and trust/revoke a current plugin fingerprint.
-- [ ] 3.5 Recompute gates, realpaths, and executable content hashes in main process before every trust, load, and invocation action.
+- [x] 3.1 Add local developer source registry state without touching remote marketplace sources.
+- [x] 3.2 Discover developer plugin directories and parse `.locus-plugin/developer.json` without executing code.
+- [x] 3.3 Include developer manifest facts in plugin review scans and change diffs.
+- [x] 3.4 Add mutations to enable Developer Plugin Mode and trust/revoke a current plugin fingerprint.
+- [x] 3.5 Recompute gates, realpaths, and executable content hashes in main process before every trust, load, and invocation action.
 - [ ] 3.6 Add Doctor/Debug facts for developer source, trust, gate, and load state.
 
 ## 4. Trusted Runtime Loader
-- [ ] 4.1 Add a minimal developer plugin loader that imports only contained local entrypoints after all gates pass.
-- [ ] 4.2 Provide a narrow Locus developer plugin API object instead of broad app internals.
-- [ ] 4.3 Block loading before import when plugin safe mode is enabled.
-- [ ] 4.4 Add an out-of-band forced safe-mode or startup recovery path for broken developer plugins.
-- [ ] 4.5 Record bounded load status/errors without exposing plugin source code or secrets.
-- [ ] 4.6 Add source-guard tests that no developer plugin loads from remote URLs, Codex cache, or marketplace packages.
+- [x] 4.1 Add a minimal developer plugin loader that imports only contained local entrypoints after all gates pass.
+- [x] 4.2 Provide a narrow Locus developer plugin API object instead of broad app internals.
+- [x] 4.3 Block loading before import when plugin safe mode is enabled.
+- [x] 4.4 Add an out-of-band forced safe-mode or startup recovery path for broken developer plugins.
+- [x] 4.5 Record bounded load status/errors without exposing plugin source code or secrets.
+- [x] 4.6 Add source-guard tests that no developer plugin loads from remote URLs, Codex cache, or marketplace packages.
 
 ## 5. Renderer UI
 - [ ] 5.1 Add Settings > Plugins developer mode controls near safe mode.

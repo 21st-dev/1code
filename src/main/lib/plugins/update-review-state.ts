@@ -207,6 +207,21 @@ export function normalizeSafeModeState(
   }
 }
 
+export function isForcedPluginSafeModeEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return env.LOCUS_PLUGIN_SAFE_MODE === "1" ||
+    env.LOCUS_FORCE_PLUGIN_SAFE_MODE === "1"
+}
+
+function applyForcedPluginSafeMode(state: PluginSafeModeState): PluginSafeModeState {
+  if (!isForcedPluginSafeModeEnabled()) return state
+  return {
+    enabled: true,
+    updatedAt: state.updatedAt,
+  }
+}
+
 export function normalizeDeveloperModeState(
   value: PluginDeveloperModeState | undefined,
 ): PluginDeveloperModeState {
@@ -220,7 +235,7 @@ export async function getPluginSafeModeState(
   filePath = getPluginReviewStatePath(),
 ): Promise<PluginSafeModeState> {
   const state = await readPluginReviewState(filePath)
-  return normalizeSafeModeState(state.safeMode)
+  return applyForcedPluginSafeMode(normalizeSafeModeState(state.safeMode))
 }
 
 export async function getPluginDeveloperModeState(
@@ -305,6 +320,7 @@ export async function trustDeveloperPluginFingerprint(
     manifestId: string
     entryPath: string
     entryContentHash: string
+    bundleContentHash: string
     sourcePath: string
   },
   filePath = getPluginReviewStatePath(),
@@ -343,6 +359,7 @@ export async function getDeveloperPluginTrustStatus(
     manifestId: string
     entryPath: string
     entryContentHash: string
+    bundleContentHash: string
     sourcePath: string
   },
   filePath = getPluginReviewStatePath(),
@@ -366,7 +383,7 @@ export async function recordPluginReviewScans(
   now = new Date(),
 ): Promise<PluginReviewScanResult> {
   const state = await readPluginReviewState(filePath)
-  const safeMode = normalizeSafeModeState(state.safeMode)
+  const safeMode = applyForcedPluginSafeMode(normalizeSafeModeState(state.safeMode))
   state.developerMode = normalizeDeveloperModeState(state.developerMode)
   state.developerSources = normalizeDeveloperSources(state.developerSources)
   state.developerTrustedPlugins = normalizeDeveloperTrustedPlugins(
@@ -495,6 +512,7 @@ function normalizeDeveloperTrustedPlugins(
       typeof trust.manifestId !== "string" ||
       typeof trust.entryPath !== "string" ||
       typeof trust.entryContentHash !== "string" ||
+      typeof trust.bundleContentHash !== "string" ||
       typeof trust.sourcePath !== "string" ||
       typeof trust.trustedAt !== "string"
     ) {
