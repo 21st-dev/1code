@@ -87,6 +87,7 @@ export interface PluginWithComponents {
     manifest?: PluginControlledUiManifest
     diagnostics: PluginControlledUiDiagnostic[]
     ignoredUnknownFields: string[]
+    actionGrantStatuses: Record<string, "current" | "stale" | "mismatch">
     gate: PluginControlledUiGate
   }
   isDisabled: boolean
@@ -164,14 +165,44 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
   }
 }
 
-function toPluginWithComponents(input: {
+async function getControlledUiActionGrantStatuses(input: {
+  plugin: PluginInfo
+  scanned: ScannedPlugin
+  updateReview: PluginUpdateReviewMetadata
+}): Promise<Record<string, "current" | "stale" | "mismatch">> {
+  const commandButtons = input.scanned.controlledUi.manifest?.surfaces.filter(
+    (surface) => surface.type === "command-button",
+  ) ?? []
+  const entries = await Promise.all(commandButtons.map(async (surface) => {
+    if (surface.type !== "command-button") return undefined
+    const key = `${surface.id}:${surface.action.id}`
+    const status = await getControlledUiPermissionGrantStatus({
+      pluginReviewKey: input.plugin.reviewKey,
+      contributionFingerprint: input.updateReview.fingerprint,
+      contributionId: surface.id,
+      actionId: surface.action.id,
+      permissionId: getControlledUiActionPermissionId(surface.action),
+    })
+    return [key, status] as const
+  }))
+  return Object.fromEntries(entries.filter((entry): entry is [string, "current" | "stale" | "mismatch"] => Boolean(entry)))
+}
+
+async function toPluginWithComponents(input: {
   scanned: ScannedPlugin
   enabledPlugins: string[]
   updateReview?: PluginUpdateReviewMetadata
   safeMode: PluginSafeModeState
-}): PluginWithComponents {
+}): Promise<PluginWithComponents> {
   const { plugin } = input.scanned
   const updateReview = input.updateReview ?? makeEmptyUpdateReviewMetadata(plugin)
+  const actionGrantStatuses = await getControlledUiActionGrantStatuses({
+    plugin,
+    scanned: input.scanned,
+    updateReview,
+  })
+  const grantValues = Object.values(actionGrantStatuses)
+  const hasControlledActions = grantValues.length > 0
   const safetyGate = buildPluginSafetyGate({
     runtime: plugin.runtime,
     hasMcpServers: input.scanned.components.mcpServers.length > 0,
@@ -184,6 +215,10 @@ function toPluginWithComponents(input: {
     updateReviewStatus: updateReview.status,
     safeModeEnabled: input.safeMode.enabled,
     hasValidManifest: Boolean(input.scanned.controlledUi.manifest),
+    permissionGranted: hasControlledActions
+      ? grantValues.every((status) => status === "current")
+      : undefined,
+    permissionStale: grantValues.some((status) => status === "stale"),
   })
 
   return {
@@ -215,6 +250,7 @@ function toPluginWithComponents(input: {
       manifest: input.scanned.controlledUi.manifest,
       diagnostics: input.scanned.controlledUi.diagnostics,
       ignoredUnknownFields: input.scanned.controlledUi.ignoredUnknownFields,
+      actionGrantStatuses,
       gate: controlledUiGate,
     },
     isDisabled: plugin.runtime === "claude" ? !input.enabledPlugins.includes(plugin.source) : false,
@@ -348,12 +384,12 @@ export const pluginsRouter = router({
       })),
     )
 
-    return scannedPlugins.map((scanned) => toPluginWithComponents({
+    return Promise.all(scannedPlugins.map((scanned) => toPluginWithComponents({
       scanned,
       enabledPlugins,
       updateReview: reviewResult.metadataByPluginKey[scanned.plugin.reviewKey],
       safeMode,
-    }))
+    })))
   }),
 
   /**

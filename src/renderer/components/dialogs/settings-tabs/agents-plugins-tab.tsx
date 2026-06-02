@@ -45,6 +45,20 @@ type PluginSafetyGateReason =
   | "review-unreviewed"
   | "codex-read-only-cache"
   | "no-mcp-servers"
+type PluginControlledUiGateReason =
+  | "safe-mode"
+  | "review-required"
+  | "review-changed"
+  | "review-unreviewed"
+  | "invalid-contribution-manifest"
+  | "unsupported-runtime"
+  | "unsupported-target-mode"
+  | "unsupported-surface"
+  | "unsupported-action"
+  | "permission-not-granted"
+  | "permission-stale"
+  | "codex-read-only-cache"
+type PluginControlledUiGrantStatus = "current" | "stale" | "mismatch"
 type PluginDiagnosticSeverity = "info" | "warning"
 type PluginDiagnosticCode =
   | "metadata-only-no-execution"
@@ -94,6 +108,73 @@ interface PluginSafetyGate {
   canApproveMcp: boolean
   canUseMcp: boolean
   reasons: PluginSafetyGateReason[]
+}
+
+interface PluginControlledUiGate {
+  canRenderControlledUi: boolean
+  canInvokeControlledAction: boolean
+  reasons: PluginControlledUiGateReason[]
+}
+
+interface PluginControlledUiDiagnostic {
+  code: string
+  severity: "info" | "warning" | "blocked"
+  path?: string
+  message?: string
+}
+
+interface PluginControlledUiField {
+  id: string
+  type: "text" | "checkbox" | "select"
+  label: string
+  description?: string
+  options?: string[]
+}
+
+interface PluginControlledUiItem {
+  type: "text" | "fact"
+  text?: string
+  label?: string
+  value?: string
+}
+
+interface PluginControlledUiAction {
+  id: string
+  type: "insert-chat-draft"
+  prompt: string
+}
+
+interface PluginControlledUiSurfaceBase {
+  id: string
+  type: "settings-section" | "workbench-panel" | "command-button"
+  title: string
+  description?: string
+}
+
+interface PluginControlledUiSettingsSection extends PluginControlledUiSurfaceBase {
+  type: "settings-section"
+  fields: PluginControlledUiField[]
+}
+
+interface PluginControlledUiWorkbenchPanel extends PluginControlledUiSurfaceBase {
+  type: "workbench-panel"
+  items: PluginControlledUiItem[]
+}
+
+interface PluginControlledUiCommandButton extends PluginControlledUiSurfaceBase {
+  type: "command-button"
+  label: string
+  action: PluginControlledUiAction
+}
+
+type PluginControlledUiSurface =
+  | PluginControlledUiSettingsSection
+  | PluginControlledUiWorkbenchPanel
+  | PluginControlledUiCommandButton
+
+interface PluginControlledUiManifest {
+  version: 1
+  surfaces: PluginControlledUiSurface[]
 }
 
 interface PluginSafeModeState {
@@ -195,6 +276,15 @@ interface PluginData {
   safetyGate: PluginSafetyGate
   sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
+  controlledUi: {
+    manifestPresent: boolean
+    manifestPath?: string
+    manifest?: PluginControlledUiManifest
+    diagnostics: PluginControlledUiDiagnostic[]
+    ignoredUnknownFields: string[]
+    actionGrantStatuses: Record<string, PluginControlledUiGrantStatus>
+    gate: PluginControlledUiGate
+  }
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -454,6 +544,125 @@ function getSafetyGateStatusClass(status: PluginSafetyGateStatus): string {
     case "read-only":
       return "border-border bg-background text-muted-foreground"
   }
+}
+
+function getControlledUiSurfaceLabel(
+  type: PluginControlledUiSurface["type"],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (type) {
+    case "settings-section":
+      return t("settings.plugins.contributionSettingsSection")
+    case "workbench-panel":
+      return t("settings.plugins.contributionWorkbenchPanel")
+    case "command-button":
+      return t("settings.plugins.contributionActionEntry")
+  }
+}
+
+function getControlledUiFieldTypeLabel(
+  type: PluginControlledUiField["type"],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (type) {
+    case "text":
+      return t("settings.plugins.contributionFieldText")
+    case "checkbox":
+      return t("settings.plugins.contributionFieldCheckbox")
+    case "select":
+      return t("settings.plugins.contributionFieldSelect")
+  }
+}
+
+function getControlledUiGateReasonLabel(
+  reason: PluginControlledUiGateReason,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (reason) {
+    case "safe-mode":
+      return t("settings.plugins.contributionReasonSafeMode")
+    case "review-required":
+      return t("settings.plugins.contributionReasonReviewRequired")
+    case "review-changed":
+      return t("settings.plugins.contributionReasonChanged")
+    case "review-unreviewed":
+      return t("settings.plugins.contributionReasonUnreviewed")
+    case "invalid-contribution-manifest":
+      return t("settings.plugins.contributionReasonInvalid")
+    case "unsupported-runtime":
+      return t("settings.plugins.contributionReasonUnsupportedRuntime")
+    case "unsupported-target-mode":
+      return t("settings.plugins.contributionReasonUnsupportedTarget")
+    case "unsupported-surface":
+      return t("settings.plugins.contributionReasonUnsupportedSurface")
+    case "unsupported-action":
+      return t("settings.plugins.contributionReasonUnsupportedAction")
+    case "permission-not-granted":
+      return t("settings.plugins.contributionReasonPermissionRequired")
+    case "permission-stale":
+      return t("settings.plugins.contributionReasonPermissionStale")
+    case "codex-read-only-cache":
+      return t("settings.plugins.contributionReasonCodexReadOnly")
+  }
+}
+
+function getControlledUiActionKey(surface: PluginControlledUiCommandButton): string {
+  return `${surface.id}:${surface.action.id}`
+}
+
+function getControlledUiContributionStatus(
+  plugin: PluginData,
+  surface: PluginControlledUiSurface,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  if (plugin.controlledUi.diagnostics.some((diagnostic) => diagnostic.severity === "blocked")) {
+    return t("settings.plugins.contributionStatusUnavailable")
+  }
+  if (surface.type === "workbench-panel") {
+    return t("settings.plugins.contributionStatusSurfaceUnavailable")
+  }
+  if (plugin.controlledUi.gate.reasons.includes("safe-mode")) {
+    return t("settings.plugins.contributionStatusSafeMode")
+  }
+  if (plugin.controlledUi.gate.reasons.includes("review-changed")) {
+    return t("settings.plugins.contributionStatusChanged")
+  }
+  if (
+    plugin.controlledUi.gate.reasons.includes("review-required") ||
+    plugin.controlledUi.gate.reasons.includes("review-unreviewed")
+  ) {
+    return t("settings.plugins.contributionStatusNeedsReview")
+  }
+  if (plugin.controlledUi.gate.reasons.includes("codex-read-only-cache")) {
+    return t("settings.plugins.contributionStatusReadOnly")
+  }
+  if (surface.type === "command-button") {
+    const grantStatus = plugin.controlledUi.actionGrantStatuses[getControlledUiActionKey(surface)]
+    if (grantStatus === "stale") return t("settings.plugins.contributionStatusPermissionStale")
+    if (grantStatus !== "current") return t("settings.plugins.contributionStatusPermissionRequired")
+  }
+  return plugin.controlledUi.gate.canRenderControlledUi
+    ? t("settings.plugins.contributionStatusAvailable")
+    : t("settings.plugins.contributionStatusUnavailable")
+}
+
+function getControlledUiContributionStatusClass(plugin: PluginData, surface: PluginControlledUiSurface): string {
+  if (
+    plugin.controlledUi.diagnostics.some((diagnostic) => diagnostic.severity === "blocked") ||
+    plugin.controlledUi.gate.reasons.includes("safe-mode") ||
+    plugin.controlledUi.gate.reasons.includes("review-changed") ||
+    plugin.controlledUi.gate.reasons.includes("review-required") ||
+    plugin.controlledUi.gate.reasons.includes("permission-stale")
+  ) {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+  }
+  if (surface.type === "workbench-panel" || plugin.controlledUi.gate.reasons.includes("codex-read-only-cache")) {
+    return "border-border bg-background text-muted-foreground"
+  }
+  if (plugin.controlledUi.gate.canRenderControlledUi) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+  }
+  return "border-border bg-background text-muted-foreground"
 }
 
 function shortFingerprint(fingerprint: string): string {
@@ -847,6 +1056,165 @@ function PluginSafetyGatePanel({ plugin }: { plugin: PluginData }) {
   )
 }
 
+function PluginControlledUiPanel({
+  plugin,
+  onGrantAction,
+  onInvokeAction,
+  isGranting,
+  isInvoking,
+}: {
+  plugin: PluginData
+  onGrantAction: (surface: PluginControlledUiCommandButton) => void
+  onInvokeAction: (surface: PluginControlledUiCommandButton) => void
+  isGranting: boolean
+  isInvoking: boolean
+}) {
+  const { t } = useI18n()
+  const surfaces = plugin.controlledUi.manifest?.surfaces ?? []
+  const commandCount = surfaces.filter((surface) => surface.type === "command-button").length
+  const visibleReasons = plugin.controlledUi.gate.reasons.slice(0, 3)
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.uiContributions")}</Label>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t("settings.plugins.uiContributionsHint")}
+          </p>
+        </div>
+        <span className="shrink-0 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {t("settings.plugins.uiContributionCount", { count: surfaces.length })}
+        </span>
+      </div>
+
+      {surfaces.length === 0 ? (
+        <div className="rounded border border-dashed border-border bg-muted/20 px-2 py-2 text-xs text-muted-foreground">
+          {t("settings.plugins.noUiContributions")}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {surfaces.map((surface) => {
+            const status = getControlledUiContributionStatus(plugin, surface, t)
+            const grantStatus = surface.type === "command-button"
+              ? plugin.controlledUi.actionGrantStatuses[getControlledUiActionKey(surface)]
+              : undefined
+            const canGrant =
+              surface.type === "command-button" &&
+              plugin.controlledUi.gate.canRenderControlledUi &&
+              grantStatus !== "current"
+            const canInvoke =
+              surface.type === "command-button" &&
+              plugin.controlledUi.gate.canInvokeControlledAction &&
+              grantStatus === "current"
+
+            return (
+              <div key={`${surface.type}:${surface.id}`} className="rounded border border-border bg-muted/20 px-2 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-xs font-medium text-foreground">{surface.title}</p>
+                      <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {getControlledUiSurfaceLabel(surface.type, t)}
+                      </span>
+                    </div>
+                    {surface.description && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {surface.description}
+                      </p>
+                    )}
+                  </div>
+                  <span className={cn(
+                    "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                    getControlledUiContributionStatusClass(plugin, surface),
+                  )}>
+                    {status}
+                  </span>
+                </div>
+
+                {surface.type === "settings-section" && surface.fields.length > 0 && (
+                  <div className="mt-2 grid gap-1.5">
+                    {surface.fields.slice(0, 4).map((field) => (
+                      <div key={field.id} className="grid grid-cols-[7rem_1fr] gap-2 rounded border border-border bg-background px-2 py-1.5 text-xs">
+                        <span className="font-medium text-muted-foreground">{field.label}</span>
+                        <span className="min-w-0 text-foreground">
+                          {field.type === "select"
+                            ? (field.options ?? []).join(", ")
+                            : getControlledUiFieldTypeLabel(field.type, t)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {surface.type === "workbench-panel" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t("settings.plugins.workbenchContributionPlanned", {
+                      count: surface.items.length,
+                    })}
+                  </p>
+                )}
+
+                {surface.type === "command-button" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {grantStatus !== "current" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => onGrantAction(surface)}
+                        disabled={!canGrant || isGranting}
+                      >
+                        {isGranting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.plugins.approveControlledAction")}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => onInvokeAction(surface)}
+                        disabled={!canInvoke || isInvoking}
+                      >
+                        {isInvoking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.plugins.prepareControlledDraft")}
+                      </Button>
+                    )}
+                    <span className="text-[11px] text-muted-foreground">
+                      {surface.action.type === "insert-chat-draft"
+                        ? t("settings.plugins.controlledActionInsertDraft")
+                        : t("settings.plugins.contributionStatusUnavailable")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {(visibleReasons.length > 0 || plugin.controlledUi.diagnostics.length > 0) && (
+        <div className="space-y-1.5">
+          {visibleReasons.map((reason) => (
+            <div key={reason} className="rounded border border-border bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground">
+              {getControlledUiGateReasonLabel(reason, t)}
+            </div>
+          ))}
+          {plugin.controlledUi.diagnostics.slice(0, 3).map((diagnostic, index) => (
+            <div key={`${diagnostic.code}-${index}`} className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+              {diagnostic.message ?? diagnostic.code}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {commandCount > 0 && (
+        <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+          {t("settings.plugins.controlledActionHint")}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function PluginUpdateReviewPanel({
   plugin,
   onMarkReviewed,
@@ -972,6 +1340,10 @@ function PluginDetail({
   isAuthenticating,
   onMarkReviewed,
   isMarkingReviewed,
+  onGrantControlledAction,
+  onInvokeControlledAction,
+  isGrantingControlledAction,
+  isInvokingControlledAction,
 }: {
   plugin: PluginData
   pluginDebug?: PluginDoctorPluginDebug
@@ -985,6 +1357,10 @@ function PluginDetail({
   isAuthenticating: boolean
   onMarkReviewed: () => void
   isMarkingReviewed: boolean
+  onGrantControlledAction: (surface: PluginControlledUiCommandButton) => void
+  onInvokeControlledAction: (surface: PluginControlledUiCommandButton) => void
+  isGrantingControlledAction: boolean
+  isInvokingControlledAction: boolean
 }) {
   const { t } = useI18n()
   const componentCount =
@@ -1077,6 +1453,13 @@ function PluginDetail({
 
           <DiagnosticsPanel diagnostics={plugin.diagnostics} />
           <PluginSafetyGatePanel plugin={plugin} />
+          <PluginControlledUiPanel
+            plugin={plugin}
+            onGrantAction={onGrantControlledAction}
+            onInvokeAction={onInvokeControlledAction}
+            isGranting={isGrantingControlledAction}
+            isInvoking={isInvokingControlledAction}
+          />
           <PluginDebugPanel plugin={plugin} debug={pluginDebug} />
 
           <PluginUpdateReviewPanel
@@ -1623,6 +2006,8 @@ export function AgentsPluginsTab() {
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
   const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
   const setSafeModeMutation = trpc.plugins.setSafeMode.useMutation()
+  const grantControlledActionMutation = trpc.plugins.grantControlledAction.useMutation()
+  const invokeControlledActionMutation = trpc.plugins.invokeControlledAction.useMutation()
 
   const filteredPlugins = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"
@@ -1831,6 +2216,46 @@ export function AgentsPluginsTab() {
       toast.error(message)
     }
   }, [approveAllMutation, refetchMcp, t])
+
+  const handleGrantControlledAction = useCallback(async (
+    plugin: PluginData,
+    surface: PluginControlledUiCommandButton,
+  ) => {
+    try {
+      await grantControlledActionMutation.mutateAsync({
+        reviewKey: plugin.reviewKey,
+        contributionId: surface.id,
+        actionId: surface.action.id,
+      })
+      toast.success(t("settings.plugins.toast.controlledActionApproved"), {
+        description: surface.title,
+      })
+      await Promise.all([refetch(), refetchDoctor()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [grantControlledActionMutation, refetch, refetchDoctor, t])
+
+  const handleInvokeControlledAction = useCallback(async (
+    plugin: PluginData,
+    surface: PluginControlledUiCommandButton,
+  ) => {
+    try {
+      const result = await invokeControlledActionMutation.mutateAsync({
+        reviewKey: plugin.reviewKey,
+        contributionId: surface.id,
+        actionId: surface.action.id,
+      })
+      await navigator.clipboard.writeText(result.prompt)
+      toast.success(t("settings.plugins.toast.controlledDraftPrepared"), {
+        description: surface.title,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [invokeControlledActionMutation, t])
 
   const handleRefreshPlugins = useCallback(async () => {
     try {
@@ -2059,6 +2484,10 @@ export function AgentsPluginsTab() {
               isAuthenticating={startOAuthMutation.isPending}
               onMarkReviewed={() => handleMarkReviewed(selectedPlugin)}
               isMarkingReviewed={markReviewedMutation.isPending}
+              onGrantControlledAction={(surface) => handleGrantControlledAction(selectedPlugin, surface)}
+              onInvokeControlledAction={(surface) => handleInvokeControlledAction(selectedPlugin, surface)}
+              isGrantingControlledAction={grantControlledActionMutation.isPending}
+              isInvokingControlledAction={invokeControlledActionMutation.isPending}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">

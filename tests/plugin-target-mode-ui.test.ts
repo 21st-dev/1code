@@ -11,6 +11,10 @@ describe("plugin target mode UI source guards", () => {
     join(process.cwd(), "src/renderer/lib/i18n/dictionaries.ts"),
     "utf8",
   )
+  const pluginsRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/plugins.ts"),
+    "utf8",
+  )
 
   test("renders target mode, execution, review, and update posture labels", () => {
     expect(pluginsTabSource).toContain("getTargetModeLabel(plugin.targetMode, t)")
@@ -116,6 +120,36 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.safetyGateBlocksAction",
       "settings.plugins.toast.safeModeEnabled",
       "settings.plugins.toast.safeModeDisabled",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
+
+  test("renders controlled UI contributions without plugin code execution", () => {
+    expect(pluginsTabSource).toContain("PluginControlledUiPanel")
+    expect(pluginsTabSource).toContain("plugin.controlledUi.manifest?.surfaces")
+    expect(pluginsTabSource).toContain("trpc.plugins.grantControlledAction.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.invokeControlledAction.useMutation")
+    expect(pluginsTabSource).toContain("navigator.clipboard.writeText(result.prompt)")
+    expect(pluginsRouterSource).toContain("grantControlledAction")
+    expect(pluginsRouterSource).toContain("invokeControlledAction")
+    expect(pluginsRouterSource).toContain("getControlledUiActionContext")
+    expect(pluginsRouterSource).toContain("buildPluginControlledUiGate")
+    expect(pluginsTabSource).not.toContain("dangerouslySetInnerHTML")
+    expect(pluginsTabSource).not.toContain("executeCodexPlugin")
+    expect(pluginsTabSource).not.toContain("new Function")
+    expect(pluginsTabSource).not.toContain("webview")
+
+    for (const key of [
+      "settings.plugins.uiContributions",
+      "settings.plugins.uiContributionsHint",
+      "settings.plugins.contributionReasonPermissionRequired",
+      "settings.plugins.contributionStatusPermissionStale",
+      "settings.plugins.approveControlledAction",
+      "settings.plugins.prepareControlledDraft",
+      "settings.plugins.controlledActionHint",
+      "settings.plugins.toast.controlledActionApproved",
+      "settings.plugins.toast.controlledDraftPrepared",
     ]) {
       expect(dictionarySource).toContain(`"${key}"`)
     }

@@ -1183,6 +1183,59 @@ export const en = {
   "settings.plugins.gateNo": "No",
   "settings.plugins.safetyGateBlocksAction":
     "Review gates or safe mode currently block this action.",
+  "settings.plugins.uiContributions": "UI Contributions",
+  "settings.plugins.uiContributionsHint":
+    "Declared Locus surfaces from this plugin. Locus renders them with app-owned controls and does not execute plugin JavaScript.",
+  "settings.plugins.noUiContributions": "No UI contributions declared.",
+  "settings.plugins.uiContributionCount": "{count} UI contributions",
+  "settings.plugins.contributionSettingsSection": "Settings section",
+  "settings.plugins.contributionWorkbenchPanel": "Workbench panel",
+  "settings.plugins.contributionActionEntry": "Action button",
+  "settings.plugins.contributionFieldText": "Text",
+  "settings.plugins.contributionFieldCheckbox": "Checkbox",
+  "settings.plugins.contributionFieldSelect": "Select",
+  "settings.plugins.contributionReasonSafeMode":
+    "Plugin safe mode is on, so controlled UI actions are blocked.",
+  "settings.plugins.contributionReasonReviewRequired":
+    "This contribution needs local review before actions are available.",
+  "settings.plugins.contributionReasonChanged":
+    "This contribution changed after the last review.",
+  "settings.plugins.contributionReasonUnreviewed":
+    "This contribution has been seen but not reviewed.",
+  "settings.plugins.contributionReasonInvalid": "The contribution manifest is invalid.",
+  "settings.plugins.contributionReasonUnsupportedRuntime":
+    "This runtime is not supported for controlled UI.",
+  "settings.plugins.contributionReasonUnsupportedTarget":
+    "This package is not in controlled UI mode.",
+  "settings.plugins.contributionReasonUnsupportedSurface":
+    "This surface is not available in this Locus build.",
+  "settings.plugins.contributionReasonUnsupportedAction":
+    "This action is not allowlisted.",
+  "settings.plugins.contributionReasonPermissionRequired":
+    "This action needs a local fingerprint-bound approval.",
+  "settings.plugins.contributionReasonPermissionStale":
+    "The previous approval is stale because the contribution changed.",
+  "settings.plugins.contributionReasonCodexReadOnly":
+    "Codex cache packages remain read-only in Locus.",
+  "settings.plugins.contributionStatusAvailable": "Available in Locus",
+  "settings.plugins.contributionStatusNeedsReview": "Needs local review",
+  "settings.plugins.contributionStatusChanged": "Changed since review",
+  "settings.plugins.contributionStatusSafeMode": "Blocked by safe mode",
+  "settings.plugins.contributionStatusUnavailable": "Surface not available",
+  "settings.plugins.contributionStatusSurfaceUnavailable": "Host not wired",
+  "settings.plugins.contributionStatusReadOnly": "Read-only metadata",
+  "settings.plugins.contributionStatusPermissionRequired": "Needs action approval",
+  "settings.plugins.contributionStatusPermissionStale": "Approval stale",
+  "settings.plugins.workbenchContributionPlanned":
+    "{count} declared items. Workbench host is not wired in this slice.",
+  "settings.plugins.approveControlledAction": "Approve action",
+  "settings.plugins.prepareControlledDraft": "Copy draft prompt",
+  "settings.plugins.controlledActionInsertDraft":
+    "Returns a bounded draft prompt. It does not send chat or run an agent.",
+  "settings.plugins.controlledActionHint":
+    "Controlled actions are handled by Locus allowlists. They do not run plugin code, shell commands, or automatic chat sends.",
+  "settings.plugins.toast.controlledActionApproved": "Controlled action approved",
+  "settings.plugins.toast.controlledDraftPrepared": "Draft prompt copied",
   "settings.plugins.doctor": "Plugin Doctor",
   "settings.plugins.doctorSummary": "{blocked} blocked / {warning} warnings / {checks} checks",
   "settings.plugins.doctorStatusPass": "Pass",
@@ -3879,6 +3932,59 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.gateNo": "否",
   "settings.plugins.safetyGateBlocksAction":
     "当前复审门禁或安全模式正在阻断这个动作。",
+  "settings.plugins.uiContributions": "UI 贡献",
+  "settings.plugins.uiContributionsHint":
+    "这些是插件声明的 Locus 界面。Locus 使用应用自己的控件渲染，不执行插件 JavaScript。",
+  "settings.plugins.noUiContributions": "没有声明 UI 贡献。",
+  "settings.plugins.uiContributionCount": "{count} 个 UI 贡献",
+  "settings.plugins.contributionSettingsSection": "设置区块",
+  "settings.plugins.contributionWorkbenchPanel": "Workbench 面板",
+  "settings.plugins.contributionActionEntry": "动作按钮",
+  "settings.plugins.contributionFieldText": "文本",
+  "settings.plugins.contributionFieldCheckbox": "复选框",
+  "settings.plugins.contributionFieldSelect": "选择",
+  "settings.plugins.contributionReasonSafeMode":
+    "插件安全模式已开启，受控 UI 动作被阻断。",
+  "settings.plugins.contributionReasonReviewRequired":
+    "这个 UI 贡献需要本地复审后才能使用动作。",
+  "settings.plugins.contributionReasonChanged":
+    "这个 UI 贡献在上次复审后发生了变化。",
+  "settings.plugins.contributionReasonUnreviewed":
+    "这个 UI 贡献已被扫描到，但还没有复审。",
+  "settings.plugins.contributionReasonInvalid": "这个 UI 贡献清单无效。",
+  "settings.plugins.contributionReasonUnsupportedRuntime":
+    "这个运行时暂不支持受控 UI。",
+  "settings.plugins.contributionReasonUnsupportedTarget":
+    "这个包不是受控 UI 模式。",
+  "settings.plugins.contributionReasonUnsupportedSurface":
+    "当前 Locus 版本还没有接入这个界面位置。",
+  "settings.plugins.contributionReasonUnsupportedAction":
+    "这个动作不在 Locus allowlist 中。",
+  "settings.plugins.contributionReasonPermissionRequired":
+    "这个动作需要本地 fingerprint 绑定批准。",
+  "settings.plugins.contributionReasonPermissionStale":
+    "UI 贡献已变化，之前的批准已过期。",
+  "settings.plugins.contributionReasonCodexReadOnly":
+    "Codex 缓存包在 Locus 中保持只读。",
+  "settings.plugins.contributionStatusAvailable": "Locus 可用",
+  "settings.plugins.contributionStatusNeedsReview": "需要本地复审",
+  "settings.plugins.contributionStatusChanged": "复审后已变化",
+  "settings.plugins.contributionStatusSafeMode": "安全模式阻断",
+  "settings.plugins.contributionStatusUnavailable": "界面不可用",
+  "settings.plugins.contributionStatusSurfaceUnavailable": "宿主未接入",
+  "settings.plugins.contributionStatusReadOnly": "只读元数据",
+  "settings.plugins.contributionStatusPermissionRequired": "需要动作批准",
+  "settings.plugins.contributionStatusPermissionStale": "批准已过期",
+  "settings.plugins.workbenchContributionPlanned":
+    "声明了 {count} 个条目；Workbench 宿主不在本切片内接入。",
+  "settings.plugins.approveControlledAction": "批准动作",
+  "settings.plugins.prepareControlledDraft": "复制草稿提示",
+  "settings.plugins.controlledActionInsertDraft":
+    "只返回有边界的草稿提示，不发送聊天，也不运行 agent。",
+  "settings.plugins.controlledActionHint":
+    "受控动作由 Locus allowlist 处理，不运行插件代码、shell 命令，也不会自动发送聊天。",
+  "settings.plugins.toast.controlledActionApproved": "受控动作已批准",
+  "settings.plugins.toast.controlledDraftPrepared": "草稿提示已复制",
   "settings.plugins.doctor": "插件 Doctor",
   "settings.plugins.doctorSummary": "{blocked} 个阻断 / {warning} 个警告 / {checks} 项检查",
   "settings.plugins.doctorStatusPass": "通过",
