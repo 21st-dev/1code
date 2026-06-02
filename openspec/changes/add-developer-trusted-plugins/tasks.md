@@ -2,7 +2,7 @@
 - [x] 1.1 Review current `runtime-plugins` spec and active plugin changes for conflicts.
 - [x] 1.2 Add proposal, design, tasks, and spec delta for developer trusted plugins.
 - [x] 1.3 Run `openspec validate add-developer-trusted-plugins --strict --no-interactive`.
-- [ ] 1.4 Obtain explicit approval before implementation.
+- [x] 1.4 Obtain explicit approval before implementation.
 
 ## 2. Shared Trust Model
 - [ ] 2.1 Add developer plugin manifest schema, bounded validation, and TypeScript types.
