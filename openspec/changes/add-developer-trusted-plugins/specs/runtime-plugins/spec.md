@@ -32,17 +32,31 @@ The system SHALL load developer trusted plugin code only when all current trust 
 - **AND** reports the blocking reason in Settings > Plugins and Doctor/Debug
 
 ### Requirement: Developer Trust Review Binding
-The system SHALL bind developer plugin trust acknowledgements to the current reviewed plugin fingerprint.
+The system SHALL bind developer plugin trust acknowledgements to the current reviewed plugin fingerprint and executable content fingerprint.
 
 #### Scenario: Developer plugin changes after trust
 - **WHEN** the developer plugin manifest, entrypoint metadata, source pins, or review-relevant plugin metadata changes
 - **THEN** previous trust acknowledgement no longer authorizes loading
 - **AND** Locus requires the user to review and trust the new fingerprint before loading code
 
+#### Scenario: Developer plugin entrypoint changes after trust
+- **WHEN** the developer plugin entrypoint file content changes while manifest metadata stays the same
+- **THEN** previous trust acknowledgement no longer authorizes loading
+- **AND** Locus reports that executable content changed
+
 #### Scenario: User revokes developer trust
 - **WHEN** the user revokes trust for a developer plugin
 - **THEN** Locus prevents future loads and invocations for that plugin
 - **AND** preserves review history and plugin files
+
+### Requirement: Developer Plugin Permission Disclosure
+The system SHALL disclose developer plugin permissions as review metadata, not as same-process sandbox enforcement.
+
+#### Scenario: Developer plugin declares permissions
+- **WHEN** a developer plugin declares permissions or capabilities
+- **THEN** Locus displays those declarations for review
+- **AND** states that same-process developer plugin code is not confined by those labels
+- **AND** does not describe the permissions as a security sandbox
 
 ### Requirement: Developer Plugin Recovery And Diagnostics
 The system SHALL keep safe mode and Doctor/Debug available as recovery and diagnostic surfaces for developer trusted plugins.
@@ -52,6 +66,11 @@ The system SHALL keep safe mode and Doctor/Debug available as recovery and diagn
 - **THEN** Locus blocks developer plugin loading before any entrypoint import
 - **AND** still allows the user to view plugin metadata, diagnostics, and trust state
 - **AND** allows the user to disable Developer Plugin Mode or revoke plugin trust
+
+#### Scenario: Forced safe mode is requested before startup
+- **WHEN** the user starts Locus with a forced safe-mode startup override
+- **THEN** Locus blocks developer plugin loading before any entrypoint import
+- **AND** keeps the core UI available for recovery actions
 
 #### Scenario: Developer plugin fails to load
 - **WHEN** a trusted developer plugin entrypoint fails during load

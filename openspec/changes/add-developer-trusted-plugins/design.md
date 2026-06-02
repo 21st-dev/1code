@@ -35,6 +35,8 @@ developer-trusted-code = user chose this local directory and accepts that it may
 
 This is not a security sandbox. Permission labels are review metadata and UI disclosure unless the capability is implemented through a Locus-owned API gate.
 
+If Locus imports a developer plugin in the Electron main process, the plugin must be treated as same-process local code. A minimal API object is useful for product ergonomics, but it is not a confinement boundary because the plugin may still use Node APIs, app internals available to that process, filesystem APIs, child processes, and network calls.
+
 The core controls are recovery and consent controls:
 
 - Global Developer Plugin Mode must be enabled.
@@ -43,6 +45,7 @@ The core controls are recovery and consent controls:
 - The current plugin fingerprint must have a per-plugin trust acknowledgement.
 - Plugin safe mode must be disabled.
 - The loader must re-check these conditions immediately before importing any entrypoint.
+- The current executable content fingerprint must match the trusted fingerprint.
 
 ## Developer Manifest
 Developer plugins use a Locus-owned manifest under the plugin directory:
@@ -72,7 +75,7 @@ Rules:
 - `entry` must resolve inside the plugin root after `realpath`.
 - Remote URLs are rejected.
 - Entry files are not imported until all developer trust gates pass.
-- The manifest and bounded entry metadata are included in review fingerprints.
+- The manifest, canonical entry path, entry content hash, and bounded bundle metadata are included in review fingerprints.
 - Manifest validation must not execute plugin code.
 
 ## Runtime Loading
@@ -82,7 +85,7 @@ The first implementation should keep the runtime surface intentionally small:
 - Import the declared entrypoint in the main process only after final gate recomputation.
 - Provide a minimal Locus developer plugin API object rather than broad app internals.
 - Record load status and errors for Doctor/Debug.
-- Unload/disable behavior should prevent future invocations and require app restart if module state cannot be fully torn down.
+- Unload/disable behavior should prevent future invocations; app restart may be required because already imported same-process code cannot be guaranteed to unload cleanly.
 
 If a future capability needs high-authority operations such as shell execution, file writes outside plugin data, MCP mutation, provider config changes, or native modules, it should use a separate explicit API proposal instead of relying on manifest permission labels.
 
@@ -101,7 +104,9 @@ Trust acknowledgements should include:
 - plugin review key
 - plugin fingerprint
 - manifest ID
-- entry path fingerprint metadata
+- canonical entry path
+- entry content hash
+- bounded bundle or lockfile hash metadata when available
 - timestamp
 - local source path
 
@@ -138,12 +143,23 @@ Doctor and per-plugin Debug should report:
 - Load errors without dumping source code or secrets.
 
 ## Security Considerations
+- Permission labels are disclosure metadata for same-process developer plugins. They must not be described as enforced confinement unless a separate out-of-process sandbox is implemented.
 - Main process must never trust renderer-provided gate state or fingerprints.
 - Loader code must perform final server-side discovery, manifest parse, fingerprint comparison, safe mode read, and trust acknowledgement comparison immediately before import.
 - Symlink/path escape tests are required for manifest and entrypoint paths.
 - Safe mode must block loading before import, not merely hide UI controls.
+- Safe mode needs an out-of-band recovery path such as an environment or startup override so a broken developer plugin cannot permanently block the core UI.
 - Developer trusted plugins must never be auto-installed or auto-enabled from remote store updates.
 - A compromised local developer plugin can read local files or spawn processes if it imports Node APIs; UI copy and docs must say this plainly.
+- A developer trusted plugin can make its own network calls and may bypass Locus local-only helper guards unless a future sandboxed execution model is introduced.
+
+## Abuse Paths
+- A malicious developer plugin exfiltrates local files, provider credentials, or runtime config over the network after same-process import.
+- A developer plugin mutates `~/.claude`, `~/.codex`, MCP config, git state, or shell environment directly instead of using Locus APIs.
+- The entry file changes after trust while manifest metadata stays the same.
+- The renderer forges a fingerprint, gate state, path, or trust status.
+- A plugin crash loop prevents Settings from loading unless safe mode is evaluated before import.
+- A symlink or path swap changes the entrypoint between review and import.
 
 ## Rollout
 1. Add OpenSpec and tests for the trust/gate model.
