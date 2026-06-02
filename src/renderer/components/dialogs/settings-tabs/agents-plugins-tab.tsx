@@ -6,7 +6,7 @@ import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../li
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck } from "lucide-react"
+import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2 } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
 import { Label } from "../../ui/label"
@@ -36,6 +36,7 @@ type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-c
 type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled-planned" | "trusted-code-planned"
 type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
 type PluginUpdatePosture = "advisory-only" | "review-before-enable"
+type PluginUpdateReviewStatus = "new" | "unchanged" | "changed" | "reviewed"
 type PluginDiagnosticSeverity = "info" | "warning"
 type PluginDiagnosticCode =
   | "metadata-only-no-execution"
@@ -54,8 +55,34 @@ interface PluginDiagnostic {
   severity: PluginDiagnosticSeverity
 }
 
+interface PluginSourcePin {
+  kind: "cache-version" | "lock-source-ref"
+  value: string
+  label?: string
+  repo?: string
+  path?: string
+}
+
+interface PluginReviewChange {
+  field: string
+  previous?: string
+  current?: string
+}
+
+interface PluginUpdateReviewMetadata {
+  fingerprint: string
+  status: PluginUpdateReviewStatus
+  firstSeenAt?: string
+  lastSeenAt?: string
+  lastReviewedAt?: string
+  lastReviewedFingerprint?: string
+  sourcePins: PluginSourcePin[]
+  changes: PluginReviewChange[]
+}
+
 interface PluginData {
   runtime: PluginRuntime
+  reviewKey: string
   name: string
   version: string
   description?: string
@@ -72,6 +99,8 @@ interface PluginData {
   executionStatus: PluginExecutionStatus
   reviewStatus: PluginReviewStatus
   updatePosture: PluginUpdatePosture
+  updateReview: PluginUpdateReviewMetadata
+  sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
   isDisabled: boolean
   canToggle: boolean
@@ -81,6 +110,7 @@ interface PluginData {
     agents: PluginComponent[]
     mcpServers: string[]
   }
+  mcpApprovalIdentifiers: Record<string, string>
 }
 
 interface PluginSourceData {
@@ -103,8 +133,8 @@ interface McpServerStatus {
   needsAuth: boolean
 }
 
-function getPluginKey(plugin: Pick<PluginData, "runtime" | "source">): string {
-  return `${plugin.runtime}:${plugin.source}`
+function getPluginKey(plugin: Pick<PluginData, "reviewKey">): string {
+  return plugin.reviewKey
 }
 
 function getRuntimeLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
@@ -231,6 +261,19 @@ function getReviewStatusLabel(status: PluginReviewStatus, t: ReturnType<typeof u
   }
 }
 
+function getUpdateReviewStatusLabel(status: PluginUpdateReviewStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "new":
+      return t("settings.plugins.updateReviewNew")
+    case "unchanged":
+      return t("settings.plugins.updateReviewUnchanged")
+    case "changed":
+      return t("settings.plugins.updateReviewChanged")
+    case "reviewed":
+      return t("settings.plugins.updateReviewReviewed")
+  }
+}
+
 function getUpdatePostureLabel(posture: PluginUpdatePosture, t: ReturnType<typeof useI18n>["t"]): string {
   switch (posture) {
     case "advisory-only":
@@ -259,6 +302,40 @@ function getReviewStatusClass(status: PluginReviewStatus): string {
       return "text-amber-600 dark:text-amber-300"
     case "read-only-cache":
       return "text-sky-700 dark:text-sky-300"
+  }
+}
+
+function getUpdateReviewStatusClass(status: PluginUpdateReviewStatus): string {
+  switch (status) {
+    case "new":
+      return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+    case "unchanged":
+      return "border-border bg-background text-muted-foreground"
+    case "changed":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "reviewed":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+  }
+}
+
+function shortFingerprint(fingerprint: string): string {
+  return fingerprint ? fingerprint.slice(0, 12) : "none"
+}
+
+function formatReviewTimestamp(value: string | undefined, t: ReturnType<typeof useI18n>["t"]): string {
+  if (!value) return t("settings.plugins.neverReviewed")
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
+}
+
+function getSourcePinLabel(pin: PluginSourcePin, t: ReturnType<typeof useI18n>["t"]): string {
+  if (pin.label) return pin.label
+  switch (pin.kind) {
+    case "cache-version":
+      return t("settings.plugins.sourcePinCacheVersion")
+    case "lock-source-ref":
+      return t("settings.plugins.sourcePinLockRef")
   }
 }
 
@@ -321,6 +398,117 @@ function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) 
   )
 }
 
+function PluginUpdateReviewPanel({
+  plugin,
+  onMarkReviewed,
+  isMarkingReviewed,
+}: {
+  plugin: PluginData
+  onMarkReviewed: () => void
+  isMarkingReviewed: boolean
+}) {
+  const { t } = useI18n()
+  const review = plugin.updateReview
+  const sourcePins = review.sourcePins.length > 0 ? review.sourcePins : plugin.sourcePins
+  const canMarkReviewed = review.status !== "reviewed"
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.updateReview")}</Label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={cn(
+              "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+              getUpdateReviewStatusClass(review.status)
+            )}>
+              {getUpdateReviewStatusLabel(review.status, t)}
+            </span>
+            <span
+              className="rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
+              title={review.fingerprint}
+            >
+              sha256:{shortFingerprint(review.fingerprint)}
+            </span>
+          </div>
+        </div>
+        {canMarkReviewed && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs shrink-0"
+            onClick={onMarkReviewed}
+            disabled={isMarkingReviewed}
+          >
+            {isMarkingReviewed ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <>
+                <FileCheck2 className="h-3.5 w-3.5 mr-1.5" />
+                {t("settings.plugins.markReviewed")}
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.firstSeen")}</p>
+          <p className="text-foreground">{formatReviewTimestamp(review.firstSeenAt, t)}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.lastReviewed")}</p>
+          <p className="text-foreground">{formatReviewTimestamp(review.lastReviewedAt, t)}</p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.sourcePins")}</p>
+        {sourcePins.length > 0 ? (
+          <div className="space-y-1">
+            {sourcePins.map((pin) => (
+              <div key={`${pin.kind}:${pin.value}:${pin.repo ?? ""}:${pin.path ?? ""}`} className="rounded border border-border bg-muted/20 px-2 py-1.5">
+                <p className="text-[11px] text-muted-foreground">{getSourcePinLabel(pin, t)}</p>
+                <p className="text-xs font-mono text-foreground break-all">{pin.value}</p>
+                {(pin.repo || pin.path) && (
+                  <p className="text-[11px] text-muted-foreground/70 break-all">
+                    {[pin.repo, pin.path].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">{t("settings.plugins.noSourcePins")}</p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.changeSummary")}</p>
+        {review.changes.length > 0 ? (
+          <div className="space-y-1">
+            {review.changes.map((change) => (
+              <div key={change.field} className="grid grid-cols-[7rem_1fr] gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs">
+                <span className="font-medium text-foreground">{change.field}</span>
+                <span className="min-w-0 text-muted-foreground break-all">
+                  {change.previous ?? "none"} {"->"} {change.current ?? "none"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">{t("settings.plugins.noReviewChanges")}</p>
+        )}
+      </div>
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+        {t("settings.plugins.markReviewedHint")}
+      </p>
+    </div>
+  )
+}
+
 // --- Detail Panel ---
 function PluginDetail({
   plugin,
@@ -332,6 +520,8 @@ function PluginDetail({
   mcpServerStatuses,
   onMcpAuth,
   isAuthenticating,
+  onMarkReviewed,
+  isMarkingReviewed,
 }: {
   plugin: PluginData
   onToggleEnabled: (enabled: boolean) => void
@@ -342,6 +532,8 @@ function PluginDetail({
   mcpServerStatuses: Record<string, McpServerStatus>
   onMcpAuth: (serverName: string) => void
   isAuthenticating: boolean
+  onMarkReviewed: () => void
+  isMarkingReviewed: boolean
 }) {
   const { t } = useI18n()
   const componentCount =
@@ -428,6 +620,12 @@ function PluginDetail({
           </div>
 
           <DiagnosticsPanel diagnostics={plugin.diagnostics} />
+
+          <PluginUpdateReviewPanel
+            plugin={plugin}
+            onMarkReviewed={onMarkReviewed}
+            isMarkingReviewed={isMarkingReviewed}
+          />
 
           {/* Info */}
           <div className="space-y-3">
@@ -952,6 +1150,7 @@ export function AgentsPluginsTab() {
 
   const setPluginEnabledMutation = trpc.claudeSettings.setPluginEnabled.useMutation()
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
+  const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
 
   const filteredPlugins = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"
@@ -1103,6 +1302,21 @@ export function AgentsPluginsTab() {
   const approveAllMutation = trpc.claudeSettings.approveAllPluginMcpServers.useMutation()
   const revokeAllMutation = trpc.claudeSettings.revokeAllPluginMcpServers.useMutation()
 
+  const handleMarkReviewed = useCallback(async (plugin: PluginData) => {
+    try {
+      await markReviewedMutation.mutateAsync({
+        reviewKey: plugin.reviewKey,
+      })
+      toast.success(t("settings.plugins.toast.reviewed"), {
+        description: formatPluginName(plugin.name),
+      })
+      await refetch()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [markReviewedMutation, refetch, t])
+
   const handleToggleEnabled = useCallback(async (plugin: PluginData, enabled: boolean) => {
     try {
       await setPluginEnabledMutation.mutateAsync({
@@ -1132,6 +1346,9 @@ export function AgentsPluginsTab() {
       await approveAllMutation.mutateAsync({
         pluginSource: plugin.source,
         serverNames: plugin.components.mcpServers,
+        identifiers: plugin.components.mcpServers
+          .map((serverName) => plugin.mcpApprovalIdentifiers[serverName])
+          .filter((identifier): identifier is string => typeof identifier === "string"),
       })
       toast.success(t("settings.plugins.toast.mcpApproved"), {
         description: formatPluginName(plugin.name),
@@ -1341,6 +1558,8 @@ export function AgentsPluginsTab() {
               mcpServerStatuses={mcpServerStatuses}
               onMcpAuth={handleMcpAuth}
               isAuthenticating={startOAuthMutation.isPending}
+              onMarkReviewed={() => handleMarkReviewed(selectedPlugin)}
+              isMarkingReviewed={markReviewedMutation.isPending}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">

@@ -74,4 +74,27 @@ describe("plugin target mode UI source guards", () => {
       expect(dictionarySource).toContain(`"${key}"`)
     }
   })
+
+  test("renders advisory plugin update review without fake update or install controls", () => {
+    expect(pluginsTabSource).toContain("PluginUpdateReviewPanel")
+    expect(pluginsTabSource).toContain("plugin.updateReview")
+    expect(pluginsTabSource).toContain("trpc.plugins.markReviewed.useMutation")
+    expect(pluginsTabSource).toContain("settings.plugins.updateReview")
+    expect(pluginsTabSource).toContain("settings.plugins.markReviewed")
+    expect(pluginsTabSource).toContain("settings.plugins.changeSummary")
+    expect(pluginsTabSource).toContain("settings.plugins.noSourcePins")
+    expect(pluginsTabSource).not.toContain("installPluginUpdate")
+    expect(pluginsTabSource).not.toContain("downloadPluginUpdate")
+    expect(pluginsTabSource).not.toContain("executeCodexPlugin")
+
+    for (const key of [
+      "settings.plugins.updateReviewNew",
+      "settings.plugins.updateReviewChanged",
+      "settings.plugins.updateReviewReviewed",
+      "settings.plugins.markReviewedHint",
+      "settings.plugins.toast.reviewed",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
 })

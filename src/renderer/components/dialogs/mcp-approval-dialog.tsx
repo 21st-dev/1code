@@ -65,6 +65,7 @@ export function McpApprovalDialog() {
       await approveAllMutation.mutateAsync({
         pluginSource: currentApproval.pluginSource,
         serverNames: samePlugin.map((a) => a.serverName),
+        identifiers: samePlugin.map((a) => a.identifier),
       })
       toast.success(t("mcpApproval.toast.allServersApproved"), {
         description: t("mcpApproval.toast.serversFromPlugin", {

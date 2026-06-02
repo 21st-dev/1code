@@ -24,12 +24,12 @@
 
 ## 4. Settings UI
 
-- [ ] 4.1 Add compact review status, manifest hash, optional source pin, and last reviewed timestamp to plugin detail.
-- [ ] 4.2 Add a bounded change summary panel for manifest/update changes.
-- [ ] 4.3 Add an advisory "Mark reviewed" button that does not affect execution, enablement, or MCP approval.
-- [ ] 4.4 Add English and Chinese localization strings.
-- [ ] 4.5 Add UI source tests for wording and no fake install/update controls.
-- [ ] 4.6 Commit the UI slice separately.
+- [x] 4.1 Add compact review status, manifest hash, optional source pin, and last reviewed timestamp to plugin detail.
+- [x] 4.2 Add a bounded change summary panel for manifest/update changes.
+- [x] 4.3 Add an advisory "Mark reviewed" button that does not affect execution, enablement, or MCP approval.
+- [x] 4.4 Add English and Chinese localization strings.
+- [x] 4.5 Add UI source tests for wording and no fake install/update controls.
+- [x] 4.6 Commit the UI slice separately.
 
 ## 5. Verification
 
