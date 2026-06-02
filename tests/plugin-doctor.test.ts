@@ -305,4 +305,70 @@ describe("plugin doctor report", () => {
     expect(serialized).not.toContain("verified safe")
     expect(serialized).not.toContain("trusted marketplace")
   })
+
+  test("reports runtime marketplace diagnostics without treating them as store candidates", () => {
+    const report = buildPluginDoctorReport({
+      now: new Date("2026-06-03T00:00:00Z"),
+      reviewStatePath: "/userData/plugin-review-state.json",
+      safeMode: { enabled: false },
+      developerMode: { enabled: false },
+      sources: [],
+      plugins: [],
+      storeCandidates: [],
+      runtimeMarketplaces: [{
+        runtime: "codex",
+        refreshedAt: "2026-06-03T00:00:00.000Z",
+        marketplaces: [{
+          runtime: "codex",
+          name: "openai-curated",
+          source: "/Users/me/.codex/.tmp/plugins",
+          path: "/Users/me/.codex/.tmp/plugins",
+          sourceKind: "runtime-cli",
+          trust: "official",
+          status: "available",
+          pluginCount: 100,
+          diagnostics: [],
+        }],
+        plugins: [{
+          runtime: "codex",
+          id: "computer-use@openai-bundled",
+          marketplace: "openai-bundled",
+          name: "computer-use",
+          version: "1.0.799",
+          status: "installed-enabled",
+          statusText: "installed, enabled",
+          installed: true,
+          enabled: true,
+          path: "/Users/me/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/computer-use",
+          componentSummary: { unknown: true },
+          diagnostics: [],
+        }],
+        diagnostics: [{
+          code: "runtime-cli-parse-failed",
+          severity: "warning",
+          runtime: "codex",
+          command: "codex plugin list",
+          message: "Runtime marketplace command output could not be parsed.",
+        }],
+      }],
+    })
+
+    expect(report.runtimeMarketplaces).toHaveLength(1)
+    expect(report.storeCandidates).toEqual([])
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: "runtime-marketplace",
+      status: "pass",
+      runtime: "codex",
+    }))
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: "runtime-plugin-listing",
+      status: "pass",
+      runtime: "codex",
+    }))
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: "runtime-marketplace-diagnostic",
+      status: "warning",
+      runtime: "codex",
+    }))
+  })
 })

@@ -1,5 +1,8 @@
 import { execFile } from "node:child_process"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { promisify } from "node:util"
+import { stripVTControlCharacters } from "node:util"
 import {
   getRuntimeMarketplaceTrust,
   normalizeRuntimePluginStatus,
@@ -81,7 +84,7 @@ export async function getClaudePluginMarketplaceSnapshot(
   options: RuntimeMarketplaceAdapterOptions = {},
 ): Promise<RuntimePluginMarketplaceSnapshot> {
   const [marketplaceResult, installedResult, availableResult] = await Promise.all([
-    runRuntimePluginCommand("claude", ["plugin", "marketplace", "list"], options),
+    runRuntimePluginCommand("claude", ["plugin", "marketplace", "list", "--json"], options),
     runRuntimePluginCommand("claude", ["plugin", "list", "--json"], options),
     runRuntimePluginCommand("claude", ["plugin", "list", "--available", "--json"], options),
   ])
@@ -118,13 +121,13 @@ export async function runRuntimePluginCommand(
   const runner = options.runner ?? defaultRuntimeCommandRunner
   const commandText = [command, ...args].join(" ")
   try {
-    const result = await runner(command, args, {
+    const result = await runner(resolveRuntimeCommandPath(command), args, {
       timeoutMs: options.timeoutMs ?? DEFAULT_RUNTIME_MARKETPLACE_TIMEOUT_MS,
       maxBuffer: MAX_RUNTIME_MARKETPLACE_BUFFER,
     })
     return {
-      stdout: result.stdout,
-      stderr: result.stderr,
+      stdout: cleanCommandOutput(result.stdout),
+      stderr: cleanCommandOutput(result.stderr),
       diagnostics: [],
     }
   } catch (error) {
@@ -146,11 +149,44 @@ async function defaultRuntimeCommandRunner(
     timeout: options.timeoutMs,
     maxBuffer: options.maxBuffer,
     shell: false,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      NO_COLOR: "1",
+      FORCE_COLOR: "0",
+    },
   })
   return {
     stdout: result.stdout,
     stderr: result.stderr,
   }
+}
+
+function resolveRuntimeCommandPath(command: string): string {
+  const binaryName = process.platform === "win32" ? `${command}.exe` : command
+  const packagedResourcesPath = typeof process.resourcesPath === "string"
+    ? path.join(process.resourcesPath, "bin", binaryName)
+    : undefined
+  if (packagedResourcesPath && fs.existsSync(packagedResourcesPath)) {
+    return packagedResourcesPath
+  }
+
+  const devResourcesPath = path.join(
+    process.cwd(),
+    "resources",
+    "bin",
+    `${process.platform}-${process.arch}`,
+    binaryName,
+  )
+  if (fs.existsSync(devResourcesPath)) {
+    return devResourcesPath
+  }
+
+  return command
+}
+
+function cleanCommandOutput(value: string): string {
+  return stripVTControlCharacters(value).replace(/\r/g, "").trim()
 }
 
 function diagnosticFromCommandError(
@@ -242,6 +278,10 @@ export function parseCodexPluginList(output: string): {
   plugins: RuntimePluginListing[]
   diagnostics: RuntimeMarketplaceDiagnostic[]
 } {
+  if (/No plugins found/i.test(output)) {
+    return { plugins: [], diagnostics: [] }
+  }
+
   const plugins: RuntimePluginListing[] = []
   let marketplace: string | undefined
   const lines = output.split(/\r?\n/)
@@ -302,6 +342,9 @@ export function parseClaudeMarketplaceList(output: string): {
   marketplaces: RuntimePluginMarketplace[]
   diagnostics: RuntimeMarketplaceDiagnostic[]
 } {
+  const jsonParse = parseClaudeMarketplaceJson(output)
+  if (jsonParse) return jsonParse
+
   const lines = nonEmptyLines(output)
   if (lines.length === 0 || /^No marketplaces configured/i.test(lines[0] ?? "")) {
     return {
@@ -336,6 +379,51 @@ export function parseClaudeMarketplaceList(output: string): {
       ? [parseFailureDiagnostic("claude", "claude plugin marketplace list")]
       : [],
   }
+}
+
+function parseClaudeMarketplaceJson(output: string): {
+  marketplaces: RuntimePluginMarketplace[]
+  diagnostics: RuntimeMarketplaceDiagnostic[]
+} | undefined {
+  if (!output.trim().startsWith("[") && !output.trim().startsWith("{")) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(output) as unknown
+  } catch {
+    return {
+      marketplaces: [],
+      diagnostics: [parseFailureDiagnostic("claude", "claude plugin marketplace list --json")],
+    }
+  }
+
+  const values = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.marketplaces)
+      ? parsed.marketplaces
+      : []
+  const marketplaces = values.map((value, index): RuntimePluginMarketplace => {
+    const record = isRecord(value) ? value : {}
+    const name = getString(record.name) ??
+      getString(record.id) ??
+      getString(record.marketplace) ??
+      `claude-marketplace-${index + 1}`
+    const source = getString(record.source) ??
+      getString(record.url) ??
+      getString(record.path) ??
+      getString(record.root)
+    return {
+      runtime: "claude",
+      name,
+      source,
+      path: getString(record.path) ?? (source?.startsWith("/") ? source : undefined),
+      sourceKind: "runtime-cli",
+      trust: getRuntimeMarketplaceTrust({ runtime: "claude", name, source }),
+      status: "available",
+      pluginCount: getNumber(record.pluginCount),
+      diagnostics: [],
+    }
+  })
+  return { marketplaces, diagnostics: [] }
 }
 
 export function parseClaudePluginJson(

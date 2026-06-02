@@ -31,6 +31,10 @@ import type {
   PluginStoreInstalledPackageRecord,
   PluginStoreValidationIssue,
 } from "./plugin-store-pins"
+import type {
+  RuntimeMarketplaceDiagnostic,
+  RuntimePluginMarketplaceSnapshot,
+} from "./runtime-plugin-marketplace"
 
 export type PluginDoctorCheckStatus =
   | "pass"
@@ -66,6 +70,9 @@ export type PluginDoctorCheckCode =
   | "store-approval"
   | "store-backup"
   | "store-target-mode"
+  | "runtime-marketplace"
+  | "runtime-marketplace-diagnostic"
+  | "runtime-plugin-listing"
   | "component-path-warning"
   | "review-state"
 
@@ -186,6 +193,7 @@ export interface PluginDoctorReport {
   checks: PluginDoctorCheck[]
   plugins: PluginDoctorPluginDebug[]
   storeCandidates: PluginDoctorStoreCandidateDebug[]
+  runtimeMarketplaces: RuntimePluginMarketplaceSnapshot[]
 }
 
 export function buildPluginDoctorReport(input: {
@@ -195,6 +203,7 @@ export function buildPluginDoctorReport(input: {
   developerMode: PluginDeveloperModeState
   reviewStatePath?: string
   storeCandidates?: PluginDoctorStoreCandidateInput[]
+  runtimeMarketplaces?: RuntimePluginMarketplaceSnapshot[]
   now?: Date
 }): PluginDoctorReport {
   const sourceChecks = input.sources.map(buildSourceCheck)
@@ -202,10 +211,15 @@ export function buildPluginDoctorReport(input: {
   const developerModeCheck = buildDeveloperModeCheck(input.developerMode)
   const plugins = input.plugins.map(buildPluginDebug)
   const storeCandidates = (input.storeCandidates ?? []).map(buildStoreCandidateDebug)
+  const runtimeMarketplaces = input.runtimeMarketplaces ?? []
+  const runtimeMarketplaceChecks = runtimeMarketplaces.flatMap(
+    buildRuntimeMarketplaceChecks,
+  )
   const checks = [
     reviewStateCheck,
     developerModeCheck,
     ...sourceChecks,
+    ...runtimeMarketplaceChecks,
     ...plugins.flatMap((plugin) => plugin.checks),
     ...storeCandidates.flatMap((candidate) => candidate.checks),
   ]
@@ -220,6 +234,7 @@ export function buildPluginDoctorReport(input: {
     checks,
     plugins,
     storeCandidates,
+    runtimeMarketplaces,
   }
 }
 
@@ -638,6 +653,57 @@ function buildStoreCandidateChecks(
   }
 
   return checks
+}
+
+function buildRuntimeMarketplaceChecks(
+  snapshot: RuntimePluginMarketplaceSnapshot,
+): PluginDoctorCheck[] {
+  const checks: PluginDoctorCheck[] = [{
+    code: "runtime-marketplace",
+    status: snapshot.marketplaces.length > 0 ? "pass" : "warning",
+    subject: `${snapshot.runtime}-marketplaces`,
+    runtime: snapshot.runtime,
+    details: {
+      marketplaceCount: snapshot.marketplaces.length,
+      pluginCount: snapshot.plugins.length,
+      refreshedAt: snapshot.refreshedAt,
+    },
+  }, {
+    code: "runtime-plugin-listing",
+    status: snapshot.plugins.length > 0 ? "pass" : "info",
+    subject: `${snapshot.runtime}-plugins`,
+    runtime: snapshot.runtime,
+    details: {
+      installedCount: snapshot.plugins.filter((plugin) => plugin.installed).length,
+      availableCount: snapshot.plugins.filter((plugin) => !plugin.installed).length,
+      pluginCount: snapshot.plugins.length,
+    },
+  }]
+
+  for (const diagnostic of snapshot.diagnostics) {
+    checks.push({
+      code: "runtime-marketplace-diagnostic",
+      status: getRuntimeMarketplaceDiagnosticStatus(diagnostic),
+      subject: diagnostic.command ?? `${snapshot.runtime}-marketplace`,
+      runtime: snapshot.runtime,
+      details: {
+        code: diagnostic.code,
+        message: diagnostic.message,
+        severity: diagnostic.severity,
+        exitCode: diagnostic.exitCode ?? 0,
+      },
+    })
+  }
+
+  return checks
+}
+
+function getRuntimeMarketplaceDiagnosticStatus(
+  diagnostic: RuntimeMarketplaceDiagnostic,
+): PluginDoctorCheckStatus {
+  if (diagnostic.severity === "blocked") return "blocked"
+  if (diagnostic.severity === "warning") return "warning"
+  return "info"
 }
 
 function getStoreCandidateCheckStatus(

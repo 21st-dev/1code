@@ -277,6 +277,9 @@ type PluginDoctorCheckCode =
   | "store-approval"
   | "store-backup"
   | "store-target-mode"
+  | "runtime-marketplace"
+  | "runtime-marketplace-diagnostic"
+  | "runtime-plugin-listing"
   | "component-path-warning"
   | "review-state"
 
@@ -353,6 +356,89 @@ interface PluginDoctorReport {
   checks: PluginDoctorCheck[]
   plugins: PluginDoctorPluginDebug[]
   storeCandidates: PluginDoctorStoreCandidateDebug[]
+  runtimeMarketplaces: RuntimePluginMarketplaceSnapshot[]
+}
+
+type RuntimeMarketplaceInventoryStatus =
+  | "available"
+  | "empty"
+  | "missing"
+  | "unavailable"
+  | "degraded"
+type RuntimeMarketplaceSourceKind = "runtime-cli" | "filesystem-fallback"
+type RuntimeMarketplaceTrust = "official" | "local" | "external"
+type RuntimePluginListingStatus =
+  | "available"
+  | "not-installed"
+  | "installed"
+  | "installed-enabled"
+  | "installed-disabled"
+  | "unknown"
+type RuntimeMarketplaceDiagnosticSeverity = "info" | "warning" | "blocked"
+type RuntimeMarketplaceDiagnosticCode =
+  | "runtime-cli-unavailable"
+  | "runtime-cli-timeout"
+  | "runtime-cli-error"
+  | "runtime-cli-parse-failed"
+  | "runtime-command-empty"
+  | "filesystem-fallback"
+  | "source-conflict"
+
+interface RuntimeMarketplaceDiagnostic {
+  code: RuntimeMarketplaceDiagnosticCode
+  severity: RuntimeMarketplaceDiagnosticSeverity
+  message: string
+  runtime?: PluginRuntime
+  command?: string
+  exitCode?: number
+}
+
+interface RuntimePluginComponentSummary {
+  skills?: number
+  mcpServers?: number
+  hooks?: number
+  apps?: number
+  commands?: number
+  agents?: number
+  lspServers?: number
+  unknown?: boolean
+}
+
+interface RuntimePluginMarketplace {
+  runtime: PluginRuntime
+  name: string
+  source?: string
+  path?: string
+  sourceKind: RuntimeMarketplaceSourceKind
+  trust: RuntimeMarketplaceTrust
+  status: RuntimeMarketplaceInventoryStatus
+  pluginCount?: number
+  diagnostics: RuntimeMarketplaceDiagnostic[]
+}
+
+interface RuntimePluginListing {
+  runtime: PluginRuntime
+  id: string
+  marketplace?: string
+  name: string
+  version?: string
+  status: RuntimePluginListingStatus
+  statusText?: string
+  installed: boolean
+  enabled?: boolean
+  source?: string
+  path?: string
+  scope?: string
+  componentSummary?: RuntimePluginComponentSummary
+  diagnostics: RuntimeMarketplaceDiagnostic[]
+}
+
+interface RuntimePluginMarketplaceSnapshot {
+  runtime: PluginRuntime
+  marketplaces: RuntimePluginMarketplace[]
+  plugins: RuntimePluginListing[]
+  diagnostics: RuntimeMarketplaceDiagnostic[]
+  refreshedAt: string
 }
 
 type PluginStoreCandidateStatus =
@@ -1215,6 +1301,12 @@ function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof u
       return t("settings.plugins.doctorCheckStoreBackup")
     case "store-target-mode":
       return t("settings.plugins.doctorCheckStoreTargetMode")
+    case "runtime-marketplace":
+      return t("settings.plugins.doctorCheckRuntimeMarketplace")
+    case "runtime-marketplace-diagnostic":
+      return t("settings.plugins.doctorCheckRuntimeMarketplaceDiagnostic")
+    case "runtime-plugin-listing":
+      return t("settings.plugins.doctorCheckRuntimePluginListing")
     case "component-path-warning":
       return t("settings.plugins.doctorCheckComponentPathWarning")
     case "review-state":

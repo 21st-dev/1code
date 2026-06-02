@@ -97,6 +97,29 @@ describe("runtime plugin marketplace adapters", () => {
       marketplaces: [],
       diagnostics: [],
     })
+    expect(parseClaudeMarketplaceList("[]\n")).toEqual({
+      marketplaces: [],
+      diagnostics: [],
+    })
+    expect(parseClaudeMarketplaceList(JSON.stringify([{
+      name: "team",
+      source: "anthropic/plugins",
+      pluginCount: 2,
+    }])).marketplaces[0]).toMatchObject({
+      runtime: "claude",
+      name: "team",
+      source: "anthropic/plugins",
+      sourceKind: "runtime-cli",
+      trust: "official",
+      pluginCount: 2,
+    })
+  })
+
+  test("treats Codex empty marketplace output as a successful empty listing", () => {
+    expect(parseCodexPluginList("No plugins found in marketplace debug\n")).toEqual({
+      plugins: [],
+      diagnostics: [],
+    })
   })
 
   test("parses Claude plugin JSON arrays and object buckets", () => {
@@ -207,6 +230,57 @@ describe("runtime plugin marketplace adapters", () => {
     })
     expect(snapshot.marketplaces).toHaveLength(3)
     expect(snapshot.plugins).toHaveLength(3)
+    expect(snapshot.diagnostics).toEqual([])
+  })
+
+  test("builds a Claude snapshot through injected JSON commands", async () => {
+    const runner: RuntimeCommandRunner = async (_command, args) => {
+      const text = args.join(" ")
+      if (text === "plugin marketplace list --json") {
+        return {
+          stdout: JSON.stringify([{ name: "team", source: "anthropic/plugins" }]),
+          stderr: "",
+        }
+      }
+      if (text === "plugin list --json") {
+        return {
+          stdout: JSON.stringify([{
+            name: "repo-tools",
+            marketplace: "team",
+            version: "1.0.0",
+            status: "installed, enabled",
+            enabled: true,
+          }]),
+          stderr: "",
+        }
+      }
+      if (text === "plugin list --available --json") {
+        return {
+          stdout: JSON.stringify({
+            available: [{ name: "review-tools", marketplace: "team" }],
+          }),
+          stderr: "",
+        }
+      }
+      throw new Error(`unexpected command: ${text}`)
+    }
+
+    const snapshot = await getRuntimePluginMarketplaceSnapshot("claude", {
+      runner,
+      now: new Date("2026-06-03T00:00:00Z"),
+    })
+
+    expect(snapshot.marketplaces).toHaveLength(1)
+    expect(snapshot.plugins).toEqual([
+      expect.objectContaining({
+        id: "repo-tools@team",
+        status: "installed-enabled",
+      }),
+      expect.objectContaining({
+        id: "review-tools@team",
+        status: "not-installed",
+      }),
+    ])
     expect(snapshot.diagnostics).toEqual([])
   })
 })

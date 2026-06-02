@@ -96,6 +96,13 @@ import {
 } from "../../plugins/store-pins"
 import type { PluginStoreCatalogEntry } from "../../../../shared/plugin-store-pins"
 import { getPluginStoreApprovalStatus } from "../../../../shared/plugin-store-pins"
+import {
+  getAllRuntimePluginMarketplaceSnapshots,
+  getRuntimePluginMarketplaceSnapshot,
+} from "../../plugins/runtime-marketplace"
+import type {
+  RuntimePluginMarketplaceSnapshot,
+} from "../../../../shared/runtime-plugin-marketplace"
 
 export interface PluginWithComponents {
   runtime: PluginRuntime
@@ -705,6 +712,17 @@ export const pluginsRouter = router({
     return listPluginStoreEntries()
   }),
 
+  runtimeMarketplaces: publicProcedure
+    .input(z.object({
+      runtime: z.enum(["claude", "codex"]).optional(),
+    }).optional())
+    .query(async ({ input }): Promise<RuntimePluginMarketplaceSnapshot[]> => {
+      if (input?.runtime) {
+        return [await getRuntimePluginMarketplaceSnapshot(input.runtime)]
+      }
+      return getAllRuntimePluginMarketplaceSnapshots()
+    }),
+
   previewStoreCandidate: publicProcedure
     .input(z.object({ storeEntryId: z.string().min(1) }))
     .query(async ({ input }): Promise<PluginStoreCandidatePreview> => {
@@ -784,11 +802,12 @@ export const pluginsRouter = router({
    * declarations. This is diagnostic-only and does not execute plugin code.
    */
   doctor: publicProcedure.query(async (): Promise<PluginDoctorReport> => {
-    const [installedPlugins, sources, developerMode, storeState] = await Promise.all([
+    const [installedPlugins, sources, developerMode, storeState, runtimeMarketplaces] = await Promise.all([
       discoverAllRuntimePlugins(),
       discoverPluginSources(),
       getPluginDeveloperModeState(),
       getPluginStoreStateSnapshot(),
+      getAllRuntimePluginMarketplaceSnapshots(),
     ])
 
     const scannedPlugins = await Promise.all(
@@ -919,6 +938,7 @@ export const pluginsRouter = router({
           (backup) => backup.storeEntryId === candidate.storeEntryId,
         ),
       })),
+      runtimeMarketplaces,
     })
   }),
 
