@@ -1192,7 +1192,7 @@ export const en = {
   "settings.plugins.diagnosticPermissionScopeReviewRequired":
     "Permission, scope, MCP, native, filesystem, network, or shell changes must be reviewed before enablement.",
   "settings.plugins.diagnosticSafeModePlanned":
-    "Safe mode is planned for future execution surfaces; no arbitrary plugin code runs in this mode.",
+    "Safe mode blocks plugin-provided runtime capabilities; arbitrary plugin code still does not run in this mode.",
   "settings.plugins.diagnosticComponentPathOutsideRoot":
     "A component path was ignored because it points outside this plugin root.",
   "settings.plugins.diagnosticSourceAvailable":
@@ -3852,7 +3852,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.diagnosticPermissionScopeReviewRequired":
     "权限、范围、MCP、native、文件系统、网络或 shell 变化启用前必须复审。",
   "settings.plugins.diagnosticSafeModePlanned":
-    "安全模式只规划给未来执行入口；当前模式不运行任意插件代码。",
+    "安全模式会阻断插件提供的运行时能力；当前模式仍不运行任意插件代码。",
   "settings.plugins.diagnosticComponentPathOutsideRoot":
     "有组件路径指向插件根目录外，已被忽略。",
   "settings.plugins.diagnosticSourceAvailable":
