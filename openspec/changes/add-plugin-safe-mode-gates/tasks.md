@@ -8,12 +8,12 @@
 - [x] 2.3 Add unit tests for gate decisions.
 
 ## 3. Main Process Enforcement
-- [ ] 3.1 Persist and read local plugin safe-mode state.
-- [ ] 3.2 Return plugin safety gates from the plugins list API.
-- [ ] 3.3 Gate Claude plugin enablement on reviewed current fingerprints.
-- [ ] 3.4 Gate plugin MCP inclusion on safe mode and reviewed current fingerprints.
-- [ ] 3.5 Skip the Locus-managed Claude plugin directory symlink when safe mode is enabled.
-- [ ] 3.6 Add targeted tests for enablement, safe mode, and MCP gate behavior.
+- [x] 3.1 Persist and read local plugin safe-mode state.
+- [x] 3.2 Return plugin safety gates from the plugins list API.
+- [x] 3.3 Gate Claude plugin enablement on reviewed current fingerprints.
+- [x] 3.4 Gate plugin MCP inclusion on safe mode and reviewed current fingerprints.
+- [x] 3.5 Skip the Locus-managed Claude plugin directory symlink when safe mode is enabled.
+- [x] 3.6 Add targeted tests for enablement, safe mode, and MCP gate behavior.
 
 ## 4. UI / UX
 - [ ] 4.1 Add visible safe-mode controls in Settings > Plugins.

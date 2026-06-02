@@ -2,8 +2,12 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import { z } from "zod"
+import { TRPCError } from "@trpc/server"
 import { router, publicProcedure } from "../index"
-import { discoverPluginMcpServers } from "../../plugins"
+import { discoverAllRuntimePlugins, discoverPluginMcpServers } from "../../plugins"
+import { scanPluginReviewDocument } from "../../plugins/review-scan"
+import { recordPluginReviewScans } from "../../plugins/update-review-state"
+import { buildPluginSafetyGate, type PluginSafetyGate } from "../../../../shared/plugin-safety-gates"
 
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json")
 
@@ -116,6 +120,67 @@ async function resolveCurrentPluginMcpApprovalIdentifiers(
     .filter((identifier): identifier is string => typeof identifier === "string")
 }
 
+async function resolvePluginSafetyGateForSource(
+  pluginSource: string,
+): Promise<PluginSafetyGate> {
+  const plugins = await discoverAllRuntimePlugins()
+  const plugin = plugins.find((candidate) => candidate.source === pluginSource)
+  if (!plugin) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Plugin is not currently discovered.",
+    })
+  }
+
+  const reviewScan = await scanPluginReviewDocument(plugin)
+  const reviewResult = await recordPluginReviewScans([{
+    pluginKey: plugin.reviewKey,
+    document: reviewScan.reviewDocument,
+  }])
+  const updateReview = reviewResult.metadataByPluginKey[plugin.reviewKey]
+
+  return buildPluginSafetyGate({
+    runtime: plugin.runtime,
+    hasMcpServers: reviewScan.components.mcpServers.length > 0,
+    updateReviewStatus: updateReview?.status,
+    safeModeEnabled: reviewResult.safeMode.enabled,
+  })
+}
+
+function assertPluginGateAllows(
+  gate: PluginSafetyGate,
+  capability: "enable" | "approve-mcp",
+): void {
+  const allowed = capability === "enable" ? gate.canEnable : gate.canApproveMcp
+  if (allowed) return
+
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message: `Plugin gate blocks ${capability}: ${gate.reasons.join(", ") || gate.status}`,
+  })
+}
+
+async function resolveCurrentPluginMcpApprovalIdentifier(
+  identifier: string,
+): Promise<{
+  pluginSource: string
+  serverName: string
+  gate: PluginSafetyGate
+} | undefined> {
+  const pluginMcpConfigs = await discoverPluginMcpServers()
+  for (const pluginConfig of pluginMcpConfigs) {
+    for (const [serverName, currentIdentifier] of Object.entries(pluginConfig.approvalIdentifiers)) {
+      if (currentIdentifier === identifier) {
+        return {
+          pluginSource: pluginConfig.pluginSource,
+          serverName,
+          gate: pluginConfig.reviewGate,
+        }
+      }
+    }
+  }
+}
+
 export const claudeSettingsRouter = router({
   /**
    * Get the includeCoAuthoredBy setting
@@ -174,6 +239,8 @@ export const claudeSettingsRouter = router({
         : []
 
       if (input.enabled && !enabledPlugins.includes(input.pluginSource)) {
+        const gate = await resolvePluginSafetyGateForSource(input.pluginSource)
+        assertPluginGateAllows(gate, "enable")
         enabledPlugins.push(input.pluginSource)
       } else if (!input.enabled) {
         const index = enabledPlugins.indexOf(input.pluginSource)
@@ -200,6 +267,15 @@ export const claudeSettingsRouter = router({
   approvePluginMcpServer: publicProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input }) => {
+      const current = await resolveCurrentPluginMcpApprovalIdentifier(input.identifier)
+      if (!current) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Plugin MCP server is not currently discovered.",
+        })
+      }
+      assertPluginGateAllows(current.gate, "approve-mcp")
+
       const settings = await readClaudeSettings()
       const approved = Array.isArray(settings.approvedPluginMcpServers)
         ? (settings.approvedPluginMcpServers as string[])
@@ -254,12 +330,13 @@ export const claudeSettingsRouter = router({
         ? (settings.approvedPluginMcpServers as string[])
         : []
 
-      const identifiers = input.identifiers?.length
-        ? input.identifiers
-        : await resolveCurrentPluginMcpApprovalIdentifiers(
-            input.pluginSource,
-            input.serverNames,
-          )
+      const gate = await resolvePluginSafetyGateForSource(input.pluginSource)
+      assertPluginGateAllows(gate, "approve-mcp")
+
+      const identifiers = await resolveCurrentPluginMcpApprovalIdentifiers(
+        input.pluginSource,
+        input.serverNames,
+      )
 
       for (const identifier of identifiers) {
         if (!approved.includes(identifier)) {

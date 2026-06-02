@@ -16,7 +16,10 @@ import { isDirentDirectory } from "../fs/dirent"
 import {
   buildCurrentPluginMcpApprovalIdentifier,
   extractCodexSourcePins,
+  recordPluginReviewScans,
 } from "./update-review-state"
+import { scanPluginReviewDocument } from "./review-scan"
+import { buildPluginSafetyGate, type PluginSafetyGate } from "../../../shared/plugin-safety-gates"
 
 export type PluginRuntime = "claude" | "codex"
 export type PluginSourceKind = "local-marketplace" | "cache"
@@ -106,6 +109,8 @@ interface CodexPluginJson {
 export interface PluginMcpConfig {
   runtime: PluginRuntime
   pluginSource: string // e.g., "ccsetup:ccsetup"
+  pluginReviewKey: string
+  reviewGate: PluginSafetyGate
   mcpServers: Record<string, McpServerConfig>
   approvalIdentifiers: Record<string, string>
 }
@@ -664,9 +669,25 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
       }
 
       if (Object.keys(validServers).length > 0) {
+        const reviewScan = await scanPluginReviewDocument(plugin)
+        const reviewResult = await recordPluginReviewScans([{
+          pluginKey: plugin.reviewKey,
+          document: reviewScan.reviewDocument,
+        }])
+        const updateReview =
+          reviewResult.metadataByPluginKey[plugin.reviewKey]
+        const reviewGate = buildPluginSafetyGate({
+          runtime: plugin.runtime,
+          hasMcpServers: reviewScan.components.mcpServers.length > 0,
+          updateReviewStatus: updateReview?.status,
+          safeModeEnabled: reviewResult.safeMode.enabled,
+        })
+
         configs.push({
           runtime: plugin.runtime,
           pluginSource: plugin.source,
+          pluginReviewKey: plugin.reviewKey,
+          reviewGate,
           mcpServers: validServers,
           approvalIdentifiers,
         })
