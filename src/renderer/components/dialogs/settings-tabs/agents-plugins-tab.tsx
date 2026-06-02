@@ -1644,6 +1644,7 @@ function PluginControlledUiPanel({
 
 function PluginDeveloperTrustPanel({
   plugin,
+  developerTrustedFacts,
   onTrust,
   onRevokeTrust,
   onLoad,
@@ -1652,6 +1653,7 @@ function PluginDeveloperTrustPanel({
   isLoadingPlugin,
 }: {
   plugin: PluginData
+  developerTrustedFacts?: PluginDoctorPluginDebug["developerTrusted"]
   onTrust: () => void
   onRevokeTrust: () => void
   onLoad: () => void
@@ -1660,7 +1662,7 @@ function PluginDeveloperTrustPanel({
   isLoadingPlugin: boolean
 }) {
   const { t } = useI18n()
-  const developer = plugin.developerTrusted
+  const developer = developerTrustedFacts ?? plugin.developerTrusted
   const isDeveloperPlugin =
     plugin.sourceKind === "developer-local" ||
     plugin.targetMode === "developer-trusted-code" ||
@@ -2084,6 +2086,7 @@ function PluginDetail({
           />
           <PluginDeveloperTrustPanel
             plugin={plugin}
+            developerTrustedFacts={pluginDebug?.developerTrusted}
             onTrust={onTrustDeveloperPlugin}
             onRevokeTrust={onRevokeDeveloperTrust}
             onLoad={onLoadDeveloperPlugin}

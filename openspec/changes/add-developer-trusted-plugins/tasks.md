@@ -32,17 +32,17 @@
 - [x] 5.2 Add a developer trust panel for local developer plugins only.
 - [x] 5.3 Show full-trust warnings and current fingerprint trust state.
 - [x] 5.4 Add English and Simplified Chinese copy.
-- [ ] 5.5 Review UI after smoke and fix clarity/layout issues.
+- [x] 5.5 Review UI after smoke and fix clarity/layout issues.
 
 ## 6. Tests and Verification
-- [ ] 6.1 Add shared manifest/gate/trust tests.
-- [ ] 6.2 Add main-process source registry, scanner, loader, stale-trust, executable-content-hash, and safe-mode tests.
-- [ ] 6.3 Add router/source guards for no renderer-trusted gates, no remote load, no Codex cache execution, no automatic MCP/provider/terminal mutation.
-- [ ] 6.4 Add renderer/i18n source-guard tests for warning copy and forbidden labels.
-- [ ] 6.5 Run targeted developer plugin tests.
-- [ ] 6.6 Run full `bun run test`.
-- [ ] 6.7 Run `bun run ts:check`.
-- [ ] 6.8 Run `openspec validate add-developer-trusted-plugins --strict --no-interactive`.
-- [ ] 6.9 Run `git diff --check`.
-- [ ] 6.10 Run desktop Settings > Plugins smoke with a clean QA userData path, forced safe-mode recovery, and a temporary local developer plugin.
-- [ ] 6.11 Record screenshot and video evidence.
+- [x] 6.1 Add shared manifest/gate/trust tests.
+- [x] 6.2 Add main-process source registry, scanner, loader, stale-trust, executable-content-hash, and safe-mode tests.
+- [x] 6.3 Add router/source guards for no renderer-trusted gates, no remote load, no Codex cache execution, no automatic MCP/provider/terminal mutation.
+- [x] 6.4 Add renderer/i18n source-guard tests for warning copy and forbidden labels.
+- [x] 6.5 Run targeted developer plugin tests.
+- [x] 6.6 Run full `bun run test`.
+- [x] 6.7 Run `bun run ts:check`.
+- [x] 6.8 Run `openspec validate add-developer-trusted-plugins --strict --no-interactive`.
+- [x] 6.9 Run `git diff --check`.
+- [x] 6.10 Run desktop Settings > Plugins smoke with a clean QA userData path, forced safe-mode recovery, and a temporary local developer plugin.
+- [x] 6.11 Record screenshot and video evidence.
