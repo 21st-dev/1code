@@ -10,8 +10,13 @@ import {
   type PluginTargetMode,
   type PluginUpdatePosture,
 } from "../../../shared/plugin-target-modes"
+import type { PluginSourcePin } from "../../../shared/plugin-update-review"
 import type { McpServerConfig } from "../claude-config"
 import { isDirentDirectory } from "../fs/dirent"
+import {
+  buildCurrentPluginMcpApprovalIdentifier,
+  extractCodexSourcePins,
+} from "./update-review-state"
 
 export type PluginRuntime = "claude" | "codex"
 export type PluginSourceKind = "local-marketplace" | "cache"
@@ -27,6 +32,7 @@ interface PluginComponentPaths {
 
 export interface PluginInfo {
   runtime: PluginRuntime
+  reviewKey: string
   name: string
   version: string
   description?: string
@@ -45,6 +51,7 @@ export interface PluginInfo {
   executionStatus: PluginExecutionStatus
   updatePosture: PluginUpdatePosture
   diagnostics: PluginDiagnostic[]
+  sourcePins?: PluginSourcePin[]
 }
 
 export interface PluginSourceInfo {
@@ -100,6 +107,7 @@ export interface PluginMcpConfig {
   runtime: PluginRuntime
   pluginSource: string // e.g., "ccsetup:ccsetup"
   mcpServers: Record<string, McpServerConfig>
+  approvalIdentifiers: Record<string, string>
 }
 
 interface PluginComponentPathResolution {
@@ -203,6 +211,27 @@ export async function resolvePluginComponentPath(
     fallbackName,
   )
   return result.path
+}
+
+export async function resolveClaudeMarketplacePluginPath(
+  marketplacePath: string,
+  sourcePath: string,
+): Promise<string | undefined> {
+  const pluginPath = path.resolve(marketplacePath, sourcePath)
+  if (!isPathInside(marketplacePath, pluginPath)) return undefined
+
+  try {
+    const [realMarketplacePath, realPluginPath] = await Promise.all([
+      fs.realpath(marketplacePath),
+      fs.realpath(pluginPath),
+    ])
+    if (!isPathInside(realMarketplacePath, realPluginPath)) return undefined
+
+    const pluginStat = await fs.stat(pluginPath)
+    return pluginStat.isDirectory() ? pluginPath : undefined
+  } catch {
+    return undefined
+  }
 }
 
 async function resolvePluginComponentPaths(
@@ -334,12 +363,12 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
         const sourcePath = typeof plugin.source === "string" ? plugin.source : null
         if (!sourcePath) continue
 
-        const pluginPath = path.resolve(marketplacePath, sourcePath)
         try {
-          const pluginStat = await fs.stat(pluginPath)
-          if (!pluginStat.isDirectory()) continue
+          const pluginPath = await resolveClaudeMarketplacePluginPath(marketplacePath, sourcePath)
+          if (!pluginPath) continue
           plugins.push({
             runtime: "claude",
+            reviewKey: `claude:${marketplaceJson.name}:${plugin.name}`,
             name: plugin.name,
             version: plugin.version || "0.0.0",
             description: plugin.description,
@@ -452,6 +481,7 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
 
         plugins.push({
           runtime: "codex",
+          reviewKey: `codex:${collection.name}:${pluginEntry.name}`,
           name: displayName,
           version: getString(parsed.version) ?? versionEntry.name,
           description,
@@ -467,6 +497,7 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           sourceKind: getSourceKind("codex"),
           sourceTrust: getSourceTrust("codex", collection.name),
           diagnostics,
+          sourcePins: await extractCodexSourcePins(pluginPath, versionEntry.name),
           ...getManifestOnlyPluginTargetMode(),
         })
       }
@@ -619,9 +650,16 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
           : parsed
 
       const validServers: Record<string, McpServerConfig> = {}
+      const approvalIdentifiers: Record<string, string> = {}
       for (const [name, config] of Object.entries(serversObj)) {
         if (config && typeof config === "object" && !Array.isArray(config)) {
-          validServers[name] = config as McpServerConfig
+          const serverConfig = config as McpServerConfig
+          validServers[name] = serverConfig
+          approvalIdentifiers[name] = buildCurrentPluginMcpApprovalIdentifier({
+            pluginSource: plugin.source,
+            serverName: name,
+            config: serverConfig,
+          })
         }
       }
 
@@ -630,6 +668,7 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
           runtime: plugin.runtime,
           pluginSource: plugin.source,
           mcpServers: validServers,
+          approvalIdentifiers,
         })
       }
     } catch {

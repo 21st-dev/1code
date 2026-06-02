@@ -3,6 +3,7 @@ import * as path from "path"
 import * as os from "os"
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
+import { discoverPluginMcpServers } from "../../plugins"
 
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json")
 
@@ -65,7 +66,7 @@ export async function getEnabledPlugins(): Promise<string[]> {
 
 /**
  * Get list of approved plugin MCP server identifiers from settings.json
- * Format: "{pluginSource}:{serverName}" e.g., "ccsetup:ccsetup:context7"
+ * Format: "{pluginSource}:{serverName}#mcp-sha256:{fingerprint}"
  * Returns empty array if no approved servers
  * Results are cached for 5 seconds to reduce filesystem reads
  */
@@ -87,9 +88,8 @@ export async function getApprovedPluginMcpServers(): Promise<string[]> {
 /**
  * Check if a plugin MCP server is approved
  */
-export async function isPluginMcpApproved(pluginSource: string, serverName: string): Promise<boolean> {
+export async function isPluginMcpApproved(identifier: string): Promise<boolean> {
   const approved = await getApprovedPluginMcpServers()
-  const identifier = `${pluginSource}:${serverName}`
   return approved.includes(identifier)
 }
 
@@ -101,6 +101,19 @@ async function writeClaudeSettings(settings: Record<string, unknown>): Promise<v
   const dir = path.dirname(CLAUDE_SETTINGS_PATH)
   await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8")
+}
+
+async function resolveCurrentPluginMcpApprovalIdentifiers(
+  pluginSource: string,
+  serverNames: string[],
+): Promise<string[]> {
+  const pluginMcpConfigs = await discoverPluginMcpServers()
+  const pluginConfig = pluginMcpConfigs.find((config) => config.pluginSource === pluginSource)
+  if (!pluginConfig) return []
+
+  return serverNames
+    .map((serverName) => pluginConfig.approvalIdentifiers[serverName])
+    .filter((identifier): identifier is string => typeof identifier === "string")
 }
 
 export const claudeSettingsRouter = router({
@@ -182,7 +195,7 @@ export const claudeSettingsRouter = router({
 
   /**
    * Approve a plugin MCP server
-   * Identifier format: "{pluginSource}:{serverName}"
+   * Identifier format: "{pluginSource}:{serverName}#mcp-sha256:{fingerprint}"
    */
   approvePluginMcpServer: publicProcedure
     .input(z.object({ identifier: z.string() }))
@@ -204,7 +217,7 @@ export const claudeSettingsRouter = router({
 
   /**
    * Revoke approval for a plugin MCP server
-   * Identifier format: "{pluginSource}:{serverName}"
+   * Identifier format: "{pluginSource}:{serverName}#mcp-sha256:{fingerprint}"
    */
   revokePluginMcpServer: publicProcedure
     .input(z.object({ identifier: z.string() }))
@@ -233,6 +246,7 @@ export const claudeSettingsRouter = router({
     .input(z.object({
       pluginSource: z.string(),
       serverNames: z.array(z.string()),
+      identifiers: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input }) => {
       const settings = await readClaudeSettings()
@@ -240,8 +254,14 @@ export const claudeSettingsRouter = router({
         ? (settings.approvedPluginMcpServers as string[])
         : []
 
-      for (const serverName of input.serverNames) {
-        const identifier = `${input.pluginSource}:${serverName}`
+      const identifiers = input.identifiers?.length
+        ? input.identifiers
+        : await resolveCurrentPluginMcpApprovalIdentifiers(
+            input.pluginSource,
+            input.serverNames,
+          )
+
+      for (const identifier of identifiers) {
         if (!approved.includes(identifier)) {
           approved.push(identifier)
         }

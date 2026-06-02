@@ -15,11 +15,12 @@
 
 ## 3. Plugin API Integration
 
-- [ ] 3.1 Add review metadata to plugin list tRPC output.
-- [ ] 3.2 Add a local-only mutation to mark the current fingerprint as reviewed.
-- [ ] 3.3 Ensure refresh does not download, install, update, enable, or execute plugins.
-- [ ] 3.4 Add router/source tests for read-only review behavior.
-- [ ] 3.5 Commit the API slice separately.
+- [x] 3.1 Add review metadata to plugin list tRPC output.
+- [x] 3.2 Add a local-only mutation to mark the current fingerprint as reviewed.
+- [x] 3.3 Bind plugin MCP approval to redacted current MCP configuration fingerprints and treat legacy approvals as stale.
+- [x] 3.4 Ensure refresh does not download, install, update, enable, or execute plugins.
+- [x] 3.5 Add router/source tests for read-only review behavior and MCP approval revalidation.
+- [x] 3.6 Commit the API slice separately.
 
 ## 4. Settings UI
 

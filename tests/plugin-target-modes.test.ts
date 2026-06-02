@@ -9,6 +9,7 @@ import {
   getPluginReviewStatus,
 } from "../src/shared/plugin-target-modes"
 import {
+  resolveClaudeMarketplacePluginPath,
   resolvePluginComponentPath,
   resolvePluginComponentPathWithDiagnostics,
 } from "../src/main/lib/plugins"
@@ -104,6 +105,26 @@ describe("plugin component path containment", () => {
       })
     } finally {
       rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test("keeps Claude marketplace plugin sources inside the marketplace root", async () => {
+    const marketplaceRoot = mkdtempSync(join(tmpdir(), "locus-marketplace-root-"))
+    const pluginRoot = join(marketplaceRoot, "plugin")
+    const outsideRoot = mkdtempSync(join(tmpdir(), "locus-marketplace-outside-"))
+    try {
+      mkdirSync(pluginRoot)
+      symlinkSync(outsideRoot, join(marketplaceRoot, "linked-outside"), "dir")
+
+      await expect(resolveClaudeMarketplacePluginPath(marketplaceRoot, "plugin")).resolves.toBe(
+        resolve(marketplaceRoot, "plugin"),
+      )
+      await expect(resolveClaudeMarketplacePluginPath(marketplaceRoot, "../outside")).resolves.toBeUndefined()
+      await expect(resolveClaudeMarketplacePluginPath(marketplaceRoot, outsideRoot)).resolves.toBeUndefined()
+      await expect(resolveClaudeMarketplacePluginPath(marketplaceRoot, "linked-outside")).resolves.toBeUndefined()
+    } finally {
+      rmSync(marketplaceRoot, { recursive: true, force: true })
+      rmSync(outsideRoot, { recursive: true, force: true })
     }
   })
 })

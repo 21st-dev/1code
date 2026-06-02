@@ -47,3 +47,17 @@ The system SHALL show bounded local summaries of plugin manifest changes.
 #### Scenario: No reviewed baseline exists
 - **WHEN** the plugin has not yet been reviewed locally
 - **THEN** the plugin detail asks for local review rather than claiming the package is safe
+
+### Requirement: Plugin MCP Approval Revalidation
+The system SHALL bind plugin MCP approval to the current redacted MCP configuration fingerprint.
+
+#### Scenario: Plugin MCP configuration changes
+- **WHEN** an enabled Claude plugin MCP declaration changes its command, URL, args, cwd, env/header key set, or other approval-relevant metadata
+- **THEN** any previous approval for the old MCP declaration no longer authorizes the changed declaration
+- **AND** the MCP server is reported as pending approval again
+- **AND** Locus does not store raw MCP secret values in approval metadata
+
+#### Scenario: Legacy plugin MCP approval exists
+- **WHEN** the settings file contains an older plugin MCP approval that is not bound to a current MCP configuration fingerprint
+- **THEN** Locus treats that legacy approval as stale for runtime MCP activation
+- **AND** requires approval of the current fingerprint-bound identifier before adding the plugin MCP server to an agent session

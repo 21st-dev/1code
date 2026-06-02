@@ -102,6 +102,60 @@ describe("plugin update review documents", () => {
       },
     ])
   })
+
+  test("builds MCP approval identifiers from redacted current config metadata", () => {
+    const config = {
+      command: "node",
+      args: ["server.js", "--api-key", "sk-secret-value", "--env=TOKEN=secret"],
+      cwd: "/workspace/plugin",
+      env: {
+        OPENAI_API_KEY: "raw-env-secret",
+      },
+      headers: {
+        Authorization: "Bearer raw-header-secret",
+      },
+      url: "https://example.test/mcp?token=raw-url-secret",
+    }
+    const document = reviewState.buildPluginMcpApprovalDocument({
+      pluginSource: "market:plugin",
+      serverName: "context",
+      config,
+    })
+    const serialized = stableJsonStringify(document)
+
+    expect(serialized).not.toContain("sk-secret-value")
+    expect(serialized).not.toContain("raw-env-secret")
+    expect(serialized).not.toContain("raw-header-secret")
+    expect(serialized).not.toContain("raw-url-secret")
+    expect(document.env).toEqual([{
+      key: "OPENAI_API_KEY",
+      hasValue: true,
+      valueSource: "inline",
+    }])
+    expect(document.headers).toEqual([{
+      key: "Authorization",
+      hasValue: true,
+      valueSource: "inline",
+    }])
+
+    const identifier = reviewState.buildCurrentPluginMcpApprovalIdentifier({
+      pluginSource: "market:plugin",
+      serverName: "context",
+      config,
+    })
+    const changedIdentifier = reviewState.buildCurrentPluginMcpApprovalIdentifier({
+      pluginSource: "market:plugin",
+      serverName: "context",
+      config: {
+        ...config,
+        command: "python",
+      },
+    })
+
+    expect(identifier.startsWith("market:plugin:context#mcp-sha256:")).toBe(true)
+    expect(identifier).not.toBe("market:plugin:context")
+    expect(changedIdentifier).not.toBe(identifier)
+  })
 })
 
 describe("plugin update review state", () => {

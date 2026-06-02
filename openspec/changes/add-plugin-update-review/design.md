@@ -38,6 +38,11 @@ Non-Goals:
 - Decision: Record review acknowledgement as local metadata only.
   - Why: Marking a fingerprint reviewed helps future diffing, but it does not enable plugin execution or MCP approval.
 
+- Decision: Bind plugin MCP approval to a redacted MCP configuration fingerprint.
+  - Why: A string-only approval such as `pluginSource:serverName` would survive command, URL, or environment/header key changes. The approval identifier must include a fingerprint derived from approval-relevant metadata, while raw secret values are omitted or represented only as presence flags.
+  - Included: plugin source, server name, command, URL with query values redacted, args with sensitive values redacted, cwd, transport/auth fields, env/header key sets, value-presence flags, and OAuth field names.
+  - Excluded: raw env values, raw header values, OAuth token values, and arbitrary plugin source files.
+
 ## Update Handling
 
 Plugin refresh:
@@ -46,6 +51,12 @@ Plugin refresh:
 - Compute the current manifest hash.
 - Compare it with stored last seen and last reviewed fingerprints.
 - Produce a bounded diff for fields such as version, target mode, component counts, MCP names, and source pin.
+
+Plugin MCP approval:
+
+- Build a redacted MCP approval document for each Claude plugin MCP server.
+- Store and compare approvals by a fingerprint-bound identifier.
+- Treat legacy string-only approvals as stale, so changed plugin MCP declarations return to pending approval.
 
 Review acknowledgement:
 
