@@ -34,6 +34,7 @@ type PluginViewMode = "installed" | "sources"
 type PluginSourceKind = "local-marketplace" | "cache"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
+const CONTROLLED_UI_SELECT_UNSET_VALUE = "__locus_controlled_ui_unset__"
 type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-code"
 type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled" | "locus-controlled-planned" | "trusted-code-planned"
 type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
@@ -320,8 +321,8 @@ interface McpServerStatus {
   needsAuth: boolean
 }
 
-function getPluginKey(plugin: Pick<PluginData, "reviewKey">): string {
-  return plugin.reviewKey
+function getPluginKey(plugin: Pick<PluginData, "reviewKey" | "path">): string {
+  return `${plugin.reviewKey}:${plugin.path}`
 }
 
 function getRuntimeLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
@@ -1178,14 +1179,21 @@ function PluginControlledUiPanel({
                             </div>
                           ) : field.type === "select" ? (
                             <Select
-                              value={typeof fieldValue === "string" ? fieldValue : undefined}
-                              onValueChange={(value) => onSetSettingValue(surface, field, value)}
+                              value={typeof fieldValue === "string" ? fieldValue : CONTROLLED_UI_SELECT_UNSET_VALUE}
+                              onValueChange={(value) => {
+                                if (value !== CONTROLLED_UI_SELECT_UNSET_VALUE) {
+                                  onSetSettingValue(surface, field, value)
+                                }
+                              }}
                               disabled={!canEditField}
                             >
                               <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder={t("settings.plugins.contributionSettingUnset")} />
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
+                                <SelectItem value={CONTROLLED_UI_SELECT_UNSET_VALUE} disabled>
+                                  {t("settings.plugins.contributionSettingUnset")}
+                                </SelectItem>
                                 {(field.options ?? []).map((option) => (
                                   <SelectItem key={option} value={option}>
                                     {option}
