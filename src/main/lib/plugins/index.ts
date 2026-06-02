@@ -2,8 +2,21 @@ import * as fs from "fs/promises"
 import type { Dirent } from "fs"
 import * as path from "path"
 import * as os from "os"
+import {
+  getManifestOnlyPluginTargetMode,
+  getPluginSourceDiagnostics,
+  type PluginDiagnostic,
+  type PluginExecutionStatus,
+  type PluginTargetMode,
+  type PluginUpdatePosture,
+} from "../../../shared/plugin-target-modes"
+import type { PluginSourcePin } from "../../../shared/plugin-update-review"
 import type { McpServerConfig } from "../claude-config"
 import { isDirentDirectory } from "../fs/dirent"
+import {
+  buildCurrentPluginMcpApprovalIdentifier,
+  extractCodexSourcePins,
+} from "./update-review-state"
 
 export type PluginRuntime = "claude" | "codex"
 export type PluginSourceKind = "local-marketplace" | "cache"
@@ -19,6 +32,7 @@ interface PluginComponentPaths {
 
 export interface PluginInfo {
   runtime: PluginRuntime
+  reviewKey: string
   name: string
   version: string
   description?: string
@@ -31,6 +45,13 @@ export interface PluginInfo {
   homepage?: string
   tags?: string[]
   componentPaths?: PluginComponentPaths
+  sourceKind: PluginSourceKind
+  sourceTrust: PluginSourceTrust
+  targetMode: PluginTargetMode
+  executionStatus: PluginExecutionStatus
+  updatePosture: PluginUpdatePosture
+  diagnostics: PluginDiagnostic[]
+  sourcePins?: PluginSourcePin[]
 }
 
 export interface PluginSourceInfo {
@@ -44,6 +65,7 @@ export interface PluginSourceInfo {
   path: string
   pluginCount: number
   installHint: string
+  diagnostics: PluginDiagnostic[]
   homepage?: string
 }
 
@@ -85,6 +107,17 @@ export interface PluginMcpConfig {
   runtime: PluginRuntime
   pluginSource: string // e.g., "ccsetup:ccsetup"
   mcpServers: Record<string, McpServerConfig>
+  approvalIdentifiers: Record<string, string>
+}
+
+interface PluginComponentPathResolution {
+  path?: string
+  diagnostics: PluginDiagnostic[]
+}
+
+interface PluginComponentPathsResolution {
+  componentPaths: PluginComponentPaths
+  diagnostics: PluginDiagnostic[]
 }
 
 // Cache for plugin discovery results
@@ -116,10 +149,116 @@ function getStringArray(value: unknown): string[] | undefined {
   return values.length > 0 ? values : undefined
 }
 
-function resolveComponentPath(pluginRoot: string, value: unknown): string | undefined {
+function isPathInside(basePath: string, candidatePath: string): boolean {
+  const relativePath = path.relative(basePath, candidatePath)
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  )
+}
+
+export async function resolvePluginComponentPathWithDiagnostics(
+  pluginRoot: string,
+  value: unknown,
+  fallbackName: string,
+): Promise<PluginComponentPathResolution> {
   const componentPath = getString(value)
-  if (!componentPath) return undefined
-  return path.resolve(pluginRoot, componentPath)
+  const candidate = componentPath
+    ? path.resolve(pluginRoot, componentPath)
+    : path.join(pluginRoot, fallbackName)
+
+  if (!isPathInside(pluginRoot, candidate)) {
+    return {
+      diagnostics: [{
+        code: "component-path-outside-root",
+        severity: "warning",
+      }],
+    }
+  }
+
+  try {
+    const [realRoot, realCandidate] = await Promise.all([
+      fs.realpath(pluginRoot),
+      fs.realpath(candidate),
+    ])
+    if (!isPathInside(realRoot, realCandidate)) {
+      return {
+        diagnostics: [{
+          code: "component-path-outside-root",
+          severity: "warning",
+        }],
+      }
+    }
+  } catch {
+    // Missing component directories are normal. Keep the syntactically safe path
+    // so later scans can return an empty component list.
+  }
+
+  return {
+    path: candidate,
+    diagnostics: [],
+  }
+}
+
+export async function resolvePluginComponentPath(
+  pluginRoot: string,
+  value: unknown,
+  fallbackName: string,
+): Promise<string | undefined> {
+  const result = await resolvePluginComponentPathWithDiagnostics(
+    pluginRoot,
+    value,
+    fallbackName,
+  )
+  return result.path
+}
+
+export async function resolveClaudeMarketplacePluginPath(
+  marketplacePath: string,
+  sourcePath: string,
+): Promise<string | undefined> {
+  const pluginPath = path.resolve(marketplacePath, sourcePath)
+  if (!isPathInside(marketplacePath, pluginPath)) return undefined
+
+  try {
+    const [realMarketplacePath, realPluginPath] = await Promise.all([
+      fs.realpath(marketplacePath),
+      fs.realpath(pluginPath),
+    ])
+    if (!isPathInside(realMarketplacePath, realPluginPath)) return undefined
+
+    const pluginStat = await fs.stat(pluginPath)
+    return pluginStat.isDirectory() ? pluginPath : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function resolvePluginComponentPaths(
+  pluginRoot: string,
+  parsed: CodexPluginJson,
+): Promise<PluginComponentPathsResolution> {
+  const [commands, skills, agents, mcpServers] = await Promise.all([
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.commands, "commands"),
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.skills, "skills"),
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.agents, "agents"),
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.mcpServers, ".mcp.json"),
+  ])
+
+  return {
+    componentPaths: {
+      commands: commands.path,
+      skills: skills.path,
+      agents: agents.path,
+      mcpServers: mcpServers.path,
+    },
+    diagnostics: [
+      ...commands.diagnostics,
+      ...skills.diagnostics,
+      ...agents.diagnostics,
+      ...mcpServers.diagnostics,
+    ],
+  }
 }
 
 async function getDirectoryStatus(targetPath: string): Promise<PluginSourceStatus> {
@@ -224,12 +363,12 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
         const sourcePath = typeof plugin.source === "string" ? plugin.source : null
         if (!sourcePath) continue
 
-        const pluginPath = path.resolve(marketplacePath, sourcePath)
         try {
-          const pluginStat = await fs.stat(pluginPath)
-          if (!pluginStat.isDirectory()) continue
+          const pluginPath = await resolveClaudeMarketplacePluginPath(marketplacePath, sourcePath)
+          if (!pluginPath) continue
           plugins.push({
             runtime: "claude",
+            reviewKey: `claude:${marketplaceJson.name}:${plugin.name}`,
             name: plugin.name,
             version: plugin.version || "0.0.0",
             description: plugin.description,
@@ -241,6 +380,10 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
             category: plugin.category,
             homepage: plugin.homepage,
             tags: plugin.tags,
+            sourceKind: getSourceKind("claude"),
+            sourceTrust: getSourceTrust("claude", marketplaceJson.name),
+            diagnostics: [],
+            ...getManifestOnlyPluginTargetMode(),
           })
         } catch {
           // Plugin directory not found, skip
@@ -334,8 +477,11 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           getString(parsed.interface?.websiteURL) ??
           getString(parsed.repository)
 
+        const { componentPaths, diagnostics } = await resolvePluginComponentPaths(pluginPath, parsed)
+
         plugins.push({
           runtime: "codex",
+          reviewKey: `codex:${collection.name}:${pluginEntry.name}`,
           name: displayName,
           version: getString(parsed.version) ?? versionEntry.name,
           description,
@@ -347,20 +493,12 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           category: getString(parsed.interface?.category),
           homepage,
           tags: getStringArray(parsed.keywords),
-          componentPaths: {
-            commands:
-              resolveComponentPath(pluginPath, parsed.commands) ??
-              path.join(pluginPath, "commands"),
-            skills:
-              resolveComponentPath(pluginPath, parsed.skills) ??
-              path.join(pluginPath, "skills"),
-            agents:
-              resolveComponentPath(pluginPath, parsed.agents) ??
-              path.join(pluginPath, "agents"),
-            mcpServers:
-              resolveComponentPath(pluginPath, parsed.mcpServers) ??
-              path.join(pluginPath, ".mcp.json"),
-          },
+          componentPaths,
+          sourceKind: getSourceKind("codex"),
+          sourceTrust: getSourceTrust("codex", collection.name),
+          diagnostics,
+          sourcePins: await extractCodexSourcePins(pluginPath, versionEntry.name),
+          ...getManifestOnlyPluginTargetMode(),
         })
       }
     }
@@ -407,20 +545,25 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
     })
   }
 
-  const sources = Array.from(bySource.values()).map((source): PluginSourceInfo => ({
-    id: `${source.runtime}:${source.marketplace}`,
-    runtime: source.runtime,
-    name: formatSourceName(source.marketplace),
-    description: getSourceDescription(source.runtime),
-    kind: getSourceKind(source.runtime),
-    trust: getSourceTrust(source.runtime, source.marketplace),
-    status: "available",
-    path: source.path,
-    pluginCount: source.pluginCount,
-    installHint: getSourceInstallHint(source.runtime),
-  }))
+  const sources = Array.from(bySource.values()).map((source): PluginSourceInfo => {
+    const status: PluginSourceStatus = "available"
+    return {
+      id: `${source.runtime}:${source.marketplace}`,
+      runtime: source.runtime,
+      name: formatSourceName(source.marketplace),
+      description: getSourceDescription(source.runtime),
+      kind: getSourceKind(source.runtime),
+      trust: getSourceTrust(source.runtime, source.marketplace),
+      status,
+      path: source.path,
+      pluginCount: source.pluginCount,
+      installHint: getSourceInstallHint(source.runtime),
+      diagnostics: getPluginSourceDiagnostics({ status }),
+    }
+  })
 
   if (!sources.some((source) => source.runtime === "claude")) {
+    const status = claudeRootStatus === "available" ? "empty" : claudeRootStatus
     sources.push({
       id: "claude:local-marketplaces",
       runtime: "claude",
@@ -428,14 +571,16 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
       description: getSourceDescription("claude"),
       kind: "local-marketplace",
       trust: "local",
-      status: claudeRootStatus === "available" ? "empty" : claudeRootStatus,
+      status,
       path: CLAUDE_MARKETPLACES_DIR,
       pluginCount: 0,
       installHint: getSourceInstallHint("claude"),
+      diagnostics: getPluginSourceDiagnostics({ status }),
     })
   }
 
   if (!sources.some((source) => source.runtime === "codex")) {
+    const status = codexRootStatus === "available" ? "empty" : codexRootStatus
     sources.push({
       id: "codex:plugin-cache",
       runtime: "codex",
@@ -443,10 +588,11 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
       description: getSourceDescription("codex"),
       kind: "cache",
       trust: "local",
-      status: codexRootStatus === "available" ? "empty" : codexRootStatus,
+      status,
       path: CODEX_PLUGIN_CACHE_DIR,
       pluginCount: 0,
       installHint: getSourceInstallHint("codex"),
+      diagnostics: getPluginSourceDiagnostics({ status }),
     })
   }
 
@@ -504,9 +650,16 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
           : parsed
 
       const validServers: Record<string, McpServerConfig> = {}
+      const approvalIdentifiers: Record<string, string> = {}
       for (const [name, config] of Object.entries(serversObj)) {
         if (config && typeof config === "object" && !Array.isArray(config)) {
-          validServers[name] = config as McpServerConfig
+          const serverConfig = config as McpServerConfig
+          validServers[name] = serverConfig
+          approvalIdentifiers[name] = buildCurrentPluginMcpApprovalIdentifier({
+            pluginSource: plugin.source,
+            serverName: name,
+            config: serverConfig,
+          })
         }
       }
 
@@ -515,6 +668,7 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
           runtime: plugin.runtime,
           pluginSource: plugin.source,
           mcpServers: validServers,
+          approvalIdentifiers,
         })
       }
     } catch {

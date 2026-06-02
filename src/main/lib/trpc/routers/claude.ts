@@ -780,8 +780,8 @@ export async function getAllMcpConfigHandler() {
                 const configObj = sanitizeMcpConfigForRenderer(
                   serverConfig as Record<string, unknown>,
                 )
-                const identifier = `${pluginConfig.pluginSource}:${name}`
-                const isApproved = approvedServers.includes(identifier)
+                const identifier = pluginConfig.approvalIdentifiers[name]
+                const isApproved = Boolean(identifier && approvedServers.includes(identifier))
 
                 if (!isApproved) {
                   return {
@@ -1577,8 +1577,8 @@ export const claudeRouter = router({
                       pConfig.mcpServers,
                     )) {
                       if (!globalServers[name] && !projectServers[name]) {
-                        const identifier = `${pConfig.pluginSource}:${name}`
-                        if (approvedServers.includes(identifier)) {
+                        const identifier = pConfig.approvalIdentifiers[name]
+                        if (identifier && approvedServers.includes(identifier)) {
                           pluginServers[name] = serverConfig
                         }
                       }
@@ -3069,8 +3069,8 @@ ${prompt}
             pluginConfig.mcpServers,
           )) {
             if (!merged[name]) {
-              const identifier = `${pluginConfig.pluginSource}:${name}`
-              if (approvedServers.includes(identifier)) {
+              const identifier = pluginConfig.approvalIdentifiers[name]
+              if (identifier && approvedServers.includes(identifier)) {
                 merged[name] = serverConfig
               }
             }
@@ -3547,8 +3547,9 @@ ${prompt}
         for (const [name, serverConfig] of Object.entries(
           pluginConfig.mcpServers,
         )) {
-          const identifier = `${pluginConfig.pluginSource}:${name}`
+          const identifier = pluginConfig.approvalIdentifiers[name]
           if (
+            identifier &&
             !approvedServers.includes(identifier) &&
             !globalServers[name] &&
             !projectServers[name]

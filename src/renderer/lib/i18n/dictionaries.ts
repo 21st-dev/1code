@@ -1101,6 +1101,79 @@ export const en = {
   "settings.plugins.viewSources": "Sources",
   "settings.plugins.capabilities": "Capabilities",
   "settings.plugins.capabilityCount": "{count} capabilities",
+  "settings.plugins.targetMode": "Target mode",
+  "settings.plugins.targetModeManifestOnly": "Metadata only",
+  "settings.plugins.targetModeControlledUi": "Controlled UI (planned)",
+  "settings.plugins.targetModeDeveloperTrustedCode": "Trusted local code (planned)",
+  "settings.plugins.targetModeManifestOnlyDescription":
+    "Locus reads this package metadata and component declarations only. It does not execute plugin JavaScript.",
+  "settings.plugins.targetModeControlledUiDescription":
+    "Controlled UI plugins require a future Locus-owned extension surface before they can run.",
+  "settings.plugins.targetModeDeveloperTrustedCodeDescription":
+    "Trusted local code would be equivalent to running code on this machine and is not available in normal plugin mode.",
+  "settings.plugins.executionStatus": "Execution",
+  "settings.plugins.executionNotRunByLocus": "Not run by Locus",
+  "settings.plugins.executionLocusControlledPlanned": "Locus surface required",
+  "settings.plugins.executionTrustedCodePlanned": "Trusted code only",
+  "settings.plugins.reviewStatus": "Review",
+  "settings.plugins.reviewMetadataOnly": "No execution",
+  "settings.plugins.reviewMcpRequired": "MCP review required",
+  "settings.plugins.reviewReadOnlyCache": "Read-only cache",
+  "settings.plugins.updatePosture": "Update posture",
+  "settings.plugins.updateAdvisoryOnly": "Advisory only",
+  "settings.plugins.updateReviewBeforeEnable": "Review before enablement",
+  "settings.plugins.updateReview": "Advisory review",
+  "settings.plugins.updateReviewNew": "New",
+  "settings.plugins.updateReviewUnchanged": "Unchanged",
+  "settings.plugins.updateReviewChanged": "Changed",
+  "settings.plugins.updateReviewReviewed": "Reviewed",
+  "settings.plugins.markReviewed": "Mark reviewed",
+  "settings.plugins.firstSeen": "First seen",
+  "settings.plugins.lastReviewed": "Last reviewed",
+  "settings.plugins.neverReviewed": "Never",
+  "settings.plugins.sourcePins": "Source pins",
+  "settings.plugins.noSourcePins": "No source pin available",
+  "settings.plugins.sourcePinCacheVersion": "Codex cache version",
+  "settings.plugins.sourcePinLockRef": "Lock source ref",
+  "settings.plugins.changeSummary": "Change summary",
+  "settings.plugins.noReviewChanges": "No manifest review changes to show.",
+  "settings.plugins.markReviewedHint":
+    "Review acknowledgement is local metadata only. It does not enable plugins, approve MCP servers, or execute plugin code.",
+  "settings.plugins.updateHandling": "Update handling",
+  "settings.plugins.pluginUpdateGuidance":
+    "Plugin updates are reviewed through metadata changes; new permissions, MCP declarations, native hooks, filesystem, network, or shell capabilities stay untrusted until reviewed.",
+  "settings.plugins.codexReferenceUpdateGuidance":
+    "Codex++ repository updates are treated as reference input only and do not change Locus execution behavior.",
+  "settings.plugins.codexDesktopUpdateGuidance":
+    "Codex Desktop updates should not affect Locus plugin behavior because Locus does not depend on Codex++ patch repair.",
+  "settings.plugins.codexRuntimeUpdateGuidance":
+    "Codex CLI/runtime updates require capability review before new plugin actions are shown.",
+  "settings.plugins.sourceUpdateGuidance":
+    "Refresh re-scans local metadata only. Install and update actions remain outside this read-only source browser.",
+  "settings.plugins.safeModePlanning": "Safe mode",
+  "settings.plugins.safeModePlanningGuidance":
+    "Safe mode is a future recovery rule for approved Locus extension surfaces. This change still does not run arbitrary plugin code.",
+  "settings.plugins.diagnostics": "Diagnostics",
+  "settings.plugins.diagnosticMetadataOnlyNoExecution":
+    "Metadata and component declarations only; plugin JavaScript is not executed.",
+  "settings.plugins.diagnosticMcpReviewRequired":
+    "This package declares MCP servers. They require explicit review before becoming active tool connections.",
+  "settings.plugins.diagnosticCodexReadOnlyCache":
+    "This Codex package is shown from the local cache only; Locus does not control its enablement.",
+  "settings.plugins.diagnosticPermissionScopeReviewRequired":
+    "Permission, scope, MCP, native, filesystem, network, or shell changes must be reviewed before enablement.",
+  "settings.plugins.diagnosticSafeModePlanned":
+    "Safe mode is planned for future execution surfaces; no arbitrary plugin code runs in this mode.",
+  "settings.plugins.diagnosticComponentPathOutsideRoot":
+    "A component path was ignored because it points outside this plugin root.",
+  "settings.plugins.diagnosticSourceAvailable":
+    "Source directory is available for metadata scanning.",
+  "settings.plugins.diagnosticSourceEmpty":
+    "Source directory exists but does not contain visible plugin entries.",
+  "settings.plugins.diagnosticSourceMissing":
+    "Source directory is missing or cannot be read.",
+  "settings.plugins.diagnosticSourceReadOnlyRefresh":
+    "Refresh updates metadata only and does not install, update, or execute plugins.",
   "settings.plugins.commandsCount": "Commands ({count})",
   "settings.plugins.skillsCount": "Skills ({count})",
   "settings.plugins.agentsCount": "Agents ({count})",
@@ -1129,6 +1202,7 @@ export const en = {
   "settings.plugins.toast.authenticated": "{name} authenticated",
   "settings.plugins.toast.enabled": "Plugin enabled",
   "settings.plugins.toast.disabled": "Plugin disabled",
+  "settings.plugins.toast.reviewed": "Plugin review recorded",
   "settings.plugins.toast.mcpApproved": "Plugin MCP servers approved",
   "settings.plugins.toast.failedToUpdate": "Failed to update plugin",
   "settings.plugins.searchPlaceholder": "Search plugins...",
@@ -1169,12 +1243,20 @@ export const en = {
   "settings.plugins.sourceTrustOfficial": "Official",
   "settings.plugins.sourceTrustLocal": "Local",
   "settings.plugins.sourceTrustExternal": "External",
+  "settings.plugins.sourceDescriptionClaude":
+    "Local Claude Code plugin marketplace source.",
+  "settings.plugins.sourceDescriptionCodex":
+    "Codex plugin cache collection managed by Codex.",
   "settings.plugins.sourceStatus": "Status",
   "settings.plugins.sourceStatusAvailable": "Available",
   "settings.plugins.sourceStatusEmpty": "Empty",
   "settings.plugins.sourceStatusMissing": "Missing",
   "settings.plugins.sourcePath": "Path",
   "settings.plugins.sourceInstallHint": "Install Hint",
+  "settings.plugins.sourceInstallHintClaude":
+    "Install Claude plugins under ~/.claude/plugins/marketplaces/.",
+  "settings.plugins.sourceInstallHintCodex":
+    "Codex manages this cache; install or update plugins through Codex, then refresh.",
 
   "settings.beta.title": "Beta Features",
   "settings.beta.subtitle":
@@ -3648,6 +3730,79 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.viewSources": "来源",
   "settings.plugins.capabilities": "能力",
   "settings.plugins.capabilityCount": "{count} 个能力",
+  "settings.plugins.targetMode": "目标模式",
+  "settings.plugins.targetModeManifestOnly": "仅元数据",
+  "settings.plugins.targetModeControlledUi": "受控 UI（规划中）",
+  "settings.plugins.targetModeDeveloperTrustedCode": "可信本地代码（规划中）",
+  "settings.plugins.targetModeManifestOnlyDescription":
+    "Locus 只读取这个包的元数据和组件声明，不执行插件 JavaScript。",
+  "settings.plugins.targetModeControlledUiDescription":
+    "受控 UI 插件需要未来由 Locus 拥有的扩展入口，批准后才可以运行。",
+  "settings.plugins.targetModeDeveloperTrustedCodeDescription":
+    "可信本地代码等同于在这台机器上运行代码，普通插件模式下不可用。",
+  "settings.plugins.executionStatus": "执行状态",
+  "settings.plugins.executionNotRunByLocus": "Locus 不运行",
+  "settings.plugins.executionLocusControlledPlanned": "需要 Locus 扩展入口",
+  "settings.plugins.executionTrustedCodePlanned": "仅可信代码",
+  "settings.plugins.reviewStatus": "复审状态",
+  "settings.plugins.reviewMetadataOnly": "不执行代码",
+  "settings.plugins.reviewMcpRequired": "需要 MCP 复审",
+  "settings.plugins.reviewReadOnlyCache": "只读缓存",
+  "settings.plugins.updatePosture": "更新处理",
+  "settings.plugins.updateAdvisoryOnly": "仅提示",
+  "settings.plugins.updateReviewBeforeEnable": "启用前复审",
+  "settings.plugins.updateReview": "提示性复审",
+  "settings.plugins.updateReviewNew": "新发现",
+  "settings.plugins.updateReviewUnchanged": "未变化",
+  "settings.plugins.updateReviewChanged": "有变化",
+  "settings.plugins.updateReviewReviewed": "已复审",
+  "settings.plugins.markReviewed": "标记已复审",
+  "settings.plugins.firstSeen": "首次发现",
+  "settings.plugins.lastReviewed": "上次复审",
+  "settings.plugins.neverReviewed": "从未",
+  "settings.plugins.sourcePins": "来源 pin",
+  "settings.plugins.noSourcePins": "没有可用来源 pin",
+  "settings.plugins.sourcePinCacheVersion": "Codex 缓存版本",
+  "settings.plugins.sourcePinLockRef": "Lock 来源 ref",
+  "settings.plugins.changeSummary": "变更摘要",
+  "settings.plugins.noReviewChanges": "没有可显示的清单复审变化。",
+  "settings.plugins.markReviewedHint":
+    "复审确认只是本地元数据，不会启用插件、批准 MCP 服务器或执行插件代码。",
+  "settings.plugins.updateHandling": "更新处理",
+  "settings.plugins.pluginUpdateGuidance":
+    "插件更新只按元数据变化复审；新增权限、MCP 声明、native hook、文件系统、网络或 shell 能力在复审前都不视为可信。",
+  "settings.plugins.codexReferenceUpdateGuidance":
+    "Codex++ 仓库更新只作为参考输入，不会直接改变 Locus 的插件执行行为。",
+  "settings.plugins.codexDesktopUpdateGuidance":
+    "Codex Desktop 更新不应影响 Locus 插件行为，因为 Locus 不依赖 Codex++ 的补丁修复链路。",
+  "settings.plugins.codexRuntimeUpdateGuidance":
+    "Codex CLI/运行时更新需要先复审能力状态，之后才显示新的插件动作。",
+  "settings.plugins.sourceUpdateGuidance":
+    "刷新只会重新扫描本地元数据。安装和更新动作仍不放在这个只读来源浏览器里。",
+  "settings.plugins.safeModePlanning": "安全模式",
+  "settings.plugins.safeModePlanningGuidance":
+    "安全模式是未来 Locus 自有扩展入口的恢复规则。本次改动仍然不执行任意插件代码。",
+  "settings.plugins.diagnostics": "诊断",
+  "settings.plugins.diagnosticMetadataOnlyNoExecution":
+    "只读取元数据和组件声明，不执行插件 JavaScript。",
+  "settings.plugins.diagnosticMcpReviewRequired":
+    "这个包声明了 MCP 服务器。成为可用工具连接前必须明确复审。",
+  "settings.plugins.diagnosticCodexReadOnlyCache":
+    "这个 Codex 包只从本地缓存展示；Locus 不控制它的启用状态。",
+  "settings.plugins.diagnosticPermissionScopeReviewRequired":
+    "权限、范围、MCP、native、文件系统、网络或 shell 变化启用前必须复审。",
+  "settings.plugins.diagnosticSafeModePlanned":
+    "安全模式只规划给未来执行入口；当前模式不运行任意插件代码。",
+  "settings.plugins.diagnosticComponentPathOutsideRoot":
+    "有组件路径指向插件根目录外，已被忽略。",
+  "settings.plugins.diagnosticSourceAvailable":
+    "来源目录可用于元数据扫描。",
+  "settings.plugins.diagnosticSourceEmpty":
+    "来源目录存在，但没有可见插件条目。",
+  "settings.plugins.diagnosticSourceMissing":
+    "来源目录不存在或无法读取。",
+  "settings.plugins.diagnosticSourceReadOnlyRefresh":
+    "刷新只更新元数据，不安装、更新或执行插件。",
   "settings.plugins.commandsCount": "命令（{count}）",
   "settings.plugins.skillsCount": "技能（{count}）",
   "settings.plugins.agentsCount": "智能体（{count}）",
@@ -3676,6 +3831,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.toast.authenticated": "{name} 已授权",
   "settings.plugins.toast.enabled": "插件已启用",
   "settings.plugins.toast.disabled": "插件已禁用",
+  "settings.plugins.toast.reviewed": "插件复审已记录",
   "settings.plugins.toast.mcpApproved": "插件 MCP 服务器已批准",
   "settings.plugins.toast.failedToUpdate": "更新插件失败",
   "settings.plugins.searchPlaceholder": "搜索插件...",
@@ -3716,12 +3872,20 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.sourceTrustOfficial": "官方",
   "settings.plugins.sourceTrustLocal": "本地",
   "settings.plugins.sourceTrustExternal": "外部",
+  "settings.plugins.sourceDescriptionClaude":
+    "本地 Claude Code 插件 Marketplace 来源。",
+  "settings.plugins.sourceDescriptionCodex":
+    "由 Codex 管理的 Codex 插件缓存集合。",
   "settings.plugins.sourceStatus": "状态",
   "settings.plugins.sourceStatusAvailable": "可用",
   "settings.plugins.sourceStatusEmpty": "空",
   "settings.plugins.sourceStatusMissing": "不存在",
   "settings.plugins.sourcePath": "路径",
   "settings.plugins.sourceInstallHint": "安装提示",
+  "settings.plugins.sourceInstallHintClaude":
+    "把 Claude 插件安装到 ~/.claude/plugins/marketplaces/。",
+  "settings.plugins.sourceInstallHintCodex":
+    "Codex 管理这个缓存；通过 Codex 安装或更新插件，然后刷新。",
 
   "settings.beta.title": "实验功能",
   "settings.beta.subtitle":
