@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { Readable } from "stream"
-import { getAgentJob, listAgentJobEvents } from "../src/main/lib/headless/job-store"
+import {
+  completeAgentJob,
+  createAgentJob,
+  getAgentJob,
+  listAgentJobEvents,
+  startAgentJob,
+} from "../src/main/lib/headless/job-store"
 import {
   HEADLESS_STDIN_MAX_BYTES,
   runHeadlessCliCommand,
@@ -186,6 +192,48 @@ describe("headless CLI dispatcher", () => {
       exitCode: 5,
       errorCode: "job_canceled",
     })
+  })
+
+  test("does not retry desktop chat jobs from the generic CLI retry path", async () => {
+    const db = createAgentJobTestDb()
+    const desktopJob = createAgentJob(db, {
+      source: "desktop",
+      runtime: "codex",
+      mode: "agent",
+      cwd: process.cwd(),
+      prompt: "Desktop chat prompt",
+      input: { kind: "desktop-chat", promptSha256: "hash" },
+    })
+    startAgentJob(db, { jobId: desktopJob.id, workerId: "desktop:codex:run-1" })
+    completeAgentJob(db, {
+      jobId: desktopJob.id,
+      status: "failed",
+      exitCode: 1,
+      errorCode: "desktop_chat_failed",
+    })
+
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "jobs",
+        "retry",
+        desktopJob.id,
+        "--output",
+        "json",
+      ],
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+    })
+
+    expect(code).toBe(3)
+    expect(stdout.value()).toBe("")
+    expect(stderr.value()).toContain(
+      "Desktop chat jobs must be retried from their linked chat.",
+    )
   })
 
   test("normalizes run exit codes instead of leaking runtime process codes", async () => {

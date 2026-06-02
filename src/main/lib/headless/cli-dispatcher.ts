@@ -435,6 +435,13 @@ function retryCommand(
 ): number {
   const job = getAgentJob(options.db, command.jobId)
   if (!job) return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
+  if (job.source === "desktop") {
+    return commandError(
+      options.stderr,
+      "Desktop chat jobs must be retried from their linked chat.",
+      3,
+    )
+  }
   getAgentJobPrompt(options.db, command.jobId)
   const retry = retryAgentJob(options.db, command.jobId)
   outputJob(options.stdout, command.output, retry)
