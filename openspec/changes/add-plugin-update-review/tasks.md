@@ -7,11 +7,11 @@
 
 ## 2. Review Metadata Model
 
-- [ ] 2.1 Add shared update-review types and deterministic fingerprint/diff helpers.
-- [ ] 2.2 Add local review-state storage in app userData with atomic JSON writes.
-- [ ] 2.3 Extract optional source pins from Codex cache version directories and `plugin.lock.json` source refs when available.
-- [ ] 2.4 Add tests for hash stability, bounded diffs, source-pin extraction, and local review acknowledgement.
-- [ ] 2.5 Commit the metadata/storage slice separately.
+- [x] 2.1 Add shared update-review types and deterministic fingerprint/diff helpers.
+- [x] 2.2 Add local review-state storage in app userData with atomic JSON writes.
+- [x] 2.3 Extract optional source pins from Codex cache version directories and `plugin.lock.json` source refs when available.
+- [x] 2.4 Add tests for hash stability, bounded diffs, source-pin extraction, and local review acknowledgement.
+- [x] 2.5 Commit the metadata/storage slice separately.
 
 ## 3. Plugin API Integration
 
