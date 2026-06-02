@@ -7,6 +7,7 @@ export type PluginTargetMode =
 
 export type PluginExecutionStatus =
   | "not-run-by-locus"
+  | "locus-controlled"
   | "locus-controlled-planned"
   | "trusted-code-planned"
 
@@ -49,6 +50,14 @@ export function getManifestOnlyPluginTargetMode(): PluginTargetModeSummary {
     targetMode: "manifest-only",
     executionStatus: "not-run-by-locus",
     updatePosture: "advisory-only",
+  }
+}
+
+export function getControlledUiPluginTargetMode(): PluginTargetModeSummary {
+  return {
+    targetMode: "controlled-ui",
+    executionStatus: "locus-controlled",
+    updatePosture: "review-before-enable",
   }
 }
 

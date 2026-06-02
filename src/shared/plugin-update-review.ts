@@ -4,6 +4,7 @@ import type {
   PluginTargetMode,
   PluginUpdatePosture,
 } from "./plugin-target-modes"
+import type { PluginControlledUiReviewDocument } from "./plugin-controlled-ui"
 
 export type PluginUpdateReviewStatus =
   | "new"
@@ -48,6 +49,7 @@ export interface PluginManifestReviewDocument {
     agents: number
     mcpServers: string[]
   }
+  controlledUi: PluginControlledUiReviewDocument
   sourcePins: PluginSourcePin[]
 }
 
@@ -106,9 +108,10 @@ function normalizePins(pins: PluginSourcePin[] | undefined): PluginSourcePin[] {
 }
 
 export function buildPluginManifestReviewDocument(
-  input: Omit<PluginManifestReviewDocument, "schemaVersion" | "tags" | "components" | "sourcePins"> & {
+  input: Omit<PluginManifestReviewDocument, "schemaVersion" | "tags" | "components" | "controlledUi" | "sourcePins"> & {
     tags?: string[]
     components?: Partial<PluginManifestReviewDocument["components"]>
+    controlledUi?: PluginControlledUiReviewDocument
     sourcePins?: PluginSourcePin[]
   },
 ): PluginManifestReviewDocument {
@@ -137,6 +140,7 @@ export function buildPluginManifestReviewDocument(
       agents: input.components?.agents ?? 0,
       mcpServers: normalizeList(input.components?.mcpServers),
     },
+    controlledUi: normalizeControlledUi(input.controlledUi),
     sourcePins: normalizePins(input.sourcePins),
   }
 }
@@ -164,9 +168,55 @@ export function diffPluginManifestReviewDocuments(
   addChange("skills", previous.components.skills, current.components.skills)
   addChange("agents", previous.components.agents, current.components.agents)
   addChange("mcpServers", previous.components.mcpServers, current.components.mcpServers)
+  addChange("controlledUi", previous.controlledUi, current.controlledUi)
   addChange("sourcePins", previous.sourcePins, current.sourcePins)
 
   return changes
+}
+
+function normalizeControlledUi(
+  value: PluginControlledUiReviewDocument | undefined,
+): PluginControlledUiReviewDocument {
+  if (!value) {
+    return {
+      manifestPresent: false,
+      surfaces: [],
+      diagnostics: [],
+      ignoredUnknownFields: [],
+    }
+  }
+  return {
+    manifestPresent: value.manifestPresent,
+    surfaces: [...value.surfaces]
+      .map((surface) => ({
+        id: surface.id,
+        type: surface.type,
+        title: surface.title,
+        description: surface.description,
+        fieldIds: normalizeList(surface.fieldIds),
+        itemCount: surface.itemCount,
+        action: surface.action
+          ? {
+              id: surface.action.id,
+              type: surface.action.type,
+              prompt: surface.action.prompt,
+            }
+          : undefined,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    diagnostics: [...value.diagnostics]
+      .map((diagnostic) => ({
+        code: diagnostic.code,
+        severity: diagnostic.severity,
+        path: diagnostic.path,
+      }))
+      .sort((a, b) => {
+        const byCode = a.code.localeCompare(b.code)
+        if (byCode !== 0) return byCode
+        return (a.path ?? "").localeCompare(b.path ?? "")
+      }),
+    ignoredUnknownFields: normalizeList(value.ignoredUnknownFields),
+  }
 }
 
 function formatReviewValue(value: unknown): string {

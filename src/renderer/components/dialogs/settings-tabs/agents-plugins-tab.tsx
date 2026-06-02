@@ -33,7 +33,7 @@ type PluginSourceKind = "local-marketplace" | "cache"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
 type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-code"
-type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled-planned" | "trusted-code-planned"
+type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled" | "locus-controlled-planned" | "trusted-code-planned"
 type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
 type PluginUpdatePosture = "advisory-only" | "review-before-enable"
 type PluginUpdateReviewStatus = "new" | "unchanged" | "changed" | "reviewed"
@@ -116,6 +116,9 @@ type PluginDoctorCheckCode =
   | "components-declared"
   | "mcp-declared"
   | "mcp-approval-fingerprint"
+  | "controlled-ui-declared"
+  | "controlled-ui-gate"
+  | "controlled-ui-diagnostic"
   | "component-path-warning"
   | "review-state"
 
@@ -333,6 +336,8 @@ function getExecutionStatusLabel(status: PluginExecutionStatus, t: ReturnType<ty
   switch (status) {
     case "not-run-by-locus":
       return t("settings.plugins.executionNotRunByLocus")
+    case "locus-controlled":
+      return t("settings.plugins.executionLocusControlled")
     case "locus-controlled-planned":
       return t("settings.plugins.executionLocusControlledPlanned")
     case "trusted-code-planned":
@@ -563,6 +568,12 @@ function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof u
       return t("settings.plugins.doctorCheckMcpDeclared")
     case "mcp-approval-fingerprint":
       return t("settings.plugins.doctorCheckMcpApprovalFingerprint")
+    case "controlled-ui-declared":
+      return t("settings.plugins.doctorCheckControlledUiDeclared")
+    case "controlled-ui-gate":
+      return t("settings.plugins.doctorCheckControlledUiGate")
+    case "controlled-ui-diagnostic":
+      return t("settings.plugins.doctorCheckControlledUiDiagnostic")
     case "component-path-warning":
       return t("settings.plugins.doctorCheckComponentPathWarning")
     case "review-state":

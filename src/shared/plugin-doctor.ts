@@ -10,6 +10,11 @@ import type {
   PluginSafeModeState,
   PluginSafetyGate,
 } from "./plugin-safety-gates"
+import type {
+  PluginControlledUiDiagnostic,
+  PluginControlledUiGate,
+  PluginControlledUiManifest,
+} from "./plugin-controlled-ui"
 
 export type PluginDoctorCheckStatus =
   | "pass"
@@ -31,6 +36,9 @@ export type PluginDoctorCheckCode =
   | "components-declared"
   | "mcp-declared"
   | "mcp-approval-fingerprint"
+  | "controlled-ui-declared"
+  | "controlled-ui-gate"
+  | "controlled-ui-diagnostic"
   | "component-path-warning"
   | "review-state"
 
@@ -67,6 +75,13 @@ export interface PluginDoctorPluginInput {
     agents: number
     mcpServers: number
   }
+  controlledUi: {
+    manifestPresent: boolean
+    manifest?: PluginControlledUiManifest
+    diagnostics: PluginControlledUiDiagnostic[]
+    ignoredUnknownFields: string[]
+    gate: PluginControlledUiGate
+  }
   mcpServers: string[]
   mcpApprovalIdentifiers: Record<string, string>
 }
@@ -84,6 +99,7 @@ export interface PluginDoctorPluginDebug {
   sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
   componentCounts: PluginDoctorPluginInput["componentCounts"]
+  controlledUi: PluginDoctorPluginInput["controlledUi"]
   mcpServers: string[]
   mcpApprovalIdentifiers: Record<string, string>
   checks: PluginDoctorCheck[]
@@ -197,6 +213,7 @@ function buildPluginDebug(plugin: PluginDoctorPluginInput): PluginDoctorPluginDe
     sourcePins: plugin.sourcePins,
     diagnostics: plugin.diagnostics,
     componentCounts: plugin.componentCounts,
+    controlledUi: plugin.controlledUi,
     mcpServers: plugin.mcpServers,
     mcpApprovalIdentifiers: plugin.mcpApprovalIdentifiers,
     checks,
@@ -311,6 +328,49 @@ function buildPluginChecks(plugin: PluginDoctorPluginInput): PluginDoctorCheck[]
     })
   }
 
+  if (plugin.controlledUi.manifestPresent) {
+    const surfaceCount = plugin.controlledUi.manifest?.surfaces.length ?? 0
+    checks.push({
+      code: "controlled-ui-declared",
+      status: surfaceCount > 0 ? "info" : "warning",
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        surfaceCount,
+        diagnosticCount: plugin.controlledUi.diagnostics.length,
+        ignoredUnknownFieldCount: plugin.controlledUi.ignoredUnknownFields.length,
+      },
+    })
+    checks.push({
+      code: "controlled-ui-gate",
+      status: getControlledUiGateCheckStatus(plugin.controlledUi.gate),
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        canRenderControlledUi: plugin.controlledUi.gate.canRenderControlledUi,
+        canInvokeControlledAction: plugin.controlledUi.gate.canInvokeControlledAction,
+        reasonCount: plugin.controlledUi.gate.reasons.length,
+      },
+    })
+  }
+
+  if (plugin.controlledUi.diagnostics.some((diagnostic) => diagnostic.severity === "blocked")) {
+    checks.push({
+      code: "controlled-ui-diagnostic",
+      status: "blocked",
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        blockedDiagnosticCount: plugin.controlledUi.diagnostics.filter(
+          (diagnostic) => diagnostic.severity === "blocked",
+        ).length,
+      },
+    })
+  }
+
   if (plugin.diagnostics.some((diagnostic) => diagnostic.code === "component-path-outside-root")) {
     checks.push({
       code: "component-path-warning",
@@ -322,6 +382,14 @@ function buildPluginChecks(plugin: PluginDoctorPluginInput): PluginDoctorCheck[]
   }
 
   return checks
+}
+
+function getControlledUiGateCheckStatus(
+  gate: PluginControlledUiGate,
+): PluginDoctorCheckStatus {
+  if (gate.canInvokeControlledAction) return "pass"
+  if (gate.canRenderControlledUi) return "info"
+  return gate.reasons.length > 0 ? "blocked" : "warning"
 }
 
 function getRuntimeGateCheckStatus(plugin: PluginDoctorPluginInput): PluginDoctorCheckStatus {

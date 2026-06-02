@@ -23,6 +23,12 @@ import {
   scanPluginReviewDocument,
   type PluginComponent,
 } from "../../plugins/review-scan"
+import {
+  buildPluginControlledUiGate,
+  type PluginControlledUiDiagnostic,
+  type PluginControlledUiGate,
+  type PluginControlledUiManifest,
+} from "../../../../shared/plugin-controlled-ui"
 import type {
   PluginSourcePin,
   PluginUpdateReviewMetadata,
@@ -70,6 +76,14 @@ export interface PluginWithComponents {
   safetyGate: PluginSafetyGate
   sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
+  controlledUi: {
+    manifestPresent: boolean
+    manifestPath?: string
+    manifest?: PluginControlledUiManifest
+    diagnostics: PluginControlledUiDiagnostic[]
+    ignoredUnknownFields: string[]
+    gate: PluginControlledUiGate
+  }
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -85,7 +99,11 @@ interface ScannedPlugin {
   plugin: PluginInfo
   reviewStatus: PluginReviewStatus
   diagnostics: PluginDiagnostic[]
+  targetMode: PluginTargetMode
+  executionStatus: PluginExecutionStatus
+  updatePosture: PluginUpdatePosture
   components: PluginWithComponents["components"]
+  controlledUi: Awaited<ReturnType<typeof scanPluginReviewDocument>>["controlledUi"]
   mcpApprovalIdentifiers: Record<string, string>
   reviewDocument: Awaited<ReturnType<typeof scanPluginReviewDocument>>["reviewDocument"]
 }
@@ -114,7 +132,7 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
       scanPluginReviewDocument(plugin),
       getPluginMcpApprovalIdentifiers(plugin),
     ])
-  const { components, reviewDocument } = reviewScan
+  const { components, controlledUi, reviewDocument, targetModeSummary } = reviewScan
   const { commands, skills, agents, mcpServers } = components
 
   const reviewStatus = getPluginReviewStatus({
@@ -123,7 +141,7 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
   })
   const diagnostics = getPluginDiagnostics({
     runtime: plugin.runtime,
-    targetMode: plugin.targetMode,
+    targetMode: targetModeSummary.targetMode,
     reviewStatus,
     baseDiagnostics: plugin.diagnostics,
   })
@@ -131,7 +149,11 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
     plugin,
     reviewStatus,
     diagnostics,
+    targetMode: targetModeSummary.targetMode,
+    executionStatus: targetModeSummary.executionStatus,
+    updatePosture: targetModeSummary.updatePosture,
     components,
+    controlledUi,
     mcpApprovalIdentifiers,
     reviewDocument,
   }
@@ -151,6 +173,13 @@ function toPluginWithComponents(input: {
     updateReviewStatus: updateReview.status,
     safeModeEnabled: input.safeMode.enabled,
   })
+  const controlledUiGate = buildPluginControlledUiGate({
+    runtime: plugin.runtime,
+    targetMode: input.scanned.targetMode,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: input.safeMode.enabled,
+    hasValidManifest: Boolean(input.scanned.controlledUi.manifest),
+  })
 
   return {
     runtime: plugin.runtime,
@@ -167,14 +196,22 @@ function toPluginWithComponents(input: {
     tags: plugin.tags,
     sourceKind: plugin.sourceKind,
     sourceTrust: plugin.sourceTrust,
-    targetMode: plugin.targetMode,
-    executionStatus: plugin.executionStatus,
+    targetMode: input.scanned.targetMode,
+    executionStatus: input.scanned.executionStatus,
     reviewStatus: input.scanned.reviewStatus,
-    updatePosture: plugin.updatePosture,
+    updatePosture: input.scanned.updatePosture,
     updateReview,
     safetyGate,
     sourcePins: plugin.sourcePins ?? [],
     diagnostics: input.scanned.diagnostics,
+    controlledUi: {
+      manifestPresent: Boolean(input.scanned.controlledUi.manifest),
+      manifestPath: input.scanned.controlledUi.manifestPath,
+      manifest: input.scanned.controlledUi.manifest,
+      diagnostics: input.scanned.controlledUi.diagnostics,
+      ignoredUnknownFields: input.scanned.controlledUi.ignoredUnknownFields,
+      gate: controlledUiGate,
+    },
     isDisabled: plugin.runtime === "claude" ? !input.enabledPlugins.includes(plugin.source) : false,
     canToggle: plugin.runtime === "claude",
     components: input.scanned.components,
@@ -291,6 +328,19 @@ export const pluginsRouter = router({
             skills: scanned.components.skills.length,
             agents: scanned.components.agents.length,
             mcpServers: scanned.components.mcpServers.length,
+          },
+          controlledUi: {
+            manifestPresent: Boolean(scanned.controlledUi.manifest),
+            manifest: scanned.controlledUi.manifest,
+            diagnostics: scanned.controlledUi.diagnostics,
+            ignoredUnknownFields: scanned.controlledUi.ignoredUnknownFields,
+            gate: buildPluginControlledUiGate({
+              runtime: plugin.runtime,
+              targetMode: scanned.targetMode,
+              updateReviewStatus: updateReview.status,
+              safeModeEnabled: reviewResult.safeMode.enabled,
+              hasValidManifest: Boolean(scanned.controlledUi.manifest),
+            }),
           },
           mcpServers: scanned.components.mcpServers,
           mcpApprovalIdentifiers: scanned.mcpApprovalIdentifiers,

@@ -12,6 +12,19 @@ function updateReview(status: "new" | "unchanged" | "changed" | "reviewed") {
   }
 }
 
+function emptyControlledUi() {
+  return {
+    manifestPresent: false,
+    diagnostics: [],
+    ignoredUnknownFields: [],
+    gate: {
+      canRenderControlledUi: false,
+      canInvokeControlledAction: false,
+      reasons: ["invalid-contribution-manifest" as const],
+    },
+  }
+}
+
 describe("plugin doctor report", () => {
   test("summarizes safe-mode and review blockers without trusting plugin code", () => {
     const report = buildPluginDoctorReport({
@@ -46,6 +59,7 @@ describe("plugin doctor report", () => {
           agents: 1,
           mcpServers: 1,
         },
+        controlledUi: emptyControlledUi(),
         mcpServers: ["tools"],
         mcpApprovalIdentifiers: {
           tools: "local:tools:tools#mcp-sha256:abc",
@@ -95,6 +109,7 @@ describe("plugin doctor report", () => {
           agents: 0,
           mcpServers: 1,
         },
+        controlledUi: emptyControlledUi(),
         mcpServers: ["figma"],
         mcpApprovalIdentifiers: {},
       }],

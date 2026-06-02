@@ -1,6 +1,15 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import { buildPluginManifestReviewDocument } from "../../../shared/plugin-update-review"
+import { getControlledUiPluginTargetMode } from "../../../shared/plugin-target-modes"
+import type { PluginTargetModeSummary } from "../../../shared/plugin-target-modes"
+import {
+  buildControlledUiReviewDocument,
+  parseControlledUiManifest,
+  type PluginControlledUiDiagnostic,
+  type PluginControlledUiManifest,
+  type PluginControlledUiReviewDocument,
+} from "../../../shared/plugin-controlled-ui"
 import type { PluginInfo } from "."
 import { resolveDirentType } from "../fs/dirent"
 import { parseMarkdownFrontmatter } from "../markdown/frontmatter"
@@ -19,8 +28,19 @@ export interface PluginDeclaredComponents {
 
 export interface ScannedPluginReviewDocument {
   components: PluginDeclaredComponents
+  targetModeSummary: PluginTargetModeSummary
+  controlledUi: {
+    manifest?: PluginControlledUiManifest
+    reviewDocument: PluginControlledUiReviewDocument
+    diagnostics: PluginControlledUiDiagnostic[]
+    ignoredUnknownFields: string[]
+    manifestPath?: string
+  }
   reviewDocument: ReturnType<typeof buildPluginManifestReviewDocument>
 }
+
+const CONTROLLED_UI_MANIFEST_RELATIVE_PATH = path.join(".locus-plugin", "ui.json")
+const MAX_CONTROLLED_UI_MANIFEST_BYTES = 64 * 1024
 
 function getPluginComponentPaths(plugin: PluginInfo) {
   return {
@@ -179,15 +199,119 @@ async function scanPluginMcpServers(mcpJsonPath: string): Promise<string[]> {
   }
 }
 
+async function scanControlledUiManifest(pluginRoot: string): Promise<ScannedPluginReviewDocument["controlledUi"]> {
+  const manifestPath = path.join(pluginRoot, CONTROLLED_UI_MANIFEST_RELATIVE_PATH)
+
+  try {
+    const [realRoot, realManifestPath] = await Promise.all([
+      fs.realpath(pluginRoot),
+      fs.realpath(manifestPath),
+    ])
+    if (!isPathInside(realRoot, realManifestPath)) {
+      const diagnostics: PluginControlledUiDiagnostic[] = [{
+        code: "controlled-ui-unsafe-field",
+        severity: "blocked",
+        path: CONTROLLED_UI_MANIFEST_RELATIVE_PATH,
+        message: "Controlled UI manifest path escapes the plugin root.",
+      }]
+      return {
+        reviewDocument: buildControlledUiReviewDocument({
+          diagnostics,
+          ignoredUnknownFields: [],
+        }),
+        diagnostics,
+        ignoredUnknownFields: [],
+        manifestPath,
+      }
+    }
+  } catch {
+    return {
+      reviewDocument: buildControlledUiReviewDocument({
+        diagnostics: [],
+        ignoredUnknownFields: [],
+      }),
+      diagnostics: [],
+      ignoredUnknownFields: [],
+    }
+  }
+
+  try {
+    const stat = await fs.stat(manifestPath)
+    if (!stat.isFile()) {
+      const diagnostics: PluginControlledUiDiagnostic[] = [{
+        code: "controlled-ui-manifest-invalid",
+        severity: "blocked",
+        path: CONTROLLED_UI_MANIFEST_RELATIVE_PATH,
+        message: "Controlled UI manifest path must be a file.",
+      }]
+      return {
+        reviewDocument: buildControlledUiReviewDocument({
+          diagnostics,
+          ignoredUnknownFields: [],
+        }),
+        diagnostics,
+        ignoredUnknownFields: [],
+        manifestPath,
+      }
+    }
+    if (stat.size > MAX_CONTROLLED_UI_MANIFEST_BYTES) {
+      const diagnostics: PluginControlledUiDiagnostic[] = [{
+        code: "controlled-ui-limit-exceeded",
+        severity: "blocked",
+        path: CONTROLLED_UI_MANIFEST_RELATIVE_PATH,
+        message: `Controlled UI manifest must be ${MAX_CONTROLLED_UI_MANIFEST_BYTES} bytes or less.`,
+      }]
+      return {
+        reviewDocument: buildControlledUiReviewDocument({
+          diagnostics,
+          ignoredUnknownFields: [],
+        }),
+        diagnostics,
+        ignoredUnknownFields: [],
+        manifestPath,
+      }
+    }
+
+    const content = await fs.readFile(manifestPath, "utf-8")
+    const parsed = parseControlledUiManifest(JSON.parse(content) as unknown)
+    return {
+      manifest: parsed.manifest,
+      reviewDocument: buildControlledUiReviewDocument(parsed),
+      diagnostics: parsed.diagnostics,
+      ignoredUnknownFields: parsed.ignoredUnknownFields,
+      manifestPath,
+    }
+  } catch (error) {
+    const diagnostics: PluginControlledUiDiagnostic[] = [{
+      code: "controlled-ui-manifest-invalid",
+      severity: "blocked",
+      path: CONTROLLED_UI_MANIFEST_RELATIVE_PATH,
+      message: error instanceof SyntaxError
+        ? "Controlled UI manifest must be valid JSON."
+        : "Controlled UI manifest could not be read.",
+    }]
+    return {
+      reviewDocument: buildControlledUiReviewDocument({
+        diagnostics,
+        ignoredUnknownFields: [],
+      }),
+      diagnostics,
+      ignoredUnknownFields: [],
+      manifestPath,
+    }
+  }
+}
+
 export async function scanPluginReviewDocument(
   plugin: PluginInfo,
 ): Promise<ScannedPluginReviewDocument> {
   const paths = getPluginComponentPaths(plugin)
-  const [commands, skills, agents, mcpServers] = await Promise.all([
+  const [commands, skills, agents, mcpServers, controlledUi] = await Promise.all([
     scanPluginCommands(paths.commands),
     scanPluginSkills(paths.skills),
     scanPluginAgents(paths.agents),
     scanPluginMcpServers(paths.mcpServers),
+    scanControlledUiManifest(plugin.path),
   ])
 
   const components = {
@@ -196,18 +320,28 @@ export async function scanPluginReviewDocument(
     agents,
     mcpServers,
   }
+  const targetModeSummary =
+    plugin.runtime === "claude" && controlledUi.manifest
+      ? getControlledUiPluginTargetMode()
+      : {
+          targetMode: plugin.targetMode,
+          executionStatus: plugin.executionStatus,
+          updatePosture: plugin.updatePosture,
+        }
 
   return {
     components,
+    targetModeSummary,
+    controlledUi,
     reviewDocument: buildPluginManifestReviewDocument({
       runtime: plugin.runtime,
       source: plugin.source,
       marketplace: plugin.marketplace,
       name: plugin.name,
       version: plugin.version,
-      targetMode: plugin.targetMode,
-      executionStatus: plugin.executionStatus,
-      updatePosture: plugin.updatePosture,
+      targetMode: targetModeSummary.targetMode,
+      executionStatus: targetModeSummary.executionStatus,
+      updatePosture: targetModeSummary.updatePosture,
       category: plugin.category,
       homepage: plugin.homepage,
       tags: plugin.tags,
@@ -218,7 +352,16 @@ export async function scanPluginReviewDocument(
         agents: agents.length,
         mcpServers,
       },
+      controlledUi: controlledUi.reviewDocument,
       sourcePins: plugin.sourcePins,
     }),
   }
+}
+
+function isPathInside(basePath: string, candidatePath: string): boolean {
+  const relativePath = path.relative(basePath, candidatePath)
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  )
 }

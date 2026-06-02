@@ -87,6 +87,31 @@ export interface PluginControlledUiManifest {
   surfaces: PluginControlledUiSurface[]
 }
 
+export interface PluginControlledUiReviewSurface {
+  id: string
+  type: PluginControlledUiSurfaceType
+  title: string
+  description?: string
+  fieldIds?: string[]
+  itemCount?: number
+  action?: {
+    id: string
+    type: PluginControlledUiActionType
+    prompt: string
+  }
+}
+
+export interface PluginControlledUiReviewDocument {
+  manifestPresent: boolean
+  surfaces: PluginControlledUiReviewSurface[]
+  diagnostics: Array<{
+    code: PluginControlledUiDiagnosticCode
+    severity: PluginControlledUiDiagnosticSeverity
+    path?: string
+  }>
+  ignoredUnknownFields: string[]
+}
+
 export interface PluginControlledUiParseResult {
   manifest?: PluginControlledUiManifest
   diagnostics: PluginControlledUiDiagnostic[]
@@ -219,6 +244,48 @@ export function parseControlledUiManifest(value: unknown): PluginControlledUiPar
     },
     diagnostics,
     ignoredUnknownFields,
+  }
+}
+
+export function buildControlledUiReviewDocument(
+  result: PluginControlledUiParseResult,
+): PluginControlledUiReviewDocument {
+  return {
+    manifestPresent: Boolean(result.manifest),
+    surfaces: (result.manifest?.surfaces ?? []).map((surface) => {
+      const base = {
+        id: surface.id,
+        type: surface.type,
+        title: surface.title,
+        description: surface.description,
+      }
+      if (surface.type === "settings-section") {
+        return {
+          ...base,
+          fieldIds: surface.fields.map((field) => field.id).sort(),
+        }
+      }
+      if (surface.type === "workbench-panel") {
+        return {
+          ...base,
+          itemCount: surface.items.length,
+        }
+      }
+      return {
+        ...base,
+        action: {
+          id: surface.action.id,
+          type: surface.action.type,
+          prompt: surface.action.prompt,
+        },
+      }
+    }),
+    diagnostics: result.diagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      severity: diagnostic.severity,
+      path: diagnostic.path,
+    })),
+    ignoredUnknownFields: [...result.ignoredUnknownFields].sort(),
   }
 }
 

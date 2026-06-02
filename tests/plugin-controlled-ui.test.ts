@@ -1,4 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import type { PluginInfo } from "../src/main/lib/plugins"
+import { scanPluginReviewDocument } from "../src/main/lib/plugins/review-scan"
 import {
   buildControlledUiPermissionGrant,
   buildPluginControlledUiGate,
@@ -7,6 +12,27 @@ import {
   isControlledUiGrantCurrent,
   parseControlledUiManifest,
 } from "../src/shared/plugin-controlled-ui"
+import { diffPluginManifestReviewDocuments } from "../src/shared/plugin-update-review"
+
+function pluginInfo(root: string): PluginInfo {
+  return {
+    runtime: "claude",
+    reviewKey: "claude:local:controlled",
+    name: "Controlled",
+    version: "1.0.0",
+    path: root,
+    installRoot: root,
+    source: "local:controlled",
+    marketplace: "local",
+    sourceKind: "local-marketplace",
+    sourceTrust: "local",
+    targetMode: "manifest-only",
+    executionStatus: "not-run-by-locus",
+    updatePosture: "advisory-only",
+    diagnostics: [],
+    sourcePins: [],
+  }
+}
 
 describe("controlled UI plugin manifest schema", () => {
   test("parses bounded declarative settings, panel, and draft actions", () => {
@@ -227,5 +253,113 @@ describe("controlled UI plugin gates and grants", () => {
     expect(getControlledUiActionPermissionId(button.action)).toBe(
       "controlled-ui.action.insert-chat-draft",
     )
+  })
+})
+
+describe("controlled UI main-process review scan", () => {
+  test("includes normalized controlled UI declarations in plugin review documents", async () => {
+    const root = await mkdtemp(join(tmpdir(), "locus-controlled-ui-plugin-"))
+    try {
+      await mkdir(join(root, ".locus-plugin"))
+      await writeFile(join(root, ".locus-plugin", "ui.json"), JSON.stringify({
+        version: 1,
+        surfaces: [{
+          id: "prepare-review",
+          type: "command-button",
+          title: "Prepare review",
+          label: "Prepare",
+          action: {
+            type: "insert-chat-draft",
+            prompt: "Review the current diff.",
+          },
+        }],
+      }))
+
+      const scan = await scanPluginReviewDocument(pluginInfo(root))
+
+      expect(scan.targetModeSummary).toEqual({
+        targetMode: "controlled-ui",
+        executionStatus: "locus-controlled",
+        updatePosture: "review-before-enable",
+      })
+      expect(scan.controlledUi.manifest?.surfaces).toHaveLength(1)
+      expect(scan.reviewDocument.controlledUi.surfaces[0]).toMatchObject({
+        id: "prepare-review",
+        type: "command-button",
+        action: {
+          type: "insert-chat-draft",
+          prompt: "Review the current diff.",
+        },
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("diffs controlled UI contribution changes as review metadata", async () => {
+    const root = await mkdtemp(join(tmpdir(), "locus-controlled-ui-plugin-"))
+    try {
+      await mkdir(join(root, ".locus-plugin"))
+      const manifestPath = join(root, ".locus-plugin", "ui.json")
+      await writeFile(manifestPath, JSON.stringify({
+        version: 1,
+        surfaces: [{
+          id: "prepare-review",
+          type: "command-button",
+          title: "Prepare review",
+          label: "Prepare",
+          action: {
+            type: "insert-chat-draft",
+            prompt: "Review the current diff.",
+          },
+        }],
+      }))
+      const first = await scanPluginReviewDocument(pluginInfo(root))
+
+      await writeFile(manifestPath, JSON.stringify({
+        version: 1,
+        surfaces: [{
+          id: "prepare-review",
+          type: "command-button",
+          title: "Prepare review",
+          label: "Prepare",
+          action: {
+            type: "insert-chat-draft",
+            prompt: "Review the current diff and list blocking issues first.",
+          },
+        }],
+      }))
+      const second = await scanPluginReviewDocument(pluginInfo(root))
+
+      expect(diffPluginManifestReviewDocuments(
+        first.reviewDocument,
+        second.reviewDocument,
+      )).toContainEqual(expect.objectContaining({
+        field: "controlledUi",
+      }))
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("blocks controlled UI manifest symlinks that escape the plugin root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "locus-controlled-ui-plugin-"))
+    const outside = await mkdtemp(join(tmpdir(), "locus-controlled-ui-outside-"))
+    try {
+      await mkdir(join(root, ".locus-plugin"))
+      const outsideManifest = join(outside, "ui.json")
+      await writeFile(outsideManifest, JSON.stringify({ version: 1, surfaces: [] }))
+      await symlink(outsideManifest, join(root, ".locus-plugin", "ui.json"))
+
+      const scan = await scanPluginReviewDocument(pluginInfo(root))
+      expect(scan.controlledUi.diagnostics).toContainEqual(expect.objectContaining({
+        code: "controlled-ui-unsafe-field",
+        severity: "blocked",
+      }))
+      expect(scan.controlledUi.manifest).toBeUndefined()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(outside, { recursive: true, force: true })
+    }
   })
 })
