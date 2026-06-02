@@ -1067,7 +1067,7 @@ const WorkbenchButton = memo(function WorkbenchButton() {
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const { t } = useI18n()
-  const jobsQuery = trpc.agentJobs.list.useQuery(
+  const cliJobsQuery = trpc.agentJobs.list.useQuery(
     { source: "cli", limit: 20 },
     {
       refetchInterval: (query) => {
@@ -1084,11 +1084,31 @@ const WorkbenchButton = memo(function WorkbenchButton() {
       placeholderData: (previous) => previous,
     },
   )
-  const cliJobCount = jobsQuery.data?.jobs.length ?? 0
-  const cliJobBadge = cliJobCount > 99 ? "99+" : String(cliJobCount)
+  const desktopJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "desktop", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = (
+          (query.state.data as { jobs?: { status?: string }[] } | undefined)
+            ?.jobs ?? []
+        )
+        return jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        )
+          ? 5000
+          : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const activeJobCount = [
+    ...(cliJobsQuery.data?.jobs ?? []),
+    ...(desktopJobsQuery.data?.jobs ?? []),
+  ].filter((job) => job.status === "queued" || job.status === "running").length
+  const activeJobBadge = activeJobCount > 99 ? "99+" : String(activeJobCount)
   const label =
-    cliJobCount > 0
-      ? t("sidebar.workbenchWithJobs", { count: cliJobCount })
+    activeJobCount > 0
+      ? t("sidebar.workbenchWithJobs", { count: activeJobCount })
       : t("sidebar.workbench")
 
   const handleClick = useCallback(() => {
@@ -1108,9 +1128,9 @@ const WorkbenchButton = memo(function WorkbenchButton() {
           className="relative flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
         >
           <LayoutDashboard className="h-4 w-4" />
-          {cliJobCount > 0 && (
+          {activeJobCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-medium leading-none text-background">
-              {cliJobBadge}
+              {activeJobBadge}
             </span>
           )}
         </button>

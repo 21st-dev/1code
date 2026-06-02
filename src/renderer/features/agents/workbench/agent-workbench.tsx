@@ -268,10 +268,21 @@ function getWorkbenchFilterCount(
 
 function canRetryHeadlessJob(job: HeadlessJob): boolean {
   return (
-    job.status === "failed" ||
-    job.status === "canceled" ||
-    job.status === "interrupted"
+    job.source !== "desktop" &&
+    (job.status === "failed" ||
+      job.status === "canceled" ||
+      job.status === "interrupted")
   )
+}
+
+function getHeadlessJobSourceIcon(job: HeadlessJob) {
+  return job.source === "desktop" ? MessageSquare : Terminal
+}
+
+function getHeadlessJobSourceLabelKey(job: HeadlessJob): TranslationKey {
+  if (job.source === "desktop") return "workbench.jobSource.desktop"
+  if (job.source === "cli") return "workbench.jobSource.cli"
+  return "workbench.jobSource.other"
 }
 
 function formatHeadlessRuntime(runtime: string): string {
@@ -523,6 +534,7 @@ function HeadlessJobCard({
 }) {
   const { t } = useI18n()
   const StatusIcon = getHeadlessJobStatusIcon(job.status)
+  const SourceIcon = getHeadlessJobSourceIcon(job)
   const createdAt = formatUpdatedAt(job.createdAt)
   const active = isActiveHeadlessJob(job)
   const retryable = canRetryHeadlessJob(job)
@@ -545,9 +557,10 @@ function HeadlessJobCard({
           </div>
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="flex min-w-0 items-center gap-1">
-              <Terminal className="h-3.5 w-3.5 flex-shrink-0" />
-              <span>{formatHeadlessRuntime(job.runtime)}</span>
+              <SourceIcon className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{t(getHeadlessJobSourceLabelKey(job))}</span>
             </span>
+            <span>{formatHeadlessRuntime(job.runtime)}</span>
             <span className="uppercase">{job.mode}</span>
             <span className="truncate">{job.cwd}</span>
             {createdAt && <span>{createdAt}</span>}
@@ -935,8 +948,19 @@ export function AgentWorkbench() {
     },
   )
 
-  const jobsQuery = trpc.agentJobs.list.useQuery(
+  const cliJobsQuery = trpc.agentJobs.list.useQuery(
     { source: "cli", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
+          ?.jobs ?? []) as HeadlessJob[]
+        return jobs.some(isActiveHeadlessJob) ? 5000 : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const desktopJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "desktop", limit: 20 },
     {
       refetchInterval: (query) => {
         const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
@@ -948,10 +972,13 @@ export function AgentWorkbench() {
   )
   const selectedJob = useMemo(
     () =>
-      ((jobsQuery.data?.jobs ?? []) as HeadlessJob[]).find(
+      ([
+        ...((desktopJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+        ...((cliJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+      ]).find(
         (job) => job.id === selectedJobId,
       ) ?? null,
-    [jobsQuery.data?.jobs, selectedJobId],
+    [cliJobsQuery.data?.jobs, desktopJobsQuery.data?.jobs, selectedJobId],
   )
   const jobLogsQuery = trpc.agentJobs.logs.useQuery(
     { jobId: selectedJobId ?? "", afterSequence: 0 },
@@ -965,7 +992,17 @@ export function AgentWorkbench() {
   )
 
   const tasks = (tasksQuery.data?.tasks ?? []) as WorkbenchTask[]
-  const headlessJobs = (jobsQuery.data?.jobs ?? []) as HeadlessJob[]
+  const headlessJobs = useMemo(() => {
+    const jobs = [
+      ...((desktopJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+      ...((cliJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+    ]
+    return jobs.sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return bTime - aTime
+    })
+  }, [cliJobsQuery.data?.jobs, desktopJobsQuery.data?.jobs])
   const visibleHeadlessJobs = useMemo(
     () =>
       headlessJobs.filter((job) =>
@@ -979,7 +1016,8 @@ export function AgentWorkbench() {
   )
   const headlessJobEvents = (jobLogsQuery.data?.events ?? []) as HeadlessJobEvent[]
   const counts = mergeWorkbenchCounts(tasksQuery.data?.counts, headlessJobCounts)
-  const isRefreshing = tasksQuery.isFetching || jobsQuery.isFetching
+  const isRefreshing =
+    tasksQuery.isFetching || cliJobsQuery.isFetching || desktopJobsQuery.isFetching
   const canCreateDraftPr =
     !!draftPrForm?.title.trim() &&
     !!draftPrForm.body.trim() &&
@@ -1228,7 +1266,8 @@ export function AgentWorkbench() {
             className="h-8 gap-1.5 text-xs"
             onClick={() => {
               void tasksQuery.refetch()
-              void jobsQuery.refetch()
+              void cliJobsQuery.refetch()
+              void desktopJobsQuery.refetch()
             }}
             disabled={isRefreshing}
           >
@@ -1265,7 +1304,9 @@ export function AgentWorkbench() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {jobsQuery.isLoading && tasksQuery.isLoading ? (
+        {cliJobsQuery.isLoading &&
+        desktopJobsQuery.isLoading &&
+        tasksQuery.isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {t("workbench.loading")}

@@ -29,10 +29,12 @@ describe("headless desktop jobs UI", () => {
     expect(startupSection).toContain("recoverStaleAgentJobs(db)")
   })
 
-  test("shows CLI jobs in Agent Workbench without replacing chat tasks", () => {
+  test("shows local jobs in Agent Workbench without replacing chat tasks", () => {
     const source = read("src/renderer/features/agents/workbench/agent-workbench.tsx")
     expect(source).toContain("HeadlessJobCard")
     expect(source).toContain("trpc.agentJobs.list.useQuery")
+    expect(source).toContain('source: "desktop"')
+    expect(source).toContain('source: "cli"')
     expect(source).toContain("trpc.agentJobs.cancel.useMutation")
     expect(source).toContain("trpc.agentJobs.retry.useMutation")
     expect(source).toContain("HeadlessJobLogsDialog")
@@ -46,13 +48,16 @@ describe("headless desktop jobs UI", () => {
     expect(source).toContain("mergeWorkbenchCounts")
     expect(source).toContain("visibleHeadlessJobs")
     expect(source).toContain("getWorkbenchFilterCount(counts, item)")
+    expect(source).toContain('job.source !== "desktop"')
     expect(source).not.toContain("tasks.length === 0 && headlessJobs.length === 0")
   })
 
-  test("adds English and Chinese job labels", () => {
+  test("adds English and Chinese run labels", () => {
     const dictionary = read("src/renderer/lib/i18n/dictionaries.ts")
     for (const key of [
       "workbench.headlessJobs",
+      "workbench.jobSource.desktop",
+      "workbench.jobSource.cli",
       "workbench.jobStatus.running",
       "workbench.jobStatus.succeeded",
       "workbench.jobStatus.interrupted",
@@ -61,5 +66,13 @@ describe("headless desktop jobs UI", () => {
     ]) {
       expect(dictionary).toContain(`"${key}"`)
     }
+  })
+
+  test("counts active desktop and CLI runs in the sidebar badge", () => {
+    const source = read("src/renderer/features/sidebar/agents-sidebar.tsx")
+    expect(source).toContain('source: "desktop"')
+    expect(source).toContain('source: "cli"')
+    expect(source).toContain("activeJobCount")
+    expect(source).toContain('job.status === "queued" || job.status === "running"')
   })
 })
