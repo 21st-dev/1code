@@ -30,7 +30,7 @@
 ## 5. Tests and Verification
 - [x] 5.1 Add shared store catalog/candidate/pin tests.
 - [x] 5.2 Add main-process preview, approval, backup, and stale-candidate tests.
-- [ ] 5.3 Add source guards for no `latest`, no remote trusted-code, no renderer-trusted candidate metadata, no plugin execution during preview/install/update, and no MCP auto-activation.
+- [x] 5.3 Add source guards for no `latest`, no remote trusted-code, no renderer-trusted candidate metadata, no plugin execution during preview/install/update, and no MCP auto-activation.
 - [ ] 5.4 Add renderer/i18n source-guard tests for pin wording and forbidden trust labels.
 - [ ] 5.5 Run targeted store pin tests.
 - [ ] 5.6 Run full `bun run test`.
