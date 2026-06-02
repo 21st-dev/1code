@@ -133,14 +133,18 @@ describe("plugin safe mode runtime source guards", () => {
 
     expect(pluginsRouterSource).toContain("grantControlledAction")
     expect(pluginsRouterSource).toContain("invokeControlledAction")
+    expect(pluginsRouterSource).toContain("setControlledSetting")
     expect(pluginsRouterSource).toContain("getControlledUiActionContext")
+    expect(pluginsRouterSource).toContain("getControlledUiSettingContext")
     expect(pluginsRouterSource).toContain("recordPluginReviewScans")
     expect(pluginsRouterSource).toContain("getControlledUiPermissionGrantStatus")
+    expect(pluginsRouterSource).toContain("setControlledUiSettingValue")
     expect(pluginsRouterSource).toContain("canInvokeControlledAction")
     expect(pluginsRouterSource).not.toContain("executeControlledActionShell")
     expect(pluginsRouterSource).not.toContain("sendChatAutomatically")
 
     expect(pluginControlledUiStateSource).toContain("contributionFingerprint")
     expect(pluginControlledUiStateSource).toContain("getControlledUiGrantStatus")
+    expect(pluginControlledUiStateSource).toContain("getControlledUiSettingsValues")
   })
 })

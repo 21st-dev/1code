@@ -1194,6 +1194,7 @@ export const en = {
   "settings.plugins.contributionFieldText": "Text",
   "settings.plugins.contributionFieldCheckbox": "Checkbox",
   "settings.plugins.contributionFieldSelect": "Select",
+  "settings.plugins.contributionSettingUnset": "Not set",
   "settings.plugins.contributionReasonSafeMode":
     "Plugin safe mode is on, so controlled UI actions are blocked.",
   "settings.plugins.contributionReasonReviewRequired":
@@ -3943,6 +3944,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.contributionFieldText": "文本",
   "settings.plugins.contributionFieldCheckbox": "复选框",
   "settings.plugins.contributionFieldSelect": "选择",
+  "settings.plugins.contributionSettingUnset": "未设置",
   "settings.plugins.contributionReasonSafeMode":
     "插件安全模式已开启，受控 UI 动作被阻断。",
   "settings.plugins.contributionReasonReviewRequired":

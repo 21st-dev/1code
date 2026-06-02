@@ -9,7 +9,9 @@ import { useI18n } from "../../../lib/i18n"
 import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
+import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import { Switch } from "../../ui/switch"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { toast } from "sonner"
@@ -59,6 +61,7 @@ type PluginControlledUiGateReason =
   | "permission-stale"
   | "codex-read-only-cache"
 type PluginControlledUiGrantStatus = "current" | "stale" | "mismatch"
+type PluginControlledUiSettingValue = string | boolean
 type PluginDiagnosticSeverity = "info" | "warning"
 type PluginDiagnosticCode =
   | "metadata-only-no-execution"
@@ -283,6 +286,7 @@ interface PluginData {
     diagnostics: PluginControlledUiDiagnostic[]
     ignoredUnknownFields: string[]
     actionGrantStatuses: Record<string, PluginControlledUiGrantStatus>
+    settingsValues: Record<string, Record<string, PluginControlledUiSettingValue>>
     gate: PluginControlledUiGate
   }
   isDisabled: boolean
@@ -1058,14 +1062,22 @@ function PluginSafetyGatePanel({ plugin }: { plugin: PluginData }) {
 
 function PluginControlledUiPanel({
   plugin,
+  onSetSettingValue,
   onGrantAction,
   onInvokeAction,
+  isSavingSetting,
   isGranting,
   isInvoking,
 }: {
   plugin: PluginData
+  onSetSettingValue: (
+    surface: PluginControlledUiSettingsSection,
+    field: PluginControlledUiField,
+    value: PluginControlledUiSettingValue,
+  ) => void
   onGrantAction: (surface: PluginControlledUiCommandButton) => void
   onInvokeAction: (surface: PluginControlledUiCommandButton) => void
+  isSavingSetting: boolean
   isGranting: boolean
   isInvoking: boolean
 }) {
@@ -1134,16 +1146,66 @@ function PluginControlledUiPanel({
 
                 {surface.type === "settings-section" && surface.fields.length > 0 && (
                   <div className="mt-2 grid gap-1.5">
-                    {surface.fields.slice(0, 4).map((field) => (
-                      <div key={field.id} className="grid grid-cols-[7rem_1fr] gap-2 rounded border border-border bg-background px-2 py-1.5 text-xs">
-                        <span className="font-medium text-muted-foreground">{field.label}</span>
-                        <span className="min-w-0 text-foreground">
-                          {field.type === "select"
-                            ? (field.options ?? []).join(", ")
-                            : getControlledUiFieldTypeLabel(field.type, t)}
-                        </span>
+                    {surface.fields.slice(0, 4).map((field) => {
+                      const fieldValue = plugin.controlledUi.settingsValues[surface.id]?.[field.id]
+                      const canEditField = plugin.controlledUi.gate.canRenderControlledUi && !isSavingSetting
+                      const currentTextValue = typeof fieldValue === "string" ? fieldValue : ""
+
+                      return (
+                        <div key={field.id} className="grid gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 font-medium text-muted-foreground">{field.label}</span>
+                            <span className="shrink-0 rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              {getControlledUiFieldTypeLabel(field.type, t)}
+                            </span>
+                          </div>
+                          {field.description && (
+                            <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                              {field.description}
+                            </p>
+                          )}
+                          {field.type === "checkbox" ? (
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={fieldValue === true}
+                                onCheckedChange={(checked) => onSetSettingValue(surface, field, checked)}
+                                disabled={!canEditField}
+                              />
+                            </div>
+                          ) : field.type === "select" ? (
+                            <Select
+                              value={typeof fieldValue === "string" ? fieldValue : undefined}
+                              onValueChange={(value) => onSetSettingValue(surface, field, value)}
+                              disabled={!canEditField}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder={t("settings.plugins.contributionSettingUnset")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(field.options ?? []).map((option) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              key={`${field.id}:${currentTextValue}`}
+                              defaultValue={currentTextValue}
+                              disabled={!canEditField}
+                              className="h-8 text-xs"
+                              onBlur={(event) => {
+                                const nextValue = event.currentTarget.value
+                                if (nextValue !== currentTextValue) {
+                                  onSetSettingValue(surface, field, nextValue)
+                                }
+                              }}
+                            />
+                          )}
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
 
@@ -1340,8 +1402,10 @@ function PluginDetail({
   isAuthenticating,
   onMarkReviewed,
   isMarkingReviewed,
+  onSetControlledSetting,
   onGrantControlledAction,
   onInvokeControlledAction,
+  isSavingControlledSetting,
   isGrantingControlledAction,
   isInvokingControlledAction,
 }: {
@@ -1357,8 +1421,14 @@ function PluginDetail({
   isAuthenticating: boolean
   onMarkReviewed: () => void
   isMarkingReviewed: boolean
+  onSetControlledSetting: (
+    surface: PluginControlledUiSettingsSection,
+    field: PluginControlledUiField,
+    value: PluginControlledUiSettingValue,
+  ) => void
   onGrantControlledAction: (surface: PluginControlledUiCommandButton) => void
   onInvokeControlledAction: (surface: PluginControlledUiCommandButton) => void
+  isSavingControlledSetting: boolean
   isGrantingControlledAction: boolean
   isInvokingControlledAction: boolean
 }) {
@@ -1455,8 +1525,10 @@ function PluginDetail({
           <PluginSafetyGatePanel plugin={plugin} />
           <PluginControlledUiPanel
             plugin={plugin}
+            onSetSettingValue={onSetControlledSetting}
             onGrantAction={onGrantControlledAction}
             onInvokeAction={onInvokeControlledAction}
+            isSavingSetting={isSavingControlledSetting}
             isGranting={isGrantingControlledAction}
             isInvoking={isInvokingControlledAction}
           />
@@ -2006,6 +2078,7 @@ export function AgentsPluginsTab() {
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
   const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
   const setSafeModeMutation = trpc.plugins.setSafeMode.useMutation()
+  const setControlledSettingMutation = trpc.plugins.setControlledSetting.useMutation()
   const grantControlledActionMutation = trpc.plugins.grantControlledAction.useMutation()
   const invokeControlledActionMutation = trpc.plugins.invokeControlledAction.useMutation()
 
@@ -2236,6 +2309,26 @@ export function AgentsPluginsTab() {
       toast.error(message)
     }
   }, [grantControlledActionMutation, refetch, refetchDoctor, t])
+
+  const handleSetControlledSetting = useCallback(async (
+    plugin: PluginData,
+    surface: PluginControlledUiSettingsSection,
+    field: PluginControlledUiField,
+    value: PluginControlledUiSettingValue,
+  ) => {
+    try {
+      await setControlledSettingMutation.mutateAsync({
+        reviewKey: plugin.reviewKey,
+        contributionId: surface.id,
+        fieldId: field.id,
+        value,
+      })
+      await refetch()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [refetch, setControlledSettingMutation, t])
 
   const handleInvokeControlledAction = useCallback(async (
     plugin: PluginData,
@@ -2484,8 +2577,10 @@ export function AgentsPluginsTab() {
               isAuthenticating={startOAuthMutation.isPending}
               onMarkReviewed={() => handleMarkReviewed(selectedPlugin)}
               isMarkingReviewed={markReviewedMutation.isPending}
+              onSetControlledSetting={(surface, field, value) => handleSetControlledSetting(selectedPlugin, surface, field, value)}
               onGrantControlledAction={(surface) => handleGrantControlledAction(selectedPlugin, surface)}
               onInvokeControlledAction={(surface) => handleInvokeControlledAction(selectedPlugin, surface)}
+              isSavingControlledSetting={setControlledSettingMutation.isPending}
               isGrantingControlledAction={grantControlledActionMutation.isPending}
               isInvokingControlledAction={invokeControlledActionMutation.isPending}
             />

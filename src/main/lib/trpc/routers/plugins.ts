@@ -27,6 +27,7 @@ import {
   buildPluginControlledUiGate,
   getControlledUiActionPermissionId,
   type PluginControlledUiDiagnostic,
+  type PluginControlledUiField,
   type PluginControlledUiGate,
   type PluginControlledUiManifest,
 } from "../../../../shared/plugin-controlled-ui"
@@ -55,7 +56,10 @@ import {
 import { getEnabledPlugins } from "./claude-settings"
 import {
   getControlledUiPermissionGrantStatus,
+  getControlledUiSettingsValues,
   grantControlledUiPermission,
+  setControlledUiSettingValue,
+  type PluginControlledUiSettingValue,
 } from "../../plugins/controlled-ui-state"
 
 export interface PluginWithComponents {
@@ -88,6 +92,7 @@ export interface PluginWithComponents {
     diagnostics: PluginControlledUiDiagnostic[]
     ignoredUnknownFields: string[]
     actionGrantStatuses: Record<string, "current" | "stale" | "mismatch">
+    settingsValues: Record<string, Record<string, PluginControlledUiSettingValue>>
     gate: PluginControlledUiGate
   }
   isDisabled: boolean
@@ -188,6 +193,29 @@ async function getControlledUiActionGrantStatuses(input: {
   return Object.fromEntries(entries.filter((entry): entry is [string, "current" | "stale" | "mismatch"] => Boolean(entry)))
 }
 
+async function getControlledUiSettingsValuesByContribution(input: {
+  plugin: PluginInfo
+  scanned: ScannedPlugin
+  updateReview: PluginUpdateReviewMetadata
+}): Promise<Record<string, Record<string, PluginControlledUiSettingValue>>> {
+  const settingsSections = input.scanned.controlledUi.manifest?.surfaces.filter(
+    (surface) => surface.type === "settings-section",
+  ) ?? []
+  const entries = await Promise.all(settingsSections.map(async (surface) => {
+    if (surface.type !== "settings-section") return undefined
+    const values = await getControlledUiSettingsValues({
+      pluginReviewKey: input.plugin.reviewKey,
+      contributionFingerprint: input.updateReview.fingerprint,
+      contributionId: surface.id,
+      fieldIds: surface.fields.map((field) => field.id),
+    })
+    return [surface.id, values] as const
+  }))
+  return Object.fromEntries(
+    entries.filter((entry): entry is [string, Record<string, PluginControlledUiSettingValue>] => Boolean(entry)),
+  )
+}
+
 async function toPluginWithComponents(input: {
   scanned: ScannedPlugin
   enabledPlugins: string[]
@@ -196,11 +224,18 @@ async function toPluginWithComponents(input: {
 }): Promise<PluginWithComponents> {
   const { plugin } = input.scanned
   const updateReview = input.updateReview ?? makeEmptyUpdateReviewMetadata(plugin)
-  const actionGrantStatuses = await getControlledUiActionGrantStatuses({
-    plugin,
-    scanned: input.scanned,
-    updateReview,
-  })
+  const [actionGrantStatuses, settingsValues] = await Promise.all([
+    getControlledUiActionGrantStatuses({
+      plugin,
+      scanned: input.scanned,
+      updateReview,
+    }),
+    getControlledUiSettingsValuesByContribution({
+      plugin,
+      scanned: input.scanned,
+      updateReview,
+    }),
+  ])
   const grantValues = Object.values(actionGrantStatuses)
   const hasControlledActions = grantValues.length > 0
   const safetyGate = buildPluginSafetyGate({
@@ -251,6 +286,7 @@ async function toPluginWithComponents(input: {
       diagnostics: input.scanned.controlledUi.diagnostics,
       ignoredUnknownFields: input.scanned.controlledUi.ignoredUnknownFields,
       actionGrantStatuses,
+      settingsValues,
       gate: controlledUiGate,
     },
     isDisabled: plugin.runtime === "claude" ? !input.enabledPlugins.includes(plugin.source) : false,
@@ -260,16 +296,12 @@ async function toPluginWithComponents(input: {
   }
 }
 
-async function getControlledUiActionContext(input: {
-  reviewKey: string
-  contributionId: string
-  actionId: string
-}) {
+async function getControlledUiCurrentContext(reviewKey: string) {
   const [installedPlugins, safeMode] = await Promise.all([
     discoverAllRuntimePlugins(),
     getPluginSafeModeState(),
   ])
-  const plugin = installedPlugins.find((candidate) => candidate.reviewKey === input.reviewKey)
+  const plugin = installedPlugins.find((candidate) => candidate.reviewKey === reviewKey)
   if (!plugin) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -285,6 +317,22 @@ async function getControlledUiActionContext(input: {
   const updateReview =
     reviewResult.metadataByPluginKey[plugin.reviewKey] ??
     makeEmptyUpdateReviewMetadata(plugin)
+
+  return {
+    plugin,
+    scanned,
+    safeMode,
+    updateReview,
+  }
+}
+
+async function getControlledUiActionContext(input: {
+  reviewKey: string
+  contributionId: string
+  actionId: string
+}) {
+  const current = await getControlledUiCurrentContext(input.reviewKey)
+  const { plugin, scanned, safeMode, updateReview } = current
   const contribution = scanned.controlledUi.manifest?.surfaces.find(
     (surface) => surface.id === input.contributionId,
   )
@@ -337,6 +385,88 @@ async function getControlledUiActionContext(input: {
       permissionStale: grantStatus === "stale",
     }),
   }
+}
+
+async function getControlledUiSettingContext(input: {
+  reviewKey: string
+  contributionId: string
+  fieldId: string
+}) {
+  const current = await getControlledUiCurrentContext(input.reviewKey)
+  const { plugin, scanned, safeMode, updateReview } = current
+  const contribution = scanned.controlledUi.manifest?.surfaces.find(
+    (surface) => surface.id === input.contributionId,
+  )
+
+  if (!contribution) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Controlled UI settings contribution is not currently declared.",
+    })
+  }
+  if (contribution.type !== "settings-section") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Controlled UI contribution is not a settings section.",
+    })
+  }
+
+  const field = contribution.fields.find((candidate) => candidate.id === input.fieldId)
+  if (!field) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Controlled UI settings field is not currently declared.",
+    })
+  }
+
+  const gate = buildPluginControlledUiGate({
+    runtime: plugin.runtime,
+    targetMode: scanned.targetMode,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: safeMode.enabled,
+    hasValidManifest: Boolean(scanned.controlledUi.manifest),
+    surfaceSupported: true,
+  })
+
+  return {
+    plugin,
+    scanned,
+    contribution,
+    field,
+    updateReview,
+    gate,
+  }
+}
+
+function normalizeControlledUiSettingValue(
+  field: PluginControlledUiField,
+  value: PluginControlledUiSettingValue,
+): PluginControlledUiSettingValue {
+  if (field.type === "checkbox") {
+    if (typeof value !== "boolean") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Controlled UI checkbox settings require a boolean value.",
+      })
+    }
+    return value
+  }
+
+  if (typeof value !== "string") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Controlled UI text and select settings require a string value.",
+    })
+  }
+
+  if (field.type === "select" && !(field.options ?? []).includes(value)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Controlled UI select setting value is not declared by the manifest.",
+    })
+  }
+
+  return value
 }
 
 export const pluginsRouter = router({
@@ -501,6 +631,39 @@ export const pluginsRouter = router({
         safeMode,
       })
   }),
+
+  /**
+   * Persist a Locus-owned controlled UI setting value. The field is validated
+   * against the current manifest and current fingerprint in the main process.
+   */
+  setControlledSetting: publicProcedure
+    .input(z.object({
+      reviewKey: z.string().min(1),
+      contributionId: z.string().min(1),
+      fieldId: z.string().min(1),
+      value: z.union([z.string().max(4000), z.boolean()]),
+    }))
+    .mutation(async ({ input }) => {
+      const context = await getControlledUiSettingContext(input)
+      if (!context.gate.canRenderControlledUi) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Controlled UI setting is blocked by current review or safe mode.",
+        })
+      }
+
+      const setting = await setControlledUiSettingValue({
+        pluginReviewKey: context.plugin.reviewKey,
+        contributionFingerprint: context.updateReview.fingerprint,
+        contributionId: context.contribution.id,
+        fieldId: context.field.id,
+        value: normalizeControlledUiSettingValue(context.field, input.value),
+      })
+      return {
+        setting,
+        gate: context.gate,
+      }
+    }),
 
   /**
    * Store a local fingerprint-bound grant for an allowlisted controlled UI

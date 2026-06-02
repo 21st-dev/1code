@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -13,6 +13,21 @@ import {
   parseControlledUiManifest,
 } from "../src/shared/plugin-controlled-ui"
 import { diffPluginManifestReviewDocuments } from "../src/shared/plugin-update-review"
+
+let userDataDir = ""
+
+mock.module("electron", () => ({
+  app: {
+    getPath(name: string) {
+      if (name !== "userData") {
+        throw new Error(`unexpected app path request: ${name}`)
+      }
+      return userDataDir
+    },
+  },
+}))
+
+const controlledUiState = await import("../src/main/lib/plugins/controlled-ui-state")
 
 function pluginInfo(root: string): PluginInfo {
   return {
@@ -253,6 +268,54 @@ describe("controlled UI plugin gates and grants", () => {
     expect(getControlledUiActionPermissionId(button.action)).toBe(
       "controlled-ui.action.insert-chat-draft",
     )
+  })
+})
+
+describe("controlled UI local state", () => {
+  test("stores settings values only for the current contribution fingerprint", async () => {
+    userDataDir = await mkdtemp(join(tmpdir(), "locus-controlled-ui-state-"))
+    const statePath = join(userDataDir, "plugin-controlled-ui-state.json")
+    try {
+      await controlledUiState.setControlledUiSettingValue({
+        pluginReviewKey: "claude:market:review",
+        contributionFingerprint: "sha256:one",
+        contributionId: "review-settings",
+        fieldId: "severity",
+        value: "high",
+        filePath: statePath,
+        now: new Date("2026-06-02T00:00:00.000Z"),
+      })
+      await controlledUiState.setControlledUiSettingValue({
+        pluginReviewKey: "claude:market:review",
+        contributionFingerprint: "sha256:one",
+        contributionId: "review-settings",
+        fieldId: "enabled",
+        value: true,
+        filePath: statePath,
+        now: new Date("2026-06-02T00:00:01.000Z"),
+      })
+
+      await expect(controlledUiState.getControlledUiSettingsValues({
+        pluginReviewKey: "claude:market:review",
+        contributionFingerprint: "sha256:one",
+        contributionId: "review-settings",
+        fieldIds: ["severity", "enabled"],
+        filePath: statePath,
+      })).resolves.toEqual({
+        severity: "high",
+        enabled: true,
+      })
+
+      await expect(controlledUiState.getControlledUiSettingsValues({
+        pluginReviewKey: "claude:market:review",
+        contributionFingerprint: "sha256:two",
+        contributionId: "review-settings",
+        fieldIds: ["severity", "enabled"],
+        filePath: statePath,
+      })).resolves.toEqual({})
+    } finally {
+      await rm(userDataDir, { recursive: true, force: true })
+    }
   })
 })
 

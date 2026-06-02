@@ -128,12 +128,17 @@ describe("plugin target mode UI source guards", () => {
   test("renders controlled UI contributions without plugin code execution", () => {
     expect(pluginsTabSource).toContain("PluginControlledUiPanel")
     expect(pluginsTabSource).toContain("plugin.controlledUi.manifest?.surfaces")
+    expect(pluginsTabSource).toContain("trpc.plugins.setControlledSetting.useMutation")
     expect(pluginsTabSource).toContain("trpc.plugins.grantControlledAction.useMutation")
     expect(pluginsTabSource).toContain("trpc.plugins.invokeControlledAction.useMutation")
+    expect(pluginsTabSource).toContain("plugin.controlledUi.settingsValues")
     expect(pluginsTabSource).toContain("navigator.clipboard.writeText(result.prompt)")
+    expect(pluginsRouterSource).toContain("setControlledSetting")
+    expect(pluginsRouterSource).toContain("setControlledUiSettingValue")
     expect(pluginsRouterSource).toContain("grantControlledAction")
     expect(pluginsRouterSource).toContain("invokeControlledAction")
     expect(pluginsRouterSource).toContain("getControlledUiActionContext")
+    expect(pluginsRouterSource).toContain("getControlledUiSettingContext")
     expect(pluginsRouterSource).toContain("buildPluginControlledUiGate")
     expect(pluginsTabSource).not.toContain("dangerouslySetInnerHTML")
     expect(pluginsTabSource).not.toContain("executeCodexPlugin")
@@ -143,6 +148,7 @@ describe("plugin target mode UI source guards", () => {
     for (const key of [
       "settings.plugins.uiContributions",
       "settings.plugins.uiContributionsHint",
+      "settings.plugins.contributionSettingUnset",
       "settings.plugins.contributionReasonPermissionRequired",
       "settings.plugins.contributionStatusPermissionStale",
       "settings.plugins.approveControlledAction",
