@@ -13,6 +13,7 @@ import {
   type PluginInfo,
 } from "../../plugins"
 import {
+  getPluginReviewStatePath,
   getPluginSafeModeState,
   markPluginFingerprintReviewed,
   recordPluginReviewScans,
@@ -40,6 +41,10 @@ import {
   type PluginSafeModeState,
   type PluginSafetyGate,
 } from "../../../../shared/plugin-safety-gates"
+import {
+  buildPluginDoctorReport,
+  type PluginDoctorReport,
+} from "../../../../shared/plugin-doctor"
 import { getEnabledPlugins } from "./claude-settings"
 
 export interface PluginWithComponents {
@@ -228,6 +233,70 @@ export const pluginsRouter = router({
       updateReview: reviewResult.metadataByPluginKey[scanned.plugin.reviewKey],
       safeMode,
     }))
+  }),
+
+  /**
+   * Build a local Doctor report for plugin metadata, review state, gates, and
+   * declarations. This is diagnostic-only and does not execute plugin code.
+   */
+  doctor: publicProcedure.query(async (): Promise<PluginDoctorReport> => {
+    const [installedPlugins, sources] = await Promise.all([
+      discoverAllRuntimePlugins(),
+      discoverPluginSources(),
+    ])
+
+    const scannedPlugins = await Promise.all(
+      installedPlugins.map((plugin) => scanPluginWithComponents(plugin)),
+    )
+    const reviewResult = await recordPluginReviewScans(
+      scannedPlugins.map((scanned) => ({
+        pluginKey: scanned.plugin.reviewKey,
+        document: scanned.reviewDocument,
+      })),
+    )
+
+    return buildPluginDoctorReport({
+      safeMode: reviewResult.safeMode,
+      reviewStatePath: getPluginReviewStatePath(),
+      sources: sources.map((source) => ({
+        id: source.id,
+        runtime: source.runtime,
+        status: source.status,
+        path: source.path,
+        pluginCount: source.pluginCount,
+      })),
+      plugins: scannedPlugins.map((scanned) => {
+        const plugin = scanned.plugin
+        const updateReview =
+          reviewResult.metadataByPluginKey[plugin.reviewKey] ??
+          makeEmptyUpdateReviewMetadata(plugin)
+        const safetyGate = buildPluginSafetyGate({
+          runtime: plugin.runtime,
+          hasMcpServers: scanned.components.mcpServers.length > 0,
+          updateReviewStatus: updateReview.status,
+          safeModeEnabled: reviewResult.safeMode.enabled,
+        })
+        return {
+          runtime: plugin.runtime,
+          reviewKey: plugin.reviewKey,
+          name: plugin.name,
+          source: plugin.source,
+          path: plugin.path,
+          updateReview,
+          safetyGate,
+          sourcePins: plugin.sourcePins ?? [],
+          diagnostics: scanned.diagnostics,
+          componentCounts: {
+            commands: scanned.components.commands.length,
+            skills: scanned.components.skills.length,
+            agents: scanned.components.agents.length,
+            mcpServers: scanned.components.mcpServers.length,
+          },
+          mcpServers: scanned.components.mcpServers,
+          mcpApprovalIdentifiers: scanned.mcpApprovalIdentifiers,
+        }
+      }),
+    })
   }),
 
   /**

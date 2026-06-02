@@ -4,9 +4,9 @@
 - [x] 1.3 Run `openspec validate add-plugin-doctor-debug --strict --no-interactive`.
 
 ## 2. Shared/Main Doctor Model
-- [ ] 2.1 Add shared Doctor/Debug types and aggregation helpers.
-- [ ] 2.2 Generate plugin Doctor checks from source status, review metadata, safety gates, component counts, MCP declarations, and local state.
-- [ ] 2.3 Expose Doctor/Debug data through the plugins tRPC router without raw secret values.
+- [x] 2.1 Add shared Doctor/Debug types and aggregation helpers.
+- [x] 2.2 Generate plugin Doctor checks from source status, review metadata, safety gates, component counts, MCP declarations, and local state.
+- [x] 2.3 Expose Doctor/Debug data through the plugins tRPC router without raw secret values.
 
 ## 3. Runtime Gate Consistency
 - [ ] 3.1 Add a main-process helper for allowed Claude plugin runtime components.
