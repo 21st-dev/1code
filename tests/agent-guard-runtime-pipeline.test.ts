@@ -40,6 +40,17 @@ describe("agent guard runtime pipeline", () => {
     expect(chunks).toContain('| { type: "guard-audit"; audit: GuardedRunAudit }')
   })
 
+  test("Claude desktop stream ownership is fenced by run identity", () => {
+    const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+
+    expect(claude).toContain("{ controller: AbortController; runId: string }")
+    expect(claude).toContain("const activeRunId = input.runId ?? streamId")
+    expect(claude).toContain(
+      "activeSessions.get(input.subChatId)?.controller === abortController",
+    )
+    expect(claude).toContain("input.runId && session.runId !== input.runId")
+  })
+
   test("Codex guarded and plan-mode runs install ACP permission enforcement", () => {
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const codexChatInputSchema = readFileSync(

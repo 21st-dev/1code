@@ -11,6 +11,7 @@ import {
   completeAgentJob,
   createAgentJob,
   getAgentJob,
+  heartbeatAgentJob,
   requestCancelAgentJob,
   startAgentJob,
 } from "./headless/job-store"
@@ -38,10 +39,17 @@ type CancelRegistration = {
   runtime: DesktopAgentRuntime
   subChatId: string
   runId?: string | null
+  db: AgentJobDatabase
+  workerId: string
+  heartbeatIntervalMs?: number
   cancel: () => void
 }
 
-const activeDesktopJobCancellations = new Map<string, CancelRegistration>()
+type ActiveCancelRegistration = CancelRegistration & {
+  heartbeatTimer: ReturnType<typeof setInterval> | null
+}
+
+const activeDesktopJobCancellations = new Map<string, ActiveCancelRegistration>()
 
 function assertDesktopRuntime(runtime: string): asserts runtime is DesktopAgentRuntime {
   if (runtime !== "claude-code" && runtime !== "codex") {
@@ -148,10 +156,26 @@ export function createAndStartDesktopAgentJob(
 export function registerActiveDesktopAgentJob(
   registration: CancelRegistration,
 ): void {
-  activeDesktopJobCancellations.set(registration.jobId, registration)
+  unregisterActiveDesktopAgentJob(registration.jobId)
+  const heartbeatTimer = setInterval(() => {
+    try {
+      heartbeatAgentJob(registration.db, registration.jobId, registration.workerId)
+    } catch {
+      unregisterActiveDesktopAgentJob(registration.jobId)
+    }
+  }, registration.heartbeatIntervalMs ?? 30_000)
+  heartbeatTimer.unref?.()
+  activeDesktopJobCancellations.set(registration.jobId, {
+    ...registration,
+    heartbeatTimer,
+  })
 }
 
 export function unregisterActiveDesktopAgentJob(jobId: string): void {
+  const registration = activeDesktopJobCancellations.get(jobId)
+  if (registration?.heartbeatTimer) {
+    clearInterval(registration.heartbeatTimer)
+  }
   activeDesktopJobCancellations.delete(jobId)
 }
 

@@ -129,6 +129,8 @@ describe("desktop agent jobs", () => {
       runtime: "claude-code",
       subChatId: "sub-chat-1",
       runId: "stream-1",
+      db,
+      workerId: "desktop:claude-code:stream-1",
       cancel: () => {
         cancelCount += 1
       },
@@ -140,6 +142,38 @@ describe("desktop agent jobs", () => {
     expect(cancelCount).toBe(1)
 
     unregisterActiveDesktopAgentJob(job.id)
+  })
+
+  test("refreshes heartbeat while a desktop job is active", async () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+    const { job, workerId } = createAndStartDesktopAgentJob(db, {
+      runtime: "codex",
+      mode: "plan",
+      chatId: "chat-1",
+      subChatId: "sub-chat-1",
+      cwd: "/tmp/project-worktree",
+      prompt: "Long running inspect",
+      runId: "run-heartbeat",
+    })
+    const initialHeartbeat = getAgentJob(db, job.id)?.heartbeatAt?.getTime() ?? 0
+
+    registerActiveDesktopAgentJob({
+      jobId: job.id,
+      runtime: "codex",
+      subChatId: "sub-chat-1",
+      runId: "run-heartbeat",
+      db,
+      workerId,
+      heartbeatIntervalMs: 5,
+      cancel: () => {},
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const refreshedHeartbeat = getAgentJob(db, job.id)?.heartbeatAt?.getTime() ?? 0
+    unregisterActiveDesktopAgentJob(job.id)
+
+    expect(refreshedHeartbeat).toBeGreaterThanOrEqual(initialHeartbeat)
   })
 
   test("completes running desktop jobs safely and ignores terminal jobs", () => {
@@ -170,4 +204,3 @@ describe("desktop agent jobs", () => {
     expect(ignored?.status).toBe("succeeded")
   })
 })
-

@@ -2223,6 +2223,8 @@ export const codexRouter = router({
               runtime: "codex",
               subChatId: input.subChatId,
               runId: input.runId,
+              db,
+              workerId: desktopJob.workerId,
               cancel: () => {
                 const activeStream = activeStreams.get(input.subChatId)
                 if (activeStream?.runId !== input.runId) return

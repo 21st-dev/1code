@@ -203,4 +203,43 @@ describe("agent job store", () => {
       expect(event.payloadJson).not.toContain("abc.def.ghi")
     }
   })
+
+  test("redacts common non-sk secret formats from job storage", () => {
+    const db = createAgentJobTestDb()
+    const prompt = [
+      "OPENAI_API_KEY=plain-openai-token",
+      "ANTHROPIC_AUTH_TOKEN=plain-anthropic-token",
+      "Authorization: Basic dXNlcjpwYXNz",
+      "ghp_abcdefghijklmnopqrstuvwxyz123456",
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature",
+      "https://example.test/callback?code=oauth-code&access_token=oauth-token",
+      "-----BEGIN PRIVATE KEY-----\\nsecret\\n-----END PRIVATE KEY-----",
+    ].join("\\n")
+
+    const job = createAgentJob(db, {
+      source: "cli",
+      runtime: "codex",
+      mode: "agent",
+      cwd: "/tmp/project",
+      prompt,
+    })
+
+    expect(job.promptPreview).not.toContain("plain-openai-token")
+    expect(job.promptPreview).not.toContain("dXNlcjpwYXNz")
+    expect(getAgentJobPrompt(db, job.id)).not.toContain("plain-anthropic-token")
+    expect(getAgentJobPrompt(db, job.id)).not.toContain("ghp_")
+    expect(getAgentJobPrompt(db, job.id)).not.toContain("oauth-code")
+
+    startAgentJob(db, { jobId: job.id, workerId: "worker-1" })
+    appendAgentJobEvent(db, {
+      jobId: job.id,
+      type: "error",
+      payload: { output: prompt },
+    })
+    const eventPayloads = listAgentJobEvents(db, job.id)
+      .map((event) => event.payloadJson)
+      .join("\\n")
+    expect(eventPayloads).not.toContain("plain-openai-token")
+    expect(eventPayloads).not.toContain("PRIVATE KEY")
+  })
 })

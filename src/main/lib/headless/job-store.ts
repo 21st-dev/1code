@@ -90,10 +90,25 @@ function assertOneOf<T extends readonly string[]>(
 
 function redactSecretText(value: string): string {
   return value
+    .replace(
+      /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----/g,
+      "[redacted-pem]",
+    )
     .replace(/sk-[A-Za-z0-9_-]{20,}/g, "[redacted]")
+    .replace(/gh[pousr]_[A-Za-z0-9_]{20,}/g, "[redacted]")
+    .replace(/github_pat_[A-Za-z0-9_]{20,}/g, "[redacted]")
+    .replace(
+      /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+      "[redacted-jwt]",
+    )
+    .replace(/(authorization\s*:\s*basic\s+)[A-Za-z0-9+/=_-]+/gi, "$1[redacted]")
     .replace(/bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]")
     .replace(
-      /((?:access_token|refresh_token)["'=:\s]+)[A-Za-z0-9._-]+/gi,
+      /((?:access_token|refresh_token|id_token|anthropic_auth_token|openai_api_key|codex_api_key|github_token|npm_token|aws_secret_access_key|aws_session_token|api[-_]?key|secret|password)["'=:\s]+)["']?[^\s"',;]+/gi,
+      "$1[redacted]",
+    )
+    .replace(
+      /([?&](?:code|access_token|refresh_token|id_token|token)=)[^&#\s]+/gi,
       "$1[redacted]",
     )
 }

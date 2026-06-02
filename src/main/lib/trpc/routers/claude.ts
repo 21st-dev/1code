@@ -244,9 +244,12 @@ const getClaudeQuery = async () => {
   return cachedClaudeQuery
 }
 
-// Active sessions for cancellation (onAbort handles stash + abort + restore)
-// Active sessions for cancellation
-const activeSessions = new Map<string, AbortController>()
+// Active sessions for cancellation. The runId guard prevents stale cleanup from
+// a superseded stream from clearing a newer stream in the same sub-chat.
+const activeSessions = new Map<
+  string,
+  { controller: AbortController; runId: string }
+>()
 
 /** Check if there are any active Claude streaming sessions */
 export function hasActiveClaudeSessions(): boolean {
@@ -255,9 +258,9 @@ export function hasActiveClaudeSessions(): boolean {
 
 /** Abort all active Claude sessions so their cleanup saves partial state */
 export function abortAllClaudeSessions(): void {
-  for (const [subChatId, controller] of activeSessions) {
+  for (const [subChatId, session] of activeSessions) {
     console.log(`[claude] Aborting session ${subChatId} before reload`)
-    controller.abort()
+    session.controller.abort()
   }
   activeSessions.clear()
 }
@@ -954,14 +957,18 @@ export const claudeRouter = router({
       return observable<UIMessageChunk>((emit) => {
         // Abort any existing session for this subChatId before starting a new one
         // This prevents race conditions if two messages are sent in quick succession
-        const existingController = activeSessions.get(input.subChatId)
-        if (existingController) {
-          existingController.abort()
+        const existingSession = activeSessions.get(input.subChatId)
+        if (existingSession) {
+          existingSession.controller.abort()
         }
 
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
-        activeSessions.set(input.subChatId, abortController)
+        const activeRunId = input.runId ?? streamId
+        activeSessions.set(input.subChatId, {
+          controller: abortController,
+          runId: activeRunId,
+        })
 
         // Stream debug logging
         const subId = input.subChatId.slice(-8) // Short ID for logs
@@ -1078,14 +1085,16 @@ export const claudeRouter = router({
               subChatId: input.subChatId,
               cwd: input.cwd,
               prompt: input.prompt,
-              runId: input.runId ?? streamId,
+              runId: activeRunId,
             })
             desktopJobId = desktopJob.job.id
             registerActiveDesktopAgentJob({
               jobId: desktopJobId,
               runtime: "claude-code",
               subChatId: input.subChatId,
-              runId: input.runId ?? streamId,
+              runId: activeRunId,
+              db,
+              workerId: desktopJob.workerId,
               cancel: () => {
                 abortController.abort()
                 clearPendingApprovals("Session cancelled.", input.subChatId)
@@ -3146,7 +3155,9 @@ ${prompt}
               })
               unregisterActiveDesktopAgentJob(desktopJobId)
             }
-            activeSessions.delete(input.subChatId)
+            if (activeSessions.get(input.subChatId)?.controller === abortController) {
+              activeSessions.delete(input.subChatId)
+            }
             if (guardedContract) {
               activeGuardedContracts.delete(guardedContract.id)
             }
@@ -3160,11 +3171,17 @@ ${prompt}
           )
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()
-          activeSessions.delete(input.subChatId)
+          const ownsActiveSession =
+            activeSessions.get(input.subChatId)?.controller === abortController
+          if (ownsActiveSession) {
+            activeSessions.delete(input.subChatId)
+          }
           if (guardedContract) {
             activeGuardedContracts.delete(guardedContract.id)
           }
-          clearPendingApprovals("Session ended.", input.subChatId)
+          if (ownsActiveSession) {
+            clearPendingApprovals("Session ended.", input.subChatId)
+          }
 
           // Clear streamId since we're no longer streaming.
           // sessionId is NOT saved here — the save block in the async function
@@ -3178,10 +3195,12 @@ ${prompt}
               // Job may already be terminal if cleanup raced with stream finish.
             }
           }
-          db.update(subChats)
-            .set({ streamId: null })
-            .where(eq(subChats.id, input.subChatId))
-            .run()
+          if (ownsActiveSession) {
+            db.update(subChats)
+              .set({ streamId: null })
+              .where(eq(subChats.id, input.subChatId))
+              .run()
+          }
         }
       })
     }),
@@ -3291,16 +3310,19 @@ ${prompt}
    * Cancel active session
    */
   cancel: publicProcedure
-    .input(z.object({ subChatId: z.string() }))
+    .input(z.object({ subChatId: z.string(), runId: z.string().optional() }))
     .mutation(({ input }) => {
-      const controller = activeSessions.get(input.subChatId)
-      if (controller) {
-        controller.abort()
+      const session = activeSessions.get(input.subChatId)
+      if (session && input.runId && session.runId !== input.runId) {
+        return { cancelled: false, ignoredStale: true }
+      }
+      if (session) {
+        session.controller.abort()
         activeSessions.delete(input.subChatId)
         clearPendingApprovals("Session cancelled.", input.subChatId)
       }
 
-      return { cancelled: !!controller }
+      return { cancelled: !!session, ignoredStale: false }
     }),
 
   /**
