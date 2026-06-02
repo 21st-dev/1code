@@ -6,7 +6,7 @@ import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../li
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope, Code2, FolderPlus, Play, ShieldOff, Trash2 } from "lucide-react"
+import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope, Code2, FolderPlus, Play, ShieldOff, Trash2, PackageCheck, Download } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
@@ -30,7 +30,7 @@ interface PluginComponent {
 
 type PluginRuntime = "claude" | "codex"
 type RuntimeFilter = "all" | PluginRuntime
-type PluginViewMode = "installed" | "sources"
+type PluginViewMode = "installed" | "sources" | "store"
 type PluginSourceKind = "local-marketplace" | "cache" | "developer-local"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
@@ -99,7 +99,7 @@ interface PluginDiagnostic {
 }
 
 interface PluginSourcePin {
-  kind: "cache-version" | "lock-source-ref"
+  kind: "cache-version" | "lock-source-ref" | "store-git-commit" | "store-package-sha256"
   value: string
   label?: string
   repo?: string
@@ -272,6 +272,11 @@ type PluginDoctorCheckCode =
   | "developer-trusted-trust"
   | "developer-trusted-load"
   | "developer-trusted-diagnostic"
+  | "store-candidate"
+  | "store-pin"
+  | "store-approval"
+  | "store-backup"
+  | "store-target-mode"
   | "component-path-warning"
   | "review-state"
 
@@ -347,6 +352,122 @@ interface PluginDoctorReport {
   }
   checks: PluginDoctorCheck[]
   plugins: PluginDoctorPluginDebug[]
+  storeCandidates: PluginDoctorStoreCandidateDebug[]
+}
+
+type PluginStoreCandidateStatus =
+  | "not-installed"
+  | "installed-current"
+  | "update-available"
+  | "pin-changed"
+  | "package-hash-changed"
+  | "review-required"
+  | "blocked-invalid-pin"
+  | "blocked-missing-package-hash"
+  | "blocked-target-mode"
+
+type PluginStoreApprovalStatus = "missing" | "current" | "stale"
+
+interface PluginStoreGitSourcePin {
+  type: "git"
+  repo: string
+  commit: string
+  path?: string
+}
+
+interface PluginStorePackagePin {
+  sha256?: string
+  sizeBytes?: number
+}
+
+interface PluginStoreCatalogEntry {
+  schemaVersion: 1
+  id: string
+  runtime: PluginRuntime
+  name: string
+  version: string
+  source: PluginStoreGitSourcePin
+  package?: PluginStorePackagePin
+  targetMode: PluginTargetMode
+  declaredPermissions: string[]
+  declaredMcpServers: string[]
+}
+
+interface PluginStoreCandidateReviewDocument {
+  schemaVersion: 1
+  storeEntryId: string
+  runtime: PluginRuntime
+  name: string
+  version: string
+  source: PluginStoreGitSourcePin
+  package: PluginStorePackagePin
+  targetMode: PluginTargetMode
+  declaredPermissions: string[]
+  declaredMcpServers: string[]
+  sourcePins: PluginSourcePin[]
+}
+
+interface PluginStoreValidationIssue {
+  code: string
+  severity: "warning" | "blocked"
+  field: string
+  message: string
+}
+
+interface PluginStoreCandidateReview {
+  document: PluginStoreCandidateReviewDocument
+  status: PluginStoreCandidateStatus
+  approvalStatus: PluginStoreApprovalStatus
+  issues: PluginStoreValidationIssue[]
+  changes: PluginReviewChange[]
+}
+
+interface PluginStoreInstalledPackageRecord {
+  schemaVersion: 1
+  pluginReviewKey: string
+  storeEntryId: string
+  commit: string
+  packageHash?: string
+  candidateFingerprint: string
+  installedAt: string
+  targetMode: PluginTargetMode
+}
+
+interface PluginStoreBackupRecord {
+  schemaVersion: 1
+  id: string
+  pluginReviewKey: string
+  storeEntryId: string
+  backupPath: string
+  previousPath: string
+  previousFingerprint?: string
+  previousCommit?: string
+  previousPackageHash?: string
+  createdAt: string
+  restoredAt?: string
+}
+
+interface PluginStoreCandidatePreview {
+  entry: PluginStoreCatalogEntry
+  review: PluginStoreCandidateReview
+  candidateFingerprint: string
+  installed?: PluginStoreInstalledPackageRecord
+}
+
+interface PluginDoctorStoreCandidateDebug {
+  storeEntryId: string
+  runtime: PluginRuntime
+  name: string
+  candidateFingerprint: string
+  status: PluginStoreCandidateStatus
+  approvalStatus: PluginStoreApprovalStatus
+  issues: PluginStoreValidationIssue[]
+  sourceCommit: string
+  packageHash?: string
+  targetMode: PluginTargetMode
+  installed?: PluginStoreInstalledPackageRecord
+  backupRecords: PluginStoreBackupRecord[]
+  checks: PluginDoctorCheck[]
 }
 
 interface PluginData {
@@ -451,12 +572,12 @@ function getPluginStatusLabel(plugin: PluginData, t: ReturnType<typeof useI18n>[
 }
 
 const RUNTIME_FILTERS: RuntimeFilter[] = ["all", "claude", "codex"]
-const VIEW_MODES: PluginViewMode[] = ["installed", "sources"]
+const VIEW_MODES: PluginViewMode[] = ["installed", "sources", "store"]
 
 function getViewModeLabel(viewMode: PluginViewMode, t: ReturnType<typeof useI18n>["t"]): string {
-  return viewMode === "installed"
-    ? t("settings.plugins.viewInstalled")
-    : t("settings.plugins.viewSources")
+  if (viewMode === "installed") return t("settings.plugins.viewInstalled")
+  if (viewMode === "sources") return t("settings.plugins.viewSources")
+  return t("settings.plugins.viewStore")
 }
 
 function getSourceKindLabel(kind: PluginSourceKind, t: ReturnType<typeof useI18n>["t"]): string {
@@ -617,6 +738,75 @@ function getUpdateReviewStatusClass(status: PluginUpdateReviewStatus): string {
       return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
     case "reviewed":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+  }
+}
+
+function getStoreCandidateStatusLabel(
+  status: PluginStoreCandidateStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (status) {
+    case "not-installed":
+      return t("settings.plugins.storeStatusNotInstalled")
+    case "installed-current":
+      return t("settings.plugins.storeStatusInstalledCurrent")
+    case "update-available":
+      return t("settings.plugins.storeStatusUpdateAvailable")
+    case "pin-changed":
+      return t("settings.plugins.storeStatusPinChanged")
+    case "package-hash-changed":
+      return t("settings.plugins.storeStatusPackageHashChanged")
+    case "review-required":
+      return t("settings.plugins.storeStatusReviewRequired")
+    case "blocked-invalid-pin":
+      return t("settings.plugins.storeStatusBlockedInvalidPin")
+    case "blocked-missing-package-hash":
+      return t("settings.plugins.storeStatusBlockedMissingHash")
+    case "blocked-target-mode":
+      return t("settings.plugins.storeStatusBlockedTargetMode")
+  }
+}
+
+function getStoreCandidateStatusClass(status: PluginStoreCandidateStatus): string {
+  if (status.startsWith("blocked")) {
+    return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+  }
+  switch (status) {
+    case "installed-current":
+    case "not-installed":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "update-available":
+      return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+    case "pin-changed":
+    case "package-hash-changed":
+    case "review-required":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+  }
+  return "border-border bg-background text-muted-foreground"
+}
+
+function getStoreApprovalStatusLabel(
+  status: PluginStoreApprovalStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (status) {
+    case "current":
+      return t("settings.plugins.storeApprovalCurrent")
+    case "stale":
+      return t("settings.plugins.storeApprovalStale")
+    case "missing":
+      return t("settings.plugins.storeApprovalMissing")
+  }
+}
+
+function getStoreApprovalStatusClass(status: PluginStoreApprovalStatus): string {
+  switch (status) {
+    case "current":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "stale":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "missing":
+      return "border-border bg-background text-muted-foreground"
   }
 }
 
@@ -896,6 +1086,10 @@ function getSourcePinLabel(pin: PluginSourcePin, t: ReturnType<typeof useI18n>["
       return t("settings.plugins.sourcePinCacheVersion")
     case "lock-source-ref":
       return t("settings.plugins.sourcePinLockRef")
+    case "store-git-commit":
+      return t("settings.plugins.sourcePinStoreCommit")
+    case "store-package-sha256":
+      return t("settings.plugins.sourcePinStorePackageHash")
   }
 }
 
@@ -1011,6 +1205,16 @@ function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof u
       return t("settings.plugins.doctorCheckDeveloperTrustedLoad")
     case "developer-trusted-diagnostic":
       return t("settings.plugins.doctorCheckDeveloperTrustedDiagnostic")
+    case "store-candidate":
+      return t("settings.plugins.doctorCheckStoreCandidate")
+    case "store-pin":
+      return t("settings.plugins.doctorCheckStorePin")
+    case "store-approval":
+      return t("settings.plugins.doctorCheckStoreApproval")
+    case "store-backup":
+      return t("settings.plugins.doctorCheckStoreBackup")
+    case "store-target-mode":
+      return t("settings.plugins.doctorCheckStoreTargetMode")
     case "component-path-warning":
       return t("settings.plugins.doctorCheckComponentPathWarning")
     case "review-state":
@@ -2472,6 +2676,293 @@ function PluginSourceListItem({
   )
 }
 
+function PluginStoreListItem({
+  entry,
+  isSelected,
+  onSelect,
+}: {
+  entry: PluginStoreCatalogEntry
+  isSelected: boolean
+  onSelect: (id: string) => void
+}) {
+  const { t } = useI18n()
+  return (
+    <button
+      data-item-id={entry.id}
+      onClick={() => onSelect(entry.id)}
+      className={cn(
+        "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+        isSelected
+          ? "bg-foreground/5 text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+      )}
+    >
+      <div className="flex items-center gap-1.5 min-w-0">
+        <PackageCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <div className="text-sm leading-tight truncate">{formatPluginName(entry.name)}</div>
+        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
+          {entry.runtime === "claude" ? "Claude" : "Codex"}
+        </span>
+      </div>
+      <div className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
+        {entry.source.repo}
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
+        <span className="truncate font-mono">
+          {entry.source.commit ? entry.source.commit.slice(0, 12) : "-"}
+        </span>
+        <span className={cn(
+          "shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium",
+          getTargetModeClass(entry.targetMode)
+        )}>
+          {getTargetModeLabel(entry.targetMode, t)}
+        </span>
+      </div>
+    </button>
+  )
+}
+
+function PluginStoreCandidateDetail({
+  entry,
+  preview,
+  debug,
+  isLoadingPreview,
+  onApprove,
+  onInstallOrUpdate,
+  isApproving,
+  isInstalling,
+}: {
+  entry: PluginStoreCatalogEntry
+  preview?: PluginStoreCandidatePreview
+  debug?: PluginDoctorStoreCandidateDebug
+  isLoadingPreview: boolean
+  onApprove: () => void
+  onInstallOrUpdate: () => void
+  isApproving: boolean
+  isInstalling: boolean
+}) {
+  const { t } = useI18n()
+  const review = preview?.review
+  const document = review?.document
+  const isBlocked = review?.issues.some((issue) => issue.severity === "blocked") ?? true
+  const canApprove = Boolean(review && !isBlocked && review.approvalStatus !== "current")
+  const canInstall = Boolean(review && !isBlocked && review.approvalStatus === "current")
+  const installLabel = preview?.installed
+    ? t("settings.plugins.storeUpdate")
+    : t("settings.plugins.storeInstall")
+  const backup = debug?.backupRecords[0]
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto p-6 space-y-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-foreground">{formatPluginName(entry.name)}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {getRuntimeLabel(entry.runtime, t)} · {entry.version}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              {review ? (
+                <>
+                  <span className={cn(
+                    "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                    getStoreCandidateStatusClass(review.status),
+                  )}>
+                    {getStoreCandidateStatusLabel(review.status, t)}
+                  </span>
+                  <span className={cn(
+                    "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                    getStoreApprovalStatusClass(review.approvalStatus),
+                  )}>
+                    {getStoreApprovalStatusLabel(review.approvalStatus, t)}
+                  </span>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+            <div className="flex items-start gap-2">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+              <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-100">
+                {t("settings.plugins.storePinWarning")}
+              </p>
+            </div>
+          </div>
+
+          {isLoadingPreview ? (
+            <div className="flex items-center gap-2 rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t("settings.plugins.storePreviewLoading")}
+            </div>
+          ) : !review || !document ? (
+            <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+              {t("settings.plugins.storePreviewUnavailable")}
+            </div>
+          ) : (
+            <>
+              <div className="rounded-md border border-border bg-background p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{t("settings.plugins.storeRepo")}</p>
+                    <p className="font-mono text-foreground break-all">{document.source.repo}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{t("settings.plugins.storeCommit")}</p>
+                    <p className="font-mono text-foreground break-all">{document.source.commit}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{t("settings.plugins.storePath")}</p>
+                    <p className="font-mono text-foreground break-all">{document.source.path ?? "-"}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{t("settings.plugins.storeCandidateFingerprint")}</p>
+                    <p className="font-mono text-foreground" title={preview?.candidateFingerprint}>
+                      sha256:{shortFingerprint(preview?.candidateFingerprint ?? "")}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{t("settings.plugins.storePackageHash")}</p>
+                    <p className="font-mono text-foreground break-all">{document.package.sha256 ?? "-"}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{t("settings.plugins.storePackageSize")}</p>
+                    <p className="text-foreground">{formatBundleSize(document.package.sizeBytes)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-border bg-background p-3 space-y-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={cn(
+                    "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                    getTargetModeClass(document.targetMode),
+                  )}>
+                    {getTargetModeLabel(document.targetMode, t)}
+                  </span>
+                  <span className="rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {t("settings.plugins.storeDeclaredPermissions", { count: document.declaredPermissions.length })}
+                  </span>
+                  <span className="rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {t("settings.plugins.storeDeclaredMcp", { count: document.declaredMcpServers.length })}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {document.declaredPermissions.length > 0
+                    ? document.declaredPermissions.join(", ")
+                    : t("settings.plugins.storeNoDeclarations")}
+                </p>
+                {document.declaredMcpServers.length > 0 ? (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    MCP: {document.declaredMcpServers.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded-md border border-border bg-background p-3 space-y-2">
+                <Label>{t("settings.plugins.storeIssues")}</Label>
+                {review.issues.length > 0 ? (
+                  <div className="space-y-1">
+                    {review.issues.map((issue, index) => (
+                      <div
+                        key={`${issue.code}-${issue.field}-${index}`}
+                        className={cn(
+                          "rounded border px-2 py-1.5 text-xs leading-relaxed",
+                          issue.severity === "blocked"
+                            ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+                        )}
+                      >
+                        <span className="font-medium">{issue.field}</span>
+                        <span className="mx-1">·</span>
+                        <span>{issue.message || issue.code}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("settings.plugins.storeNoIssues")}</p>
+                )}
+              </div>
+
+              <div className="rounded-md border border-border bg-background p-3 space-y-2">
+                <Label>{t("settings.plugins.changeSummary")}</Label>
+                {review.changes.length > 0 ? (
+                  <div className="space-y-1">
+                    {review.changes.map((change) => (
+                      <div key={change.field} className="grid grid-cols-[8rem_1fr] gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs">
+                        <span className="font-medium text-foreground">{change.field}</span>
+                        <span className="min-w-0 text-muted-foreground break-all">
+                          {change.previous ?? "none"} {"->"} {change.current ?? "none"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("settings.plugins.noReviewChanges")}</p>
+                )}
+              </div>
+
+              {backup ? (
+                <div className="rounded-md border border-border bg-background p-3 space-y-1.5">
+                  <Label>{t("settings.plugins.storeBackup")}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.plugins.storeLatestBackup", {
+                      date: formatReviewTimestamp(backup.createdAt, t),
+                    })}
+                  </p>
+                  <p className="font-mono text-xs text-foreground break-all">{backup.backupPath}</p>
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={onApprove}
+                  disabled={!canApprove || isApproving}
+                  title={!canApprove ? t("settings.plugins.storeApprovalGateBlocksAction") : undefined}
+                >
+                  {isApproving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                      {t("settings.plugins.storeApproveExact")}
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={onInstallOrUpdate}
+                  disabled={!canInstall || isInstalling}
+                  title={!canInstall ? t("settings.plugins.storeInstallGateBlocksAction") : undefined}
+                >
+                  {isInstalling ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                      {installLabel}
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                {t("settings.plugins.storeActionHint")}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PluginSourceDetail({
   source,
   onRefresh,
@@ -2598,6 +3089,7 @@ export function AgentsPluginsTab() {
   const [viewMode, setViewMode] = useState<PluginViewMode>("installed")
   const [selectedPluginKey, setSelectedPluginKey] = useState<string | null>(null)
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+  const [selectedStoreEntryId, setSelectedStoreEntryId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all")
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -2623,6 +3115,9 @@ export function AgentsPluginsTab() {
   const { data: pluginSources = [], isLoading: isLoadingSources, refetch: refetchSources } = trpc.plugins.sources.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
+  const { data: storeEntries = [], isLoading: isLoadingStore, refetch: refetchStoreCatalog } = trpc.plugins.storeCatalog.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
   const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } = trpc.plugins.safeMode.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
@@ -2632,6 +3127,13 @@ export function AgentsPluginsTab() {
   const { data: doctorReport, isLoading: isLoadingDoctor, refetch: refetchDoctor } = trpc.plugins.doctor.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
+  const { data: selectedStorePreview, isLoading: isLoadingStorePreview, refetch: refetchStorePreview } = trpc.plugins.previewStoreCandidate.useQuery(
+    selectedStoreEntryId ? { storeEntryId: selectedStoreEntryId } : { storeEntryId: "" },
+    {
+      enabled: viewMode === "store" && Boolean(selectedStoreEntryId),
+      staleTime: 60 * 1000,
+    },
+  )
 
   // MCP server statuses for showing auth state in plugin detail
   const { data: allMcpConfig, refetch: refetchMcp } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
@@ -2679,6 +3181,8 @@ export function AgentsPluginsTab() {
   const setControlledSettingMutation = trpc.plugins.setControlledSetting.useMutation()
   const grantControlledActionMutation = trpc.plugins.grantControlledAction.useMutation()
   const invokeControlledActionMutation = trpc.plugins.invokeControlledAction.useMutation()
+  const approveStoreCandidateMutation = trpc.plugins.approveStoreCandidate.useMutation()
+  const installOrUpdateStoreCandidateMutation = trpc.plugins.installOrUpdateStoreCandidate.useMutation()
 
   const filteredPlugins = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"
@@ -2780,6 +3284,43 @@ export function AgentsPluginsTab() {
     return groups
   }, [filteredSources, t])
 
+  const filteredStoreEntries = useMemo(() => {
+    const runtimeFiltered = runtimeFilter === "all"
+      ? storeEntries
+      : storeEntries.filter((entry) => entry.runtime === runtimeFilter)
+
+    if (!searchQuery.trim()) return runtimeFiltered
+    const q = searchQuery.toLowerCase()
+    const qNoDashes = q.replace(/-/g, " ")
+    const qWithDashes = q.replace(/ /g, "-")
+    return runtimeFiltered.filter((entry) => {
+      const name = entry.name.toLowerCase()
+      if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (entry.id.toLowerCase().includes(q)) return true
+      if (entry.runtime.includes(q)) return true
+      if (entry.version.toLowerCase().includes(q)) return true
+      if (entry.source.repo.toLowerCase().includes(q)) return true
+      if (entry.source.commit.toLowerCase().includes(q)) return true
+      if (entry.source.path?.toLowerCase().includes(q)) return true
+      if (entry.package?.sha256?.toLowerCase().includes(q)) return true
+      return false
+    })
+  }, [runtimeFilter, searchQuery, storeEntries])
+
+  const storeGroups = useMemo(() => {
+    const groups: Array<{ id: string; label: string; entries: PluginStoreCatalogEntry[] }> = []
+    for (const runtime of ["claude", "codex"] as const) {
+      const runtimeEntries = filteredStoreEntries.filter((entry) => entry.runtime === runtime)
+      if (runtimeEntries.length === 0) continue
+      groups.push({
+        id: runtime,
+        label: `${getRuntimeLabel(runtime, t)} · ${t("settings.plugins.store")}`,
+        entries: runtimeEntries,
+      })
+    }
+    return groups
+  }, [filteredStoreEntries, t])
+
   const allPluginKeys = useMemo(
     () => pluginGroups.flatMap((group) => group.plugins.map(getPluginKey)),
     [pluginGroups]
@@ -2788,23 +3329,41 @@ export function AgentsPluginsTab() {
     () => sourceGroups.flatMap((group) => group.sources.map((source) => source.id)),
     [sourceGroups]
   )
+  const allStoreEntryIds = useMemo(
+    () => storeGroups.flatMap((group) => group.entries.map((entry) => entry.id)),
+    [storeGroups]
+  )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
-    items: viewMode === "installed" ? allPluginKeys : allSourceIds,
-    selectedItem: viewMode === "installed" ? selectedPluginKey : selectedSourceId,
+    items: viewMode === "installed"
+      ? allPluginKeys
+      : viewMode === "sources"
+        ? allSourceIds
+        : allStoreEntryIds,
+    selectedItem: viewMode === "installed"
+      ? selectedPluginKey
+      : viewMode === "sources"
+        ? selectedSourceId
+        : selectedStoreEntryId,
     onSelect: (id) => {
       if (viewMode === "installed") {
         setSelectedPluginKey(id)
-      } else {
+      } else if (viewMode === "sources") {
         setSelectedSourceId(id)
+      } else {
+        setSelectedStoreEntryId(id)
       }
     },
   })
 
   const selectedPlugin = plugins.find((p) => getPluginKey(p) === selectedPluginKey) || null
   const selectedSource = pluginSources.find((source) => source.id === selectedSourceId) || null
+  const selectedStoreEntry = storeEntries.find((entry) => entry.id === selectedStoreEntryId) || null
   const selectedPluginDebug = selectedPlugin
     ? doctorReport?.plugins.find((debug) => debug.reviewKey === selectedPlugin.reviewKey)
+    : undefined
+  const selectedStoreDebug = selectedStoreEntry
+    ? doctorReport?.storeCandidates.find((debug) => debug.storeEntryId === selectedStoreEntry.id)
     : undefined
 
   // Auto-select first plugin in display order (enabled first, then marketplace)
@@ -2829,6 +3388,17 @@ export function AgentsPluginsTab() {
     const first = sourceGroups[0]?.sources[0]
     setSelectedSourceId(first?.id ?? null)
   }, [filteredSources, isLoadingSources, selectedSource, selectedSourceId, sourceGroups, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== "store") return
+    if (selectedStoreEntry && filteredStoreEntries.includes(selectedStoreEntry)) return
+    if (isLoadingStore || filteredStoreEntries.length === 0) {
+      if (selectedStoreEntryId && filteredStoreEntries.length === 0) setSelectedStoreEntryId(null)
+      return
+    }
+    const first = storeGroups[0]?.entries[0]
+    setSelectedStoreEntryId(first?.id ?? null)
+  }, [filteredStoreEntries, isLoadingStore, selectedStoreEntry, selectedStoreEntryId, storeGroups, viewMode])
 
   const approveAllMutation = trpc.claudeSettings.approveAllPluginMcpServers.useMutation()
   const revokeAllMutation = trpc.claudeSettings.revokeAllPluginMcpServers.useMutation()
@@ -2948,15 +3518,55 @@ export function AgentsPluginsTab() {
     }
   }, [invokeControlledActionMutation, t])
 
-  const handleRefreshPlugins = useCallback(async () => {
+  const handleApproveStoreCandidate = useCallback(async (entry: PluginStoreCatalogEntry) => {
     try {
-      await clearPluginCacheMutation.mutateAsync()
-      await Promise.all([refetch(), refetchSources(), refetchDoctor()])
+      await approveStoreCandidateMutation.mutateAsync({ storeEntryId: entry.id })
+      toast.success(t("settings.plugins.toast.storeCandidateApproved"), {
+        description: formatPluginName(entry.name),
+      })
+      await Promise.all([refetchStorePreview(), refetchDoctor()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [clearPluginCacheMutation, refetch, refetchSources, refetchDoctor, t])
+  }, [approveStoreCandidateMutation, refetchDoctor, refetchStorePreview, t])
+
+  const handleInstallOrUpdateStoreCandidate = useCallback(async (entry: PluginStoreCatalogEntry) => {
+    try {
+      const result = await installOrUpdateStoreCandidateMutation.mutateAsync({ storeEntryId: entry.id })
+      toast.success(
+        result.backup
+          ? t("settings.plugins.toast.storeCandidateUpdated")
+          : t("settings.plugins.toast.storeCandidateInstalled"),
+        { description: formatPluginName(entry.name) },
+      )
+      await Promise.all([
+        refetch(),
+        refetchStoreCatalog(),
+        refetchStorePreview(),
+        refetchDoctor(),
+      ])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [installOrUpdateStoreCandidateMutation, refetch, refetchDoctor, refetchStoreCatalog, refetchStorePreview, t])
+
+  const handleRefreshPlugins = useCallback(async () => {
+    try {
+      await clearPluginCacheMutation.mutateAsync()
+      await Promise.all([
+        refetch(),
+        refetchSources(),
+        refetchStoreCatalog(),
+        selectedStoreEntryId ? refetchStorePreview() : Promise.resolve(),
+        refetchDoctor(),
+      ])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [clearPluginCacheMutation, refetch, refetchSources, refetchStoreCatalog, refetchStorePreview, refetchDoctor, selectedStoreEntryId, t])
 
   const handleToggleSafeMode = useCallback(async (enabled: boolean) => {
     try {
@@ -3056,7 +3666,7 @@ export function AgentsPluginsTab() {
     }
   }, [loadDeveloperPluginMutation, refetch, refetchDoctor, t])
 
-  const isRefreshingPlugins = isLoading || isLoadingSources || clearPluginCacheMutation.isPending
+  const isRefreshingPlugins = isLoading || isLoadingSources || isLoadingStore || clearPluginCacheMutation.isPending
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -3075,7 +3685,7 @@ export function AgentsPluginsTab() {
       >
         <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
           <div className="px-2 pt-2 flex-shrink-0">
-            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-0.5">
+            <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-0.5">
               {VIEW_MODES.map((mode) => (
                 <button
                   key={mode}
@@ -3121,7 +3731,9 @@ export function AgentsPluginsTab() {
               ref={searchInputRef}
               placeholder={viewMode === "installed"
                 ? t("settings.plugins.searchPlaceholder")
-                : t("settings.plugins.searchSourcesPlaceholder")}
+                : viewMode === "sources"
+                  ? t("settings.plugins.searchSourcesPlaceholder")
+                  : t("settings.plugins.searchStorePlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
@@ -3203,44 +3815,90 @@ export function AgentsPluginsTab() {
                   ))}
                 </div>
               )
-            ) : isLoadingSources ? (
+            ) : viewMode === "sources" ? (
+              isLoadingSources ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                </div>
+              ) : pluginSources.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                  <PluginFilledIcon className="h-8 w-8 text-border mb-3" />
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {t("settings.plugins.noSources")}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/70">
+                    {t("settings.plugins.sourcesEmptyDescription")}
+                  </p>
+                </div>
+              ) : filteredSources.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                  <p className="text-xs font-medium text-foreground">
+                    {searchQuery.trim()
+                      ? t("settings.plugins.noResults")
+                      : t("settings.plugins.sourceRuntimeEmptyTitle", {
+                          runtime: getRuntimeFilterLabel(runtimeFilter, t),
+                        })}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sourceGroups.map((group) => (
+                    <div key={group.id}>
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
+                        {group.label}
+                      </p>
+                      <div className="space-y-0.5">
+                        {group.sources.map((source) => (
+                          <PluginSourceListItem
+                            key={source.id}
+                            source={source}
+                            isSelected={selectedSourceId === source.id}
+                            onSelect={setSelectedSourceId}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : isLoadingStore ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
               </div>
-            ) : pluginSources.length === 0 ? (
+            ) : storeEntries.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                <PluginFilledIcon className="h-8 w-8 text-border mb-3" />
+                <PackageCheck className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">
-                  {t("settings.plugins.noSources")}
+                  {t("settings.plugins.noStoreEntries")}
                 </p>
                 <p className="text-[11px] text-muted-foreground/70">
-                  {t("settings.plugins.sourcesEmptyDescription")}
+                  {t("settings.plugins.storeEmptyDescription")}
                 </p>
               </div>
-            ) : filteredSources.length === 0 ? (
+            ) : filteredStoreEntries.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center px-3">
                 <p className="text-xs font-medium text-foreground">
                   {searchQuery.trim()
                     ? t("settings.plugins.noResults")
-                    : t("settings.plugins.sourceRuntimeEmptyTitle", {
+                    : t("settings.plugins.storeRuntimeEmptyTitle", {
                         runtime: getRuntimeFilterLabel(runtimeFilter, t),
                       })}
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {sourceGroups.map((group) => (
+                {storeGroups.map((group) => (
                   <div key={group.id}>
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
                       {group.label}
                     </p>
                     <div className="space-y-0.5">
-                      {group.sources.map((source) => (
-                        <PluginSourceListItem
-                          key={source.id}
-                          source={source}
-                          isSelected={selectedSourceId === source.id}
-                          onSelect={setSelectedSourceId}
+                      {group.entries.map((entry) => (
+                        <PluginStoreListItem
+                          key={entry.id}
+                          entry={entry}
+                          isSelected={selectedStoreEntryId === entry.id}
+                          onSelect={setSelectedStoreEntryId}
                         />
                       ))}
                     </div>
@@ -3307,26 +3965,63 @@ export function AgentsPluginsTab() {
               </Button>
             </div>
           )
-        ) : selectedSource ? (
-          <PluginSourceDetail
-            source={selectedSource}
-            onRefresh={() => { void handleRefreshPlugins() }}
-            onRemoveDeveloperSource={() => handleRemoveDeveloperSource(selectedSource)}
-            isRefreshing={isRefreshingPlugins}
-            isRemovingDeveloperSource={removeDeveloperSourceMutation.isPending}
+        ) : viewMode === "sources" ? (
+          selectedSource ? (
+            <PluginSourceDetail
+              source={selectedSource}
+              onRefresh={() => { void handleRefreshPlugins() }}
+              onRemoveDeveloperSource={() => handleRemoveDeveloperSource(selectedSource)}
+              isRefreshing={isRefreshingPlugins}
+              isRemovingDeveloperSource={removeDeveloperSourceMutation.isPending}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <PluginFilledIcon className="h-12 w-12 text-border mb-4" />
+              <p className="text-sm font-medium text-foreground">
+                {pluginSources.length > 0
+                  ? t("settings.plugins.selectSourceToView")
+                  : t("settings.plugins.noSources")}
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+                {pluginSources.length === 0
+                  ? t("settings.plugins.sourcesEmptyDescription")
+                  : t("settings.plugins.sourcesDescription")}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 h-7 px-2 text-xs"
+                onClick={() => { void handleRefreshPlugins() }}
+                disabled={isRefreshingPlugins}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+                {t("settings.plugins.refresh")}
+              </Button>
+            </div>
+          )
+        ) : selectedStoreEntry ? (
+          <PluginStoreCandidateDetail
+            entry={selectedStoreEntry}
+            preview={selectedStorePreview}
+            debug={selectedStoreDebug}
+            isLoadingPreview={isLoadingStorePreview}
+            onApprove={() => handleApproveStoreCandidate(selectedStoreEntry)}
+            onInstallOrUpdate={() => handleInstallOrUpdateStoreCandidate(selectedStoreEntry)}
+            isApproving={approveStoreCandidateMutation.isPending}
+            isInstalling={installOrUpdateStoreCandidateMutation.isPending}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <PluginFilledIcon className="h-12 w-12 text-border mb-4" />
+            <PackageCheck className="h-12 w-12 text-border mb-4" />
             <p className="text-sm font-medium text-foreground">
-              {pluginSources.length > 0
-                ? t("settings.plugins.selectSourceToView")
-                : t("settings.plugins.noSources")}
+              {storeEntries.length > 0
+                ? t("settings.plugins.selectStoreToView")
+                : t("settings.plugins.noStoreEntries")}
             </p>
             <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
-              {pluginSources.length === 0
-                ? t("settings.plugins.sourcesEmptyDescription")
-                : t("settings.plugins.sourcesDescription")}
+              {storeEntries.length === 0
+                ? t("settings.plugins.storeEmptyDescription")
+                : t("settings.plugins.storeDescription")}
             </p>
             <Button
               variant="outline"

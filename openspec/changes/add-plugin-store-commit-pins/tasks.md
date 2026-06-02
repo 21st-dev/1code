@@ -20,18 +20,18 @@
 - [x] 3.6 Add Doctor/Debug facts for store pin status, approval freshness, candidate diffs, and backup metadata.
 
 ## 4. Renderer UI
-- [ ] 4.1 Add store pin and candidate status rows to Settings > Plugins.
-- [ ] 4.2 Add install/update review preview with bounded diffs.
-- [ ] 4.3 Add explicit approve pinned candidate action and separate install/update action.
-- [ ] 4.4 Add warnings that pins are reproducibility metadata, not proof of safety.
-- [ ] 4.5 Add English and Simplified Chinese copy.
+- [x] 4.1 Add store pin and candidate status rows to Settings > Plugins.
+- [x] 4.2 Add install/update review preview with bounded diffs.
+- [x] 4.3 Add explicit approve pinned candidate action and separate install/update action.
+- [x] 4.4 Add warnings that pins are reproducibility metadata, not proof of safety.
+- [x] 4.5 Add English and Simplified Chinese copy.
 - [ ] 4.6 Review UI after smoke and fix clarity/layout issues.
 
 ## 5. Tests and Verification
 - [x] 5.1 Add shared store catalog/candidate/pin tests.
 - [x] 5.2 Add main-process preview, approval, backup, and stale-candidate tests.
 - [x] 5.3 Add source guards for no `latest`, no remote trusted-code, no renderer-trusted candidate metadata, no plugin execution during preview/install/update, and no MCP auto-activation.
-- [ ] 5.4 Add renderer/i18n source-guard tests for pin wording and forbidden trust labels.
+- [x] 5.4 Add renderer/i18n source-guard tests for pin wording and forbidden trust labels.
 - [ ] 5.5 Run targeted store pin tests.
 - [ ] 5.6 Run full `bun run test`.
 - [ ] 5.7 Run `bun run ts:check`.

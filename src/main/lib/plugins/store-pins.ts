@@ -463,7 +463,7 @@ function coercePluginStoreCatalogEntry(value: unknown): PluginStoreCatalogEntry 
     declaredPermissions: stringArrayValue(value.declaredPermissions),
     declaredMcpServers: stringArrayValue(value.declaredMcpServers),
     controlledUi: isRecord(value.controlledUi)
-      ? value.controlledUi as PluginStoreCatalogEntry["controlledUi"]
+      ? value.controlledUi as unknown as PluginStoreCatalogEntry["controlledUi"]
       : undefined,
   }
 }

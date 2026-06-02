@@ -197,6 +197,50 @@ describe("plugin target mode UI source guards", () => {
     expect(dictionarySource).toContain("不是沙箱或可信证书")
   })
 
+  test("renders pinned store candidate review gates without safety claims", () => {
+    expect(pluginsTabSource).toContain("PluginStoreCandidateDetail")
+    expect(pluginsTabSource).toContain("PluginStoreListItem")
+    expect(pluginsTabSource).toContain("trpc.plugins.storeCatalog.useQuery")
+    expect(pluginsTabSource).toContain("trpc.plugins.previewStoreCandidate.useQuery")
+    expect(pluginsTabSource).toContain("trpc.plugins.approveStoreCandidate.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.installOrUpdateStoreCandidate.useMutation")
+    expect(pluginsTabSource).toContain("selectedStorePreview")
+    expect(pluginsTabSource).toContain("settings.plugins.storePinWarning")
+    expect(pluginsTabSource).toContain("settings.plugins.storeApproveExact")
+    expect(pluginsTabSource).toContain("settings.plugins.storeInstallGateBlocksAction")
+    expect(pluginsTabSource).not.toContain("trustedMarketplace")
+    expect(pluginsTabSource).not.toContain("verifiedSafe")
+
+    for (const key of [
+      "settings.plugins.viewStore",
+      "settings.plugins.store",
+      "settings.plugins.searchStorePlaceholder",
+      "settings.plugins.storePinWarning",
+      "settings.plugins.storeStatusBlockedInvalidPin",
+      "settings.plugins.storeApprovalCurrent",
+      "settings.plugins.storeCandidateFingerprint",
+      "settings.plugins.storePackageHash",
+      "settings.plugins.storeApproveExact",
+      "settings.plugins.storeInstall",
+      "settings.plugins.storeUpdate",
+      "settings.plugins.storeActionHint",
+      "settings.plugins.sourcePinStoreCommit",
+      "settings.plugins.sourcePinStorePackageHash",
+      "settings.plugins.doctorCheckStoreCandidate",
+      "settings.plugins.doctorCheckStoreApproval",
+      "settings.plugins.toast.storeCandidateApproved",
+      "settings.plugins.toast.storeCandidateInstalled",
+      "settings.plugins.toast.storeCandidateUpdated",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+
+    const lowerDictionary = dictionarySource.toLowerCase()
+    expect(lowerDictionary).not.toContain("verified safe")
+    expect(lowerDictionary).not.toContain("trusted marketplace")
+    expect(lowerDictionary).not.toContain("safety certificate for store")
+  })
+
   test("renders developer trusted plugin controls without renderer path or code execution", () => {
     expect(pluginsTabSource).toContain("PluginDeveloperModeControl")
     expect(pluginsTabSource).toContain("PluginDeveloperTrustPanel")
