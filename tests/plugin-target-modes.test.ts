@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -8,11 +8,23 @@ import {
   getPluginSourceDiagnostics,
   getPluginReviewStatus,
 } from "../src/shared/plugin-target-modes"
-import {
+
+mock.module("electron", () => ({
+  app: {
+    getPath(name: string) {
+      if (name !== "userData") {
+        throw new Error(`unexpected app path request: ${name}`)
+      }
+      return join(tmpdir(), "locus-plugin-target-modes-userdata")
+    },
+  },
+}))
+
+const {
   resolveClaudeMarketplacePluginPath,
   resolvePluginComponentPath,
   resolvePluginComponentPathWithDiagnostics,
-} from "../src/main/lib/plugins"
+} = await import("../src/main/lib/plugins")
 
 describe("plugin target modes", () => {
   test("classifies current packages as manifest-only metadata", () => {

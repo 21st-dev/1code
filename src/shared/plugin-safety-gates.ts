@@ -28,6 +28,12 @@ export interface PluginSafetyGate {
   reasons: PluginSafetyGateReason[]
 }
 
+export {
+  buildPluginDeveloperTrustedGate,
+  type PluginDeveloperTrustedGate,
+  type PluginDeveloperTrustedGateReason,
+} from "./plugin-developer-trusted"
+
 export function isPluginFingerprintReviewed(
   status: PluginUpdateReviewStatus | undefined,
 ): boolean {

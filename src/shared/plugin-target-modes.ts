@@ -10,6 +10,7 @@ export type PluginExecutionStatus =
   | "locus-controlled"
   | "locus-controlled-planned"
   | "trusted-code-planned"
+  | "developer-trusted-code"
 
 export type PluginReviewStatus =
   | "metadata-only"
@@ -28,6 +29,7 @@ export type PluginDiagnosticCode =
   | "codex-read-only-cache"
   | "permission-scope-review-required"
   | "safe-mode-planned"
+  | "developer-trusted-code-full-trust"
   | "component-path-outside-root"
   | "source-available"
   | "source-empty"
@@ -57,6 +59,14 @@ export function getControlledUiPluginTargetMode(): PluginTargetModeSummary {
   return {
     targetMode: "controlled-ui",
     executionStatus: "locus-controlled",
+    updatePosture: "review-before-enable",
+  }
+}
+
+export function getDeveloperTrustedPluginTargetMode(): PluginTargetModeSummary {
+  return {
+    targetMode: "developer-trusted-code",
+    executionStatus: "developer-trusted-code",
     updatePosture: "review-before-enable",
   }
 }
@@ -103,6 +113,13 @@ export function getPluginDiagnostics(input: {
     diagnostics.push({
       code: "codex-read-only-cache",
       severity: "info",
+    })
+  }
+
+  if (input.targetMode === "developer-trusted-code") {
+    diagnostics.push({
+      code: "developer-trusted-code-full-trust",
+      severity: "warning",
     })
   }
 

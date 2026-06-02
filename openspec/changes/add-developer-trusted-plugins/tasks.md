@@ -5,11 +5,11 @@
 - [x] 1.4 Obtain explicit approval before implementation.
 
 ## 2. Shared Trust Model
-- [ ] 2.1 Add developer plugin manifest schema, bounded validation, and TypeScript types.
-- [ ] 2.2 Add developer trusted-code target-mode helpers and diagnostics.
-- [ ] 2.3 Add developer trust gate helpers for safe mode, Developer Plugin Mode, reviewed fingerprint, runtime/source ownership, and per-plugin trust acknowledgement.
+- [x] 2.1 Add developer plugin manifest schema, bounded validation, and TypeScript types.
+- [x] 2.2 Add developer trusted-code target-mode helpers and diagnostics.
+- [x] 2.3 Add developer trust gate helpers for safe mode, Developer Plugin Mode, reviewed fingerprint, runtime/source ownership, and per-plugin trust acknowledgement.
 - [ ] 2.4 Add review document fields for developer manifest, canonical entry path, entry content hash, and bounded bundle metadata.
-- [ ] 2.5 Add unit tests for valid manifests, invalid manifests, path escape, stale trust, and gate decisions.
+- [x] 2.5 Add unit tests for valid manifests, invalid manifests, path escape, stale trust, and gate decisions.
 
 ## 3. Main Process Discovery and State
 - [ ] 3.1 Add local developer source registry state without touching remote marketplace sources.
