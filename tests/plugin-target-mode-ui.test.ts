@@ -243,16 +243,22 @@ describe("plugin target mode UI source guards", () => {
     expect(lowerDictionary).not.toContain("safety certificate for store")
   })
 
-  test("renders runtime marketplaces separately from Locus store without cross-runtime actions", () => {
+  test("renders runtime marketplaces separately from Locus store with confirmed runtime-owned actions", () => {
     expect(pluginsTabSource).toContain("RuntimeMarketplaceListItem")
     expect(pluginsTabSource).toContain("RuntimeMarketplaceDetail")
     expect(pluginsTabSource).toContain("trpc.plugins.runtimeMarketplaces.useQuery")
+    expect(pluginsTabSource).toContain("trpc.plugins.previewRuntimePluginWriteAction.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.executeRuntimePluginWriteAction.useMutation")
     expect(pluginsTabSource).toContain("viewMode === \"marketplaces\"")
     expect(pluginsTabSource).toContain("settings.plugins.viewMarketplaces")
     expect(pluginsTabSource).toContain("settings.plugins.viewLocusStore")
     expect(pluginsTabSource).toContain("grid grid-cols-2 gap-1")
     expect(pluginsTabSource).toContain("whitespace-nowrap")
-    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReadOnlyHint")
+    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceActionBoundaryHint")
+    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceActionPreview")
+    expect(pluginsTabSource).toContain("runtimeActionConfirmation === actionPreview.targetLabel")
+    expect(pluginsTabSource).toContain("getRuntimePluginWriteActions(plugin)")
+    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceNoCodexEnableDisable")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReportedPlugins")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplacePluginSummary")
     expect(pluginsTabSource).toContain("getRuntimePluginListingStatusLabel(plugin.status, t)")
@@ -270,7 +276,13 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.noRuntimeMarketplaces",
       "settings.plugins.runtimeMarketplacesDescription",
       "settings.plugins.runtimeMarketplacesEmptyDescription",
-      "settings.plugins.runtimeMarketplaceReadOnlyHint",
+      "settings.plugins.runtimeMarketplaceActionBoundaryHint",
+      "settings.plugins.runtimeMarketplaceActions",
+      "settings.plugins.runtimeMarketplaceActionPreview",
+      "settings.plugins.runtimeMarketplaceConfirmTarget",
+      "settings.plugins.runtimeMarketplaceClaudeReloadHint",
+      "settings.plugins.runtimePluginActionInstall",
+      "settings.plugins.runtimePluginActionUninstall",
       "settings.plugins.runtimeMarketplaceReportedPlugins",
       "settings.plugins.runtimePluginStatusInstalledEnabled",
       "settings.plugins.runtimePluginStatusNotInstalled",
@@ -281,8 +293,8 @@ describe("plugin target mode UI source guards", () => {
 
     expect(dictionarySource).toContain("Locus Store")
     expect(dictionarySource).toContain("Locus 商店")
-    expect(dictionarySource).toContain("does not install, update, remove, enable, disable")
-    expect(dictionarySource).toContain("不会在这里安装、更新、删除、启用、禁用")
+    expect(dictionarySource).toContain("Locus previews the exact runtime CLI command")
+    expect(dictionarySource).toContain("预览精确的运行时 CLI 命令")
   })
 
   test("renders developer trusted plugin controls without renderer path or code execution", () => {

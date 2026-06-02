@@ -1445,6 +1445,42 @@ export const en = {
   "settings.plugins.runtimeMarketplacePluginSummary": "{installed} installed / {available} available",
   "settings.plugins.runtimeMarketplaceReadOnlyHint":
     "This is read-only runtime inventory. Locus does not install, update, remove, enable, disable, execute plugin code, or convert plugins across runtimes from this view.",
+  "settings.plugins.runtimeMarketplaceActionBoundaryHint":
+    "Runtime marketplace actions are owned by Codex or Claude Code. Locus previews the exact runtime CLI command, asks for confirmation, then refreshes inventory; it still does not convert plugins or execute plugin code in the Locus process.",
+  "settings.plugins.runtimeMarketplaceActions": "Runtime-owned actions",
+  "settings.plugins.runtimeMarketplaceActionsHint":
+    "Use these controls to ask the owning runtime to update its own marketplace or plugin state. Locus Store installs stay separate.",
+  "settings.plugins.runtimeMarketplaceAddSourcePlaceholder":
+    "Marketplace source, URL, absolute path, or owner/repo",
+  "settings.plugins.runtimeMarketplaceAddMarketplace": "Add marketplace",
+  "settings.plugins.runtimeMarketplaceUpgradeMarketplace": "Upgrade",
+  "settings.plugins.runtimeMarketplaceUpdateMarketplace": "Update",
+  "settings.plugins.runtimeMarketplaceRemoveMarketplace": "Remove marketplace",
+  "settings.plugins.runtimeMarketplaceReportedPluginsActionsHint":
+    "These plugins were reported without a configured marketplace row, so marketplace update and remove actions are unavailable.",
+  "settings.plugins.runtimeMarketplaceNoCodexEnableDisable":
+    "Codex exposes add and remove for plugins here; enable and disable are not available in the Codex CLI.",
+  "settings.plugins.runtimeMarketplaceActionPreview": "Action preview",
+  "settings.plugins.runtimeMarketplacePreviewReady":
+    "Review this exact runtime-owned command before it runs.",
+  "settings.plugins.runtimeMarketplacePreviewBlocked": "This action is blocked.",
+  "settings.plugins.runtimeMarketplaceCommand": "Command",
+  "settings.plugins.runtimeMarketplaceImpact": "Impact",
+  "settings.plugins.runtimeMarketplaceConfirmTarget":
+    "Type {target} to confirm",
+  "settings.plugins.runtimeMarketplaceExecute": "Run action",
+  "settings.plugins.runtimeMarketplaceCancel": "Cancel",
+  "settings.plugins.runtimeMarketplaceClaudeReloadHint":
+    "In Claude Code, run /reload-plugins after this plugin mutation if an active session needs the updated plugin state.",
+  "settings.plugins.runtimeMarketplaceActionSucceeded": "Runtime action completed",
+  "settings.plugins.runtimeMarketplaceActionFailed": "Runtime action failed",
+  "settings.plugins.runtimePluginActionAdd": "Add",
+  "settings.plugins.runtimePluginActionRemove": "Remove",
+  "settings.plugins.runtimePluginActionInstall": "Install",
+  "settings.plugins.runtimePluginActionUpdate": "Update",
+  "settings.plugins.runtimePluginActionEnable": "Enable",
+  "settings.plugins.runtimePluginActionDisable": "Disable",
+  "settings.plugins.runtimePluginActionUninstall": "Uninstall",
   "settings.plugins.runtimeMarketplaceStatus": "Marketplace status",
   "settings.plugins.runtimeMarketplaceInventory": "Inventory",
   "settings.plugins.runtimeMarketplaceSourceKind": "Source kind",
@@ -4356,6 +4392,42 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.runtimeMarketplacePluginSummary": "{installed} 已安装 / {available} 可用",
   "settings.plugins.runtimeMarketplaceReadOnlyHint":
     "这是只读运行时清单。Locus 不会在这里安装、更新、删除、启用、禁用、执行插件代码，也不会跨运行时转换插件。",
+  "settings.plugins.runtimeMarketplaceActionBoundaryHint":
+    "运行时插件市场动作由 Codex 或 Claude Code 自己拥有。Locus 只预览精确的运行时 CLI 命令，确认后再执行并刷新清单；仍不会跨运行时转换插件，也不会在 Locus 进程里执行插件代码。",
+  "settings.plugins.runtimeMarketplaceActions": "运行时自有动作",
+  "settings.plugins.runtimeMarketplaceActionsHint":
+    "这些控件会让对应运行时修改自己的市场或插件状态。Locus 商店安装仍然是独立流程。",
+  "settings.plugins.runtimeMarketplaceAddSourcePlaceholder":
+    "市场来源、URL、绝对路径或 owner/repo",
+  "settings.plugins.runtimeMarketplaceAddMarketplace": "添加市场",
+  "settings.plugins.runtimeMarketplaceUpgradeMarketplace": "升级",
+  "settings.plugins.runtimeMarketplaceUpdateMarketplace": "更新",
+  "settings.plugins.runtimeMarketplaceRemoveMarketplace": "移除市场",
+  "settings.plugins.runtimeMarketplaceReportedPluginsActionsHint":
+    "这些插件没有对应的已配置市场行，因此不能对市场执行更新或移除。",
+  "settings.plugins.runtimeMarketplaceNoCodexEnableDisable":
+    "Codex CLI 在这里提供插件 add/remove；没有 enable/disable 动作。",
+  "settings.plugins.runtimeMarketplaceActionPreview": "动作预览",
+  "settings.plugins.runtimeMarketplacePreviewReady":
+    "运行前先复审这个精确的运行时自有命令。",
+  "settings.plugins.runtimeMarketplacePreviewBlocked": "这个动作被阻断。",
+  "settings.plugins.runtimeMarketplaceCommand": "命令",
+  "settings.plugins.runtimeMarketplaceImpact": "影响",
+  "settings.plugins.runtimeMarketplaceConfirmTarget":
+    "输入 {target} 以确认",
+  "settings.plugins.runtimeMarketplaceExecute": "执行动作",
+  "settings.plugins.runtimeMarketplaceCancel": "取消",
+  "settings.plugins.runtimeMarketplaceClaudeReloadHint":
+    "如果已有 Claude Code 会话需要新的插件状态，请在 Claude Code 里运行 /reload-plugins。",
+  "settings.plugins.runtimeMarketplaceActionSucceeded": "运行时动作已完成",
+  "settings.plugins.runtimeMarketplaceActionFailed": "运行时动作失败",
+  "settings.plugins.runtimePluginActionAdd": "添加",
+  "settings.plugins.runtimePluginActionRemove": "移除",
+  "settings.plugins.runtimePluginActionInstall": "安装",
+  "settings.plugins.runtimePluginActionUpdate": "更新",
+  "settings.plugins.runtimePluginActionEnable": "启用",
+  "settings.plugins.runtimePluginActionDisable": "禁用",
+  "settings.plugins.runtimePluginActionUninstall": "卸载",
   "settings.plugins.runtimeMarketplaceStatus": "市场状态",
   "settings.plugins.runtimeMarketplaceInventory": "清单",
   "settings.plugins.runtimeMarketplaceSourceKind": "来源类型",

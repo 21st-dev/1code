@@ -8,14 +8,14 @@
 - [x] 2.4 Add tRPC preview/execute mutations and refresh cache state after successful writes.
 
 ## 3. UI
-- [ ] 3.1 Add marketplace add/update/remove controls in the runtime marketplace view.
-- [ ] 3.2 Add plugin install/update/enable/disable/uninstall controls where each runtime supports them.
-- [ ] 3.3 Add command preview, exact confirmation, destructive action copy, unsupported Codex enable/disable copy, and Claude `/reload-plugins` guidance.
-- [ ] 3.4 Keep Locus Store and runtime marketplace actions visually distinct.
+- [x] 3.1 Add marketplace add/update/remove controls in the runtime marketplace view.
+- [x] 3.2 Add plugin install/update/enable/disable/uninstall controls where each runtime supports them.
+- [x] 3.3 Add command preview, exact confirmation, destructive action copy, unsupported Codex enable/disable copy, and Claude `/reload-plugins` guidance.
+- [x] 3.4 Keep Locus Store and runtime marketplace actions visually distinct.
 
 ## 4. Verification
 - [x] 4.1 Add unit tests for command mapping, unsupported action blocking, confirmation tokens, redaction, and injected runner execution.
-- [ ] 4.2 Add UI source-guard tests for runtime write controls and no cross-runtime conversion.
+- [x] 4.2 Add UI source-guard tests for runtime write controls and no cross-runtime conversion.
 - [ ] 4.3 Run targeted tests after each implementation checkpoint and commit each checkpoint.
 - [ ] 4.4 Run `bun run test`, `bun run ts:check`, `openspec validate add-runtime-plugin-write-actions --strict --no-interactive`, and `git diff --check`.
 - [ ] 4.5 Run a local desktop UI smoke for Settings > Plugins runtime marketplace actions.

@@ -441,6 +441,57 @@ interface RuntimePluginMarketplaceSnapshot {
   refreshedAt: string
 }
 
+type RuntimePluginWriteActionId =
+  | "codex.marketplace.add"
+  | "codex.marketplace.upgrade"
+  | "codex.marketplace.remove"
+  | "codex.plugin.add"
+  | "codex.plugin.remove"
+  | "claude.marketplace.add"
+  | "claude.marketplace.update"
+  | "claude.marketplace.remove"
+  | "claude.plugin.install"
+  | "claude.plugin.update"
+  | "claude.plugin.enable"
+  | "claude.plugin.disable"
+  | "claude.plugin.uninstall"
+
+type RuntimePluginWriteScope = "user" | "project" | "local" | "managed"
+
+interface RuntimePluginWriteTarget {
+  pluginId?: string
+  marketplace?: string
+  source?: string
+  scope?: RuntimePluginWriteScope
+}
+
+interface RuntimePluginWriteActionRequest {
+  runtime: PluginRuntime
+  action: RuntimePluginWriteActionId
+  target: RuntimePluginWriteTarget
+}
+
+interface RuntimePluginWritePreview {
+  previewId: string
+  confirmationToken?: string
+  operationFingerprint: string
+  runtime: PluginRuntime
+  action: RuntimePluginWriteActionId
+  label: string
+  command: "codex" | "claude"
+  args: string[]
+  commandDisplay: string
+  target: RuntimePluginWriteTarget
+  targetLabel: string
+  destructive: boolean
+  requiresTargetConfirmation: boolean
+  canExecute: boolean
+  blockedReason?: string
+  impact: string
+  reloadHint?: string
+  expiresAt: string
+}
+
 type PluginStoreCandidateStatus =
   | "not-installed"
   | "installed-current"
@@ -793,6 +844,53 @@ function getRuntimePluginListingStatusClass(status: RuntimePluginListingStatus):
     case "unknown":
       return "border-border bg-muted/20 text-muted-foreground"
   }
+}
+
+function getRuntimePluginWriteActionLabel(
+  action: RuntimePluginWriteActionId,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (action) {
+    case "codex.marketplace.add":
+    case "claude.marketplace.add":
+      return t("settings.plugins.runtimeMarketplaceAddMarketplace")
+    case "codex.marketplace.upgrade":
+      return t("settings.plugins.runtimeMarketplaceUpgradeMarketplace")
+    case "claude.marketplace.update":
+      return t("settings.plugins.runtimeMarketplaceUpdateMarketplace")
+    case "codex.marketplace.remove":
+    case "claude.marketplace.remove":
+      return t("settings.plugins.runtimeMarketplaceRemoveMarketplace")
+    case "codex.plugin.add":
+      return t("settings.plugins.runtimePluginActionAdd")
+    case "codex.plugin.remove":
+      return t("settings.plugins.runtimePluginActionRemove")
+    case "claude.plugin.install":
+      return t("settings.plugins.runtimePluginActionInstall")
+    case "claude.plugin.update":
+      return t("settings.plugins.runtimePluginActionUpdate")
+    case "claude.plugin.enable":
+      return t("settings.plugins.runtimePluginActionEnable")
+    case "claude.plugin.disable":
+      return t("settings.plugins.runtimePluginActionDisable")
+    case "claude.plugin.uninstall":
+      return t("settings.plugins.runtimePluginActionUninstall")
+  }
+}
+
+function getRuntimePluginWriteActions(plugin: RuntimePluginListing): RuntimePluginWriteActionId[] {
+  if (plugin.runtime === "codex") {
+    return plugin.installed ? ["codex.plugin.remove"] : ["codex.plugin.add"]
+  }
+  if (!plugin.installed) return ["claude.plugin.install"]
+  const actions: RuntimePluginWriteActionId[] = ["claude.plugin.update"]
+  if (plugin.enabled === false || plugin.status === "installed-disabled") {
+    actions.push("claude.plugin.enable")
+  } else if (plugin.enabled === true || plugin.status === "installed-enabled") {
+    actions.push("claude.plugin.disable")
+  }
+  actions.push("claude.plugin.uninstall")
+  return actions
 }
 
 function getTargetModeLabel(mode: PluginTargetMode, t: ReturnType<typeof useI18n>["t"]): string {
@@ -3303,18 +3401,92 @@ function RuntimeMarketplaceDetail({
   marketplace,
   onRefresh,
   isRefreshing,
+  actionPreview,
+  runtimeActionConfirmation,
+  onRuntimeActionConfirmationChange,
+  onPreviewRuntimeAction,
+  onExecuteRuntimeAction,
+  onCancelRuntimeActionPreview,
+  isPreviewingRuntimeAction,
+  isExecutingRuntimeAction,
 }: {
   marketplace: RuntimeMarketplaceListItem
   onRefresh: () => void
   isRefreshing: boolean
+  actionPreview: RuntimePluginWritePreview | null
+  runtimeActionConfirmation: string
+  onRuntimeActionConfirmationChange: (value: string) => void
+  onPreviewRuntimeAction: (request: RuntimePluginWriteActionRequest) => void
+  onExecuteRuntimeAction: () => void
+  onCancelRuntimeActionPreview: () => void
+  isPreviewingRuntimeAction: boolean
+  isExecutingRuntimeAction: boolean
 }) {
   const { t } = useI18n()
+  const [marketplaceSource, setMarketplaceSource] = useState("")
+  const [marketplaceScope, setMarketplaceScope] = useState<RuntimePluginWriteScope>("user")
   const installedCount = marketplace.plugins.filter((plugin) => plugin.installed).length
   const availableCount = marketplace.plugins.length - installedCount
   const diagnostics = [
     ...marketplace.diagnostics,
     ...marketplace.snapshotDiagnostics,
   ]
+  const isRuntimeReportedGroup = marketplace.id.endsWith(":runtime-reported-plugins")
+  const isRuntimeActionBusy = isPreviewingRuntimeAction || isExecutingRuntimeAction || isRefreshing
+  const marketplaceAddAction: RuntimePluginWriteActionId = marketplace.runtime === "codex"
+    ? "codex.marketplace.add"
+    : "claude.marketplace.add"
+  const marketplaceUpdateAction: RuntimePluginWriteActionId = marketplace.runtime === "codex"
+    ? "codex.marketplace.upgrade"
+    : "claude.marketplace.update"
+  const marketplaceRemoveAction: RuntimePluginWriteActionId = marketplace.runtime === "codex"
+    ? "codex.marketplace.remove"
+    : "claude.marketplace.remove"
+  const canExecutePreview = Boolean(
+    actionPreview?.canExecute &&
+    actionPreview.confirmationToken &&
+    (!actionPreview.requiresTargetConfirmation || runtimeActionConfirmation === actionPreview.targetLabel),
+  )
+
+  useEffect(() => {
+    setMarketplaceSource("")
+    setMarketplaceScope("user")
+  }, [marketplace.id])
+
+  const previewMarketplaceAdd = () => {
+    if (!marketplaceSource.trim()) return
+    onPreviewRuntimeAction({
+      runtime: marketplace.runtime,
+      action: marketplaceAddAction,
+      target: {
+        source: marketplaceSource.trim(),
+        scope: marketplace.runtime === "claude" ? marketplaceScope : undefined,
+      },
+    })
+  }
+
+  const previewMarketplaceAction = (action: RuntimePluginWriteActionId) => {
+    onPreviewRuntimeAction({
+      runtime: marketplace.runtime,
+      action,
+      target: {
+        marketplace: marketplace.name,
+        scope: marketplace.runtime === "claude" ? marketplaceScope : undefined,
+      },
+    })
+  }
+
+  const previewPluginAction = (plugin: RuntimePluginListing, action: RuntimePluginWriteActionId) => {
+    onPreviewRuntimeAction({
+      runtime: plugin.runtime,
+      action,
+      target: {
+        pluginId: plugin.id,
+        marketplace: plugin.marketplace,
+        scope: plugin.runtime === "claude" ? marketplaceScope : undefined,
+      },
+    })
+  }
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
@@ -3342,10 +3514,178 @@ function RuntimeMarketplaceDetail({
             <div className="flex items-start gap-2">
               <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                {t("settings.plugins.runtimeMarketplaceReadOnlyHint")}
+                {t("settings.plugins.runtimeMarketplaceActionBoundaryHint")}
               </p>
             </div>
           </div>
+
+          <div className="rounded-md border border-border bg-background p-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Label>{t("settings.plugins.runtimeMarketplaceActions")}</Label>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {t("settings.plugins.runtimeMarketplaceActionsHint")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs shrink-0"
+                onClick={() => previewMarketplaceAction(marketplaceUpdateAction)}
+                disabled={isRuntimeActionBusy || isRuntimeReportedGroup}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                {getRuntimePluginWriteActionLabel(marketplaceUpdateAction, t)}
+              </Button>
+            </div>
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_8.5rem_auto]">
+              <Input
+                value={marketplaceSource}
+                onChange={(event) => setMarketplaceSource(event.target.value)}
+                placeholder={t("settings.plugins.runtimeMarketplaceAddSourcePlaceholder")}
+                className="h-8 text-xs"
+              />
+              {marketplace.runtime === "claude" ? (
+                <Select
+                  value={marketplaceScope}
+                  onValueChange={(value) => setMarketplaceScope(value as RuntimePluginWriteScope)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">user</SelectItem>
+                    <SelectItem value="project">project</SelectItem>
+                    <SelectItem value="local">local</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="hidden md:block" />
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-xs"
+                onClick={previewMarketplaceAdd}
+                disabled={isRuntimeActionBusy || !marketplaceSource.trim()}
+              >
+                <FolderPlus className="h-3.5 w-3.5 mr-1.5" />
+                {getRuntimePluginWriteActionLabel(marketplaceAddAction, t)}
+              </Button>
+            </div>
+            {!isRuntimeReportedGroup ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => previewMarketplaceAction(marketplaceRemoveAction)}
+                  disabled={isRuntimeActionBusy}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  {getRuntimePluginWriteActionLabel(marketplaceRemoveAction, t)}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                {t("settings.plugins.runtimeMarketplaceReportedPluginsActionsHint")}
+              </p>
+            )}
+            {marketplace.runtime === "codex" ? (
+              <p className="text-[11px] text-muted-foreground">
+                {t("settings.plugins.runtimeMarketplaceNoCodexEnableDisable")}
+              </p>
+            ) : null}
+          </div>
+
+          {actionPreview ? (
+            <div className={cn(
+              "rounded-md border p-3 space-y-3",
+              actionPreview.canExecute
+                ? "border-border bg-background"
+                : "border-amber-500/30 bg-amber-500/10",
+            )}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Label>{t("settings.plugins.runtimeMarketplaceActionPreview")}</Label>
+                  <p className="mt-1 text-sm font-medium text-foreground">{actionPreview.label}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {actionPreview.canExecute
+                      ? t("settings.plugins.runtimeMarketplacePreviewReady")
+                      : actionPreview.blockedReason ?? t("settings.plugins.runtimeMarketplacePreviewBlocked")}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs shrink-0"
+                  onClick={onCancelRuntimeActionPreview}
+                  disabled={isExecutingRuntimeAction}
+                >
+                  {t("settings.plugins.runtimeMarketplaceCancel")}
+                </Button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>{t("settings.plugins.runtimeMarketplaceCommand")}</Label>
+                  <p className="rounded border border-border bg-muted/30 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-foreground break-all">
+                    {actionPreview.commandDisplay}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t("settings.plugins.runtimeMarketplaceImpact")}</Label>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {actionPreview.impact}
+                  </p>
+                  {actionPreview.reloadHint ? (
+                    <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-200">
+                      {t("settings.plugins.runtimeMarketplaceClaudeReloadHint")}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              {actionPreview.requiresTargetConfirmation ? (
+                <div className="space-y-1.5">
+                  <Label>
+                    {t("settings.plugins.runtimeMarketplaceConfirmTarget", {
+                      target: actionPreview.targetLabel,
+                    })}
+                  </Label>
+                  <Input
+                    value={runtimeActionConfirmation}
+                    onChange={(event) => onRuntimeActionConfirmationChange(event.target.value)}
+                    placeholder={actionPreview.targetLabel}
+                    className="h-8 text-xs font-mono"
+                    disabled={isExecutingRuntimeAction}
+                  />
+                </div>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={onCancelRuntimeActionPreview}
+                  disabled={isExecutingRuntimeAction}
+                >
+                  {t("settings.plugins.runtimeMarketplaceCancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={onExecuteRuntimeAction}
+                  disabled={!canExecutePreview || isExecutingRuntimeAction}
+                >
+                  {isExecutingRuntimeAction ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  {t("settings.plugins.runtimeMarketplaceExecute")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -3423,24 +3763,54 @@ function RuntimeMarketplaceDetail({
                 {marketplace.plugins.map((plugin) => (
                   <div
                     key={plugin.id}
-                    className="grid grid-cols-[minmax(0,1.4fr)_8.5rem_6.5rem_minmax(0,1fr)] items-center gap-3 border-b border-border/70 px-3 py-2 last:border-b-0"
+                    className="border-b border-border/70 px-3 py-2 last:border-b-0"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-foreground">{plugin.name}</p>
-                      <p className="truncate text-[10px] text-muted-foreground/70">{plugin.id}</p>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-foreground">{plugin.name}</p>
+                        <p className="truncate text-[10px] text-muted-foreground/70">{plugin.id}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span className={cn(
+                            "w-fit rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                            getRuntimePluginListingStatusClass(plugin.status),
+                          )}>
+                            {getRuntimePluginListingStatusLabel(plugin.status, t)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {plugin.version ?? "-"}
+                          </span>
+                          <span
+                            className="max-w-[22rem] truncate font-mono text-[10px] text-muted-foreground/70"
+                            title={plugin.path ?? plugin.source}
+                          >
+                            {plugin.path ?? plugin.source ?? "-"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex max-w-[15rem] flex-wrap justify-end gap-1">
+                        {getRuntimePluginWriteActions(plugin).map((action) => (
+                          <Button
+                            key={`${plugin.id}-${action}`}
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px]"
+                            onClick={() => previewPluginAction(plugin, action)}
+                            disabled={isRuntimeActionBusy}
+                          >
+                            {action.includes("remove") || action.includes("uninstall") ? (
+                              <Trash2 className="h-3 w-3 mr-1" />
+                            ) : action.includes("disable") ? (
+                              <ShieldOff className="h-3 w-3 mr-1" />
+                            ) : action.includes("update") ? (
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                            ) : (
+                              <Download className="h-3 w-3 mr-1" />
+                            )}
+                            {getRuntimePluginWriteActionLabel(action, t)}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
-                    <span className={cn(
-                      "w-fit rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                      getRuntimePluginListingStatusClass(plugin.status),
-                    )}>
-                      {getRuntimePluginListingStatusLabel(plugin.status, t)}
-                    </span>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {plugin.version ?? "-"}
-                    </p>
-                    <p className="truncate font-mono text-[10px] text-muted-foreground/70" title={plugin.path ?? plugin.source}>
-                      {plugin.path ?? plugin.source ?? "-"}
-                    </p>
                   </div>
                 ))}
               </div>
@@ -3460,6 +3830,8 @@ export function AgentsPluginsTab() {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string | null>(null)
   const [selectedStoreEntryId, setSelectedStoreEntryId] = useState<string | null>(null)
+  const [runtimeActionPreview, setRuntimeActionPreview] = useState<RuntimePluginWritePreview | null>(null)
+  const [runtimeActionConfirmation, setRuntimeActionConfirmation] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all")
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -3560,6 +3932,8 @@ export function AgentsPluginsTab() {
   const invokeControlledActionMutation = trpc.plugins.invokeControlledAction.useMutation()
   const approveStoreCandidateMutation = trpc.plugins.approveStoreCandidate.useMutation()
   const installOrUpdateStoreCandidateMutation = trpc.plugins.installOrUpdateStoreCandidate.useMutation()
+  const previewRuntimePluginWriteActionMutation = trpc.plugins.previewRuntimePluginWriteAction.useMutation()
+  const executeRuntimePluginWriteActionMutation = trpc.plugins.executeRuntimePluginWriteAction.useMutation()
 
   const filteredPlugins = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"
@@ -3879,6 +4253,11 @@ export function AgentsPluginsTab() {
   ])
 
   useEffect(() => {
+    setRuntimeActionPreview(null)
+    setRuntimeActionConfirmation("")
+  }, [selectedMarketplaceId])
+
+  useEffect(() => {
     if (viewMode !== "store") return
     if (selectedStoreEntry && filteredStoreEntries.includes(selectedStoreEntry)) return
     if (isLoadingStore || filteredStoreEntries.length === 0) {
@@ -4040,6 +4419,69 @@ export function AgentsPluginsTab() {
       toast.error(message)
     }
   }, [installOrUpdateStoreCandidateMutation, refetch, refetchDoctor, refetchStoreCatalog, refetchStorePreview, t])
+
+  const handlePreviewRuntimePluginWriteAction = useCallback(async (
+    request: RuntimePluginWriteActionRequest,
+  ) => {
+    try {
+      const preview = await previewRuntimePluginWriteActionMutation.mutateAsync(request)
+      setRuntimeActionPreview(preview)
+      setRuntimeActionConfirmation("")
+      if (!preview.canExecute) {
+        toast.error(preview.blockedReason ?? t("settings.plugins.runtimeMarketplacePreviewBlocked"), {
+          description: preview.label,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [previewRuntimePluginWriteActionMutation, t])
+
+  const handleExecuteRuntimePluginWriteAction = useCallback(async () => {
+    if (!runtimeActionPreview?.confirmationToken) return
+    try {
+      const result = await executeRuntimePluginWriteActionMutation.mutateAsync({
+        previewId: runtimeActionPreview.previewId,
+        confirmationToken: runtimeActionPreview.confirmationToken,
+        targetConfirmation: runtimeActionPreview.requiresTargetConfirmation
+          ? runtimeActionConfirmation
+          : undefined,
+      })
+      if (result.status !== "success") {
+        toast.error(result.diagnostics[0]?.message ?? t("settings.plugins.runtimeMarketplaceActionFailed"), {
+          description: result.preview.label,
+        })
+        return
+      }
+      toast.success(t("settings.plugins.runtimeMarketplaceActionSucceeded"), {
+        description: result.preview.label,
+      })
+      if (result.preview.reloadHint) {
+        toast.success(t("settings.plugins.runtimeMarketplaceClaudeReloadHint"))
+      }
+      setRuntimeActionPreview(null)
+      setRuntimeActionConfirmation("")
+      await Promise.all([
+        refetch(),
+        refetchSources(),
+        refetchRuntimeMarketplaces(),
+        refetchDoctor(),
+      ])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.runtimeMarketplaceActionFailed")
+      toast.error(message)
+    }
+  }, [
+    executeRuntimePluginWriteActionMutation,
+    refetch,
+    refetchDoctor,
+    refetchRuntimeMarketplaces,
+    refetchSources,
+    runtimeActionConfirmation,
+    runtimeActionPreview,
+    t,
+  ])
 
   const handleRefreshPlugins = useCallback(async () => {
     try {
@@ -4558,6 +5000,17 @@ export function AgentsPluginsTab() {
               marketplace={selectedMarketplace}
               onRefresh={() => { void handleRefreshPlugins() }}
               isRefreshing={isRefreshingPlugins}
+              actionPreview={runtimeActionPreview}
+              runtimeActionConfirmation={runtimeActionConfirmation}
+              onRuntimeActionConfirmationChange={setRuntimeActionConfirmation}
+              onPreviewRuntimeAction={(request) => { void handlePreviewRuntimePluginWriteAction(request) }}
+              onExecuteRuntimeAction={() => { void handleExecuteRuntimePluginWriteAction() }}
+              onCancelRuntimeActionPreview={() => {
+                setRuntimeActionPreview(null)
+                setRuntimeActionConfirmation("")
+              }}
+              isPreviewingRuntimeAction={previewRuntimePluginWriteActionMutation.isPending}
+              isExecutingRuntimeAction={executeRuntimePluginWriteActionMutation.isPending}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
