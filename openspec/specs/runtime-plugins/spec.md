@@ -4,18 +4,20 @@
 Define runtime-aware plugin discovery, source browsing, and enablement behavior for Claude Code and Codex plugin formats.
 ## Requirements
 ### Requirement: Runtime-Aware Plugin Catalog
-The system SHALL list local plugin packages by runtime so Claude Code plugins and Codex plugins are not presented as the same installation format.
+The system SHALL list plugin packages and marketplace listings by owning runtime so Claude Code plugins, Codex plugins, and Locus-native plugin packages are not presented as the same installation format.
 
 #### Scenario: User opens Plugins settings
 - **WHEN** the user opens Settings > Plugins
-- **THEN** the app shows plugins grouped or filterable by runtime
-- **AND** Claude Code plugins are discovered from the Claude plugin marketplace directory
-- **AND** Codex plugins are discovered from the Codex plugin cache directory
+- **THEN** the app shows plugin data grouped or tabbed by runtime scope
+- **AND** Claude Code marketplace/listing state is read from Claude-owned read surfaces when available
+- **AND** Codex marketplace/listing state is read from Codex-owned read surfaces when available
+- **AND** local filesystem scans remain fallback or component-enrichment inputs with visible diagnostics
 
 #### Scenario: Runtime has no plugins
-- **WHEN** one runtime has no discoverable plugin packages
-- **THEN** the app shows an empty state for that runtime
-- **AND** does not imply that the other runtime's plugins apply to it
+- **WHEN** one runtime has no installed plugin packages
+- **THEN** the app shows an empty state for that runtime's installed plugins
+- **AND** still shows that runtime's configured marketplaces or available plugins when the runtime reports them
+- **AND** does not imply that another runtime's plugins apply to it
 
 ### Requirement: Runtime-Scoped Plugin Actions
 The system SHALL keep plugin actions scoped to the runtime that owns the plugin package.
@@ -44,30 +46,30 @@ The system SHALL require explicit approval before plugin-provided MCP servers be
 - **AND** approvals for MCP servers from that plugin are revoked
 
 ### Requirement: Plugin Source Browser
-The system SHALL provide a read-only view of known plugin sources so users can distinguish where runtime plugin packages are discovered from.
+The system SHALL provide a read-only view of known plugin sources so users can distinguish runtime-owned marketplaces, local filesystem fallbacks, developer sources, and Locus-native pinned store candidates.
 
 #### Scenario: User opens plugin sources
-- **WHEN** the user opens the Sources view in Settings > Plugins
-- **THEN** the app lists known plugin sources by runtime
-- **AND** each source shows its path, status, source type, trust label, and plugin count
+- **WHEN** the user opens the Sources or Marketplaces view in Settings > Plugins
+- **THEN** the app lists known sources by runtime scope
+- **AND** each source shows its path or source identifier, status, source type, trust label, plugin count when known, and whether it came from a runtime-owned read surface or filesystem fallback
 
 #### Scenario: Source root is empty or missing
-- **WHEN** a runtime has no discovered plugin packages
-- **THEN** the app still shows the runtime's expected local source root
-- **AND** labels it as empty or missing instead of hiding the runtime
+- **WHEN** a runtime has no discovered plugin packages from fallback filesystem scans
+- **THEN** the app still shows runtime-owned marketplace state when the runtime reports it
+- **AND** labels missing fallback paths as fallback diagnostics instead of hiding the runtime
 
 ### Requirement: Read-Only Source Handling
-The system SHALL keep plugin source browsing read-only until explicit install/update flows are designed.
+The system SHALL keep plugin source and marketplace browsing read-only until explicit install/update flows are designed for each owning runtime.
 
 #### Scenario: User views a source
-- **WHEN** the user selects a plugin source
-- **THEN** the app shows install guidance for that runtime
-- **AND** does not show remote install, update, enable, or delete controls
+- **WHEN** the user selects a runtime marketplace source or Locus-native store source
+- **THEN** the app shows source details and runtime-specific install guidance
+- **AND** does not show remote install, update, enable, disable, remove, or marketplace mutation controls for Codex or Claude Code runtime marketplaces
 
 #### Scenario: User refreshes plugin metadata
-- **WHEN** the user refreshes plugins from the Sources view
-- **THEN** the app re-scans local/cache plugin metadata
-- **AND** does not contact remote plugin marketplaces
+- **WHEN** the user refreshes plugins from the Sources or Marketplaces view
+- **THEN** the app re-runs bounded read-only runtime inventory commands and local fallback scans
+- **AND** does not add marketplaces, update marketplace snapshots, install packages, update packages, remove packages, enable plugins, disable plugins, or execute plugin code
 
 ### Requirement: Plugin Target Mode Classification
 The system SHALL classify each discovered runtime plugin package with a Locus target mode that describes how Locus may use it.
@@ -479,15 +481,16 @@ The system SHALL make the full-trust nature of developer plugins visible before 
 - **AND** requires an explicit user action before storing the trust acknowledgement
 
 ### Requirement: Plugin Store Commit Pins
-The system SHALL model plugin store entries with immutable source pins before install or update approval.
+The system SHALL model Locus-native plugin store entries with immutable source pins before install or update approval.
 
-#### Scenario: Store entry has immutable source pin
-- **WHEN** Locus previews a store plugin entry with a full commit SHA and bounded package metadata
+#### Scenario: Locus store entry has immutable source pin
+- **WHEN** Locus previews a Locus-native pinned store plugin entry with a full commit SHA and bounded package metadata
 - **THEN** Locus shows the repo, commit, path, package hash when available, runtime, target mode, and declared capabilities
 - **AND** labels the pin as review metadata rather than proof of safety
+- **AND** does not present the entry as a Codex or Claude Code marketplace listing
 
-#### Scenario: Store entry uses mutable source ref
-- **WHEN** a store plugin entry uses `latest`, a branch name, an unresolved tag, or another mutable ref for an approved write action
+#### Scenario: Locus store entry uses mutable source ref
+- **WHEN** a Locus-native pinned store entry uses `latest`, a branch name, an unresolved tag, or another mutable ref for an approved write action
 - **THEN** Locus blocks install or update approval
 - **AND** reports that an immutable commit pin is required
 
@@ -554,3 +557,155 @@ The system SHALL report store pin and candidate review status in Settings > Plug
 - **WHEN** a store candidate approval is stale, mutable, hash-mismatched, missing required hash metadata, or blocked by target-mode policy
 - **THEN** Settings > Plugins and Doctor/Debug show the reason
 - **AND** do not describe the candidate as verified safe or marketplace trusted
+
+### Requirement: Runtime Marketplace Center
+The system SHALL provide a runtime-scoped marketplace center that distinguishes Codex marketplaces, Claude Code marketplaces, and Locus-native pinned store candidates.
+
+#### Scenario: User opens the plugin marketplace center
+- **WHEN** the user opens Settings > Plugins
+- **THEN** the app presents Codex, Claude Code, and Locus-native plugin scopes separately
+- **AND** does not present one runtime's plugin marketplace as applying to another runtime
+- **AND** labels Locus-native pinned store candidates separately from Codex and Claude Code marketplaces
+
+#### Scenario: Locus store has no candidates
+- **WHEN** the Locus-native pinned store catalog is empty
+- **THEN** the app shows the Locus store as empty
+- **AND** still shows Codex and Claude Code marketplace/plugin state when those runtimes report inventory
+- **AND** does not imply that the overall plugin ecosystem is empty
+
+### Requirement: Runtime-Owned Marketplace Inventory
+The system SHALL read marketplace inventory through runtime-owned read surfaces before falling back to local filesystem scans.
+
+#### Scenario: Codex marketplace inventory is available
+- **WHEN** the Codex CLI can run marketplace read commands
+- **THEN** Locus reads Codex marketplace sources from Codex-owned command output
+- **AND** captures marketplace name, root/source path when available, status, and diagnostics
+- **AND** treats local Codex cache scans as fallback or component enrichment rather than the primary source of marketplace truth
+
+#### Scenario: Claude Code marketplace inventory is available
+- **WHEN** the Claude Code CLI can run marketplace read commands
+- **THEN** Locus reads Claude Code marketplace sources from Claude-owned command output
+- **AND** captures marketplace name, source/root when available, status, and diagnostics
+- **AND** treats local Claude marketplace directory scans as fallback or component enrichment rather than the primary source of marketplace truth
+
+### Requirement: Runtime-Owned Plugin Listings
+The system SHALL read installed and available plugin listings through the runtime that owns each plugin ecosystem.
+
+#### Scenario: Codex plugin listings are available
+- **WHEN** Codex reports plugin listings through its plugin read commands
+- **THEN** Locus shows Codex plugin id, marketplace, install or enablement status when available, version, path/source, and component summary when discoverable
+- **AND** marks Codex plugin actions as runtime-owned and read-only in this slice
+
+#### Scenario: Claude Code plugin listings are available
+- **WHEN** Claude Code reports installed or available plugin listings through its plugin read commands
+- **THEN** Locus shows Claude plugin id, marketplace, install status, enablement status when available, version, scope/source/path when available, and component summary when discoverable
+- **AND** marks Claude plugin actions as runtime-owned and read-only in this slice
+
+#### Scenario: Runtime reports no installed plugins
+- **WHEN** a runtime read command succeeds and reports no installed plugins
+- **THEN** Locus shows a runtime-specific empty state
+- **AND** preserves any available marketplace listings for that runtime
+- **AND** does not treat the empty installed state as a Locus store failure
+
+### Requirement: Runtime Marketplace Read-Only Actions
+The system SHALL keep runtime marketplace browsing read-only by default, while allowing separately confirmed runtime-owned write actions defined by this change.
+
+#### Scenario: User refreshes runtime metadata
+- **WHEN** the user refreshes plugins from the Sources or Marketplaces view
+- **THEN** the app re-runs bounded read-only runtime inventory commands and local fallback scans
+- **AND** does not add marketplaces, update marketplace snapshots, install packages, update packages, remove packages, enable plugins, disable plugins, or execute plugin code merely because the user refreshed
+
+#### Scenario: User opens a write action
+- **WHEN** the user chooses a supported runtime-owned marketplace or plugin mutation
+- **THEN** the app opens a confirmation preview before any write occurs
+- **AND** keeps the action visually separate from Locus-native pinned store installs
+
+### Requirement: No Cross-Runtime Plugin Conversion
+The system SHALL prevent cross-runtime install, conversion, or compatibility claims between Codex and Claude Code plugins.
+
+#### Scenario: Codex plugin appears in the marketplace center
+- **WHEN** a plugin belongs to Codex
+- **THEN** Locus shows it only under the Codex runtime scope
+- **AND** does not offer to install it into Claude Code
+- **AND** does not translate Codex plugin manifests into Claude Code plugin manifests
+
+#### Scenario: Claude Code plugin appears in the marketplace center
+- **WHEN** a plugin belongs to Claude Code
+- **THEN** Locus shows it only under the Claude Code runtime scope
+- **AND** does not offer to install it into Codex
+- **AND** does not translate Claude Code plugin manifests into Codex plugin manifests
+
+### Requirement: Runtime Marketplace Doctor
+The system SHALL diagnose runtime marketplace health without executing plugin code or changing runtime configuration.
+
+#### Scenario: Runtime CLI is unavailable
+- **WHEN** Codex or Claude Code marketplace read commands are unavailable, fail, time out, or return unsupported output
+- **THEN** Doctor reports a runtime-specific warning or blocked check
+- **AND** includes bounded command/status diagnostics
+- **AND** does not expose secrets, raw config values, OAuth tokens, or MCP secret values
+
+#### Scenario: Runtime CLI and filesystem fallback disagree
+- **WHEN** runtime-owned marketplace output disagrees with a local filesystem scan
+- **THEN** Doctor reports the mismatch
+- **AND** identifies the runtime-owned read surface as authoritative for marketplace inventory in this slice
+- **AND** keeps filesystem scan details as fallback or component-enrichment diagnostics
+
+### Requirement: Runtime Plugin Write Action Preview
+The system SHALL preview every runtime-owned plugin marketplace write action before it can run.
+
+#### Scenario: User previews a runtime marketplace action
+- **WHEN** the user chooses a Codex or Claude Code marketplace add, update, upgrade, or remove action
+- **THEN** the main process maps the typed action id to an allowlisted runtime CLI command
+- **AND** returns the exact command, args, runtime, target, destructive flag, impact summary, and confirmation token
+- **AND** the renderer does not provide raw command strings or arbitrary args
+
+#### Scenario: User previews a runtime plugin action
+- **WHEN** the user chooses a runtime plugin install, update, enable, disable, or uninstall action
+- **THEN** the preview names the owning runtime and plugin selector
+- **AND** only includes actions supported by that runtime's CLI
+- **AND** does not describe the action as a Locus-native install, cross-runtime conversion, or plugin code execution
+
+### Requirement: Confirmed Runtime Plugin Write Execution
+The system SHALL execute runtime-owned plugin marketplace writes only after explicit user confirmation.
+
+#### Scenario: User confirms a write action
+- **WHEN** the user confirms the exact previewed runtime plugin action
+- **THEN** the main process revalidates the action id, target, scope, and confirmation token
+- **AND** spawns only the bundled owning runtime CLI with allowlisted args
+- **AND** returns redacted stdout, stderr, command diagnostics, and reload guidance
+- **AND** refreshes runtime marketplace inventory and plugin diagnostics after a successful write
+
+#### Scenario: Confirmation does not match
+- **WHEN** the confirmation token or destructive target confirmation does not match the preview
+- **THEN** the system blocks execution before spawning any runtime CLI process
+- **AND** reports the action as rejected rather than partially executed
+
+### Requirement: Runtime-Specific Plugin Action Support
+The system SHALL expose only runtime-supported plugin write actions.
+
+#### Scenario: Codex plugin actions are shown
+- **WHEN** a Codex plugin listing is available
+- **THEN** Locus may offer Codex plugin add for not-installed plugins and Codex plugin remove for installed plugins
+- **AND** may offer Codex marketplace add, list, upgrade, and remove actions
+- **AND** does not show Codex enable, disable, install, or uninstall controls that the Codex CLI does not expose
+
+#### Scenario: Claude plugin actions are shown
+- **WHEN** a Claude Code plugin listing is available
+- **THEN** Locus may offer Claude plugin install, update, enable, disable, and uninstall controls according to runtime-reported status
+- **AND** may offer Claude marketplace add, list, update, and remove actions
+- **AND** shows `/reload-plugins` guidance after plugin mutations instead of trying to run the slash command from Locus
+
+### Requirement: Runtime Plugin Write Boundaries
+The system SHALL keep runtime-owned plugin writes separate from Locus-native store installs and plugin execution surfaces.
+
+#### Scenario: User performs a runtime write
+- **WHEN** Locus runs a confirmed Codex or Claude Code plugin marketplace command
+- **THEN** the command changes only that runtime's plugin or marketplace state
+- **AND** does not install a Codex plugin into Claude Code or a Claude plugin into Codex
+- **AND** does not translate plugin manifests between runtimes
+- **AND** does not execute plugin JavaScript, hooks, MCP servers, native modules, app connectors, or developer trusted code in the Locus process
+
+#### Scenario: Runtime write output contains sensitive text
+- **WHEN** the runtime CLI writes stdout, stderr, errors, URLs, or environment-like text
+- **THEN** Locus redacts tokens, passwords, bearer values, API keys, and credentialed URLs before exposing the output to the renderer
+- **AND** Doctor and toast copy do not include raw secrets
