@@ -15,9 +15,9 @@
 - [x] 3.4 Gate plugin agents and agent loading on enabled source, safe mode, and reviewed fingerprint.
 
 ## 4. UI/UX
-- [ ] 4.1 Add a compact Doctor summary to Settings > Plugins.
-- [ ] 4.2 Add per-plugin Debug details without implying sandboxing or Codex++ compatibility.
-- [ ] 4.3 Localize English and Simplified Chinese copy.
+- [x] 4.1 Add a compact Doctor summary to Settings > Plugins.
+- [x] 4.2 Add per-plugin Debug details without implying sandboxing or Codex++ compatibility.
+- [x] 4.3 Localize English and Simplified Chinese copy.
 - [ ] 4.4 Review the UI after smoke and fix clarity/layout issues.
 
 ## 5. Tests

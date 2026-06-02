@@ -6,7 +6,7 @@ import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../li
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert } from "lucide-react"
+import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
 import { Label } from "../../ui/label"
@@ -99,6 +99,74 @@ interface PluginSafetyGate {
 interface PluginSafeModeState {
   enabled: boolean
   updatedAt?: string
+}
+
+type PluginDoctorCheckStatus = "pass" | "info" | "warning" | "blocked"
+type PluginDoctorCheckCode =
+  | "source-available"
+  | "source-empty"
+  | "source-missing"
+  | "manifest-fingerprint"
+  | "review-required"
+  | "review-changed"
+  | "reviewed"
+  | "safe-mode"
+  | "runtime-gate"
+  | "codex-read-only"
+  | "components-declared"
+  | "mcp-declared"
+  | "mcp-approval-fingerprint"
+  | "component-path-warning"
+  | "review-state"
+
+interface PluginDoctorCheck {
+  code: PluginDoctorCheckCode
+  status: PluginDoctorCheckStatus
+  subject: string
+  runtime?: PluginRuntime
+  pluginReviewKey?: string
+  details?: Record<string, string | number | boolean>
+}
+
+interface PluginDoctorPluginDebug {
+  runtime: PluginRuntime
+  reviewKey: string
+  name: string
+  source: string
+  path: string
+  fingerprint: string
+  lastReviewedFingerprint?: string
+  reviewStatus: PluginUpdateReviewStatus
+  safetyGate: PluginSafetyGate
+  sourcePins: PluginSourcePin[]
+  diagnostics: PluginDiagnostic[]
+  componentCounts: {
+    commands: number
+    skills: number
+    agents: number
+    mcpServers: number
+  }
+  mcpServers: string[]
+  mcpApprovalIdentifiers: Record<string, string>
+  checks: PluginDoctorCheck[]
+}
+
+interface PluginDoctorReport {
+  generatedAt: string
+  safeMode: PluginSafeModeState
+  reviewStatePath?: string
+  summary: {
+    totalChecks: number
+    pass: number
+    info: number
+    warning: number
+    blocked: number
+    pluginCount: number
+    blockedPluginCount: number
+    mcpServerCount: number
+  }
+  checks: PluginDoctorCheck[]
+  plugins: PluginDoctorPluginDebug[]
 }
 
 interface PluginData {
@@ -434,6 +502,207 @@ function getDiagnosticClass(severity: PluginDiagnosticSeverity): string {
     : "border-border bg-background text-muted-foreground"
 }
 
+function getDoctorStatusLabel(status: PluginDoctorCheckStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "pass":
+      return t("settings.plugins.doctorStatusPass")
+    case "info":
+      return t("settings.plugins.doctorStatusInfo")
+    case "warning":
+      return t("settings.plugins.doctorStatusWarning")
+    case "blocked":
+      return t("settings.plugins.doctorStatusBlocked")
+  }
+}
+
+function getDoctorStatusClass(status: PluginDoctorCheckStatus): string {
+  switch (status) {
+    case "pass":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "info":
+      return "border-border bg-background text-muted-foreground"
+    case "warning":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "blocked":
+      return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+  }
+}
+
+function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (code) {
+    case "source-available":
+      return t("settings.plugins.doctorCheckSourceAvailable")
+    case "source-empty":
+      return t("settings.plugins.doctorCheckSourceEmpty")
+    case "source-missing":
+      return t("settings.plugins.doctorCheckSourceMissing")
+    case "manifest-fingerprint":
+      return t("settings.plugins.doctorCheckManifestFingerprint")
+    case "review-required":
+      return t("settings.plugins.doctorCheckReviewRequired")
+    case "review-changed":
+      return t("settings.plugins.doctorCheckReviewChanged")
+    case "reviewed":
+      return t("settings.plugins.doctorCheckReviewed")
+    case "safe-mode":
+      return t("settings.plugins.doctorCheckSafeMode")
+    case "runtime-gate":
+      return t("settings.plugins.doctorCheckRuntimeGate")
+    case "codex-read-only":
+      return t("settings.plugins.doctorCheckCodexReadOnly")
+    case "components-declared":
+      return t("settings.plugins.doctorCheckComponentsDeclared")
+    case "mcp-declared":
+      return t("settings.plugins.doctorCheckMcpDeclared")
+    case "mcp-approval-fingerprint":
+      return t("settings.plugins.doctorCheckMcpApprovalFingerprint")
+    case "component-path-warning":
+      return t("settings.plugins.doctorCheckComponentPathWarning")
+    case "review-state":
+      return t("settings.plugins.doctorCheckReviewState")
+  }
+}
+
+function PluginDoctorSummaryPanel({
+  report,
+  isLoading,
+}: {
+  report?: PluginDoctorReport
+  isLoading: boolean
+}) {
+  const { t } = useI18n()
+
+  return (
+    <div className="rounded-lg border border-border bg-background px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Stethoscope className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-foreground">
+              {t("settings.plugins.doctor")}
+            </p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {isLoading
+                ? t("common.loading")
+                : t("settings.plugins.doctorSummary", {
+                    blocked: report?.summary.blocked ?? 0,
+                    warning: report?.summary.warning ?? 0,
+                    checks: report?.summary.totalChecks ?? 0,
+                  })}
+            </p>
+          </div>
+        </div>
+        <span className={cn(
+          "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+          report && report.summary.blocked > 0
+            ? getDoctorStatusClass("blocked")
+            : report && report.summary.warning > 0
+              ? getDoctorStatusClass("warning")
+              : getDoctorStatusClass("pass"),
+        )}>
+          {report && report.summary.blocked > 0
+            ? getDoctorStatusLabel("blocked", t)
+            : report && report.summary.warning > 0
+              ? getDoctorStatusLabel("warning", t)
+              : getDoctorStatusLabel("pass", t)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function PluginDebugPanel({
+  plugin,
+  debug,
+}: {
+  plugin: PluginData
+  debug?: PluginDoctorPluginDebug
+}) {
+  const { t } = useI18n()
+  if (!debug) return null
+
+  const approvalCount = Object.keys(debug.mcpApprovalIdentifiers).length
+  const visibleChecks = debug.checks.slice(0, 8)
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.debug")}</Label>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t("settings.plugins.debugHint")}
+          </p>
+        </div>
+        <span className={cn(
+          "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+          getDoctorStatusClass(debug.checks.some((check) => check.status === "blocked") ? "blocked" : "pass"),
+        )}>
+          {debug.checks.some((check) => check.status === "blocked")
+            ? getDoctorStatusLabel("blocked", t)
+            : getDoctorStatusLabel("pass", t)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorFingerprint")}</p>
+          <p className="font-mono text-foreground" title={debug.fingerprint}>
+            sha256:{shortFingerprint(debug.fingerprint)}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorLastReviewedFingerprint")}</p>
+          <p className="font-mono text-foreground" title={debug.lastReviewedFingerprint}>
+            sha256:{shortFingerprint(debug.lastReviewedFingerprint ?? "")}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorComponentCounts")}</p>
+          <p className="text-foreground">
+            {[
+              `${t("settings.plugins.doctorCommandsShort")}:${debug.componentCounts.commands}`,
+              `${t("settings.plugins.doctorSkillsShort")}:${debug.componentCounts.skills}`,
+              `${t("settings.plugins.doctorAgentsShort")}:${debug.componentCounts.agents}`,
+              `MCP:${debug.componentCounts.mcpServers}`,
+            ].join(" / ")}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorMcpApprovals")}</p>
+          <p className="text-foreground">
+            {approvalCount} / {plugin.components.mcpServers.length}
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.doctorChecks")}</p>
+        <div className="space-y-1">
+          {visibleChecks.map((check, index) => (
+            <div
+              key={`${check.code}-${index}`}
+              className="grid grid-cols-[1fr_auto] items-start gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">{getDoctorCheckLabel(check.code, t)}</p>
+                <p className="truncate text-[11px] text-muted-foreground" title={check.subject}>
+                  {check.subject}
+                </p>
+              </div>
+              <span className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                getDoctorStatusClass(check.status),
+              )}>
+                {getDoctorStatusLabel(check.status, t)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) {
   const { t } = useI18n()
   if (diagnostics.length === 0) return null
@@ -675,6 +944,7 @@ function PluginUpdateReviewPanel({
 // --- Detail Panel ---
 function PluginDetail({
   plugin,
+  pluginDebug,
   onToggleEnabled,
   isTogglingEnabled,
   onApproveMcpServers,
@@ -687,6 +957,7 @@ function PluginDetail({
   isMarkingReviewed,
 }: {
   plugin: PluginData
+  pluginDebug?: PluginDoctorPluginDebug
   onToggleEnabled: (enabled: boolean) => void
   isTogglingEnabled: boolean
   onApproveMcpServers?: () => void
@@ -789,6 +1060,7 @@ function PluginDetail({
 
           <DiagnosticsPanel diagnostics={plugin.diagnostics} />
           <PluginSafetyGatePanel plugin={plugin} />
+          <PluginDebugPanel plugin={plugin} debug={pluginDebug} />
 
           <PluginUpdateReviewPanel
             plugin={plugin}
@@ -1293,6 +1565,9 @@ export function AgentsPluginsTab() {
   const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } = trpc.plugins.safeMode.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
+  const { data: doctorReport, isLoading: isLoadingDoctor, refetch: refetchDoctor } = trpc.plugins.doctor.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
 
   // MCP server statuses for showing auth state in plugin detail
   const { data: allMcpConfig, refetch: refetchMcp } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
@@ -1455,6 +1730,9 @@ export function AgentsPluginsTab() {
 
   const selectedPlugin = plugins.find((p) => getPluginKey(p) === selectedPluginKey) || null
   const selectedSource = pluginSources.find((source) => source.id === selectedSourceId) || null
+  const selectedPluginDebug = selectedPlugin
+    ? doctorReport?.plugins.find((debug) => debug.reviewKey === selectedPlugin.reviewKey)
+    : undefined
 
   // Auto-select first plugin in display order (enabled first, then marketplace)
   useEffect(() => {
@@ -1490,12 +1768,12 @@ export function AgentsPluginsTab() {
       toast.success(t("settings.plugins.toast.reviewed"), {
         description: formatPluginName(plugin.name),
       })
-      await refetch()
+      await Promise.all([refetch(), refetchDoctor()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [markReviewedMutation, refetch, t])
+  }, [markReviewedMutation, refetch, refetchDoctor, t])
 
   const handleToggleEnabled = useCallback(async (plugin: PluginData, enabled: boolean) => {
     try {
@@ -1513,12 +1791,12 @@ export function AgentsPluginsTab() {
       toast.success(enabled ? t("settings.plugins.toast.enabled") : t("settings.plugins.toast.disabled"), {
         description: formatPluginName(plugin.name),
       })
-      await Promise.all([refetch(), refetchMcp()])
+      await Promise.all([refetch(), refetchDoctor(), refetchMcp()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [setPluginEnabledMutation, revokeAllMutation, refetch, refetchMcp, t])
+  }, [setPluginEnabledMutation, revokeAllMutation, refetch, refetchDoctor, refetchMcp, t])
 
   const handleApproveMcpServers = useCallback(async (plugin: PluginData) => {
     if (plugin.runtime !== "claude" || plugin.components.mcpServers.length === 0) return
@@ -1540,12 +1818,12 @@ export function AgentsPluginsTab() {
   const handleRefreshPlugins = useCallback(async () => {
     try {
       await clearPluginCacheMutation.mutateAsync()
-      await Promise.all([refetch(), refetchSources()])
+      await Promise.all([refetch(), refetchSources(), refetchDoctor()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [clearPluginCacheMutation, refetch, refetchSources, t])
+  }, [clearPluginCacheMutation, refetch, refetchSources, refetchDoctor, t])
 
   const handleToggleSafeMode = useCallback(async (enabled: boolean) => {
     try {
@@ -1553,12 +1831,12 @@ export function AgentsPluginsTab() {
       toast.success(enabled
         ? t("settings.plugins.toast.safeModeEnabled")
         : t("settings.plugins.toast.safeModeDisabled"))
-      await Promise.all([refetchSafeMode(), refetch(), refetchMcp()])
+      await Promise.all([refetchSafeMode(), refetch(), refetchDoctor(), refetchMcp()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [setSafeModeMutation, refetchSafeMode, refetch, refetchMcp, t])
+  }, [setSafeModeMutation, refetchSafeMode, refetch, refetchDoctor, refetchMcp, t])
 
   const isRefreshingPlugins = isLoading || isLoadingSources || clearPluginCacheMutation.isPending
 
@@ -1602,6 +1880,12 @@ export function AgentsPluginsTab() {
               safeMode={safeMode}
               onToggle={handleToggleSafeMode}
               isToggling={setSafeModeMutation.isPending}
+            />
+          </div>
+          <div className="px-2 pt-2 flex-shrink-0">
+            <PluginDoctorSummaryPanel
+              report={doctorReport}
+              isLoading={isLoadingDoctor}
             />
           </div>
           {/* Search */}
@@ -1747,6 +2031,7 @@ export function AgentsPluginsTab() {
           selectedPlugin ? (
             <PluginDetail
               plugin={selectedPlugin}
+              pluginDebug={selectedPluginDebug}
               onToggleEnabled={(enabled) => handleToggleEnabled(selectedPlugin, enabled)}
               isTogglingEnabled={setPluginEnabledMutation.isPending}
               onApproveMcpServers={() => handleApproveMcpServers(selectedPlugin)}

@@ -120,4 +120,30 @@ describe("plugin target mode UI source guards", () => {
       expect(dictionarySource).toContain(`"${key}"`)
     }
   })
+
+  test("renders plugin Doctor and Debug facts without sandbox claims", () => {
+    expect(pluginsTabSource).toContain("PluginDoctorSummaryPanel")
+    expect(pluginsTabSource).toContain("PluginDebugPanel")
+    expect(pluginsTabSource).toContain("trpc.plugins.doctor.useQuery")
+    expect(pluginsTabSource).toContain("doctorReport?.plugins.find")
+    expect(pluginsTabSource).toContain("settings.plugins.doctor")
+    expect(pluginsTabSource).toContain("settings.plugins.debug")
+    expect(pluginsTabSource).not.toContain("installPluginUpdate")
+    expect(pluginsTabSource).not.toContain("executeCodexPlugin")
+
+    for (const key of [
+      "settings.plugins.doctorSummary",
+      "settings.plugins.doctorStatusBlocked",
+      "settings.plugins.debugHint",
+      "settings.plugins.doctorFingerprint",
+      "settings.plugins.doctorCheckRuntimeGate",
+      "settings.plugins.doctorCheckCodexReadOnly",
+      "settings.plugins.doctorCheckMcpApprovalFingerprint",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+
+    expect(dictionarySource).toContain("This is not a sandbox or trust certificate")
+    expect(dictionarySource).toContain("不是沙箱或可信证书")
+  })
 })
