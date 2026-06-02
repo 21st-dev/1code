@@ -1,6 +1,7 @@
 import type {
   PluginDiagnostic,
   PluginRuntime,
+  PluginTargetMode,
 } from "./plugin-target-modes"
 import type {
   PluginSourcePin,
@@ -23,6 +24,13 @@ import type {
   PluginDeveloperTrustedManifest,
   PluginDeveloperTrustedStatus,
 } from "./plugin-developer-trusted"
+import type {
+  PluginStoreApprovalStatus,
+  PluginStoreBackupRecord,
+  PluginStoreCandidateStatus,
+  PluginStoreInstalledPackageRecord,
+  PluginStoreValidationIssue,
+} from "./plugin-store-pins"
 
 export type PluginDoctorCheckStatus =
   | "pass"
@@ -53,6 +61,11 @@ export type PluginDoctorCheckCode =
   | "developer-trusted-trust"
   | "developer-trusted-load"
   | "developer-trusted-diagnostic"
+  | "store-candidate"
+  | "store-pin"
+  | "store-approval"
+  | "store-backup"
+  | "store-target-mode"
   | "component-path-warning"
   | "review-state"
 
@@ -116,6 +129,21 @@ export interface PluginDoctorPluginInput {
   mcpApprovalIdentifiers: Record<string, string>
 }
 
+export interface PluginDoctorStoreCandidateInput {
+  storeEntryId: string
+  runtime: PluginRuntime
+  name: string
+  candidateFingerprint: string
+  status: PluginStoreCandidateStatus
+  approvalStatus: PluginStoreApprovalStatus
+  issues: PluginStoreValidationIssue[]
+  sourceCommit: string
+  packageHash?: string
+  targetMode: PluginTargetMode
+  installed?: PluginStoreInstalledPackageRecord
+  backupRecords: PluginStoreBackupRecord[]
+}
+
 export interface PluginDoctorPluginDebug {
   runtime: PluginRuntime
   reviewKey: string
@@ -136,6 +164,10 @@ export interface PluginDoctorPluginDebug {
   checks: PluginDoctorCheck[]
 }
 
+export interface PluginDoctorStoreCandidateDebug extends PluginDoctorStoreCandidateInput {
+  checks: PluginDoctorCheck[]
+}
+
 export interface PluginDoctorReport {
   generatedAt: string
   safeMode: PluginSafeModeState
@@ -153,6 +185,7 @@ export interface PluginDoctorReport {
   }
   checks: PluginDoctorCheck[]
   plugins: PluginDoctorPluginDebug[]
+  storeCandidates: PluginDoctorStoreCandidateDebug[]
 }
 
 export function buildPluginDoctorReport(input: {
@@ -161,17 +194,20 @@ export function buildPluginDoctorReport(input: {
   safeMode: PluginSafeModeState
   developerMode: PluginDeveloperModeState
   reviewStatePath?: string
+  storeCandidates?: PluginDoctorStoreCandidateInput[]
   now?: Date
 }): PluginDoctorReport {
   const sourceChecks = input.sources.map(buildSourceCheck)
   const reviewStateCheck = buildReviewStateCheck(input.reviewStatePath)
   const developerModeCheck = buildDeveloperModeCheck(input.developerMode)
   const plugins = input.plugins.map(buildPluginDebug)
+  const storeCandidates = (input.storeCandidates ?? []).map(buildStoreCandidateDebug)
   const checks = [
     reviewStateCheck,
     developerModeCheck,
     ...sourceChecks,
     ...plugins.flatMap((plugin) => plugin.checks),
+    ...storeCandidates.flatMap((candidate) => candidate.checks),
   ]
   const summary = summarizeDoctorChecks(checks, plugins)
 
@@ -183,6 +219,7 @@ export function buildPluginDoctorReport(input: {
     summary,
     checks,
     plugins,
+    storeCandidates,
   }
 }
 
@@ -509,6 +546,108 @@ function buildPluginChecks(plugin: PluginDoctorPluginInput): PluginDoctorCheck[]
   }
 
   return checks
+}
+
+function buildStoreCandidateDebug(
+  candidate: PluginDoctorStoreCandidateInput,
+): PluginDoctorStoreCandidateDebug {
+  const checks = buildStoreCandidateChecks(candidate)
+  return {
+    ...candidate,
+    checks,
+  }
+}
+
+function buildStoreCandidateChecks(
+  candidate: PluginDoctorStoreCandidateInput,
+): PluginDoctorCheck[] {
+  const blockedIssueCodes = candidate.issues
+    .filter((issue) => issue.severity === "blocked")
+    .map((issue) => issue.code)
+  const checks: PluginDoctorCheck[] = [{
+    code: "store-candidate",
+    status: getStoreCandidateCheckStatus(candidate.status),
+    subject: candidate.name,
+    runtime: candidate.runtime,
+    details: {
+      storeEntryId: candidate.storeEntryId,
+      status: candidate.status,
+      candidateFingerprint: candidate.candidateFingerprint,
+      blockedIssueCodes: blockedIssueCodes.join(","),
+    },
+  }]
+
+  checks.push({
+    code: "store-pin",
+    status: blockedIssueCodes.includes("immutable-commit-required") ||
+      blockedIssueCodes.includes("invalid-package-hash") ||
+      blockedIssueCodes.includes("missing-package-hash") ||
+      blockedIssueCodes.includes("package-hash-mismatch")
+      ? "blocked"
+      : "pass",
+    subject: candidate.name,
+    runtime: candidate.runtime,
+    details: {
+      storeEntryId: candidate.storeEntryId,
+      commit: candidate.sourceCommit,
+      packageHash: candidate.packageHash ?? "",
+    },
+  })
+
+  checks.push({
+    code: "store-approval",
+    status: candidate.approvalStatus === "current"
+      ? "pass"
+      : candidate.approvalStatus === "stale"
+        ? "warning"
+        : "info",
+    subject: candidate.name,
+    runtime: candidate.runtime,
+    details: {
+      storeEntryId: candidate.storeEntryId,
+      approvalStatus: candidate.approvalStatus,
+    },
+  })
+
+  checks.push({
+    code: "store-target-mode",
+    status: blockedIssueCodes.includes("remote-developer-trusted-code") ||
+      candidate.targetMode === "developer-trusted-code"
+      ? "blocked"
+      : "pass",
+    subject: candidate.name,
+    runtime: candidate.runtime,
+    details: {
+      storeEntryId: candidate.storeEntryId,
+      targetMode: candidate.targetMode,
+    },
+  })
+
+  if (candidate.backupRecords.length > 0) {
+    checks.push({
+      code: "store-backup",
+      status: "info",
+      subject: candidate.name,
+      runtime: candidate.runtime,
+      details: {
+        storeEntryId: candidate.storeEntryId,
+        backupCount: candidate.backupRecords.length,
+        latestBackupPath: candidate.backupRecords[0]?.backupPath ?? "",
+      },
+    })
+  }
+
+  return checks
+}
+
+function getStoreCandidateCheckStatus(
+  status: PluginStoreCandidateStatus,
+): PluginDoctorCheckStatus {
+  if (status.startsWith("blocked")) return "blocked"
+  if (status === "review-required" || status === "pin-changed" || status === "package-hash-changed") {
+    return "warning"
+  }
+  return "pass"
 }
 
 function hasDeveloperTrustedFacts(

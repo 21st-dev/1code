@@ -23,6 +23,14 @@ import {
   type PluginDeveloperTrustedAcknowledgement,
   type PluginDeveloperTrustedStatus,
 } from "../../../shared/plugin-developer-trusted"
+import type {
+  PluginStoreBackupRecord,
+  PluginStoreCandidateApproval,
+  PluginStoreCandidateReviewDocument,
+  PluginStoreCandidateStatus,
+  PluginStoreInstalledPackageRecord,
+  PluginStoreValidationIssue,
+} from "../../../shared/plugin-store-pins"
 import type { McpServerConfig } from "../claude-config"
 
 const PLUGIN_REVIEW_STATE_VERSION = 1
@@ -45,6 +53,20 @@ interface PluginReviewState {
   developerMode?: PluginDeveloperModeState
   developerSources?: PluginDeveloperSourceRecord[]
   developerTrustedPlugins?: Record<string, PluginDeveloperTrustedAcknowledgement>
+  storeCandidates?: Record<string, PluginStoreCandidateRecord>
+  storeApprovals?: Record<string, PluginStoreCandidateApproval>
+  installedStorePackages?: Record<string, PluginStoreInstalledPackageRecord>
+  storeBackupRecords?: PluginStoreBackupRecord[]
+}
+
+export interface PluginStoreCandidateRecord {
+  schemaVersion: 1
+  storeEntryId: string
+  candidateFingerprint: string
+  document: PluginStoreCandidateReviewDocument
+  status: PluginStoreCandidateStatus
+  issues: PluginStoreValidationIssue[]
+  previewedAt: string
 }
 
 export interface PluginDeveloperSourceRecord {
@@ -185,6 +207,10 @@ export async function readPluginReviewState(
       developerMode: normalizeDeveloperModeState(state.developerMode),
       developerSources: normalizeDeveloperSources(state.developerSources),
       developerTrustedPlugins: normalizeDeveloperTrustedPlugins(state.developerTrustedPlugins),
+      storeCandidates: normalizeStoreCandidates(state.storeCandidates),
+      storeApprovals: normalizeStoreApprovals(state.storeApprovals),
+      installedStorePackages: normalizeInstalledStorePackages(state.installedStorePackages),
+      storeBackupRecords: normalizeStoreBackupRecords(state.storeBackupRecords),
     }
   } catch {
     return { schemaVersion: PLUGIN_REVIEW_STATE_VERSION, plugins: {} }
@@ -243,6 +269,88 @@ export async function getPluginDeveloperModeState(
 ): Promise<PluginDeveloperModeState> {
   const state = await readPluginReviewState(filePath)
   return normalizeDeveloperModeState(state.developerMode)
+}
+
+export async function getPluginStoreStateSnapshot(
+  filePath = getPluginReviewStatePath(),
+): Promise<{
+  candidates: Record<string, PluginStoreCandidateRecord>
+  approvals: Record<string, PluginStoreCandidateApproval>
+  installedPackages: Record<string, PluginStoreInstalledPackageRecord>
+  backupRecords: PluginStoreBackupRecord[]
+}> {
+  const state = await readPluginReviewState(filePath)
+  return {
+    candidates: normalizeStoreCandidates(state.storeCandidates),
+    approvals: normalizeStoreApprovals(state.storeApprovals),
+    installedPackages: normalizeInstalledStorePackages(state.installedStorePackages),
+    backupRecords: normalizeStoreBackupRecords(state.storeBackupRecords),
+  }
+}
+
+export async function recordPluginStoreCandidatePreview(
+  input: {
+    storeEntryId: string
+    candidateFingerprint: string
+    document: PluginStoreCandidateReviewDocument
+    status: PluginStoreCandidateStatus
+    issues: PluginStoreValidationIssue[]
+  },
+  filePath = getPluginReviewStatePath(),
+  now = new Date(),
+): Promise<PluginStoreCandidateRecord> {
+  const state = await readPluginReviewState(filePath)
+  const record: PluginStoreCandidateRecord = {
+    schemaVersion: 1,
+    storeEntryId: input.storeEntryId,
+    candidateFingerprint: input.candidateFingerprint,
+    document: input.document,
+    status: input.status,
+    issues: input.issues,
+    previewedAt: now.toISOString(),
+  }
+  state.storeCandidates = {
+    ...normalizeStoreCandidates(state.storeCandidates),
+    [input.storeEntryId]: record,
+  }
+  await writePluginReviewState(state, filePath)
+  return record
+}
+
+export async function approvePluginStoreCandidateFingerprint(
+  approval: PluginStoreCandidateApproval,
+  filePath = getPluginReviewStatePath(),
+): Promise<PluginStoreCandidateApproval> {
+  const state = await readPluginReviewState(filePath)
+  state.storeApprovals = {
+    ...normalizeStoreApprovals(state.storeApprovals),
+    [approval.storeEntryId]: approval,
+  }
+  await writePluginReviewState(state, filePath)
+  return approval
+}
+
+export async function recordInstalledPluginStorePackage(
+  input: {
+    installed: PluginStoreInstalledPackageRecord
+    backup?: PluginStoreBackupRecord
+  },
+  filePath = getPluginReviewStatePath(),
+): Promise<{
+  installed: PluginStoreInstalledPackageRecord
+  backup?: PluginStoreBackupRecord
+}> {
+  const state = await readPluginReviewState(filePath)
+  state.installedStorePackages = {
+    ...normalizeInstalledStorePackages(state.installedStorePackages),
+    [input.installed.storeEntryId]: input.installed,
+  }
+  state.storeBackupRecords = [
+    ...(input.backup ? [input.backup] : []),
+    ...normalizeStoreBackupRecords(state.storeBackupRecords),
+  ].slice(0, 64)
+  await writePluginReviewState(state, filePath)
+  return input
 }
 
 export async function setPluginSafeModeEnabled(
@@ -521,6 +629,98 @@ function normalizeDeveloperTrustedPlugins(
     normalized[key] = trust
   }
   return normalized
+}
+
+function normalizeStoreCandidates(
+  value: Record<string, PluginStoreCandidateRecord> | undefined,
+): Record<string, PluginStoreCandidateRecord> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const normalized: Record<string, PluginStoreCandidateRecord> = {}
+  for (const [key, record] of Object.entries(value)) {
+    if (
+      !record ||
+      typeof record !== "object" ||
+      record.schemaVersion !== 1 ||
+      record.storeEntryId !== key ||
+      typeof record.candidateFingerprint !== "string" ||
+      !record.document ||
+      typeof record.document !== "object" ||
+      typeof record.status !== "string" ||
+      !Array.isArray(record.issues) ||
+      typeof record.previewedAt !== "string"
+    ) {
+      continue
+    }
+    normalized[key] = record
+  }
+  return normalized
+}
+
+function normalizeStoreApprovals(
+  value: Record<string, PluginStoreCandidateApproval> | undefined,
+): Record<string, PluginStoreCandidateApproval> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const normalized: Record<string, PluginStoreCandidateApproval> = {}
+  for (const [key, approval] of Object.entries(value)) {
+    if (
+      !approval ||
+      typeof approval !== "object" ||
+      approval.schemaVersion !== 1 ||
+      approval.storeEntryId !== key ||
+      typeof approval.commit !== "string" ||
+      (approval.packageHash !== undefined && typeof approval.packageHash !== "string") ||
+      typeof approval.candidateFingerprint !== "string" ||
+      typeof approval.approvedAt !== "string"
+    ) {
+      continue
+    }
+    normalized[key] = approval
+  }
+  return normalized
+}
+
+function normalizeInstalledStorePackages(
+  value: Record<string, PluginStoreInstalledPackageRecord> | undefined,
+): Record<string, PluginStoreInstalledPackageRecord> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const normalized: Record<string, PluginStoreInstalledPackageRecord> = {}
+  for (const [key, record] of Object.entries(value)) {
+    if (
+      !record ||
+      typeof record !== "object" ||
+      record.schemaVersion !== 1 ||
+      record.storeEntryId !== key ||
+      typeof record.pluginReviewKey !== "string" ||
+      typeof record.commit !== "string" ||
+      (record.packageHash !== undefined && typeof record.packageHash !== "string") ||
+      typeof record.candidateFingerprint !== "string" ||
+      typeof record.installedAt !== "string" ||
+      typeof record.targetMode !== "string"
+    ) {
+      continue
+    }
+    normalized[key] = record
+  }
+  return normalized
+}
+
+function normalizeStoreBackupRecords(
+  value: PluginStoreBackupRecord[] | undefined,
+): PluginStoreBackupRecord[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((record): record is PluginStoreBackupRecord =>
+    Boolean(
+      record &&
+      typeof record === "object" &&
+      record.schemaVersion === 1 &&
+      typeof record.id === "string" &&
+      typeof record.pluginReviewKey === "string" &&
+      typeof record.storeEntryId === "string" &&
+      typeof record.backupPath === "string" &&
+      typeof record.previousPath === "string" &&
+      typeof record.createdAt === "string",
+    ),
+  )
 }
 
 async function resolveDeveloperSourcePath(sourcePath: string): Promise<string> {

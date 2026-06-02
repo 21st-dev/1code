@@ -12,12 +12,12 @@
 - [x] 2.5 Add unit tests for valid candidates, invalid pins, hash changes, target-mode changes, MCP changes, controlled UI changes, and stale approvals.
 
 ## 3. Main Process Store APIs
-- [ ] 3.1 Add local store catalog registry and read-only candidate preview APIs.
-- [ ] 3.2 Compute candidate review fingerprints in main without executing plugin code.
-- [ ] 3.3 Add exact-candidate approval storage bound to store entry, commit pin, package hash, and candidate fingerprint.
-- [ ] 3.4 Add backup-first install/update write actions gated on current approved candidate.
-- [ ] 3.5 Recompute candidate metadata in main before approval and write actions.
-- [ ] 3.6 Add Doctor/Debug facts for store pin status, approval freshness, candidate diffs, and backup metadata.
+- [x] 3.1 Add local store catalog registry and read-only candidate preview APIs.
+- [x] 3.2 Compute candidate review fingerprints in main without executing plugin code.
+- [x] 3.3 Add exact-candidate approval storage bound to store entry, commit pin, package hash, and candidate fingerprint.
+- [x] 3.4 Add backup-first install/update write actions gated on current approved candidate.
+- [x] 3.5 Recompute candidate metadata in main before approval and write actions.
+- [x] 3.6 Add Doctor/Debug facts for store pin status, approval freshness, candidate diffs, and backup metadata.
 
 ## 4. Renderer UI
 - [ ] 4.1 Add store pin and candidate status rows to Settings > Plugins.
@@ -28,8 +28,8 @@
 - [ ] 4.6 Review UI after smoke and fix clarity/layout issues.
 
 ## 5. Tests and Verification
-- [ ] 5.1 Add shared store catalog/candidate/pin tests.
-- [ ] 5.2 Add main-process preview, approval, backup, and stale-candidate tests.
+- [x] 5.1 Add shared store catalog/candidate/pin tests.
+- [x] 5.2 Add main-process preview, approval, backup, and stale-candidate tests.
 - [ ] 5.3 Add source guards for no `latest`, no remote trusted-code, no renderer-trusted candidate metadata, no plugin execution during preview/install/update, and no MCP auto-activation.
 - [ ] 5.4 Add renderer/i18n source-guard tests for pin wording and forbidden trust labels.
 - [ ] 5.5 Run targeted store pin tests.

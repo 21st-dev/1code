@@ -17,6 +17,7 @@ import {
   addDeveloperPluginSource,
   getDeveloperPluginTrustStatus,
   getPluginDeveloperModeState,
+  getPluginStoreStateSnapshot,
   getPluginReviewStatePath,
   getPluginSafeModeState,
   markPluginFingerprintReviewed,
@@ -85,6 +86,16 @@ import {
   setControlledUiSettingValue,
   type PluginControlledUiSettingValue,
 } from "../../plugins/controlled-ui-state"
+import {
+  approveCurrentPluginStoreCandidate,
+  installOrUpdateApprovedPluginStoreCandidate,
+  listPluginStoreEntries,
+  previewPluginStoreCandidate,
+  type PluginStoreCandidatePreview,
+  type PluginStoreInstallResult,
+} from "../../plugins/store-pins"
+import type { PluginStoreCatalogEntry } from "../../../../shared/plugin-store-pins"
+import { getPluginStoreApprovalStatus } from "../../../../shared/plugin-store-pins"
 
 export interface PluginWithComponents {
   runtime: PluginRuntime
@@ -690,6 +701,48 @@ export const pluginsRouter = router({
     return getDeveloperPluginLoadStates()
   }),
 
+  storeCatalog: publicProcedure.query(async (): Promise<PluginStoreCatalogEntry[]> => {
+    return listPluginStoreEntries()
+  }),
+
+  previewStoreCandidate: publicProcedure
+    .input(z.object({ storeEntryId: z.string().min(1) }))
+    .query(async ({ input }): Promise<PluginStoreCandidatePreview> => {
+      return previewPluginStoreCandidate(input.storeEntryId)
+    }),
+
+  approveStoreCandidate: publicProcedure
+    .input(z.object({ storeEntryId: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        return await approveCurrentPluginStoreCandidate(input.storeEntryId)
+      } catch (error) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: error instanceof Error
+            ? error.message
+            : "Store candidate approval failed.",
+        })
+      }
+    }),
+
+  installOrUpdateStoreCandidate: publicProcedure
+    .input(z.object({ storeEntryId: z.string().min(1) }))
+    .mutation(async ({ input }): Promise<PluginStoreInstallResult> => {
+      try {
+        const result = await installOrUpdateApprovedPluginStoreCandidate(input.storeEntryId)
+        clearPluginCache()
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: error instanceof Error
+            ? error.message
+            : "Store candidate install or update failed.",
+        })
+      }
+    }),
+
   loadDeveloperPlugin: publicProcedure
     .input(z.object({ reviewKey: z.string().min(1) }))
     .mutation(async ({ input }): Promise<PluginDeveloperTrustedLoadState> => {
@@ -731,10 +784,11 @@ export const pluginsRouter = router({
    * declarations. This is diagnostic-only and does not execute plugin code.
    */
   doctor: publicProcedure.query(async (): Promise<PluginDoctorReport> => {
-    const [installedPlugins, sources, developerMode] = await Promise.all([
+    const [installedPlugins, sources, developerMode, storeState] = await Promise.all([
       discoverAllRuntimePlugins(),
       discoverPluginSources(),
       getPluginDeveloperModeState(),
+      getPluginStoreStateSnapshot(),
     ])
 
     const scannedPlugins = await Promise.all(
@@ -843,6 +897,28 @@ export const pluginsRouter = router({
         pluginCount: source.pluginCount,
       })),
       plugins: doctorPlugins,
+      storeCandidates: Object.values(storeState.candidates).map((candidate) => ({
+        storeEntryId: candidate.storeEntryId,
+        runtime: candidate.document.runtime,
+        name: candidate.document.name,
+        candidateFingerprint: candidate.candidateFingerprint,
+        status: candidate.status,
+        approvalStatus: getPluginStoreApprovalStatus(
+          storeState.approvals[candidate.storeEntryId],
+          {
+            document: candidate.document,
+            candidateFingerprint: candidate.candidateFingerprint,
+          },
+        ),
+        issues: candidate.issues,
+        sourceCommit: candidate.document.source.commit,
+        packageHash: candidate.document.package.sha256,
+        targetMode: candidate.document.targetMode,
+        installed: storeState.installedPackages[candidate.storeEntryId],
+        backupRecords: storeState.backupRecords.filter(
+          (backup) => backup.storeEntryId === candidate.storeEntryId,
+        ),
+      })),
     })
   }),
 

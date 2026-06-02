@@ -59,6 +59,11 @@ describe("plugin store commit pins", () => {
 
   test("builds normalized candidate review documents and source pins", () => {
     const entry = catalogEntry({
+      package: {
+        sha256: HASH_A,
+        sizeBytes: 12345,
+        localPath: "/tmp/locus-store-package",
+      },
       declaredPermissions: ["workspace.write", "workspace.read"],
       declaredMcpServers: ["zeta", "context"],
     })
@@ -80,6 +85,7 @@ describe("plugin store commit pins", () => {
       declaredPermissions: ["workspace.read", "workspace.write"],
       declaredMcpServers: ["context", "zeta"],
     })
+    expect(document.package).not.toHaveProperty("localPath")
     expect(buildPluginStoreSourcePins(entry)).toEqual([
       {
         kind: "store-git-commit",
@@ -126,6 +132,20 @@ describe("plugin store commit pins", () => {
       code: "missing-package-hash",
       field: "package.sha256",
     }))
+  })
+
+  test("blocks raw over-limit permission and MCP declarations instead of silently truncating", () => {
+    const tooManyPermissions = Array.from({ length: 49 }, (_, index) => `permission.${index}`)
+    const tooManyServers = Array.from({ length: 33 }, (_, index) => `server.${index}`)
+    const issues = validatePluginStoreCatalogEntry(catalogEntry({
+      declaredPermissions: tooManyPermissions,
+      declaredMcpServers: tooManyServers,
+    }))
+
+    expect(issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-permission", field: "declaredPermissions" }),
+      expect.objectContaining({ code: "invalid-mcp-server", field: "declaredMcpServers" }),
+    ]))
   })
 
   test("diffs hash, target mode, MCP, permission, and controlled UI changes", () => {

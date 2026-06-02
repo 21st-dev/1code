@@ -39,6 +39,9 @@ export type PluginStoreValidationCode =
   | "immutable-commit-required"
   | "invalid-package-hash"
   | "missing-package-hash"
+  | "missing-package-local-path"
+  | "package-hash-mismatch"
+  | "package-containment-failed"
   | "invalid-source-path"
   | "remote-developer-trusted-code"
   | "invalid-target-mode"
@@ -63,6 +66,7 @@ export interface PluginStoreGitSourcePin {
 export interface PluginStorePackagePin {
   sha256?: string
   sizeBytes?: number
+  localPath?: string
 }
 
 export interface PluginStoreCatalogEntry {
@@ -204,6 +208,12 @@ export function validatePluginStoreCatalogEntry(
 ): PluginStoreValidationIssue[] {
   const normalized = normalizePluginStoreCatalogEntry(entry)
   const issues: PluginStoreValidationIssue[] = []
+  const rawPermissions = Array.isArray(entry.declaredPermissions)
+    ? entry.declaredPermissions
+    : []
+  const rawMcpServers = Array.isArray(entry.declaredMcpServers)
+    ? entry.declaredMcpServers
+    : []
 
   if (normalized.schemaVersion !== 1) {
     issues.push(blocked(
@@ -291,7 +301,7 @@ export function validatePluginStoreCatalogEntry(
       "Store target mode must be manifest-only or controlled-ui.",
     ))
   }
-  if (normalized.declaredPermissions.length > MAX_PERMISSIONS) {
+  if (rawPermissions.length > MAX_PERMISSIONS) {
     issues.push(blocked(
       "invalid-permission",
       "declaredPermissions",
@@ -308,7 +318,7 @@ export function validatePluginStoreCatalogEntry(
       break
     }
   }
-  if (normalized.declaredMcpServers.length > MAX_MCP_SERVERS) {
+  if (rawMcpServers.length > MAX_MCP_SERVERS) {
     issues.push(blocked(
       "invalid-mcp-server",
       "declaredMcpServers",
@@ -350,7 +360,10 @@ export function buildPluginStoreCandidateReviewDocument(
     name: normalized.name,
     version: normalized.version,
     source: normalized.source,
-    package: normalized.package ?? {},
+    package: {
+      sha256: normalized.package?.sha256,
+      sizeBytes: normalized.package?.sizeBytes,
+    },
     targetMode: normalized.targetMode,
     declaredPermissions: normalized.declaredPermissions,
     declaredMcpServers: normalized.declaredMcpServers,
@@ -415,13 +428,17 @@ export function buildPluginStoreCandidateReview(input: {
   installed?: PluginStoreInstalledPackageRecord
   previousCandidate?: PluginStoreCandidateReviewDocument
   approval?: PluginStoreCandidateApproval
+  extraIssues?: PluginStoreValidationIssue[]
   candidateFingerprint: string
   requirePackageHashForWrite?: boolean
 }): PluginStoreCandidateReview {
   const document = buildPluginStoreCandidateReviewDocument(input.entry)
-  const issues = validatePluginStoreCatalogEntry(input.entry, {
-    requirePackageHashForWrite: input.requirePackageHashForWrite,
-  })
+  const issues = dedupeIssues([
+    ...validatePluginStoreCatalogEntry(input.entry, {
+      requirePackageHashForWrite: input.requirePackageHashForWrite,
+    }),
+    ...(input.extraIssues ?? []),
+  ])
   const approvalStatus = getPluginStoreApprovalStatus(input.approval, {
     document,
     candidateFingerprint: input.candidateFingerprint,
@@ -536,6 +553,7 @@ function normalizePackagePin(value: PluginStorePackagePin | undefined): PluginSt
     sizeBytes: typeof value.sizeBytes === "number" && Number.isFinite(value.sizeBytes) && value.sizeBytes >= 0
       ? Math.floor(value.sizeBytes)
       : undefined,
+    localPath: value.localPath?.trim(),
   }
 }
 

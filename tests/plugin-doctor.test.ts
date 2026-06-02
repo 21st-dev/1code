@@ -242,4 +242,67 @@ describe("plugin doctor report", () => {
     expect(serialized).not.toContain("console.log")
     expect(serialized).not.toContain("new Function")
   })
+
+  test("reports store commit pins, stale approvals, blocked candidates, and backups as review metadata", () => {
+    const report = buildPluginDoctorReport({
+      now: new Date("2026-06-02T00:00:00Z"),
+      reviewStatePath: "/userData/plugin-review-state.json",
+      safeMode: { enabled: false },
+      developerMode: { enabled: false },
+      sources: [],
+      plugins: [],
+      storeCandidates: [{
+        storeEntryId: "example.plugin",
+        runtime: "claude",
+        name: "Example Plugin",
+        candidateFingerprint: "candidate-fingerprint",
+        status: "blocked-invalid-pin",
+        approvalStatus: "stale",
+        issues: [{
+          code: "immutable-commit-required",
+          severity: "blocked",
+          field: "source.commit",
+          message: "Immutable commit pin required.",
+        }],
+        sourceCommit: "latest",
+        packageHash: "a".repeat(64),
+        targetMode: "manifest-only",
+        backupRecords: [{
+          schemaVersion: 1,
+          id: "example-plugin-backup",
+          pluginReviewKey: "store:claude:example.plugin",
+          storeEntryId: "example.plugin",
+          backupPath: "/userData/plugin-store-backups/example",
+          previousPath: "/userData/plugin-store-packages/example.plugin",
+          previousCommit: "0123456789abcdef0123456789abcdef01234567",
+          previousPackageHash: "b".repeat(64),
+          previousFingerprint: "previous-fingerprint",
+          createdAt: "2026-06-02T00:00:00.000Z",
+        }],
+      }],
+    })
+
+    expect(report.storeCandidates).toHaveLength(1)
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: "store-candidate",
+      status: "blocked",
+    }))
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: "store-pin",
+      status: "blocked",
+    }))
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: "store-approval",
+      status: "warning",
+    }))
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: "store-backup",
+      status: "info",
+    }))
+    const serialized = JSON.stringify(report)
+    expect(serialized).toContain("latest")
+    expect(serialized).toContain("candidate-fingerprint")
+    expect(serialized).not.toContain("verified safe")
+    expect(serialized).not.toContain("trusted marketplace")
+  })
 })
