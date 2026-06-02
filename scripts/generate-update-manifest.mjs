@@ -16,6 +16,8 @@
  *   - Locus-{version}-arm64-mac.zip
  *   - Locus-{version}-friend.zip
  *   - Locus-{version}-mac.zip
+ *   - Locus-Setup-{version}.exe
+ *   - Locus-{version}-portable.exe
  */
 
 import { createHash } from "crypto"
@@ -181,6 +183,74 @@ function generateManifest(arch) {
   }
 }
 
+function getWindowsInstallerPatterns() {
+  return [
+    `Locus-Setup-${version}`,
+    `Setup-${version}`,
+    `Setup ${version}`,
+    `${version}-Setup`,
+    `${version}-setup`,
+  ]
+}
+
+function generateWindowsManifest() {
+  const installerMatch = findReleaseFile(getWindowsInstallerPatterns(), ".exe")
+
+  if (!installerMatch) {
+    console.warn(
+      `Warning: Windows installer not found; tried ${formatPatterns(
+        getWindowsInstallerPatterns(),
+      )}`,
+    )
+    console.warn("Skipping Windows manifest generation")
+    return null
+  }
+
+  const installerPath = installerMatch.path
+  const installerName = basename(installerPath)
+  const sha512 = calculateSha512(installerPath)
+  const size = getFileSize(installerPath)
+  const portableMatch = findReleaseFile(
+    [`Locus-${version}-portable`, `${version}-portable`, `portable-${version}`],
+    ".exe",
+  )
+
+  const manifest = {
+    version,
+    files: [
+      {
+        url: installerName,
+        sha512,
+        size,
+      },
+    ],
+    path: installerName,
+    sha512,
+    releaseDate: new Date().toISOString(),
+  }
+
+  const prefix = channel === "beta" ? "beta" : "latest"
+  const manifestFileName = `${prefix}.yml`
+  const manifestPath = join(releaseDir, manifestFileName)
+
+  const yaml = objectToYaml(manifest)
+  writeFileSync(manifestPath, yaml)
+
+  console.log(`Generated ${manifestFileName}:`)
+  console.log(`  Version: ${version}`)
+  console.log(`  File: ${installerName}`)
+  console.log(`  Matched: ${installerMatch.matchedPattern}`)
+  console.log(`  Size: ${formatBytes(size)}`)
+  console.log(`  SHA512: ${sha512.substring(0, 20)}...`)
+  console.log()
+
+  return {
+    manifestPath,
+    artifactName: installerName,
+    manualDownloadName: portableMatch ? basename(portableMatch.path) : null,
+  }
+}
+
 /**
  * Convert object to YAML string (simple implementation)
  */
@@ -288,9 +358,10 @@ console.log()
 
 const arm64Manifest = generateManifest("arm64")
 const x64Manifest = generateManifest("x64")
+const windowsManifest = generateWindowsManifest()
 const linuxManifest = generateLinuxManifest()
 
-if (!arm64Manifest && !x64Manifest && !linuxManifest) {
+if (!arm64Manifest && !x64Manifest && !windowsManifest && !linuxManifest) {
   console.error("No manifest files were generated!")
   console.error("Make sure you have built the app with: npm run dist")
   process.exit(1)
@@ -314,6 +385,13 @@ if (x64Manifest) {
   console.log(`   - ${x64Manifest.artifactName}`)
   if (x64Manifest.manualDownloadName) {
     console.log(`   - ${x64Manifest.manualDownloadName}`)
+  }
+}
+if (windowsManifest) {
+  console.log(`   - ${prefix}.yml`)
+  console.log(`   - ${windowsManifest.artifactName}`)
+  if (windowsManifest.manualDownloadName) {
+    console.log(`   - ${windowsManifest.manualDownloadName}`)
   }
 }
 if (linuxManifest) {

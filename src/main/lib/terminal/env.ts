@@ -351,7 +351,8 @@ export function buildTerminalEnv(params: {
 
   // Get Electron's process.env and filter to only allowlisted safe vars
   const rawBaseEnv = sanitizeEnv(process.env) || {}
-  const baseEnv = buildSafeEnv(rawBaseEnv)
+  const safeBaseEnv = buildSafeEnv(rawBaseEnv)
+  const baseEnv = platform.buildEnvironment(safeBaseEnv)
   const locale = getLocale(rawBaseEnv)
 
   const env: Record<string, string> = {

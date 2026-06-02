@@ -910,7 +910,7 @@ export function AgentsSkillsTab() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [activeView, setActiveView] = useState<SkillsViewMode>("skills")
-  const [activeSkillFilter, setActiveSkillFilter] = useState<SkillFilter>("installed")
+  const [activeSkillFilter, setActiveSkillFilter] = useState<SkillFilter>("all")
   const [showAddForm, setShowAddForm] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 

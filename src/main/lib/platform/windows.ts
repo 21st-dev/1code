@@ -18,12 +18,10 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
   readonly displayName = "Windows"
 
   getShellConfig(): ShellConfig {
-    const powershellPath =
-      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
     const cmdPath = process.env.COMSPEC || "C:\\Windows\\System32\\cmd.exe"
 
     return {
-      executable: process.env.COMSPEC || powershellPath,
+      executable: cmdPath,
       loginArgs: [], // Windows shells don't have login mode like Unix
       execArgs: (command: string) => ["/c", command],
     }
@@ -87,11 +85,8 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
   }
 
   override getDefaultShell(): string {
-    // Prefer PowerShell, fall back to cmd.exe
-    return (
-      process.env.COMSPEC ||
-      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
-    )
+    // Keep the default shell aligned with the cmd.exe /c exec arguments.
+    return process.env.COMSPEC || "C:\\Windows\\System32\\cmd.exe"
   }
 
   override async detectShell(): Promise<string> {

@@ -11,6 +11,28 @@ import {
 } from "../../../../shared/external-apps";
 import { openExternalUrl } from "../../local-only";
 
+const APP_COMMANDS: Partial<Record<ExternalApp, string[]>> = {
+	cursor: ["cursor"],
+	vscode: ["code"],
+	"vscode-insiders": ["code-insiders"],
+	zed: ["zed"],
+	windsurf: ["windsurf"],
+	sublime: ["subl", "sublime_text"],
+	trae: ["trae"],
+	"github-desktop": ["github"],
+	intellij: ["idea", "idea64"],
+	webstorm: ["webstorm", "webstorm64"],
+	pycharm: ["pycharm", "pycharm64"],
+	phpstorm: ["phpstorm", "phpstorm64"],
+	rubymine: ["rubymine", "rubymine64"],
+	goland: ["goland", "goland64"],
+	clion: ["clion", "clion64"],
+	rider: ["rider", "rider64"],
+	datagrip: ["datagrip", "datagrip64"],
+	fleet: ["fleet"],
+	rustrover: ["rustrover", "rustrover64"],
+};
+
 function expandTilde(filePath: string): string {
 	if (filePath.startsWith("~/") || filePath === "~") {
 		return path.join(os.homedir(), filePath.slice(1));
@@ -18,11 +40,18 @@ function expandTilde(filePath: string): string {
 	return filePath;
 }
 
-function spawnAsync(command: string, args: string[]): Promise<void> {
+function spawnAsync(
+	command: string,
+	args: string[],
+	options?: { cwd?: string },
+): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(command, args, {
+			cwd: options?.cwd,
 			detached: true,
 			stdio: "ignore",
+			windowsHide: true,
+			shell: process.platform === "win32",
 		});
 		child.unref();
 		child.on("error", reject);
@@ -31,16 +60,54 @@ function spawnAsync(command: string, args: string[]): Promise<void> {
 	});
 }
 
-function openPathInApp(app: ExternalApp, targetPath: string): Promise<void> {
+function commandExists(command: string): boolean {
+	try {
+		const lookupCommand = process.platform === "win32" ? "where" : "which";
+		execFileSync(lookupCommand, [command], {
+			stdio: "ignore",
+			windowsHide: true,
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function spawnFirstAvailableCommand(
+	commands: string[],
+	args: string[],
+	options?: { cwd?: string },
+): Promise<string | null> {
+	for (const command of commands) {
+		if (!commandExists(command)) continue;
+		await spawnAsync(command, args, options);
+		return command;
+	}
+
+	return null;
+}
+
+async function openPathInApp(app: ExternalApp, targetPath: string): Promise<void> {
 	const expandedPath = expandTilde(targetPath);
 
 	if (app === "finder") {
 		shell.showItemInFolder(expandedPath);
-		return Promise.resolve();
+		return;
+	}
+
+	const commands = APP_COMMANDS[app];
+	if (commands) {
+		const launched = await spawnFirstAvailableCommand(commands, [expandedPath]);
+		if (launched) return;
+	}
+
+	if (process.platform !== "darwin") {
+		await shell.openPath(expandedPath);
+		return;
 	}
 
 	const meta = APP_META[app];
-	return spawnAsync("open", ["-a", meta.macAppName, expandedPath]);
+	await spawnAsync("open", ["-a", meta.macAppName, expandedPath]);
 }
 
 /**
@@ -91,21 +158,21 @@ export const externalRouter = router({
 			const editors = [
 				{ cmd: "cursor", args: [filePath] }, // Cursor
 				{ cmd: "code", args: [filePath] }, // VS Code
+				{ cmd: "code-insiders", args: [filePath] }, // VS Code Insiders
+				{ cmd: "windsurf", args: [filePath] }, // Windsurf
+				{ cmd: "zed", args: [filePath] }, // Zed
 				{ cmd: "subl", args: [filePath] }, // Sublime Text
 				{ cmd: "atom", args: [filePath] }, // Atom
-				{ cmd: "open", args: ["-t", filePath] }, // macOS default text editor
+				...(process.platform === "darwin"
+					? [{ cmd: "open", args: ["-t", filePath] }]
+					: []), // macOS default text editor
 			];
 
 			for (const editor of editors) {
 				try {
 					// Check if the command exists first
-					execFileSync("which", [editor.cmd], { stdio: "ignore" });
-					const child = spawn(editor.cmd, editor.args, {
-						cwd: cwd || undefined,
-						detached: true,
-						stdio: "ignore",
-					});
-					child.unref();
+					if (!commandExists(editor.cmd)) continue;
+					await spawnAsync(editor.cmd, editor.args, { cwd });
 					return { success: true, editor: editor.cmd };
 				} catch {
 					// Try next editor

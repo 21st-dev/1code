@@ -1,0 +1,8 @@
+resources/skill-registry/**/*.csv text eol=lf
+resources/skill-registry/**/*.json text eol=lf
+resources/skill-registry/**/*.md text eol=lf
+resources/skill-registry/**/*.py text eol=lf
+resources/skill-registry/**/*.txt text eol=lf
+resources/skill-registry/**/*.xml text eol=lf
+resources/skill-registry/**/*.yaml text eol=lf
+resources/skill-registry/**/*.yml text eol=lf
