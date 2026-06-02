@@ -4190,14 +4190,14 @@ export function AgentsPluginsTab() {
       >
         <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
           <div className="px-2 pt-2 flex-shrink-0">
-            <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-0.5">
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-0.5">
               {VIEW_MODES.map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setViewMode(mode)}
                   className={cn(
-                    "h-6 rounded-md px-1 text-[10px] font-medium transition-colors",
+                    "h-7 whitespace-nowrap rounded-md px-2 text-[11px] font-medium transition-colors",
                     viewMode === mode
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"

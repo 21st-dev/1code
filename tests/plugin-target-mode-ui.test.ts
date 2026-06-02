@@ -250,6 +250,8 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("viewMode === \"marketplaces\"")
     expect(pluginsTabSource).toContain("settings.plugins.viewMarketplaces")
     expect(pluginsTabSource).toContain("settings.plugins.viewLocusStore")
+    expect(pluginsTabSource).toContain("grid grid-cols-2 gap-1")
+    expect(pluginsTabSource).toContain("whitespace-nowrap")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReadOnlyHint")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReportedPlugins")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplacePluginSummary")
