@@ -93,6 +93,13 @@ The system SHALL provide a one-shot headless run command for local agent work wi
 - **AND** linked chat fields remain empty
 - **AND** job history is read from `agent_jobs` and `agent_job_events`
 
+#### Scenario: User enqueues a daemon job
+- **WHEN** the user runs `locus run --daemon` with a cwd, runtime, mode, and prompt
+- **THEN** the packaged CLI launches the Locus Electron main process in headless CLI mode
+- **AND** creates a queued `source=daemon` job in the existing SQLite job store
+- **AND** does not run the runtime in the submitter process
+- **AND** prints the created job according to the selected output format
+
 ### Requirement: Job Management CLI
 The system SHALL provide CLI commands for inspecting and managing local jobs.
 
@@ -122,19 +129,43 @@ The system SHALL provide CLI commands for inspecting and managing local jobs.
 - **AND** increments the attempt number for the retry chain
 - **AND** preserves the original job history unchanged
 
-### Requirement: Future Local Daemon Queue Boundary
-The system SHALL support a later local daemon queue that reuses durable jobs and the shared runtime core.
+### Requirement: Local Daemon Queue
+The system SHALL provide an opt-in local daemon queue that reuses durable jobs and the shared runtime core.
 
-#### Scenario: Daemon enqueues job
-- **WHEN** daemon mode is enabled and a caller enqueues a job
-- **THEN** the daemon stores the job in SQLite
-- **AND** starts it according to local concurrency limits
-- **AND** does not require a renderer window to remain open
+#### Scenario: Daemon starts without a renderer window
+- **WHEN** the user runs `locus daemon run`
+- **THEN** the packaged CLI launches the Locus Electron main process in daemon mode
+- **AND** the daemon starts before GUI single-instance handling, menu construction, BrowserWindow creation, updater startup, auth callback server startup, and GUI-only MCP warmup
+- **AND** the daemon writes diagnostics to stderr without polluting structured stdout
+
+#### Scenario: Daemon claims queued daemon jobs
+- **WHEN** the daemon is running
+- **AND** queued `source=daemon` jobs exist
+- **THEN** the daemon starts those jobs through the shared runtime core according to configured local concurrency limits
+- **AND** writes heartbeat, cancel, runtime event, and completion state through `agent_jobs` and `agent_job_events`
+- **AND** does not claim `source=desktop`, default one-shot `source=cli`, `source=schedule`, or `source=protocol` jobs
+
+#### Scenario: Daemon follows cancellation requests
+- **WHEN** `locus jobs cancel <job-id>` is used for a running daemon job
+- **THEN** the system records a persisted cancel request
+- **AND** the daemon worker observes the request through the job observer
+- **AND** the daemon marks the job `canceled` only after the runtime stops or the worker confirms cancellation
+
+#### Scenario: User follows daemon logs
+- **WHEN** a user follows a daemon job with `locus run --daemon --follow` or `locus jobs logs <job-id> --follow`
+- **THEN** the CLI streams persisted events in sequence
+- **AND** exits after the daemon job reaches a terminal status
 
 #### Scenario: Daemon restarts after crash
 - **WHEN** the daemon starts and finds jobs marked running without an active worker
 - **THEN** it marks those jobs as interrupted
 - **AND** exposes retry or resume only when the runtime adapter supports it
+
+#### Scenario: Daemon coordination stays local
+- **WHEN** the local daemon is running
+- **THEN** it uses only local per-user coordination primitives and the app SQLite database for queue state
+- **AND** does not expose an unauthenticated TCP HTTP or WebSocket control surface by default
+- **AND** does not accept provider tokens, API keys, or raw environment values from daemon clients
 
 ### Requirement: Future Local Job Scheduling Boundary
 The system SHALL support opt-in local schedules only after durable jobs and daemon recovery are implemented.

@@ -73,7 +73,7 @@ Current status is **macOS local implementation complete through Phase 5, pending
 - [x] 7.5 Run `bun run build`.
 - [x] 7.6 Smoke test macOS `locus run`, `locus jobs list`, and `locus jobs logs` via Electron headless mode.
 - [x] 7.7 Smoke test desktop listing/log viewing for a CLI-created job and save screenshot/video evidence.
-- [x] 7.8 Document deferred daemon, schedule, ACP, Codex parity, and Windows real-smoke evidence.
+- [x] 7.8 Document deferred schedule, ACP, Codex parity, and Windows real-smoke evidence.
 - [ ] 7.9 Run equivalent Windows smoke and attach evidence.
 
 ## 8. Phase 5: Desktop Chat as `source=desktop` Jobs
@@ -89,8 +89,20 @@ Current status is **macOS local implementation complete through Phase 5, pending
 - [x] 8.10 Run real desktop smoke proving ordinary chat sends create linked `source=desktop` jobs and Workbench can navigate back to the chat.
 - [x] 8.11 Save video/screenshot/smoke-summary artifacts for the Phase 5 desktop migration.
 
+## 9. Phase 6: Local Daemon Queue
+- [x] 9.1 Update OpenSpec proposal/design/spec to move the local daemon from future boundary into the explicit Phase 6 scope while keeping schedule and ACP deferred.
+- [ ] 9.2 Extract the one-shot job execution path into a reusable job runner used by both CLI and daemon workers.
+- [ ] 9.3 Add a local daemon loop that starts in headless Electron mode without a BrowserWindow, recovers stale running jobs on startup, respects a configurable concurrency limit, and claims only queued `source=daemon` jobs.
+- [ ] 9.4 Add daemon CLI parsing and dispatch for `locus daemon run`, `locus run --daemon`, and `locus run --daemon --follow`.
+- [ ] 9.5 Update macOS and Windows CLI shims so `daemon` uses the same synchronous headless Electron marker path as `run` and `jobs`.
+- [ ] 9.6 Keep default `locus run` as one-shot `source=cli`; do not route desktop chat, schedule, or protocol jobs through the daemon in this phase.
+- [ ] 9.7 Show daemon jobs in the desktop Agent Workbench and sidebar counts with source labels that distinguish daemon, CLI, and desktop jobs.
+- [ ] 9.8 Add focused tests for daemon queueing, concurrency, cancellation, startup stale-job interruption, CLI parsing/dispatch, shim dispatch, and desktop daemon job visibility.
+- [ ] 9.9 Run macOS real daemon smoke with a clean user data directory: start daemon, enqueue fake runner job, follow logs, verify terminal status, and prove no renderer window is required for daemon execution.
+- [ ] 9.10 Save daemon smoke screenshot/video/summary artifacts and update verification notes.
+- [ ] 9.11 Record that Windows daemon source/shim tests exist but real Windows daemon smoke remains pending until a Windows host or CI runner is used.
+
 ## Future Follow-Up Proposals
 These items are intentionally not implementation tasks for this change:
-- Local daemon and recovery: enqueue, cancel, status, log-follow IPC, interrupted recovery, and bounded concurrency.
 - Local scheduling: create, pause, resume, run-now, delete, and visible audit history for scheduled jobs.
 - Protocol compatibility: `locus acp` stdio server backed by the same runner core with strict JSON-RPC stdout behavior.
