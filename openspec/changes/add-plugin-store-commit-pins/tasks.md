@@ -2,14 +2,14 @@
 - [x] 1.1 Review current `runtime-plugins` spec and plugin update-review changes for conflicts.
 - [x] 1.2 Add proposal, design, tasks, and spec delta for plugin store commit pins.
 - [x] 1.3 Run `openspec validate add-plugin-store-commit-pins --strict --no-interactive`.
-- [ ] 1.4 Obtain explicit approval before implementation.
+- [x] 1.4 Obtain explicit approval before implementation.
 
 ## 2. Shared Store Review Model
-- [ ] 2.1 Add store catalog, candidate, source-pin, approval, and backup metadata types.
-- [ ] 2.2 Add bounded validation for immutable commit pins, package hashes, target modes, permissions, MCP, and controlled UI metadata.
-- [ ] 2.3 Add candidate review document builders and diff helpers.
-- [ ] 2.4 Reject mutable refs, missing write-action hashes, path traversal, and remote developer-trusted-code requests.
-- [ ] 2.5 Add unit tests for valid candidates, invalid pins, hash changes, target-mode changes, MCP changes, controlled UI changes, and stale approvals.
+- [x] 2.1 Add store catalog, candidate, source-pin, approval, and backup metadata types.
+- [x] 2.2 Add bounded validation for immutable commit pins, package hashes, target modes, permissions, MCP, and controlled UI metadata.
+- [x] 2.3 Add candidate review document builders and diff helpers.
+- [x] 2.4 Reject mutable refs, missing write-action hashes, path traversal, and remote developer-trusted-code requests.
+- [x] 2.5 Add unit tests for valid candidates, invalid pins, hash changes, target-mode changes, MCP changes, controlled UI changes, and stale approvals.
 
 ## 3. Main Process Store APIs
 - [ ] 3.1 Add local store catalog registry and read-only candidate preview APIs.

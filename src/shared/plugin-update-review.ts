@@ -16,6 +16,8 @@ export type PluginUpdateReviewStatus =
 export type PluginSourcePinKind =
   | "cache-version"
   | "lock-source-ref"
+  | "store-git-commit"
+  | "store-package-sha256"
 
 export interface PluginSourcePin {
   kind: PluginSourcePinKind
