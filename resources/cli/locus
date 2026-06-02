@@ -17,7 +17,7 @@ LOCUS_EXE="${LOCUS_HEADLESS_EXECUTABLE:-$CONTENTS_DIR/MacOS/Locus}"
 COMMAND="${1:-open}"
 
 case "$COMMAND" in
-  run|jobs)
+  run|jobs|daemon)
     if [ ! -x "$LOCUS_EXE" ]; then
       echo "Error: Locus executable not found: $LOCUS_EXE" >&2
       exit 1

@@ -35,13 +35,14 @@ describe("headless desktop jobs UI", () => {
     expect(source).toContain("trpc.agentJobs.list.useQuery")
     expect(source).toContain('source: "desktop"')
     expect(source).toContain('source: "cli"')
+    expect(source).toContain('source: "daemon"')
     expect(source).toContain("trpc.agentJobs.cancel.useMutation")
     expect(source).toContain("trpc.agentJobs.retry.useMutation")
     expect(source).toContain("HeadlessJobLogsDialog")
     expect(source).toContain("trpc.agentWorkbench.listTasks.useQuery")
   })
 
-  test("counts and filters CLI jobs alongside workbench tasks", () => {
+  test("counts and filters local jobs alongside workbench tasks", () => {
     const source = read("src/renderer/features/agents/workbench/agent-workbench.tsx")
     expect(source).toContain("matchesHeadlessJobFilter")
     expect(source).toContain("getHeadlessJobCounts")
@@ -58,6 +59,7 @@ describe("headless desktop jobs UI", () => {
       "workbench.headlessJobs",
       "workbench.jobSource.desktop",
       "workbench.jobSource.cli",
+      "workbench.jobSource.daemon",
       "workbench.jobStatus.running",
       "workbench.jobStatus.succeeded",
       "workbench.jobStatus.interrupted",
@@ -68,10 +70,11 @@ describe("headless desktop jobs UI", () => {
     }
   })
 
-  test("counts active desktop and CLI runs in the sidebar badge", () => {
+  test("counts active desktop, CLI, and daemon runs in the sidebar badge", () => {
     const source = read("src/renderer/features/sidebar/agents-sidebar.tsx")
     expect(source).toContain('source: "desktop"')
     expect(source).toContain('source: "cli"')
+    expect(source).toContain('source: "daemon"')
     expect(source).toContain("activeJobCount")
     expect(source).toContain('job.status === "queued" || job.status === "running"')
   })

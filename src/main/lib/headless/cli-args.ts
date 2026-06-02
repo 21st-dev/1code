@@ -2,7 +2,9 @@ import { existsSync } from "fs"
 import { resolve } from "path"
 import {
   AGENT_JOB_MODES,
+  AGENT_JOB_SOURCES,
   type AgentJobMode,
+  type AgentJobSource,
 } from "../../../shared/agent-jobs"
 import {
   AGENT_RUNTIME_IDS,
@@ -16,6 +18,8 @@ export const HEADLESS_OUTPUT_FORMATS = ["text", "json", "stream-json"] as const
 
 export type HeadlessOutputFormat = (typeof HEADLESS_OUTPUT_FORMATS)[number]
 
+export type HeadlessJobSourceFilter = AgentJobSource | "all"
+
 export type HeadlessCliCommand =
   | {
       kind: "run"
@@ -24,10 +28,13 @@ export type HeadlessCliCommand =
       mode: AgentJobMode
       prompt: string
       stdin: boolean
+      daemon: boolean
+      follow: boolean
       output: HeadlessOutputFormat
     }
   | {
       kind: "jobs-list"
+      source: HeadlessJobSourceFilter
       output: HeadlessOutputFormat
     }
   | {
@@ -49,6 +56,13 @@ export type HeadlessCliCommand =
   | {
       kind: "jobs-retry"
       jobId: string
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "daemon-run"
+      once: boolean
+      concurrency: number
+      pollIntervalMs: number
       output: HeadlessOutputFormat
     }
   | {
@@ -112,6 +126,30 @@ function parseRuntime(value: string | null): AgentRuntimeId {
   return runtime
 }
 
+function parseJobSource(value: string | null): HeadlessJobSourceFilter {
+  const source = value ?? "all"
+  if (source === "all") return "all"
+  if (!(AGENT_JOB_SOURCES as readonly string[]).includes(source)) {
+    throw new Error(`Unsupported --source: ${source}`)
+  }
+  return source as AgentJobSource
+}
+
+function parsePositiveInteger(
+  value: string | null,
+  fallback: number,
+  name: string,
+  max: number,
+): number {
+  const raw = value ?? String(fallback)
+  if (!/^\d+$/.test(raw)) throw new Error(`${name} must be a positive integer`)
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > max) {
+    throw new Error(`${name} must be between 1 and ${max}`)
+  }
+  return parsed
+}
+
 function parseCwd(value: string | null): string {
   const cwd = resolve(value ?? process.cwd())
   if (!existsSync(cwd)) {
@@ -138,7 +176,8 @@ function errorCodeForParseMessage(message: string): number {
   if (message.startsWith("Invalid or inaccessible cwd:")) return 7
   if (
     message.startsWith("Unsupported --runtime:") ||
-    message.startsWith("Unsupported --mode:")
+    message.startsWith("Unsupported --mode:") ||
+    message.startsWith("Unsupported --source:")
   ) {
     return 3
   }
@@ -156,11 +195,16 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
 
     if (command === "run") {
       const stdin = takeFlag(args, "--stdin")
+      const daemon = takeFlag(args, "--daemon")
+      const follow = takeFlag(args, "--follow")
       const output = parseOutput(args)
       const cwd = parseCwd(takeOption(args, "--cwd"))
       const runtime = parseRuntime(takeOption(args, "--runtime"))
       const mode = parseMode(takeOption(args, "--mode"))
       const prompt = takeOption(args, "--prompt") ?? ""
+      if (follow && !daemon) {
+        throw new Error("--follow can only be used with --daemon")
+      }
       if (!stdin && !prompt.trim()) {
         throw new Error("locus run requires --prompt or --stdin")
       }
@@ -176,6 +220,8 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           mode,
           prompt,
           stdin,
+          daemon,
+          follow,
           output,
         },
       }
@@ -186,10 +232,11 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
       const follow = takeFlag(args, "--follow")
       const output = parseOutput(args)
       if (subcommand === "list") {
+        const source = parseJobSource(takeOption(args, "--source"))
         if (args.length > 0) {
           throw new Error(`Unexpected arguments: ${args.join(" ")}`)
         }
-        return { ok: true, command: { kind: "jobs-list", output } }
+        return { ok: true, command: { kind: "jobs-list", source, output } }
       }
       const jobId = args.shift()
       if (!jobId) throw new Error(`locus jobs ${subcommand} requires a job id`)
@@ -209,6 +256,40 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
         return { ok: true, command: { kind: "jobs-retry", jobId, output } }
       }
       throw new Error(`Unknown jobs subcommand: ${subcommand}`)
+    }
+
+    if (command === "daemon") {
+      const subcommand = args.shift() ?? "run"
+      if (subcommand !== "run") {
+        throw new Error(`Unknown daemon subcommand: ${subcommand}`)
+      }
+      const once = takeFlag(args, "--once")
+      const output = parseOutput(args)
+      const concurrency = parsePositiveInteger(
+        takeOption(args, "--concurrency"),
+        1,
+        "--concurrency",
+        16,
+      )
+      const pollIntervalMs = parsePositiveInteger(
+        takeOption(args, "--poll-interval-ms"),
+        1000,
+        "--poll-interval-ms",
+        60_000,
+      )
+      if (args.length > 0) {
+        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+      }
+      return {
+        ok: true,
+        command: {
+          kind: "daemon-run",
+          once,
+          concurrency,
+          pollIntervalMs,
+          output,
+        },
+      }
     }
 
     throw new Error(`Unknown command: ${command}`)

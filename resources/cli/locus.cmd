@@ -11,6 +11,7 @@ if "%LOCUS_HEADLESS_EXECUTABLE%"=="" (
 
 if "%COMMAND%"=="run" goto headless
 if "%COMMAND%"=="jobs" goto headless
+if "%COMMAND%"=="daemon" goto headless
 if "%COMMAND%"=="open" goto gui_open
 if "%COMMAND%"=="gui" goto gui_open
 goto gui_default

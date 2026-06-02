@@ -5,25 +5,26 @@ import { join } from "path"
 const repoRoot = join(__dirname, "..")
 
 describe("headless CLI shims", () => {
-  test("macOS shim routes run/jobs to Electron headless mode", () => {
+  test("macOS shim routes run/jobs/daemon to Electron headless mode", () => {
     const source = readFileSync(join(repoRoot, "resources/cli/locus"), "utf-8")
     expect(source).toContain("--locus-headless-cli")
     expect(source).toContain('case "$COMMAND" in')
-    expect(source).toContain('run|jobs)')
+    expect(source).toContain('run|jobs|daemon)')
 
     const headlessSection = source.slice(
-      source.indexOf('run|jobs)'),
+      source.indexOf('run|jobs|daemon)'),
       source.indexOf('open|gui)'),
     )
     expect(headlessSection).toContain("exec")
     expect(headlessSection).not.toContain("open -a")
   })
 
-  test("Windows shim routes run/jobs synchronously without start", () => {
+  test("Windows shim routes run/jobs/daemon synchronously without start", () => {
     const source = readFileSync(join(repoRoot, "resources/cli/locus.cmd"), "utf-8")
     expect(source).toContain("--locus-headless-cli")
     expect(source).toContain('if "%COMMAND%"=="run"')
     expect(source).toContain('if "%COMMAND%"=="jobs"')
+    expect(source).toContain('if "%COMMAND%"=="daemon"')
 
     const headlessSection = source.slice(
       source.indexOf(":headless"),

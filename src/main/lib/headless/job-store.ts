@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm"
+import { and, asc, desc, eq, isNull, lt, or, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/better-sqlite3"
 import type * as schema from "../db/schema"
 import {
@@ -310,6 +310,21 @@ export function listAgentJobs(
     .from(agentJobs)
     .orderBy(desc(agentJobs.createdAt))
     .limit(limit)
+    .all()
+}
+
+export function listQueuedAgentJobsForSource(
+  db: AgentJobDatabase,
+  source: AgentJobSource,
+  limit: number,
+): AgentJob[] {
+  const boundedLimit = Math.max(1, Math.min(limit, 200))
+  return db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.source, source), eq(agentJobs.status, "queued")))
+    .orderBy(asc(agentJobs.createdAt))
+    .limit(boundedLimit)
     .all()
 }
 

@@ -120,4 +120,94 @@ describe("headless CLI args", () => {
       },
     })
   })
+
+  test("parses daemon enqueue, source filtering, and daemon run commands", () => {
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--daemon",
+        "--follow",
+        "--runtime",
+        "codex",
+        "--cwd",
+        process.cwd(),
+        "--output",
+        "stream-json",
+        "--prompt",
+        "Queue this work",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "run",
+        daemon: true,
+        follow: true,
+        runtime: "codex",
+        output: "stream-json",
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "jobs",
+        "list",
+        "--source",
+        "daemon",
+        "--output",
+        "json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "jobs-list",
+        source: "daemon",
+        output: "json",
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "daemon",
+        "run",
+        "--once",
+        "--concurrency",
+        "2",
+        "--poll-interval-ms",
+        "250",
+        "--output",
+        "json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "daemon-run",
+        once: true,
+        concurrency: 2,
+        pollIntervalMs: 250,
+        output: "json",
+      },
+    })
+  })
+
+  test("rejects follow without daemon enqueue", () => {
+    const parsed = parseHeadlessCliArgv([
+      "Locus",
+      HEADLESS_CLI_MARKER,
+      "run",
+      "--follow",
+      "--prompt",
+      "Do work",
+    ])
+    expect(parsed).toMatchObject({
+      ok: false,
+      code: 2,
+    })
+    if (!parsed.ok) expect(parsed.message).toContain("--follow")
+  })
 })

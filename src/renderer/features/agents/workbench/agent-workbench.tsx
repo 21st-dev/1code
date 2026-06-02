@@ -16,6 +16,7 @@ import {
   RefreshCw,
   RotateCcw,
   ScrollText,
+  Server,
   Terminal,
   XCircle,
 } from "lucide-react"
@@ -276,12 +277,14 @@ function canRetryHeadlessJob(job: HeadlessJob): boolean {
 }
 
 function getHeadlessJobSourceIcon(job: HeadlessJob) {
+  if (job.source === "daemon") return Server
   return job.source === "desktop" ? MessageSquare : Terminal
 }
 
 function getHeadlessJobSourceLabelKey(job: HeadlessJob): TranslationKey {
   if (job.source === "desktop") return "workbench.jobSource.desktop"
   if (job.source === "cli") return "workbench.jobSource.cli"
+  if (job.source === "daemon") return "workbench.jobSource.daemon"
   return "workbench.jobSource.other"
 }
 
@@ -970,15 +973,32 @@ export function AgentWorkbench() {
       placeholderData: (previous) => previous,
     },
   )
+  const daemonJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "daemon", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
+          ?.jobs ?? []) as HeadlessJob[]
+        return jobs.some(isActiveHeadlessJob) ? 5000 : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
   const selectedJob = useMemo(
     () =>
       ([
         ...((desktopJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((cliJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+        ...((daemonJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ]).find(
         (job) => job.id === selectedJobId,
       ) ?? null,
-    [cliJobsQuery.data?.jobs, desktopJobsQuery.data?.jobs, selectedJobId],
+    [
+      cliJobsQuery.data?.jobs,
+      daemonJobsQuery.data?.jobs,
+      desktopJobsQuery.data?.jobs,
+      selectedJobId,
+    ],
   )
   const jobLogsQuery = trpc.agentJobs.logs.useQuery(
     { jobId: selectedJobId ?? "", afterSequence: 0 },
@@ -996,13 +1016,18 @@ export function AgentWorkbench() {
     const jobs = [
       ...((desktopJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ...((cliJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+      ...((daemonJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
     ]
     return jobs.sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
       const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
       return bTime - aTime
     })
-  }, [cliJobsQuery.data?.jobs, desktopJobsQuery.data?.jobs])
+  }, [
+    cliJobsQuery.data?.jobs,
+    daemonJobsQuery.data?.jobs,
+    desktopJobsQuery.data?.jobs,
+  ])
   const visibleHeadlessJobs = useMemo(
     () =>
       headlessJobs.filter((job) =>
@@ -1017,7 +1042,10 @@ export function AgentWorkbench() {
   const headlessJobEvents = (jobLogsQuery.data?.events ?? []) as HeadlessJobEvent[]
   const counts = mergeWorkbenchCounts(tasksQuery.data?.counts, headlessJobCounts)
   const isRefreshing =
-    tasksQuery.isFetching || cliJobsQuery.isFetching || desktopJobsQuery.isFetching
+    tasksQuery.isFetching ||
+    cliJobsQuery.isFetching ||
+    desktopJobsQuery.isFetching ||
+    daemonJobsQuery.isFetching
   const canCreateDraftPr =
     !!draftPrForm?.title.trim() &&
     !!draftPrForm.body.trim() &&
@@ -1268,6 +1296,7 @@ export function AgentWorkbench() {
               void tasksQuery.refetch()
               void cliJobsQuery.refetch()
               void desktopJobsQuery.refetch()
+              void daemonJobsQuery.refetch()
             }}
             disabled={isRefreshing}
           >
@@ -1306,6 +1335,7 @@ export function AgentWorkbench() {
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {cliJobsQuery.isLoading &&
         desktopJobsQuery.isLoading &&
+        daemonJobsQuery.isLoading &&
         tasksQuery.isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

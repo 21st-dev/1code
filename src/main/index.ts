@@ -425,6 +425,7 @@ async function runHeadlessMain(): Promise<void> {
       stdin: process.stdin,
       stdout: process.stdout,
       stderr: process.stderr,
+      daemonLockPath: join(userDataPath, "agent-daemon.lock"),
     })
   } catch (error) {
     console.error("[Headless] Failed:", error)

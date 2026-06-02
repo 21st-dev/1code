@@ -121,6 +121,114 @@ describe("headless CLI dispatcher", () => {
     expect(logsStdout.value()).toContain("Read from stdin")
   })
 
+  test("queues daemon runs without executing the runtime in the submitter", async () => {
+    const db = createAgentJobTestDb()
+    const stdout = writer()
+    let runnerCalled = false
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--daemon",
+        "--runtime",
+        "codex",
+        "--cwd",
+        process.cwd(),
+        "--output",
+        "json",
+        "--prompt",
+        "Queue background work",
+      ],
+      stdout: stdout.stream,
+      stderr: writer().stream,
+      runner: async () => {
+        runnerCalled = true
+        return { status: "failed", errorCode: "should_not_run" }
+      },
+    })
+
+    expect(code).toBe(0)
+    expect(runnerCalled).toBe(false)
+    const parsed = JSON.parse(stdout.value())
+    expect(parsed.job).toMatchObject({
+      source: "daemon",
+      runtime: "codex",
+      status: "queued",
+    })
+    expect(getAgentJob(db, parsed.job.id)?.status).toBe("queued")
+  })
+
+  test("runs daemon once and claims only daemon queued jobs", async () => {
+    const db = createAgentJobTestDb()
+    const cliJob = createAgentJob(db, {
+      source: "cli",
+      runtime: "codex",
+      mode: "agent",
+      cwd: process.cwd(),
+      prompt: "Leave this one-shot retry queued",
+    })
+    const daemonJob = createAgentJob(db, {
+      source: "daemon",
+      runtime: "claude-code",
+      mode: "plan",
+      cwd: process.cwd(),
+      prompt: "Run in daemon",
+    })
+
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "daemon",
+        "run",
+        "--once",
+        "--poll-interval-ms",
+        "10",
+        "--output",
+        "json",
+      ],
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout.value()).daemon).toMatchObject({
+      startedJobs: 1,
+      completedJobs: 1,
+      failedJobs: 0,
+      stoppedBy: "once",
+    })
+    expect(stderr.value()).toContain("Started local agent daemon")
+    expect(getAgentJob(db, daemonJob.id)?.status).toBe("succeeded")
+    expect(getAgentJob(db, cliJob.id)?.status).toBe("queued")
+
+    const listStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "jobs",
+        "list",
+        "--source",
+        "daemon",
+        "--output",
+        "json",
+      ],
+      stdout: listStdout.stream,
+      stderr: writer().stream,
+    })
+    const listed = JSON.parse(listStdout.value()).jobs
+    expect(listed).toHaveLength(1)
+    expect(listed[0]).toMatchObject({ id: daemonJob.id, source: "daemon" })
+  })
+
   test("cancels queued jobs and retries terminal jobs", async () => {
     const db = createAgentJobTestDb()
     const runStdout = writer()

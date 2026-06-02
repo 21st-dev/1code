@@ -104,6 +104,7 @@ export function formatJobListText(jobs: AgentJob[]): string {
         job.status.padEnd(11),
         job.runtime.padEnd(11),
         job.mode.padEnd(5),
+        job.source.padEnd(8),
         createdAt,
         job.cwd,
       ].join("  ")

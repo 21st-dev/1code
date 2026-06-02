@@ -2,17 +2,14 @@ import type { Readable } from "stream"
 import type { AgentJob, AgentJobEvent } from "../db/schema"
 import { isTerminalAgentJobStatus, type AgentJobStatus } from "../../../shared/agent-jobs"
 import {
-  appendAgentJobEvent,
   completeAgentJob,
   createAgentJob,
   getAgentJob,
   getAgentJobPrompt,
-  heartbeatAgentJob,
   listAgentJobEvents,
   listAgentJobs,
   requestCancelAgentJob,
   retryAgentJob,
-  startAgentJob,
   type AgentJobDatabase,
 } from "./job-store"
 import { recoverStaleAgentJobs } from "./job-recovery"
@@ -28,12 +25,12 @@ import {
   type HeadlessCliCommand,
   type HeadlessOutputFormat,
 } from "./cli-args"
-import type {
-  AgentRuntimeObserver,
-  AgentRuntimeRunRequest,
-  AgentRuntimeRunResult,
-  AgentTaskRunner,
-} from "./agent-runtime-contract"
+import type { AgentTaskRunner } from "./agent-runtime-contract"
+import {
+  HEADLESS_EXIT_CODES,
+  runPersistedAgentJob,
+} from "./job-runner"
+import { runLocalAgentDaemon } from "./daemon"
 
 type Writer = {
   write(chunk: string): unknown
@@ -49,21 +46,10 @@ export type RunHeadlessCliCommandOptions = {
   stderr?: Writer
   runner?: AgentTaskRunner | null
   now?: Date
+  daemonLockPath?: string | null
 }
 
 export const HEADLESS_STDIN_MAX_BYTES = 1024 * 1024
-
-const HEADLESS_EXIT_CODES = {
-  success: 0,
-  runtimeFailed: 1,
-  invalidArguments: 2,
-  unsupportedRuntimeOrMode: 3,
-  missingCredentials: 4,
-  canceled: 5,
-  localOnlyBlocked: 6,
-  invalidCwd: 7,
-  internalFailure: 8,
-} as const
 
 function write(writer: Writer | undefined, chunk: string): void {
   writer?.write(chunk)
@@ -84,10 +70,6 @@ function commandError(
 ): number {
   writeLine(stderr, message)
   return code
-}
-
-function isFakeRunnerEnabled(env: NodeJS.ProcessEnv | undefined): boolean {
-  return env?.LOCUS_HEADLESS_FAKE_RUNNER === "1"
 }
 
 async function readStdin(stream: Readable | undefined): Promise<string> {
@@ -175,82 +157,6 @@ function outputRunResult(
   write(stdout, formatJobText(job))
 }
 
-function fakeAgentTaskRunner(
-  request: AgentRuntimeRunRequest,
-  observer: AgentRuntimeObserver,
-): Promise<AgentRuntimeRunResult> {
-  observer.appendEvent("status", {
-    fake: true,
-    status: "running",
-    runtime: request.runtime,
-  })
-  observer.appendEvent("assistant_delta", {
-    fake: true,
-    text: `Fake ${request.runtime} response for: ${request.prompt.slice(0, 120)}`,
-  })
-  observer.heartbeat()
-  return Promise.resolve({
-    status: "succeeded",
-    exitCode: 0,
-    result: {
-      fake: true,
-      finalMessage: `Fake ${request.runtime} job completed.`,
-    },
-  })
-}
-
-function normalizeHeadlessExitCode(input: {
-  status?: AgentJobStatus | null
-  errorCode?: string | null
-}): number {
-  if (input.status === "succeeded") return HEADLESS_EXIT_CODES.success
-  if (input.status === "canceled") return HEADLESS_EXIT_CODES.canceled
-  if (input.errorCode === "unsupported_capability") {
-    return HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode
-  }
-  if (input.errorCode === "runtime_auth_required") {
-    return HEADLESS_EXIT_CODES.missingCredentials
-  }
-  if (input.errorCode === "local_only_guard_blocked") {
-    return HEADLESS_EXIT_CODES.localOnlyBlocked
-  }
-  if (input.errorCode === "invalid_cwd") return HEADLESS_EXIT_CODES.invalidCwd
-  if (
-    input.errorCode === "spawn_failed" ||
-    input.errorCode === "heartbeat_failed" ||
-    input.errorCode === "internal_error"
-  ) {
-    return HEADLESS_EXIT_CODES.internalFailure
-  }
-  return HEADLESS_EXIT_CODES.runtimeFailed
-}
-
-function createObserver(
-  db: AgentJobDatabase,
-  jobId: string,
-  workerId: string,
-  abortController: AbortController,
-): AgentRuntimeObserver {
-  return {
-    appendEvent(type, payload) {
-      const current = getAgentJob(db, jobId)
-      if (current?.cancelRequestedAt) abortController.abort()
-      return appendAgentJobEvent(db, { jobId, type, payload })
-    },
-    heartbeat() {
-      const job = heartbeatAgentJob(db, jobId, workerId)
-      if (job.cancelRequestedAt) abortController.abort()
-      return job
-    },
-    isCancelRequested() {
-      const job = getAgentJob(db, jobId)
-      const requested = !!job?.cancelRequestedAt
-      if (requested) abortController.abort()
-      return requested
-    },
-  }
-}
-
 async function runCommand(
   command: Extract<HeadlessCliCommand, { kind: "run" }>,
   options: RunHeadlessCliCommandOptions,
@@ -278,89 +184,49 @@ async function runCommand(
   }
 
   const job = createAgentJob(options.db, {
-    source: "cli",
+    source: command.daemon ? "daemon" : "cli",
     runtime: command.runtime,
     mode: command.mode,
     cwd: command.cwd,
     prompt,
     createdByVersion: options.appVersion ?? null,
   })
-  const workerId = `headless:${process.pid}:${Date.now()}`
-  startAgentJob(options.db, {
+
+  if (command.daemon) {
+    if (command.follow) {
+      outputJob(options.stdout, command.output, job)
+      return logsCommand(
+        {
+          kind: "jobs-logs",
+          jobId: job.id,
+          follow: true,
+          output: command.output,
+        },
+        options,
+      )
+    }
+    outputJob(options.stdout, command.output, job)
+    return HEADLESS_EXIT_CODES.success
+  }
+
+  const result = await runPersistedAgentJob({
+    db: options.db,
     jobId: job.id,
-    workerId,
-    workerPid: process.pid,
+    runner: options.runner,
+    env: options.env,
   })
-
-  let runner =
-    options.runner ??
-    (isFakeRunnerEnabled(options.env) ? fakeAgentTaskRunner : null)
-  if (!runner) {
-    runner = (await import("./agent-runtime")).runAgentTask
-  }
-
-  const abortController = new AbortController()
-  const observer = createObserver(options.db, job.id, workerId, abortController)
-  try {
-    const result = await runner(
-      {
-        jobId: job.id,
-        runtime: command.runtime,
-        cwd: command.cwd,
-        mode: command.mode,
-        prompt,
-        signal: abortController.signal,
-      },
-      observer,
-    )
-    const canceled = observer.isCancelRequested() || abortController.signal.aborted
-    const status = canceled ? "canceled" : result.status ?? "succeeded"
-    const errorCode = canceled ? "job_canceled" : result.errorCode ?? null
-    const exitCode = normalizeHeadlessExitCode({ status, errorCode })
-    const completed = completeAgentJob(options.db, {
-      jobId: job.id,
-      status,
-      exitCode,
-      errorCode,
-      errorMessage: canceled ? "Job was canceled." : result.errorMessage ?? null,
-      result: result.result,
-    })
-    outputRunResult(
-      options.stdout,
-      command.output,
-      completed,
-      listAgentJobEvents(options.db, job.id),
-    )
-    return exitCode
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const status = abortController.signal.aborted ? "canceled" : "failed"
-    const errorCode = abortController.signal.aborted
-      ? "job_canceled"
-      : "runtime_error"
-    const exitCode = normalizeHeadlessExitCode({ status, errorCode })
-    const completed = completeAgentJob(options.db, {
-      jobId: job.id,
-      status,
-      exitCode,
-      errorCode,
-      errorMessage: abortController.signal.aborted ? "Job was canceled." : message,
-    })
-    outputRunResult(
-      options.stdout,
-      command.output,
-      completed,
-      listAgentJobEvents(options.db, job.id),
-    )
-    return exitCode
-  }
+  outputRunResult(options.stdout, command.output, result.job, result.events)
+  return result.exitCode
 }
 
 function listCommand(
   command: Extract<HeadlessCliCommand, { kind: "jobs-list" }>,
   options: RunHeadlessCliCommandOptions,
 ): number {
-  const jobs = listAgentJobs(options.db, { source: "cli", limit: 100 })
+  const jobs = listAgentJobs(options.db, {
+    source: command.source === "all" ? undefined : command.source,
+    limit: 100,
+  })
   if (command.output === "json" || command.output === "stream-json") {
     writeJson(options.stdout, { jobs: jobs.map(serializeAgentJob) })
   } else {
@@ -448,6 +314,51 @@ function retryCommand(
   return 0
 }
 
+async function daemonRunCommand(
+  command: Extract<HeadlessCliCommand, { kind: "daemon-run" }>,
+  options: RunHeadlessCliCommandOptions,
+): Promise<number> {
+  const abortController = new AbortController()
+  const abort = () => abortController.abort()
+  if (!command.once) {
+    process.once("SIGINT", abort)
+    process.once("SIGTERM", abort)
+  }
+
+  try {
+    const result = await runLocalAgentDaemon({
+      db: options.db,
+      env: options.env,
+      runner: options.runner,
+      stderr: options.stderr,
+      concurrency: command.concurrency,
+      pollIntervalMs: command.pollIntervalMs,
+      once: command.once,
+      lockPath: options.daemonLockPath,
+      signal: abortController.signal,
+      now: options.now,
+    })
+    if (shouldUseJson(command.output)) {
+      writeJson(options.stdout, { daemon: result })
+    } else {
+      writeLine(
+        options.stdout,
+        `daemon stopped (${result.stoppedBy}); started=${result.startedJobs} completed=${result.completedJobs} failed=${result.failedJobs} interrupted=${result.interruptedJobs}`,
+      )
+    }
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.internalFailure,
+    )
+  } finally {
+    process.removeListener("SIGINT", abort)
+    process.removeListener("SIGTERM", abort)
+  }
+}
+
 function helpCommand(options: RunHeadlessCliCommandOptions): number {
   write(
     options.stdout,
@@ -455,6 +366,8 @@ function helpCommand(options: RunHeadlessCliCommandOptions): number {
       "Usage:",
       "  locus run --runtime claude-code|codex --prompt <text> [--cwd <path>] [--mode plan|agent] [--output text|json|stream-json]",
       "  locus run --stdin [--prompt <prefix>]",
+      "  locus run --daemon [--follow] --prompt <text>",
+      "  locus daemon run [--concurrency <n>] [--poll-interval-ms <ms>]",
       `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
       "  locus jobs list",
       "  locus jobs show <id>",
@@ -490,6 +403,8 @@ export async function runHeadlessCliCommand(
       return cancelCommand(parsed.command, options)
     case "jobs-retry":
       return retryCommand(parsed.command, options)
+    case "daemon-run":
+      return daemonRunCommand(parsed.command, options)
     case "help":
       return helpCommand(options)
   }
