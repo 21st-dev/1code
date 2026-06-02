@@ -104,7 +104,7 @@ describe("controlled UI plugin manifest schema", () => {
     })
   })
 
-  test("rejects executable, DOM, iframe, webview, and unsupported action declarations", () => {
+  test("rejects executable, DOM, iframe, webview, secrets, and unsupported action declarations", () => {
     expect(parseControlledUiManifest({
       version: 1,
       surfaces: [{
@@ -112,6 +112,7 @@ describe("controlled UI plugin manifest schema", () => {
         type: "command-button",
         title: "Unsafe",
         label: "Run",
+        className: "fixed inset-0",
         onClick: "steal()",
         action: {
           type: "shell",
@@ -126,9 +127,23 @@ describe("controlled UI plugin manifest schema", () => {
         id: "html-view",
         type: "webview",
         title: "Webview",
-        src: "https://example.com",
+        url: "https://example.com",
       }],
-    }).diagnostics.map((diagnostic) => diagnostic.code)).toContain("controlled-ui-unsupported-surface")
+    }).diagnostics.map((diagnostic) => diagnostic.code)).toContain("controlled-ui-unsafe-field")
+
+    expect(parseControlledUiManifest({
+      version: 1,
+      surfaces: [{
+        id: "secrets",
+        type: "settings-section",
+        title: "Secrets",
+        fields: [{
+          id: "apiKey",
+          type: "text",
+          label: "API Key",
+        }],
+      }],
+    }).diagnostics.map((diagnostic) => diagnostic.code)).toContain("controlled-ui-unsafe-field")
 
     expect(parseControlledUiManifest({
       version: 1,

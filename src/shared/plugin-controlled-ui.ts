@@ -171,21 +171,46 @@ const FIELD_KEYS = new Set(["id", "type", "label", "description", "options"])
 const ITEM_KEYS = new Set(["type", "text", "label", "value"])
 const ACTION_KEYS = new Set(["id", "type", "prompt"])
 const UNSAFE_FIELD_NAMES = new Set([
+  "args",
+  "class",
+  "className",
+  "command",
+  "component",
+  "dangerouslySetInnerHTML",
+  "env",
+  "eventHandler",
+  "execute",
+  "file",
+  "fs",
+  "handler",
+  "headers",
+  "href",
   "html",
+  "iframe",
+  "import",
+  "jsx",
+  "mcp",
+  "module",
+  "native",
+  "oauth",
   "script",
-  "style",
-  "css",
   "onClick",
   "onclick",
   "onSubmit",
   "onsubmit",
-  "handler",
-  "eventHandler",
-  "iframe",
-  "webview",
+  "path",
+  "secret",
+  "selector",
+  "shell",
   "srcdoc",
-  "dangerouslySetInnerHTML",
+  "style",
+  "css",
+  "token",
+  "url",
+  "webview",
 ])
+const SENSITIVE_SETTING_PATTERN =
+  /(api[-_ ]?key|credential|oauth|password|passwd|private[-_ ]?key|secret|token)/i
 
 export function parseControlledUiManifest(value: unknown): PluginControlledUiParseResult {
   const diagnostics: PluginControlledUiDiagnostic[] = []
@@ -514,6 +539,15 @@ function parseFields(
       diagnostics,
     )
     if (!id || !label) return []
+    if (SENSITIVE_SETTING_PATTERN.test(id) || SENSITIVE_SETTING_PATTERN.test(label)) {
+      diagnostics.push({
+        code: "controlled-ui-unsafe-field",
+        severity: "blocked",
+        path: `${fieldPath}.id`,
+        message: "Controlled UI settings cannot request secrets, credentials, tokens, passwords, or API keys.",
+      })
+      return []
+    }
     if (!["text", "checkbox", "select"].includes(String(field.type))) {
       diagnostics.push({
         code: "controlled-ui-manifest-invalid",

@@ -128,6 +128,7 @@ describe("plugin target mode UI source guards", () => {
   test("renders controlled UI contributions without plugin code execution", () => {
     expect(pluginsTabSource).toContain("PluginControlledUiPanel")
     expect(pluginsTabSource).toContain("plugin.controlledUi.manifest?.surfaces")
+    expect(pluginsTabSource).toContain("!plugin.controlledUi.manifestPresent")
     expect(pluginsTabSource).toContain("trpc.plugins.setControlledSetting.useMutation")
     expect(pluginsTabSource).toContain("trpc.plugins.grantControlledAction.useMutation")
     expect(pluginsTabSource).toContain("trpc.plugins.invokeControlledAction.useMutation")

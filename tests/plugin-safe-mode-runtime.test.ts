@@ -129,6 +129,10 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginControlledUiSource).toContain("dangerouslySetInnerHTML")
     expect(pluginControlledUiSource).toContain("webview")
     expect(pluginControlledUiSource).toContain("iframe")
+    expect(pluginControlledUiSource).toContain("className")
+    expect(pluginControlledUiSource).toContain("shell")
+    expect(pluginControlledUiSource).toContain("mcp")
+    expect(pluginControlledUiSource).toContain("SENSITIVE_SETTING_PATTERN")
     expect(pluginControlledUiSource).not.toContain("eval(")
 
     expect(pluginsRouterSource).toContain("grantControlledAction")

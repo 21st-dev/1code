@@ -1086,6 +1086,10 @@ function PluginControlledUiPanel({
   const commandCount = surfaces.filter((surface) => surface.type === "command-button").length
   const visibleReasons = plugin.controlledUi.gate.reasons.slice(0, 3)
 
+  if (surfaces.length === 0 && !plugin.controlledUi.manifestPresent && plugin.targetMode !== "controlled-ui") {
+    return null
+  }
+
   return (
     <div className="rounded-md border border-border bg-background p-3 space-y-3">
       <div className="flex items-start justify-between gap-3">
