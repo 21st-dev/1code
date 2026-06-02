@@ -114,4 +114,20 @@ describe("headless process runner", () => {
     expect(result.status).toBe("canceled")
     expect(result.errorCode).toBe("job_canceled")
   })
+
+  test("classifies login failures as runtime auth requirements", async () => {
+    const controller = new AbortController()
+    const { observer } = createObserver()
+    const result = await runProcessAgentTask({
+      request: request(controller.signal),
+      observer,
+      executable: process.execPath,
+      args: ["-e", "console.log('Not logged in · Please run /login'); process.exit(1)"],
+      label: "Claude Code",
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.errorCode).toBe("runtime_auth_required")
+    expect(result.errorMessage).toBe("Claude Code authentication is required.")
+  })
 })

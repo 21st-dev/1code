@@ -14,8 +14,6 @@ function buildCodexArgs(request: AgentRuntimeRunRequest): string[] {
     request.cwd,
     "--color",
     "never",
-    "--ask-for-approval",
-    "never",
     "--sandbox",
     request.mode === "plan" ? "read-only" : "workspace-write",
     "--skip-git-repo-check",

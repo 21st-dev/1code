@@ -51,7 +51,7 @@ describe("headless runtime adapters", () => {
     })
     expect(planArgs.slice(0, 2)).toEqual(["exec", "--cd"])
     expect(planArgs[planArgs.indexOf("--sandbox") + 1]).toBe("read-only")
-    expect(planArgs[planArgs.indexOf("--ask-for-approval") + 1]).toBe("never")
+    expect(planArgs).not.toContain("--ask-for-approval")
 
     const agentArgs = __testCodexHeadless.buildCodexArgs({
       ...baseRequest,

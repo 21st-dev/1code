@@ -37,6 +37,29 @@ function killChild(child: ChildProcess): void {
   }, 5000).unref()
 }
 
+function classifyProcessFailure(input: {
+  label: string
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  signal: NodeJS.Signals | null
+}): Pick<AgentRuntimeRunResult, "errorCode" | "errorMessage"> {
+  const combined = `${input.stdout}\n${input.stderr}`
+  if (/not logged in|please run\s+\/login|authentication failed|invalid api key/i.test(combined)) {
+    return {
+      errorCode: "runtime_auth_required",
+      errorMessage: `${input.label} authentication is required.`,
+    }
+  }
+
+  return {
+    errorCode: "runtime_process_failed",
+    errorMessage: `${input.label} exited with code ${input.exitCode ?? "null"}${
+      input.signal ? ` and signal ${input.signal}` : ""
+    }.`,
+  }
+}
+
 export async function runProcessAgentTask(
   input: ProcessAgentTaskInput,
 ): Promise<AgentRuntimeRunResult> {
@@ -83,10 +106,11 @@ export async function runProcessAgentTask(
     heartbeatInterval.unref()
 
     try {
+      const hasStdin = input.stdin !== undefined && input.stdin !== null
       child = spawn(input.executable, input.args, {
         cwd: request.cwd,
         env: input.env ?? process.env,
-        stdio: ["pipe", "pipe", "pipe"],
+        stdio: [hasStdin ? "pipe" : "ignore", "pipe", "pipe"],
         windowsHide: true,
       })
     } catch (error) {
@@ -108,8 +132,6 @@ export async function runProcessAgentTask(
 
     if (input.stdin !== undefined && input.stdin !== null) {
       child.stdin?.end(input.stdin)
-    } else {
-      child.stdin?.end()
     }
 
     child.stdout?.on("data", (chunk: Buffer) => {
@@ -147,15 +169,20 @@ export async function runProcessAgentTask(
       }
 
       const success = exitCode === 0
+      const failure = success
+        ? { errorCode: null, errorMessage: null }
+        : classifyProcessFailure({
+            label: input.label,
+            stdout,
+            stderr,
+            exitCode,
+            signal,
+          })
       finish({
         status: success ? "succeeded" : "failed",
         exitCode: exitCode ?? 1,
-        errorCode: success ? null : "runtime_process_failed",
-        errorMessage: success
-          ? null
-          : `${input.label} exited with code ${exitCode ?? "null"}${
-              signal ? ` and signal ${signal}` : ""
-            }.`,
+        errorCode: failure.errorCode,
+        errorMessage: failure.errorMessage,
         result: {
           finalMessage: stdout.trim(),
           stdout: stdout.trim(),
