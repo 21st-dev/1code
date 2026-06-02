@@ -1,7 +1,6 @@
 import type { Readable } from "stream"
 import type { AgentJob, AgentJobEvent } from "../db/schema"
-import { isTerminalAgentJobStatus, type AgentJobEventType, type AgentJobStatus } from "../../../shared/agent-jobs"
-import type { AgentRuntimeId } from "../../../shared/agent-runtime-capabilities"
+import { isTerminalAgentJobStatus, type AgentJobStatus } from "../../../shared/agent-jobs"
 import {
   appendAgentJobEvent,
   completeAgentJob,
@@ -29,38 +28,16 @@ import {
   type HeadlessCliCommand,
   type HeadlessOutputFormat,
 } from "./cli-args"
+import type {
+  AgentRuntimeObserver,
+  AgentRuntimeRunRequest,
+  AgentRuntimeRunResult,
+  AgentTaskRunner,
+} from "./agent-runtime-contract"
 
 type Writer = {
   write(chunk: string): unknown
 }
-
-export type AgentRuntimeObserver = {
-  appendEvent(type: AgentJobEventType, payload?: unknown): AgentJobEvent
-  heartbeat(): AgentJob
-  isCancelRequested(): boolean
-}
-
-export type AgentRuntimeRunRequest = {
-  jobId: string
-  runtime: AgentRuntimeId
-  cwd: string
-  mode: "plan" | "agent"
-  prompt: string
-  signal: AbortSignal
-}
-
-export type AgentRuntimeRunResult = {
-  status?: Exclude<AgentJobStatus, "queued" | "running">
-  exitCode?: number | null
-  errorCode?: string | null
-  errorMessage?: string | null
-  result?: unknown
-}
-
-export type AgentTaskRunner = (
-  request: AgentRuntimeRunRequest,
-  observer: AgentRuntimeObserver,
-) => Promise<AgentRuntimeRunResult>
 
 export type RunHeadlessCliCommandOptions = {
   argv?: string[]
@@ -256,24 +233,11 @@ async function runCommand(
     workerPid: process.pid,
   })
 
-  const runner =
+  let runner =
     options.runner ??
     (isFakeRunnerEnabled(options.env) ? fakeAgentTaskRunner : null)
   if (!runner) {
-    const failed = completeAgentJob(options.db, {
-      jobId: job.id,
-      status: "failed",
-      exitCode: 1,
-      errorCode: "runtime_not_connected",
-      errorMessage: "Headless runtime runner is not connected yet.",
-    })
-    outputRunResult(
-      options.stdout,
-      command.output,
-      failed,
-      listAgentJobEvents(options.db, job.id),
-    )
-    return 1
+    runner = (await import("./agent-runtime")).runAgentTask
   }
 
   const abortController = new AbortController()
