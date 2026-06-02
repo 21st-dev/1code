@@ -18,16 +18,16 @@
 - [x] 4.1 Add a compact Doctor summary to Settings > Plugins.
 - [x] 4.2 Add per-plugin Debug details without implying sandboxing or Codex++ compatibility.
 - [x] 4.3 Localize English and Simplified Chinese copy.
-- [ ] 4.4 Review the UI after smoke and fix clarity/layout issues.
+- [x] 4.4 Review the UI after smoke and fix clarity/layout issues.
 
 ## 5. Tests
-- [ ] 5.1 Add shared Doctor model tests.
-- [ ] 5.2 Add source guards for runtime component gate coverage.
-- [ ] 5.3 Add UI/i18n source-guard tests.
-- [ ] 5.4 Run targeted plugin/i18n tests.
-- [ ] 5.5 Run full `bun run test`.
-- [ ] 5.6 Run `bun run ts:check`.
-- [ ] 5.7 Run `openspec validate add-plugin-doctor-debug --strict --no-interactive`.
-- [ ] 5.8 Run `git diff --check`.
-- [ ] 5.9 Run desktop Settings > Plugins smoke with a clean QA userData path.
-- [ ] 5.10 Record screenshot and video evidence.
+- [x] 5.1 Add shared Doctor model tests.
+- [x] 5.2 Add source guards for runtime component gate coverage.
+- [x] 5.3 Add UI/i18n source-guard tests.
+- [x] 5.4 Run targeted plugin/i18n tests.
+- [x] 5.5 Run full `bun run test`.
+- [x] 5.6 Run `bun run ts:check`.
+- [x] 5.7 Run `openspec validate add-plugin-doctor-debug --strict --no-interactive`.
+- [x] 5.8 Run `git diff --check`.
+- [x] 5.9 Run desktop Settings > Plugins smoke with a clean QA userData path.
+- [x] 5.10 Record screenshot and video evidence.
