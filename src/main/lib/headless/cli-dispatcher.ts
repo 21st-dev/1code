@@ -8,7 +8,6 @@ import {
   getAgentJob,
   getAgentJobPrompt,
   heartbeatAgentJob,
-  interruptStaleAgentJobs,
   listAgentJobEvents,
   listAgentJobs,
   requestCancelAgentJob,
@@ -16,6 +15,7 @@ import {
   startAgentJob,
   type AgentJobDatabase,
 } from "./job-store"
+import { recoverStaleAgentJobs } from "./job-recovery"
 import {
   formatEventsText,
   formatJobListText,
@@ -51,7 +51,19 @@ export type RunHeadlessCliCommandOptions = {
   now?: Date
 }
 
-const STALE_RUNNING_JOB_MS = 2 * 60 * 1000
+export const HEADLESS_STDIN_MAX_BYTES = 1024 * 1024
+
+const HEADLESS_EXIT_CODES = {
+  success: 0,
+  runtimeFailed: 1,
+  invalidArguments: 2,
+  unsupportedRuntimeOrMode: 3,
+  missingCredentials: 4,
+  canceled: 5,
+  localOnlyBlocked: 6,
+  invalidCwd: 7,
+  internalFailure: 8,
+} as const
 
 function write(writer: Writer | undefined, chunk: string): void {
   writer?.write(chunk)
@@ -81,8 +93,16 @@ function isFakeRunnerEnabled(env: NodeJS.ProcessEnv | undefined): boolean {
 async function readStdin(stream: Readable | undefined): Promise<string> {
   if (!stream) return ""
   const chunks: Buffer[] = []
+  let byteLength = 0
   for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+    byteLength += buffer.length
+    if (byteLength > HEADLESS_STDIN_MAX_BYTES) {
+      throw new Error(
+        `stdin exceeds ${HEADLESS_STDIN_MAX_BYTES} byte limit`,
+      )
+    }
+    chunks.push(buffer)
   }
   return Buffer.concat(chunks).toString("utf-8")
 }
@@ -179,6 +199,32 @@ function fakeAgentTaskRunner(
   })
 }
 
+function normalizeHeadlessExitCode(input: {
+  status?: AgentJobStatus | null
+  errorCode?: string | null
+}): number {
+  if (input.status === "succeeded") return HEADLESS_EXIT_CODES.success
+  if (input.status === "canceled") return HEADLESS_EXIT_CODES.canceled
+  if (input.errorCode === "unsupported_capability") {
+    return HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode
+  }
+  if (input.errorCode === "runtime_auth_required") {
+    return HEADLESS_EXIT_CODES.missingCredentials
+  }
+  if (input.errorCode === "local_only_guard_blocked") {
+    return HEADLESS_EXIT_CODES.localOnlyBlocked
+  }
+  if (input.errorCode === "invalid_cwd") return HEADLESS_EXIT_CODES.invalidCwd
+  if (
+    input.errorCode === "spawn_failed" ||
+    input.errorCode === "heartbeat_failed" ||
+    input.errorCode === "internal_error"
+  ) {
+    return HEADLESS_EXIT_CODES.internalFailure
+  }
+  return HEADLESS_EXIT_CODES.runtimeFailed
+}
+
 function createObserver(
   db: AgentJobDatabase,
   jobId: string,
@@ -209,13 +255,26 @@ async function runCommand(
   command: Extract<HeadlessCliCommand, { kind: "run" }>,
   options: RunHeadlessCliCommandOptions,
 ): Promise<number> {
-  const stdinPrompt = command.stdin ? await readStdin(options.stdin) : ""
+  let stdinPrompt = ""
+  try {
+    stdinPrompt = command.stdin ? await readStdin(options.stdin) : ""
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.invalidArguments,
+    )
+  }
   const prompt = [command.prompt, stdinPrompt]
     .map((part) => part.trim())
     .filter(Boolean)
     .join("\n\n")
   if (!prompt) {
-    return commandError(options.stderr, "locus run requires --prompt or --stdin", 2)
+    return commandError(
+      options.stderr,
+      "locus run requires --prompt or --stdin",
+      HEADLESS_EXIT_CODES.invalidArguments,
+    )
   }
 
   const job = createAgentJob(options.db, {
@@ -255,11 +314,14 @@ async function runCommand(
       observer,
     )
     const canceled = observer.isCancelRequested() || abortController.signal.aborted
+    const status = canceled ? "canceled" : result.status ?? "succeeded"
+    const errorCode = canceled ? "job_canceled" : result.errorCode ?? null
+    const exitCode = normalizeHeadlessExitCode({ status, errorCode })
     const completed = completeAgentJob(options.db, {
       jobId: job.id,
-      status: canceled ? "canceled" : result.status ?? "succeeded",
-      exitCode: canceled ? 130 : result.exitCode ?? 0,
-      errorCode: canceled ? "job_canceled" : result.errorCode ?? null,
+      status,
+      exitCode,
+      errorCode,
       errorMessage: canceled ? "Job was canceled." : result.errorMessage ?? null,
       result: result.result,
     })
@@ -269,14 +331,19 @@ async function runCommand(
       completed,
       listAgentJobEvents(options.db, job.id),
     )
-    return completed.exitCode ?? (completed.status === "succeeded" ? 0 : 1)
+    return exitCode
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const status = abortController.signal.aborted ? "canceled" : "failed"
+    const errorCode = abortController.signal.aborted
+      ? "job_canceled"
+      : "runtime_error"
+    const exitCode = normalizeHeadlessExitCode({ status, errorCode })
     const completed = completeAgentJob(options.db, {
       jobId: job.id,
-      status: abortController.signal.aborted ? "canceled" : "failed",
-      exitCode: abortController.signal.aborted ? 130 : 1,
-      errorCode: abortController.signal.aborted ? "job_canceled" : "runtime_error",
+      status,
+      exitCode,
+      errorCode,
       errorMessage: abortController.signal.aborted ? "Job was canceled." : message,
     })
     outputRunResult(
@@ -285,7 +352,7 @@ async function runCommand(
       completed,
       listAgentJobEvents(options.db, job.id),
     )
-    return completed.exitCode ?? 1
+    return exitCode
   }
 }
 
@@ -353,7 +420,7 @@ function cancelCommand(
     updated = completeAgentJob(options.db, {
       jobId: command.jobId,
       status: "canceled",
-      exitCode: 130,
+      exitCode: HEADLESS_EXIT_CODES.canceled,
       errorCode: "job_canceled",
       errorMessage: "Job was canceled before it started.",
     })
@@ -381,6 +448,7 @@ function helpCommand(options: RunHeadlessCliCommandOptions): number {
       "Usage:",
       "  locus run --runtime claude-code|codex --prompt <text> [--cwd <path>] [--mode plan|agent] [--output text|json|stream-json]",
       "  locus run --stdin [--prompt <prefix>]",
+      `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
       "  locus jobs list",
       "  locus jobs show <id>",
       "  locus jobs logs <id> [--follow]",
@@ -400,11 +468,7 @@ export async function runHeadlessCliCommand(
     return commandError(options.stderr, parsed.message, parsed.code)
   }
 
-  interruptStaleAgentJobs(
-    options.db,
-    new Date((options.now ?? new Date()).getTime() - STALE_RUNNING_JOB_MS),
-    options.now,
-  )
+  recoverStaleAgentJobs(options.db, options.now)
 
   switch (parsed.command.kind) {
     case "run":

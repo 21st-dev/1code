@@ -67,6 +67,15 @@ export type ListAgentJobsInput = {
 }
 
 const MAX_PROMPT_PREVIEW_LENGTH = 240
+const EVENT_SEQUENCE_RETRY_LIMIT = 5
+
+type AgentJobStoreExecutor = Pick<
+  AgentJobDatabase,
+  "select" | "insert" | "update"
+>
+type AgentJobTransaction = Parameters<
+  Parameters<AgentJobDatabase["transaction"]>[0]
+>[0]
 
 function assertOneOf<T extends readonly string[]>(
   values: T,
@@ -134,6 +143,71 @@ function assertNonTerminal(job: AgentJob): void {
   if (isTerminalAgentJobStatus(job.status as AgentJobStatus)) {
     throw new Error(`Job ${job.id} is already terminal: ${job.status}`)
   }
+}
+
+function isEventSequenceConflict(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return (
+    /agent_job_events_job_sequence_idx/i.test(error.message) ||
+    /unique constraint failed: agent_job_events\.job_id,\s*agent_job_events\.sequence/i.test(
+      error.message,
+    )
+  )
+}
+
+function withEventSequenceRetry<T>(operation: () => T): T {
+  let lastError: unknown
+  for (let attempt = 0; attempt < EVENT_SEQUENCE_RETRY_LIMIT; attempt += 1) {
+    try {
+      return operation()
+    } catch (error) {
+      if (!isEventSequenceConflict(error)) throw error
+      lastError = error
+    }
+  }
+  throw lastError
+}
+
+function getJobFromExecutor(
+  executor: AgentJobStoreExecutor,
+  jobId: string,
+): AgentJob | null {
+  return (
+    (executor as AgentJobDatabase)
+      .select()
+      .from(agentJobs)
+      .where(eq(agentJobs.id, jobId))
+      .get() ?? null
+  )
+}
+
+function insertAgentJobEventRecord(
+  executor: AgentJobStoreExecutor,
+  input: AppendAgentJobEventInput,
+  now: Date,
+): AgentJobEvent {
+  const db = executor as AgentJobDatabase
+  const eventId = createId()
+  const sequence = nextEventSequence(executor, input.jobId)
+
+  db.insert(agentJobEvents)
+    .values({
+      id: eventId,
+      jobId: input.jobId,
+      sequence,
+      type: input.type,
+      payloadJson: toJson(input.payload),
+      createdAt: now,
+    })
+    .run()
+
+  const event =
+    db.select()
+      .from(agentJobEvents)
+      .where(eq(agentJobEvents.id, eventId))
+      .get() ?? null
+  if (!event) throw new Error(`Failed to append event ${eventId}`)
+  return event
 }
 
 export function createAgentJob(
@@ -232,34 +306,43 @@ export function startAgentJob(
   input: StartAgentJobInput,
 ): AgentJob {
   const now = input.now ?? new Date()
-  const job = getAgentJob(db, input.jobId)
-  if (!job) throw new Error(`Unknown job: ${input.jobId}`)
-  assertNonTerminal(job)
-  if (job.status !== "queued") {
-    throw new Error(`Job ${job.id} cannot start from status ${job.status}`)
-  }
+  return withEventSequenceRetry(() => {
+    return db.transaction((tx: AgentJobTransaction) => {
+      const job = getJobFromExecutor(tx, input.jobId)
+      if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+      assertNonTerminal(job)
+      if (job.status !== "queued") {
+        throw new Error(`Job ${job.id} cannot start from status ${job.status}`)
+      }
 
-  db.update(agentJobs)
-    .set({
-      status: "running",
-      startedAt: now,
-      workerId: input.workerId,
-      workerPid: input.workerPid ?? null,
-      workerStartedAt: now,
-      heartbeatAt: now,
+      tx.update(agentJobs)
+        .set({
+          status: "running",
+          startedAt: now,
+          workerId: input.workerId,
+          workerPid: input.workerPid ?? null,
+          workerStartedAt: now,
+          heartbeatAt: now,
+        })
+        .where(eq(agentJobs.id, input.jobId))
+        .run()
+      insertAgentJobEventRecord(
+        tx,
+        {
+          jobId: input.jobId,
+          type: "job_started",
+          payload: {
+            workerId: input.workerId,
+            workerPid: input.workerPid ?? null,
+          },
+          now,
+        },
+        now,
+      )
+
+      return getJobFromExecutor(tx, input.jobId) ?? job
     })
-    .where(eq(agentJobs.id, input.jobId))
-    .run()
-  appendAgentJobEvent(db, {
-    jobId: input.jobId,
-    type: "job_started",
-    payload: {
-      workerId: input.workerId,
-      workerPid: input.workerPid ?? null,
-    },
-    now,
   })
-  return getAgentJob(db, input.jobId) ?? job
 }
 
 export function appendAgentJobEvent(
@@ -268,44 +351,14 @@ export function appendAgentJobEvent(
 ): AgentJobEvent {
   assertOneOf(AGENT_JOB_EVENT_TYPES, input.type, "job event type")
   const now = input.now ?? new Date()
-  const eventId = createId()
 
-  return db.transaction((tx) => {
-    const job = tx
-      .select()
-      .from(agentJobs)
-      .where(eq(agentJobs.id, input.jobId))
-      .get()
-    if (!job) throw new Error(`Unknown job: ${input.jobId}`)
-    assertNonTerminal(job)
-
-    const latest = tx
-      .select({
-        maxSequence: sql<number>`coalesce(max(${agentJobEvents.sequence}), 0)`,
-      })
-      .from(agentJobEvents)
-      .where(eq(agentJobEvents.jobId, input.jobId))
-      .get()
-    const sequence = (latest?.maxSequence ?? 0) + 1
-
-    tx.insert(agentJobEvents)
-      .values({
-        id: eventId,
-        jobId: input.jobId,
-        sequence,
-        type: input.type,
-        payloadJson: toJson(input.payload),
-        createdAt: now,
-      })
-      .run()
-
-    const event = tx
-      .select()
-      .from(agentJobEvents)
-      .where(eq(agentJobEvents.id, eventId))
-      .get()
-    if (!event) throw new Error(`Failed to append event ${eventId}`)
-    return event
+  return withEventSequenceRetry(() => {
+    return db.transaction((tx: AgentJobTransaction) => {
+      const job = getJobFromExecutor(tx, input.jobId)
+      if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+      assertNonTerminal(job)
+      return insertAgentJobEventRecord(tx, input, now)
+    })
   })
 }
 
@@ -359,24 +412,32 @@ export function requestCancelAgentJob(
   requestedBy: string,
   now = new Date(),
 ): AgentJob {
-  const job = getAgentJob(db, jobId)
-  if (!job) throw new Error(`Unknown job: ${jobId}`)
-  if (isTerminalAgentJobStatus(job.status as AgentJobStatus)) return job
+  return withEventSequenceRetry(() => {
+    return db.transaction((tx: AgentJobTransaction) => {
+      const job = getJobFromExecutor(tx, jobId)
+      if (!job) throw new Error(`Unknown job: ${jobId}`)
+      if (isTerminalAgentJobStatus(job.status as AgentJobStatus)) return job
 
-  db.update(agentJobs)
-    .set({
-      cancelRequestedAt: job.cancelRequestedAt ?? now,
-      cancelRequestedBy: job.cancelRequestedBy ?? requestedBy,
+      tx.update(agentJobs)
+        .set({
+          cancelRequestedAt: job.cancelRequestedAt ?? now,
+          cancelRequestedBy: job.cancelRequestedBy ?? requestedBy,
+        })
+        .where(eq(agentJobs.id, jobId))
+        .run()
+      insertAgentJobEventRecord(
+        tx,
+        {
+          jobId,
+          type: "status",
+          payload: { status: "cancel_requested", requestedBy },
+          now,
+        },
+        now,
+      )
+      return getJobFromExecutor(tx, jobId) ?? job
     })
-    .where(eq(agentJobs.id, jobId))
-    .run()
-  appendAgentJobEvent(db, {
-    jobId,
-    type: "status",
-    payload: { status: "cancel_requested", requestedBy },
-    now,
   })
-  return getAgentJob(db, jobId) ?? job
 }
 
 export function completeAgentJob(
@@ -385,47 +446,55 @@ export function completeAgentJob(
 ): AgentJob {
   assertOneOf(AGENT_JOB_STATUSES, input.status, "job status")
   const now = input.now ?? new Date()
-  const job = getAgentJob(db, input.jobId)
-  if (!job) throw new Error(`Unknown job: ${input.jobId}`)
-  assertNonTerminal(job)
 
-  db.update(agentJobs)
-    .set({
-      status: input.status,
-      finishedAt: now,
-      exitCode: input.exitCode ?? null,
-      errorCode: input.errorCode ?? null,
-      errorMessage: input.errorMessage
-        ? redactSecretText(input.errorMessage)
-        : null,
-      resultJson: input.result === undefined ? null : toJson(input.result),
-      heartbeatAt: now,
+  return withEventSequenceRetry(() => {
+    return db.transaction((tx: AgentJobTransaction) => {
+      const job = getJobFromExecutor(tx, input.jobId)
+      if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+      assertNonTerminal(job)
+
+      tx.update(agentJobs)
+        .set({
+          status: input.status,
+          finishedAt: now,
+          exitCode: input.exitCode ?? null,
+          errorCode: input.errorCode ?? null,
+          errorMessage: input.errorMessage
+            ? redactSecretText(input.errorMessage)
+            : null,
+          resultJson: input.result === undefined ? null : toJson(input.result),
+          heartbeatAt: now,
+        })
+        .where(eq(agentJobs.id, input.jobId))
+        .run()
+
+      insertAgentJobEventRecord(
+        tx,
+        {
+          jobId: input.jobId,
+          type: "completed",
+          payload: {
+            status: input.status,
+            exitCode: input.exitCode ?? null,
+            errorCode: input.errorCode ?? null,
+            errorMessage: input.errorMessage ?? null,
+            result: input.result ?? null,
+          },
+          now,
+        },
+        now,
+      )
+
+      return getJobFromExecutor(tx, input.jobId) ?? job
     })
-    .where(eq(agentJobs.id, input.jobId))
-    .run()
-
-  db.insert(agentJobEvents)
-    .values({
-      id: createId(),
-      jobId: input.jobId,
-      sequence: nextEventSequence(db, input.jobId),
-      type: "completed",
-      payloadJson: toJson({
-        status: input.status,
-        exitCode: input.exitCode ?? null,
-        errorCode: input.errorCode ?? null,
-        errorMessage: input.errorMessage ?? null,
-        result: input.result ?? null,
-      }),
-      createdAt: now,
-    })
-    .run()
-
-  return getAgentJob(db, input.jobId) ?? job
+  })
 }
 
-function nextEventSequence(db: AgentJobDatabase, jobId: string): number {
-  const latest = db
+function nextEventSequence(
+  executor: AgentJobStoreExecutor,
+  jobId: string,
+): number {
+  const latest = (executor as AgentJobDatabase)
     .select({
       maxSequence: sql<number>`coalesce(max(${agentJobEvents.sequence}), 0)`,
     })
@@ -452,28 +521,41 @@ export function interruptStaleAgentJobs(
     .all()
 
   for (const job of staleJobs) {
-    db.update(agentJobs)
-      .set({
-        status: "interrupted",
-        finishedAt: now,
-        errorCode: "worker_interrupted",
-        errorMessage: "Worker heartbeat was lost.",
+    withEventSequenceRetry(() => {
+      db.transaction((tx: AgentJobTransaction) => {
+        const current = getJobFromExecutor(tx, job.id)
+        if (
+          !current ||
+          current.status !== "running" ||
+          (current.heartbeatAt && current.heartbeatAt >= staleBefore)
+        ) {
+          return
+        }
+
+        tx.update(agentJobs)
+          .set({
+            status: "interrupted",
+            finishedAt: now,
+            errorCode: "worker_interrupted",
+            errorMessage: "Worker heartbeat was lost.",
+          })
+          .where(eq(agentJobs.id, job.id))
+          .run()
+        insertAgentJobEventRecord(
+          tx,
+          {
+            jobId: job.id,
+            type: "error",
+            payload: {
+              status: "interrupted",
+              errorCode: "worker_interrupted",
+            },
+            now,
+          },
+          now,
+        )
       })
-      .where(eq(agentJobs.id, job.id))
-      .run()
-    db.insert(agentJobEvents)
-      .values({
-        id: createId(),
-        jobId: job.id,
-        sequence: nextEventSequence(db, job.id),
-        type: "error",
-        payloadJson: toJson({
-          status: "interrupted",
-          errorCode: "worker_interrupted",
-        }),
-        createdAt: now,
-      })
-      .run()
+    })
   }
 
   return staleJobs.map((job) => getAgentJob(db, job.id)).filter(Boolean) as AgentJob[]

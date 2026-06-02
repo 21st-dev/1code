@@ -18,6 +18,17 @@ describe("headless desktop jobs UI", () => {
     expect(routerSource).not.toContain("inputJson")
   })
 
+  test("runs stale job recovery during desktop startup", () => {
+    const source = read("src/main/index.ts")
+    const startupSection = source.slice(
+      source.indexOf("// Initialize database"),
+      source.indexOf("// Create main window"),
+    )
+
+    expect(startupSection).toContain("const db = initDatabase()")
+    expect(startupSection).toContain("recoverStaleAgentJobs(db)")
+  })
+
   test("shows CLI jobs in Agent Workbench without replacing chat tasks", () => {
     const source = read("src/renderer/features/agents/workbench/agent-workbench.tsx")
     expect(source).toContain("HeadlessJobCard")

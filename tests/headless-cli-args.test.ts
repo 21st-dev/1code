@@ -66,6 +66,38 @@ describe("headless CLI args", () => {
     }
   })
 
+  test("classifies unsupported runtime and invalid cwd with documented exit codes", () => {
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--runtime",
+        "future-runtime",
+        "--prompt",
+        "Do work",
+      ]),
+    ).toMatchObject({
+      ok: false,
+      code: 3,
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--cwd",
+        "/this/path/does/not/exist",
+        "--prompt",
+        "Do work",
+      ]),
+    ).toMatchObject({
+      ok: false,
+      code: 7,
+    })
+  })
+
   test("parses jobs commands without treating output flags as job ids", () => {
     expect(
       parseHeadlessCliArgv([

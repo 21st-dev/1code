@@ -9,6 +9,7 @@ import { startAutomaticAppUpdateChecks } from "./lib/app-updater"
 import { closeDatabase, initDatabase } from "./lib/db"
 import { isHeadlessCliInvocation } from "./lib/headless/cli-args"
 import { runHeadlessCliCommand } from "./lib/headless/cli-dispatcher"
+import { recoverStaleAgentJobs } from "./lib/headless/job-recovery"
 import {
   getLaunchDirectory,
   isCliInstalled,
@@ -837,7 +838,13 @@ if (gotTheLock) {
 
     // Initialize database
     try {
-      initDatabase()
+      const db = initDatabase()
+      const interruptedJobs = recoverStaleAgentJobs(db)
+      if (interruptedJobs.length > 0) {
+        console.warn(
+          `[Headless] Marked ${interruptedJobs.length} stale agent job(s) as interrupted.`,
+        )
+      }
       console.log("[App] Database initialized")
     } catch (error) {
       console.error("[App] Failed to initialize database:", error)

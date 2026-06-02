@@ -941,7 +941,7 @@ export function AgentWorkbench() {
       refetchInterval: (query) => {
         const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
           ?.jobs ?? []) as HeadlessJob[]
-        return jobs.some(isActiveHeadlessJob) ? 5000 : false
+        return jobs.some(isActiveHeadlessJob) ? 5000 : 10000
       },
       placeholderData: (previous) => previous,
     },

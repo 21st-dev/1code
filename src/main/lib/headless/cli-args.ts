@@ -134,6 +134,17 @@ function rejectSecretFlags(args: string[]): void {
   }
 }
 
+function errorCodeForParseMessage(message: string): number {
+  if (message.startsWith("Invalid or inaccessible cwd:")) return 7
+  if (
+    message.startsWith("Unsupported --runtime:") ||
+    message.startsWith("Unsupported --mode:")
+  ) {
+    return 3
+  }
+  return 2
+}
+
 export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
   const args = argsAfterMarker(argv)
   try {
@@ -202,10 +213,11 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
 
     throw new Error(`Unknown command: ${command}`)
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     return {
       ok: false,
-      code: 2,
-      message: error instanceof Error ? error.message : String(error),
+      code: errorCodeForParseMessage(message),
+      message,
     }
   }
 }

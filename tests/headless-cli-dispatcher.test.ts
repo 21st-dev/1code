@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { Readable } from "stream"
 import { getAgentJob, listAgentJobEvents } from "../src/main/lib/headless/job-store"
-import { runHeadlessCliCommand } from "../src/main/lib/headless/cli-dispatcher"
+import {
+  HEADLESS_STDIN_MAX_BYTES,
+  runHeadlessCliCommand,
+} from "../src/main/lib/headless/cli-dispatcher"
 import { HEADLESS_CLI_MARKER } from "../src/main/lib/headless/cli-args"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
@@ -180,7 +183,108 @@ describe("headless CLI dispatcher", () => {
     })
     expect(JSON.parse(cancelStdout.value()).job).toMatchObject({
       status: "canceled",
+      exitCode: 5,
       errorCode: "job_canceled",
     })
+  })
+
+  test("normalizes run exit codes instead of leaking runtime process codes", async () => {
+    const db = createAgentJobTestDb()
+    const cancelStdout = writer()
+    const cancelCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--runtime",
+        "codex",
+        "--cwd",
+        process.cwd(),
+        "--output",
+        "json",
+        "--prompt",
+        "Cancel me",
+      ],
+      stdout: cancelStdout.stream,
+      stderr: writer().stream,
+      runner: async () => ({
+        status: "canceled",
+        exitCode: 130,
+        errorCode: "job_canceled",
+        errorMessage: "Canceled by test",
+      }),
+    })
+    expect(cancelCode).toBe(5)
+    expect(JSON.parse(cancelStdout.value()).job).toMatchObject({
+      status: "canceled",
+      exitCode: 5,
+    })
+
+    const authStdout = writer()
+    const authCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--runtime",
+        "claude-code",
+        "--cwd",
+        process.cwd(),
+        "--output",
+        "json",
+        "--prompt",
+        "Needs login",
+      ],
+      stdout: authStdout.stream,
+      stderr: writer().stream,
+      runner: async () => ({
+        status: "failed",
+        exitCode: 1,
+        errorCode: "runtime_auth_required",
+        errorMessage: "Claude Code authentication is required.",
+      }),
+    })
+    expect(authCode).toBe(4)
+    expect(JSON.parse(authStdout.value()).job).toMatchObject({
+      status: "failed",
+      exitCode: 4,
+      errorCode: "runtime_auth_required",
+    })
+  })
+
+  test("rejects oversized stdin before creating a job", async () => {
+    const db = createAgentJobTestDb()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--runtime",
+        "codex",
+        "--cwd",
+        process.cwd(),
+        "--stdin",
+      ],
+      stdin: Readable.from(["x".repeat(HEADLESS_STDIN_MAX_BYTES + 1)]),
+      stdout: writer().stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(2)
+    expect(stderr.value()).toContain("stdin exceeds")
+
+    const listStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: ["Locus", HEADLESS_CLI_MARKER, "jobs", "list", "--output", "json"],
+      stdout: listStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(JSON.parse(listStdout.value()).jobs).toHaveLength(0)
   })
 })
