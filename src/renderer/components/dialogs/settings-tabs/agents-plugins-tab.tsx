@@ -409,6 +409,7 @@ interface RuntimePluginMarketplace {
   name: string
   source?: string
   path?: string
+  targetable?: boolean
   sourceKind: RuntimeMarketplaceSourceKind
   trust: RuntimeMarketplaceTrust
   status: RuntimeMarketplaceInventoryStatus
@@ -3432,6 +3433,7 @@ function RuntimeMarketplaceDetail({
     ...marketplace.snapshotDiagnostics,
   ]
   const isRuntimeReportedGroup = marketplace.id.endsWith(":runtime-reported-plugins")
+  const canTargetExistingMarketplace = marketplace.targetable !== false && !isRuntimeReportedGroup
   const isRuntimeActionBusy = isPreviewingRuntimeAction || isExecutingRuntimeAction || isRefreshing
   const marketplaceAddAction: RuntimePluginWriteActionId = marketplace.runtime === "codex"
     ? "codex.marketplace.add"
@@ -3527,16 +3529,18 @@ function RuntimeMarketplaceDetail({
                   {t("settings.plugins.runtimeMarketplaceActionsHint")}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-xs shrink-0"
-                onClick={() => previewMarketplaceAction(marketplaceUpdateAction)}
-                disabled={isRuntimeActionBusy || isRuntimeReportedGroup}
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                {getRuntimePluginWriteActionLabel(marketplaceUpdateAction, t)}
-              </Button>
+              {canTargetExistingMarketplace ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs shrink-0"
+                  onClick={() => previewMarketplaceAction(marketplaceUpdateAction)}
+                  disabled={isRuntimeActionBusy}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  {getRuntimePluginWriteActionLabel(marketplaceUpdateAction, t)}
+                </Button>
+              ) : null}
             </div>
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_8.5rem_auto]">
               <Input
@@ -3573,7 +3577,7 @@ function RuntimeMarketplaceDetail({
                 {getRuntimePluginWriteActionLabel(marketplaceAddAction, t)}
               </Button>
             </div>
-            {!isRuntimeReportedGroup ? (
+            {canTargetExistingMarketplace ? (
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -3588,7 +3592,9 @@ function RuntimeMarketplaceDetail({
               </div>
             ) : (
               <p className="text-[11px] text-muted-foreground">
-                {t("settings.plugins.runtimeMarketplaceReportedPluginsActionsHint")}
+                {t(isRuntimeReportedGroup
+                  ? "settings.plugins.runtimeMarketplaceReportedPluginsActionsHint"
+                  : "settings.plugins.runtimeMarketplaceEmptyActionsHint")}
               </p>
             )}
             {marketplace.runtime === "codex" ? (

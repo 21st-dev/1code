@@ -138,6 +138,7 @@ export interface RuntimePluginMarketplace {
   name: string
   source?: string
   path?: string
+  targetable?: boolean
   sourceKind: RuntimeMarketplaceSourceKind
   trust: RuntimeMarketplaceTrust
   status: RuntimeMarketplaceInventoryStatus

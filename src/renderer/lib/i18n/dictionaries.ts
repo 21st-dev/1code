@@ -1458,6 +1458,8 @@ export const en = {
   "settings.plugins.runtimeMarketplaceRemoveMarketplace": "Remove marketplace",
   "settings.plugins.runtimeMarketplaceReportedPluginsActionsHint":
     "These plugins were reported without a configured marketplace row, so marketplace update and remove actions are unavailable.",
+  "settings.plugins.runtimeMarketplaceEmptyActionsHint":
+    "No runtime marketplace is configured yet. Add a source first; update/remove actions appear after the runtime reports a marketplace.",
   "settings.plugins.runtimeMarketplaceNoCodexEnableDisable":
     "Codex exposes add and remove for plugins here; enable and disable are not available in the Codex CLI.",
   "settings.plugins.runtimeMarketplaceActionPreview": "Action preview",
@@ -4405,6 +4407,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.runtimeMarketplaceRemoveMarketplace": "移除市场",
   "settings.plugins.runtimeMarketplaceReportedPluginsActionsHint":
     "这些插件没有对应的已配置市场行，因此不能对市场执行更新或移除。",
+  "settings.plugins.runtimeMarketplaceEmptyActionsHint":
+    "当前还没有配置运行时插件市场。先添加一个来源；运行时报告出真实市场后才会显示更新/移除动作。",
   "settings.plugins.runtimeMarketplaceNoCodexEnableDisable":
     "Codex CLI 在这里提供插件 add/remove；没有 enable/disable 动作。",
   "settings.plugins.runtimeMarketplaceActionPreview": "动作预览",

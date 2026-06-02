@@ -63,6 +63,22 @@ describe("runtime plugin marketplace adapters", () => {
     })
   })
 
+  test("parses Codex empty marketplace output as a non-targetable empty state", () => {
+    expect(parseCodexMarketplaceList("No plugin marketplaces in scope.\n")).toEqual({
+      marketplaces: [{
+        runtime: "codex",
+        name: "No plugin marketplaces in scope.",
+        targetable: false,
+        sourceKind: "runtime-cli",
+        trust: "external",
+        status: "empty",
+        pluginCount: 0,
+        diagnostics: [],
+      }],
+      diagnostics: [],
+    })
+  })
+
   test("parses Codex plugin list table output with installed and available rows", () => {
     const parsed = parseCodexPluginList(CODEX_PLUGINS)
 

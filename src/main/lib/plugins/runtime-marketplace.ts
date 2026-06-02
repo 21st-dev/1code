@@ -328,6 +328,21 @@ export function parseCodexMarketplaceList(output: string): {
       diagnostics: [emptyCommandDiagnostic("codex", "codex plugin marketplace list")],
     }
   }
+  if (lines.length === 1 && /no plugin marketplaces/i.test(lines[0] ?? "")) {
+    return {
+      marketplaces: [{
+        runtime: "codex" as const,
+        name: lines[0] ?? "No plugin marketplaces in scope.",
+        targetable: false,
+        sourceKind: "runtime-cli" as const,
+        trust: "external" as const,
+        status: "empty" as const,
+        pluginCount: 0,
+        diagnostics: [],
+      }],
+      diagnostics: [],
+    }
+  }
   const rows = lines[0]?.toLowerCase().startsWith("marketplace")
     ? lines.slice(1)
     : lines
