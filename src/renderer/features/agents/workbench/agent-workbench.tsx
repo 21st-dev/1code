@@ -172,6 +172,15 @@ const FILTERS: WorkbenchFilter[] = [
   "clean",
 ]
 
+type WorkbenchCounts = {
+  all: number
+  running: number
+  needsReview: number
+  prs: number
+  blocked: number
+  clean: number
+}
+
 function getStatusIcon(status: WorkbenchTaskStatus) {
   if (status === "running") return Loader2
   if (status === "blocked") return AlertCircle
@@ -208,6 +217,53 @@ function getHeadlessJobStatusClassName(status: HeadlessJobStatus): string {
 
 function isActiveHeadlessJob(job: HeadlessJob): boolean {
   return job.status === "queued" || job.status === "running"
+}
+
+function matchesHeadlessJobFilter(
+  status: HeadlessJobStatus,
+  filter: WorkbenchFilter,
+): boolean {
+  if (filter === "all") return true
+  if (filter === "running") return status === "queued" || status === "running"
+  if (filter === "blocked") return status === "failed" || status === "interrupted"
+  if (filter === "clean") return status === "succeeded"
+  return false
+}
+
+function getHeadlessJobCounts(jobs: HeadlessJob[]): WorkbenchCounts {
+  return {
+    all: jobs.length,
+    running: jobs.filter((job) => matchesHeadlessJobFilter(job.status, "running"))
+      .length,
+    needsReview: 0,
+    prs: 0,
+    blocked: jobs.filter((job) => matchesHeadlessJobFilter(job.status, "blocked"))
+      .length,
+    clean: jobs.filter((job) => matchesHeadlessJobFilter(job.status, "clean"))
+      .length,
+  }
+}
+
+function mergeWorkbenchCounts(
+  taskCounts: WorkbenchCounts | undefined,
+  headlessCounts: WorkbenchCounts,
+): WorkbenchCounts {
+  return {
+    all: (taskCounts?.all ?? 0) + headlessCounts.all,
+    running: (taskCounts?.running ?? 0) + headlessCounts.running,
+    needsReview: (taskCounts?.needsReview ?? 0) + headlessCounts.needsReview,
+    prs: (taskCounts?.prs ?? 0) + headlessCounts.prs,
+    blocked: (taskCounts?.blocked ?? 0) + headlessCounts.blocked,
+    clean: (taskCounts?.clean ?? 0) + headlessCounts.clean,
+  }
+}
+
+function getWorkbenchFilterCount(
+  counts: WorkbenchCounts,
+  filter: WorkbenchFilter,
+): number {
+  if (filter === "needs-review") return counts.needsReview
+  return counts[filter]
 }
 
 function canRetryHeadlessJob(job: HeadlessJob): boolean {
@@ -910,8 +966,19 @@ export function AgentWorkbench() {
 
   const tasks = (tasksQuery.data?.tasks ?? []) as WorkbenchTask[]
   const headlessJobs = (jobsQuery.data?.jobs ?? []) as HeadlessJob[]
+  const visibleHeadlessJobs = useMemo(
+    () =>
+      headlessJobs.filter((job) =>
+        matchesHeadlessJobFilter(job.status, filter),
+      ),
+    [filter, headlessJobs],
+  )
+  const headlessJobCounts = useMemo(
+    () => getHeadlessJobCounts(headlessJobs),
+    [headlessJobs],
+  )
   const headlessJobEvents = (jobLogsQuery.data?.events ?? []) as HeadlessJobEvent[]
-  const counts = tasksQuery.data?.counts
+  const counts = mergeWorkbenchCounts(tasksQuery.data?.counts, headlessJobCounts)
   const isRefreshing = tasksQuery.isFetching || jobsQuery.isFetching
   const canCreateDraftPr =
     !!draftPrForm?.title.trim() &&
@@ -1189,17 +1256,9 @@ export function AgentWorkbench() {
               )}
             >
               {t(`workbench.filter.${item}` as TranslationKey)}
-              {counts && (
-                <span className="ml-1 opacity-70">
-                  {item === "needs-review"
-                    ? counts.needsReview
-                    : item === "all"
-                      ? counts.all
-                      : item === "prs"
-                        ? counts.prs
-                        : counts[item]}
-                </span>
-              )}
+              <span className="ml-1 opacity-70">
+                {getWorkbenchFilterCount(counts, item)}
+              </span>
             </button>
           ))}
         </div>
@@ -1211,7 +1270,7 @@ export function AgentWorkbench() {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {t("workbench.loading")}
           </div>
-        ) : tasks.length === 0 && headlessJobs.length === 0 ? (
+        ) : tasks.length === 0 && visibleHeadlessJobs.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-sm text-center">
               <Circle className="mx-auto h-6 w-6 text-muted-foreground" />
@@ -1225,7 +1284,7 @@ export function AgentWorkbench() {
           </div>
         ) : (
           <div className="space-y-5">
-            {headlessJobs.length > 0 && (
+            {visibleHeadlessJobs.length > 0 && (
               <section className="space-y-2">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -1238,7 +1297,7 @@ export function AgentWorkbench() {
                   </div>
                 </div>
                 <div className="grid gap-3">
-                  {headlessJobs.map((job) => (
+                  {visibleHeadlessJobs.map((job) => (
                     <HeadlessJobCard
                       key={job.id}
                       job={job}

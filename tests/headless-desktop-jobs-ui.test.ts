@@ -28,6 +28,16 @@ describe("headless desktop jobs UI", () => {
     expect(source).toContain("trpc.agentWorkbench.listTasks.useQuery")
   })
 
+  test("counts and filters CLI jobs alongside workbench tasks", () => {
+    const source = read("src/renderer/features/agents/workbench/agent-workbench.tsx")
+    expect(source).toContain("matchesHeadlessJobFilter")
+    expect(source).toContain("getHeadlessJobCounts")
+    expect(source).toContain("mergeWorkbenchCounts")
+    expect(source).toContain("visibleHeadlessJobs")
+    expect(source).toContain("getWorkbenchFilterCount(counts, item)")
+    expect(source).not.toContain("tasks.length === 0 && headlessJobs.length === 0")
+  })
+
   test("adds English and Chinese job labels", () => {
     const dictionary = read("src/renderer/lib/i18n/dictionaries.ts")
     for (const key of [
