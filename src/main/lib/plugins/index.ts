@@ -2,6 +2,12 @@ import * as fs from "fs/promises"
 import type { Dirent } from "fs"
 import * as path from "path"
 import * as os from "os"
+import {
+  getManifestOnlyPluginTargetMode,
+  type PluginExecutionStatus,
+  type PluginTargetMode,
+  type PluginUpdatePosture,
+} from "../../../shared/plugin-target-modes"
 import type { McpServerConfig } from "../claude-config"
 import { isDirentDirectory } from "../fs/dirent"
 
@@ -31,6 +37,11 @@ export interface PluginInfo {
   homepage?: string
   tags?: string[]
   componentPaths?: PluginComponentPaths
+  sourceKind: PluginSourceKind
+  sourceTrust: PluginSourceTrust
+  targetMode: PluginTargetMode
+  executionStatus: PluginExecutionStatus
+  updatePosture: PluginUpdatePosture
 }
 
 export interface PluginSourceInfo {
@@ -116,10 +127,52 @@ function getStringArray(value: unknown): string[] | undefined {
   return values.length > 0 ? values : undefined
 }
 
-function resolveComponentPath(pluginRoot: string, value: unknown): string | undefined {
+function isPathInside(basePath: string, candidatePath: string): boolean {
+  const relativePath = path.relative(basePath, candidatePath)
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  )
+}
+
+export async function resolvePluginComponentPath(
+  pluginRoot: string,
+  value: unknown,
+  fallbackName: string,
+): Promise<string | undefined> {
   const componentPath = getString(value)
-  if (!componentPath) return undefined
-  return path.resolve(pluginRoot, componentPath)
+  const candidate = componentPath
+    ? path.resolve(pluginRoot, componentPath)
+    : path.join(pluginRoot, fallbackName)
+
+  if (!isPathInside(pluginRoot, candidate)) return undefined
+
+  try {
+    const [realRoot, realCandidate] = await Promise.all([
+      fs.realpath(pluginRoot),
+      fs.realpath(candidate),
+    ])
+    if (!isPathInside(realRoot, realCandidate)) return undefined
+  } catch {
+    // Missing component directories are normal. Keep the syntactically safe path
+    // so later scans can return an empty component list.
+  }
+
+  return candidate
+}
+
+async function resolvePluginComponentPaths(
+  pluginRoot: string,
+  parsed: CodexPluginJson,
+): Promise<PluginComponentPaths> {
+  const [commands, skills, agents, mcpServers] = await Promise.all([
+    resolvePluginComponentPath(pluginRoot, parsed.commands, "commands"),
+    resolvePluginComponentPath(pluginRoot, parsed.skills, "skills"),
+    resolvePluginComponentPath(pluginRoot, parsed.agents, "agents"),
+    resolvePluginComponentPath(pluginRoot, parsed.mcpServers, ".mcp.json"),
+  ])
+
+  return { commands, skills, agents, mcpServers }
 }
 
 async function getDirectoryStatus(targetPath: string): Promise<PluginSourceStatus> {
@@ -241,6 +294,9 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
             category: plugin.category,
             homepage: plugin.homepage,
             tags: plugin.tags,
+            sourceKind: getSourceKind("claude"),
+            sourceTrust: getSourceTrust("claude", marketplaceJson.name),
+            ...getManifestOnlyPluginTargetMode(),
           })
         } catch {
           // Plugin directory not found, skip
@@ -334,6 +390,8 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           getString(parsed.interface?.websiteURL) ??
           getString(parsed.repository)
 
+        const componentPaths = await resolvePluginComponentPaths(pluginPath, parsed)
+
         plugins.push({
           runtime: "codex",
           name: displayName,
@@ -347,20 +405,10 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           category: getString(parsed.interface?.category),
           homepage,
           tags: getStringArray(parsed.keywords),
-          componentPaths: {
-            commands:
-              resolveComponentPath(pluginPath, parsed.commands) ??
-              path.join(pluginPath, "commands"),
-            skills:
-              resolveComponentPath(pluginPath, parsed.skills) ??
-              path.join(pluginPath, "skills"),
-            agents:
-              resolveComponentPath(pluginPath, parsed.agents) ??
-              path.join(pluginPath, "agents"),
-            mcpServers:
-              resolveComponentPath(pluginPath, parsed.mcpServers) ??
-              path.join(pluginPath, ".mcp.json"),
-          },
+          componentPaths,
+          sourceKind: getSourceKind("codex"),
+          sourceTrust: getSourceTrust("codex", collection.name),
+          ...getManifestOnlyPluginTargetMode(),
         })
       }
     }

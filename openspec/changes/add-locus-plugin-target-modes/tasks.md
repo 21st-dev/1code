@@ -7,11 +7,11 @@
 
 ## 2. Metadata Model
 
-- [ ] 2.1 Add shared/plugin-library target-mode types for `manifest-only`, `controlled-ui`, and `developer-trusted-code`.
-- [ ] 2.2 Classify existing Claude and Codex discovered packages as `manifest-only`.
-- [ ] 2.3 Add trust/review/update guidance fields without exposing secrets or reading plugin code beyond existing metadata/component scans.
-- [ ] 2.4 Add tests for plugin target-mode classification and source handling.
-- [ ] 2.5 Commit the metadata slice separately.
+- [x] 2.1 Add shared/plugin-library target-mode types for `manifest-only`, `controlled-ui`, and `developer-trusted-code`.
+- [x] 2.2 Classify existing Claude and Codex discovered packages as `manifest-only`.
+- [x] 2.3 Add trust/review/update guidance fields without exposing secrets or reading plugin code beyond existing metadata/component scans.
+- [x] 2.4 Add tests for plugin target-mode classification and source handling.
+- [x] 2.5 Commit the metadata slice separately.
 
 ## 3. Settings UI
 

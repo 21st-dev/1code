@@ -10,7 +10,16 @@ import {
   clearPluginCache,
   type PluginSourceInfo,
   type PluginRuntime,
+  type PluginSourceKind,
+  type PluginSourceTrust,
 } from "../../plugins"
+import {
+  getPluginReviewStatus,
+  type PluginExecutionStatus,
+  type PluginReviewStatus,
+  type PluginTargetMode,
+  type PluginUpdatePosture,
+} from "../../../../shared/plugin-target-modes"
 import { getEnabledPlugins } from "./claude-settings"
 
 export interface PluginComponent {
@@ -30,6 +39,12 @@ export interface PluginWithComponents {
   category?: string
   homepage?: string
   tags?: string[]
+  sourceKind: PluginSourceKind
+  sourceTrust: PluginSourceTrust
+  targetMode: PluginTargetMode
+  executionStatus: PluginExecutionStatus
+  reviewStatus: PluginReviewStatus
+  updatePosture: PluginUpdatePosture
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -246,6 +261,15 @@ export const pluginsRouter = router({
           category: plugin.category,
           homepage: plugin.homepage,
           tags: plugin.tags,
+          sourceKind: plugin.sourceKind,
+          sourceTrust: plugin.sourceTrust,
+          targetMode: plugin.targetMode,
+          executionStatus: plugin.executionStatus,
+          reviewStatus: getPluginReviewStatus({
+            runtime: plugin.runtime,
+            hasMcpServers: mcpServers.length > 0,
+          }),
+          updatePosture: plugin.updatePosture,
           isDisabled: plugin.runtime === "claude" ? !enabledPlugins.includes(plugin.source) : false,
           canToggle: plugin.runtime === "claude",
           components: {
