@@ -35,6 +35,27 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.codexReferenceUpdateGuidance",
       "settings.plugins.codexDesktopUpdateGuidance",
       "settings.plugins.codexRuntimeUpdateGuidance",
+      "settings.plugins.safeModePlanningGuidance",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
+
+  test("renders diagnostics and safe-mode planning copy without execution controls", () => {
+    expect(pluginsTabSource).toContain("DiagnosticsPanel")
+    expect(pluginsTabSource).toContain("plugin.diagnostics")
+    expect(pluginsTabSource).toContain("source.diagnostics")
+    expect(pluginsTabSource).toContain("settings.plugins.safeModePlanning")
+    expect(pluginsTabSource).not.toContain("runPluginSafeMode")
+
+    for (const key of [
+      "settings.plugins.diagnostics",
+      "settings.plugins.diagnosticMcpReviewRequired",
+      "settings.plugins.diagnosticPermissionScopeReviewRequired",
+      "settings.plugins.diagnosticSafeModePlanned",
+      "settings.plugins.diagnosticComponentPathOutsideRoot",
+      "settings.plugins.diagnosticSourceMissing",
+      "settings.plugins.diagnosticSourceReadOnlyRefresh",
     ]) {
       expect(dictionarySource).toContain(`"${key}"`)
     }

@@ -4,6 +4,8 @@ import * as path from "path"
 import * as os from "os"
 import {
   getManifestOnlyPluginTargetMode,
+  getPluginSourceDiagnostics,
+  type PluginDiagnostic,
   type PluginExecutionStatus,
   type PluginTargetMode,
   type PluginUpdatePosture,
@@ -42,6 +44,7 @@ export interface PluginInfo {
   targetMode: PluginTargetMode
   executionStatus: PluginExecutionStatus
   updatePosture: PluginUpdatePosture
+  diagnostics: PluginDiagnostic[]
 }
 
 export interface PluginSourceInfo {
@@ -55,6 +58,7 @@ export interface PluginSourceInfo {
   path: string
   pluginCount: number
   installHint: string
+  diagnostics: PluginDiagnostic[]
   homepage?: string
 }
 
@@ -98,6 +102,16 @@ export interface PluginMcpConfig {
   mcpServers: Record<string, McpServerConfig>
 }
 
+interface PluginComponentPathResolution {
+  path?: string
+  diagnostics: PluginDiagnostic[]
+}
+
+interface PluginComponentPathsResolution {
+  componentPaths: PluginComponentPaths
+  diagnostics: PluginDiagnostic[]
+}
+
 // Cache for plugin discovery results
 let pluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
 let codexPluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
@@ -135,44 +149,87 @@ function isPathInside(basePath: string, candidatePath: string): boolean {
   )
 }
 
-export async function resolvePluginComponentPath(
+export async function resolvePluginComponentPathWithDiagnostics(
   pluginRoot: string,
   value: unknown,
   fallbackName: string,
-): Promise<string | undefined> {
+): Promise<PluginComponentPathResolution> {
   const componentPath = getString(value)
   const candidate = componentPath
     ? path.resolve(pluginRoot, componentPath)
     : path.join(pluginRoot, fallbackName)
 
-  if (!isPathInside(pluginRoot, candidate)) return undefined
+  if (!isPathInside(pluginRoot, candidate)) {
+    return {
+      diagnostics: [{
+        code: "component-path-outside-root",
+        severity: "warning",
+      }],
+    }
+  }
 
   try {
     const [realRoot, realCandidate] = await Promise.all([
       fs.realpath(pluginRoot),
       fs.realpath(candidate),
     ])
-    if (!isPathInside(realRoot, realCandidate)) return undefined
+    if (!isPathInside(realRoot, realCandidate)) {
+      return {
+        diagnostics: [{
+          code: "component-path-outside-root",
+          severity: "warning",
+        }],
+      }
+    }
   } catch {
     // Missing component directories are normal. Keep the syntactically safe path
     // so later scans can return an empty component list.
   }
 
-  return candidate
+  return {
+    path: candidate,
+    diagnostics: [],
+  }
+}
+
+export async function resolvePluginComponentPath(
+  pluginRoot: string,
+  value: unknown,
+  fallbackName: string,
+): Promise<string | undefined> {
+  const result = await resolvePluginComponentPathWithDiagnostics(
+    pluginRoot,
+    value,
+    fallbackName,
+  )
+  return result.path
 }
 
 async function resolvePluginComponentPaths(
   pluginRoot: string,
   parsed: CodexPluginJson,
-): Promise<PluginComponentPaths> {
+): Promise<PluginComponentPathsResolution> {
   const [commands, skills, agents, mcpServers] = await Promise.all([
-    resolvePluginComponentPath(pluginRoot, parsed.commands, "commands"),
-    resolvePluginComponentPath(pluginRoot, parsed.skills, "skills"),
-    resolvePluginComponentPath(pluginRoot, parsed.agents, "agents"),
-    resolvePluginComponentPath(pluginRoot, parsed.mcpServers, ".mcp.json"),
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.commands, "commands"),
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.skills, "skills"),
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.agents, "agents"),
+    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.mcpServers, ".mcp.json"),
   ])
 
-  return { commands, skills, agents, mcpServers }
+  return {
+    componentPaths: {
+      commands: commands.path,
+      skills: skills.path,
+      agents: agents.path,
+      mcpServers: mcpServers.path,
+    },
+    diagnostics: [
+      ...commands.diagnostics,
+      ...skills.diagnostics,
+      ...agents.diagnostics,
+      ...mcpServers.diagnostics,
+    ],
+  }
 }
 
 async function getDirectoryStatus(targetPath: string): Promise<PluginSourceStatus> {
@@ -296,6 +353,7 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
             tags: plugin.tags,
             sourceKind: getSourceKind("claude"),
             sourceTrust: getSourceTrust("claude", marketplaceJson.name),
+            diagnostics: [],
             ...getManifestOnlyPluginTargetMode(),
           })
         } catch {
@@ -390,7 +448,7 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           getString(parsed.interface?.websiteURL) ??
           getString(parsed.repository)
 
-        const componentPaths = await resolvePluginComponentPaths(pluginPath, parsed)
+        const { componentPaths, diagnostics } = await resolvePluginComponentPaths(pluginPath, parsed)
 
         plugins.push({
           runtime: "codex",
@@ -408,6 +466,7 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           componentPaths,
           sourceKind: getSourceKind("codex"),
           sourceTrust: getSourceTrust("codex", collection.name),
+          diagnostics,
           ...getManifestOnlyPluginTargetMode(),
         })
       }
@@ -455,20 +514,25 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
     })
   }
 
-  const sources = Array.from(bySource.values()).map((source): PluginSourceInfo => ({
-    id: `${source.runtime}:${source.marketplace}`,
-    runtime: source.runtime,
-    name: formatSourceName(source.marketplace),
-    description: getSourceDescription(source.runtime),
-    kind: getSourceKind(source.runtime),
-    trust: getSourceTrust(source.runtime, source.marketplace),
-    status: "available",
-    path: source.path,
-    pluginCount: source.pluginCount,
-    installHint: getSourceInstallHint(source.runtime),
-  }))
+  const sources = Array.from(bySource.values()).map((source): PluginSourceInfo => {
+    const status: PluginSourceStatus = "available"
+    return {
+      id: `${source.runtime}:${source.marketplace}`,
+      runtime: source.runtime,
+      name: formatSourceName(source.marketplace),
+      description: getSourceDescription(source.runtime),
+      kind: getSourceKind(source.runtime),
+      trust: getSourceTrust(source.runtime, source.marketplace),
+      status,
+      path: source.path,
+      pluginCount: source.pluginCount,
+      installHint: getSourceInstallHint(source.runtime),
+      diagnostics: getPluginSourceDiagnostics({ status }),
+    }
+  })
 
   if (!sources.some((source) => source.runtime === "claude")) {
+    const status = claudeRootStatus === "available" ? "empty" : claudeRootStatus
     sources.push({
       id: "claude:local-marketplaces",
       runtime: "claude",
@@ -476,14 +540,16 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
       description: getSourceDescription("claude"),
       kind: "local-marketplace",
       trust: "local",
-      status: claudeRootStatus === "available" ? "empty" : claudeRootStatus,
+      status,
       path: CLAUDE_MARKETPLACES_DIR,
       pluginCount: 0,
       installHint: getSourceInstallHint("claude"),
+      diagnostics: getPluginSourceDiagnostics({ status }),
     })
   }
 
   if (!sources.some((source) => source.runtime === "codex")) {
+    const status = codexRootStatus === "available" ? "empty" : codexRootStatus
     sources.push({
       id: "codex:plugin-cache",
       runtime: "codex",
@@ -491,10 +557,11 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
       description: getSourceDescription("codex"),
       kind: "cache",
       trust: "local",
-      status: codexRootStatus === "available" ? "empty" : codexRootStatus,
+      status,
       path: CODEX_PLUGIN_CACHE_DIR,
       pluginCount: 0,
       installHint: getSourceInstallHint("codex"),
+      diagnostics: getPluginSourceDiagnostics({ status }),
     })
   }
 

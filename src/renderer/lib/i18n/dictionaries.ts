@@ -1133,6 +1133,30 @@ export const en = {
     "Codex CLI/runtime updates require capability review before new plugin actions are shown.",
   "settings.plugins.sourceUpdateGuidance":
     "Refresh re-scans local metadata only. Install and update actions remain outside this read-only source browser.",
+  "settings.plugins.safeModePlanning": "Safe mode",
+  "settings.plugins.safeModePlanningGuidance":
+    "Safe mode is a future recovery rule for approved Locus extension surfaces. This change still does not run arbitrary plugin code.",
+  "settings.plugins.diagnostics": "Diagnostics",
+  "settings.plugins.diagnosticMetadataOnlyNoExecution":
+    "Metadata and component declarations only; plugin JavaScript is not executed.",
+  "settings.plugins.diagnosticMcpReviewRequired":
+    "This package declares MCP servers. They require explicit review before becoming active tool connections.",
+  "settings.plugins.diagnosticCodexReadOnlyCache":
+    "This Codex package is shown from the local cache only; Locus does not control its enablement.",
+  "settings.plugins.diagnosticPermissionScopeReviewRequired":
+    "Permission, scope, MCP, native, filesystem, network, or shell changes must be reviewed before enablement.",
+  "settings.plugins.diagnosticSafeModePlanned":
+    "Safe mode is planned for future execution surfaces; no arbitrary plugin code runs in this mode.",
+  "settings.plugins.diagnosticComponentPathOutsideRoot":
+    "A component path was ignored because it points outside this plugin root.",
+  "settings.plugins.diagnosticSourceAvailable":
+    "Source directory is available for metadata scanning.",
+  "settings.plugins.diagnosticSourceEmpty":
+    "Source directory exists but does not contain visible plugin entries.",
+  "settings.plugins.diagnosticSourceMissing":
+    "Source directory is missing or cannot be read.",
+  "settings.plugins.diagnosticSourceReadOnlyRefresh":
+    "Refresh updates metadata only and does not install, update, or execute plugins.",
   "settings.plugins.commandsCount": "Commands ({count})",
   "settings.plugins.skillsCount": "Skills ({count})",
   "settings.plugins.agentsCount": "Agents ({count})",
@@ -3712,6 +3736,30 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "Codex CLI/运行时更新需要先复审能力状态，之后才显示新的插件动作。",
   "settings.plugins.sourceUpdateGuidance":
     "刷新只会重新扫描本地元数据。安装和更新动作仍不放在这个只读来源浏览器里。",
+  "settings.plugins.safeModePlanning": "安全模式",
+  "settings.plugins.safeModePlanningGuidance":
+    "安全模式是未来 Locus 自有扩展入口的恢复规则。本次改动仍然不执行任意插件代码。",
+  "settings.plugins.diagnostics": "诊断",
+  "settings.plugins.diagnosticMetadataOnlyNoExecution":
+    "只读取元数据和组件声明，不执行插件 JavaScript。",
+  "settings.plugins.diagnosticMcpReviewRequired":
+    "这个包声明了 MCP 服务器。成为可用工具连接前必须明确复审。",
+  "settings.plugins.diagnosticCodexReadOnlyCache":
+    "这个 Codex 包只从本地缓存展示；Locus 不控制它的启用状态。",
+  "settings.plugins.diagnosticPermissionScopeReviewRequired":
+    "权限、范围、MCP、native、文件系统、网络或 shell 变化启用前必须复审。",
+  "settings.plugins.diagnosticSafeModePlanned":
+    "安全模式只规划给未来执行入口；当前模式不运行任意插件代码。",
+  "settings.plugins.diagnosticComponentPathOutsideRoot":
+    "有组件路径指向插件根目录外，已被忽略。",
+  "settings.plugins.diagnosticSourceAvailable":
+    "来源目录可用于元数据扫描。",
+  "settings.plugins.diagnosticSourceEmpty":
+    "来源目录存在，但没有可见插件条目。",
+  "settings.plugins.diagnosticSourceMissing":
+    "来源目录不存在或无法读取。",
+  "settings.plugins.diagnosticSourceReadOnlyRefresh":
+    "刷新只更新元数据，不安装、更新或执行插件。",
   "settings.plugins.commandsCount": "命令（{count}）",
   "settings.plugins.skillsCount": "技能（{count}）",
   "settings.plugins.agentsCount": "智能体（{count}）",

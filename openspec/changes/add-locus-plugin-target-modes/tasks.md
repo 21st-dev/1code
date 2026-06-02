@@ -25,10 +25,10 @@
 
 ## 4. Diagnostics And Safe Mode Planning
 
-- [ ] 4.1 Add non-executing diagnostics metadata for invalid/missing plugin roots and permission/scope changes.
-- [ ] 4.2 Add planned safe-mode wording that makes clear no arbitrary code is executed in this change.
-- [ ] 4.3 Add tests for diagnostic labels and safe-mode copy.
-- [ ] 4.4 Commit the diagnostics slice separately.
+- [x] 4.1 Add non-executing diagnostics metadata for invalid/missing plugin roots and permission/scope changes.
+- [x] 4.2 Add planned safe-mode wording that makes clear no arbitrary code is executed in this change.
+- [x] 4.3 Add tests for diagnostic labels and safe-mode copy.
+- [x] 4.4 Commit the diagnostics slice separately.
 
 ## 5. Verification
 

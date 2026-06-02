@@ -14,7 +14,9 @@ import {
   type PluginSourceTrust,
 } from "../../plugins"
 import {
+  getPluginDiagnostics,
   getPluginReviewStatus,
+  type PluginDiagnostic,
   type PluginExecutionStatus,
   type PluginReviewStatus,
   type PluginTargetMode,
@@ -45,6 +47,7 @@ export interface PluginWithComponents {
   executionStatus: PluginExecutionStatus
   reviewStatus: PluginReviewStatus
   updatePosture: PluginUpdatePosture
+  diagnostics: PluginDiagnostic[]
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -249,6 +252,11 @@ export const pluginsRouter = router({
           scanPluginMcpServers(paths.mcpServers),
         ])
 
+        const reviewStatus = getPluginReviewStatus({
+          runtime: plugin.runtime,
+          hasMcpServers: mcpServers.length > 0,
+        })
+
         return {
           runtime: plugin.runtime,
           name: plugin.name,
@@ -265,11 +273,14 @@ export const pluginsRouter = router({
           sourceTrust: plugin.sourceTrust,
           targetMode: plugin.targetMode,
           executionStatus: plugin.executionStatus,
-          reviewStatus: getPluginReviewStatus({
-            runtime: plugin.runtime,
-            hasMcpServers: mcpServers.length > 0,
-          }),
+          reviewStatus,
           updatePosture: plugin.updatePosture,
+          diagnostics: getPluginDiagnostics({
+            runtime: plugin.runtime,
+            targetMode: plugin.targetMode,
+            reviewStatus,
+            baseDiagnostics: plugin.diagnostics,
+          }),
           isDisabled: plugin.runtime === "claude" ? !enabledPlugins.includes(plugin.source) : false,
           canToggle: plugin.runtime === "claude",
           components: {

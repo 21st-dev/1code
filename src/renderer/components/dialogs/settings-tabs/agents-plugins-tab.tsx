@@ -36,6 +36,23 @@ type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-c
 type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled-planned" | "trusted-code-planned"
 type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
 type PluginUpdatePosture = "advisory-only" | "review-before-enable"
+type PluginDiagnosticSeverity = "info" | "warning"
+type PluginDiagnosticCode =
+  | "metadata-only-no-execution"
+  | "mcp-review-required"
+  | "codex-read-only-cache"
+  | "permission-scope-review-required"
+  | "safe-mode-planned"
+  | "component-path-outside-root"
+  | "source-available"
+  | "source-empty"
+  | "source-missing"
+  | "source-read-only-refresh"
+
+interface PluginDiagnostic {
+  code: PluginDiagnosticCode
+  severity: PluginDiagnosticSeverity
+}
 
 interface PluginData {
   runtime: PluginRuntime
@@ -55,6 +72,7 @@ interface PluginData {
   executionStatus: PluginExecutionStatus
   reviewStatus: PluginReviewStatus
   updatePosture: PluginUpdatePosture
+  diagnostics: PluginDiagnostic[]
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -76,6 +94,7 @@ interface PluginSourceData {
   path: string
   pluginCount: number
   installHint: string
+  diagnostics: PluginDiagnostic[]
   homepage?: string
 }
 
@@ -231,6 +250,65 @@ function getReviewStatusClass(status: PluginReviewStatus): string {
   }
 }
 
+function getDiagnosticLabel(code: PluginDiagnosticCode, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (code) {
+    case "metadata-only-no-execution":
+      return t("settings.plugins.diagnosticMetadataOnlyNoExecution")
+    case "mcp-review-required":
+      return t("settings.plugins.diagnosticMcpReviewRequired")
+    case "codex-read-only-cache":
+      return t("settings.plugins.diagnosticCodexReadOnlyCache")
+    case "permission-scope-review-required":
+      return t("settings.plugins.diagnosticPermissionScopeReviewRequired")
+    case "safe-mode-planned":
+      return t("settings.plugins.diagnosticSafeModePlanned")
+    case "component-path-outside-root":
+      return t("settings.plugins.diagnosticComponentPathOutsideRoot")
+    case "source-available":
+      return t("settings.plugins.diagnosticSourceAvailable")
+    case "source-empty":
+      return t("settings.plugins.diagnosticSourceEmpty")
+    case "source-missing":
+      return t("settings.plugins.diagnosticSourceMissing")
+    case "source-read-only-refresh":
+      return t("settings.plugins.diagnosticSourceReadOnlyRefresh")
+  }
+}
+
+function getDiagnosticClass(severity: PluginDiagnosticSeverity): string {
+  return severity === "warning"
+    ? "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    : "border-border bg-background text-muted-foreground"
+}
+
+function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) {
+  const { t } = useI18n()
+  if (diagnostics.length === 0) return null
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-2">
+      <Label>{t("settings.plugins.diagnostics")}</Label>
+      <div className="space-y-1.5">
+        {diagnostics.map((diagnostic, index) => (
+          <div
+            key={`${diagnostic.code}-${index}`}
+            className={cn(
+              "flex items-start gap-2 rounded border px-2 py-1.5 text-xs leading-relaxed",
+              getDiagnosticClass(diagnostic.severity)
+            )}
+          >
+            <span className={cn(
+              "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+              diagnostic.severity === "warning" ? "bg-amber-500" : "bg-muted-foreground/50"
+            )} />
+            <span>{getDiagnosticLabel(diagnostic.code, t)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // --- Detail Panel ---
 function PluginDetail({
   plugin,
@@ -337,6 +415,8 @@ function PluginDetail({
             </p>
           </div>
 
+          <DiagnosticsPanel diagnostics={plugin.diagnostics} />
+
           {/* Info */}
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -409,6 +489,13 @@ function PluginDetail({
               <p>{t("settings.plugins.codexDesktopUpdateGuidance")}</p>
               <p>{t("settings.plugins.codexRuntimeUpdateGuidance")}</p>
             </div>
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3 space-y-2">
+            <Label>{t("settings.plugins.safeModePlanning")}</Label>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t("settings.plugins.safeModePlanningGuidance")}
+            </p>
           </div>
 
           {/* Components — clickable when the runtime exposes them to shared tabs */}
@@ -750,6 +837,8 @@ function PluginSourceDetail({
               <p className="text-sm text-foreground">{getSourceTrustLabel(source.trust, t)}</p>
             </div>
           </div>
+
+          <DiagnosticsPanel diagnostics={source.diagnostics} />
 
           <div className="space-y-1.5">
             <Label>{t("settings.plugins.sourcePath")}</Label>
