@@ -27,6 +27,18 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/trpc/routers/plugins.ts"),
     "utf8",
   )
+  const pluginReviewScanSource = readFileSync(
+    join(process.cwd(), "src/main/lib/plugins/review-scan.ts"),
+    "utf8",
+  )
+  const pluginControlledUiSource = readFileSync(
+    join(process.cwd(), "src/shared/plugin-controlled-ui.ts"),
+    "utf8",
+  )
+  const pluginControlledUiStateSource = readFileSync(
+    join(process.cwd(), "src/main/lib/plugins/controlled-ui-state.ts"),
+    "utf8",
+  )
   const commandsRouterSource = readFileSync(
     join(process.cwd(), "src/main/lib/trpc/routers/commands.ts"),
     "utf8",
@@ -103,5 +115,32 @@ describe("plugin safe mode runtime source guards", () => {
     expect(skillsRouterSource).not.toContain("discoverInstalledPlugins")
     expect(agentsRouterSource).not.toContain("discoverInstalledPlugins")
     expect(agentUtilsSource).not.toContain("discoverInstalledPlugins")
+  })
+
+  test("keeps controlled UI declarative and gates action invocation in main", () => {
+    expect(pluginReviewScanSource).toContain(".locus-plugin")
+    expect(pluginReviewScanSource).toContain("parseControlledUiManifest")
+    expect(pluginReviewScanSource).toContain("fs.realpath")
+    expect(pluginReviewScanSource).not.toContain("import(")
+    expect(pluginReviewScanSource).not.toContain("require(")
+    expect(pluginReviewScanSource).not.toContain("new Function")
+
+    expect(pluginControlledUiSource).toContain("UNSAFE_FIELD_NAMES")
+    expect(pluginControlledUiSource).toContain("dangerouslySetInnerHTML")
+    expect(pluginControlledUiSource).toContain("webview")
+    expect(pluginControlledUiSource).toContain("iframe")
+    expect(pluginControlledUiSource).not.toContain("eval(")
+
+    expect(pluginsRouterSource).toContain("grantControlledAction")
+    expect(pluginsRouterSource).toContain("invokeControlledAction")
+    expect(pluginsRouterSource).toContain("getControlledUiActionContext")
+    expect(pluginsRouterSource).toContain("recordPluginReviewScans")
+    expect(pluginsRouterSource).toContain("getControlledUiPermissionGrantStatus")
+    expect(pluginsRouterSource).toContain("canInvokeControlledAction")
+    expect(pluginsRouterSource).not.toContain("executeControlledActionShell")
+    expect(pluginsRouterSource).not.toContain("sendChatAutomatically")
+
+    expect(pluginControlledUiStateSource).toContain("contributionFingerprint")
+    expect(pluginControlledUiStateSource).toContain("getControlledUiGrantStatus")
   })
 })

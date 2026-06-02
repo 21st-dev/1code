@@ -25,6 +25,7 @@ import {
 } from "../../plugins/review-scan"
 import {
   buildPluginControlledUiGate,
+  getControlledUiActionPermissionId,
   type PluginControlledUiDiagnostic,
   type PluginControlledUiGate,
   type PluginControlledUiManifest,
@@ -52,6 +53,10 @@ import {
   type PluginDoctorReport,
 } from "../../../../shared/plugin-doctor"
 import { getEnabledPlugins } from "./claude-settings"
+import {
+  getControlledUiPermissionGrantStatus,
+  grantControlledUiPermission,
+} from "../../plugins/controlled-ui-state"
 
 export interface PluginWithComponents {
   runtime: PluginRuntime
@@ -219,6 +224,85 @@ function toPluginWithComponents(input: {
   }
 }
 
+async function getControlledUiActionContext(input: {
+  reviewKey: string
+  contributionId: string
+  actionId: string
+}) {
+  const [installedPlugins, safeMode] = await Promise.all([
+    discoverAllRuntimePlugins(),
+    getPluginSafeModeState(),
+  ])
+  const plugin = installedPlugins.find((candidate) => candidate.reviewKey === input.reviewKey)
+  if (!plugin) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Plugin is not currently discovered.",
+    })
+  }
+
+  const scanned = await scanPluginWithComponents(plugin)
+  const reviewResult = await recordPluginReviewScans([{
+    pluginKey: plugin.reviewKey,
+    document: scanned.reviewDocument,
+  }])
+  const updateReview =
+    reviewResult.metadataByPluginKey[plugin.reviewKey] ??
+    makeEmptyUpdateReviewMetadata(plugin)
+  const contribution = scanned.controlledUi.manifest?.surfaces.find(
+    (surface) => surface.id === input.contributionId,
+  )
+
+  if (!contribution) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Controlled UI contribution is not currently declared.",
+    })
+  }
+  if (contribution.type !== "command-button" || contribution.action.id !== input.actionId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Controlled UI contribution action is not allowlisted.",
+    })
+  }
+
+  const permissionId = getControlledUiActionPermissionId(contribution.action)
+  const grantStatus = await getControlledUiPermissionGrantStatus({
+    pluginReviewKey: plugin.reviewKey,
+    contributionFingerprint: updateReview.fingerprint,
+    contributionId: contribution.id,
+    actionId: contribution.action.id,
+    permissionId,
+  })
+  const baseGate = {
+    runtime: plugin.runtime,
+    targetMode: scanned.targetMode,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: safeMode.enabled,
+    hasValidManifest: Boolean(scanned.controlledUi.manifest),
+    surfaceSupported: true,
+    actionSupported: contribution.action.type === "insert-chat-draft",
+  }
+
+  return {
+    plugin,
+    scanned,
+    contribution,
+    permissionId,
+    grantStatus,
+    updateReview,
+    gateForGrant: buildPluginControlledUiGate({
+      ...baseGate,
+      permissionGranted: true,
+    }),
+    gateForInvoke: buildPluginControlledUiGate({
+      ...baseGate,
+      permissionGranted: grantStatus === "current",
+      permissionStale: grantStatus === "stale",
+    }),
+  }
+}
+
 export const pluginsRouter = router({
   /**
    * List local/cache plugin sources by runtime.
@@ -381,6 +465,67 @@ export const pluginsRouter = router({
         safeMode,
       })
   }),
+
+  /**
+   * Store a local fingerprint-bound grant for an allowlisted controlled UI
+   * action. Main re-scans the plugin and review state before granting.
+   */
+  grantControlledAction: publicProcedure
+    .input(z.object({
+      reviewKey: z.string().min(1),
+      contributionId: z.string().min(1),
+      actionId: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const context = await getControlledUiActionContext(input)
+      if (!context.gateForGrant.canRenderControlledUi) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Controlled UI action cannot be granted for the current plugin state.",
+        })
+      }
+
+      const grant = await grantControlledUiPermission({
+        pluginReviewKey: context.plugin.reviewKey,
+        contributionFingerprint: context.updateReview.fingerprint,
+        contributionId: context.contribution.id,
+        actionId: context.contribution.action.id,
+        permissionId: context.permissionId,
+      })
+      return {
+        grant,
+        gate: context.gateForGrant,
+      }
+    }),
+
+  /**
+   * Invoke an allowlisted controlled UI action. This returns a bounded payload
+   * for the renderer; it never sends chat, runs shell, edits files, approves
+   * MCP, enables plugins, imports plugin JS, or patches the DOM.
+   */
+  invokeControlledAction: publicProcedure
+    .input(z.object({
+      reviewKey: z.string().min(1),
+      contributionId: z.string().min(1),
+      actionId: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const context = await getControlledUiActionContext(input)
+      if (!context.gateForInvoke.canInvokeControlledAction) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Controlled UI action is blocked by current review, safe mode, or grant state.",
+        })
+      }
+
+      return {
+        type: "insert-chat-draft" as const,
+        pluginReviewKey: context.plugin.reviewKey,
+        contributionId: context.contribution.id,
+        actionId: context.contribution.action.id,
+        prompt: context.contribution.action.prompt,
+      }
+    }),
 
   /**
    * Clear plugin cache (forces re-scan on next list)
