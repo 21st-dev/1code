@@ -164,6 +164,18 @@ function getSourceStatusLabel(status: PluginSourceStatus, t: ReturnType<typeof u
   }
 }
 
+function getSourceDescriptionLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
+  return runtime === "claude"
+    ? t("settings.plugins.sourceDescriptionClaude")
+    : t("settings.plugins.sourceDescriptionCodex")
+}
+
+function getSourceInstallHintLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
+  return runtime === "claude"
+    ? t("settings.plugins.sourceInstallHintClaude")
+    : t("settings.plugins.sourceInstallHintCodex")
+}
+
 function getSourceStatusClass(status: PluginSourceStatus): string {
   switch (status) {
     case "available":
@@ -813,7 +825,7 @@ function PluginSourceDetail({
             </Button>
           </div>
 
-          <p className="text-sm text-muted-foreground">{source.description}</p>
+          <p className="text-sm text-muted-foreground">{getSourceDescriptionLabel(source.runtime, t)}</p>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -847,7 +859,7 @@ function PluginSourceDetail({
 
           <div className="space-y-1.5">
             <Label>{t("settings.plugins.sourceInstallHint")}</Label>
-            <p className="text-sm text-muted-foreground">{source.installHint}</p>
+            <p className="text-sm text-muted-foreground">{getSourceInstallHintLabel(source.runtime, t)}</p>
           </div>
 
           <div className="space-y-1.5">

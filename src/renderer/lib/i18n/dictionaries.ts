@@ -1225,12 +1225,20 @@ export const en = {
   "settings.plugins.sourceTrustOfficial": "Official",
   "settings.plugins.sourceTrustLocal": "Local",
   "settings.plugins.sourceTrustExternal": "External",
+  "settings.plugins.sourceDescriptionClaude":
+    "Local Claude Code plugin marketplace source.",
+  "settings.plugins.sourceDescriptionCodex":
+    "Codex plugin cache collection managed by Codex.",
   "settings.plugins.sourceStatus": "Status",
   "settings.plugins.sourceStatusAvailable": "Available",
   "settings.plugins.sourceStatusEmpty": "Empty",
   "settings.plugins.sourceStatusMissing": "Missing",
   "settings.plugins.sourcePath": "Path",
   "settings.plugins.sourceInstallHint": "Install Hint",
+  "settings.plugins.sourceInstallHintClaude":
+    "Install Claude plugins under ~/.claude/plugins/marketplaces/.",
+  "settings.plugins.sourceInstallHintCodex":
+    "Codex manages this cache; install or update plugins through Codex, then refresh.",
 
   "settings.beta.title": "Beta Features",
   "settings.beta.subtitle":
@@ -3828,12 +3836,20 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.sourceTrustOfficial": "官方",
   "settings.plugins.sourceTrustLocal": "本地",
   "settings.plugins.sourceTrustExternal": "外部",
+  "settings.plugins.sourceDescriptionClaude":
+    "本地 Claude Code 插件 Marketplace 来源。",
+  "settings.plugins.sourceDescriptionCodex":
+    "由 Codex 管理的 Codex 插件缓存集合。",
   "settings.plugins.sourceStatus": "状态",
   "settings.plugins.sourceStatusAvailable": "可用",
   "settings.plugins.sourceStatusEmpty": "空",
   "settings.plugins.sourceStatusMissing": "不存在",
   "settings.plugins.sourcePath": "路径",
   "settings.plugins.sourceInstallHint": "安装提示",
+  "settings.plugins.sourceInstallHintClaude":
+    "把 Claude 插件安装到 ~/.claude/plugins/marketplaces/。",
+  "settings.plugins.sourceInstallHintCodex":
+    "Codex 管理这个缓存；通过 Codex 安装或更新插件，然后刷新。",
 
   "settings.beta.title": "实验功能",
   "settings.beta.subtitle":

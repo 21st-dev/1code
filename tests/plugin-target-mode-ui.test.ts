@@ -60,4 +60,18 @@ describe("plugin target mode UI source guards", () => {
       expect(dictionarySource).toContain(`"${key}"`)
     }
   })
+
+  test("localizes plugin source detail descriptions and install hints", () => {
+    expect(pluginsTabSource).toContain("getSourceDescriptionLabel(source.runtime, t)")
+    expect(pluginsTabSource).toContain("getSourceInstallHintLabel(source.runtime, t)")
+
+    for (const key of [
+      "settings.plugins.sourceDescriptionClaude",
+      "settings.plugins.sourceDescriptionCodex",
+      "settings.plugins.sourceInstallHintClaude",
+      "settings.plugins.sourceInstallHintCodex",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
 })
