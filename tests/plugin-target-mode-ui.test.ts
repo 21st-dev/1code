@@ -262,6 +262,7 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReportedPlugins")
     expect(pluginsTabSource).toContain("canTargetExistingMarketplace")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceEmptyActionsHint")
+    expect(pluginsTabSource).toContain(":empty-marketplaces")
     expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplacePluginSummary")
     expect(pluginsTabSource).toContain("getRuntimePluginListingStatusLabel(plugin.status, t)")
     expect(pluginsTabSource).toContain("runtime-reported-plugins")

@@ -4048,7 +4048,25 @@ export function AgentsPluginsTab() {
         }
       })
       const unmatchedPlugins = snapshot.plugins.filter((plugin) => !matchedPluginIds.has(plugin.id))
-      if (unmatchedPlugins.length === 0) return marketplaceItems
+      if (unmatchedPlugins.length === 0) {
+        if (marketplaceItems.length > 0) return marketplaceItems
+        return [{
+          runtime: snapshot.runtime,
+          name: t("settings.plugins.marketplaceRuntimeEmptyTitle", {
+            runtime: getRuntimeLabel(snapshot.runtime, t),
+          }),
+          targetable: false,
+          sourceKind: "runtime-cli" as const,
+          trust: "external" as const,
+          status: "empty" as const,
+          diagnostics: [],
+          id: `${snapshot.runtime}:empty-marketplaces`,
+          pluginCount: 0,
+          plugins: [],
+          snapshotDiagnostics: snapshot.diagnostics,
+          refreshedAt: snapshot.refreshedAt,
+        }]
+      }
       return [
         ...marketplaceItems,
         {
