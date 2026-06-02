@@ -2746,8 +2746,11 @@ function PluginStoreCandidateDetail({
   const document = review?.document
   const isBlocked = review?.issues.some((issue) => issue.severity === "blocked") ?? true
   const canApprove = Boolean(review && !isBlocked && review.approvalStatus !== "current")
-  const canInstall = Boolean(review && !isBlocked && review.approvalStatus === "current")
-  const installLabel = preview?.installed
+  const isInstalledCurrent = review?.status === "installed-current"
+  const canInstall = Boolean(review && !isBlocked && review.approvalStatus === "current" && !isInstalledCurrent)
+  const installLabel = isInstalledCurrent
+    ? t("settings.plugins.storeStatusInstalledCurrent")
+    : preview?.installed
     ? t("settings.plugins.storeUpdate")
     : t("settings.plugins.storeInstall")
   const backup = debug?.backupRecords[0]

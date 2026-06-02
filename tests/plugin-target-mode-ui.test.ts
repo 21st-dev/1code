@@ -208,6 +208,8 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("settings.plugins.storePinWarning")
     expect(pluginsTabSource).toContain("settings.plugins.storeApproveExact")
     expect(pluginsTabSource).toContain("settings.plugins.storeInstallGateBlocksAction")
+    expect(pluginsTabSource).toContain("const isInstalledCurrent = review?.status === \"installed-current\"")
+    expect(pluginsTabSource).toContain("review.approvalStatus === \"current\" && !isInstalledCurrent")
     expect(pluginsTabSource).not.toContain("trustedMarketplace")
     expect(pluginsTabSource).not.toContain("verifiedSafe")
 
