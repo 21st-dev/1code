@@ -1,19 +1,27 @@
 # Tasks
 
+## 0. Current Acceptance Boundary
+- [x] 0.1 Record that phases 0-4 are implemented and smoked locally on macOS.
+- [x] 0.2 Record that Windows shim implementation and source/unit tests exist, but real Windows smoke has not been run.
+- [ ] 0.3 Run real Windows smoke for `locus run`, `locus jobs list`, `locus jobs logs`, and structured stdout/exit-code behavior.
+- [x] 0.4 Keep ordinary desktop chat migration, daemon, schedule, and `locus acp` out of this first-slice implementation.
+
+Current status is **local implementation complete, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
+
 ## 1. Proposal and Scope
 - [x] 1.1 Create the OpenSpec proposal, design, and multiple capability deltas for headless agent jobs.
 - [x] 1.2 Validate the OpenSpec change strictly.
 - [x] 1.3 Clarify phase 0 boundaries for macOS/Windows CLI, GUI single-instance separation, cross-process cancellation, worker heartbeat/interruption, SQLite concurrency, stdout/stderr, and job/chat linking.
 - [x] 1.4 Commit the proposal as its own planning slice.
 
-## 2. Runtime Core Extraction
-- [ ] 2.1 Add `src/main/lib/agent-runtime/contract.ts` with `AgentRuntime`, run request/result/session types, and observer/cancellation contracts; consume runtime IDs and capability manifests from `add-agent-runtime-capability-model`.
-- [ ] 2.2 Extend `src/main/lib/agent-runtime/runtime-registry.ts` to register Claude and Codex drivers/run entry points while reusing the shared non-secret capability manifest registry.
-- [ ] 2.3 Add normalized event helpers for assistant output, reasoning, tool calls, status updates, permission requests, scope expansion, AskUserQuestion, errors, and completion.
-- [ ] 2.4 Extract a narrow Claude adapter from the existing Claude router without changing renderer behavior, and keep its declared support aligned with the shared capability manifest.
-- [ ] 2.5 Extract a narrow Codex adapter from the existing Codex router without changing renderer behavior, and keep missing behavior represented as `degraded` or `unsupported` through the shared capability manifest.
-- [ ] 2.6 Add focused tests for runtime registry lookup, capability manifests, event normalization, adapter cancellation behavior, and declared-capability enforcement.
-- [ ] 2.7 Keep existing `claude` and `codex` tRPC subscriptions working while migrated behavior routes through the new core where practical.
+## 2. Runtime Adapter Layer
+- [x] 2.1 Add a narrow `AgentRuntime` run/observer/result contract for headless jobs.
+- [x] 2.2 Register Claude Code and Codex adapters behind one `runAgentTask` entry point.
+- [x] 2.3 Add capability gating before runtime work starts.
+- [x] 2.4 Implement a Claude Code headless adapter using non-interactive print mode.
+- [x] 2.5 Implement a Codex headless adapter using `codex exec`.
+- [x] 2.6 Add focused tests for adapter arguments, process cancellation, auth failure classification, and stderr filtering.
+- [ ] 2.7 Migrate ordinary desktop chat streaming through the job layer. This is intentionally deferred to the later `source=desktop` migration phase.
 
 ## 3. Durable Job Store
 - [x] 3.1 Add Drizzle schema and migration for `agent_jobs`.
@@ -24,49 +32,53 @@
 - [x] 3.6 Ensure provider secrets are never stored in job rows or event payloads.
 
 ## 4. One-Shot CLI Runner
-- [ ] 4.1 Upgrade `resources/cli/locus` to support `open`, `run`, and `jobs` command dispatch on macOS without using `open -a` for headless commands.
-- [ ] 4.2 Upgrade `resources/cli/locus.cmd` with equivalent synchronous Windows command dispatch without detached `start` for headless commands.
-- [ ] 4.3 Add headless CLI argument handling in the Electron main process before BrowserWindow creation.
-- [ ] 4.4 Implement `locus run` by launching the Electron main process in headless CLI mode, not by duplicating runtime logic in a standalone Node script.
-- [ ] 4.5 Ensure headless CLI mode bypasses GUI single-instance focus/window behavior while preserving normal GUI single-instance behavior for `locus open`.
-- [ ] 4.6 Support `--cwd`, `--runtime`, `--mode`, `--prompt`, stdin, and output format options.
-- [ ] 4.7 Support `text`, `json`, and `stream-json` output formats with documented exit codes.
-- [ ] 4.8 Keep stdout JSON-only in structured modes and route diagnostics to stderr.
-- [ ] 4.9 Persist one-shot runs as local jobs linked to project/chat/sub-chat where cheap and unambiguous, without requiring chat/sub-chat creation.
-- [ ] 4.10 Add CLI parsing tests and local smoke commands for macOS and Windows shims.
+- [x] 4.1 Upgrade `resources/cli/locus` to support `open`, `run`, and `jobs` command dispatch on macOS without using `open -a` for headless commands.
+- [x] 4.2 Upgrade `resources/cli/locus.cmd` with equivalent synchronous Windows command dispatch without detached `start` for headless commands.
+- [x] 4.3 Add headless CLI argument handling in the Electron main process before BrowserWindow creation.
+- [x] 4.4 Implement `locus run` by launching the Electron main process in headless CLI mode, not by duplicating runtime logic in a standalone Node script.
+- [x] 4.5 Ensure headless CLI mode bypasses GUI single-instance focus/window behavior while preserving normal GUI single-instance behavior for `locus open`.
+- [x] 4.6 Support `--cwd`, `--runtime`, `--mode`, `--prompt`, stdin, and output format options.
+- [x] 4.7 Support `text`, `json`, and `stream-json` output formats with documented exit codes.
+- [x] 4.8 Keep stdout JSON-only in structured modes and route diagnostics to stderr.
+- [x] 4.9 Persist one-shot runs as local jobs without requiring chat/sub-chat creation.
+- [x] 4.10 Add CLI parsing tests and macOS/Windows shim source tests.
+- [x] 4.11 Run macOS fake and real headless smoke through Electron headless mode.
+- [ ] 4.12 Run real Windows headless smoke on a Windows host or CI runner.
 
 ## 5. Job Management CLI
-- [ ] 5.1 Implement `locus jobs list` with text and JSON output.
-- [ ] 5.2 Implement `locus jobs show <job-id>`.
-- [ ] 5.3 Implement `locus jobs logs <job-id>` and `--follow`.
-- [ ] 5.4 Implement `locus jobs cancel <job-id>` for running jobs.
-- [ ] 5.5 Implement `locus jobs retry <job-id>` for failed, canceled, and interrupted jobs.
-- [ ] 5.6 Add diagnostics for missing app database, invalid cwd, unsupported runtime, and unavailable credentials.
+- [x] 5.1 Implement `locus jobs list` with text and JSON output.
+- [x] 5.2 Implement `locus jobs show <job-id>`.
+- [x] 5.3 Implement `locus jobs logs <job-id>` and `--follow`.
+- [x] 5.4 Implement `locus jobs cancel <job-id>` for running and queued jobs.
+- [x] 5.5 Implement `locus jobs retry <job-id>` for failed, canceled, and interrupted jobs.
+- [x] 5.6 Add diagnostics for invalid cwd, unsupported runtime/mode, unavailable credentials, auth failure, and process failure.
 
 ## 6. Desktop Job Surface
-- [ ] 6.1 Add a `jobs` tRPC router for list, detail, events, cancel, and retry.
-- [ ] 6.2 Show active and recent jobs in the existing agents/workbench area.
-- [ ] 6.3 Add status filters, event/log detail, and linked chat/sub-chat navigation.
-- [ ] 6.4 Show reconnect/interrupted states for jobs created by CLI or daemon.
-- [ ] 6.5 Reuse existing GitHub confirmation and diff/review surfaces instead of adding parallel write paths.
-- [ ] 6.6 Gate runtime-specific UI controls from the `AgentRuntime` capability manifest instead of provider-name checks where capability behavior matters.
-- [ ] 6.7 Show degraded/unsupported runtime capabilities clearly and link Codex parity gaps to the separate `upgrade-codex-runtime-parity` change instead of hiding them behind provider-specific branches.
-- [ ] 6.8 Keep ordinary desktop chat streaming on the existing chat/sub-chat path until a later explicit migration phase.
-- [ ] 6.9 Run a real desktop smoke where a CLI-created job appears in the app.
-- [ ] 6.10 Run real desktop chat smoke verifying supported runtime behavior still works and unsupported/degraded runtime capabilities are visible instead of falsely enabled.
+- [x] 6.1 Add an `agentJobs` tRPC router for list, events/logs, cancel, and retry.
+- [x] 6.2 Show active and recent CLI/headless jobs in the existing Agent Workbench.
+- [x] 6.3 Add status filters, event/log detail, and linked chat/sub-chat navigation hooks.
+- [x] 6.4 Show queued, running, succeeded, failed, canceled, and interrupted states for CLI/headless jobs.
+- [x] 6.5 Reuse existing app surfaces for local file opening instead of adding parallel write paths.
+- [x] 6.6 Keep renderer-visible job data sanitized and avoid exposing persisted input JSON.
+- [x] 6.7 Show runtime/auth/process failures as job status and event data without claiming runtime parity.
+- [x] 6.8 Keep ordinary desktop chat streaming on the existing chat/sub-chat path until a later explicit migration phase.
+- [x] 6.9 Run a real desktop smoke where a CLI-created job appears in the app.
+- [ ] 6.10 Run real desktop chat migration smoke after `source=desktop` job migration is designed and implemented.
 
 ## 7. Verification
-- [ ] 7.1 Run `openspec validate add-headless-agent-jobs --strict --no-interactive`.
-- [ ] 7.2 Run focused Bun tests for runtime core, job store, and CLI parsing.
-- [ ] 7.3 Run focused tests proving runtime capability declarations are enforced and caller gating handles degraded/unsupported states.
-- [ ] 7.4 Run `bun run ts:check`.
-- [ ] 7.5 Run `bun run build`.
-- [ ] 7.6 Smoke test `locus run`, `locus jobs list`, `locus jobs logs`, and cancellation.
-- [ ] 7.7 Smoke test desktop reconnect/listing for CLI-created jobs.
-- [ ] 7.8 Document unsupported first-slice surfaces clearly if Windows CLI parity, daemon, schedule, ACP surfaces, or Codex parity capabilities are deferred.
+- [x] 7.1 Run `openspec validate add-headless-agent-jobs --strict --no-interactive`.
+- [x] 7.2 Run focused Bun tests for runtime adapters, job store, CLI parsing/dispatch, process runner, shims, and desktop job UI.
+- [x] 7.3 Run tests proving runtime capability declarations are consumed and unsupported/degraded behavior stays gated.
+- [x] 7.4 Run `bun run ts:check`.
+- [x] 7.5 Run `bun run build`.
+- [x] 7.6 Smoke test macOS `locus run`, `locus jobs list`, and `locus jobs logs` via Electron headless mode.
+- [x] 7.7 Smoke test desktop listing/log viewing for a CLI-created job and save screenshot/video evidence.
+- [x] 7.8 Document deferred daemon, schedule, ACP, ordinary desktop chat migration, Codex parity, and Windows real-smoke evidence.
+- [ ] 7.9 Run equivalent Windows smoke and attach evidence.
 
 ## Future Follow-Up Proposals
 These items are intentionally not implementation tasks for this change:
+- Ordinary desktop chat job migration: make desktop chats create/manage `source=desktop` jobs while preserving current chat, message, stream, and session behavior.
 - Local daemon and recovery: enqueue, cancel, status, log-follow IPC, interrupted recovery, and bounded concurrency.
 - Local scheduling: create, pause, resume, run-now, delete, and visible audit history for scheduled jobs.
 - Protocol compatibility: `locus acp` stdio server backed by the same runner core with strict JSON-RPC stdout behavior.
