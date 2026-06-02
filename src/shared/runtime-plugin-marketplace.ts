@@ -47,6 +47,81 @@ export interface RuntimeMarketplaceDiagnostic {
   exitCode?: number
 }
 
+export type RuntimePluginWriteActionId =
+  | "codex.marketplace.add"
+  | "codex.marketplace.upgrade"
+  | "codex.marketplace.remove"
+  | "codex.plugin.add"
+  | "codex.plugin.remove"
+  | "claude.marketplace.add"
+  | "claude.marketplace.update"
+  | "claude.marketplace.remove"
+  | "claude.plugin.install"
+  | "claude.plugin.update"
+  | "claude.plugin.enable"
+  | "claude.plugin.disable"
+  | "claude.plugin.uninstall"
+
+export type RuntimePluginWriteScope =
+  | "user"
+  | "project"
+  | "local"
+  | "managed"
+
+export interface RuntimePluginWriteTarget {
+  pluginId?: string
+  marketplace?: string
+  source?: string
+  scope?: RuntimePluginWriteScope
+}
+
+export interface RuntimePluginWriteActionRequest {
+  runtime: PluginRuntime
+  action: RuntimePluginWriteActionId
+  target: RuntimePluginWriteTarget
+}
+
+export interface RuntimePluginWritePreview {
+  previewId: string
+  confirmationToken?: string
+  operationFingerprint: string
+  runtime: PluginRuntime
+  action: RuntimePluginWriteActionId
+  label: string
+  command: "codex" | "claude"
+  args: string[]
+  commandDisplay: string
+  target: RuntimePluginWriteTarget
+  targetLabel: string
+  destructive: boolean
+  requiresTargetConfirmation: boolean
+  canExecute: boolean
+  blockedReason?: string
+  impact: string
+  reloadHint?: string
+  expiresAt: string
+}
+
+export interface RuntimePluginWriteExecutionRequest {
+  previewId: string
+  confirmationToken: string
+  targetConfirmation?: string
+}
+
+export type RuntimePluginWriteExecutionStatus =
+  | "success"
+  | "failed"
+
+export interface RuntimePluginWriteExecutionResult {
+  status: RuntimePluginWriteExecutionStatus
+  preview: RuntimePluginWritePreview
+  stdout: string
+  stderr: string
+  diagnostics: RuntimeMarketplaceDiagnostic[]
+  refreshedSnapshot?: RuntimePluginMarketplaceSnapshot
+  executedAt: string
+}
+
 export interface RuntimePluginComponentSummary {
   skills?: number
   mcpServers?: number

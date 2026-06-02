@@ -101,8 +101,14 @@ import {
   getRuntimePluginMarketplaceSnapshot,
 } from "../../plugins/runtime-marketplace"
 import type {
+  RuntimePluginWriteExecutionResult,
+  RuntimePluginWritePreview,
   RuntimePluginMarketplaceSnapshot,
 } from "../../../../shared/runtime-plugin-marketplace"
+import {
+  executeRuntimePluginWriteAction,
+  previewRuntimePluginWriteAction,
+} from "../../plugins/runtime-marketplace-actions"
 
 export interface PluginWithComponents {
   runtime: PluginRuntime
@@ -164,6 +170,46 @@ export interface PluginWithComponents {
   }
   mcpApprovalIdentifiers: Record<string, string>
 }
+
+const runtimePluginWriteActionIds = [
+  "codex.marketplace.add",
+  "codex.marketplace.upgrade",
+  "codex.marketplace.remove",
+  "codex.plugin.add",
+  "codex.plugin.remove",
+  "claude.marketplace.add",
+  "claude.marketplace.update",
+  "claude.marketplace.remove",
+  "claude.plugin.install",
+  "claude.plugin.update",
+  "claude.plugin.enable",
+  "claude.plugin.disable",
+  "claude.plugin.uninstall",
+] as const
+
+const runtimePluginWriteScopes = [
+  "user",
+  "project",
+  "local",
+  "managed",
+] as const
+
+const runtimePluginWriteActionRequestSchema = z.object({
+  runtime: z.enum(["claude", "codex"]),
+  action: z.enum(runtimePluginWriteActionIds),
+  target: z.object({
+    pluginId: z.string().optional(),
+    marketplace: z.string().optional(),
+    source: z.string().optional(),
+    scope: z.enum(runtimePluginWriteScopes).optional(),
+  }).strict(),
+}).strict()
+
+const runtimePluginWriteExecutionRequestSchema = z.object({
+  previewId: z.string().min(1),
+  confirmationToken: z.string().min(1),
+  targetConfirmation: z.string().optional(),
+}).strict()
 
 interface ScannedPlugin {
   plugin: PluginInfo
@@ -721,6 +767,46 @@ export const pluginsRouter = router({
         return [await getRuntimePluginMarketplaceSnapshot(input.runtime)]
       }
       return getAllRuntimePluginMarketplaceSnapshots()
+    }),
+
+  previewRuntimePluginWriteAction: publicProcedure
+    .input(runtimePluginWriteActionRequestSchema)
+    .mutation(async ({ input }): Promise<RuntimePluginWritePreview> => {
+      try {
+        const safeMode = await getPluginSafeModeState()
+        return await previewRuntimePluginWriteAction(input, {
+          safeModeEnabled: safeMode.enabled,
+        })
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: error instanceof Error
+            ? error.message
+            : "Runtime plugin write preview failed.",
+        })
+      }
+    }),
+
+  executeRuntimePluginWriteAction: publicProcedure
+    .input(runtimePluginWriteExecutionRequestSchema)
+    .mutation(async ({ input }): Promise<RuntimePluginWriteExecutionResult> => {
+      try {
+        const safeMode = await getPluginSafeModeState()
+        const result = await executeRuntimePluginWriteAction(input, {
+          safeModeEnabled: safeMode.enabled,
+        })
+        if (result.status === "success") {
+          clearPluginCache()
+        }
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: error instanceof Error
+            ? error.message
+            : "Runtime plugin write action failed.",
+        })
+      }
     }),
 
   previewStoreCandidate: publicProcedure

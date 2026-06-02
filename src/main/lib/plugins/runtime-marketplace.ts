@@ -164,7 +164,7 @@ async function defaultRuntimeCommandRunner(
   }
 }
 
-function resolveBundledRuntimeCommandPath(command: string): string {
+export function resolveBundledRuntimeCommandPath(command: string): string {
   const binaryName = process.platform === "win32" ? `${command}.exe` : command
   const packagedResourcesPath = typeof process.resourcesPath === "string"
     ? path.join(process.resourcesPath, "bin", binaryName)
