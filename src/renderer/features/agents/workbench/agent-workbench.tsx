@@ -8,11 +8,16 @@ import {
   Circle,
   ExternalLink,
   FileDiff,
+  FolderOpen,
   GitBranch,
   GitPullRequest,
   Loader2,
   MessageSquare,
   RefreshCw,
+  RotateCcw,
+  ScrollText,
+  Terminal,
+  XCircle,
 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
@@ -61,6 +66,13 @@ import { useAgentSubChatStore } from "../stores/sub-chat-store"
 
 type WorkbenchFilter = "all" | "running" | "needs-review" | "prs" | "blocked" | "clean"
 type WorkbenchTaskStatus = "running" | "blocked" | "needs-review" | "has-pr" | "clean" | "archived"
+type HeadlessJobStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "canceled"
+  | "interrupted"
 
 type WorkbenchTask = {
   id: string
@@ -103,6 +115,41 @@ type WorkbenchTask = {
   }
 }
 
+type HeadlessJob = {
+  id: string
+  retryOfJobId: string | null
+  attempt: number
+  source: string
+  runtime: string
+  status: HeadlessJobStatus
+  mode: "plan" | "agent"
+  cwd: string
+  chatId: string | null
+  subChatId: string | null
+  promptPreview: string | null
+  createdAt: Date | string | null
+  startedAt: Date | string | null
+  finishedAt: Date | string | null
+  exitCode: number | null
+  errorCode: string | null
+  errorMessage: string | null
+  result: unknown
+  workerId: string | null
+  workerPid: number | null
+  heartbeatAt: Date | string | null
+  cancelRequestedAt: Date | string | null
+  cancelRequestedBy: string | null
+}
+
+type HeadlessJobEvent = {
+  id: string
+  jobId: string
+  sequence: number
+  type: string
+  payload: unknown
+  createdAt: Date | string | null
+}
+
 type DraftPrFormState = {
   title: string
   body: string
@@ -141,6 +188,50 @@ function getStatusClassName(status: WorkbenchTaskStatus): string {
   if (status === "has-pr") return "text-emerald-500"
   if (status === "clean") return "text-muted-foreground"
   return "text-muted-foreground"
+}
+
+function getHeadlessJobStatusIcon(status: HeadlessJobStatus) {
+  if (status === "queued" || status === "running") return Loader2
+  if (status === "succeeded") return CheckCircle2
+  if (status === "failed" || status === "interrupted") return AlertCircle
+  if (status === "canceled") return XCircle
+  return Circle
+}
+
+function getHeadlessJobStatusClassName(status: HeadlessJobStatus): string {
+  if (status === "queued" || status === "running") return "text-blue-500"
+  if (status === "succeeded") return "text-emerald-500"
+  if (status === "failed" || status === "interrupted") return "text-destructive"
+  if (status === "canceled") return "text-muted-foreground"
+  return "text-muted-foreground"
+}
+
+function isActiveHeadlessJob(job: HeadlessJob): boolean {
+  return job.status === "queued" || job.status === "running"
+}
+
+function canRetryHeadlessJob(job: HeadlessJob): boolean {
+  return (
+    job.status === "failed" ||
+    job.status === "canceled" ||
+    job.status === "interrupted"
+  )
+}
+
+function formatHeadlessRuntime(runtime: string): string {
+  if (runtime === "claude-code") return "Claude Code"
+  if (runtime === "codex") return "Codex"
+  return runtime
+}
+
+function formatPayload(payload: unknown): string {
+  if (payload === null || payload === undefined) return ""
+  if (typeof payload === "string") return payload
+  try {
+    return JSON.stringify(payload, null, 2)
+  } catch {
+    return String(payload)
+  }
 }
 
 function getReviewDisabledReason(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"]) {
@@ -355,6 +446,202 @@ function TaskCard({
   )
 }
 
+function HeadlessJobCard({
+  job,
+  onOpenLogs,
+  onOpenCwd,
+  onOpenLinkedChat,
+  onCancel,
+  onRetry,
+  isCanceling,
+  isRetrying,
+}: {
+  job: HeadlessJob
+  onOpenLogs: (job: HeadlessJob) => void
+  onOpenCwd: (job: HeadlessJob) => void
+  onOpenLinkedChat: (job: HeadlessJob) => void
+  onCancel: (job: HeadlessJob) => void
+  onRetry: (job: HeadlessJob) => void
+  isCanceling: boolean
+  isRetrying: boolean
+}) {
+  const { t } = useI18n()
+  const StatusIcon = getHeadlessJobStatusIcon(job.status)
+  const createdAt = formatUpdatedAt(job.createdAt)
+  const active = isActiveHeadlessJob(job)
+  const retryable = canRetryHeadlessJob(job)
+
+  return (
+    <article className="rounded-lg border border-border bg-background px-4 py-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <StatusIcon
+              className={cn(
+                "h-4 w-4 flex-shrink-0",
+                getHeadlessJobStatusClassName(job.status),
+                active && "animate-spin",
+              )}
+            />
+            <h3 className="truncate text-sm font-medium text-foreground">
+              {job.promptPreview || t("workbench.headlessJobUntitled")}
+            </h3>
+          </div>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex min-w-0 items-center gap-1">
+              <Terminal className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{formatHeadlessRuntime(job.runtime)}</span>
+            </span>
+            <span className="uppercase">{job.mode}</span>
+            <span className="truncate">{job.cwd}</span>
+            {createdAt && <span>{createdAt}</span>}
+          </div>
+        </div>
+
+        <span className="flex-shrink-0 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+          {t(`workbench.jobStatus.${job.status}` as TranslationKey)}
+        </span>
+      </div>
+
+      {(job.errorMessage || job.cancelRequestedAt) && (
+        <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">
+          {job.errorMessage ||
+            t("workbench.cancelRequested", {
+              by: job.cancelRequestedBy || "desktop",
+            })}
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          onClick={() => onOpenLogs(job)}
+        >
+          <ScrollText className="mr-1.5 h-3.5 w-3.5" />
+          {t("workbench.logs")}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          onClick={() => onOpenCwd(job)}
+        >
+          <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+          {t("workbench.openCwd")}
+        </Button>
+        {job.chatId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            onClick={() => onOpenLinkedChat(job)}
+          >
+            <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+            {t("workbench.openLinkedChat")}
+          </Button>
+        )}
+        {active && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            disabled={isCanceling}
+            onClick={() => onCancel(job)}
+          >
+            {isCanceling ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <XCircle className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {t("workbench.cancelJob")}
+          </Button>
+        )}
+        {retryable && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            disabled={isRetrying}
+            onClick={() => onRetry(job)}
+          >
+            {isRetrying ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {t("workbench.retryJob")}
+          </Button>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function HeadlessJobLogsDialog({
+  job,
+  events,
+  isLoading,
+  isOpen,
+  onOpenChange,
+}: {
+  job: HeadlessJob | null
+  events: HeadlessJobEvent[]
+  isLoading: boolean
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useI18n()
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[760px] p-0">
+        <DialogHeader className="border-b border-border px-5 py-4">
+          <DialogTitle className="text-base">
+            {t("workbench.jobLogs")}
+          </DialogTitle>
+          <DialogDescription className="truncate">
+            {job?.id || t("workbench.headlessJobUntitled")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[68vh] overflow-y-auto px-5 py-4">
+          {isLoading ? (
+            <div className="flex items-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t("workbench.loadingLogs")}
+            </div>
+          ) : events.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("workbench.noLogs")}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="grid grid-cols-[3.5rem_9rem_minmax(0,1fr)] gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs"
+                >
+                  <span className="font-mono text-muted-foreground">
+                    #{event.sequence}
+                  </span>
+                  <span className="truncate font-medium text-foreground">
+                    {event.type}
+                  </span>
+                  <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-muted-foreground">
+                    {formatPayload(event.payload)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function DraftPrDialog({
   task,
   form,
@@ -546,6 +833,8 @@ export function AgentWorkbench() {
   const [isDraftPrDialogOpen, setIsDraftPrDialogOpen] = useState(false)
   const [isCreateDraftPrDialogOpen, setIsCreateDraftPrDialogOpen] =
     useState(false)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [mutatingJobId, setMutatingJobId] = useState<string | null>(null)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
@@ -559,6 +848,9 @@ export function AgentWorkbench() {
     trpc.githubWorkflow.prepareDraftPullRequest.useMutation()
   const createDraftPrMutation =
     trpc.githubWorkflow.createDraftPullRequest.useMutation()
+  const cancelJobMutation = trpc.agentJobs.cancel.useMutation()
+  const retryJobMutation = trpc.agentJobs.retry.useMutation()
+  const openInFinderMutation = trpc.external.openInFinder.useMutation()
   const trpcUtils = trpc.useUtils()
   const runningSubChatIds = useMemo(
     () =>
@@ -587,8 +879,40 @@ export function AgentWorkbench() {
     },
   )
 
+  const jobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "cli", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
+          ?.jobs ?? []) as HeadlessJob[]
+        return jobs.some(isActiveHeadlessJob) ? 5000 : false
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const selectedJob = useMemo(
+    () =>
+      ((jobsQuery.data?.jobs ?? []) as HeadlessJob[]).find(
+        (job) => job.id === selectedJobId,
+      ) ?? null,
+    [jobsQuery.data?.jobs, selectedJobId],
+  )
+  const jobLogsQuery = trpc.agentJobs.logs.useQuery(
+    { jobId: selectedJobId ?? "", afterSequence: 0 },
+    {
+      enabled: !!selectedJobId,
+      refetchInterval: selectedJob && isActiveHeadlessJob(selectedJob)
+        ? 3000
+        : false,
+      placeholderData: (previous) => previous,
+    },
+  )
+
   const tasks = (tasksQuery.data?.tasks ?? []) as WorkbenchTask[]
+  const headlessJobs = (jobsQuery.data?.jobs ?? []) as HeadlessJob[]
+  const headlessJobEvents = (jobLogsQuery.data?.events ?? []) as HeadlessJobEvent[]
   const counts = tasksQuery.data?.counts
+  const isRefreshing = tasksQuery.isFetching || jobsQuery.isFetching
   const canCreateDraftPr =
     !!draftPrForm?.title.trim() &&
     !!draftPrForm.body.trim() &&
@@ -636,6 +960,63 @@ export function AgentWorkbench() {
       window.desktopApi.openExternal(task.pr.url)
     }
   }, [])
+
+  const handleOpenJobLogs = useCallback((job: HeadlessJob) => {
+    setSelectedJobId(job.id)
+  }, [])
+
+  const handleOpenJobCwd = useCallback(
+    (job: HeadlessJob) => {
+      openInFinderMutation.mutate(job.cwd)
+    },
+    [openInFinderMutation],
+  )
+
+  const handleOpenLinkedJobChat = useCallback(
+    (job: HeadlessJob) => {
+      if (!job.chatId) return
+      const store = useAgentSubChatStore.getState()
+      setSelectedDraftId(null)
+      setShowNewChatForm(false)
+      setDesktopView(null)
+      store.setChatId(job.chatId)
+      if (job.subChatId) {
+        store.addToOpenSubChats(job.subChatId)
+        store.setActiveSubChat(job.subChatId)
+      }
+      setSelectedChatId(job.chatId)
+    },
+    [setDesktopView, setSelectedChatId, setSelectedDraftId, setShowNewChatForm],
+  )
+
+  const handleCancelJob = useCallback(
+    async (job: HeadlessJob) => {
+      setMutatingJobId(job.id)
+      try {
+        await cancelJobMutation.mutateAsync({ jobId: job.id })
+        await Promise.all([
+          trpcUtils.agentJobs.list.invalidate(),
+          trpcUtils.agentJobs.logs.invalidate({ jobId: job.id, afterSequence: 0 }),
+        ])
+      } finally {
+        setMutatingJobId(null)
+      }
+    },
+    [cancelJobMutation, trpcUtils],
+  )
+
+  const handleRetryJob = useCallback(
+    async (job: HeadlessJob) => {
+      setMutatingJobId(job.id)
+      try {
+        await retryJobMutation.mutateAsync({ jobId: job.id })
+        await trpcUtils.agentJobs.list.invalidate()
+      } finally {
+        setMutatingJobId(null)
+      }
+    },
+    [retryJobMutation, trpcUtils],
+  )
 
   const handlePreparePr = useCallback(
     async (task: WorkbenchTask) => {
@@ -778,13 +1159,16 @@ export function AgentWorkbench() {
             variant="outline"
             size="sm"
             className="h-8 gap-1.5 text-xs"
-            onClick={() => tasksQuery.refetch()}
-            disabled={tasksQuery.isFetching}
+            onClick={() => {
+              void tasksQuery.refetch()
+              void jobsQuery.refetch()
+            }}
+            disabled={isRefreshing}
           >
             <RefreshCw
               className={cn(
                 "h-3.5 w-3.5",
-                tasksQuery.isFetching && "animate-spin",
+                isRefreshing && "animate-spin",
               )}
             />
             {t("workbench.refresh")}
@@ -822,12 +1206,12 @@ export function AgentWorkbench() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {tasksQuery.isLoading ? (
+        {jobsQuery.isLoading && tasksQuery.isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {t("workbench.loading")}
           </div>
-        ) : tasks.length === 0 ? (
+        ) : tasks.length === 0 && headlessJobs.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-sm text-center">
               <Circle className="mx-auto h-6 w-6 text-muted-foreground" />
@@ -840,21 +1224,68 @@ export function AgentWorkbench() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-3">
-            {tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onOpen={openTask}
-                onReview={handleReview}
-                onOpenPr={handleOpenPr}
-                onPreparePr={handlePreparePr}
-                isPreparingPr={preparingPrTaskId === task.id}
-              />
-            ))}
+          <div className="space-y-5">
+            {headlessJobs.length > 0 && (
+              <section className="space-y-2">
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-medium text-foreground">
+                      {t("workbench.headlessJobs")}
+                    </h2>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {t("workbench.headlessJobsSubtitle")}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-3">
+                  {headlessJobs.map((job) => (
+                    <HeadlessJobCard
+                      key={job.id}
+                      job={job}
+                      onOpenLogs={handleOpenJobLogs}
+                      onOpenCwd={handleOpenJobCwd}
+                      onOpenLinkedChat={handleOpenLinkedJobChat}
+                      onCancel={handleCancelJob}
+                      onRetry={handleRetryJob}
+                      isCanceling={
+                        mutatingJobId === job.id && cancelJobMutation.isPending
+                      }
+                      isRetrying={
+                        mutatingJobId === job.id && retryJobMutation.isPending
+                      }
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {tasks.length > 0 && (
+              <div className="grid gap-3">
+                {tasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onOpen={openTask}
+                    onReview={handleReview}
+                    onOpenPr={handleOpenPr}
+                    onPreparePr={handlePreparePr}
+                    isPreparingPr={preparingPrTaskId === task.id}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
+      <HeadlessJobLogsDialog
+        job={selectedJob}
+        events={headlessJobEvents}
+        isLoading={jobLogsQuery.isLoading}
+        isOpen={!!selectedJobId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedJobId(null)
+        }}
+      />
       <DraftPrDialog
         task={draftPrTask}
         form={draftPrForm}
