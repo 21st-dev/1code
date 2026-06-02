@@ -1,7 +1,8 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
-import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getPluginComponentPaths } from "../../plugins"
+import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
 import { resolveDirentType } from "../../fs/dirent"
 import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import { getEnabledPlugins } from "./claude-settings"
@@ -152,15 +153,11 @@ export async function loadAgent(
   }
 
   // Search in plugin directories
-  const [enabledPluginSources, installedPlugins] = await Promise.all([
-    getEnabledPlugins(),
-    discoverInstalledPlugins(),
-  ])
-  const enabledPlugins = installedPlugins.filter(
-    (p) => enabledPluginSources.includes(p.source),
-  )
+  const enabledPluginSources = await getEnabledPlugins()
+  const allowedPluginComponents =
+    await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
   const pluginResults = await Promise.all(
-    enabledPlugins.map(async (plugin) => {
+    allowedPluginComponents.map(async ({ plugin }) => {
       const paths = getPluginComponentPaths(plugin)
       const agentPath = path.join(paths.agents, `${name}.md`)
       try {

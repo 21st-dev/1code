@@ -15,6 +15,7 @@ import {
   type PluginUpdateReviewMetadata,
   type PluginUpdateReviewStatus,
 } from "../../../shared/plugin-update-review"
+import type { PluginSafeModeState } from "../../../shared/plugin-safety-gates"
 import type { McpServerConfig } from "../claude-config"
 
 const PLUGIN_REVIEW_STATE_VERSION = 1
@@ -33,6 +34,7 @@ interface PluginReviewStateRecord {
 interface PluginReviewState {
   schemaVersion: 1
   plugins: Record<string, PluginReviewStateRecord>
+  safeMode?: PluginSafeModeState
 }
 
 export interface PluginReviewScanInput {
@@ -42,6 +44,7 @@ export interface PluginReviewScanInput {
 
 export interface PluginReviewScanResult {
   state: PluginReviewState
+  safeMode: PluginSafeModeState
   metadataByPluginKey: Record<string, PluginUpdateReviewMetadata>
 }
 
@@ -159,7 +162,11 @@ export async function readPluginReviewState(
     if (state.schemaVersion !== PLUGIN_REVIEW_STATE_VERSION || !state.plugins) {
       return { schemaVersion: PLUGIN_REVIEW_STATE_VERSION, plugins: {} }
     }
-    return state
+    return {
+      schemaVersion: PLUGIN_REVIEW_STATE_VERSION,
+      plugins: state.plugins,
+      safeMode: normalizeSafeModeState(state.safeMode),
+    }
   } catch {
     return { schemaVersion: PLUGIN_REVIEW_STATE_VERSION, plugins: {} }
   }
@@ -172,12 +179,43 @@ export async function writePluginReviewState(
   await writeJsonAtomic(filePath, state)
 }
 
+export function normalizeSafeModeState(
+  value: PluginSafeModeState | undefined,
+): PluginSafeModeState {
+  return {
+    enabled: value?.enabled === true,
+    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
+  }
+}
+
+export async function getPluginSafeModeState(
+  filePath = getPluginReviewStatePath(),
+): Promise<PluginSafeModeState> {
+  const state = await readPluginReviewState(filePath)
+  return normalizeSafeModeState(state.safeMode)
+}
+
+export async function setPluginSafeModeEnabled(
+  enabled: boolean,
+  filePath = getPluginReviewStatePath(),
+  now = new Date(),
+): Promise<PluginSafeModeState> {
+  const state = await readPluginReviewState(filePath)
+  state.safeMode = {
+    enabled,
+    updatedAt: now.toISOString(),
+  }
+  await writePluginReviewState(state, filePath)
+  return state.safeMode
+}
+
 export async function recordPluginReviewScans(
   inputs: PluginReviewScanInput[],
   filePath = getPluginReviewStatePath(),
   now = new Date(),
 ): Promise<PluginReviewScanResult> {
   const state = await readPluginReviewState(filePath)
+  const safeMode = normalizeSafeModeState(state.safeMode)
   const metadataByPluginKey: Record<string, PluginUpdateReviewMetadata> = {}
   const seenAt = now.toISOString()
 
@@ -214,7 +252,7 @@ export async function recordPluginReviewScans(
   }
 
   await writePluginReviewState(state, filePath)
-  return { state, metadataByPluginKey }
+  return { state, safeMode, metadataByPluginKey }
 }
 
 export async function markPluginFingerprintReviewed(

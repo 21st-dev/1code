@@ -7,7 +7,8 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import { stripVTControlCharacters } from "node:util"
-import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { getPluginComponentPaths } from "../../plugins"
+import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
 import { resolveDirentType } from "../../fs/dirent"
 import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import { getEnabledPlugins } from "./claude-settings"
@@ -1047,14 +1048,10 @@ export const commandsRouter = router({
       }
 
       // Discover plugin commands
-      const [enabledPluginSources, installedPlugins] = await Promise.all([
-        getEnabledPlugins(),
-        discoverInstalledPlugins(),
-      ])
-      const enabledPlugins = installedPlugins.filter(
-        (p) => enabledPluginSources.includes(p.source),
-      )
-      const pluginCommandsPromises = enabledPlugins.map(async (plugin) => {
+      const enabledPluginSources = await getEnabledPlugins()
+      const allowedPluginComponents =
+        await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
+      const pluginCommandsPromises = allowedPluginComponents.map(async ({ plugin }) => {
         const paths = getPluginComponentPaths(plugin)
         try {
           const commands = await scanCommandsDirectory(paths.commands, "plugin")

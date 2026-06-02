@@ -1,0 +1,33 @@
+## 1. OpenSpec
+- [x] 1.1 Add proposal, design, tasks, and runtime-plugins spec delta.
+- [x] 1.2 Validate the change with strict OpenSpec checks.
+
+## 2. Shared Gate Model
+- [x] 2.1 Add shared safe-mode and review-gate types.
+- [x] 2.2 Add deterministic gate helpers for safe mode, review status, runtime, and MCP presence.
+- [x] 2.3 Add unit tests for gate decisions.
+
+## 3. Main Process Enforcement
+- [x] 3.1 Persist and read local plugin safe-mode state.
+- [x] 3.2 Return plugin safety gates from the plugins list API.
+- [x] 3.3 Gate Claude plugin enablement on reviewed current fingerprints.
+- [x] 3.4 Gate plugin MCP inclusion on safe mode and reviewed current fingerprints.
+- [x] 3.5 Skip the Locus-managed Claude plugin directory symlink when safe mode is enabled.
+- [x] 3.6 Add targeted tests for enablement, safe mode, and MCP gate behavior.
+
+## 4. UI / UX
+- [x] 4.1 Add visible safe-mode controls in Settings > Plugins.
+- [x] 4.2 Show per-plugin gate state and blocked reasons.
+- [x] 4.3 Disable or explain enable/MCP actions when gates block capability.
+- [x] 4.4 Localize all new copy in English and Simplified Chinese.
+- [x] 4.5 Add UI source-guard tests.
+
+## 5. Verification
+- [x] 5.1 Run targeted plugin and i18n tests.
+- [x] 5.2 Run full `bun run test`.
+- [x] 5.3 Run `bun run ts:check`.
+- [x] 5.4 Run `openspec validate add-plugin-safe-mode-gates --strict --no-interactive`.
+- [x] 5.5 Run `git diff --check`.
+- [x] 5.6 Start the dev app with a clean QA userData path and verify Settings > Plugins.
+- [x] 5.7 Record a real UI smoke video and screenshot.
+- [x] 5.8 Review UI/UX after smoke and fix issues found.

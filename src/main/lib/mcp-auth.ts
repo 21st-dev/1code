@@ -5,6 +5,7 @@ import { BrowserWindow } from 'electron';
 import {
   getMcpServerConfig,
   GLOBAL_MCP_PATH,
+  getLocusPluginMcpProvenance,
   readClaudeConfig,
   updateClaudeConfigAtomic,
   updateMcpServerConfig,
@@ -12,6 +13,10 @@ import {
 import { getClaudeShellEnvironment } from './claude/env';
 import { CraftOAuth, fetchOAuthMetadata, getMcpBaseUrl, type OAuthMetadata, type OAuthTokens } from './oauth';
 import { discoverPluginMcpServers } from './plugins';
+import {
+  getApprovedPluginMcpServers,
+  getEnabledPlugins,
+} from './trpc/routers/claude-settings';
 import { bringToFront } from './window';
 import { assertOfficialCloudAllowed, openExternalUrl } from './local-only';
 
@@ -198,12 +203,30 @@ export async function startMcpOAuth(
   // 1. Read server config from ~/.claude.json
   const config = await readClaudeConfig();
   let serverConfig = getMcpServerConfig(config, projectPath, serverName);
+  if (getLocusPluginMcpProvenance(serverConfig)) {
+    serverConfig = undefined;
+  }
 
   // Fallback: check plugin MCP servers if not found in ~/.claude.json
   if (!serverConfig?.url) {
-    const pluginMcpConfigs = await discoverPluginMcpServers();
+    const [
+      pluginMcpConfigs,
+      enabledPluginSources,
+      approvedPluginMcpServers,
+    ] = await Promise.all([
+      discoverPluginMcpServers(),
+      getEnabledPlugins(),
+      getApprovedPluginMcpServers(),
+    ]);
     for (const pluginConfig of pluginMcpConfigs) {
-      if (pluginConfig.mcpServers[serverName]) {
+      const identifier = pluginConfig.approvalIdentifiers[serverName];
+      if (
+        pluginConfig.mcpServers[serverName] &&
+        enabledPluginSources.includes(pluginConfig.pluginSource) &&
+        pluginConfig.reviewGate.canUseMcp &&
+        identifier &&
+        approvedPluginMcpServers.includes(identifier)
+      ) {
         serverConfig = pluginConfig.mcpServers[serverName];
         // Save plugin server config to ~/.claude.json so token storage works
         await updateClaudeConfigAtomic((cfg) => {
@@ -211,6 +234,12 @@ export async function startMcpOAuth(
             url: serverConfig!.url,
             type: serverConfig!.url?.endsWith('/sse') ? 'sse' : 'http',
             authType: 'oauth',
+            _locusPluginMcp: {
+              pluginSource: pluginConfig.pluginSource,
+              pluginReviewKey: pluginConfig.pluginReviewKey,
+              serverName,
+              approvalIdentifier: identifier,
+            },
           });
         });
         break;

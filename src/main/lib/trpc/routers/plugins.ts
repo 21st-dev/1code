@@ -1,15 +1,10 @@
 import { TRPCError } from "@trpc/server"
 import { router, publicProcedure } from "../index"
-import * as fs from "fs/promises"
-import * as path from "path"
 import { z } from "zod"
-import { resolveDirentType } from "../../fs/dirent"
-import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import {
   discoverAllRuntimePlugins,
   discoverPluginMcpServers,
   discoverPluginSources,
-  getPluginComponentPaths,
   clearPluginCache,
   type PluginSourceInfo,
   type PluginRuntime,
@@ -18,10 +13,24 @@ import {
   type PluginInfo,
 } from "../../plugins"
 import {
-  buildPluginManifestReviewDocument,
+  getPluginReviewStatePath,
+  getPluginSafeModeState,
   markPluginFingerprintReviewed,
   recordPluginReviewScans,
+  setPluginSafeModeEnabled,
 } from "../../plugins/update-review-state"
+import {
+  scanPluginReviewDocument,
+  type PluginComponent,
+} from "../../plugins/review-scan"
+import {
+  buildPluginControlledUiGate,
+  getControlledUiActionPermissionId,
+  type PluginControlledUiDiagnostic,
+  type PluginControlledUiField,
+  type PluginControlledUiGate,
+  type PluginControlledUiManifest,
+} from "../../../../shared/plugin-controlled-ui"
 import type {
   PluginSourcePin,
   PluginUpdateReviewMetadata,
@@ -35,12 +44,23 @@ import {
   type PluginTargetMode,
   type PluginUpdatePosture,
 } from "../../../../shared/plugin-target-modes"
+import {
+  buildPluginSafetyGate,
+  type PluginSafeModeState,
+  type PluginSafetyGate,
+} from "../../../../shared/plugin-safety-gates"
+import {
+  buildPluginDoctorReport,
+  type PluginDoctorReport,
+} from "../../../../shared/plugin-doctor"
 import { getEnabledPlugins } from "./claude-settings"
-
-export interface PluginComponent {
-  name: string
-  description?: string
-}
+import {
+  getControlledUiPermissionGrantStatus,
+  getControlledUiSettingsValues,
+  grantControlledUiPermission,
+  setControlledUiSettingValue,
+  type PluginControlledUiSettingValue,
+} from "../../plugins/controlled-ui-state"
 
 export interface PluginWithComponents {
   runtime: PluginRuntime
@@ -62,8 +82,19 @@ export interface PluginWithComponents {
   reviewStatus: PluginReviewStatus
   updatePosture: PluginUpdatePosture
   updateReview: PluginUpdateReviewMetadata
+  safetyGate: PluginSafetyGate
   sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
+  controlledUi: {
+    manifestPresent: boolean
+    manifestPath?: string
+    manifest?: PluginControlledUiManifest
+    diagnostics: PluginControlledUiDiagnostic[]
+    ignoredUnknownFields: string[]
+    actionGrantStatuses: Record<string, "current" | "stale" | "mismatch">
+    settingsValues: Record<string, Record<string, PluginControlledUiSettingValue>>
+    gate: PluginControlledUiGate
+  }
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -79,174 +110,13 @@ interface ScannedPlugin {
   plugin: PluginInfo
   reviewStatus: PluginReviewStatus
   diagnostics: PluginDiagnostic[]
+  targetMode: PluginTargetMode
+  executionStatus: PluginExecutionStatus
+  updatePosture: PluginUpdatePosture
   components: PluginWithComponents["components"]
+  controlledUi: Awaited<ReturnType<typeof scanPluginReviewDocument>>["controlledUi"]
   mcpApprovalIdentifiers: Record<string, string>
-  reviewDocument: ReturnType<typeof buildPluginManifestReviewDocument>
-}
-
-/**
- * Validate entry name for security (prevent path traversal)
- */
-function isValidEntryName(name: string): boolean {
-  return !name.includes("..") && !name.includes("/") && !name.includes("\\")
-}
-
-/**
- * Scan commands directory and return component info
- */
-async function scanPluginCommands(dir: string): Promise<PluginComponent[]> {
-  const components: PluginComponent[] = []
-
-  try {
-    await fs.access(dir)
-  } catch {
-    return components
-  }
-
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true })
-
-    for (const entry of entries) {
-      if (!isValidEntryName(entry.name)) continue
-
-      const fullPath = path.join(dir, entry.name)
-      const { isDirectory, isFile } = await resolveDirentType(dir, entry)
-
-      if (isDirectory) {
-        // Recursively scan nested directories for namespaced commands
-        const nested = await scanPluginCommands(fullPath)
-        components.push(...nested)
-      } else if (isFile && entry.name.endsWith(".md")) {
-        try {
-          const content = await fs.readFile(fullPath, "utf-8")
-          const { data } = parseMarkdownFrontmatter(content)
-          const baseName = entry.name.replace(/\.md$/, "")
-          components.push({
-            name: typeof data.name === "string" ? data.name : baseName,
-            description:
-              typeof data.description === "string" ? data.description : undefined,
-          })
-        } catch {
-          // Skip files that can't be read
-        }
-      }
-    }
-  } catch {
-    // Directory read failed
-  }
-
-  return components
-}
-
-/**
- * Scan skills directory and return component info
- */
-async function scanPluginSkills(dir: string): Promise<PluginComponent[]> {
-  const components: PluginComponent[] = []
-
-  try {
-    await fs.access(dir)
-  } catch {
-    return components
-  }
-
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true })
-
-    for (const entry of entries) {
-      if (!isValidEntryName(entry.name)) continue
-
-      const { isDirectory } = await resolveDirentType(dir, entry)
-      if (!isDirectory) continue
-
-      const skillMdPath = path.join(dir, entry.name, "SKILL.md")
-      try {
-        const content = await fs.readFile(skillMdPath, "utf-8")
-        const { data } = parseMarkdownFrontmatter(content)
-        components.push({
-          name: typeof data.name === "string" ? data.name : entry.name,
-          description:
-            typeof data.description === "string" ? data.description : undefined,
-        })
-      } catch {
-        // Skill directory doesn't have SKILL.md - skip
-      }
-    }
-  } catch {
-    // Directory read failed
-  }
-
-  return components
-}
-
-/**
- * Scan agents directory and return component info
- */
-async function scanPluginAgents(dir: string): Promise<PluginComponent[]> {
-  const components: PluginComponent[] = []
-
-  try {
-    await fs.access(dir)
-  } catch {
-    return components
-  }
-
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true })
-
-    for (const entry of entries) {
-      if (!entry.name.endsWith(".md") || !isValidEntryName(entry.name)) continue
-
-      const { isFile } = await resolveDirentType(dir, entry)
-      if (!isFile) continue
-
-      const fullPath = path.join(dir, entry.name)
-      try {
-        const content = await fs.readFile(fullPath, "utf-8")
-        const { data } = parseMarkdownFrontmatter(content)
-        const baseName = entry.name.replace(/\.md$/, "")
-        components.push({
-          name: typeof data.name === "string" ? data.name : baseName,
-          description:
-            typeof data.description === "string" ? data.description : undefined,
-        })
-      } catch {
-        // Skip files that can't be read
-      }
-    }
-  } catch {
-    // Directory read failed
-  }
-
-  return components
-}
-
-/**
- * Scan a plugin .mcp.json file and return server names.
- */
-async function scanPluginMcpServers(mcpJsonPath: string): Promise<string[]> {
-  try {
-    await fs.access(mcpJsonPath)
-  } catch {
-    return []
-  }
-
-  try {
-    const content = await fs.readFile(mcpJsonPath, "utf-8")
-    const parsed = JSON.parse(content) as Record<string, unknown>
-    const serversObj =
-      parsed.mcpServers &&
-      typeof parsed.mcpServers === "object" &&
-      !Array.isArray(parsed.mcpServers)
-        ? (parsed.mcpServers as Record<string, unknown>)
-        : parsed
-
-    return Object.entries(serversObj)
-      .filter(([, config]) => config && typeof config === "object" && !Array.isArray(config))
-      .map(([name]) => name)
-  } catch {
-    return []
-  }
+  reviewDocument: Awaited<ReturnType<typeof scanPluginReviewDocument>>["reviewDocument"]
 }
 
 function makeEmptyUpdateReviewMetadata(plugin: PluginInfo): PluginUpdateReviewMetadata {
@@ -268,16 +138,13 @@ async function getPluginMcpApprovalIdentifiers(
 }
 
 async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlugin> {
-  const paths = getPluginComponentPaths(plugin)
-
-  const [commands, skills, agents, mcpServers, mcpApprovalIdentifiers] =
+  const [reviewScan, mcpApprovalIdentifiers] =
     await Promise.all([
-      scanPluginCommands(paths.commands),
-      scanPluginSkills(paths.skills),
-      scanPluginAgents(paths.agents),
-      scanPluginMcpServers(paths.mcpServers),
+      scanPluginReviewDocument(plugin),
       getPluginMcpApprovalIdentifiers(plugin),
     ])
+  const { components, controlledUi, reviewDocument, targetModeSummary } = reviewScan
+  const { commands, skills, agents, mcpServers } = components
 
   const reviewStatus = getPluginReviewStatus({
     runtime: plugin.runtime,
@@ -285,54 +152,110 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
   })
   const diagnostics = getPluginDiagnostics({
     runtime: plugin.runtime,
-    targetMode: plugin.targetMode,
+    targetMode: targetModeSummary.targetMode,
     reviewStatus,
     baseDiagnostics: plugin.diagnostics,
   })
-  const components = {
-    commands,
-    skills,
-    agents,
-    mcpServers,
-  }
-  const reviewDocument = buildPluginManifestReviewDocument({
-    runtime: plugin.runtime,
-    source: plugin.source,
-    marketplace: plugin.marketplace,
-    name: plugin.name,
-    version: plugin.version,
-    targetMode: plugin.targetMode,
-    executionStatus: plugin.executionStatus,
-    updatePosture: plugin.updatePosture,
-    category: plugin.category,
-    homepage: plugin.homepage,
-    tags: plugin.tags,
-    componentPaths: plugin.componentPaths ?? {},
-    components: {
-      commands: commands.length,
-      skills: skills.length,
-      agents: agents.length,
-      mcpServers,
-    },
-    sourcePins: plugin.sourcePins,
-  })
-
   return {
     plugin,
     reviewStatus,
     diagnostics,
+    targetMode: targetModeSummary.targetMode,
+    executionStatus: targetModeSummary.executionStatus,
+    updatePosture: targetModeSummary.updatePosture,
     components,
+    controlledUi,
     mcpApprovalIdentifiers,
     reviewDocument,
   }
 }
 
-function toPluginWithComponents(input: {
+async function getControlledUiActionGrantStatuses(input: {
+  plugin: PluginInfo
+  scanned: ScannedPlugin
+  updateReview: PluginUpdateReviewMetadata
+}): Promise<Record<string, "current" | "stale" | "mismatch">> {
+  const commandButtons = input.scanned.controlledUi.manifest?.surfaces.filter(
+    (surface) => surface.type === "command-button",
+  ) ?? []
+  const entries = await Promise.all(commandButtons.map(async (surface) => {
+    if (surface.type !== "command-button") return undefined
+    const key = `${surface.id}:${surface.action.id}`
+    const status = await getControlledUiPermissionGrantStatus({
+      pluginReviewKey: input.plugin.reviewKey,
+      contributionFingerprint: input.updateReview.fingerprint,
+      contributionId: surface.id,
+      actionId: surface.action.id,
+      permissionId: getControlledUiActionPermissionId(surface.action),
+    })
+    return [key, status] as const
+  }))
+  return Object.fromEntries(entries.filter((entry): entry is [string, "current" | "stale" | "mismatch"] => Boolean(entry)))
+}
+
+async function getControlledUiSettingsValuesByContribution(input: {
+  plugin: PluginInfo
+  scanned: ScannedPlugin
+  updateReview: PluginUpdateReviewMetadata
+}): Promise<Record<string, Record<string, PluginControlledUiSettingValue>>> {
+  const settingsSections = input.scanned.controlledUi.manifest?.surfaces.filter(
+    (surface) => surface.type === "settings-section",
+  ) ?? []
+  const entries = await Promise.all(settingsSections.map(async (surface) => {
+    if (surface.type !== "settings-section") return undefined
+    const values = await getControlledUiSettingsValues({
+      pluginReviewKey: input.plugin.reviewKey,
+      contributionFingerprint: input.updateReview.fingerprint,
+      contributionId: surface.id,
+      fieldIds: surface.fields.map((field) => field.id),
+    })
+    return [surface.id, values] as const
+  }))
+  return Object.fromEntries(
+    entries.filter((entry): entry is [string, Record<string, PluginControlledUiSettingValue>] => Boolean(entry)),
+  )
+}
+
+async function toPluginWithComponents(input: {
   scanned: ScannedPlugin
   enabledPlugins: string[]
   updateReview?: PluginUpdateReviewMetadata
-}): PluginWithComponents {
+  safeMode: PluginSafeModeState
+}): Promise<PluginWithComponents> {
   const { plugin } = input.scanned
+  const updateReview = input.updateReview ?? makeEmptyUpdateReviewMetadata(plugin)
+  const [actionGrantStatuses, settingsValues] = await Promise.all([
+    getControlledUiActionGrantStatuses({
+      plugin,
+      scanned: input.scanned,
+      updateReview,
+    }),
+    getControlledUiSettingsValuesByContribution({
+      plugin,
+      scanned: input.scanned,
+      updateReview,
+    }),
+  ])
+  const grantValues = Object.values(actionGrantStatuses)
+  const hasControlledActions = grantValues.length > 0
+  const safetyGate = buildPluginSafetyGate({
+    runtime: plugin.runtime,
+    hasMcpServers: input.scanned.components.mcpServers.length > 0,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: input.safeMode.enabled,
+  })
+  const controlledUiGate = buildPluginControlledUiGate({
+    runtime: plugin.runtime,
+    targetMode: input.scanned.targetMode,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: input.safeMode.enabled,
+    hasValidManifest: Boolean(input.scanned.controlledUi.manifest),
+    permissionGranted: hasControlledActions
+      ? grantValues.every((status) => status === "current")
+      : undefined,
+    permissionStale: grantValues.some((status) => status === "stale"),
+  })
+
   return {
     runtime: plugin.runtime,
     reviewKey: plugin.reviewKey,
@@ -348,18 +271,202 @@ function toPluginWithComponents(input: {
     tags: plugin.tags,
     sourceKind: plugin.sourceKind,
     sourceTrust: plugin.sourceTrust,
-    targetMode: plugin.targetMode,
-    executionStatus: plugin.executionStatus,
+    targetMode: input.scanned.targetMode,
+    executionStatus: input.scanned.executionStatus,
     reviewStatus: input.scanned.reviewStatus,
-    updatePosture: plugin.updatePosture,
-    updateReview: input.updateReview ?? makeEmptyUpdateReviewMetadata(plugin),
+    updatePosture: input.scanned.updatePosture,
+    updateReview,
+    safetyGate,
     sourcePins: plugin.sourcePins ?? [],
     diagnostics: input.scanned.diagnostics,
+    controlledUi: {
+      manifestPresent: Boolean(input.scanned.controlledUi.manifest),
+      manifestPath: input.scanned.controlledUi.manifestPath,
+      manifest: input.scanned.controlledUi.manifest,
+      diagnostics: input.scanned.controlledUi.diagnostics,
+      ignoredUnknownFields: input.scanned.controlledUi.ignoredUnknownFields,
+      actionGrantStatuses,
+      settingsValues,
+      gate: controlledUiGate,
+    },
     isDisabled: plugin.runtime === "claude" ? !input.enabledPlugins.includes(plugin.source) : false,
     canToggle: plugin.runtime === "claude",
     components: input.scanned.components,
     mcpApprovalIdentifiers: input.scanned.mcpApprovalIdentifiers,
   }
+}
+
+async function getControlledUiCurrentContext(reviewKey: string) {
+  const [installedPlugins, safeMode] = await Promise.all([
+    discoverAllRuntimePlugins(),
+    getPluginSafeModeState(),
+  ])
+  const plugin = installedPlugins.find((candidate) => candidate.reviewKey === reviewKey)
+  if (!plugin) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Plugin is not currently discovered.",
+    })
+  }
+
+  const scanned = await scanPluginWithComponents(plugin)
+  const reviewResult = await recordPluginReviewScans([{
+    pluginKey: plugin.reviewKey,
+    document: scanned.reviewDocument,
+  }])
+  const updateReview =
+    reviewResult.metadataByPluginKey[plugin.reviewKey] ??
+    makeEmptyUpdateReviewMetadata(plugin)
+
+  return {
+    plugin,
+    scanned,
+    safeMode,
+    updateReview,
+  }
+}
+
+async function getControlledUiActionContext(input: {
+  reviewKey: string
+  contributionId: string
+  actionId: string
+}) {
+  const current = await getControlledUiCurrentContext(input.reviewKey)
+  const { plugin, scanned, safeMode, updateReview } = current
+  const contribution = scanned.controlledUi.manifest?.surfaces.find(
+    (surface) => surface.id === input.contributionId,
+  )
+
+  if (!contribution) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Controlled UI contribution is not currently declared.",
+    })
+  }
+  if (contribution.type !== "command-button" || contribution.action.id !== input.actionId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Controlled UI contribution action is not allowlisted.",
+    })
+  }
+
+  const permissionId = getControlledUiActionPermissionId(contribution.action)
+  const grantStatus = await getControlledUiPermissionGrantStatus({
+    pluginReviewKey: plugin.reviewKey,
+    contributionFingerprint: updateReview.fingerprint,
+    contributionId: contribution.id,
+    actionId: contribution.action.id,
+    permissionId,
+  })
+  const baseGate = {
+    runtime: plugin.runtime,
+    targetMode: scanned.targetMode,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: safeMode.enabled,
+    hasValidManifest: Boolean(scanned.controlledUi.manifest),
+    surfaceSupported: true,
+    actionSupported: contribution.action.type === "insert-chat-draft",
+  }
+
+  return {
+    plugin,
+    scanned,
+    contribution,
+    permissionId,
+    grantStatus,
+    updateReview,
+    gateForGrant: buildPluginControlledUiGate({
+      ...baseGate,
+      permissionGranted: true,
+    }),
+    gateForInvoke: buildPluginControlledUiGate({
+      ...baseGate,
+      permissionGranted: grantStatus === "current",
+      permissionStale: grantStatus === "stale",
+    }),
+  }
+}
+
+async function getControlledUiSettingContext(input: {
+  reviewKey: string
+  contributionId: string
+  fieldId: string
+}) {
+  const current = await getControlledUiCurrentContext(input.reviewKey)
+  const { plugin, scanned, safeMode, updateReview } = current
+  const contribution = scanned.controlledUi.manifest?.surfaces.find(
+    (surface) => surface.id === input.contributionId,
+  )
+
+  if (!contribution) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Controlled UI settings contribution is not currently declared.",
+    })
+  }
+  if (contribution.type !== "settings-section") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Controlled UI contribution is not a settings section.",
+    })
+  }
+
+  const field = contribution.fields.find((candidate) => candidate.id === input.fieldId)
+  if (!field) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Controlled UI settings field is not currently declared.",
+    })
+  }
+
+  const gate = buildPluginControlledUiGate({
+    runtime: plugin.runtime,
+    targetMode: scanned.targetMode,
+    updateReviewStatus: updateReview.status,
+    safeModeEnabled: safeMode.enabled,
+    hasValidManifest: Boolean(scanned.controlledUi.manifest),
+    surfaceSupported: true,
+  })
+
+  return {
+    plugin,
+    scanned,
+    contribution,
+    field,
+    updateReview,
+    gate,
+  }
+}
+
+function normalizeControlledUiSettingValue(
+  field: PluginControlledUiField,
+  value: PluginControlledUiSettingValue,
+): PluginControlledUiSettingValue {
+  if (field.type === "checkbox") {
+    if (typeof value !== "boolean") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Controlled UI checkbox settings require a boolean value.",
+      })
+    }
+    return value
+  }
+
+  if (typeof value !== "string") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Controlled UI text and select settings require a string value.",
+    })
+  }
+
+  if (field.type === "select" && !(field.options ?? []).includes(value)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Controlled UI select setting value is not declared by the manifest.",
+    })
+  }
+
+  return value
 }
 
 export const pluginsRouter = router({
@@ -371,12 +478,30 @@ export const pluginsRouter = router({
   }),
 
   /**
+   * Get local plugin safe mode state.
+   */
+  safeMode: publicProcedure.query(async (): Promise<PluginSafeModeState> => {
+    return getPluginSafeModeState()
+  }),
+
+  /**
+   * Toggle local plugin safe mode without deleting packages or review metadata.
+   */
+  setSafeMode: publicProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ input }): Promise<PluginSafeModeState> => {
+      clearPluginCache()
+      return setPluginSafeModeEnabled(input.enabled)
+    }),
+
+  /**
    * List all installed runtime plugins with their components and disabled status.
    */
   list: publicProcedure.query(async (): Promise<PluginWithComponents[]> => {
-    const [installedPlugins, enabledPlugins] = await Promise.all([
+    const [installedPlugins, enabledPlugins, safeMode] = await Promise.all([
       discoverAllRuntimePlugins(),
       getEnabledPlugins(),
+      getPluginSafeModeState(),
     ])
 
     const scannedPlugins = await Promise.all(
@@ -389,11 +514,89 @@ export const pluginsRouter = router({
       })),
     )
 
-    return scannedPlugins.map((scanned) => toPluginWithComponents({
+    return Promise.all(scannedPlugins.map((scanned) => toPluginWithComponents({
       scanned,
       enabledPlugins,
       updateReview: reviewResult.metadataByPluginKey[scanned.plugin.reviewKey],
-    }))
+      safeMode,
+    })))
+  }),
+
+  /**
+   * Build a local Doctor report for plugin metadata, review state, gates, and
+   * declarations. This is diagnostic-only and does not execute plugin code.
+   */
+  doctor: publicProcedure.query(async (): Promise<PluginDoctorReport> => {
+    const [installedPlugins, sources] = await Promise.all([
+      discoverAllRuntimePlugins(),
+      discoverPluginSources(),
+    ])
+
+    const scannedPlugins = await Promise.all(
+      installedPlugins.map((plugin) => scanPluginWithComponents(plugin)),
+    )
+    const reviewResult = await recordPluginReviewScans(
+      scannedPlugins.map((scanned) => ({
+        pluginKey: scanned.plugin.reviewKey,
+        document: scanned.reviewDocument,
+      })),
+    )
+
+    return buildPluginDoctorReport({
+      safeMode: reviewResult.safeMode,
+      reviewStatePath: getPluginReviewStatePath(),
+      sources: sources.map((source) => ({
+        id: source.id,
+        runtime: source.runtime,
+        status: source.status,
+        path: source.path,
+        pluginCount: source.pluginCount,
+      })),
+      plugins: scannedPlugins.map((scanned) => {
+        const plugin = scanned.plugin
+        const updateReview =
+          reviewResult.metadataByPluginKey[plugin.reviewKey] ??
+          makeEmptyUpdateReviewMetadata(plugin)
+        const safetyGate = buildPluginSafetyGate({
+          runtime: plugin.runtime,
+          hasMcpServers: scanned.components.mcpServers.length > 0,
+          updateReviewStatus: updateReview.status,
+          safeModeEnabled: reviewResult.safeMode.enabled,
+        })
+        return {
+          runtime: plugin.runtime,
+          reviewKey: plugin.reviewKey,
+          name: plugin.name,
+          source: plugin.source,
+          path: plugin.path,
+          updateReview,
+          safetyGate,
+          sourcePins: plugin.sourcePins ?? [],
+          diagnostics: scanned.diagnostics,
+          componentCounts: {
+            commands: scanned.components.commands.length,
+            skills: scanned.components.skills.length,
+            agents: scanned.components.agents.length,
+            mcpServers: scanned.components.mcpServers.length,
+          },
+          controlledUi: {
+            manifestPresent: Boolean(scanned.controlledUi.manifest),
+            manifest: scanned.controlledUi.manifest,
+            diagnostics: scanned.controlledUi.diagnostics,
+            ignoredUnknownFields: scanned.controlledUi.ignoredUnknownFields,
+            gate: buildPluginControlledUiGate({
+              runtime: plugin.runtime,
+              targetMode: scanned.targetMode,
+              updateReviewStatus: updateReview.status,
+              safeModeEnabled: reviewResult.safeMode.enabled,
+              hasValidManifest: Boolean(scanned.controlledUi.manifest),
+            }),
+          },
+          mcpServers: scanned.components.mcpServers,
+          mcpApprovalIdentifiers: scanned.mcpApprovalIdentifiers,
+        }
+      }),
+    })
   }),
 
   /**
@@ -402,9 +605,10 @@ export const pluginsRouter = router({
   markReviewed: publicProcedure
     .input(z.object({ reviewKey: z.string() }))
     .mutation(async ({ input }) => {
-      const [installedPlugins, enabledPlugins] = await Promise.all([
+      const [installedPlugins, enabledPlugins, safeMode] = await Promise.all([
         discoverAllRuntimePlugins(),
         getEnabledPlugins(),
+        getPluginSafeModeState(),
       ])
       const plugin = installedPlugins.find((candidate) => candidate.reviewKey === input.reviewKey)
       if (!plugin) {
@@ -424,8 +628,103 @@ export const pluginsRouter = router({
         scanned,
         enabledPlugins,
         updateReview,
+        safeMode,
       })
   }),
+
+  /**
+   * Persist a Locus-owned controlled UI setting value. The field is validated
+   * against the current manifest and current fingerprint in the main process.
+   */
+  setControlledSetting: publicProcedure
+    .input(z.object({
+      reviewKey: z.string().min(1),
+      contributionId: z.string().min(1),
+      fieldId: z.string().min(1),
+      value: z.union([z.string().max(4000), z.boolean()]),
+    }))
+    .mutation(async ({ input }) => {
+      const context = await getControlledUiSettingContext(input)
+      if (!context.gate.canRenderControlledUi) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Controlled UI setting is blocked by current review or safe mode.",
+        })
+      }
+
+      const setting = await setControlledUiSettingValue({
+        pluginReviewKey: context.plugin.reviewKey,
+        contributionFingerprint: context.updateReview.fingerprint,
+        contributionId: context.contribution.id,
+        fieldId: context.field.id,
+        value: normalizeControlledUiSettingValue(context.field, input.value),
+      })
+      return {
+        setting,
+        gate: context.gate,
+      }
+    }),
+
+  /**
+   * Store a local fingerprint-bound grant for an allowlisted controlled UI
+   * action. Main re-scans the plugin and review state before granting.
+   */
+  grantControlledAction: publicProcedure
+    .input(z.object({
+      reviewKey: z.string().min(1),
+      contributionId: z.string().min(1),
+      actionId: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const context = await getControlledUiActionContext(input)
+      if (!context.gateForGrant.canRenderControlledUi) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Controlled UI action cannot be granted for the current plugin state.",
+        })
+      }
+
+      const grant = await grantControlledUiPermission({
+        pluginReviewKey: context.plugin.reviewKey,
+        contributionFingerprint: context.updateReview.fingerprint,
+        contributionId: context.contribution.id,
+        actionId: context.contribution.action.id,
+        permissionId: context.permissionId,
+      })
+      return {
+        grant,
+        gate: context.gateForGrant,
+      }
+    }),
+
+  /**
+   * Invoke an allowlisted controlled UI action. This returns a bounded payload
+   * for the renderer; it never sends chat, runs shell, edits files, approves
+   * MCP, enables plugins, imports plugin JS, or patches the DOM.
+   */
+  invokeControlledAction: publicProcedure
+    .input(z.object({
+      reviewKey: z.string().min(1),
+      contributionId: z.string().min(1),
+      actionId: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const context = await getControlledUiActionContext(input)
+      if (!context.gateForInvoke.canInvokeControlledAction) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Controlled UI action is blocked by current review, safe mode, or grant state.",
+        })
+      }
+
+      return {
+        type: "insert-chat-draft" as const,
+        pluginReviewKey: context.plugin.reviewKey,
+        contributionId: context.contribution.id,
+        actionId: context.contribution.action.id,
+        prompt: context.contribution.action.prompt,
+      }
+    }),
 
   /**
    * Clear plugin cache (forces re-scan on next list)

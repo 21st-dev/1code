@@ -26,6 +26,7 @@ export interface McpServerConfig {
   args?: string[]
   url?: string
   authType?: "oauth" | "bearer" | "none"
+  _locusPluginMcp?: LocusPluginMcpProvenance
   _oauth?: {
     accessToken: string
     refreshToken?: string
@@ -33,6 +34,13 @@ export interface McpServerConfig {
     expiresAt?: number
   }
   [key: string]: unknown
+}
+
+export interface LocusPluginMcpProvenance {
+  pluginSource: string
+  pluginReviewKey: string
+  serverName: string
+  approvalIdentifier: string
 }
 
 export interface ProjectConfig {
@@ -177,6 +185,65 @@ export function updateMcpServerConfig(
   config.projects[resolvedPath].mcpServers[serverName] = {
     ...config.projects[resolvedPath].mcpServers[serverName],
     ...update,
+  }
+  return config
+}
+
+export function getLocusPluginMcpProvenance(
+  config: McpServerConfig | undefined,
+): LocusPluginMcpProvenance | undefined {
+  const provenance = config?._locusPluginMcp
+  if (!provenance || typeof provenance !== "object") return undefined
+  const candidate = provenance as unknown as Record<string, unknown>
+  if (
+    typeof candidate.pluginSource !== "string" ||
+    typeof candidate.pluginReviewKey !== "string" ||
+    typeof candidate.serverName !== "string" ||
+    typeof candidate.approvalIdentifier !== "string"
+  ) {
+    return undefined
+  }
+  return {
+    pluginSource: candidate.pluginSource,
+    pluginReviewKey: candidate.pluginReviewKey,
+    serverName: candidate.serverName,
+    approvalIdentifier: candidate.approvalIdentifier,
+  }
+}
+
+export function isLocusPluginMcpServerConfig(
+  config: McpServerConfig | undefined,
+): boolean {
+  return Boolean(getLocusPluginMcpProvenance(config))
+}
+
+export function filterLocusPluginMcpServers(
+  servers: Record<string, McpServerConfig>,
+): Record<string, McpServerConfig> {
+  return Object.fromEntries(
+    Object.entries(servers).filter(([, config]) =>
+      !isLocusPluginMcpServerConfig(config)
+    ),
+  )
+}
+
+export function getMatchingLocusPluginMcpServerConfig(input: {
+  servers: Record<string, McpServerConfig> | undefined
+  serverName: string
+  pluginSource: string
+  pluginReviewKey: string
+  approvalIdentifier: string
+}): McpServerConfig | undefined {
+  const config = input.servers?.[input.serverName]
+  const provenance = getLocusPluginMcpProvenance(config)
+  if (!provenance) return undefined
+  if (
+    provenance.pluginSource !== input.pluginSource ||
+    provenance.pluginReviewKey !== input.pluginReviewKey ||
+    provenance.serverName !== input.serverName ||
+    provenance.approvalIdentifier !== input.approvalIdentifier
+  ) {
+    return undefined
   }
   return config
 }
@@ -453,11 +520,11 @@ export async function getMergedGlobalMcpServers(
   const claudeDirMcp = await readClaudeDirMcpJson()
 
   // Lower priority first, higher priority overwrites
-  return {
+  return filterLocusPluginMcpServers({
     ...claudeDirMcp,
     ...(dirConfig.mcpServers || {}),
     ...(config.mcpServers || {}),
-  }
+  })
 }
 
 /**

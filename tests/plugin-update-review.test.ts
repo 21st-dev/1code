@@ -211,6 +211,43 @@ describe("plugin update review state", () => {
     })
   })
 
+  test("persists plugin safe mode without deleting review records", async () => {
+    const statePath = join(userDataDir, "plugin-review-state.json")
+    const pluginKey = "codex:openai-curated:figma"
+    const document = reviewDocument()
+
+    await reviewState.markPluginFingerprintReviewed(
+      { pluginKey, document },
+      statePath,
+      new Date("2026-06-02T00:02:00Z"),
+    )
+
+    await expect(
+      reviewState.setPluginSafeModeEnabled(
+        true,
+        statePath,
+        new Date("2026-06-02T00:03:00Z"),
+      ),
+    ).resolves.toEqual({
+      enabled: true,
+      updatedAt: "2026-06-02T00:03:00.000Z",
+    })
+
+    await expect(reviewState.getPluginSafeModeState(statePath)).resolves.toEqual({
+      enabled: true,
+      updatedAt: "2026-06-02T00:03:00.000Z",
+    })
+
+    const scan = await reviewState.recordPluginReviewScans(
+      [{ pluginKey, document }],
+      statePath,
+      new Date("2026-06-02T00:04:00Z"),
+    )
+
+    expect(scan.safeMode.enabled).toBe(true)
+    expect(scan.metadataByPluginKey[pluginKey].status).toBe("reviewed")
+  })
+
   test("extracts cache versions and lock source refs as advisory pins", async () => {
     const pluginRoot = await mkdtemp(join(tmpdir(), "locus-plugin-lock-"))
     try {

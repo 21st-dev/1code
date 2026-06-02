@@ -6,10 +6,12 @@ import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../li
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2 } from "lucide-react"
+import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope } from "lucide-react"
 import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
+import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import { Switch } from "../../ui/switch"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { toast } from "sonner"
@@ -32,11 +34,35 @@ type PluginViewMode = "installed" | "sources"
 type PluginSourceKind = "local-marketplace" | "cache"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
+const CONTROLLED_UI_SELECT_UNSET_VALUE = "__locus_controlled_ui_unset__"
 type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-code"
-type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled-planned" | "trusted-code-planned"
+type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled" | "locus-controlled-planned" | "trusted-code-planned"
 type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
 type PluginUpdatePosture = "advisory-only" | "review-before-enable"
 type PluginUpdateReviewStatus = "new" | "unchanged" | "changed" | "reviewed"
+type PluginSafetyGateStatus = "allowed" | "safe-mode" | "review-required" | "read-only"
+type PluginSafetyGateReason =
+  | "global-safe-mode"
+  | "review-new"
+  | "review-changed"
+  | "review-unreviewed"
+  | "codex-read-only-cache"
+  | "no-mcp-servers"
+type PluginControlledUiGateReason =
+  | "safe-mode"
+  | "review-required"
+  | "review-changed"
+  | "review-unreviewed"
+  | "invalid-contribution-manifest"
+  | "unsupported-runtime"
+  | "unsupported-target-mode"
+  | "unsupported-surface"
+  | "unsupported-action"
+  | "permission-not-granted"
+  | "permission-stale"
+  | "codex-read-only-cache"
+type PluginControlledUiGrantStatus = "current" | "stale" | "mismatch"
+type PluginControlledUiSettingValue = string | boolean
 type PluginDiagnosticSeverity = "info" | "warning"
 type PluginDiagnosticCode =
   | "metadata-only-no-execution"
@@ -80,6 +106,157 @@ interface PluginUpdateReviewMetadata {
   changes: PluginReviewChange[]
 }
 
+interface PluginSafetyGate {
+  status: PluginSafetyGateStatus
+  canEnable: boolean
+  canApproveMcp: boolean
+  canUseMcp: boolean
+  reasons: PluginSafetyGateReason[]
+}
+
+interface PluginControlledUiGate {
+  canRenderControlledUi: boolean
+  canInvokeControlledAction: boolean
+  reasons: PluginControlledUiGateReason[]
+}
+
+interface PluginControlledUiDiagnostic {
+  code: string
+  severity: "info" | "warning" | "blocked"
+  path?: string
+  message?: string
+}
+
+interface PluginControlledUiField {
+  id: string
+  type: "text" | "checkbox" | "select"
+  label: string
+  description?: string
+  options?: string[]
+}
+
+interface PluginControlledUiItem {
+  type: "text" | "fact"
+  text?: string
+  label?: string
+  value?: string
+}
+
+interface PluginControlledUiAction {
+  id: string
+  type: "insert-chat-draft"
+  prompt: string
+}
+
+interface PluginControlledUiSurfaceBase {
+  id: string
+  type: "settings-section" | "workbench-panel" | "command-button"
+  title: string
+  description?: string
+}
+
+interface PluginControlledUiSettingsSection extends PluginControlledUiSurfaceBase {
+  type: "settings-section"
+  fields: PluginControlledUiField[]
+}
+
+interface PluginControlledUiWorkbenchPanel extends PluginControlledUiSurfaceBase {
+  type: "workbench-panel"
+  items: PluginControlledUiItem[]
+}
+
+interface PluginControlledUiCommandButton extends PluginControlledUiSurfaceBase {
+  type: "command-button"
+  label: string
+  action: PluginControlledUiAction
+}
+
+type PluginControlledUiSurface =
+  | PluginControlledUiSettingsSection
+  | PluginControlledUiWorkbenchPanel
+  | PluginControlledUiCommandButton
+
+interface PluginControlledUiManifest {
+  version: 1
+  surfaces: PluginControlledUiSurface[]
+}
+
+interface PluginSafeModeState {
+  enabled: boolean
+  updatedAt?: string
+}
+
+type PluginDoctorCheckStatus = "pass" | "info" | "warning" | "blocked"
+type PluginDoctorCheckCode =
+  | "source-available"
+  | "source-empty"
+  | "source-missing"
+  | "manifest-fingerprint"
+  | "review-required"
+  | "review-changed"
+  | "reviewed"
+  | "safe-mode"
+  | "runtime-gate"
+  | "codex-read-only"
+  | "components-declared"
+  | "mcp-declared"
+  | "mcp-approval-fingerprint"
+  | "controlled-ui-declared"
+  | "controlled-ui-gate"
+  | "controlled-ui-diagnostic"
+  | "component-path-warning"
+  | "review-state"
+
+interface PluginDoctorCheck {
+  code: PluginDoctorCheckCode
+  status: PluginDoctorCheckStatus
+  subject: string
+  runtime?: PluginRuntime
+  pluginReviewKey?: string
+  details?: Record<string, string | number | boolean>
+}
+
+interface PluginDoctorPluginDebug {
+  runtime: PluginRuntime
+  reviewKey: string
+  name: string
+  source: string
+  path: string
+  fingerprint: string
+  lastReviewedFingerprint?: string
+  reviewStatus: PluginUpdateReviewStatus
+  safetyGate: PluginSafetyGate
+  sourcePins: PluginSourcePin[]
+  diagnostics: PluginDiagnostic[]
+  componentCounts: {
+    commands: number
+    skills: number
+    agents: number
+    mcpServers: number
+  }
+  mcpServers: string[]
+  mcpApprovalIdentifiers: Record<string, string>
+  checks: PluginDoctorCheck[]
+}
+
+interface PluginDoctorReport {
+  generatedAt: string
+  safeMode: PluginSafeModeState
+  reviewStatePath?: string
+  summary: {
+    totalChecks: number
+    pass: number
+    info: number
+    warning: number
+    blocked: number
+    pluginCount: number
+    blockedPluginCount: number
+    mcpServerCount: number
+  }
+  checks: PluginDoctorCheck[]
+  plugins: PluginDoctorPluginDebug[]
+}
+
 interface PluginData {
   runtime: PluginRuntime
   reviewKey: string
@@ -100,8 +277,19 @@ interface PluginData {
   reviewStatus: PluginReviewStatus
   updatePosture: PluginUpdatePosture
   updateReview: PluginUpdateReviewMetadata
+  safetyGate: PluginSafetyGate
   sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
+  controlledUi: {
+    manifestPresent: boolean
+    manifestPath?: string
+    manifest?: PluginControlledUiManifest
+    diagnostics: PluginControlledUiDiagnostic[]
+    ignoredUnknownFields: string[]
+    actionGrantStatuses: Record<string, PluginControlledUiGrantStatus>
+    settingsValues: Record<string, Record<string, PluginControlledUiSettingValue>>
+    gate: PluginControlledUiGate
+  }
   isDisabled: boolean
   canToggle: boolean
   components: {
@@ -133,8 +321,8 @@ interface McpServerStatus {
   needsAuth: boolean
 }
 
-function getPluginKey(plugin: Pick<PluginData, "reviewKey">): string {
-  return plugin.reviewKey
+function getPluginKey(plugin: Pick<PluginData, "reviewKey" | "path">): string {
+  return `${plugin.reviewKey}:${plugin.path}`
 }
 
 function getRuntimeLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
@@ -243,6 +431,8 @@ function getExecutionStatusLabel(status: PluginExecutionStatus, t: ReturnType<ty
   switch (status) {
     case "not-run-by-locus":
       return t("settings.plugins.executionNotRunByLocus")
+    case "locus-controlled":
+      return t("settings.plugins.executionLocusControlled")
     case "locus-controlled-planned":
       return t("settings.plugins.executionLocusControlledPlanned")
     case "trusted-code-planned":
@@ -318,6 +508,168 @@ function getUpdateReviewStatusClass(status: PluginUpdateReviewStatus): string {
   }
 }
 
+function getSafetyGateStatusLabel(status: PluginSafetyGateStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "allowed":
+      return t("settings.plugins.safetyGateAllowed")
+    case "safe-mode":
+      return t("settings.plugins.safetyGateSafeMode")
+    case "review-required":
+      return t("settings.plugins.safetyGateReviewRequired")
+    case "read-only":
+      return t("settings.plugins.safetyGateReadOnly")
+  }
+}
+
+function getSafetyGateReasonLabel(reason: PluginSafetyGateReason, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (reason) {
+    case "global-safe-mode":
+      return t("settings.plugins.safetyReasonGlobalSafeMode")
+    case "review-new":
+      return t("settings.plugins.safetyReasonReviewNew")
+    case "review-changed":
+      return t("settings.plugins.safetyReasonReviewChanged")
+    case "review-unreviewed":
+      return t("settings.plugins.safetyReasonReviewUnreviewed")
+    case "codex-read-only-cache":
+      return t("settings.plugins.safetyReasonCodexReadOnly")
+    case "no-mcp-servers":
+      return t("settings.plugins.safetyReasonNoMcp")
+  }
+}
+
+function getSafetyGateStatusClass(status: PluginSafetyGateStatus): string {
+  switch (status) {
+    case "allowed":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "safe-mode":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "review-required":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "read-only":
+      return "border-border bg-background text-muted-foreground"
+  }
+}
+
+function getControlledUiSurfaceLabel(
+  type: PluginControlledUiSurface["type"],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (type) {
+    case "settings-section":
+      return t("settings.plugins.contributionSettingsSection")
+    case "workbench-panel":
+      return t("settings.plugins.contributionWorkbenchPanel")
+    case "command-button":
+      return t("settings.plugins.contributionActionEntry")
+  }
+}
+
+function getControlledUiFieldTypeLabel(
+  type: PluginControlledUiField["type"],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (type) {
+    case "text":
+      return t("settings.plugins.contributionFieldText")
+    case "checkbox":
+      return t("settings.plugins.contributionFieldCheckbox")
+    case "select":
+      return t("settings.plugins.contributionFieldSelect")
+  }
+}
+
+function getControlledUiGateReasonLabel(
+  reason: PluginControlledUiGateReason,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (reason) {
+    case "safe-mode":
+      return t("settings.plugins.contributionReasonSafeMode")
+    case "review-required":
+      return t("settings.plugins.contributionReasonReviewRequired")
+    case "review-changed":
+      return t("settings.plugins.contributionReasonChanged")
+    case "review-unreviewed":
+      return t("settings.plugins.contributionReasonUnreviewed")
+    case "invalid-contribution-manifest":
+      return t("settings.plugins.contributionReasonInvalid")
+    case "unsupported-runtime":
+      return t("settings.plugins.contributionReasonUnsupportedRuntime")
+    case "unsupported-target-mode":
+      return t("settings.plugins.contributionReasonUnsupportedTarget")
+    case "unsupported-surface":
+      return t("settings.plugins.contributionReasonUnsupportedSurface")
+    case "unsupported-action":
+      return t("settings.plugins.contributionReasonUnsupportedAction")
+    case "permission-not-granted":
+      return t("settings.plugins.contributionReasonPermissionRequired")
+    case "permission-stale":
+      return t("settings.plugins.contributionReasonPermissionStale")
+    case "codex-read-only-cache":
+      return t("settings.plugins.contributionReasonCodexReadOnly")
+  }
+}
+
+function getControlledUiActionKey(surface: PluginControlledUiCommandButton): string {
+  return `${surface.id}:${surface.action.id}`
+}
+
+function getControlledUiContributionStatus(
+  plugin: PluginData,
+  surface: PluginControlledUiSurface,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  if (plugin.controlledUi.diagnostics.some((diagnostic) => diagnostic.severity === "blocked")) {
+    return t("settings.plugins.contributionStatusUnavailable")
+  }
+  if (surface.type === "workbench-panel") {
+    return t("settings.plugins.contributionStatusSurfaceUnavailable")
+  }
+  if (plugin.controlledUi.gate.reasons.includes("safe-mode")) {
+    return t("settings.plugins.contributionStatusSafeMode")
+  }
+  if (plugin.controlledUi.gate.reasons.includes("review-changed")) {
+    return t("settings.plugins.contributionStatusChanged")
+  }
+  if (
+    plugin.controlledUi.gate.reasons.includes("review-required") ||
+    plugin.controlledUi.gate.reasons.includes("review-unreviewed")
+  ) {
+    return t("settings.plugins.contributionStatusNeedsReview")
+  }
+  if (plugin.controlledUi.gate.reasons.includes("codex-read-only-cache")) {
+    return t("settings.plugins.contributionStatusReadOnly")
+  }
+  if (surface.type === "command-button") {
+    const grantStatus = plugin.controlledUi.actionGrantStatuses[getControlledUiActionKey(surface)]
+    if (grantStatus === "stale") return t("settings.plugins.contributionStatusPermissionStale")
+    if (grantStatus !== "current") return t("settings.plugins.contributionStatusPermissionRequired")
+  }
+  return plugin.controlledUi.gate.canRenderControlledUi
+    ? t("settings.plugins.contributionStatusAvailable")
+    : t("settings.plugins.contributionStatusUnavailable")
+}
+
+function getControlledUiContributionStatusClass(plugin: PluginData, surface: PluginControlledUiSurface): string {
+  if (
+    plugin.controlledUi.diagnostics.some((diagnostic) => diagnostic.severity === "blocked") ||
+    plugin.controlledUi.gate.reasons.includes("safe-mode") ||
+    plugin.controlledUi.gate.reasons.includes("review-changed") ||
+    plugin.controlledUi.gate.reasons.includes("review-required") ||
+    plugin.controlledUi.gate.reasons.includes("permission-stale")
+  ) {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+  }
+  if (surface.type === "workbench-panel" || plugin.controlledUi.gate.reasons.includes("codex-read-only-cache")) {
+    return "border-border bg-background text-muted-foreground"
+  }
+  if (plugin.controlledUi.gate.canRenderControlledUi) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+  }
+  return "border-border bg-background text-muted-foreground"
+}
+
 function shortFingerprint(fingerprint: string): string {
   return fingerprint ? fingerprint.slice(0, 12) : "none"
 }
@@ -369,6 +721,219 @@ function getDiagnosticClass(severity: PluginDiagnosticSeverity): string {
     : "border-border bg-background text-muted-foreground"
 }
 
+function getDoctorStatusLabel(status: PluginDoctorCheckStatus, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (status) {
+    case "pass":
+      return t("settings.plugins.doctorStatusPass")
+    case "info":
+      return t("settings.plugins.doctorStatusInfo")
+    case "warning":
+      return t("settings.plugins.doctorStatusWarning")
+    case "blocked":
+      return t("settings.plugins.doctorStatusBlocked")
+  }
+}
+
+function getDoctorStatusClass(status: PluginDoctorCheckStatus): string {
+  switch (status) {
+    case "pass":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "info":
+      return "border-border bg-background text-muted-foreground"
+    case "warning":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "blocked":
+      return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+  }
+}
+
+function getWorstDoctorStatus(checks: PluginDoctorCheck[]): PluginDoctorCheckStatus {
+  if (checks.some((check) => check.status === "blocked")) return "blocked"
+  if (checks.some((check) => check.status === "warning")) return "warning"
+  if (checks.some((check) => check.status === "info")) return "info"
+  return "pass"
+}
+
+function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof useI18n>["t"]): string {
+  switch (code) {
+    case "source-available":
+      return t("settings.plugins.doctorCheckSourceAvailable")
+    case "source-empty":
+      return t("settings.plugins.doctorCheckSourceEmpty")
+    case "source-missing":
+      return t("settings.plugins.doctorCheckSourceMissing")
+    case "manifest-fingerprint":
+      return t("settings.plugins.doctorCheckManifestFingerprint")
+    case "review-required":
+      return t("settings.plugins.doctorCheckReviewRequired")
+    case "review-changed":
+      return t("settings.plugins.doctorCheckReviewChanged")
+    case "reviewed":
+      return t("settings.plugins.doctorCheckReviewed")
+    case "safe-mode":
+      return t("settings.plugins.doctorCheckSafeMode")
+    case "runtime-gate":
+      return t("settings.plugins.doctorCheckRuntimeGate")
+    case "codex-read-only":
+      return t("settings.plugins.doctorCheckCodexReadOnly")
+    case "components-declared":
+      return t("settings.plugins.doctorCheckComponentsDeclared")
+    case "mcp-declared":
+      return t("settings.plugins.doctorCheckMcpDeclared")
+    case "mcp-approval-fingerprint":
+      return t("settings.plugins.doctorCheckMcpApprovalFingerprint")
+    case "controlled-ui-declared":
+      return t("settings.plugins.doctorCheckControlledUiDeclared")
+    case "controlled-ui-gate":
+      return t("settings.plugins.doctorCheckControlledUiGate")
+    case "controlled-ui-diagnostic":
+      return t("settings.plugins.doctorCheckControlledUiDiagnostic")
+    case "component-path-warning":
+      return t("settings.plugins.doctorCheckComponentPathWarning")
+    case "review-state":
+      return t("settings.plugins.doctorCheckReviewState")
+  }
+}
+
+function PluginDoctorSummaryPanel({
+  report,
+  isLoading,
+}: {
+  report?: PluginDoctorReport
+  isLoading: boolean
+}) {
+  const { t } = useI18n()
+
+  return (
+    <div className="rounded-lg border border-border bg-background px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Stethoscope className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-foreground">
+              {t("settings.plugins.doctor")}
+            </p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {isLoading
+                ? t("common.loading")
+                : t("settings.plugins.doctorSummary", {
+                    blocked: report?.summary.blocked ?? 0,
+                    warning: report?.summary.warning ?? 0,
+                    checks: report?.summary.totalChecks ?? 0,
+                  })}
+            </p>
+          </div>
+        </div>
+        <span className={cn(
+          "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+          report && report.summary.blocked > 0
+            ? getDoctorStatusClass("blocked")
+            : report && report.summary.warning > 0
+              ? getDoctorStatusClass("warning")
+              : getDoctorStatusClass("pass"),
+        )}>
+          {report && report.summary.blocked > 0
+            ? getDoctorStatusLabel("blocked", t)
+            : report && report.summary.warning > 0
+              ? getDoctorStatusLabel("warning", t)
+              : getDoctorStatusLabel("pass", t)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function PluginDebugPanel({
+  plugin,
+  debug,
+}: {
+  plugin: PluginData
+  debug?: PluginDoctorPluginDebug
+}) {
+  const { t } = useI18n()
+  if (!debug) return null
+
+  const approvalCount = Object.keys(debug.mcpApprovalIdentifiers).length
+  const visibleChecks = debug.checks.slice(0, 8)
+  const debugStatus = getWorstDoctorStatus(debug.checks)
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.debug")}</Label>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t("settings.plugins.debugHint")}
+          </p>
+        </div>
+        <span className={cn(
+          "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+          getDoctorStatusClass(debugStatus),
+        )}>
+          {getDoctorStatusLabel(debugStatus, t)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorFingerprint")}</p>
+          <p className="font-mono text-foreground" title={debug.fingerprint}>
+            sha256:{shortFingerprint(debug.fingerprint)}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorLastReviewedFingerprint")}</p>
+          <p className="font-mono text-foreground" title={debug.lastReviewedFingerprint}>
+            sha256:{shortFingerprint(debug.lastReviewedFingerprint ?? "")}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorComponentCounts")}</p>
+          <p className="text-foreground">
+            {[
+              `${t("settings.plugins.doctorCommandsShort")}:${debug.componentCounts.commands}`,
+              `${t("settings.plugins.doctorSkillsShort")}:${debug.componentCounts.skills}`,
+              `${t("settings.plugins.doctorAgentsShort")}:${debug.componentCounts.agents}`,
+              `MCP:${debug.componentCounts.mcpServers}`,
+            ].join(" / ")}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">{t("settings.plugins.doctorMcpApprovals")}</p>
+          <p className="text-foreground">
+            {approvalCount} / {plugin.components.mcpServers.length}
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.doctorChecks")}</p>
+        <div className="space-y-1">
+          {visibleChecks.map((check, index) => (
+            <div
+              key={`${check.code}-${index}`}
+              className="grid grid-cols-[1fr_auto] items-start gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">{getDoctorCheckLabel(check.code, t)}</p>
+                <p className="truncate text-[11px] text-muted-foreground" title={check.subject}>
+                  {check.subject}
+                </p>
+              </div>
+              <span className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                getDoctorStatusClass(check.status),
+              )}>
+                {getDoctorStatusLabel(check.status, t)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) {
   const { t } = useI18n()
   if (diagnostics.length === 0) return null
@@ -393,6 +958,333 @@ function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) 
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function PluginSafeModeControl({
+  safeMode,
+  onToggle,
+  isToggling,
+}: {
+  safeMode: PluginSafeModeState
+  onToggle: (enabled: boolean) => void
+  isToggling: boolean
+}) {
+  const { t } = useI18n()
+  return (
+    <div className={cn(
+      "rounded-lg border px-2.5 py-2",
+      safeMode.enabled
+        ? "border-amber-500/30 bg-amber-500/10"
+        : "border-border bg-background"
+    )}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <ShieldAlert className={cn(
+            "h-3.5 w-3.5 shrink-0",
+            safeMode.enabled ? "text-amber-500" : "text-muted-foreground"
+          )} />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-foreground">
+              {t("settings.plugins.safeMode")}
+            </p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {safeMode.enabled
+                ? t("settings.plugins.safeModeEnabledShort")
+                : t("settings.plugins.safeModeDisabledShort")}
+            </p>
+          </div>
+        </div>
+        <Switch
+          checked={safeMode.enabled}
+          onCheckedChange={onToggle}
+          disabled={isToggling}
+        />
+      </div>
+    </div>
+  )
+}
+
+function PluginSafetyGatePanel({ plugin }: { plugin: PluginData }) {
+  const { t } = useI18n()
+  const gate = plugin.safetyGate
+  const visibleReasons = gate.reasons.filter((reason) => reason !== "no-mcp-servers")
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <Label>{t("settings.plugins.safetyGate")}</Label>
+        <span className={cn(
+          "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+          getSafetyGateStatusClass(gate.status),
+        )}>
+          {getSafetyGateStatusLabel(gate.status, t)}
+        </span>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {t("settings.plugins.safetyGateHint")}
+      </p>
+      {visibleReasons.length > 0 && (
+        <div className="space-y-1.5">
+          {visibleReasons.map((reason) => (
+            <div
+              key={reason}
+              className="rounded border border-border bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground"
+            >
+              {getSafetyGateReasonLabel(reason, t)}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div>
+          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanEnable")}</p>
+          <p className="text-xs font-medium text-foreground">
+            {gate.canEnable ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanApproveMcp")}</p>
+          <p className="text-xs font-medium text-foreground">
+            {gate.canApproveMcp ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanUseMcp")}</p>
+          <p className="text-xs font-medium text-foreground">
+            {gate.canUseMcp ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PluginControlledUiPanel({
+  plugin,
+  onSetSettingValue,
+  onGrantAction,
+  onInvokeAction,
+  isSavingSetting,
+  isGranting,
+  isInvoking,
+}: {
+  plugin: PluginData
+  onSetSettingValue: (
+    surface: PluginControlledUiSettingsSection,
+    field: PluginControlledUiField,
+    value: PluginControlledUiSettingValue,
+  ) => void
+  onGrantAction: (surface: PluginControlledUiCommandButton) => void
+  onInvokeAction: (surface: PluginControlledUiCommandButton) => void
+  isSavingSetting: boolean
+  isGranting: boolean
+  isInvoking: boolean
+}) {
+  const { t } = useI18n()
+  const surfaces = plugin.controlledUi.manifest?.surfaces ?? []
+  const commandCount = surfaces.filter((surface) => surface.type === "command-button").length
+  const visibleReasons = plugin.controlledUi.gate.reasons.slice(0, 3)
+
+  if (surfaces.length === 0 && !plugin.controlledUi.manifestPresent && plugin.targetMode !== "controlled-ui") {
+    return null
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.uiContributions")}</Label>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t("settings.plugins.uiContributionsHint")}
+          </p>
+        </div>
+        <span className="shrink-0 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {t("settings.plugins.uiContributionCount", { count: surfaces.length })}
+        </span>
+      </div>
+
+      {surfaces.length === 0 ? (
+        <div className="rounded border border-dashed border-border bg-muted/20 px-2 py-2 text-xs text-muted-foreground">
+          {t("settings.plugins.noUiContributions")}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {surfaces.map((surface) => {
+            const status = getControlledUiContributionStatus(plugin, surface, t)
+            const grantStatus = surface.type === "command-button"
+              ? plugin.controlledUi.actionGrantStatuses[getControlledUiActionKey(surface)]
+              : undefined
+            const canGrant =
+              surface.type === "command-button" &&
+              plugin.controlledUi.gate.canRenderControlledUi &&
+              grantStatus !== "current"
+            const canInvoke =
+              surface.type === "command-button" &&
+              plugin.controlledUi.gate.canInvokeControlledAction &&
+              grantStatus === "current"
+
+            return (
+              <div key={`${surface.type}:${surface.id}`} className="rounded border border-border bg-muted/20 px-2 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-xs font-medium text-foreground">{surface.title}</p>
+                      <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {getControlledUiSurfaceLabel(surface.type, t)}
+                      </span>
+                    </div>
+                    {surface.description && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {surface.description}
+                      </p>
+                    )}
+                  </div>
+                  <span className={cn(
+                    "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                    getControlledUiContributionStatusClass(plugin, surface),
+                  )}>
+                    {status}
+                  </span>
+                </div>
+
+                {surface.type === "settings-section" && surface.fields.length > 0 && (
+                  <div className="mt-2 grid gap-1.5">
+                    {surface.fields.slice(0, 4).map((field) => {
+                      const fieldValue = plugin.controlledUi.settingsValues[surface.id]?.[field.id]
+                      const canEditField = plugin.controlledUi.gate.canRenderControlledUi && !isSavingSetting
+                      const currentTextValue = typeof fieldValue === "string" ? fieldValue : ""
+
+                      return (
+                        <div key={field.id} className="grid gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 font-medium text-muted-foreground">{field.label}</span>
+                            <span className="shrink-0 rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              {getControlledUiFieldTypeLabel(field.type, t)}
+                            </span>
+                          </div>
+                          {field.description && (
+                            <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                              {field.description}
+                            </p>
+                          )}
+                          {field.type === "checkbox" ? (
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={fieldValue === true}
+                                onCheckedChange={(checked) => onSetSettingValue(surface, field, checked)}
+                                disabled={!canEditField}
+                              />
+                            </div>
+                          ) : field.type === "select" ? (
+                            <Select
+                              value={typeof fieldValue === "string" ? fieldValue : CONTROLLED_UI_SELECT_UNSET_VALUE}
+                              onValueChange={(value) => {
+                                if (value !== CONTROLLED_UI_SELECT_UNSET_VALUE) {
+                                  onSetSettingValue(surface, field, value)
+                                }
+                              }}
+                              disabled={!canEditField}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={CONTROLLED_UI_SELECT_UNSET_VALUE} disabled>
+                                  {t("settings.plugins.contributionSettingUnset")}
+                                </SelectItem>
+                                {(field.options ?? []).map((option) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              key={`${field.id}:${currentTextValue}`}
+                              defaultValue={currentTextValue}
+                              disabled={!canEditField}
+                              className="h-8 text-xs"
+                              onBlur={(event) => {
+                                const nextValue = event.currentTarget.value
+                                if (nextValue !== currentTextValue) {
+                                  onSetSettingValue(surface, field, nextValue)
+                                }
+                              }}
+                            />
+                          )}
+                      </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {surface.type === "workbench-panel" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t("settings.plugins.workbenchContributionPlanned", {
+                      count: surface.items.length,
+                    })}
+                  </p>
+                )}
+
+                {surface.type === "command-button" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {grantStatus !== "current" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => onGrantAction(surface)}
+                        disabled={!canGrant || isGranting}
+                      >
+                        {isGranting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.plugins.approveControlledAction")}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => onInvokeAction(surface)}
+                        disabled={!canInvoke || isInvoking}
+                      >
+                        {isInvoking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.plugins.prepareControlledDraft")}
+                      </Button>
+                    )}
+                    <span className="text-[11px] text-muted-foreground">
+                      {surface.action.type === "insert-chat-draft"
+                        ? t("settings.plugins.controlledActionInsertDraft")
+                        : t("settings.plugins.contributionStatusUnavailable")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {(visibleReasons.length > 0 || plugin.controlledUi.diagnostics.length > 0) && (
+        <div className="space-y-1.5">
+          {visibleReasons.map((reason) => (
+            <div key={reason} className="rounded border border-border bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground">
+              {getControlledUiGateReasonLabel(reason, t)}
+            </div>
+          ))}
+          {plugin.controlledUi.diagnostics.slice(0, 3).map((diagnostic, index) => (
+            <div key={`${diagnostic.code}-${index}`} className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+              {diagnostic.message ?? diagnostic.code}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {commandCount > 0 && (
+        <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+          {t("settings.plugins.controlledActionHint")}
+        </p>
+      )}
     </div>
   )
 }
@@ -511,6 +1403,7 @@ function PluginUpdateReviewPanel({
 // --- Detail Panel ---
 function PluginDetail({
   plugin,
+  pluginDebug,
   onToggleEnabled,
   isTogglingEnabled,
   onApproveMcpServers,
@@ -521,8 +1414,15 @@ function PluginDetail({
   isAuthenticating,
   onMarkReviewed,
   isMarkingReviewed,
+  onSetControlledSetting,
+  onGrantControlledAction,
+  onInvokeControlledAction,
+  isSavingControlledSetting,
+  isGrantingControlledAction,
+  isInvokingControlledAction,
 }: {
   plugin: PluginData
+  pluginDebug?: PluginDoctorPluginDebug
   onToggleEnabled: (enabled: boolean) => void
   isTogglingEnabled: boolean
   onApproveMcpServers?: () => void
@@ -533,6 +1433,16 @@ function PluginDetail({
   isAuthenticating: boolean
   onMarkReviewed: () => void
   isMarkingReviewed: boolean
+  onSetControlledSetting: (
+    surface: PluginControlledUiSettingsSection,
+    field: PluginControlledUiField,
+    value: PluginControlledUiSettingValue,
+  ) => void
+  onGrantControlledAction: (surface: PluginControlledUiCommandButton) => void
+  onInvokeControlledAction: (surface: PluginControlledUiCommandButton) => void
+  isSavingControlledSetting: boolean
+  isGrantingControlledAction: boolean
+  isInvokingControlledAction: boolean
 }) {
   const { t } = useI18n()
   const componentCount =
@@ -546,8 +1456,13 @@ function PluginDetail({
     plugin.runtime === "claude" &&
     !plugin.isDisabled &&
     plugin.components.mcpServers.length > 0 &&
+    plugin.safetyGate.canApproveMcp &&
     !!onApproveMcpServers
-  const canNavigateCapabilities = plugin.runtime === "claude" && !plugin.isDisabled
+  const canNavigateCapabilities =
+    plugin.runtime === "claude" &&
+    !plugin.isDisabled &&
+    plugin.safetyGate.status === "allowed"
+  const isEnableBlocked = plugin.canToggle && plugin.isDisabled && !plugin.safetyGate.canEnable
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -574,7 +1489,7 @@ function PluginDetail({
                   <Switch
                     checked={!plugin.isDisabled}
                     onCheckedChange={onToggleEnabled}
-                    disabled={isTogglingEnabled}
+                    disabled={isTogglingEnabled || isEnableBlocked}
                   />
                 ) : (
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -619,6 +1534,17 @@ function PluginDetail({
           </div>
 
           <DiagnosticsPanel diagnostics={plugin.diagnostics} />
+          <PluginSafetyGatePanel plugin={plugin} />
+          <PluginControlledUiPanel
+            plugin={plugin}
+            onSetSettingValue={onSetControlledSetting}
+            onGrantAction={onGrantControlledAction}
+            onInvokeAction={onInvokeControlledAction}
+            isSavingSetting={isSavingControlledSetting}
+            isGranting={isGrantingControlledAction}
+            isInvoking={isInvokingControlledAction}
+          />
+          <PluginDebugPanel plugin={plugin} debug={pluginDebug} />
 
           <PluginUpdateReviewPanel
             plugin={plugin}
@@ -808,13 +1734,14 @@ function PluginDetail({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">
                 <Label>{t("settings.plugins.mcpServersCount", { count: plugin.components.mcpServers.length })}</Label>
-                {canApproveMcp && (
+                {plugin.runtime === "claude" && plugin.components.mcpServers.length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[11px] shrink-0"
-                    disabled={isApprovingMcpServers}
+                    disabled={!canApproveMcp || isApprovingMcpServers}
                     onClick={onApproveMcpServers}
+                    title={!canApproveMcp ? t("settings.plugins.safetyGateBlocksAction") : undefined}
                   >
                     {isApprovingMcpServers ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -858,8 +1785,9 @@ function PluginDetail({
                           variant="secondary"
                           size="sm"
                           className="h-6 px-2 text-[11px] shrink-0"
-                          disabled={isAuthenticating}
+                          disabled={isAuthenticating || !plugin.safetyGate.canUseMcp}
                           onClick={() => onMcpAuth(serverName)}
+                          title={!plugin.safetyGate.canUseMcp ? t("settings.plugins.safetyGateBlocksAction") : undefined}
                         >
                           {isAuthenticating ? <Loader2 className="h-3 w-3 animate-spin" /> : t("settings.plugins.signIn")}
                         </Button>
@@ -903,6 +1831,9 @@ function PluginListItem({
     plugin.components.skills.length +
     plugin.components.agents.length +
     plugin.components.mcpServers.length
+  const statusLabel = plugin.safetyGate.status === "allowed"
+    ? getPluginStatusLabel(plugin, t)
+    : getSafetyGateStatusLabel(plugin.safetyGate.status, t)
 
   return (
     <button
@@ -938,9 +1869,11 @@ function PluginListItem({
         </span>
         <span className={cn(
           "shrink-0",
-          plugin.canToggle && plugin.isDisabled ? "text-muted-foreground/60" : "text-emerald-500/80",
+          plugin.safetyGate.status === "allowed" && !(plugin.canToggle && plugin.isDisabled)
+            ? "text-emerald-500/80"
+            : "text-muted-foreground/60",
         )}>
-          {getPluginStatusLabel(plugin, t)}
+          {statusLabel}
         </span>
       </div>
     </button>
@@ -1113,6 +2046,12 @@ export function AgentsPluginsTab() {
   const { data: pluginSources = [], isLoading: isLoadingSources, refetch: refetchSources } = trpc.plugins.sources.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
+  const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } = trpc.plugins.safeMode.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
+  const { data: doctorReport, isLoading: isLoadingDoctor, refetch: refetchDoctor } = trpc.plugins.doctor.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
 
   // MCP server statuses for showing auth state in plugin detail
   const { data: allMcpConfig, refetch: refetchMcp } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
@@ -1150,6 +2089,10 @@ export function AgentsPluginsTab() {
   const setPluginEnabledMutation = trpc.claudeSettings.setPluginEnabled.useMutation()
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
   const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
+  const setSafeModeMutation = trpc.plugins.setSafeMode.useMutation()
+  const setControlledSettingMutation = trpc.plugins.setControlledSetting.useMutation()
+  const grantControlledActionMutation = trpc.plugins.grantControlledAction.useMutation()
+  const invokeControlledActionMutation = trpc.plugins.invokeControlledAction.useMutation()
 
   const filteredPlugins = useMemo(() => {
     const runtimeFiltered = runtimeFilter === "all"
@@ -1274,6 +2217,9 @@ export function AgentsPluginsTab() {
 
   const selectedPlugin = plugins.find((p) => getPluginKey(p) === selectedPluginKey) || null
   const selectedSource = pluginSources.find((source) => source.id === selectedSourceId) || null
+  const selectedPluginDebug = selectedPlugin
+    ? doctorReport?.plugins.find((debug) => debug.reviewKey === selectedPlugin.reviewKey)
+    : undefined
 
   // Auto-select first plugin in display order (enabled first, then marketplace)
   useEffect(() => {
@@ -1309,12 +2255,12 @@ export function AgentsPluginsTab() {
       toast.success(t("settings.plugins.toast.reviewed"), {
         description: formatPluginName(plugin.name),
       })
-      await refetch()
+      await Promise.all([refetch(), refetchDoctor()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [markReviewedMutation, refetch, t])
+  }, [markReviewedMutation, refetch, refetchDoctor, t])
 
   const handleToggleEnabled = useCallback(async (plugin: PluginData, enabled: boolean) => {
     try {
@@ -1332,12 +2278,12 @@ export function AgentsPluginsTab() {
       toast.success(enabled ? t("settings.plugins.toast.enabled") : t("settings.plugins.toast.disabled"), {
         description: formatPluginName(plugin.name),
       })
-      await Promise.all([refetch(), refetchMcp()])
+      await Promise.all([refetch(), refetchDoctor(), refetchMcp()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [setPluginEnabledMutation, revokeAllMutation, refetch, refetchMcp, t])
+  }, [setPluginEnabledMutation, revokeAllMutation, refetch, refetchDoctor, refetchMcp, t])
 
   const handleApproveMcpServers = useCallback(async (plugin: PluginData) => {
     if (plugin.runtime !== "claude" || plugin.components.mcpServers.length === 0) return
@@ -1345,9 +2291,6 @@ export function AgentsPluginsTab() {
       await approveAllMutation.mutateAsync({
         pluginSource: plugin.source,
         serverNames: plugin.components.mcpServers,
-        identifiers: plugin.components.mcpServers
-          .map((serverName) => plugin.mcpApprovalIdentifiers[serverName])
-          .filter((identifier): identifier is string => typeof identifier === "string"),
       })
       toast.success(t("settings.plugins.toast.mcpApproved"), {
         description: formatPluginName(plugin.name),
@@ -1359,15 +2302,88 @@ export function AgentsPluginsTab() {
     }
   }, [approveAllMutation, refetchMcp, t])
 
-  const handleRefreshPlugins = useCallback(async () => {
+  const handleGrantControlledAction = useCallback(async (
+    plugin: PluginData,
+    surface: PluginControlledUiCommandButton,
+  ) => {
     try {
-      await clearPluginCacheMutation.mutateAsync()
-      await Promise.all([refetch(), refetchSources()])
+      await grantControlledActionMutation.mutateAsync({
+        reviewKey: plugin.reviewKey,
+        contributionId: surface.id,
+        actionId: surface.action.id,
+      })
+      toast.success(t("settings.plugins.toast.controlledActionApproved"), {
+        description: surface.title,
+      })
+      await Promise.all([refetch(), refetchDoctor()])
     } catch (error) {
       const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
-  }, [clearPluginCacheMutation, refetch, refetchSources, t])
+  }, [grantControlledActionMutation, refetch, refetchDoctor, t])
+
+  const handleSetControlledSetting = useCallback(async (
+    plugin: PluginData,
+    surface: PluginControlledUiSettingsSection,
+    field: PluginControlledUiField,
+    value: PluginControlledUiSettingValue,
+  ) => {
+    try {
+      await setControlledSettingMutation.mutateAsync({
+        reviewKey: plugin.reviewKey,
+        contributionId: surface.id,
+        fieldId: field.id,
+        value,
+      })
+      await refetch()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [refetch, setControlledSettingMutation, t])
+
+  const handleInvokeControlledAction = useCallback(async (
+    plugin: PluginData,
+    surface: PluginControlledUiCommandButton,
+  ) => {
+    try {
+      const result = await invokeControlledActionMutation.mutateAsync({
+        reviewKey: plugin.reviewKey,
+        contributionId: surface.id,
+        actionId: surface.action.id,
+      })
+      await navigator.clipboard.writeText(result.prompt)
+      toast.success(t("settings.plugins.toast.controlledDraftPrepared"), {
+        description: surface.title,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [invokeControlledActionMutation, t])
+
+  const handleRefreshPlugins = useCallback(async () => {
+    try {
+      await clearPluginCacheMutation.mutateAsync()
+      await Promise.all([refetch(), refetchSources(), refetchDoctor()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [clearPluginCacheMutation, refetch, refetchSources, refetchDoctor, t])
+
+  const handleToggleSafeMode = useCallback(async (enabled: boolean) => {
+    try {
+      await setSafeModeMutation.mutateAsync({ enabled })
+      toast.success(enabled
+        ? t("settings.plugins.toast.safeModeEnabled")
+        : t("settings.plugins.toast.safeModeDisabled"))
+      await Promise.all([refetchSafeMode(), refetch(), refetchDoctor(), refetchMcp()])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      toast.error(message)
+    }
+  }, [setSafeModeMutation, refetchSafeMode, refetch, refetchDoctor, refetchMcp, t])
 
   const isRefreshingPlugins = isLoading || isLoadingSources || clearPluginCacheMutation.isPending
 
@@ -1405,6 +2421,19 @@ export function AgentsPluginsTab() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="px-2 pt-2 flex-shrink-0">
+            <PluginSafeModeControl
+              safeMode={safeMode}
+              onToggle={handleToggleSafeMode}
+              isToggling={setSafeModeMutation.isPending}
+            />
+          </div>
+          <div className="px-2 pt-2 flex-shrink-0">
+            <PluginDoctorSummaryPanel
+              report={doctorReport}
+              isLoading={isLoadingDoctor}
+            />
           </div>
           {/* Search */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
@@ -1549,6 +2578,7 @@ export function AgentsPluginsTab() {
           selectedPlugin ? (
             <PluginDetail
               plugin={selectedPlugin}
+              pluginDebug={selectedPluginDebug}
               onToggleEnabled={(enabled) => handleToggleEnabled(selectedPlugin, enabled)}
               isTogglingEnabled={setPluginEnabledMutation.isPending}
               onApproveMcpServers={() => handleApproveMcpServers(selectedPlugin)}
@@ -1559,6 +2589,12 @@ export function AgentsPluginsTab() {
               isAuthenticating={startOAuthMutation.isPending}
               onMarkReviewed={() => handleMarkReviewed(selectedPlugin)}
               isMarkingReviewed={markReviewedMutation.isPending}
+              onSetControlledSetting={(surface, field, value) => handleSetControlledSetting(selectedPlugin, surface, field, value)}
+              onGrantControlledAction={(surface) => handleGrantControlledAction(selectedPlugin, surface)}
+              onInvokeControlledAction={(surface) => handleInvokeControlledAction(selectedPlugin, surface)}
+              isSavingControlledSetting={setControlledSettingMutation.isPending}
+              isGrantingControlledAction={grantControlledActionMutation.isPending}
+              isInvokingControlledAction={invokeControlledActionMutation.isPending}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">

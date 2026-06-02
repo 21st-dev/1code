@@ -11,6 +11,10 @@ describe("plugin target mode UI source guards", () => {
     join(process.cwd(), "src/renderer/lib/i18n/dictionaries.ts"),
     "utf8",
   )
+  const pluginsRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/plugins.ts"),
+    "utf8",
+  )
 
   test("renders target mode, execution, review, and update posture labels", () => {
     expect(pluginsTabSource).toContain("getTargetModeLabel(plugin.targetMode, t)")
@@ -96,5 +100,92 @@ describe("plugin target mode UI source guards", () => {
     ]) {
       expect(dictionarySource).toContain(`"${key}"`)
     }
+  })
+
+  test("renders enforceable safe mode gates without trusting renderer approvals", () => {
+    expect(pluginsTabSource).toContain("PluginSafeModeControl")
+    expect(pluginsTabSource).toContain("PluginSafetyGatePanel")
+    expect(pluginsTabSource).toContain("trpc.plugins.safeMode.useQuery")
+    expect(pluginsTabSource).toContain("trpc.plugins.setSafeMode.useMutation")
+    expect(pluginsTabSource).toContain("plugin.safetyGate.canApproveMcp")
+    expect(pluginsTabSource).toContain("plugin.safetyGate.canUseMcp")
+    expect(pluginsTabSource).not.toContain("identifiers: plugin.components.mcpServers")
+
+    for (const key of [
+      "settings.plugins.safeMode",
+      "settings.plugins.safetyGate",
+      "settings.plugins.safetyGateHint",
+      "settings.plugins.safetyGateReviewRequired",
+      "settings.plugins.safetyReasonReviewChanged",
+      "settings.plugins.safetyGateBlocksAction",
+      "settings.plugins.toast.safeModeEnabled",
+      "settings.plugins.toast.safeModeDisabled",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
+
+  test("renders controlled UI contributions without plugin code execution", () => {
+    expect(pluginsTabSource).toContain("PluginControlledUiPanel")
+    expect(pluginsTabSource).toContain("plugin.controlledUi.manifest?.surfaces")
+    expect(pluginsTabSource).toContain("!plugin.controlledUi.manifestPresent")
+    expect(pluginsTabSource).toContain("trpc.plugins.setControlledSetting.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.grantControlledAction.useMutation")
+    expect(pluginsTabSource).toContain("trpc.plugins.invokeControlledAction.useMutation")
+    expect(pluginsTabSource).toContain("plugin.controlledUi.settingsValues")
+    expect(pluginsTabSource).toContain("navigator.clipboard.writeText(result.prompt)")
+    expect(pluginsRouterSource).toContain("setControlledSetting")
+    expect(pluginsRouterSource).toContain("setControlledUiSettingValue")
+    expect(pluginsRouterSource).toContain("grantControlledAction")
+    expect(pluginsRouterSource).toContain("invokeControlledAction")
+    expect(pluginsRouterSource).toContain("getControlledUiActionContext")
+    expect(pluginsRouterSource).toContain("getControlledUiSettingContext")
+    expect(pluginsRouterSource).toContain("buildPluginControlledUiGate")
+    expect(pluginsTabSource).not.toContain("dangerouslySetInnerHTML")
+    expect(pluginsTabSource).not.toContain("executeCodexPlugin")
+    expect(pluginsTabSource).not.toContain("new Function")
+    expect(pluginsTabSource).not.toContain("webview")
+
+    for (const key of [
+      "settings.plugins.uiContributions",
+      "settings.plugins.uiContributionsHint",
+      "settings.plugins.contributionSettingUnset",
+      "settings.plugins.contributionReasonPermissionRequired",
+      "settings.plugins.contributionStatusPermissionStale",
+      "settings.plugins.approveControlledAction",
+      "settings.plugins.prepareControlledDraft",
+      "settings.plugins.controlledActionHint",
+      "settings.plugins.toast.controlledActionApproved",
+      "settings.plugins.toast.controlledDraftPrepared",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
+
+  test("renders plugin Doctor and Debug facts without sandbox claims", () => {
+    expect(pluginsTabSource).toContain("PluginDoctorSummaryPanel")
+    expect(pluginsTabSource).toContain("PluginDebugPanel")
+    expect(pluginsTabSource).toContain("getWorstDoctorStatus")
+    expect(pluginsTabSource).toContain("trpc.plugins.doctor.useQuery")
+    expect(pluginsTabSource).toContain("doctorReport?.plugins.find")
+    expect(pluginsTabSource).toContain("settings.plugins.doctor")
+    expect(pluginsTabSource).toContain("settings.plugins.debug")
+    expect(pluginsTabSource).not.toContain("installPluginUpdate")
+    expect(pluginsTabSource).not.toContain("executeCodexPlugin")
+
+    for (const key of [
+      "settings.plugins.doctorSummary",
+      "settings.plugins.doctorStatusBlocked",
+      "settings.plugins.debugHint",
+      "settings.plugins.doctorFingerprint",
+      "settings.plugins.doctorCheckRuntimeGate",
+      "settings.plugins.doctorCheckCodexReadOnly",
+      "settings.plugins.doctorCheckMcpApprovalFingerprint",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+
+    expect(dictionarySource).toContain("This is not a sandbox or trust certificate")
+    expect(dictionarySource).toContain("不是沙箱或可信证书")
   })
 })

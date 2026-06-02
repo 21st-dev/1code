@@ -1103,16 +1103,17 @@ export const en = {
   "settings.plugins.capabilityCount": "{count} capabilities",
   "settings.plugins.targetMode": "Target mode",
   "settings.plugins.targetModeManifestOnly": "Metadata only",
-  "settings.plugins.targetModeControlledUi": "Controlled UI (planned)",
+  "settings.plugins.targetModeControlledUi": "Controlled UI",
   "settings.plugins.targetModeDeveloperTrustedCode": "Trusted local code (planned)",
   "settings.plugins.targetModeManifestOnlyDescription":
     "Locus reads this package metadata and component declarations only. It does not execute plugin JavaScript.",
   "settings.plugins.targetModeControlledUiDescription":
-    "Controlled UI plugins require a future Locus-owned extension surface before they can run.",
+    "Locus renders declared plugin surfaces with app-owned controls. Plugin JavaScript is not executed.",
   "settings.plugins.targetModeDeveloperTrustedCodeDescription":
     "Trusted local code would be equivalent to running code on this machine and is not available in normal plugin mode.",
   "settings.plugins.executionStatus": "Execution",
   "settings.plugins.executionNotRunByLocus": "Not run by Locus",
+  "settings.plugins.executionLocusControlled": "Locus-controlled surface",
   "settings.plugins.executionLocusControlledPlanned": "Locus surface required",
   "settings.plugins.executionTrustedCodePlanned": "Trusted code only",
   "settings.plugins.reviewStatus": "Review",
@@ -1152,7 +1153,125 @@ export const en = {
     "Refresh re-scans local metadata only. Install and update actions remain outside this read-only source browser.",
   "settings.plugins.safeModePlanning": "Safe mode",
   "settings.plugins.safeModePlanningGuidance":
-    "Safe mode is a future recovery rule for approved Locus extension surfaces. This change still does not run arbitrary plugin code.",
+    "Safe mode blocks plugin-provided runtime capabilities while keeping metadata, source pins, and review history visible.",
+  "settings.plugins.safeMode": "Plugin safe mode",
+  "settings.plugins.safeModeEnabledShort": "Plugin capabilities are blocked",
+  "settings.plugins.safeModeDisabledShort": "Reviewed capabilities may run",
+  "settings.plugins.safetyGate": "Capability gate",
+  "settings.plugins.safetyGateHint":
+    "This gate controls whether plugin-provided capabilities may enter a Locus runtime path. Local review is not a safety certification.",
+  "settings.plugins.safetyGateAllowed": "Allowed",
+  "settings.plugins.safetyGateSafeMode": "Safe mode",
+  "settings.plugins.safetyGateReviewRequired": "Needs review",
+  "settings.plugins.safetyGateReadOnly": "Read-only",
+  "settings.plugins.safetyReasonGlobalSafeMode":
+    "Plugin safe mode is on, so plugin-provided capabilities are blocked.",
+  "settings.plugins.safetyReasonReviewNew":
+    "This plugin is new and its current manifest fingerprint has not been locally reviewed.",
+  "settings.plugins.safetyReasonReviewChanged":
+    "This plugin changed after the last local review. Review the current fingerprint before enabling capabilities.",
+  "settings.plugins.safetyReasonReviewUnreviewed":
+    "This manifest has been seen but not locally reviewed.",
+  "settings.plugins.safetyReasonCodexReadOnly":
+    "Codex cache packages remain read-only in Locus.",
+  "settings.plugins.safetyReasonNoMcp":
+    "No MCP servers are declared by this plugin.",
+  "settings.plugins.safetyCanEnable": "Enable",
+  "settings.plugins.safetyCanApproveMcp": "Approve MCP",
+  "settings.plugins.safetyCanUseMcp": "Use MCP",
+  "settings.plugins.gateYes": "Yes",
+  "settings.plugins.gateNo": "No",
+  "settings.plugins.safetyGateBlocksAction":
+    "Review gates or safe mode currently block this action.",
+  "settings.plugins.uiContributions": "UI Contributions",
+  "settings.plugins.uiContributionsHint":
+    "Declared Locus surfaces from this plugin. Locus renders them with app-owned controls and does not execute plugin JavaScript.",
+  "settings.plugins.noUiContributions": "No UI contributions declared.",
+  "settings.plugins.uiContributionCount": "{count} UI contributions",
+  "settings.plugins.contributionSettingsSection": "Settings section",
+  "settings.plugins.contributionWorkbenchPanel": "Workbench panel",
+  "settings.plugins.contributionActionEntry": "Action button",
+  "settings.plugins.contributionFieldText": "Text",
+  "settings.plugins.contributionFieldCheckbox": "Checkbox",
+  "settings.plugins.contributionFieldSelect": "Select",
+  "settings.plugins.contributionSettingUnset": "Not set",
+  "settings.plugins.contributionReasonSafeMode":
+    "Plugin safe mode is on, so controlled UI actions are blocked.",
+  "settings.plugins.contributionReasonReviewRequired":
+    "This contribution needs local review before actions are available.",
+  "settings.plugins.contributionReasonChanged":
+    "This contribution changed after the last review.",
+  "settings.plugins.contributionReasonUnreviewed":
+    "This contribution has been seen but not reviewed.",
+  "settings.plugins.contributionReasonInvalid": "The contribution manifest is invalid.",
+  "settings.plugins.contributionReasonUnsupportedRuntime":
+    "This runtime is not supported for controlled UI.",
+  "settings.plugins.contributionReasonUnsupportedTarget":
+    "This package is not in controlled UI mode.",
+  "settings.plugins.contributionReasonUnsupportedSurface":
+    "This surface is not available in this Locus build.",
+  "settings.plugins.contributionReasonUnsupportedAction":
+    "This action is not allowlisted.",
+  "settings.plugins.contributionReasonPermissionRequired":
+    "This action needs a local fingerprint-bound approval.",
+  "settings.plugins.contributionReasonPermissionStale":
+    "The previous approval is stale because the contribution changed.",
+  "settings.plugins.contributionReasonCodexReadOnly":
+    "Codex cache packages remain read-only in Locus.",
+  "settings.plugins.contributionStatusAvailable": "Available in Locus",
+  "settings.plugins.contributionStatusNeedsReview": "Needs local review",
+  "settings.plugins.contributionStatusChanged": "Changed since review",
+  "settings.plugins.contributionStatusSafeMode": "Blocked by safe mode",
+  "settings.plugins.contributionStatusUnavailable": "Surface not available",
+  "settings.plugins.contributionStatusSurfaceUnavailable": "Host not wired",
+  "settings.plugins.contributionStatusReadOnly": "Read-only metadata",
+  "settings.plugins.contributionStatusPermissionRequired": "Needs action approval",
+  "settings.plugins.contributionStatusPermissionStale": "Approval stale",
+  "settings.plugins.workbenchContributionPlanned":
+    "{count} declared items. Workbench host is not wired in this slice.",
+  "settings.plugins.approveControlledAction": "Approve action",
+  "settings.plugins.prepareControlledDraft": "Copy draft prompt",
+  "settings.plugins.controlledActionInsertDraft":
+    "Returns a bounded draft prompt. It does not send chat or run an agent.",
+  "settings.plugins.controlledActionHint":
+    "Controlled actions are handled by Locus allowlists. They do not run plugin code, shell commands, or automatic chat sends.",
+  "settings.plugins.toast.controlledActionApproved": "Controlled action approved",
+  "settings.plugins.toast.controlledDraftPrepared": "Draft prompt copied",
+  "settings.plugins.doctor": "Plugin Doctor",
+  "settings.plugins.doctorSummary": "{blocked} blocked / {warning} warnings / {checks} checks",
+  "settings.plugins.doctorStatusPass": "Pass",
+  "settings.plugins.doctorStatusInfo": "Info",
+  "settings.plugins.doctorStatusWarning": "Warning",
+  "settings.plugins.doctorStatusBlocked": "Blocked",
+  "settings.plugins.debug": "Debug",
+  "settings.plugins.debugHint":
+    "Local Doctor facts from the main process. This is not a sandbox or trust certificate.",
+  "settings.plugins.doctorFingerprint": "Current fingerprint",
+  "settings.plugins.doctorLastReviewedFingerprint": "Reviewed fingerprint",
+  "settings.plugins.doctorComponentCounts": "Components",
+  "settings.plugins.doctorCommandsShort": "Cmd",
+  "settings.plugins.doctorSkillsShort": "Skill",
+  "settings.plugins.doctorAgentsShort": "Agent",
+  "settings.plugins.doctorMcpApprovals": "MCP approvals",
+  "settings.plugins.doctorChecks": "Doctor checks",
+  "settings.plugins.doctorCheckSourceAvailable": "Source available",
+  "settings.plugins.doctorCheckSourceEmpty": "Source empty",
+  "settings.plugins.doctorCheckSourceMissing": "Source missing",
+  "settings.plugins.doctorCheckManifestFingerprint": "Manifest fingerprint",
+  "settings.plugins.doctorCheckReviewRequired": "Review required",
+  "settings.plugins.doctorCheckReviewChanged": "Changed after review",
+  "settings.plugins.doctorCheckReviewed": "Fingerprint reviewed",
+  "settings.plugins.doctorCheckSafeMode": "Safe mode gate",
+  "settings.plugins.doctorCheckRuntimeGate": "Runtime gate",
+  "settings.plugins.doctorCheckCodexReadOnly": "Codex read-only cache",
+  "settings.plugins.doctorCheckComponentsDeclared": "Components declared",
+  "settings.plugins.doctorCheckMcpDeclared": "MCP declared",
+  "settings.plugins.doctorCheckMcpApprovalFingerprint": "MCP approval fingerprint",
+  "settings.plugins.doctorCheckControlledUiDeclared": "Controlled UI declared",
+  "settings.plugins.doctorCheckControlledUiGate": "Controlled UI gate",
+  "settings.plugins.doctorCheckControlledUiDiagnostic": "Controlled UI diagnostic",
+  "settings.plugins.doctorCheckComponentPathWarning": "Component path warning",
+  "settings.plugins.doctorCheckReviewState": "Review state file",
   "settings.plugins.diagnostics": "Diagnostics",
   "settings.plugins.diagnosticMetadataOnlyNoExecution":
     "Metadata and component declarations only; plugin JavaScript is not executed.",
@@ -1163,7 +1282,7 @@ export const en = {
   "settings.plugins.diagnosticPermissionScopeReviewRequired":
     "Permission, scope, MCP, native, filesystem, network, or shell changes must be reviewed before enablement.",
   "settings.plugins.diagnosticSafeModePlanned":
-    "Safe mode is planned for future execution surfaces; no arbitrary plugin code runs in this mode.",
+    "Safe mode blocks plugin-provided runtime capabilities; arbitrary plugin code still does not run in this mode.",
   "settings.plugins.diagnosticComponentPathOutsideRoot":
     "A component path was ignored because it points outside this plugin root.",
   "settings.plugins.diagnosticSourceAvailable":
@@ -1204,6 +1323,8 @@ export const en = {
   "settings.plugins.toast.disabled": "Plugin disabled",
   "settings.plugins.toast.reviewed": "Plugin review recorded",
   "settings.plugins.toast.mcpApproved": "Plugin MCP servers approved",
+  "settings.plugins.toast.safeModeEnabled": "Plugin safe mode enabled",
+  "settings.plugins.toast.safeModeDisabled": "Plugin safe mode disabled",
   "settings.plugins.toast.failedToUpdate": "Failed to update plugin",
   "settings.plugins.searchPlaceholder": "Search plugins...",
   "settings.plugins.searchSourcesPlaceholder": "Search sources...",
@@ -3732,16 +3853,17 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.capabilityCount": "{count} 个能力",
   "settings.plugins.targetMode": "目标模式",
   "settings.plugins.targetModeManifestOnly": "仅元数据",
-  "settings.plugins.targetModeControlledUi": "受控 UI（规划中）",
+  "settings.plugins.targetModeControlledUi": "受控 UI",
   "settings.plugins.targetModeDeveloperTrustedCode": "可信本地代码（规划中）",
   "settings.plugins.targetModeManifestOnlyDescription":
     "Locus 只读取这个包的元数据和组件声明，不执行插件 JavaScript。",
   "settings.plugins.targetModeControlledUiDescription":
-    "受控 UI 插件需要未来由 Locus 拥有的扩展入口，批准后才可以运行。",
+    "Locus 使用应用自己的控件渲染插件声明的 UI，不执行插件 JavaScript。",
   "settings.plugins.targetModeDeveloperTrustedCodeDescription":
     "可信本地代码等同于在这台机器上运行代码，普通插件模式下不可用。",
   "settings.plugins.executionStatus": "执行状态",
   "settings.plugins.executionNotRunByLocus": "Locus 不运行",
+  "settings.plugins.executionLocusControlled": "Locus 受控界面",
   "settings.plugins.executionLocusControlledPlanned": "需要 Locus 扩展入口",
   "settings.plugins.executionTrustedCodePlanned": "仅可信代码",
   "settings.plugins.reviewStatus": "复审状态",
@@ -3781,7 +3903,125 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "刷新只会重新扫描本地元数据。安装和更新动作仍不放在这个只读来源浏览器里。",
   "settings.plugins.safeModePlanning": "安全模式",
   "settings.plugins.safeModePlanningGuidance":
-    "安全模式是未来 Locus 自有扩展入口的恢复规则。本次改动仍然不执行任意插件代码。",
+    "安全模式会阻断插件提供的运行时能力，但仍保留元数据、来源 pin 和复审历史展示。",
+  "settings.plugins.safeMode": "插件安全模式",
+  "settings.plugins.safeModeEnabledShort": "插件能力已阻断",
+  "settings.plugins.safeModeDisabledShort": "已复审能力可进入运行路径",
+  "settings.plugins.safetyGate": "能力门禁",
+  "settings.plugins.safetyGateHint":
+    "这个门禁只控制插件能力能否进入 Locus 运行路径。本地复审不是安全认证。",
+  "settings.plugins.safetyGateAllowed": "允许",
+  "settings.plugins.safetyGateSafeMode": "安全模式",
+  "settings.plugins.safetyGateReviewRequired": "需要复审",
+  "settings.plugins.safetyGateReadOnly": "只读",
+  "settings.plugins.safetyReasonGlobalSafeMode":
+    "插件安全模式已开启，因此插件提供的能力被阻断。",
+  "settings.plugins.safetyReasonReviewNew":
+    "这是新发现的插件，当前清单 fingerprint 还没有本地复审。",
+  "settings.plugins.safetyReasonReviewChanged":
+    "这个插件在上次本地复审后发生变化。启用能力前需要复审当前 fingerprint。",
+  "settings.plugins.safetyReasonReviewUnreviewed":
+    "这个清单已经被扫描到，但还没有本地复审。",
+  "settings.plugins.safetyReasonCodexReadOnly":
+    "Codex 缓存包在 Locus 中保持只读。",
+  "settings.plugins.safetyReasonNoMcp":
+    "这个插件没有声明 MCP 服务器。",
+  "settings.plugins.safetyCanEnable": "启用",
+  "settings.plugins.safetyCanApproveMcp": "批准 MCP",
+  "settings.plugins.safetyCanUseMcp": "使用 MCP",
+  "settings.plugins.gateYes": "是",
+  "settings.plugins.gateNo": "否",
+  "settings.plugins.safetyGateBlocksAction":
+    "当前复审门禁或安全模式正在阻断这个动作。",
+  "settings.plugins.uiContributions": "UI 贡献",
+  "settings.plugins.uiContributionsHint":
+    "这些是插件声明的 Locus 界面。Locus 使用应用自己的控件渲染，不执行插件 JavaScript。",
+  "settings.plugins.noUiContributions": "没有声明 UI 贡献。",
+  "settings.plugins.uiContributionCount": "{count} 个 UI 贡献",
+  "settings.plugins.contributionSettingsSection": "设置区块",
+  "settings.plugins.contributionWorkbenchPanel": "Workbench 面板",
+  "settings.plugins.contributionActionEntry": "动作按钮",
+  "settings.plugins.contributionFieldText": "文本",
+  "settings.plugins.contributionFieldCheckbox": "复选框",
+  "settings.plugins.contributionFieldSelect": "选择",
+  "settings.plugins.contributionSettingUnset": "未设置",
+  "settings.plugins.contributionReasonSafeMode":
+    "插件安全模式已开启，受控 UI 动作被阻断。",
+  "settings.plugins.contributionReasonReviewRequired":
+    "这个 UI 贡献需要本地复审后才能使用动作。",
+  "settings.plugins.contributionReasonChanged":
+    "这个 UI 贡献在上次复审后发生了变化。",
+  "settings.plugins.contributionReasonUnreviewed":
+    "这个 UI 贡献已被扫描到，但还没有复审。",
+  "settings.plugins.contributionReasonInvalid": "这个 UI 贡献清单无效。",
+  "settings.plugins.contributionReasonUnsupportedRuntime":
+    "这个运行时暂不支持受控 UI。",
+  "settings.plugins.contributionReasonUnsupportedTarget":
+    "这个包不是受控 UI 模式。",
+  "settings.plugins.contributionReasonUnsupportedSurface":
+    "当前 Locus 版本还没有接入这个界面位置。",
+  "settings.plugins.contributionReasonUnsupportedAction":
+    "这个动作不在 Locus allowlist 中。",
+  "settings.plugins.contributionReasonPermissionRequired":
+    "这个动作需要本地 fingerprint 绑定批准。",
+  "settings.plugins.contributionReasonPermissionStale":
+    "UI 贡献已变化，之前的批准已过期。",
+  "settings.plugins.contributionReasonCodexReadOnly":
+    "Codex 缓存包在 Locus 中保持只读。",
+  "settings.plugins.contributionStatusAvailable": "Locus 可用",
+  "settings.plugins.contributionStatusNeedsReview": "需要本地复审",
+  "settings.plugins.contributionStatusChanged": "复审后已变化",
+  "settings.plugins.contributionStatusSafeMode": "安全模式阻断",
+  "settings.plugins.contributionStatusUnavailable": "界面不可用",
+  "settings.plugins.contributionStatusSurfaceUnavailable": "宿主未接入",
+  "settings.plugins.contributionStatusReadOnly": "只读元数据",
+  "settings.plugins.contributionStatusPermissionRequired": "需要动作批准",
+  "settings.plugins.contributionStatusPermissionStale": "批准已过期",
+  "settings.plugins.workbenchContributionPlanned":
+    "声明了 {count} 个条目；Workbench 宿主不在本切片内接入。",
+  "settings.plugins.approveControlledAction": "批准动作",
+  "settings.plugins.prepareControlledDraft": "复制草稿提示",
+  "settings.plugins.controlledActionInsertDraft":
+    "只返回有边界的草稿提示，不发送聊天，也不运行 agent。",
+  "settings.plugins.controlledActionHint":
+    "受控动作由 Locus allowlist 处理，不运行插件代码、shell 命令，也不会自动发送聊天。",
+  "settings.plugins.toast.controlledActionApproved": "受控动作已批准",
+  "settings.plugins.toast.controlledDraftPrepared": "草稿提示已复制",
+  "settings.plugins.doctor": "插件 Doctor",
+  "settings.plugins.doctorSummary": "{blocked} 个阻断 / {warning} 个警告 / {checks} 项检查",
+  "settings.plugins.doctorStatusPass": "通过",
+  "settings.plugins.doctorStatusInfo": "信息",
+  "settings.plugins.doctorStatusWarning": "警告",
+  "settings.plugins.doctorStatusBlocked": "阻断",
+  "settings.plugins.debug": "Debug",
+  "settings.plugins.debugHint":
+    "这些是 main process 生成的本地 Doctor 事实，不是沙箱或可信证书。",
+  "settings.plugins.doctorFingerprint": "当前 fingerprint",
+  "settings.plugins.doctorLastReviewedFingerprint": "已复审 fingerprint",
+  "settings.plugins.doctorComponentCounts": "组件",
+  "settings.plugins.doctorCommandsShort": "命令",
+  "settings.plugins.doctorSkillsShort": "技能",
+  "settings.plugins.doctorAgentsShort": "智能体",
+  "settings.plugins.doctorMcpApprovals": "MCP 批准",
+  "settings.plugins.doctorChecks": "Doctor 检查",
+  "settings.plugins.doctorCheckSourceAvailable": "来源可用",
+  "settings.plugins.doctorCheckSourceEmpty": "来源为空",
+  "settings.plugins.doctorCheckSourceMissing": "来源缺失",
+  "settings.plugins.doctorCheckManifestFingerprint": "清单 fingerprint",
+  "settings.plugins.doctorCheckReviewRequired": "需要复审",
+  "settings.plugins.doctorCheckReviewChanged": "复审后已变化",
+  "settings.plugins.doctorCheckReviewed": "fingerprint 已复审",
+  "settings.plugins.doctorCheckSafeMode": "安全模式门禁",
+  "settings.plugins.doctorCheckRuntimeGate": "运行时门禁",
+  "settings.plugins.doctorCheckCodexReadOnly": "Codex 只读缓存",
+  "settings.plugins.doctorCheckComponentsDeclared": "组件声明",
+  "settings.plugins.doctorCheckMcpDeclared": "MCP 声明",
+  "settings.plugins.doctorCheckMcpApprovalFingerprint": "MCP 批准 fingerprint",
+  "settings.plugins.doctorCheckControlledUiDeclared": "受控 UI 声明",
+  "settings.plugins.doctorCheckControlledUiGate": "受控 UI 门禁",
+  "settings.plugins.doctorCheckControlledUiDiagnostic": "受控 UI 诊断",
+  "settings.plugins.doctorCheckComponentPathWarning": "组件路径警告",
+  "settings.plugins.doctorCheckReviewState": "复审状态文件",
   "settings.plugins.diagnostics": "诊断",
   "settings.plugins.diagnosticMetadataOnlyNoExecution":
     "只读取元数据和组件声明，不执行插件 JavaScript。",
@@ -3792,7 +4032,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.diagnosticPermissionScopeReviewRequired":
     "权限、范围、MCP、native、文件系统、网络或 shell 变化启用前必须复审。",
   "settings.plugins.diagnosticSafeModePlanned":
-    "安全模式只规划给未来执行入口；当前模式不运行任意插件代码。",
+    "安全模式会阻断插件提供的运行时能力；当前模式仍不运行任意插件代码。",
   "settings.plugins.diagnosticComponentPathOutsideRoot":
     "有组件路径指向插件根目录外，已被忽略。",
   "settings.plugins.diagnosticSourceAvailable":
@@ -3833,6 +4073,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.toast.disabled": "插件已禁用",
   "settings.plugins.toast.reviewed": "插件复审已记录",
   "settings.plugins.toast.mcpApproved": "插件 MCP 服务器已批准",
+  "settings.plugins.toast.safeModeEnabled": "插件安全模式已开启",
+  "settings.plugins.toast.safeModeDisabled": "插件安全模式已关闭",
   "settings.plugins.toast.failedToUpdate": "更新插件失败",
   "settings.plugins.searchPlaceholder": "搜索插件...",
   "settings.plugins.searchSourcesPlaceholder": "搜索来源...",
