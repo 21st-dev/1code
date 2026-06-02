@@ -23,11 +23,11 @@
 - [x] 4.5 Add UI source-guard tests.
 
 ## 5. Verification
-- [ ] 5.1 Run targeted plugin and i18n tests.
-- [ ] 5.2 Run full `bun run test`.
-- [ ] 5.3 Run `bun run ts:check`.
-- [ ] 5.4 Run `openspec validate add-plugin-safe-mode-gates --strict --no-interactive`.
-- [ ] 5.5 Run `git diff --check`.
-- [ ] 5.6 Start the dev app with a clean QA userData path and verify Settings > Plugins.
-- [ ] 5.7 Record a real UI smoke video and screenshot.
-- [ ] 5.8 Review UI/UX after smoke and fix issues found.
+- [x] 5.1 Run targeted plugin and i18n tests.
+- [x] 5.2 Run full `bun run test`.
+- [x] 5.3 Run `bun run ts:check`.
+- [x] 5.4 Run `openspec validate add-plugin-safe-mode-gates --strict --no-interactive`.
+- [x] 5.5 Run `git diff --check`.
+- [x] 5.6 Start the dev app with a clean QA userData path and verify Settings > Plugins.
+- [x] 5.7 Record a real UI smoke video and screenshot.
+- [x] 5.8 Review UI/UX after smoke and fix issues found.
