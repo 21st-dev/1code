@@ -238,6 +238,7 @@ export const agentJobs = sqliteTable("agent_jobs", {
     onDelete: "set null",
   }),
   promptPreview: text("prompt_preview"),
+  inputJson: text("input_json"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),

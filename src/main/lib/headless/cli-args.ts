@@ -1,0 +1,211 @@
+import { existsSync } from "fs"
+import { resolve } from "path"
+import {
+  AGENT_JOB_MODES,
+  type AgentJobMode,
+} from "../../../shared/agent-jobs"
+import {
+  AGENT_RUNTIME_IDS,
+  toAgentRuntimeId,
+  type AgentRuntimeId,
+} from "../../../shared/agent-runtime-capabilities"
+
+export const HEADLESS_CLI_MARKER = "--locus-headless-cli"
+
+export const HEADLESS_OUTPUT_FORMATS = ["text", "json", "stream-json"] as const
+
+export type HeadlessOutputFormat = (typeof HEADLESS_OUTPUT_FORMATS)[number]
+
+export type HeadlessCliCommand =
+  | {
+      kind: "run"
+      cwd: string
+      runtime: AgentRuntimeId
+      mode: AgentJobMode
+      prompt: string
+      stdin: boolean
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "jobs-list"
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "jobs-show"
+      jobId: string
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "jobs-logs"
+      jobId: string
+      follow: boolean
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "jobs-cancel"
+      jobId: string
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "jobs-retry"
+      jobId: string
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "help"
+      output: "text"
+    }
+
+export type ParsedHeadlessCli =
+  | { ok: true; command: HeadlessCliCommand }
+  | { ok: false; code: number; message: string }
+
+export function isHeadlessCliInvocation(argv = process.argv): boolean {
+  return argv.includes(HEADLESS_CLI_MARKER)
+}
+
+function argsAfterMarker(argv: string[]): string[] {
+  const markerIndex = argv.indexOf(HEADLESS_CLI_MARKER)
+  if (markerIndex >= 0) return argv.slice(markerIndex + 1)
+  return argv.slice(process.defaultApp ? 2 : 1)
+}
+
+function takeOption(args: string[], name: string): string | null {
+  const index = args.indexOf(name)
+  if (index < 0) return null
+  const value = args[index + 1]
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${name} requires a value`)
+  }
+  args.splice(index, 2)
+  return value
+}
+
+function takeFlag(args: string[], name: string): boolean {
+  const index = args.indexOf(name)
+  if (index < 0) return false
+  args.splice(index, 1)
+  return true
+}
+
+function parseOutput(args: string[]): HeadlessOutputFormat {
+  const output = takeOption(args, "--output") ?? "text"
+  if (!(HEADLESS_OUTPUT_FORMATS as readonly string[]).includes(output)) {
+    throw new Error(`Unsupported --output: ${output}`)
+  }
+  return output as HeadlessOutputFormat
+}
+
+function parseMode(value: string | null): AgentJobMode {
+  const mode = value ?? "agent"
+  if (!(AGENT_JOB_MODES as readonly string[]).includes(mode)) {
+    throw new Error(`Unsupported --mode: ${mode}`)
+  }
+  return mode as AgentJobMode
+}
+
+function parseRuntime(value: string | null): AgentRuntimeId {
+  const runtime = toAgentRuntimeId(value ?? "claude-code")
+  if (!runtime || !(AGENT_RUNTIME_IDS as readonly string[]).includes(runtime)) {
+    throw new Error(`Unsupported --runtime: ${value ?? "claude-code"}`)
+  }
+  return runtime
+}
+
+function parseCwd(value: string | null): string {
+  const cwd = resolve(value ?? process.cwd())
+  if (!existsSync(cwd)) {
+    throw new Error(`Invalid or inaccessible cwd: ${cwd}`)
+  }
+  return cwd
+}
+
+function rejectSecretFlags(args: string[]): void {
+  const forbidden = [
+    "--api-key",
+    "--token",
+    "--auth-token",
+    "--access-token",
+    "--refresh-token",
+  ]
+  const flag = args.find((arg) => forbidden.includes(arg))
+  if (flag) {
+    throw new Error(`${flag} is not accepted. Use stored provider credentials.`)
+  }
+}
+
+export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
+  const args = argsAfterMarker(argv)
+  try {
+    rejectSecretFlags(args)
+    const command = args.shift()
+    if (!command || command === "help" || command === "--help" || command === "-h") {
+      return { ok: true, command: { kind: "help", output: "text" } }
+    }
+
+    if (command === "run") {
+      const stdin = takeFlag(args, "--stdin")
+      const output = parseOutput(args)
+      const cwd = parseCwd(takeOption(args, "--cwd"))
+      const runtime = parseRuntime(takeOption(args, "--runtime"))
+      const mode = parseMode(takeOption(args, "--mode"))
+      const prompt = takeOption(args, "--prompt") ?? ""
+      if (!stdin && !prompt.trim()) {
+        throw new Error("locus run requires --prompt or --stdin")
+      }
+      if (args.length > 0) {
+        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+      }
+      return {
+        ok: true,
+        command: {
+          kind: "run",
+          cwd,
+          runtime,
+          mode,
+          prompt,
+          stdin,
+          output,
+        },
+      }
+    }
+
+    if (command === "jobs") {
+      const subcommand = args.shift() ?? "list"
+      const follow = takeFlag(args, "--follow")
+      const output = parseOutput(args)
+      if (subcommand === "list") {
+        if (args.length > 0) {
+          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        }
+        return { ok: true, command: { kind: "jobs-list", output } }
+      }
+      const jobId = args.shift()
+      if (!jobId) throw new Error(`locus jobs ${subcommand} requires a job id`)
+      if (args.length > 0) {
+        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+      }
+      if (subcommand === "show") {
+        return { ok: true, command: { kind: "jobs-show", jobId, output } }
+      }
+      if (subcommand === "logs") {
+        return { ok: true, command: { kind: "jobs-logs", jobId, follow, output } }
+      }
+      if (subcommand === "cancel") {
+        return { ok: true, command: { kind: "jobs-cancel", jobId, output } }
+      }
+      if (subcommand === "retry") {
+        return { ok: true, command: { kind: "jobs-retry", jobId, output } }
+      }
+      throw new Error(`Unknown jobs subcommand: ${subcommand}`)
+    }
+
+    throw new Error(`Unknown command: ${command}`)
+  } catch (error) {
+    return {
+      ok: false,
+      code: 2,
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+}

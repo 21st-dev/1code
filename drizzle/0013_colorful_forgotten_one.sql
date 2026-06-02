@@ -1,0 +1,1 @@
+ALTER TABLE `agent_jobs` ADD `input_json` text;

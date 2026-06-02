@@ -63,6 +63,7 @@ export type CompleteAgentJobInput = {
 export type ListAgentJobsInput = {
   limit?: number
   status?: AgentJobStatus
+  source?: AgentJobSource
 }
 
 const MAX_PROMPT_PREVIEW_LENGTH = 240
@@ -111,6 +112,15 @@ function toJson(value: unknown): string {
   return JSON.stringify(sanitizeForStorage(value ?? {}))
 }
 
+function fromJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
 function promptPreview(prompt: string): string {
   const compact = prompt.replace(/\s+/g, " ").trim()
   const truncated =
@@ -145,6 +155,7 @@ export function createAgentJob(
       mode: input.mode,
       cwd: input.cwd,
       promptPreview: promptPreview(input.prompt),
+      inputJson: toJson({ prompt: input.prompt }),
       projectId: input.projectId ?? null,
       chatId: input.chatId ?? null,
       subChatId: input.subChatId ?? null,
@@ -181,11 +192,22 @@ export function listAgentJobs(
   input: ListAgentJobsInput = {},
 ): AgentJob[] {
   const limit = Math.max(1, Math.min(input.limit ?? 50, 200))
-  if (input.status) {
+  const whereClauses = [
+    input.status ? eq(agentJobs.status, input.status) : undefined,
+    input.source ? eq(agentJobs.source, input.source) : undefined,
+  ].filter(Boolean)
+  const whereClause =
+    whereClauses.length === 0
+      ? undefined
+      : whereClauses.length === 1
+        ? whereClauses[0]
+        : and(...whereClauses)
+
+  if (whereClause) {
     return db
       .select()
       .from(agentJobs)
-      .where(eq(agentJobs.status, input.status))
+      .where(whereClause)
       .orderBy(desc(agentJobs.createdAt))
       .limit(limit)
       .all()
@@ -196,6 +218,13 @@ export function listAgentJobs(
     .orderBy(desc(agentJobs.createdAt))
     .limit(limit)
     .all()
+}
+
+export function getAgentJobPrompt(db: AgentJobDatabase, jobId: string): string {
+  const job = getAgentJob(db, jobId)
+  if (!job) throw new Error(`Unknown job: ${jobId}`)
+  const input = fromJson<{ prompt?: unknown }>(job.inputJson, {})
+  return typeof input.prompt === "string" ? input.prompt : ""
 }
 
 export function startAgentJob(
@@ -480,6 +509,7 @@ export function retryAgentJob(
       chatId: job.chatId,
       subChatId: job.subChatId,
       promptPreview: job.promptPreview,
+      inputJson: job.inputJson,
       createdAt: now,
       createdByVersion: job.createdByVersion,
     })
