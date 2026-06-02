@@ -8,9 +8,44 @@ export function createAgentJobTestDb() {
   sqlite.exec("PRAGMA busy_timeout = 5000")
   sqlite.exec("PRAGMA foreign_keys = ON")
   sqlite.exec(`
-    CREATE TABLE projects (id text PRIMARY KEY NOT NULL);
-    CREATE TABLE chats (id text PRIMARY KEY NOT NULL);
-    CREATE TABLE sub_chats (id text PRIMARY KEY NOT NULL);
+    CREATE TABLE projects (
+      id text PRIMARY KEY NOT NULL,
+      name text DEFAULT 'Project' NOT NULL,
+      path text DEFAULT '/tmp/project' NOT NULL,
+      created_at integer,
+      updated_at integer,
+      git_remote_url text,
+      git_provider text,
+      git_owner text,
+      git_repo text,
+      icon_path text
+    );
+    CREATE TABLE chats (
+      id text PRIMARY KEY NOT NULL,
+      name text,
+      project_id text DEFAULT 'project-1' NOT NULL,
+      worktree_path text,
+      created_at integer,
+      updated_at integer,
+      archived_at integer,
+      branch text,
+      base_branch text,
+      pr_url text,
+      pr_number integer,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
+    );
+    CREATE TABLE sub_chats (
+      id text PRIMARY KEY NOT NULL,
+      name text,
+      chat_id text DEFAULT 'chat-1' NOT NULL,
+      session_id text,
+      stream_id text,
+      mode text DEFAULT 'agent' NOT NULL,
+      messages text DEFAULT '[]' NOT NULL,
+      created_at integer,
+      updated_at integer,
+      FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE cascade
+    );
     CREATE TABLE agent_jobs (
       id text PRIMARY KEY NOT NULL,
       retry_of_job_id text,

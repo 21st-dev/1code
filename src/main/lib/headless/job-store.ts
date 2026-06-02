@@ -30,6 +30,7 @@ export type CreateAgentJobInput = {
   mode: AgentJobMode
   cwd: string
   prompt: string
+  input?: unknown
   projectId?: string | null
   chatId?: string | null
   subChatId?: string | null
@@ -229,7 +230,10 @@ export function createAgentJob(
       mode: input.mode,
       cwd: input.cwd,
       promptPreview: promptPreview(input.prompt),
-      inputJson: toJson({ prompt: input.prompt }),
+      inputJson:
+        input.input === undefined
+          ? toJson({ prompt: input.prompt })
+          : toJson(input.input),
       projectId: input.projectId ?? null,
       chatId: input.chatId ?? null,
       subChatId: input.subChatId ?? null,
