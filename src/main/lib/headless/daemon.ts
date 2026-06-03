@@ -20,6 +20,7 @@ import {
   type RunPersistedAgentJobOptions,
 } from "./job-runner"
 import type { AgentTaskRunner } from "./agent-runtime-contract"
+import { evaluateDueAgentSchedules } from "./schedules"
 
 type Writer = {
   write(chunk: string): unknown
@@ -39,6 +40,7 @@ export type RunLocalAgentDaemonOptions = {
 }
 
 export type RunLocalAgentDaemonResult = {
+  scheduledJobs: number
   startedJobs: number
   completedJobs: number
   failedJobs: number
@@ -137,6 +139,18 @@ function delay(ms: number, signal: AbortSignal | undefined): Promise<void> {
   })
 }
 
+function listQueuedDaemonWork(
+  db: AgentJobDatabase,
+  limit: number,
+): AgentJob[] {
+  const jobs: AgentJob[] = []
+  for (const source of ["daemon", "schedule"] as const) {
+    if (jobs.length >= limit) break
+    jobs.push(...listQueuedAgentJobsForSource(db, source, limit - jobs.length))
+  }
+  return jobs
+}
+
 async function runDaemonJob(
   job: AgentJob,
   options: RunLocalAgentDaemonOptions,
@@ -163,6 +177,7 @@ export async function runLocalAgentDaemon(
   const lock = options.lockPath ? acquireDaemonLock(options.lockPath) : null
   const active = new Set<Promise<void>>()
   const result: RunLocalAgentDaemonResult = {
+    scheduledJobs: 0,
     startedJobs: 0,
     completedJobs: 0,
     failedJobs: 0,
@@ -187,11 +202,12 @@ export async function runLocalAgentDaemon(
     while (!options.signal?.aborted) {
       const available = concurrency - active.size
       if (available > 0) {
-        const queued = listQueuedAgentJobsForSource(
-          options.db,
-          "daemon",
-          available,
-        )
+        const scheduled = evaluateDueAgentSchedules(options.db, {
+          now: options.now,
+          limit: available,
+        })
+        result.scheduledJobs += scheduled.length
+        const queued = listQueuedDaemonWork(options.db, available)
         for (const job of queued) {
           result.startedJobs += 1
           let promise: Promise<void>
@@ -216,7 +232,7 @@ export async function runLocalAgentDaemon(
       }
 
       if (options.once && active.size === 0) {
-        const queued = listQueuedAgentJobsForSource(options.db, "daemon", 1)
+        const queued = listQueuedDaemonWork(options.db, 1)
         if (queued.length === 0) break
       }
 

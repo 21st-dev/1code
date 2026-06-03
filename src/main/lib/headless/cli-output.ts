@@ -1,4 +1,4 @@
-import type { AgentJob, AgentJobEvent } from "../db/schema"
+import type { AgentJob, AgentJobEvent, AgentSchedule } from "../db/schema"
 
 export type SerializedAgentJob = {
   id: string
@@ -34,6 +34,25 @@ export type SerializedAgentJobEvent = {
   type: string
   payload: unknown
   createdAt: string | null
+}
+
+export type SerializedAgentSchedule = {
+  id: string
+  name: string
+  status: string
+  runtime: string
+  mode: string
+  cwd: string
+  projectId: string | null
+  promptPreview: string | null
+  intervalSeconds: number
+  timezone: string
+  nextRunAt: string | null
+  lastRunAt: string | null
+  lastJobId: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  disabledAt: string | null
 }
 
 function toIso(value: Date | string | number | null | undefined): string | null {
@@ -94,6 +113,29 @@ export function serializeAgentJobEvent(
   }
 }
 
+export function serializeAgentSchedule(
+  schedule: AgentSchedule,
+): SerializedAgentSchedule {
+  return {
+    id: schedule.id,
+    name: schedule.name,
+    status: schedule.status,
+    runtime: schedule.runtime,
+    mode: schedule.mode,
+    cwd: schedule.cwd,
+    projectId: schedule.projectId,
+    promptPreview: schedule.promptPreview,
+    intervalSeconds: schedule.intervalSeconds,
+    timezone: schedule.timezone,
+    nextRunAt: toIso(schedule.nextRunAt),
+    lastRunAt: toIso(schedule.lastRunAt),
+    lastJobId: schedule.lastJobId,
+    createdAt: toIso(schedule.createdAt),
+    updatedAt: toIso(schedule.updatedAt),
+    disabledAt: toIso(schedule.disabledAt),
+  }
+}
+
 export function formatJobListText(jobs: AgentJob[]): string {
   if (jobs.length === 0) return "No jobs found.\n"
   return `${jobs
@@ -129,6 +171,42 @@ export function formatJobText(job: AgentJob): string {
   if (job.errorCode) lines.push(`errorCode: ${job.errorCode}`)
   if (job.errorMessage) lines.push(`error: ${job.errorMessage}`)
   if (job.promptPreview) lines.push(`prompt: ${job.promptPreview}`)
+  return `${lines.join("\n")}\n`
+}
+
+export function formatScheduleListText(schedules: AgentSchedule[]): string {
+  if (schedules.length === 0) return "No schedules found.\n"
+  return `${schedules
+    .map((schedule) => {
+      const nextRunAt = toIso(schedule.nextRunAt) ?? "not scheduled"
+      return [
+        schedule.id,
+        schedule.status.padEnd(8),
+        schedule.runtime.padEnd(11),
+        schedule.mode.padEnd(5),
+        `${schedule.intervalSeconds}s`.padEnd(8),
+        nextRunAt,
+        schedule.name,
+      ].join("  ")
+    })
+    .join("\n")}\n`
+}
+
+export function formatScheduleText(schedule: AgentSchedule): string {
+  const lines = [
+    `id: ${schedule.id}`,
+    `name: ${schedule.name}`,
+    `status: ${schedule.status}`,
+    `runtime: ${schedule.runtime}`,
+    `mode: ${schedule.mode}`,
+    `cwd: ${schedule.cwd}`,
+    `intervalSeconds: ${schedule.intervalSeconds}`,
+    `nextRunAt: ${toIso(schedule.nextRunAt) ?? "not scheduled"}`,
+    `created: ${toIso(schedule.createdAt) ?? "unknown"}`,
+  ]
+  if (schedule.lastRunAt) lines.push(`lastRunAt: ${toIso(schedule.lastRunAt)}`)
+  if (schedule.lastJobId) lines.push(`lastJobId: ${schedule.lastJobId}`)
+  if (schedule.promptPreview) lines.push(`prompt: ${schedule.promptPreview}`)
   return `${lines.join("\n")}\n`
 }
 

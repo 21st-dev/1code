@@ -12,6 +12,7 @@ import {
   runHeadlessCliCommand,
 } from "../src/main/lib/headless/cli-dispatcher"
 import { HEADLESS_CLI_MARKER } from "../src/main/lib/headless/cli-args"
+import { projects } from "../src/main/lib/db/schema"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
 function writer() {
@@ -26,6 +27,16 @@ function writer() {
       return value
     },
   }
+}
+
+function seedCurrentProject(db: ReturnType<typeof createAgentJobTestDb>) {
+  db.insert(projects)
+    .values({
+      id: "project-1",
+      name: "Current",
+      path: process.cwd(),
+    })
+    .run()
 }
 
 describe("headless CLI dispatcher", () => {
@@ -227,6 +238,188 @@ describe("headless CLI dispatcher", () => {
     const listed = JSON.parse(listStdout.value()).jobs
     expect(listed).toHaveLength(1)
     expect(listed[0]).toMatchObject({ id: daemonJob.id, source: "daemon" })
+  })
+
+  test("manages schedules and creates schedule jobs through the CLI", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const createStdout = writer()
+    const createStderr = writer()
+    const createCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "create",
+        "--name",
+        "Nightly",
+        "--runtime",
+        "codex",
+        "--mode",
+        "plan",
+        "--cwd",
+        process.cwd(),
+        "--interval-seconds",
+        "300",
+        "--prompt",
+        "Inspect current project",
+        "--output",
+        "json",
+      ],
+      stdout: createStdout.stream,
+      stderr: createStderr.stream,
+      now: new Date("2026-06-03T01:00:00.000Z"),
+    })
+
+    expect(createCode).toBe(0)
+    expect(createStderr.value()).toBe("")
+    const created = JSON.parse(createStdout.value()).schedule
+    expect(created).toMatchObject({
+      name: "Nightly",
+      status: "enabled",
+      runtime: "codex",
+      mode: "plan",
+      intervalSeconds: 300,
+      nextRunAt: "2026-06-03T01:05:00.000Z",
+    })
+
+    const listStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "list",
+        "--output",
+        "json",
+      ],
+      stdout: listStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(JSON.parse(listStdout.value()).schedules).toHaveLength(1)
+
+    const pauseStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "pause",
+        created.id,
+        "--output",
+        "json",
+      ],
+      stdout: pauseStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(JSON.parse(pauseStdout.value()).schedule.status).toBe("paused")
+
+    const resumeStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "resume",
+        created.id,
+        "--output",
+        "json",
+      ],
+      stdout: resumeStdout.stream,
+      stderr: writer().stream,
+      now: new Date("2026-06-03T01:01:00.000Z"),
+    })
+    expect(JSON.parse(resumeStdout.value()).schedule.status).toBe("enabled")
+
+    const runStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "run",
+        created.id,
+        "--output",
+        "json",
+      ],
+      stdout: runStdout.stream,
+      stderr: writer().stream,
+      now: new Date("2026-06-03T01:02:00.000Z"),
+    })
+    const run = JSON.parse(runStdout.value())
+    expect(run.job).toMatchObject({
+      source: "schedule",
+      status: "queued",
+      runtime: "codex",
+    })
+    expect(getAgentJob(db, run.job.id)?.source).toBe("schedule")
+
+    const deleteStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "delete",
+        created.id,
+        "--output",
+        "json",
+      ],
+      stdout: deleteStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(JSON.parse(deleteStdout.value()).schedule.status).toBe("disabled")
+
+    const finalListStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "list",
+        "--output",
+        "json",
+      ],
+      stdout: finalListStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(JSON.parse(finalListStdout.value()).schedules).toHaveLength(0)
+  })
+
+  test("reports schedule create path validation failures on stderr", async () => {
+    const db = createAgentJobTestDb()
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "create",
+        "--name",
+        "Unsafe",
+        "--cwd",
+        process.cwd(),
+        "--prompt",
+        "Inspect",
+        "--output",
+        "json",
+      ],
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+    })
+
+    expect(code).toBe(7)
+    expect(stdout.value()).toBe("")
+    expect(stderr.value()).toContain("registered project")
   })
 
   test("daemon command reports stale running jobs it interrupts", async () => {

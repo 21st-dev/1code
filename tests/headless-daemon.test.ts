@@ -5,6 +5,7 @@ import { join } from "path"
 import {
   createAgentJob,
   getAgentJob,
+  listAgentJobs,
   requestCancelAgentJob,
   startAgentJob,
 } from "../src/main/lib/headless/job-store"
@@ -12,6 +13,8 @@ import {
   acquireDaemonLock,
   runLocalAgentDaemon,
 } from "../src/main/lib/headless/daemon"
+import { createAgentSchedule } from "../src/main/lib/headless/schedules"
+import { projects } from "../src/main/lib/db/schema"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 import type { AgentTaskRunner } from "../src/main/lib/headless/agent-runtime-contract"
 
@@ -30,6 +33,16 @@ async function waitUntil(
     await delay(5)
   }
   throw new Error(message)
+}
+
+function seedCurrentProject(db: ReturnType<typeof createAgentJobTestDb>) {
+  db.insert(projects)
+    .values({
+      id: "project-1",
+      name: "Current",
+      path: process.cwd(),
+    })
+    .run()
 }
 
 describe("local agent daemon", () => {
@@ -71,6 +84,47 @@ describe("local agent daemon", () => {
     })
     expect(getAgentJob(db, staleJob.id)?.status).toBe("interrupted")
     expect(getAgentJob(db, queuedJob.id)?.status).toBe("succeeded")
+  })
+
+  test("fires due schedules and claims schedule jobs without claiming protocol jobs", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    createAgentSchedule(db, {
+      name: "Due",
+      runtime: "codex",
+      mode: "agent",
+      cwd: process.cwd(),
+      prompt: "Run scheduled work",
+      intervalSeconds: 60,
+      nextRunAt: new Date("2026-06-03T01:00:00.000Z"),
+      now: new Date("2026-06-03T00:00:00.000Z"),
+    })
+    const protocolJob = createAgentJob(db, {
+      source: "protocol",
+      runtime: "codex",
+      mode: "agent",
+      cwd: process.cwd(),
+      prompt: "Do not claim through daemon",
+    })
+
+    const result = await runLocalAgentDaemon({
+      db,
+      once: true,
+      pollIntervalMs: 5,
+      now: new Date("2026-06-03T01:05:00.000Z"),
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(result).toMatchObject({
+      scheduledJobs: 1,
+      startedJobs: 1,
+      completedJobs: 1,
+      failedJobs: 0,
+      stoppedBy: "once",
+    })
+    expect(listAgentJobs(db, { source: "schedule" })).toHaveLength(1)
+    expect(listAgentJobs(db, { source: "schedule" })[0].status).toBe("succeeded")
+    expect(getAgentJob(db, protocolJob.id)?.status).toBe("queued")
   })
 
   test("daemon worker observes persisted cancel requests", async () => {

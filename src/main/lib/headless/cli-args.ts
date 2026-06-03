@@ -11,6 +11,11 @@ import {
   toAgentRuntimeId,
   type AgentRuntimeId,
 } from "../../../shared/agent-runtime-capabilities"
+import {
+  AGENT_SCHEDULE_STATUSES,
+  MAX_AGENT_SCHEDULE_INTERVAL_SECONDS,
+  type AgentScheduleStatus,
+} from "../../../shared/agent-schedules"
 
 export const HEADLESS_CLI_MARKER = "--locus-headless-cli"
 
@@ -63,6 +68,31 @@ export type HeadlessCliCommand =
       once: boolean
       concurrency: number
       pollIntervalMs: number
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "schedules-list"
+      includeDisabled: boolean
+      status: AgentScheduleStatus | null
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind: "schedules-create"
+      name: string
+      cwd: string
+      runtime: AgentRuntimeId
+      mode: AgentJobMode
+      prompt: string
+      intervalSeconds: number
+      output: HeadlessOutputFormat
+    }
+  | {
+      kind:
+        | "schedules-pause"
+        | "schedules-resume"
+        | "schedules-delete"
+        | "schedules-run"
+      scheduleId: string
       output: HeadlessOutputFormat
     }
   | {
@@ -135,6 +165,14 @@ function parseJobSource(value: string | null): HeadlessJobSourceFilter {
   return source as AgentJobSource
 }
 
+function parseScheduleStatus(value: string | null): AgentScheduleStatus | null {
+  if (!value) return null
+  if (!(AGENT_SCHEDULE_STATUSES as readonly string[]).includes(value)) {
+    throw new Error(`Unsupported --status: ${value}`)
+  }
+  return value as AgentScheduleStatus
+}
+
 function parsePositiveInteger(
   value: string | null,
   fallback: number,
@@ -177,7 +215,8 @@ function errorCodeForParseMessage(message: string): number {
   if (
     message.startsWith("Unsupported --runtime:") ||
     message.startsWith("Unsupported --mode:") ||
-    message.startsWith("Unsupported --source:")
+    message.startsWith("Unsupported --source:") ||
+    message.startsWith("Unsupported --status:")
   ) {
     return 3
   }
@@ -290,6 +329,91 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           output,
         },
       }
+    }
+
+    if (command === "schedules" || command === "schedule") {
+      const subcommand = args.shift() ?? "list"
+      const output = parseOutput(args)
+      if (subcommand === "list") {
+        const includeDisabled = takeFlag(args, "--include-disabled")
+        const status = parseScheduleStatus(takeOption(args, "--status"))
+        if (args.length > 0) {
+          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        }
+        return {
+          ok: true,
+          command: {
+            kind: "schedules-list",
+            includeDisabled,
+            status,
+            output,
+          },
+        }
+      }
+      if (subcommand === "create") {
+        const cwd = parseCwd(takeOption(args, "--cwd"))
+        const runtime = parseRuntime(takeOption(args, "--runtime"))
+        const mode = parseMode(takeOption(args, "--mode"))
+        const name = takeOption(args, "--name") ?? ""
+        const prompt = takeOption(args, "--prompt") ?? ""
+        const intervalSeconds = parsePositiveInteger(
+          takeOption(args, "--interval-seconds"),
+          3600,
+          "--interval-seconds",
+          MAX_AGENT_SCHEDULE_INTERVAL_SECONDS,
+        )
+        if (!name.trim()) throw new Error("locus schedules create requires --name")
+        if (!prompt.trim()) {
+          throw new Error("locus schedules create requires --prompt")
+        }
+        if (args.length > 0) {
+          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        }
+        return {
+          ok: true,
+          command: {
+            kind: "schedules-create",
+            name,
+            cwd,
+            runtime,
+            mode,
+            prompt,
+            intervalSeconds,
+            output,
+          },
+        }
+      }
+      if (
+        subcommand === "pause" ||
+        subcommand === "resume" ||
+        subcommand === "delete" ||
+        subcommand === "run" ||
+        subcommand === "run-now"
+      ) {
+        const scheduleId = args.shift()
+        if (!scheduleId) {
+          throw new Error(`locus schedules ${subcommand} requires a schedule id`)
+        }
+        if (args.length > 0) {
+          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        }
+        return {
+          ok: true,
+          command: {
+            kind:
+              subcommand === "run-now"
+                ? "schedules-run"
+                : (`schedules-${subcommand}` as
+                    | "schedules-pause"
+                    | "schedules-resume"
+                    | "schedules-delete"
+                    | "schedules-run"),
+            scheduleId,
+            output,
+          },
+        }
+      }
+      throw new Error(`Unknown schedules subcommand: ${subcommand}`)
     }
 
     throw new Error(`Unknown command: ${command}`)

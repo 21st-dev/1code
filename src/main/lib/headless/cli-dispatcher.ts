@@ -17,8 +17,11 @@ import {
   formatEventsText,
   formatJobListText,
   formatJobText,
+  formatScheduleListText,
+  formatScheduleText,
   serializeAgentJob,
   serializeAgentJobEvent,
+  serializeAgentSchedule,
 } from "./cli-output"
 import {
   parseHeadlessCliArgv,
@@ -31,6 +34,14 @@ import {
   runPersistedAgentJob,
 } from "./job-runner"
 import { runLocalAgentDaemon } from "./daemon"
+import {
+  createAgentSchedule,
+  deleteAgentSchedule,
+  listAgentSchedules,
+  pauseAgentSchedule,
+  resumeAgentSchedule,
+  runAgentScheduleNow,
+} from "./schedules"
 
 type Writer = {
   write(chunk: string): unknown
@@ -123,6 +134,18 @@ function outputEvents(
     return
   }
   write(stdout, formatEventsText(events))
+}
+
+function outputSchedule(
+  stdout: Writer | undefined,
+  output: HeadlessOutputFormat,
+  schedule: Parameters<typeof serializeAgentSchedule>[0],
+): void {
+  if (shouldUseJson(output)) {
+    writeJson(stdout, { schedule: serializeAgentSchedule(schedule) })
+    return
+  }
+  write(stdout, formatScheduleText(schedule))
 }
 
 function outputRunResult(
@@ -314,6 +337,97 @@ function retryCommand(
   return 0
 }
 
+function scheduleErrorCode(message: string): number {
+  if (/cwd|project path|registered project/i.test(message)) {
+    return HEADLESS_EXIT_CODES.invalidCwd
+  }
+  if (/Unsupported/.test(message)) return HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode
+  return HEADLESS_EXIT_CODES.invalidArguments
+}
+
+function schedulesListCommand(
+  command: Extract<HeadlessCliCommand, { kind: "schedules-list" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  const schedules = listAgentSchedules(options.db, {
+    includeDisabled: command.includeDisabled,
+    status: command.status ?? undefined,
+    limit: 100,
+  })
+  if (shouldUseJson(command.output)) {
+    writeJson(options.stdout, {
+      schedules: schedules.map(serializeAgentSchedule),
+    })
+    return HEADLESS_EXIT_CODES.success
+  }
+  write(options.stdout, formatScheduleListText(schedules))
+  return HEADLESS_EXIT_CODES.success
+}
+
+function schedulesCreateCommand(
+  command: Extract<HeadlessCliCommand, { kind: "schedules-create" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    const schedule = createAgentSchedule(options.db, {
+      name: command.name,
+      cwd: command.cwd,
+      runtime: command.runtime,
+      mode: command.mode,
+      prompt: command.prompt,
+      intervalSeconds: command.intervalSeconds,
+      now: options.now,
+    })
+    outputSchedule(options.stdout, command.output, schedule)
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return commandError(options.stderr, message, scheduleErrorCode(message))
+  }
+}
+
+function schedulesMutationCommand(
+  command: Extract<
+    HeadlessCliCommand,
+    {
+      kind:
+        | "schedules-pause"
+        | "schedules-resume"
+        | "schedules-delete"
+        | "schedules-run"
+    }
+  >,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    if (command.kind === "schedules-run") {
+      const fired = runAgentScheduleNow(options.db, command.scheduleId, options.now)
+      if (shouldUseJson(command.output)) {
+        writeJson(options.stdout, {
+          schedule: serializeAgentSchedule(fired.schedule),
+          job: serializeAgentJob(fired.job),
+        })
+      } else {
+        write(options.stdout, formatScheduleText(fired.schedule))
+        write(options.stdout, formatJobText(fired.job))
+      }
+      return HEADLESS_EXIT_CODES.success
+    }
+
+    const schedule =
+      command.kind === "schedules-pause"
+        ? pauseAgentSchedule(options.db, command.scheduleId, options.now)
+        : command.kind === "schedules-resume"
+          ? resumeAgentSchedule(options.db, command.scheduleId, options.now)
+          : deleteAgentSchedule(options.db, command.scheduleId, options.now)
+    outputSchedule(options.stdout, command.output, schedule)
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return commandError(options.stderr, message, scheduleErrorCode(message))
+  }
+}
+
 async function daemonRunCommand(
   command: Extract<HeadlessCliCommand, { kind: "daemon-run" }>,
   options: RunHeadlessCliCommandOptions,
@@ -338,14 +452,14 @@ async function daemonRunCommand(
       signal: abortController.signal,
       now: options.now,
     })
-    if (shouldUseJson(command.output)) {
-      writeJson(options.stdout, { daemon: result })
-    } else {
-      writeLine(
-        options.stdout,
-        `daemon stopped (${result.stoppedBy}); started=${result.startedJobs} completed=${result.completedJobs} failed=${result.failedJobs} interrupted=${result.interruptedJobs}`,
-      )
-    }
+      if (shouldUseJson(command.output)) {
+        writeJson(options.stdout, { daemon: result })
+      } else {
+        writeLine(
+          options.stdout,
+          `daemon stopped (${result.stoppedBy}); scheduled=${result.scheduledJobs} started=${result.startedJobs} completed=${result.completedJobs} failed=${result.failedJobs} interrupted=${result.interruptedJobs}`,
+        )
+      }
     return HEADLESS_EXIT_CODES.success
   } catch (error) {
     return commandError(
@@ -363,13 +477,16 @@ function helpCommand(options: RunHeadlessCliCommandOptions): number {
   write(
     options.stdout,
     [
-      "Usage:",
-      "  locus run --runtime claude-code|codex --prompt <text> [--cwd <path>] [--mode plan|agent] [--output text|json|stream-json]",
-      "  locus run --stdin [--prompt <prefix>]",
-      "  locus run --daemon [--follow] --prompt <text>",
-      "  locus daemon run [--concurrency <n>] [--poll-interval-ms <ms>]",
-      `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
-      "  locus jobs list",
+        "Usage:",
+        "  locus run --runtime claude-code|codex --prompt <text> [--cwd <path>] [--mode plan|agent] [--output text|json|stream-json]",
+        "  locus run --stdin [--prompt <prefix>]",
+        "  locus run --daemon [--follow] --prompt <text>",
+        "  locus daemon run [--concurrency <n>] [--poll-interval-ms <ms>]",
+        "  locus schedules list [--status enabled|paused|disabled] [--include-disabled]",
+        "  locus schedules create --name <name> --prompt <text> --interval-seconds <n> [--cwd <path>] [--runtime claude-code|codex] [--mode plan|agent]",
+        "  locus schedules pause|resume|delete|run <id>",
+        `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
+        "  locus jobs list",
       "  locus jobs show <id>",
       "  locus jobs logs <id> [--follow]",
       "  locus jobs cancel <id>",
@@ -403,10 +520,19 @@ export async function runHeadlessCliCommand(
       return logsCommand(parsed.command, options)
     case "jobs-cancel":
       return cancelCommand(parsed.command, options)
-    case "jobs-retry":
-      return retryCommand(parsed.command, options)
-    case "daemon-run":
-      return daemonRunCommand(parsed.command, options)
+      case "jobs-retry":
+        return retryCommand(parsed.command, options)
+      case "schedules-list":
+        return schedulesListCommand(parsed.command, options)
+      case "schedules-create":
+        return schedulesCreateCommand(parsed.command, options)
+      case "schedules-pause":
+      case "schedules-resume":
+      case "schedules-delete":
+      case "schedules-run":
+        return schedulesMutationCommand(parsed.command, options)
+      case "daemon-run":
+        return daemonRunCommand(parsed.command, options)
     case "help":
       return helpCommand(options)
   }

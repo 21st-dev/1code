@@ -195,6 +195,78 @@ describe("headless CLI args", () => {
     })
   })
 
+  test("parses schedule commands", () => {
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "create",
+        "--name",
+        "Nightly",
+        "--runtime",
+        "codex",
+        "--mode",
+        "plan",
+        "--cwd",
+        process.cwd(),
+        "--interval-seconds",
+        "300",
+        "--prompt",
+        "Inspect",
+        "--output",
+        "json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "schedules-create",
+        name: "Nightly",
+        runtime: "codex",
+        mode: "plan",
+        intervalSeconds: 300,
+        output: "json",
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "list",
+        "--status",
+        "paused",
+        "--include-disabled",
+        "--output",
+        "json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "schedules-list",
+        status: "paused",
+        includeDisabled: true,
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
+        "run-now",
+        "schedule-1",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "schedules-run",
+        scheduleId: "schedule-1",
+      },
+    })
+  })
+
   test("rejects follow without daemon enqueue", () => {
     const parsed = parseHeadlessCliArgv([
       "Locus",
