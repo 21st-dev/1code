@@ -5,6 +5,7 @@ import {
   createAgentJob,
   getAgentJob,
   listAgentJobEvents,
+  listAgentJobs,
   startAgentJob,
 } from "../src/main/lib/headless/job-store"
 import {
@@ -37,6 +38,14 @@ function seedCurrentProject(db: ReturnType<typeof createAgentJobTestDb>) {
       path: process.cwd(),
     })
     .run()
+}
+
+function parseJsonLines(value: string): any[] {
+  return value
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
 }
 
 describe("headless CLI dispatcher", () => {
@@ -420,6 +429,114 @@ describe("headless CLI dispatcher", () => {
     expect(code).toBe(7)
     expect(stdout.value()).toBe("")
     expect(stderr.value()).toContain("registered project")
+  })
+
+  test("runs minimal ACP stdio with JSON-only stdout and protocol jobs", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const stdout = writer()
+    const stderr = writer()
+    const input = [
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {},
+      },
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "job.run",
+        params: {
+          runtime: "codex",
+          mode: "agent",
+          cwd: process.cwd(),
+          prompt: "ACP smoke",
+        },
+      },
+      {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "shutdown",
+        params: {},
+      },
+    ].map(JSON.stringify).join("\n")
+
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: ["Locus", HEADLESS_CLI_MARKER, "acp"],
+      stdin: Readable.from([`${input}\n`]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(0)
+    expect(stderr.value()).toBe("")
+    const lines = parseJsonLines(stdout.value())
+    expect(lines.every((line) => line.jsonrpc === "2.0")).toBe(true)
+    expect(lines.find((line) => line.id === 1)?.result.capabilities).toMatchObject({
+      jobRun: true,
+      jobCancel: true,
+      eventStream: true,
+      shutdown: true,
+    })
+    const runResponse = lines.find((line) => line.id === 2)
+    expect(runResponse?.result.job).toMatchObject({
+      source: "protocol",
+      runtime: "codex",
+      status: "queued",
+    })
+    expect(
+      lines.filter((line) => line.method === "job/event").map((line) => line.params.event.type),
+    ).toContain("completed")
+    expect(listAgentJobs(db, { source: "protocol" })).toHaveLength(1)
+    expect(listAgentJobs(db, { source: "protocol" })[0].status).toBe("succeeded")
+  })
+
+  test("rejects ACP provider secrets and raw env without creating jobs", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const stdout = writer()
+    const stderr = writer()
+    const input = [
+      {
+        jsonrpc: "2.0",
+        id: "run",
+        method: "job.run",
+        params: {
+          runtime: "codex",
+          cwd: process.cwd(),
+          prompt: "Do work",
+          env: {
+            OPENAI_API_KEY: "sk-abcdefghijklmnopqrstuvwxyz123456",
+          },
+        },
+      },
+      {
+        jsonrpc: "2.0",
+        id: "shutdown",
+        method: "shutdown",
+        params: {},
+      },
+    ].map(JSON.stringify).join("\n")
+
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: ["Locus", HEADLESS_CLI_MARKER, "acp"],
+      stdin: Readable.from([`${input}\n`]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(0)
+    const lines = parseJsonLines(stdout.value())
+    expect(lines.find((line) => line.id === "run")?.error).toMatchObject({
+      code: -32602,
+    })
+    expect(stderr.value()).toContain("must not include provider tokens")
+    expect(listAgentJobs(db, { source: "protocol" })).toHaveLength(0)
   })
 
   test("daemon command reports stale running jobs it interrupts", async () => {

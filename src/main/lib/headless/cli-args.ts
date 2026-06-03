@@ -96,6 +96,9 @@ export type HeadlessCliCommand =
       output: HeadlessOutputFormat
     }
   | {
+      kind: "acp"
+    }
+  | {
       kind: "help"
       output: "text"
     }
@@ -414,6 +417,13 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
         }
       }
       throw new Error(`Unknown schedules subcommand: ${subcommand}`)
+    }
+
+    if (command === "acp") {
+      if (args.length > 0) {
+        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+      }
+      return { ok: true, command: { kind: "acp" } }
     }
 
     throw new Error(`Unknown command: ${command}`)

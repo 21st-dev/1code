@@ -267,6 +267,21 @@ describe("headless CLI args", () => {
     })
   })
 
+  test("parses acp stdio command", () => {
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "acp",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "acp",
+      },
+    })
+  })
+
   test("rejects follow without daemon enqueue", () => {
     const parsed = parseHeadlessCliArgv([
       "Locus",

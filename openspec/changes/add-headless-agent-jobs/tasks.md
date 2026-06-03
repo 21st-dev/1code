@@ -109,9 +109,9 @@ Current status is **macOS local implementation complete through Phase 6, pending
 - [x] 10.4 Extend the local daemon loop to evaluate due enabled schedules, create at most one `source=schedule` job per due schedule fire, and claim queued schedule jobs without claiming desktop, one-shot CLI, or protocol jobs.
 - [x] 10.5 Add schedule tRPC APIs and Agent Workbench UI so schedules are visible, pausable/resumable, deletable, runnable now, and linked to their created jobs.
 - [x] 10.6 Add focused tests for schedule store transitions, CLI parsing/dispatch, daemon schedule firing/deduplication, job visibility, and UI labels/actions.
-- [ ] 10.7 Add minimal `locus acp` stdio parsing/dispatch that supports initialization/capabilities, job-backed run creation, event streaming, cancellation, shutdown, strict JSON-RPC stdout, and stderr diagnostics.
-- [ ] 10.8 Keep protocol jobs as `source=protocol`, route execution through the shared runner core, reject provider tokens/raw env over protocol, and avoid full ACP parity claims.
-- [ ] 10.9 Update macOS and Windows CLI shims/source tests so `acp` and `schedules` use the synchronous headless Electron marker path.
+- [x] 10.7 Add minimal `locus acp` stdio parsing/dispatch that supports initialization/capabilities, job-backed run creation, event streaming, cancellation, shutdown, strict JSON-RPC stdout, and stderr diagnostics.
+- [x] 10.8 Keep protocol jobs as `source=protocol`, route execution through the shared runner core, reject provider tokens/raw env over protocol, and avoid full ACP parity claims.
+- [x] 10.9 Update macOS and Windows CLI shims/source tests so `acp` and `schedules` use the synchronous headless Electron marker path.
 - [ ] 10.10 Run comprehensive tests: OpenSpec strict validation, TypeScript, focused schedule/ACP/headless/job/UI/shim tests, build, and diff whitespace checks.
 - [ ] 10.11 Run real macOS smoke with a clean user data directory: create a schedule, run it now, start daemon for due schedule, verify schedule-created jobs/logs, run minimal ACP stdio against a fake runner, verify protocol stdout is JSON-only, and save logs.
 - [ ] 10.12 Record UI/UX evidence with screenshot/video for the schedule surface and protocol/schedule-created job visibility; fix any visible overlap, confusing labels, or action-state issues discovered during review.

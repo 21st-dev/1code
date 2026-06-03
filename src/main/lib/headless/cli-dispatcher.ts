@@ -34,6 +34,7 @@ import {
   runPersistedAgentJob,
 } from "./job-runner"
 import { runLocalAgentDaemon } from "./daemon"
+import { runAcpStdioServer } from "./acp-stdio"
 import {
   createAgentSchedule,
   deleteAgentSchedule,
@@ -473,6 +474,17 @@ async function daemonRunCommand(
   }
 }
 
+async function acpCommand(options: RunHeadlessCliCommandOptions): Promise<number> {
+  return runAcpStdioServer({
+    db: options.db,
+    stdin: options.stdin,
+    stdout: options.stdout,
+    stderr: options.stderr,
+    env: options.env,
+    runner: options.runner,
+  })
+}
+
 function helpCommand(options: RunHeadlessCliCommandOptions): number {
   write(
     options.stdout,
@@ -482,10 +494,11 @@ function helpCommand(options: RunHeadlessCliCommandOptions): number {
         "  locus run --stdin [--prompt <prefix>]",
         "  locus run --daemon [--follow] --prompt <text>",
         "  locus daemon run [--concurrency <n>] [--poll-interval-ms <ms>]",
-        "  locus schedules list [--status enabled|paused|disabled] [--include-disabled]",
-        "  locus schedules create --name <name> --prompt <text> --interval-seconds <n> [--cwd <path>] [--runtime claude-code|codex] [--mode plan|agent]",
-        "  locus schedules pause|resume|delete|run <id>",
-        `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
+      "  locus schedules list [--status enabled|paused|disabled] [--include-disabled]",
+      "  locus schedules create --name <name> --prompt <text> --interval-seconds <n> [--cwd <path>] [--runtime claude-code|codex] [--mode plan|agent]",
+      "  locus schedules pause|resume|delete|run <id>",
+      "  locus acp",
+      `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
         "  locus jobs list",
       "  locus jobs show <id>",
       "  locus jobs logs <id> [--follow]",
@@ -529,10 +542,12 @@ export async function runHeadlessCliCommand(
       case "schedules-pause":
       case "schedules-resume":
       case "schedules-delete":
-      case "schedules-run":
-        return schedulesMutationCommand(parsed.command, options)
-      case "daemon-run":
-        return daemonRunCommand(parsed.command, options)
+    case "schedules-run":
+      return schedulesMutationCommand(parsed.command, options)
+    case "acp":
+      return acpCommand(options)
+    case "daemon-run":
+      return daemonRunCommand(parsed.command, options)
     case "help":
       return helpCommand(options)
   }
