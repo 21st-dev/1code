@@ -104,7 +104,7 @@ Current status is **macOS local implementation complete through Phase 6, pending
 
 ## 10. Phase 7: Local Schedules and Minimal ACP Stdio
 - [x] 10.1 Update OpenSpec proposal/design/spec/tasks to move local schedules and minimal `locus acp` from future boundary into explicit Phase 7 scope.
-- [ ] 10.2 Add local schedule persistence, migrations, and store helpers for create, list, update status, run-now, delete, next-run metadata, and audit linkage to created jobs.
+- [x] 10.2 Add local schedule persistence, migrations, and store helpers for create, list, update status, run-now, delete, next-run metadata, and audit linkage to created jobs.
 - [ ] 10.3 Add schedule CLI parsing/dispatch for listing, creating, pausing, resuming, deleting, and running schedules now, with JSON-safe stdout and diagnostics on stderr.
 - [ ] 10.4 Extend the local daemon loop to evaluate due enabled schedules, create at most one `source=schedule` job per due schedule fire, and claim queued schedule jobs without claiming desktop, one-shot CLI, or protocol jobs.
 - [ ] 10.5 Add schedule tRPC APIs and Agent Workbench UI so schedules are visible, pausable/resumable, deletable, runnable now, and linked to their created jobs.

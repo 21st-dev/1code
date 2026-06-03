@@ -285,6 +285,62 @@ export const agentJobEvents = sqliteTable("agent_job_events", {
   index("agent_job_events_job_created_at_idx").on(table.jobId, table.createdAt),
 ])
 
+export const agentSchedules = sqliteTable("agent_schedules", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("enabled"),
+  runtime: text("runtime").notNull(),
+  mode: text("mode").notNull().default("agent"),
+  cwd: text("cwd").notNull(),
+  projectId: text("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  promptPreview: text("prompt_preview"),
+  inputJson: text("input_json").notNull().default("{}"),
+  intervalSeconds: integer("interval_seconds").notNull(),
+  timezone: text("timezone").notNull().default("local"),
+  nextRunAt: integer("next_run_at", { mode: "timestamp" }),
+  lastRunAt: integer("last_run_at", { mode: "timestamp" }),
+  lastJobId: text("last_job_id").references(() => agentJobs.id, {
+    onDelete: "set null",
+  }),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  disabledAt: integer("disabled_at", { mode: "timestamp" }),
+}, (table) => [
+  index("agent_schedules_status_idx").on(table.status),
+  index("agent_schedules_next_run_at_idx").on(table.nextRunAt),
+  index("agent_schedules_project_id_idx").on(table.projectId),
+  index("agent_schedules_last_job_id_idx").on(table.lastJobId),
+])
+
+export const agentScheduleRuns = sqliteTable("agent_schedule_runs", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  scheduleId: text("schedule_id").references(() => agentSchedules.id, {
+    onDelete: "set null",
+  }),
+  jobId: text("job_id").references(() => agentJobs.id, {
+    onDelete: "set null",
+  }),
+  trigger: text("trigger").notNull(),
+  scheduledFor: integer("scheduled_for", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+}, (table) => [
+  index("agent_schedule_runs_schedule_id_idx").on(table.scheduleId),
+  index("agent_schedule_runs_job_id_idx").on(table.jobId),
+  index("agent_schedule_runs_created_at_idx").on(table.createdAt),
+])
+
 export const agentJobsRelations = relations(agentJobs, ({ one, many }) => ({
   retryOfJob: one(agentJobs, {
     fields: [agentJobs.retryOfJobId],
@@ -307,11 +363,35 @@ export const agentJobsRelations = relations(agentJobs, ({ one, many }) => ({
     references: [subChats.id],
   }),
   events: many(agentJobEvents),
+  scheduleRuns: many(agentScheduleRuns),
 }))
 
 export const agentJobEventsRelations = relations(agentJobEvents, ({ one }) => ({
   job: one(agentJobs, {
     fields: [agentJobEvents.jobId],
+    references: [agentJobs.id],
+  }),
+}))
+
+export const agentSchedulesRelations = relations(agentSchedules, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [agentSchedules.projectId],
+    references: [projects.id],
+  }),
+  lastJob: one(agentJobs, {
+    fields: [agentSchedules.lastJobId],
+    references: [agentJobs.id],
+  }),
+  runs: many(agentScheduleRuns),
+}))
+
+export const agentScheduleRunsRelations = relations(agentScheduleRuns, ({ one }) => ({
+  schedule: one(agentSchedules, {
+    fields: [agentScheduleRuns.scheduleId],
+    references: [agentSchedules.id],
+  }),
+  job: one(agentJobs, {
+    fields: [agentScheduleRuns.jobId],
     references: [agentJobs.id],
   }),
 }))
@@ -342,3 +422,7 @@ export type AgentJob = typeof agentJobs.$inferSelect
 export type NewAgentJob = typeof agentJobs.$inferInsert
 export type AgentJobEvent = typeof agentJobEvents.$inferSelect
 export type NewAgentJobEvent = typeof agentJobEvents.$inferInsert
+export type AgentSchedule = typeof agentSchedules.$inferSelect
+export type NewAgentSchedule = typeof agentSchedules.$inferInsert
+export type AgentScheduleRun = typeof agentScheduleRuns.$inferSelect
+export type NewAgentScheduleRun = typeof agentScheduleRuns.$inferInsert
