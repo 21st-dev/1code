@@ -1101,8 +1101,8 @@ const WorkbenchButton = memo(function WorkbenchButton() {
       placeholderData: (previous) => previous,
     },
   )
-  const daemonJobsQuery = trpc.agentJobs.list.useQuery(
-    { source: "daemon", limit: 20 },
+    const daemonJobsQuery = trpc.agentJobs.list.useQuery(
+      { source: "daemon", limit: 20 },
     {
       refetchInterval: (query) => {
         const jobs = (
@@ -1116,13 +1116,49 @@ const WorkbenchButton = memo(function WorkbenchButton() {
           : 10000
       },
       placeholderData: (previous) => previous,
-    },
-  )
-  const activeJobCount = [
-    ...(cliJobsQuery.data?.jobs ?? []),
-    ...(desktopJobsQuery.data?.jobs ?? []),
-    ...(daemonJobsQuery.data?.jobs ?? []),
-  ].filter((job) => job.status === "queued" || job.status === "running").length
+      },
+    )
+    const scheduleJobsQuery = trpc.agentJobs.list.useQuery(
+      { source: "schedule", limit: 20 },
+      {
+        refetchInterval: (query) => {
+          const jobs = (
+            (query.state.data as { jobs?: { status?: string }[] } | undefined)
+              ?.jobs ?? []
+          )
+          return jobs.some(
+            (job) => job.status === "queued" || job.status === "running",
+          )
+            ? 5000
+            : 10000
+        },
+        placeholderData: (previous) => previous,
+      },
+    )
+    const protocolJobsQuery = trpc.agentJobs.list.useQuery(
+      { source: "protocol", limit: 20 },
+      {
+        refetchInterval: (query) => {
+          const jobs = (
+            (query.state.data as { jobs?: { status?: string }[] } | undefined)
+              ?.jobs ?? []
+          )
+          return jobs.some(
+            (job) => job.status === "queued" || job.status === "running",
+          )
+            ? 5000
+            : 10000
+        },
+        placeholderData: (previous) => previous,
+      },
+    )
+    const activeJobCount = [
+      ...(cliJobsQuery.data?.jobs ?? []),
+      ...(desktopJobsQuery.data?.jobs ?? []),
+      ...(daemonJobsQuery.data?.jobs ?? []),
+      ...(scheduleJobsQuery.data?.jobs ?? []),
+      ...(protocolJobsQuery.data?.jobs ?? []),
+    ].filter((job) => job.status === "queued" || job.status === "running").length
   const activeJobBadge = activeJobCount > 99 ? "99+" : String(activeJobCount)
   const label =
     activeJobCount > 0

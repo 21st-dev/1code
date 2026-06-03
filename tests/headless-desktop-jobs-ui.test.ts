@@ -9,14 +9,24 @@ function read(relativePath: string): string {
 }
 
 describe("headless desktop jobs UI", () => {
-  test("exposes a dedicated agent jobs router", () => {
-    const routerIndex = read("src/main/lib/trpc/routers/index.ts")
-    const routerSource = read("src/main/lib/trpc/routers/agent-jobs.ts")
-    expect(routerIndex).toContain("agentJobs: agentJobsRouter")
+    test("exposes a dedicated agent jobs router", () => {
+      const routerIndex = read("src/main/lib/trpc/routers/index.ts")
+      const routerSource = read("src/main/lib/trpc/routers/agent-jobs.ts")
+      expect(routerIndex).toContain("agentJobs: agentJobsRouter")
     expect(routerSource).toContain("serializeAgentJob")
     expect(routerSource).toContain('source: sourceSchema.default("cli")')
-    expect(routerSource).not.toContain("inputJson")
-  })
+      expect(routerSource).not.toContain("inputJson")
+    })
+
+    test("exposes a dedicated agent schedules router", () => {
+      const routerIndex = read("src/main/lib/trpc/routers/index.ts")
+      const routerSource = read("src/main/lib/trpc/routers/agent-schedules.ts")
+      expect(routerIndex).toContain("agentSchedules: agentSchedulesRouter")
+      expect(routerSource).toContain("listAgentSchedules")
+      expect(routerSource).toContain("runAgentScheduleNow")
+      expect(routerSource).toContain("serializeAgentSchedule")
+      expect(routerSource).not.toContain("inputJson")
+    })
 
   test("runs stale job recovery during desktop startup", () => {
     const source = read("src/main/index.ts")
@@ -33,34 +43,50 @@ describe("headless desktop jobs UI", () => {
     const source = read("src/renderer/features/agents/workbench/agent-workbench.tsx")
     expect(source).toContain("HeadlessJobCard")
     expect(source).toContain("trpc.agentJobs.list.useQuery")
-    expect(source).toContain('source: "desktop"')
-    expect(source).toContain('source: "cli"')
-    expect(source).toContain('source: "daemon"')
-    expect(source).toContain("trpc.agentJobs.cancel.useMutation")
-    expect(source).toContain("trpc.agentJobs.retry.useMutation")
-    expect(source).toContain("HeadlessJobLogsDialog")
-    expect(source).toContain("trpc.agentWorkbench.listTasks.useQuery")
-  })
+      expect(source).toContain('source: "desktop"')
+      expect(source).toContain('source: "cli"')
+      expect(source).toContain('source: "daemon"')
+      expect(source).toContain('source: "schedule"')
+      expect(source).toContain('source: "protocol"')
+      expect(source).toContain("trpc.agentSchedules.list.useQuery")
+      expect(source).toContain("ScheduleCard")
+      expect(source).toContain("trpc.agentJobs.cancel.useMutation")
+      expect(source).toContain("trpc.agentJobs.retry.useMutation")
+      expect(source).toContain("trpc.agentSchedules.runNow.useMutation")
+      expect(source).toContain("trpc.agentSchedules.pause.useMutation")
+      expect(source).toContain("trpc.agentSchedules.resume.useMutation")
+      expect(source).toContain("trpc.agentSchedules.delete.useMutation")
+      expect(source).toContain("HeadlessJobLogsDialog")
+      expect(source).toContain("trpc.agentWorkbench.listTasks.useQuery")
+    })
 
   test("counts and filters local jobs alongside workbench tasks", () => {
     const source = read("src/renderer/features/agents/workbench/agent-workbench.tsx")
     expect(source).toContain("matchesHeadlessJobFilter")
     expect(source).toContain("getHeadlessJobCounts")
     expect(source).toContain("mergeWorkbenchCounts")
-    expect(source).toContain("visibleHeadlessJobs")
-    expect(source).toContain("getWorkbenchFilterCount(counts, item)")
-    expect(source).toContain('job.source !== "desktop"')
-    expect(source).not.toContain("tasks.length === 0 && headlessJobs.length === 0")
+      expect(source).toContain("visibleHeadlessJobs")
+      expect(source).toContain("schedules.length === 0")
+      expect(source).toContain("getWorkbenchFilterCount(counts, item)")
+      expect(source).toContain('job.source !== "desktop"')
+      expect(source).not.toContain("tasks.length === 0 && headlessJobs.length === 0")
   })
 
   test("adds English and Chinese run labels", () => {
     const dictionary = read("src/renderer/lib/i18n/dictionaries.ts")
     for (const key of [
       "workbench.headlessJobs",
-      "workbench.jobSource.desktop",
-      "workbench.jobSource.cli",
-      "workbench.jobSource.daemon",
-      "workbench.jobStatus.running",
+        "workbench.jobSource.desktop",
+        "workbench.jobSource.cli",
+        "workbench.jobSource.daemon",
+        "workbench.jobSource.schedule",
+        "workbench.jobSource.protocol",
+        "workbench.schedules",
+        "workbench.runScheduleNow",
+        "workbench.pauseSchedule",
+        "workbench.resumeSchedule",
+        "workbench.deleteSchedule",
+        "workbench.jobStatus.running",
       "workbench.jobStatus.succeeded",
       "workbench.jobStatus.interrupted",
       "workbench.cancelJob",
@@ -70,12 +96,14 @@ describe("headless desktop jobs UI", () => {
     }
   })
 
-  test("counts active desktop, CLI, and daemon runs in the sidebar badge", () => {
-    const source = read("src/renderer/features/sidebar/agents-sidebar.tsx")
-    expect(source).toContain('source: "desktop"')
-    expect(source).toContain('source: "cli"')
-    expect(source).toContain('source: "daemon"')
-    expect(source).toContain("activeJobCount")
+  test("counts active desktop, CLI, daemon, schedule, and protocol runs in the sidebar badge", () => {
+      const source = read("src/renderer/features/sidebar/agents-sidebar.tsx")
+      expect(source).toContain('source: "desktop"')
+      expect(source).toContain('source: "cli"')
+      expect(source).toContain('source: "daemon"')
+      expect(source).toContain('source: "schedule"')
+      expect(source).toContain('source: "protocol"')
+      expect(source).toContain("activeJobCount")
     expect(source).toContain('job.status === "queued" || job.status === "running"')
   })
 })

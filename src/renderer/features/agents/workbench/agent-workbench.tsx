@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
   AlertCircle,
+  Cable,
+  CalendarClock,
   CheckCircle2,
   Circle,
   ExternalLink,
@@ -13,11 +15,14 @@ import {
   GitPullRequest,
   Loader2,
   MessageSquare,
+  PauseCircle,
+  PlayCircle,
   RefreshCw,
   RotateCcw,
   ScrollText,
   Server,
   Terminal,
+  Trash2,
   XCircle,
 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
@@ -151,6 +156,25 @@ type HeadlessJobEvent = {
   createdAt: Date | string | null
 }
 
+type AgentSchedule = {
+  id: string
+  name: string
+  status: "enabled" | "paused" | "disabled"
+  runtime: string
+  mode: "plan" | "agent"
+  cwd: string
+  projectId: string | null
+  promptPreview: string | null
+  intervalSeconds: number
+  timezone: string
+  nextRunAt: Date | string | null
+  lastRunAt: Date | string | null
+  lastJobId: string | null
+  createdAt: Date | string | null
+  updatedAt: Date | string | null
+  disabledAt: Date | string | null
+}
+
 type DraftPrFormState = {
   title: string
   body: string
@@ -163,6 +187,8 @@ type DraftPrMetaState = {
   changedFileCount: number
   commitCount: number
 }
+
+type ScheduleMutationAction = "run" | "pause" | "resume" | "delete"
 
 const FILTERS: WorkbenchFilter[] = [
   "all",
@@ -277,6 +303,8 @@ function canRetryHeadlessJob(job: HeadlessJob): boolean {
 }
 
 function getHeadlessJobSourceIcon(job: HeadlessJob) {
+  if (job.source === "schedule") return CalendarClock
+  if (job.source === "protocol") return Cable
   if (job.source === "daemon") return Server
   return job.source === "desktop" ? MessageSquare : Terminal
 }
@@ -285,6 +313,8 @@ function getHeadlessJobSourceLabelKey(job: HeadlessJob): TranslationKey {
   if (job.source === "desktop") return "workbench.jobSource.desktop"
   if (job.source === "cli") return "workbench.jobSource.cli"
   if (job.source === "daemon") return "workbench.jobSource.daemon"
+  if (job.source === "schedule") return "workbench.jobSource.schedule"
+  if (job.source === "protocol") return "workbench.jobSource.protocol"
   return "workbench.jobSource.other"
 }
 
@@ -292,6 +322,18 @@ function formatHeadlessRuntime(runtime: string): string {
   if (runtime === "claude-code") return "Claude Code"
   if (runtime === "codex") return "Codex"
   return runtime
+}
+
+function getScheduleStatusClassName(status: AgentSchedule["status"]): string {
+  if (status === "enabled") return "text-emerald-500"
+  if (status === "paused") return "text-amber-500"
+  return "text-muted-foreground"
+}
+
+function formatScheduleInterval(intervalSeconds: number): string {
+  if (intervalSeconds % 3600 === 0) return `${intervalSeconds / 3600}h`
+  if (intervalSeconds % 60 === 0) return `${intervalSeconds / 60}m`
+  return `${intervalSeconds}s`
 }
 
 function formatPayload(payload: unknown): string {
@@ -511,6 +553,160 @@ function TaskCard({
             <TooltipContent>{preparePrHint}</TooltipContent>
           </Tooltip>
         )}
+      </div>
+    </article>
+  )
+}
+
+function ScheduleCard({
+  schedule,
+  onRunNow,
+  onPause,
+  onResume,
+  onDelete,
+  onOpenLastJob,
+  mutatingAction,
+}: {
+  schedule: AgentSchedule
+  onRunNow: (schedule: AgentSchedule) => void
+  onPause: (schedule: AgentSchedule) => void
+  onResume: (schedule: AgentSchedule) => void
+  onDelete: (schedule: AgentSchedule) => void
+  onOpenLastJob: (schedule: AgentSchedule) => void
+  mutatingAction: ScheduleMutationAction | null
+}) {
+  const { t } = useI18n()
+  const nextRunAt = formatUpdatedAt(schedule.nextRunAt)
+  const lastRunAt = formatUpdatedAt(schedule.lastRunAt)
+  const isMutating = mutatingAction !== null
+  const canRun = schedule.status !== "disabled"
+  const canPause = schedule.status === "enabled"
+  const canResume = schedule.status === "paused"
+
+  return (
+    <article className="rounded-lg border border-border bg-background px-4 py-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <CalendarClock
+              className={cn(
+                "h-4 w-4 flex-shrink-0",
+                getScheduleStatusClassName(schedule.status),
+              )}
+            />
+            <h3 className="truncate text-sm font-medium text-foreground">
+              {schedule.name}
+            </h3>
+          </div>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>{formatHeadlessRuntime(schedule.runtime)}</span>
+            <span className="uppercase">{schedule.mode}</span>
+            <span>
+              {t("workbench.scheduleInterval", {
+                interval: formatScheduleInterval(schedule.intervalSeconds),
+              })}
+            </span>
+            {nextRunAt && (
+              <span>
+                {t("workbench.scheduleNextRun", { time: nextRunAt })}
+              </span>
+            )}
+            {lastRunAt && (
+              <span>
+                {t("workbench.scheduleLastRun", { time: lastRunAt })}
+              </span>
+            )}
+            <span className="truncate">{schedule.cwd}</span>
+          </div>
+        </div>
+
+        <span className="flex-shrink-0 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+          {t(`workbench.scheduleStatus.${schedule.status}` as TranslationKey)}
+        </span>
+      </div>
+
+      {schedule.promptPreview && (
+        <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">
+          {schedule.promptPreview}
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          disabled={!canRun || isMutating}
+          onClick={() => onRunNow(schedule)}
+        >
+          {mutatingAction === "run" ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <PlayCircle className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          {t("workbench.runScheduleNow")}
+        </Button>
+
+        {canPause && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            disabled={isMutating}
+            onClick={() => onPause(schedule)}
+          >
+            {mutatingAction === "pause" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PauseCircle className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {t("workbench.pauseSchedule")}
+          </Button>
+        )}
+
+        {canResume && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            disabled={isMutating}
+            onClick={() => onResume(schedule)}
+          >
+            {mutatingAction === "resume" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PlayCircle className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {t("workbench.resumeSchedule")}
+          </Button>
+        )}
+
+        {schedule.lastJobId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            onClick={() => onOpenLastJob(schedule)}
+          >
+            <ScrollText className="mr-1.5 h-3.5 w-3.5" />
+            {t("workbench.openScheduleJob")}
+          </Button>
+        )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          disabled={schedule.status === "disabled" || isMutating}
+          onClick={() => onDelete(schedule)}
+        >
+          {mutatingAction === "delete" ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          {t("workbench.deleteSchedule")}
+        </Button>
       </div>
     </article>
   )
@@ -907,6 +1103,10 @@ export function AgentWorkbench() {
     useState(false)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [mutatingJobId, setMutatingJobId] = useState<string | null>(null)
+  const [mutatingSchedule, setMutatingSchedule] = useState<{
+    id: string
+    action: ScheduleMutationAction
+  } | null>(null)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
@@ -922,6 +1122,10 @@ export function AgentWorkbench() {
     trpc.githubWorkflow.createDraftPullRequest.useMutation()
   const cancelJobMutation = trpc.agentJobs.cancel.useMutation()
   const retryJobMutation = trpc.agentJobs.retry.useMutation()
+  const runScheduleNowMutation = trpc.agentSchedules.runNow.useMutation()
+  const pauseScheduleMutation = trpc.agentSchedules.pause.useMutation()
+  const resumeScheduleMutation = trpc.agentSchedules.resume.useMutation()
+  const deleteScheduleMutation = trpc.agentSchedules.delete.useMutation()
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
   const trpcUtils = trpc.useUtils()
   const runningSubChatIds = useMemo(
@@ -984,12 +1188,43 @@ export function AgentWorkbench() {
       placeholderData: (previous) => previous,
     },
   )
+  const scheduleJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "schedule", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
+          ?.jobs ?? []) as HeadlessJob[]
+        return jobs.some(isActiveHeadlessJob) ? 5000 : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const protocolJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "protocol", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
+          ?.jobs ?? []) as HeadlessJob[]
+        return jobs.some(isActiveHeadlessJob) ? 5000 : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const schedulesQuery = trpc.agentSchedules.list.useQuery(
+    { includeDisabled: false, limit: 20 },
+    {
+      refetchInterval: 10000,
+      placeholderData: (previous) => previous,
+    },
+  )
   const selectedJob = useMemo(
     () =>
       ([
         ...((desktopJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((cliJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((daemonJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+        ...((scheduleJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+        ...((protocolJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ]).find(
         (job) => job.id === selectedJobId,
       ) ?? null,
@@ -997,6 +1232,8 @@ export function AgentWorkbench() {
       cliJobsQuery.data?.jobs,
       daemonJobsQuery.data?.jobs,
       desktopJobsQuery.data?.jobs,
+      protocolJobsQuery.data?.jobs,
+      scheduleJobsQuery.data?.jobs,
       selectedJobId,
     ],
   )
@@ -1012,11 +1249,14 @@ export function AgentWorkbench() {
   )
 
   const tasks = (tasksQuery.data?.tasks ?? []) as WorkbenchTask[]
+  const schedules = (schedulesQuery.data?.schedules ?? []) as AgentSchedule[]
   const headlessJobs = useMemo(() => {
     const jobs = [
       ...((desktopJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ...((cliJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ...((daemonJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+      ...((scheduleJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+      ...((protocolJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
     ]
     return jobs.sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
@@ -1027,6 +1267,8 @@ export function AgentWorkbench() {
     cliJobsQuery.data?.jobs,
     daemonJobsQuery.data?.jobs,
     desktopJobsQuery.data?.jobs,
+    protocolJobsQuery.data?.jobs,
+    scheduleJobsQuery.data?.jobs,
   ])
   const visibleHeadlessJobs = useMemo(
     () =>
@@ -1040,12 +1282,16 @@ export function AgentWorkbench() {
     [headlessJobs],
   )
   const headlessJobEvents = (jobLogsQuery.data?.events ?? []) as HeadlessJobEvent[]
+  const loggedJob = ((jobLogsQuery.data?.job as HeadlessJob | undefined) ?? selectedJob)
   const counts = mergeWorkbenchCounts(tasksQuery.data?.counts, headlessJobCounts)
   const isRefreshing =
     tasksQuery.isFetching ||
     cliJobsQuery.isFetching ||
     desktopJobsQuery.isFetching ||
-    daemonJobsQuery.isFetching
+    daemonJobsQuery.isFetching ||
+    scheduleJobsQuery.isFetching ||
+    protocolJobsQuery.isFetching ||
+    schedulesQuery.isFetching
   const canCreateDraftPr =
     !!draftPrForm?.title.trim() &&
     !!draftPrForm.body.trim() &&
@@ -1150,6 +1396,72 @@ export function AgentWorkbench() {
     },
     [retryJobMutation, trpcUtils],
   )
+
+  const refreshSchedulesAndJobs = useCallback(async () => {
+    await Promise.all([
+      trpcUtils.agentSchedules.list.invalidate(),
+      trpcUtils.agentJobs.list.invalidate(),
+    ])
+  }, [trpcUtils])
+
+  const handleRunScheduleNow = useCallback(
+    async (schedule: AgentSchedule) => {
+      setMutatingSchedule({ id: schedule.id, action: "run" })
+      try {
+        const result = await runScheduleNowMutation.mutateAsync({
+          scheduleId: schedule.id,
+        })
+        setSelectedJobId(result.job.id)
+        await refreshSchedulesAndJobs()
+      } finally {
+        setMutatingSchedule(null)
+      }
+    },
+    [refreshSchedulesAndJobs, runScheduleNowMutation],
+  )
+
+  const handlePauseSchedule = useCallback(
+    async (schedule: AgentSchedule) => {
+      setMutatingSchedule({ id: schedule.id, action: "pause" })
+      try {
+        await pauseScheduleMutation.mutateAsync({ scheduleId: schedule.id })
+        await refreshSchedulesAndJobs()
+      } finally {
+        setMutatingSchedule(null)
+      }
+    },
+    [pauseScheduleMutation, refreshSchedulesAndJobs],
+  )
+
+  const handleResumeSchedule = useCallback(
+    async (schedule: AgentSchedule) => {
+      setMutatingSchedule({ id: schedule.id, action: "resume" })
+      try {
+        await resumeScheduleMutation.mutateAsync({ scheduleId: schedule.id })
+        await refreshSchedulesAndJobs()
+      } finally {
+        setMutatingSchedule(null)
+      }
+    },
+    [refreshSchedulesAndJobs, resumeScheduleMutation],
+  )
+
+  const handleDeleteSchedule = useCallback(
+    async (schedule: AgentSchedule) => {
+      setMutatingSchedule({ id: schedule.id, action: "delete" })
+      try {
+        await deleteScheduleMutation.mutateAsync({ scheduleId: schedule.id })
+        await refreshSchedulesAndJobs()
+      } finally {
+        setMutatingSchedule(null)
+      }
+    },
+    [deleteScheduleMutation, refreshSchedulesAndJobs],
+  )
+
+  const handleOpenScheduleJob = useCallback((schedule: AgentSchedule) => {
+    if (schedule.lastJobId) setSelectedJobId(schedule.lastJobId)
+  }, [])
 
   const handlePreparePr = useCallback(
     async (task: WorkbenchTask) => {
@@ -1294,11 +1606,14 @@ export function AgentWorkbench() {
             className="h-8 gap-1.5 text-xs"
             onClick={() => {
               void tasksQuery.refetch()
-              void cliJobsQuery.refetch()
-              void desktopJobsQuery.refetch()
-              void daemonJobsQuery.refetch()
-            }}
-            disabled={isRefreshing}
+                void cliJobsQuery.refetch()
+                void desktopJobsQuery.refetch()
+                void daemonJobsQuery.refetch()
+                void scheduleJobsQuery.refetch()
+                void protocolJobsQuery.refetch()
+                void schedulesQuery.refetch()
+              }}
+              disabled={isRefreshing}
           >
             <RefreshCw
               className={cn(
@@ -1333,15 +1648,20 @@ export function AgentWorkbench() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {cliJobsQuery.isLoading &&
-        desktopJobsQuery.isLoading &&
-        daemonJobsQuery.isLoading &&
-        tasksQuery.isLoading ? (
+          {cliJobsQuery.isLoading &&
+          desktopJobsQuery.isLoading &&
+          daemonJobsQuery.isLoading &&
+          scheduleJobsQuery.isLoading &&
+          protocolJobsQuery.isLoading &&
+          schedulesQuery.isLoading &&
+          tasksQuery.isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {t("workbench.loading")}
           </div>
-        ) : tasks.length === 0 && visibleHeadlessJobs.length === 0 ? (
+          ) : tasks.length === 0 &&
+            schedules.length === 0 &&
+            visibleHeadlessJobs.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-sm text-center">
               <Circle className="mx-auto h-6 w-6 text-muted-foreground" />
@@ -1353,10 +1673,43 @@ export function AgentWorkbench() {
               </p>
             </div>
           </div>
-        ) : (
-          <div className="space-y-5">
-            {visibleHeadlessJobs.length > 0 && (
-              <section className="space-y-2">
+          ) : (
+            <div className="space-y-5">
+              {schedules.length > 0 && (
+                <section className="space-y-2">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-medium text-foreground">
+                        {t("workbench.schedules")}
+                      </h2>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {t("workbench.schedulesSubtitle")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-3">
+                    {schedules.map((schedule) => (
+                      <ScheduleCard
+                        key={schedule.id}
+                        schedule={schedule}
+                        onRunNow={handleRunScheduleNow}
+                        onPause={handlePauseSchedule}
+                        onResume={handleResumeSchedule}
+                        onDelete={handleDeleteSchedule}
+                        onOpenLastJob={handleOpenScheduleJob}
+                        mutatingAction={
+                          mutatingSchedule?.id === schedule.id
+                            ? mutatingSchedule.action
+                            : null
+                        }
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {visibleHeadlessJobs.length > 0 && (
+                <section className="space-y-2">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="text-sm font-medium text-foreground">
@@ -1407,8 +1760,8 @@ export function AgentWorkbench() {
           </div>
         )}
       </div>
-      <HeadlessJobLogsDialog
-        job={selectedJob}
+        <HeadlessJobLogsDialog
+          job={loggedJob}
         events={headlessJobEvents}
         isLoading={jobLogsQuery.isLoading}
         isOpen={!!selectedJobId}
