@@ -102,7 +102,22 @@ Current status is **macOS local implementation complete through Phase 6, pending
 - [x] 9.10 Save daemon smoke screenshot/video/summary artifacts and update verification notes.
 - [x] 9.11 Record that Windows daemon source/shim tests exist but real Windows daemon smoke remains pending until a Windows host or CI runner is used.
 
+## 10. Phase 7: Local Schedules and Minimal ACP Stdio
+- [x] 10.1 Update OpenSpec proposal/design/spec/tasks to move local schedules and minimal `locus acp` from future boundary into explicit Phase 7 scope.
+- [ ] 10.2 Add local schedule persistence, migrations, and store helpers for create, list, update status, run-now, delete, next-run metadata, and audit linkage to created jobs.
+- [ ] 10.3 Add schedule CLI parsing/dispatch for listing, creating, pausing, resuming, deleting, and running schedules now, with JSON-safe stdout and diagnostics on stderr.
+- [ ] 10.4 Extend the local daemon loop to evaluate due enabled schedules, create at most one `source=schedule` job per due schedule fire, and claim queued schedule jobs without claiming desktop, one-shot CLI, or protocol jobs.
+- [ ] 10.5 Add schedule tRPC APIs and Agent Workbench UI so schedules are visible, pausable/resumable, deletable, runnable now, and linked to their created jobs.
+- [ ] 10.6 Add focused tests for schedule store transitions, CLI parsing/dispatch, daemon schedule firing/deduplication, job visibility, and UI labels/actions.
+- [ ] 10.7 Add minimal `locus acp` stdio parsing/dispatch that supports initialization/capabilities, job-backed run creation, event streaming, cancellation, shutdown, strict JSON-RPC stdout, and stderr diagnostics.
+- [ ] 10.8 Keep protocol jobs as `source=protocol`, route execution through the shared runner core, reject provider tokens/raw env over protocol, and avoid full ACP parity claims.
+- [ ] 10.9 Update macOS and Windows CLI shims/source tests so `acp` and `schedules` use the synchronous headless Electron marker path.
+- [ ] 10.10 Run comprehensive tests: OpenSpec strict validation, TypeScript, focused schedule/ACP/headless/job/UI/shim tests, build, and diff whitespace checks.
+- [ ] 10.11 Run real macOS smoke with a clean user data directory: create a schedule, run it now, start daemon for due schedule, verify schedule-created jobs/logs, run minimal ACP stdio against a fake runner, verify protocol stdout is JSON-only, and save logs.
+- [ ] 10.12 Record UI/UX evidence with screenshot/video for the schedule surface and protocol/schedule-created job visibility; fix any visible overlap, confusing labels, or action-state issues discovered during review.
+- [ ] 10.13 Record that Windows schedule/ACP source and unit tests exist but real Windows schedule/ACP smoke remains pending until a Windows host or CI runner is used.
+
 ## Future Follow-Up Proposals
 These items are intentionally not implementation tasks for this change:
-- Local scheduling: create, pause, resume, run-now, delete, and visible audit history for scheduled jobs.
-- Protocol compatibility: `locus acp` stdio server backed by the same runner core with strict JSON-RPC stdout behavior.
+- Full ACP parity beyond the minimal stdio job surface.
+- Hosted or OS-level scheduling beyond the local daemon's opt-in schedule evaluation.

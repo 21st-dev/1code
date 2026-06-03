@@ -324,7 +324,7 @@ request. A Workbench cancellation should not cancel a newer stream in the same
 sub-chat merely because an older job row shares the same chat IDs.
 
 ### Layer 6: Daemon, Schedule, Protocol
-Phase 6 implements only the local daemon part of this layer:
+Phase 6 implemented only the local daemon part of this layer:
 - `locus daemon run`: starts a long-running headless Electron main process without creating a BrowserWindow or entering GUI single-instance behavior.
 - `locus run --daemon`: creates a queued `source=daemon` job in SQLite for the daemon to claim.
 - `locus run --daemon --follow`: creates the same queued job and follows persisted job events until a terminal state.
@@ -335,9 +335,13 @@ Phase 6 implements only the local daemon part of this layer:
 
 The Phase 6 daemon uses a local per-user single-daemon lock only for coordination. It must not expose an unauthenticated TCP server, must not treat a PID file as authorization, must not accept provider tokens or raw environment from clients, and must not duplicate runtime execution outside the shared adapter layer.
 
-Schedule and ACP are still future:
-- Schedule: opt-in local schedules that create jobs; disabled by default and visible in the app.
-- ACP-compatible protocol: `locus acp` over stdio, mapping internal job/session events to ACP-style JSON-RPC messages.
+Phase 7 completes the next roadmap boundary with two bounded surfaces:
+- Schedule: opt-in local schedules that create `source=schedule` jobs; disabled by default unless created/enabled by the user, visible in the app, pausable, resumable, deletable, and manually runnable.
+- ACP-compatible protocol: `locus acp` over stdio, mapping internal job/session events to minimal JSON-RPC messages without opening a TCP/HTTP listener.
+
+Phase 7 schedule execution deliberately reuses the existing local daemon loop rather than adding a second background worker. On each daemon poll, due enabled schedules create at most one queued `source=schedule` job per schedule fire, update their next-run metadata, and append audit history. The daemon may claim queued `source=schedule` jobs after creating them, but must continue to avoid `source=desktop`, default one-shot `source=cli`, and `source=protocol` unless the user explicitly starts `locus acp`.
+
+Phase 7 ACP is intentionally minimal. It should support a small documented JSON-RPC envelope over stdio for initialize/capabilities, run creation, job event streaming, cancellation, and shutdown. It should not claim full ACP parity, session resume parity, MCP negotiation parity, or provider-specific workflow behavior. It should create `source=protocol` jobs through the shared job runner and preserve strict stdout/stderr separation so protocol clients can parse stdout.
 
 ## Decisions
 
@@ -360,6 +364,16 @@ Why: existing CLI scripts, smoke tests, and users rely on synchronous one-shot e
 Decision: the Phase 6 daemon coordinates through the existing SQLite job store and a per-user single-daemon lock, not a public HTTP/WebSocket listener.
 
 Why: the daemon is a local background worker, not a remote API. SQLite already stores queued/running/terminal job truth, cancel requests, heartbeats, and append-only logs. Avoiding an unauthenticated network listener keeps the first daemon slice small and avoids turning local job IDs into remote control tokens.
+
+### Schedule Through Existing Daemon
+Decision: Phase 7 schedules are evaluated by the existing local daemon poll loop.
+
+Why: schedule evaluation is a local background concern and should not introduce a second worker, hosted queue, or renderer-owned timer. The daemon already has a single-process lock, durable job store access, and recovery semantics. Reusing it keeps schedule-created jobs visible, cancelable, and retryable through the existing job surfaces.
+
+### Minimal ACP Stdio Before Full Protocol Parity
+Decision: Phase 7 implements only a minimal stdio JSON-RPC surface for job-backed runs.
+
+Why: the useful Step 7 value is letting protocol clients start, observe, and cancel local jobs without requiring a renderer window. Full ACP capability negotiation, tool approval parity, session resume semantics, and MCP protocol bridging require separate compatibility work. A minimal stdio surface validates the local runner boundary while keeping stdout parseable and credentials local.
 
 ### Headless Electron Main as CLI Host
 Decision: `locus run` uses the Electron main process in a headless CLI mode instead of a standalone Node-only runner.

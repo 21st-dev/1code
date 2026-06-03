@@ -167,16 +167,33 @@ The system SHALL provide an opt-in local daemon queue that reuses durable jobs a
 - **AND** does not expose an unauthenticated TCP HTTP or WebSocket control surface by default
 - **AND** does not accept provider tokens, API keys, or raw environment values from daemon clients
 
-### Requirement: Future Local Job Scheduling Boundary
-The system SHALL support opt-in local schedules only after durable jobs and daemon recovery are implemented.
+### Requirement: Local Job Scheduling
+The system SHALL support opt-in local schedules that create visible local jobs through the durable job store.
 
 #### Scenario: User creates schedule
 - **WHEN** the user creates a local schedule
 - **THEN** the system stores schedule metadata locally
 - **AND** shows the schedule as enabled, paused, or disabled
-- **AND** creates visible jobs when schedule triggers fire
+- **AND** creates visible `source=schedule` jobs when schedule triggers fire
 
 #### Scenario: User pauses schedule
 - **WHEN** the user pauses a schedule
 - **THEN** no new jobs are created by that schedule until it is resumed
 - **AND** existing jobs keep their current status
+
+#### Scenario: User runs schedule now
+- **WHEN** the user manually runs an enabled or paused schedule
+- **THEN** the system creates a queued `source=schedule` job immediately
+- **AND** records schedule audit metadata that links the job back to the schedule
+
+#### Scenario: Daemon evaluates due schedules
+- **WHEN** the local daemon is running
+- **AND** an enabled schedule is due
+- **THEN** the daemon creates at most one queued `source=schedule` job for that schedule fire
+- **AND** updates the next-run metadata before another daemon poll can create a duplicate
+- **AND** may claim the queued schedule job through the same runner core
+
+#### Scenario: User deletes schedule
+- **WHEN** the user deletes a local schedule
+- **THEN** the schedule no longer creates new jobs
+- **AND** previously created jobs and events remain visible in job history
