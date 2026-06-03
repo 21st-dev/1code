@@ -388,7 +388,9 @@ export async function runHeadlessCliCommand(
     return commandError(options.stderr, parsed.message, parsed.code)
   }
 
-  recoverStaleAgentJobs(options.db, options.now)
+  if (parsed.command.kind !== "daemon-run") {
+    recoverStaleAgentJobs(options.db, options.now)
+  }
 
   switch (parsed.command.kind) {
     case "run":

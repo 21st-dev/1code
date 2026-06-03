@@ -4,9 +4,9 @@
 - [x] 0.1 Record that phases 0-4 are implemented and smoked locally on macOS.
 - [x] 0.2 Record that Windows shim implementation and source/unit tests exist, but real Windows smoke has not been run.
 - [ ] 0.3 Run real Windows smoke for `locus run`, `locus jobs list`, `locus jobs logs`, and structured stdout/exit-code behavior.
-- [x] 0.4 Keep ordinary desktop chat migration, daemon, schedule, and `locus acp` out of this first-slice implementation.
+- [x] 0.4 Record that ordinary desktop chat migration, daemon, schedule, and `locus acp` were kept out of the original first-slice implementation; Phase 5 and Phase 6 later moved desktop chat migration and the local daemon into explicit scope, while schedule and `locus acp` remain future work.
 
-Current status is **macOS local implementation complete through Phase 5, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
+Current status is **macOS local implementation complete through Phase 6, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
 
 ## 1. Proposal and Scope
 - [x] 1.1 Create the OpenSpec proposal, design, and multiple capability deltas for headless agent jobs.
@@ -98,9 +98,9 @@ Current status is **macOS local implementation complete through Phase 5, pending
 - [x] 9.6 Keep default `locus run` as one-shot `source=cli`; do not route desktop chat, schedule, or protocol jobs through the daemon in this phase.
 - [x] 9.7 Show daemon jobs in the desktop Agent Workbench and sidebar counts with source labels that distinguish daemon, CLI, and desktop jobs.
 - [x] 9.8 Add focused tests for daemon queueing, concurrency, cancellation, startup stale-job interruption, CLI parsing/dispatch, shim dispatch, and desktop daemon job visibility.
-- [ ] 9.9 Run macOS real daemon smoke with a clean user data directory: start daemon, enqueue fake runner job, follow logs, verify terminal status, and prove no renderer window is required for daemon execution.
-- [ ] 9.10 Save daemon smoke screenshot/video/summary artifacts and update verification notes.
-- [ ] 9.11 Record that Windows daemon source/shim tests exist but real Windows daemon smoke remains pending until a Windows host or CI runner is used.
+- [x] 9.9 Run macOS real daemon smoke with a clean user data directory: start daemon, enqueue fake runner job, follow logs, verify terminal status, and prove no renderer window is required for daemon execution.
+- [x] 9.10 Save daemon smoke screenshot/video/summary artifacts and update verification notes.
+- [x] 9.11 Record that Windows daemon source/shim tests exist but real Windows daemon smoke remains pending until a Windows host or CI runner is used.
 
 ## Future Follow-Up Proposals
 These items are intentionally not implementation tasks for this change:

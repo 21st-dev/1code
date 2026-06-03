@@ -229,6 +229,50 @@ describe("headless CLI dispatcher", () => {
     expect(listed[0]).toMatchObject({ id: daemonJob.id, source: "daemon" })
   })
 
+  test("daemon command reports stale running jobs it interrupts", async () => {
+    const db = createAgentJobTestDb()
+    const staleJob = createAgentJob(db, {
+      source: "daemon",
+      runtime: "codex",
+      mode: "agent",
+      cwd: process.cwd(),
+      prompt: "Recover me",
+    })
+    startAgentJob(db, {
+      jobId: staleJob.id,
+      workerId: "daemon:stale",
+      now: new Date("2026-06-03T00:00:00.000Z"),
+    })
+
+    const stdout = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "daemon",
+        "run",
+        "--once",
+        "--poll-interval-ms",
+        "10",
+        "--output",
+        "json",
+      ],
+      stdout: stdout.stream,
+      stderr: writer().stream,
+      now: new Date("2026-06-03T00:03:00.000Z"),
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout.value()).daemon).toMatchObject({
+      startedJobs: 0,
+      interruptedJobs: 1,
+      stoppedBy: "once",
+    })
+    expect(getAgentJob(db, staleJob.id)?.status).toBe("interrupted")
+  })
+
   test("cancels queued jobs and retries terminal jobs", async () => {
     const db = createAgentJobTestDb()
     const runStdout = writer()
