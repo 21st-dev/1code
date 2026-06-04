@@ -11,6 +11,7 @@ import { publicProcedure, router } from "../index"
 export const localApiProviderPurposeSchema = z.enum([
   "sub_chat_title",
   "commit_message",
+  "voice_transcription",
 ])
 export type LocalApiProviderPurpose = z.infer<
   typeof localApiProviderPurposeSchema
@@ -61,6 +62,24 @@ function normalizeProviderToken(token: string): string {
   }
 
   return normalized
+}
+
+export function getLocalApiProviderTokenRequirement(input: {
+  baseUrl: string
+  token?: string | null
+  existingEncryptedToken?: string | null
+  existingBaseUrl?: string | null
+}): "none" | "missing" | "destination_changed" {
+  if (input.token?.trim()) return "none"
+
+  const baseUrl = normalizeBaseUrl(input.baseUrl)
+  const destinationChanged = Boolean(
+    input.existingEncryptedToken && input.existingBaseUrl !== baseUrl,
+  )
+
+  if (destinationChanged) return "destination_changed"
+  if (!input.existingEncryptedToken) return "missing"
+  return "none"
 }
 
 function getStoredProviderRow(purpose: LocalApiProviderPurpose) {
@@ -134,8 +153,19 @@ export const localApiProviderConfigRouter = router({
       throw new Error("Model and base URL are required")
     }
 
-    if (!token && !existing?.encryptedToken) {
-      throw new Error("Token is required for a new provider config")
+    const tokenRequirement = getLocalApiProviderTokenRequirement({
+      baseUrl,
+      token,
+      existingEncryptedToken: existing?.encryptedToken,
+      existingBaseUrl: existing?.baseUrl,
+    })
+
+    if (tokenRequirement !== "none") {
+      throw new Error(
+        tokenRequirement === "destination_changed"
+          ? "Token is required when changing provider endpoint"
+          : "Token is required for a new provider config",
+      )
     }
 
     const encryptedToken = token

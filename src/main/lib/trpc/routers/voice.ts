@@ -1,13 +1,17 @@
 /**
  * Voice TRPC router
- * Provides voice-to-text transcription using OpenAI Whisper API
+ * Provides voice-to-text transcription using a user-configured
+ * OpenAI-compatible audio transcription API.
  *
- * Local-first builds use a user-owned OpenAI API key only.
+ * Local-first builds store provider credentials in main-process secure storage.
  */
 
-import { execSync } from "node:child_process"
-import os from "node:os"
 import { z } from "zod"
+import {
+  getActiveLocalApiProviderConfig,
+  type LocalApiProviderRuntimeConfig,
+} from "./local-api-provider-config"
+import { assertOfficialCloudAllowed } from "../../local-only"
 import { publicProcedure, router } from "../index"
 
 // Max audio size: 25MB (Whisper API limit)
@@ -15,6 +19,11 @@ const MAX_AUDIO_SIZE = 25 * 1024 * 1024
 
 // API request timeout: 30 seconds
 const API_TIMEOUT_MS = 30000
+
+const VOICE_TRANSCRIPTION_PURPOSE = "voice_transcription" as const
+const MAX_BASE64_AUDIO_LENGTH = Math.ceil((MAX_AUDIO_SIZE * 4) / 3) + 8
+const BASE64_AUDIO_REGEX = /^[A-Za-z0-9+/]+={0,2}$/
+const LANGUAGE_CODE_REGEX = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/
 
 /**
  * Clean up transcribed text
@@ -41,107 +50,75 @@ function cleanTranscribedText(text: string): string {
   )
 }
 
-// Cache for OpenAI API key
-let cachedOpenAIKey: string | null | undefined = undefined
-
-// User-configured OpenAI API key (from settings, set via IPC)
-let userConfiguredOpenAIKey: string | null = null
-
-/**
- * Set OpenAI API key from user settings
- * Called from renderer via tRPC
- */
-export function setUserOpenAIKey(key: string | null): void {
-  userConfiguredOpenAIKey = key?.trim() || null
-  // Clear env cache so next call re-evaluates
-  cachedOpenAIKey = undefined
+export type VoiceTranscriptionProviderConfig = LocalApiProviderRuntimeConfig & {
+  source: "stored"
 }
 
-/**
- * Get OpenAI API key from multiple sources (priority order):
- * 1. User-configured key from settings
- * 2. Vite env vars (.env.local files)
- * 3. process.env
- * 4. Shell environment
- */
-function getOpenAIApiKey(): string | null {
-  // First check user-configured key (highest priority, not cached)
-  if (userConfiguredOpenAIKey && userConfiguredOpenAIKey.startsWith("sk-")) {
-    return userConfiguredOpenAIKey
+function getVoiceTranscriptionProviderConfig():
+  | VoiceTranscriptionProviderConfig
+  | undefined {
+  const storedConfig = getActiveLocalApiProviderConfig(VOICE_TRANSCRIPTION_PURPOSE)
+  if (storedConfig) {
+    return { ...storedConfig, source: "stored" }
   }
 
-  // Return cached value if already fetched from env
-  if (cachedOpenAIKey !== undefined) {
-    return cachedOpenAIKey
+  return undefined
+}
+
+export function buildTranscriptionUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "")
+  if (!trimmed) {
+    throw new Error("Voice transcription API base URL is required")
   }
 
-  // Check Vite env vars (works with .env.local files)
-  const viteKey = (import.meta.env as Record<string, string | undefined>)
-    .MAIN_VITE_OPENAI_API_KEY
-  if (viteKey) {
-    cachedOpenAIKey = viteKey
-    console.log(
-      "[Voice] Using OPENAI_API_KEY from Vite env (MAIN_VITE_OPENAI_API_KEY)"
-    )
-    return cachedOpenAIKey
-  }
-
-  // Check process.env (works in dev mode)
-  if (process.env.OPENAI_API_KEY) {
-    cachedOpenAIKey = process.env.OPENAI_API_KEY
-    console.log("[Voice] Using OPENAI_API_KEY from process.env")
-    return cachedOpenAIKey
-  }
-
-  // Try to get from shell environment (for production builds)
+  let parsed: URL
   try {
-    const shell = process.env.SHELL || "/bin/zsh"
-    const result = execSync(`${shell} -ilc 'echo $OPENAI_API_KEY'`, {
-      encoding: "utf8",
-      timeout: 5000,
-      env: {
-        HOME: os.homedir(),
-        USER: os.userInfo().username,
-        SHELL: shell,
-      } as unknown as NodeJS.ProcessEnv,
-    })
-
-    const key = result.trim()
-    if (key && key !== "$OPENAI_API_KEY" && key.startsWith("sk-")) {
-      cachedOpenAIKey = key
-      console.log("[Voice] Using OPENAI_API_KEY from shell environment")
-      return cachedOpenAIKey
-    }
-  } catch (err) {
-    console.error("[Voice] Failed to read OPENAI_API_KEY from shell:", err)
+    parsed = new URL(trimmed)
+  } catch {
+    throw new Error("Voice transcription API base URL is invalid")
   }
 
-  cachedOpenAIKey = null
-  return null
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("Voice transcription API base URL must be HTTP or HTTPS")
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error("Voice transcription API base URL must not contain credentials")
+  }
+
+  parsed.search = ""
+  parsed.hash = ""
+
+  if (parsed.pathname.endsWith("/audio/transcriptions")) {
+    return parsed.toString().replace(/\/+$/, "")
+  }
+
+  parsed.pathname = `${parsed.pathname.replace(/\/+$/, "")}/audio/transcriptions`
+  return parsed.toString()
+}
+
+function decodeBase64Audio(audio: string): Buffer {
+  const normalized = audio.trim()
+  if (
+    !normalized ||
+    normalized.length % 4 === 1 ||
+    !BASE64_AUDIO_REGEX.test(normalized)
+  ) {
+    throw new Error("Invalid audio payload")
+  }
+
+  return Buffer.from(normalized, "base64")
 }
 
 /**
- * Clear cached API key (for testing)
+ * Transcribe audio using an OpenAI-compatible audio transcription API.
  */
-export function clearOpenAIKeyCache(): void {
-  cachedOpenAIKey = undefined
-}
-
-/**
- * Transcribe audio using OpenAI Whisper API directly (for open-source users)
- */
-async function transcribeWithWhisper(
+export async function transcribeWithProviderConfig(
   audioBuffer: Buffer,
   format: string,
+  providerConfig: VoiceTranscriptionProviderConfig,
   language?: string
 ): Promise<string> {
-  const key = getOpenAIApiKey()
-  if (!key) {
-    throw new Error(
-      "OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
-    )
-  }
-
   // Check audio size limit
   if (audioBuffer.length > MAX_AUDIO_SIZE) {
     throw new Error(
@@ -156,7 +133,7 @@ async function transcribeWithWhisper(
   const uint8Array = new Uint8Array(audioBuffer)
   const blob = new Blob([uint8Array], { type: `audio/${format}` })
   formData.append("file", blob, `audio.${format}`)
-  formData.append("model", "whisper-1")
+  formData.append("model", providerConfig.model)
   formData.append("response_format", "text")
 
   if (language) {
@@ -168,29 +145,31 @@ async function transcribeWithWhisper(
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
   try {
-    const response = await fetch(
-      "https://api.openai.com/v1/audio/transcriptions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-        },
-        body: formData,
-        signal: controller.signal,
-      }
+    const transcriptionUrl = buildTranscriptionUrl(providerConfig.baseUrl)
+    assertOfficialCloudAllowed(
+      "transcribe voice with configured provider",
+      transcriptionUrl,
     )
 
+    const response = await fetch(transcriptionUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${providerConfig.token}`,
+      },
+      body: formData,
+      signal: controller.signal,
+    })
+
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("[Voice] Whisper API error:", response.status, errorText)
+      console.error("[Voice] Transcription API error:", response.status)
 
       // Provide user-friendly error messages
       if (response.status === 401) {
-        throw new Error("Invalid OpenAI API key")
+        throw new Error("Invalid voice transcription API key")
       } else if (response.status === 429) {
         throw new Error("Rate limit exceeded. Please try again later.")
       } else if (response.status >= 500) {
-        throw new Error("OpenAI service temporarily unavailable")
+        throw new Error("Voice transcription service temporarily unavailable")
       }
       throw new Error(`Transcription failed (${response.status})`)
     }
@@ -210,18 +189,25 @@ async function transcribeWithWhisper(
 export const voiceRouter = router({
   /**
    * Transcribe audio to text
-   * Requires a user-owned OpenAI API key.
+   * Requires a user-owned transcription provider API key.
    */
   transcribe: publicProcedure
     .input(
       z.object({
-        audio: z.string(), // base64 encoded audio
+        audio: z.string().max(MAX_BASE64_AUDIO_LENGTH), // base64 encoded audio
         format: z.enum(["webm", "wav", "mp3", "m4a", "ogg"]).default("webm"),
-        language: z.string().optional(), // ISO 639-1 code (e.g., "en", "ru")
+        language: z
+          .string()
+          .regex(LANGUAGE_CODE_REGEX)
+          .optional(), // ISO 639 language code (e.g., "en", "zh-CN")
       })
     )
     .mutation(async ({ input }) => {
-      const audioBuffer = Buffer.from(input.audio, "base64")
+      if (input.audio.length > MAX_BASE64_AUDIO_LENGTH) {
+        throw new Error("Audio too large. Maximum is 25MB.")
+      }
+
+      const audioBuffer = decodeBase64Audio(input.audio)
 
       console.log(
         `[Voice] Transcribing ${audioBuffer.length} bytes of ${input.format} audio`
@@ -234,33 +220,34 @@ export const voiceRouter = router({
         )
       }
 
-      const hasLocalKey = !!getOpenAIApiKey()
-      if (hasLocalKey) {
-        const text = await transcribeWithWhisper(
+      const providerConfig = getVoiceTranscriptionProviderConfig()
+      if (providerConfig) {
+        const text = await transcribeWithProviderConfig(
           audioBuffer,
           input.format,
-          input.language
+          providerConfig,
+          input.language,
         )
-        console.log(`[Voice] Local transcription result: "${text.slice(0, 100)}..."`)
+        console.log("[Voice] Transcription completed")
         return { text }
       }
 
       throw new Error(
-        "Voice input requires an OpenAI API key. Add one in Settings > Models or set OPENAI_API_KEY."
+        "Voice input requires a transcription API. Configure it in Settings > Models > Helper APIs."
       )
     }),
 
   /**
    * Check if voice transcription is available
-   * Available if the user has configured an OpenAI API key.
+   * Available if the user has configured a transcription API key.
    */
   isAvailable: publicProcedure.query(() => {
-    const hasLocalKey = !!getOpenAIApiKey()
+    const providerConfig = getVoiceTranscriptionProviderConfig()
 
-    if (hasLocalKey) {
+    if (providerConfig) {
       return {
         available: true,
-        method: "local" as const,
+        method: "stored" as const,
         reason: undefined,
       }
     }
@@ -269,32 +256,8 @@ export const voiceRouter = router({
       available: false,
       method: null,
       reason:
-        "Add your OpenAI API key in Settings > Models to use voice input.",
+        "Configure Voice Transcription API in Settings > Models > Helper APIs to use voice input.",
     }
   }),
 
-  /**
-   * Set OpenAI API key from user settings
-   */
-  setOpenAIKey: publicProcedure
-    .input(z.object({ key: z.string() }))
-    .mutation(({ input }) => {
-      const key = input.key.trim()
-
-      // Validate key format if provided
-      if (key && !key.startsWith("sk-")) {
-        throw new Error("Invalid OpenAI API key format. Key should start with 'sk-'")
-      }
-
-      setUserOpenAIKey(key || null)
-
-      return { success: true }
-    }),
-
-  /**
-   * Check if user has configured an OpenAI API key
-   */
-  hasOpenAIKey: publicProcedure.query(() => {
-    return { hasKey: !!getOpenAIApiKey() }
-  }),
 })
