@@ -40,6 +40,7 @@ export type RunPersistedAgentJobOptions = {
   env?: NodeJS.ProcessEnv
   workerId?: string
   workerPid?: number | null
+  signal?: AbortSignal
 }
 
 export type RunPersistedAgentJobResult = {
@@ -139,6 +140,28 @@ async function resolveRunner(
   return (await import("./agent-runtime")).runAgentTask
 }
 
+function canceledRunResult(): AgentRuntimeRunResult {
+  return {
+    status: "canceled",
+    exitCode: HEADLESS_EXIT_CODES.canceled,
+    errorCode: "job_canceled",
+    errorMessage: "Job was canceled.",
+  }
+}
+
+function waitForAbort(signal: AbortSignal): Promise<AgentRuntimeRunResult> {
+  if (signal.aborted) return Promise.resolve(canceledRunResult())
+  return new Promise((resolve) => {
+    signal.addEventListener(
+      "abort",
+      () => {
+        resolve(canceledRunResult())
+      },
+      { once: true },
+    )
+  })
+}
+
 export async function runPersistedAgentJob(
   options: RunPersistedAgentJobOptions,
 ): Promise<RunPersistedAgentJobResult> {
@@ -155,6 +178,14 @@ export async function runPersistedAgentJob(
   const prompt = getAgentJobPrompt(options.db, job.id)
   const runner = await resolveRunner(options.runner, options.env)
   const abortController = new AbortController()
+  const abortFromExternalSignal = () => abortController.abort()
+  if (options.signal?.aborted) {
+    abortController.abort()
+  } else {
+    options.signal?.addEventListener("abort", abortFromExternalSignal, {
+      once: true,
+    })
+  }
   const observer = createObserver(
     options.db,
     job.id,
@@ -163,17 +194,26 @@ export async function runPersistedAgentJob(
   )
 
   try {
-    const result = await runner(
-      {
-        jobId: job.id,
-        runtime: job.runtime as AgentJobRuntime,
-        cwd: job.cwd,
-        mode: job.mode as AgentJobMode,
-        prompt,
-        signal: abortController.signal,
-      },
-      observer,
-    )
+    const result = abortController.signal.aborted
+      ? canceledRunResult()
+      : await (() => {
+          const runnerPromise = runner(
+            {
+              jobId: job.id,
+              runtime: job.runtime as AgentJobRuntime,
+              cwd: job.cwd,
+              mode: job.mode as AgentJobMode,
+              prompt,
+              signal: abortController.signal,
+            },
+            observer,
+          )
+          void runnerPromise.catch(() => {})
+          return Promise.race([
+            runnerPromise,
+            waitForAbort(abortController.signal),
+          ])
+        })()
     const canceled = observer.isCancelRequested() || abortController.signal.aborted
     const status = canceled ? "canceled" : result.status ?? "succeeded"
     const errorCode = canceled ? "job_canceled" : result.errorCode ?? null
@@ -210,5 +250,7 @@ export async function runPersistedAgentJob(
       events: listAgentJobEvents(options.db, job.id),
       exitCode,
     }
+  } finally {
+    options.signal?.removeEventListener("abort", abortFromExternalSignal)
   }
 }

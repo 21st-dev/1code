@@ -71,6 +71,19 @@ export async function runProcessAgentTask(
     args: sanitizeArgs(input.args),
     cwd: request.cwd,
   })
+  if (request.signal.aborted) {
+    observer.appendEvent("command_finished", {
+      label: input.label,
+      exitCode: 130,
+      status: "canceled",
+    })
+    return {
+      status: "canceled",
+      exitCode: 130,
+      errorCode: "job_canceled",
+      errorMessage: "Job was canceled.",
+    }
+  }
 
   return await new Promise<AgentRuntimeRunResult>((resolve) => {
     let child: ChildProcess | null = null

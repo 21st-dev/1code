@@ -2,6 +2,8 @@ import { existsSync, realpathSync } from "node:fs"
 import { isAbsolute, relative, resolve } from "node:path"
 import { and, asc, desc, eq, lte, ne } from "drizzle-orm"
 import {
+  agentJobEvents,
+  agentJobs,
   agentScheduleRuns,
   agentSchedules,
   projects,
@@ -26,7 +28,6 @@ import {
   type AgentScheduleTrigger,
 } from "../../../shared/agent-schedules"
 import {
-  createAgentJob,
   type AgentJobDatabase,
 } from "./job-store"
 
@@ -62,6 +63,14 @@ export type FiredAgentSchedule = {
 
 const MAX_SCHEDULE_LIMIT = 200
 const MAX_PROMPT_PREVIEW_LENGTH = 240
+
+type AgentScheduleStoreExecutor = Pick<
+  AgentJobDatabase,
+  "select" | "insert" | "update"
+>
+type AgentScheduleTransaction = Parameters<
+  Parameters<AgentJobDatabase["transaction"]>[0]
+>[0]
 
 function assertOneOf<T extends readonly string[]>(
   values: T,
@@ -187,15 +196,16 @@ export function findRegisteredProjectForCwd(
   db: AgentJobDatabase,
   cwd: string,
   projectId?: string | null,
+  label = "Schedule cwd",
 ): Project {
-  const cwdReal = canonicalExistingPath(cwd, "Schedule cwd")
+  const cwdReal = canonicalExistingPath(cwd, label)
 
   if (projectId) {
     const project = getProject(db, projectId)
     if (!project) throw new Error(`Unknown project: ${projectId}`)
     const projectReal = canonicalExistingPath(project.path, "Registered project path")
     if (!isPathInside(projectReal, cwdReal)) {
-      throw new Error("Schedule cwd must be inside the registered project path")
+      throw new Error(`${label} must be inside the registered project path`)
     }
     return project
   }
@@ -212,7 +222,7 @@ export function findRegisteredProjectForCwd(
     if (isPathInside(projectReal, cwdReal)) return project
   }
 
-  throw new Error("Schedule cwd must be inside a registered project")
+  throw new Error(`${label} must be inside a registered project`)
 }
 
 function addSeconds(date: Date, seconds: number): Date {
@@ -236,14 +246,41 @@ function getSchedulePrompt(schedule: AgentSchedule): string {
   return typeof input.prompt === "string" ? input.prompt : ""
 }
 
+function getScheduleFromExecutor(
+  executor: AgentScheduleStoreExecutor,
+  scheduleId: string,
+): AgentSchedule | null {
+  return (
+    (executor as AgentJobDatabase)
+      .select()
+      .from(agentSchedules)
+      .where(eq(agentSchedules.id, scheduleId))
+      .get() ?? null
+  )
+}
+
+function getJobFromExecutor(
+  executor: AgentScheduleStoreExecutor,
+  jobId: string,
+): AgentJob | null {
+  return (
+    (executor as AgentJobDatabase)
+      .select()
+      .from(agentJobs)
+      .where(eq(agentJobs.id, jobId))
+      .get() ?? null
+  )
+}
+
 function insertScheduleRun(
-  db: AgentJobDatabase,
+  executor: AgentScheduleStoreExecutor,
   scheduleId: string,
   jobId: string,
   trigger: AgentScheduleTrigger,
   scheduledFor: Date,
   now: Date,
 ): AgentScheduleRun {
+  const db = executor as AgentJobDatabase
   const id = createId()
   db.insert(agentScheduleRuns)
     .values({
@@ -263,13 +300,14 @@ function insertScheduleRun(
 }
 
 function updateScheduleAfterFire(
-  db: AgentJobDatabase,
+  executor: AgentScheduleStoreExecutor,
   schedule: AgentSchedule,
   job: AgentJob,
   trigger: AgentScheduleTrigger,
   scheduledFor: Date,
   now: Date,
 ): AgentSchedule {
+  const db = executor as AgentJobDatabase
   const nextRunAt =
     trigger === "due" ? nextRunAfter(schedule, scheduledFor, now) : schedule.nextRunAt
   db.update(agentSchedules)
@@ -281,7 +319,61 @@ function updateScheduleAfterFire(
     })
     .where(eq(agentSchedules.id, schedule.id))
     .run()
-  return getAgentSchedule(db, schedule.id) ?? schedule
+  return getScheduleFromExecutor(db, schedule.id) ?? schedule
+}
+
+function createScheduleJobRecord(
+  executor: AgentScheduleStoreExecutor,
+  schedule: AgentSchedule,
+  trigger: AgentScheduleTrigger,
+  scheduledFor: Date,
+  prompt: string,
+  now: Date,
+): AgentJob {
+  const db = executor as AgentJobDatabase
+  const jobId = createId()
+  db.insert(agentJobs)
+    .values({
+      id: jobId,
+      source: "schedule",
+      runtime: schedule.runtime,
+      status: "queued",
+      mode: schedule.mode,
+      cwd: schedule.cwd,
+      promptPreview: promptPreview(prompt),
+      inputJson: toJson({
+        prompt,
+        scheduleId: schedule.id,
+        trigger,
+        scheduledFor: scheduledFor.toISOString(),
+      }),
+      projectId: schedule.projectId,
+      createdAt: now,
+    })
+    .run()
+
+  db.insert(agentJobEvents)
+    .values({
+      id: createId(),
+      jobId,
+      sequence: 1,
+      type: "job_created",
+      payloadJson: toJson({
+        source: "schedule",
+        runtime: schedule.runtime,
+        mode: schedule.mode,
+        cwd: schedule.cwd,
+        scheduleId: schedule.id,
+        trigger,
+        scheduledFor: scheduledFor.toISOString(),
+      }),
+      createdAt: now,
+    })
+    .run()
+
+  const job = getJobFromExecutor(db, jobId)
+  if (!job) throw new Error(`Failed to create schedule job ${jobId}`)
+  return job
 }
 
 function fireAgentSchedule(
@@ -290,37 +382,41 @@ function fireAgentSchedule(
   trigger: AgentScheduleTrigger,
   scheduledFor: Date,
   now: Date,
-): FiredAgentSchedule {
+): FiredAgentSchedule | null {
   assertScheduleTrigger(trigger)
-  if (schedule.status === "disabled") {
-    throw new Error(`Schedule ${schedule.id} is disabled`)
-  }
+  assertOneOf(AGENT_RUNTIME_IDS, schedule.runtime, "job runtime")
+  assertOneOf(AGENT_JOB_MODES, schedule.mode, "job mode")
   findRegisteredProjectForCwd(db, schedule.cwd, schedule.projectId)
-  const prompt = getSchedulePrompt(schedule)
-  const job = createAgentJob(db, {
-    source: "schedule",
-    runtime: schedule.runtime as AgentJobRuntime,
-    mode: schedule.mode as AgentJobMode,
-    cwd: schedule.cwd,
-    prompt,
-    input: {
-      prompt,
-      scheduleId: schedule.id,
+
+  return db.transaction((tx: AgentScheduleTransaction) => {
+    const current = getScheduleFromExecutor(tx, schedule.id)
+    if (!current) throw new Error(`Unknown schedule: ${schedule.id}`)
+    if (current.status === "disabled") {
+      throw new Error(`Schedule ${schedule.id} is disabled`)
+    }
+    if (
+      trigger === "due" &&
+      (current.status !== "enabled" ||
+        !current.nextRunAt ||
+        current.nextRunAt > now ||
+        current.nextRunAt.getTime() !== scheduledFor.getTime())
+    ) {
+      return null
+    }
+
+    const prompt = getSchedulePrompt(current)
+    const job = createScheduleJobRecord(tx, current, trigger, scheduledFor, prompt, now)
+    const run = insertScheduleRun(tx, current.id, job.id, trigger, scheduledFor, now)
+    const updated = updateScheduleAfterFire(
+      tx,
+      current,
+      job,
       trigger,
-      scheduledFor: scheduledFor.toISOString(),
-    },
-    projectId: schedule.projectId,
+      scheduledFor,
+      now,
+    )
+    return { schedule: updated, job, run }
   })
-  const run = insertScheduleRun(db, schedule.id, job.id, trigger, scheduledFor, now)
-  const updated = updateScheduleAfterFire(
-    db,
-    schedule,
-    job,
-    trigger,
-    scheduledFor,
-    now,
-  )
-  return { schedule: updated, job, run }
 }
 
 export function createAgentSchedule(
@@ -492,7 +588,9 @@ export function runAgentScheduleNow(
 ): FiredAgentSchedule {
   const schedule = getAgentSchedule(db, scheduleId)
   if (!schedule) throw new Error(`Unknown schedule: ${scheduleId}`)
-  return fireAgentSchedule(db, schedule, "manual", now, now)
+  const fired = fireAgentSchedule(db, schedule, "manual", now, now)
+  if (!fired) throw new Error(`Schedule ${scheduleId} is not runnable`)
+  return fired
 }
 
 export function evaluateDueAgentSchedules(
@@ -525,7 +623,8 @@ export function evaluateDueAgentSchedules(
       continue
     }
     try {
-      fired.push(fireAgentSchedule(db, current, "due", current.nextRunAt, now))
+      const firedSchedule = fireAgentSchedule(db, current, "due", current.nextRunAt, now)
+      if (firedSchedule) fired.push(firedSchedule)
     } catch {
       disableAgentSchedule(db, current.id, now)
     }

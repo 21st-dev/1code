@@ -143,8 +143,8 @@ function parseOutput(args: string[]): HeadlessOutputFormat {
   return output as HeadlessOutputFormat
 }
 
-function parseMode(value: string | null): AgentJobMode {
-  const mode = value ?? "agent"
+function parseMode(value: string | null, fallback: AgentJobMode = "agent"): AgentJobMode {
+  const mode = value ?? fallback
   if (!(AGENT_JOB_MODES as readonly string[]).includes(mode)) {
     throw new Error(`Unsupported --mode: ${mode}`)
   }
@@ -356,7 +356,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
       if (subcommand === "create") {
         const cwd = parseCwd(takeOption(args, "--cwd"))
         const runtime = parseRuntime(takeOption(args, "--runtime"))
-        const mode = parseMode(takeOption(args, "--mode"))
+        const mode = parseMode(takeOption(args, "--mode"), "plan")
         const name = takeOption(args, "--name") ?? ""
         const prompt = takeOption(args, "--prompt") ?? ""
         const intervalSeconds = parsePositiveInteger(

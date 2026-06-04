@@ -28,6 +28,12 @@ type Writer = {
 
 type JsonRpcId = string | number | null
 
+type ActiveProtocolJob = {
+  jobId: string
+  abortController: AbortController
+  streamPromise: Promise<void>
+}
+
 export type RunAcpStdioServerOptions = {
   db: AgentJobDatabase
   stdin?: Readable
@@ -90,8 +96,16 @@ function notification(method: string, params: unknown): unknown {
   return { jsonrpc: "2.0", method, params }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve()
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    signal?.addEventListener("abort", onAbort, { once: true })
+  })
 }
 
 function hasForbiddenSecretValue(value: string): boolean {
@@ -172,6 +186,7 @@ async function streamJobEvents(
   options: RunAcpStdioServerOptions,
   jobId: string,
   runPromise: Promise<unknown>,
+  signal?: AbortSignal,
 ): Promise<void> {
   let afterSequence = 0
   let finished = false
@@ -197,7 +212,7 @@ async function streamJobEvents(
       )
     }
     if (finished && events.length === 0) break
-    await delay(finished ? 0 : 100)
+    await delay(finished ? 0 : 100, signal)
   }
 
   if (runError) {
@@ -235,11 +250,16 @@ function handleJobRun(
   id: JsonRpcId,
   request: JsonRpcRequest,
   options: RunAcpStdioServerOptions,
-  activeJobs: Map<string, Promise<void>>,
+  activeJobs: Map<string, ActiveProtocolJob>,
 ): void {
   assertNoProtocolSecrets(request.params)
   const params = jobRunParamsSchema.parse(request.params ?? {})
-  const project = findRegisteredProjectForCwd(options.db, params.cwd)
+  const project = findRegisteredProjectForCwd(
+    options.db,
+    params.cwd,
+    null,
+    "Protocol job cwd",
+  )
   const job = createAgentJob(options.db, {
     source: "protocol",
     runtime: params.runtime as AgentJobRuntime,
@@ -252,6 +272,7 @@ function handleJobRun(
     },
     projectId: project.id,
   })
+  const abortController = new AbortController()
   const runPromise = runPersistedAgentJob({
     db: options.db,
     jobId: job.id,
@@ -259,11 +280,21 @@ function handleJobRun(
     runner: options.runner,
     workerId: `protocol:${process.pid}:${Date.now()}:${job.id}`,
     workerPid: process.pid,
+    signal: abortController.signal,
   })
-  const streamPromise = streamJobEvents(options, job.id, runPromise).finally(() => {
+  const streamPromise = streamJobEvents(
+    options,
+    job.id,
+    runPromise,
+    abortController.signal,
+  ).finally(() => {
     activeJobs.delete(job.id)
   })
-  activeJobs.set(job.id, streamPromise)
+  activeJobs.set(job.id, {
+    jobId: job.id,
+    abortController,
+    streamPromise,
+  })
   writeJsonLine(options.stdout, response(id, { job: serializeAgentJob(job) }))
 }
 
@@ -271,16 +302,53 @@ function handleJobCancel(
   id: JsonRpcId,
   request: JsonRpcRequest,
   options: RunAcpStdioServerOptions,
+  activeJobs: Map<string, ActiveProtocolJob>,
 ): void {
   const params = jobCancelParamsSchema.parse(request.params ?? {})
+  const activeJob = activeJobs.get(params.jobId)
+  if (!activeJob) {
+    writeJsonLine(
+      options.stdout,
+      errorResponse(
+        id,
+        -32602,
+        "Protocol jobs can only be canceled by the ACP session that created them.",
+      ),
+    )
+    return
+  }
   const job = requestCancelAgentJob(options.db, params.jobId, "protocol")
+  activeJob.abortController.abort()
   writeJsonLine(options.stdout, response(id, { job: serializeAgentJob(job) }))
+}
+
+function cancelActiveProtocolJobs(
+  options: RunAcpStdioServerOptions,
+  activeJobs: Map<string, ActiveProtocolJob>,
+): void {
+  for (const job of activeJobs.values()) {
+    try {
+      requestCancelAgentJob(options.db, job.jobId, "protocol")
+    } catch {}
+    job.abortController.abort()
+  }
+}
+
+async function drainActiveProtocolJobs(
+  activeJobs: Map<string, ActiveProtocolJob>,
+  timeoutMs: number,
+): Promise<void> {
+  if (activeJobs.size === 0) return
+  await Promise.race([
+    Promise.allSettled(Array.from(activeJobs.values(), (job) => job.streamPromise)),
+    delay(timeoutMs),
+  ])
 }
 
 function handleRequest(
   request: JsonRpcRequest,
   options: RunAcpStdioServerOptions,
-  activeJobs: Map<string, Promise<void>>,
+  activeJobs: Map<string, ActiveProtocolJob>,
 ): boolean {
   const id = request.id ?? null
   try {
@@ -293,7 +361,7 @@ function handleRequest(
       return false
     }
     if (request.method === "job.cancel") {
-      handleJobCancel(id, request, options)
+      handleJobCancel(id, request, options, activeJobs)
       return false
     }
     if (request.method === "shutdown") {
@@ -316,7 +384,7 @@ function handleRequest(
 export async function runAcpStdioServer(
   options: RunAcpStdioServerOptions,
 ): Promise<number> {
-  const activeJobs = new Map<string, Promise<void>>()
+  const activeJobs = new Map<string, ActiveProtocolJob>()
   let shouldShutdown = false
   try {
     for await (const line of readJsonLines(options.stdin)) {
@@ -338,13 +406,16 @@ export async function runAcpStdioServer(
       shouldShutdown = handleRequest(requestResult.data, options, activeJobs)
       if (shouldShutdown) break
     }
-    await Promise.allSettled(activeJobs.values())
+    await drainActiveProtocolJobs(activeJobs, 250)
+    cancelActiveProtocolJobs(options, activeJobs)
+    await drainActiveProtocolJobs(activeJobs, 250)
     return HEADLESS_EXIT_CODES.success
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     writeStderr(options.stderr, `[ACP] ${message}`)
     writeJsonLine(options.stdout, errorResponse(null, -32600, message))
-    await Promise.allSettled(activeJobs.values())
+    cancelActiveProtocolJobs(options, activeJobs)
+    await drainActiveProtocolJobs(activeJobs, 250)
     return HEADLESS_EXIT_CODES.invalidArguments
   }
 }

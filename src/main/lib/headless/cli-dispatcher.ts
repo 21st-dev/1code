@@ -38,6 +38,7 @@ import { runAcpStdioServer } from "./acp-stdio"
 import {
   createAgentSchedule,
   deleteAgentSchedule,
+  findRegisteredProjectForCwd,
   listAgentSchedules,
   pauseAgentSchedule,
   resumeAgentSchedule,
@@ -207,12 +208,24 @@ async function runCommand(
     )
   }
 
+  let project: ReturnType<typeof findRegisteredProjectForCwd>
+  try {
+    project = findRegisteredProjectForCwd(options.db, command.cwd, null, "Run cwd")
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.invalidCwd,
+    )
+  }
+
   const job = createAgentJob(options.db, {
     source: command.daemon ? "daemon" : "cli",
     runtime: command.runtime,
     mode: command.mode,
     cwd: command.cwd,
     prompt,
+    projectId: project.id,
     createdByVersion: options.appVersion ?? null,
   })
 
@@ -453,14 +466,14 @@ async function daemonRunCommand(
       signal: abortController.signal,
       now: options.now,
     })
-      if (shouldUseJson(command.output)) {
-        writeJson(options.stdout, { daemon: result })
-      } else {
-        writeLine(
-          options.stdout,
-          `daemon stopped (${result.stoppedBy}); scheduled=${result.scheduledJobs} started=${result.startedJobs} completed=${result.completedJobs} failed=${result.failedJobs} interrupted=${result.interruptedJobs}`,
-        )
-      }
+    if (shouldUseJson(command.output)) {
+      writeJson(options.stdout, { daemon: result })
+    } else {
+      writeLine(
+        options.stdout,
+        `daemon stopped (${result.stoppedBy}); scheduled=${result.scheduledJobs} started=${result.startedJobs} completed=${result.completedJobs} failed=${result.failedJobs} interrupted=${result.interruptedJobs}`,
+      )
+    }
     return HEADLESS_EXIT_CODES.success
   } catch (error) {
     return commandError(
@@ -489,17 +502,17 @@ function helpCommand(options: RunHeadlessCliCommandOptions): number {
   write(
     options.stdout,
     [
-        "Usage:",
-        "  locus run --runtime claude-code|codex --prompt <text> [--cwd <path>] [--mode plan|agent] [--output text|json|stream-json]",
-        "  locus run --stdin [--prompt <prefix>]",
-        "  locus run --daemon [--follow] --prompt <text>",
-        "  locus daemon run [--concurrency <n>] [--poll-interval-ms <ms>]",
+      "Usage:",
+      "  locus run --runtime claude-code|codex --prompt <text> [--cwd <path>] [--mode plan|agent] [--output text|json|stream-json]",
+      "  locus run --stdin [--prompt <prefix>]",
+      "  locus run --daemon [--follow] --prompt <text>",
+      "  locus daemon run [--concurrency <n>] [--poll-interval-ms <ms>]",
       "  locus schedules list [--status enabled|paused|disabled] [--include-disabled]",
       "  locus schedules create --name <name> --prompt <text> --interval-seconds <n> [--cwd <path>] [--runtime claude-code|codex] [--mode plan|agent]",
       "  locus schedules pause|resume|delete|run <id>",
       "  locus acp",
       `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
-        "  locus jobs list",
+      "  locus jobs list",
       "  locus jobs show <id>",
       "  locus jobs logs <id> [--follow]",
       "  locus jobs cancel <id>",
@@ -533,15 +546,15 @@ export async function runHeadlessCliCommand(
       return logsCommand(parsed.command, options)
     case "jobs-cancel":
       return cancelCommand(parsed.command, options)
-      case "jobs-retry":
-        return retryCommand(parsed.command, options)
-      case "schedules-list":
-        return schedulesListCommand(parsed.command, options)
-      case "schedules-create":
-        return schedulesCreateCommand(parsed.command, options)
-      case "schedules-pause":
-      case "schedules-resume":
-      case "schedules-delete":
+    case "jobs-retry":
+      return retryCommand(parsed.command, options)
+    case "schedules-list":
+      return schedulesListCommand(parsed.command, options)
+    case "schedules-create":
+      return schedulesCreateCommand(parsed.command, options)
+    case "schedules-pause":
+    case "schedules-resume":
+    case "schedules-delete":
     case "schedules-run":
       return schedulesMutationCommand(parsed.command, options)
     case "acp":

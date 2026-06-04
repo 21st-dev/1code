@@ -1,4 +1,5 @@
 import { resolveBundledCodexCliPath } from "../../codex/cli-path"
+import { buildCodexProviderEnv } from "../../codex/provider-runtime-binding"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import type {
   AgentRuntimeObserver,
@@ -21,10 +22,13 @@ function buildCodexArgs(request: AgentRuntimeRunRequest): string[] {
   ]
 }
 
-function buildCodexEnv(request: AgentRuntimeRunRequest): NodeJS.ProcessEnv {
+function buildCodexEnv(
+  request: AgentRuntimeRunRequest,
+  processEnv: NodeJS.ProcessEnv = process.env,
+  shellEnv: NodeJS.ProcessEnv = getClaudeShellEnvironment(),
+): NodeJS.ProcessEnv {
   return {
-    ...getClaudeShellEnvironment(),
-    ...process.env,
+    ...buildCodexProviderEnv({ processEnv, shellEnv }),
     LOCUS_HEADLESS_JOB_ID: request.jobId,
   }
 }
@@ -50,5 +54,6 @@ export async function runCodexHeadlessTask(
 
 export const __testCodexHeadless = {
   buildCodexArgs,
+  buildCodexEnv,
   filterCodexStderr,
 }
