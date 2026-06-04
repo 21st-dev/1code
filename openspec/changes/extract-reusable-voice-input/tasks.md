@@ -1,11 +1,11 @@
 ## 1. Specification
-- [ ] 1.1 Add voice-input OpenSpec delta.
-- [ ] 1.2 Validate the change with OpenSpec strict mode.
+- [x] 1.1 Add voice-input OpenSpec delta.
+- [x] 1.2 Validate the change with OpenSpec strict mode.
 
 ## 2. Main Process
-- [ ] 2.1 Extract transcription URL building and provider transcription into `src/main/lib/voice/`.
-- [ ] 2.2 Keep the tRPC voice router as provider lookup, input validation, and response transport.
-- [ ] 2.3 Update transcription tests to target the extracted service.
+- [x] 2.1 Extract transcription URL building and provider transcription into `src/main/lib/voice/`.
+- [x] 2.2 Keep the tRPC voice router as provider lookup, input validation, and response transport.
+- [x] 2.3 Update transcription tests to target the extracted service.
 
 ## 3. Renderer
 - [ ] 3.1 Add reusable `useVoiceInput` orchestration hook.

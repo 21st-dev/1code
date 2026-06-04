@@ -34,7 +34,7 @@ mock.module("electron", () => ({
 }))
 
 const { buildTranscriptionUrl, transcribeWithProviderConfig } = await import(
-  "../src/main/lib/trpc/routers/voice"
+  "../src/main/lib/voice/transcription"
 )
 
 async function readBody(req: IncomingMessage): Promise<string> {
