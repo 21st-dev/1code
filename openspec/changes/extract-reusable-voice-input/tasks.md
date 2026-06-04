@@ -15,5 +15,5 @@
 ## 4. Verification
 - [x] 4.1 Add focused tests for the reusable hook/component source boundaries.
 - [x] 4.2 Run targeted voice tests.
-- [ ] 4.3 Run TypeScript check and build.
-- [ ] 4.4 Confirm no plaintext provider token or env fallback is introduced.
+- [x] 4.3 Run TypeScript check and build.
+- [x] 4.4 Confirm no plaintext provider token or env fallback is introduced.
