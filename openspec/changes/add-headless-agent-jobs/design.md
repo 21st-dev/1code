@@ -437,10 +437,10 @@ Decision: a runtime may report `hardToolGuard: supported` only when the adapter 
 
 Why: prompt-only constraints and post-run audits are useful, but they are not equivalent to Claude Code's `canUseTool` enforcement. In this change, a runtime that lacks pre-tool enforcement must mark hard tool guard as `degraded` or `unsupported`; making Codex equivalent is owned by `upgrade-codex-runtime-parity`.
 
-### Protocol-Shaped Events, Not Protocol-First
-Decision: normalize events using names and payloads that can map to ACP later, but defer an external `locus acp` command.
+### Protocol-Shaped Events Before Full Protocol Parity
+Decision: normalize events using names and payloads that can map to richer ACP compatibility, and expose only a minimal Phase 7 `locus acp` stdio command for job-backed runs.
 
-Why: protocol compatibility is useful, but implementing a public protocol before local jobs work would expand the surface area prematurely.
+Why: protocol compatibility is useful, but full ACP capability negotiation, session resume, MCP parity, and provider-specific workflow behavior would expand the surface area beyond the local job platform. The Phase 7 stdio command validates job creation, event streaming, cancellation, shutdown, and strict stdout/stderr separation while keeping full ACP parity deferred.
 
 ### Local Process Runtime First
 Decision: support local process/worktree execution first. Container runtime remains a future extension point.
@@ -456,8 +456,8 @@ Why: Locus is already a local desktop app with local git/worktree and terminal b
   - Mitigation: keep Codex capability states honest in this slice, gate UI/CLI behavior from those states, and move behavior parity work to `upgrade-codex-runtime-parity`.
 - Long-running jobs may outlive renderer subscriptions.
   - Mitigation: append events to SQLite before notifying observers; desktop subscriptions can reconnect from the last sequence.
-- A daemon could accidentally claim jobs created for desktop chat or one-shot CLI.
-  - Mitigation: Phase 6 daemon claims only queued `source=daemon` jobs. Desktop chat remains `source=desktop`, default `locus run` remains `source=cli`, and future schedule/protocol sources need explicit specs before daemon claims them.
+- A daemon could accidentally claim jobs created for desktop chat, one-shot CLI, or protocol clients.
+  - Mitigation: Phase 6 daemon claims queued `source=daemon` jobs, and Phase 7 explicitly adds daemon-claimed `source=schedule` jobs only after schedule creation/audit state is updated. Desktop chat remains `source=desktop`, default `locus run` remains `source=cli`, and minimal `locus acp` creates `source=protocol` jobs that are run by the stdio session rather than claimed by the daemon.
 - Multiple daemon processes could race for the same queue.
   - Mitigation: use a per-user daemon lock, short SQLite writes, and job start transactions so only queued jobs can transition to running.
 - Background execution can amplify weak cwd, provider-env, or log/cancel boundaries.

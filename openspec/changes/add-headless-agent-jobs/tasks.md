@@ -4,9 +4,9 @@
 - [x] 0.1 Record that phases 0-4 are implemented and smoked locally on macOS.
 - [x] 0.2 Record that Windows shim implementation and source/unit tests exist, but real Windows smoke has not been run.
 - [ ] 0.3 Run real Windows smoke for `locus run`, `locus jobs list`, `locus jobs logs`, and structured stdout/exit-code behavior.
-- [x] 0.4 Record that ordinary desktop chat migration, daemon, schedule, and `locus acp` were kept out of the original first-slice implementation; Phase 5 and Phase 6 later moved desktop chat migration and the local daemon into explicit scope, while schedule and `locus acp` remain future work.
+- [x] 0.4 Record that ordinary desktop chat migration, daemon, schedule, and `locus acp` were kept out of the original first-slice implementation; Phase 5, Phase 6, and Phase 7 later moved desktop chat migration, the local daemon, local schedules, and minimal `locus acp` into explicit scope.
 
-Current status is **macOS local implementation complete through Phase 6, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
+Current status is **macOS local implementation complete through Phase 7, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
 
 ## 1. Proposal and Scope
 - [x] 1.1 Create the OpenSpec proposal, design, and multiple capability deltas for headless agent jobs.
@@ -73,7 +73,7 @@ Current status is **macOS local implementation complete through Phase 6, pending
 - [x] 7.5 Run `bun run build`.
 - [x] 7.6 Smoke test macOS `locus run`, `locus jobs list`, and `locus jobs logs` via Electron headless mode.
 - [x] 7.7 Smoke test desktop listing/log viewing for a CLI-created job and save screenshot/video evidence.
-- [x] 7.8 Document deferred schedule, ACP, Codex parity, and Windows real-smoke evidence.
+- [x] 7.8 Document deferred full ACP parity, hosted/OS scheduling, Codex parity, and Windows real-smoke evidence.
 - [ ] 7.9 Run equivalent Windows smoke and attach evidence.
 
 ## 8. Phase 5: Desktop Chat as `source=desktop` Jobs
@@ -90,7 +90,7 @@ Current status is **macOS local implementation complete through Phase 6, pending
 - [x] 8.11 Save video/screenshot/smoke-summary artifacts for the Phase 5 desktop migration.
 
 ## 9. Phase 6: Local Daemon Queue
-- [x] 9.1 Update OpenSpec proposal/design/spec to move the local daemon from future boundary into the explicit Phase 6 scope while keeping schedule and ACP deferred.
+- [x] 9.1 Update OpenSpec proposal/design/spec to move the local daemon from future boundary into the explicit Phase 6 scope while keeping schedule and ACP deferred until Phase 7.
 - [x] 9.2 Extract the one-shot job execution path into a reusable job runner used by both CLI and daemon workers.
 - [x] 9.3 Add a local daemon loop that starts in headless Electron mode without a BrowserWindow, recovers stale running jobs on startup, respects a configurable concurrency limit, and claims only queued `source=daemon` jobs.
 - [x] 9.4 Add daemon CLI parsing and dispatch for `locus daemon run`, `locus run --daemon`, and `locus run --daemon --follow`.

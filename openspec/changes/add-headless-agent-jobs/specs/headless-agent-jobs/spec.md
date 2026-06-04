@@ -143,7 +143,8 @@ The system SHALL provide an opt-in local daemon queue that reuses durable jobs a
 - **AND** queued `source=daemon` jobs exist
 - **THEN** the daemon starts those jobs through the shared runtime core according to configured local concurrency limits
 - **AND** writes heartbeat, cancel, runtime event, and completion state through `agent_jobs` and `agent_job_events`
-- **AND** does not claim `source=desktop`, default one-shot `source=cli`, `source=schedule`, or `source=protocol` jobs
+- **AND** does not claim `source=desktop`, default one-shot `source=cli`, or `source=protocol` jobs
+- **AND** claims `source=schedule` jobs only through the explicit local scheduling scenario
 
 #### Scenario: Daemon follows cancellation requests
 - **WHEN** `locus jobs cancel <job-id>` is used for a running daemon job

@@ -4,8 +4,9 @@ Date: 2026-06-03
 
 ## Current Status
 
-The first four requested steps, Phase 5 desktop-chat job migration, and Phase 6
-local daemon queue are implemented and verified locally on macOS:
+The first four requested steps, Phase 5 desktop-chat job migration, Phase 6
+local daemon queue, and Phase 7 low-start schedule/ACP surfaces are implemented
+and verified locally on macOS:
 
 - Phase 0: OpenSpec boundary and non-goals clarified.
 - Phase 1: Durable job database, state machine, heartbeat, cancellation, retry, and interruption handling implemented and tested.
@@ -19,6 +20,9 @@ local daemon queue are implemented and verified locally on macOS:
   run` claims them through the shared runner without a renderer window, stale
   daemon jobs recover to `interrupted`, and Agent Workbench shows daemon jobs
   with a distinct source label.
+- Phase 7: local schedules create visible `source=schedule` jobs through the
+  daemon and minimal `locus acp` stdio creates/cancels/streams
+  `source=protocol` jobs without claiming full ACP parity.
 
 This change is **not release-ready or archive-ready yet** because the OpenSpec
 requires both macOS and Windows support, and Windows has not had a real host
@@ -253,6 +257,42 @@ media/ui-workbench-daemon-recording.mov
 recordingBytes: 4645956
 ```
 
+## Phase 7 Schedule and ACP Smoke
+
+Phase 7 was run with a clean temporary user data directory. The smoke created a
+local schedule, ran it manually, let the daemon fire due schedule work, listed
+schedule-created jobs/logs, and ran a minimal ACP stdio session against the fake
+runner while preserving JSON-only protocol stdout.
+
+Final artifact directory:
+
+```text
+/Users/ethan/Documents/Locus-smoke-artifacts/step7-schedules-acp-20260604-001145/
+```
+
+Artifacts:
+
+```text
+smoke-summary.json
+logs/schedules-create.stdout.json
+logs/schedules-run-now.stdout.json
+logs/daemon-due.stdout.json
+logs/jobs-list-schedule.stdout.json
+logs/jobs-list-protocol.stdout.json
+logs/acp.stdout.ndjson
+logs/acp.stderr
+media/ui-workbench-screenshot.png
+media/ui-workbench-recording.mov
+```
+
+The verified Phase 7 boundary is intentionally low-start:
+
+```text
+schedule: local opt-in schedules, daemon-backed firing, pause/resume/delete/run-now
+ACP: minimal stdio JSON-RPC for initialize, job.run, job.cancel, shutdown, and job/event streaming
+not claimed: hosted scheduler, OS service scheduler, full ACP parity, MCP negotiation parity, session resume parity
+```
+
 ## Windows Evidence Still Required
 
 Implemented and test-covered:
@@ -272,25 +312,30 @@ Not yet verified:
 - Windows stdout/stderr/exit-code behavior from the actual `.cmd` shim and packaged executable.
 - Windows desktop visibility for a CLI-created job.
 - Windows desktop visibility for a daemon-created job.
+- Real Windows host or CI smoke for `locus schedules create/list/run`.
+- Real Windows host or CI smoke for `locus acp` stdio stdout/stderr behavior.
+- Windows desktop visibility for a schedule-created job.
+- Windows desktop visibility for a protocol-created job.
 
 Until this Windows evidence exists, the accurate status is:
 
 ```text
 macOS local implementation + smoke complete
-headless/job/desktop/daemon visibility implemented and verified locally
+headless/job/desktop/daemon/schedule/protocol visibility implemented and verified locally
 desktop chat source=desktop migration implemented and smoked locally
 daemon source=daemon queue implemented and smoked locally on macOS
+schedule source=schedule jobs implemented and smoked locally on macOS
+minimal ACP source=protocol jobs implemented and smoked locally on macOS
 Windows shim implemented and source-tested
 Windows real smoke pending
-schedule and locus acp deferred
 ```
 
 ## Deferred By Design
 
 These are not part of the current completion:
 
-- Local schedules.
-- `locus acp`.
+- Full ACP parity beyond the minimal stdio job surface.
+- Hosted or OS-level scheduling beyond the local daemon's opt-in schedule evaluation.
 - Full Codex behavior parity with Claude Code.
 - Generic safe retry semantics for `source=desktop` chat jobs. Generic retry is
   intentionally disabled for desktop chat jobs until chat-specific retry can
