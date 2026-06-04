@@ -1,18 +1,60 @@
 # Locus
 
-Local coding agents for your own machine.
+Languages: English | [Simplified Chinese](README.zh-CN.md)
 
-Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a local-first desktop workflow. It keeps the desktop UI, local project selection, worktrees, terminal, git tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local provider storage while removing upstream hosted product surfaces from the default build.
+Local-first AI workbench and agent runtime hub.
+
+Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a
+local-first desktop workflow. Coding remains the first strong use case, but the
+core product direction is broader: Locus is becoming a local AI workbench and
+runtime hub for Claude Code / Codex powered work.
+
+Locus keeps the desktop UI, local project selection, worktrees, terminal, git
+tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local
+provider-profile storage for supported provider flows while removing upstream
+hosted product surfaces from the default build.
+
+![Locus target local agent platform](docs/assets/locus-agent-platform.svg)
 
 ## Current Scope
 
 - Local projects and local SQLite state
 - Claude Code subscription, API key, and custom provider flows
 - Codex subscription, API key, and local Codex integration
+- Agent Workbench for local desktop task visibility
 - Local chat, tools, terminal, git diff, staging, commit generation, and worktrees
 - Ollama-first helper generation with Settings-configured provider fallback
 - Local-only guard enabled by default as defense-in-depth
 - Upstream hosted auth, subscription checks, remote sandbox, automations, inbox, analytics, error tracking, and updater UI removed or isolated from the default local-first build
+
+## Platform Direction
+
+The headless job platform is being developed as a separate branch before it is
+merged into `main`. That branch adds durable local jobs, job events,
+`locus run`, `locus jobs`, a local daemon, local schedules, desktop job
+visibility, and a minimal `locus acp` stdio surface. Keep these as platform
+direction on `main` until the headless implementation is reviewed and merged.
+
+See [docs/locus-local-agent-platform.md](docs/locus-local-agent-platform.md)
+for the platform direction, integration boundaries, and roadmap.
+
+## Status and Boundaries
+
+Current `main` maturity:
+
+| Area | Status |
+| --- | --- |
+| Desktop local workbench | Implemented |
+| Claude Code and Codex desktop runs | Implemented with runtime-specific limits |
+| Local job store and job events | Developed on headless branch; pending main merge |
+| `locus run` and `locus jobs` | Developed on headless branch; pending main merge |
+| Local daemon queue | Developed on headless branch; pending main merge |
+| Local schedules | Developed on headless branch; pending main merge |
+| Minimal `locus acp` stdio job surface | Experimental on headless branch |
+| Windows packaged real-machine smoke | Pending |
+| Full ACP parity | Not implemented |
+| Hosted/cloud agents or hosted scheduler | Not implemented |
+| Full Codex parity with Claude Code | Not implemented |
 
 ## Local-Only Mode
 
@@ -27,6 +69,16 @@ MAIN_VITE_LOCAL_ONLY=false bun run dev
 ```
 
 User-configured AI provider endpoints, Ollama, local projects, Git, GitHub operations initiated by local workflows, and external links that are not upstream hosted services remain available.
+
+Local-first does not mean offline-only or "no data leaves your machine." When
+you run Claude Code, Codex, a configured provider, voice transcription, MCP
+tools, or GitHub workflows, prompts, selected file content, diffs, audio, tool
+context, or metadata may be sent to the user-selected service or runtime.
+
+Locus is not an OS sandbox. Terminal, git, filesystem, MCP, runtime tools, and
+future computer-control flows can affect the local machine when authorized or
+invoked. Project/worktree-aware checks exist for supported flows, but they
+should not be described as complete filesystem isolation.
 
 ## Development
 
@@ -70,7 +122,7 @@ Current repo config does not define a macOS notarization step. Local/internal ma
 
 ## Notes
 
-- Voice transcription uses a user-provided OpenAI API key only; the upstream hosted subscription fallback has been removed from the default build.
+- Voice transcription uses a user-provided OpenAI API key only; the upstream hosted subscription fallback has been removed from the default build. Voice key storage is still a known hardening gap and should not be included in broad "all API keys are encrypted" claims until migrated to main-process secure storage.
 - New worktree setup config is saved to `.locus/worktree.json`. Legacy `.1code/worktree.json` remains readable so existing projects keep working.
 - Some compatibility names and paths such as the legacy `1code` CLI, `~/Library/Application Support/Agent Code for Me`, and `~/.21st/worktrees` may still exist to avoid breaking existing local project data.
 - Some upstream compatibility names remain to avoid breaking existing local project data, but hosted product surfaces should not be reintroduced without an OpenSpec proposal.

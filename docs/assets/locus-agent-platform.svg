@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="720" viewBox="0 0 1120 720" role="img" aria-labelledby="title desc">
+  <title id="title">Locus local agent platform architecture</title>
+  <desc id="desc">A layered diagram showing desktop UI, CLI, daemon, schedules, and protocol clients flowing into the Locus Job Platform and then into Claude Code and Codex adapters.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbfa; }
+      .panel { fill: #ffffff; stroke: #d8d8d2; stroke-width: 2; rx: 14; }
+      .platform { fill: #f7efe2; stroke: #c98d45; stroke-width: 2; rx: 14; }
+      .adapter { fill: #eef5f1; stroke: #5b9178; stroke-width: 2; rx: 14; }
+      .runtime { fill: #eef2fa; stroke: #607cae; stroke-width: 2; rx: 14; }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .heading { fill: #1e1f22; font-size: 32px; font-weight: 750; }
+      .label { fill: #1e1f22; font-size: 23px; font-weight: 700; }
+      .small { fill: #5f6368; font-size: 16px; font-weight: 450; }
+      .tiny { fill: #6f7277; font-size: 14px; font-weight: 450; }
+      .arrow { stroke: #3d3f44; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#3d3f44"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1120" height="720"/>
+
+  <text class="heading" x="64" y="64">Locus local agent platform</text>
+  <text class="small" x="64" y="94">Local AI workbench and runtime hub</text>
+
+  <rect class="panel" x="64" y="130" width="178" height="96" rx="14"/>
+  <text class="label" x="91" y="168">Desktop UI</text>
+  <text class="small" x="91" y="196">workbench</text>
+
+  <rect class="panel" x="268" y="130" width="150" height="96" rx="14"/>
+  <text class="label" x="309" y="168">CLI</text>
+  <text class="small" x="301" y="196">run / jobs</text>
+
+  <rect class="panel" x="444" y="130" width="170" height="96" rx="14"/>
+  <text class="label" x="482" y="168">Daemon</text>
+  <text class="small" x="479" y="196">background queue</text>
+
+  <rect class="panel" x="640" y="130" width="178" height="96" rx="14"/>
+  <text class="label" x="680" y="168">Schedule</text>
+  <text class="small" x="682" y="196">local schedules</text>
+
+  <rect class="panel" x="844" y="130" width="212" height="96" rx="14"/>
+  <text class="label" x="890" y="168">Protocol</text>
+  <text class="small" x="885" y="196">minimal locus acp</text>
+
+  <path class="arrow" d="M153 226 V286"/>
+  <path class="arrow" d="M343 226 V286"/>
+  <path class="arrow" d="M529 226 V286"/>
+  <path class="arrow" d="M729 226 V286"/>
+  <path class="arrow" d="M950 226 V286"/>
+
+  <rect class="platform" x="148" y="286" width="824" height="142" rx="14"/>
+  <text class="label" x="395" y="333">Locus Job Platform</text>
+  <text class="small" x="277" y="365">jobs, events, logs, cancel, retry, heartbeat, recovery</text>
+  <text class="small" x="401" y="394">single local execution and audit layer</text>
+
+  <path class="arrow" d="M560 428 V486"/>
+
+  <rect class="adapter" x="214" y="486" width="300" height="104" rx="14"/>
+  <text class="label" x="278" y="527">Claude Adapter</text>
+  <text class="small" x="290" y="555">Claude Code specific</text>
+
+  <rect class="adapter" x="606" y="486" width="300" height="104" rx="14"/>
+  <text class="label" x="684" y="527">Codex Adapter</text>
+  <text class="small" x="700" y="555">Codex specific</text>
+
+  <path class="arrow" d="M492 454 C435 464 391 474 366 486"/>
+  <path class="arrow" d="M628 454 C685 464 729 474 754 486"/>
+
+  <rect class="runtime" x="214" y="624" width="300" height="58" rx="14"/>
+  <text class="label" x="298" y="660">Claude Code</text>
+
+  <rect class="runtime" x="606" y="624" width="300" height="58" rx="14"/>
+  <text class="label" x="710" y="660">Codex</text>
+
+  <path class="arrow" d="M364 590 V624"/>
+  <path class="arrow" d="M756 590 V624"/>
+</svg>

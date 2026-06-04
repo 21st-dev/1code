@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="660" viewBox="0 0 1120 660" role="img" aria-labelledby="title desc">
+  <title id="title">下游项目通过 Locus job 边界接入</title>
+  <desc id="desc">架构图：求职、日历规划和电脑操作项目通过 Locus job 边界接入，而不是各自重复内嵌 Claude Code 或 Codex。</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbfa; }
+      .app { fill: #ffffff; stroke: #d8d8d2; stroke-width: 2; rx: 14; }
+      .locus { fill: #f7efe2; stroke: #c98d45; stroke-width: 2; rx: 14; }
+      .own { fill: #eef5f1; stroke: #5b9178; stroke-width: 2; rx: 14; }
+      .risk { fill: #fff4ed; stroke: #d47b4b; stroke-width: 2; rx: 14; }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .heading { fill: #1e1f22; font-size: 30px; font-weight: 750; }
+      .label { fill: #1e1f22; font-size: 23px; font-weight: 700; }
+      .small { fill: #5f6368; font-size: 16px; font-weight: 450; }
+      .tiny { fill: #6f7277; font-size: 14px; font-weight: 450; }
+      .arrow { stroke: #3d3f44; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#3d3f44"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1120" height="660"/>
+  <text class="heading" x="64" y="64">下游项目应该在 job 边界接入</text>
+  <text class="small" x="64" y="94">不要在每个项目里重复内嵌 Claude Code 或 Codex CLI</text>
+
+  <rect class="app" x="64" y="138" width="280" height="106" rx="14"/>
+  <text class="label" x="96" y="178">求职助手</text>
+  <text class="small" x="96" y="206">简历、JD、草稿</text>
+
+  <rect class="app" x="64" y="278" width="280" height="106" rx="14"/>
+  <text class="label" x="96" y="318">日历规划</text>
+  <text class="small" x="96" y="346">复盘与计划建议</text>
+
+  <rect class="app" x="64" y="418" width="280" height="106" rx="14"/>
+  <text class="label" x="96" y="458">电脑操作</text>
+  <text class="small" x="96" y="486">带权限门禁的控制</text>
+
+  <path class="arrow" d="M344 191 H454"/>
+  <path class="arrow" d="M344 331 H454"/>
+  <path class="arrow" d="M344 471 H454"/>
+
+  <rect class="locus" x="454" y="168" width="274" height="326" rx="14"/>
+  <text class="label" x="498" y="222">Locus Job 边界</text>
+  <text class="small" x="500" y="254">创建 job</text>
+  <text class="small" x="500" y="282">读取事件流</text>
+  <text class="small" x="500" y="310">取消 / 重试</text>
+  <text class="small" x="500" y="338">能力门禁</text>
+  <text class="small" x="500" y="366">本地审计日志</text>
+
+  <path class="arrow" d="M728 259 H814"/>
+  <path class="arrow" d="M728 401 H814"/>
+
+  <rect class="own" x="814" y="190" width="244" height="138" rx="14"/>
+  <text class="label" x="853" y="232">AI 执行层</text>
+  <text class="small" x="856" y="263">Claude Code / Codex</text>
+  <text class="tiny" x="856" y="292">runtime 专属能力</text>
+
+  <rect class="risk" x="814" y="366" width="244" height="138" rx="14"/>
+  <text class="label" x="848" y="408">用户控制</text>
+  <text class="small" x="856" y="439">显式权限确认</text>
+  <text class="tiny" x="856" y="468">文件、shell、屏幕、凭据</text>
+
+  <text class="tiny" x="64" y="596">原则：下游应用保留业务数据和最终体验；Locus 负责本地执行、日志、取消和 runtime 能力真实状态。</text>
+</svg>
