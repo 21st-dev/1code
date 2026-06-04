@@ -37,6 +37,7 @@ projects:
 | `locus run --daemon` | Submit queued background work | Implemented; macOS smoked |
 | `locus daemon run` | Claim daemon and schedule jobs | Implemented; macOS smoked |
 | `locus schedules` | Create, pause, resume, delete, and run local schedules | Implemented; macOS smoked |
+| `locus api` | Machine-readable Local Job API v1 for downstream consumers | Implemented; macOS smoked |
 | `locus acp` | Minimal stdio protocol for job-backed runs | Experimental |
 
 Windows source and shim behavior are covered by tests, but packaged Windows
@@ -160,13 +161,17 @@ It is not a full ACP server yet. Full ACP parity should be a separate project
 with explicit protocol, session, permission, MCP, reconnect, and compatibility
 tests.
 
-The recommended next platform boundary is a Locus-owned Local Job API v1. ACP
-can then be one adapter over that stable local API rather than the only platform
-interface.
+The recommended downstream platform boundary is now the Locus-owned Local Job
+API v1. ACP can then become one adapter over that stable local API rather than
+the only platform interface.
 
-## Local Job API v1 Direction
+## Local Job API v1
 
-This is a future direction, not an implemented API contract.
+Local Job API v1 is implemented as the `locus api` CLI group. Downstream
+projects should read the consumer guide rather than the OpenSpec proposal:
+
+- [Local Job API v1 Consumer Guide](local-job-api-v1-consumer-guide.md)
+- [Local Job API v1 Consumer Guide, Simplified Chinese](local-job-api-v1-consumer-guide.zh-CN.md)
 
 Minimum useful operations:
 
@@ -188,7 +193,8 @@ Recommended order:
    schedules, ACP, exit codes, stdout/stderr, and Workbench visibility.
 2. Harden documentation and release wording so local macOS completion is not
    confused with cross-platform release readiness.
-3. Define Local Job API v1 as an OpenSpec proposal.
+3. Keep the Local Job API v1 consumer guide aligned with implementation and
+   smoke evidence.
 4. Let downstream projects integrate through the job boundary.
 5. Add stronger capability and permission gates for non-coding domains.
 6. Add full ACP parity only when a real external client needs standard ACP

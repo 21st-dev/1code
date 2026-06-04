@@ -35,6 +35,7 @@ coding 仍然是第一个强场景，但不是长期唯一场景。其他本地�
 | `locus run --daemon` | 提交后台队列任务 | 已实现，macOS 已 smoke |
 | `locus daemon run` | 消费 daemon 和 schedule job | 已实现，macOS 已 smoke |
 | `locus schedules` | 创建、暂停、恢复、删除、立即运行本地 schedule | 已实现，macOS 已 smoke |
+| `locus api` | 面向下游 consumer 的机器可读 Local Job API v1 | 已实现，macOS 已 smoke |
 | `locus acp` | job-backed run 的最小 stdio 协议入口 | 实验性 |
 
 Windows 源码和 shim 行为有测试覆盖，但 Windows packaged 实机 smoke 仍未完成。在
@@ -145,12 +146,16 @@ job events、取消 job，并且在 shutdown 时保持 stdout 结构化。
 它还不是完整 ACP server。完整 ACP parity 应该作为单独项目处理，并明确协议、session、
 permission、MCP、reconnect 和兼容性测试。
 
-更推荐的下一步平台边界是 Locus 自己拥有的 Local Job API v1。ACP 可以成为这个稳定
+推荐的下游平台边界现在是 Locus 自己拥有的 Local Job API v1。ACP 可以成为这个稳定
 本地 API 之上的一个 adapter，而不是唯一平台接口。
 
-## Local Job API v1 方向
+## Local Job API v1
 
-这是未来方向，不是已经实现的 API contract。
+Local Job API v1 已经实现为 `locus api` CLI group。下游项目应该读 consumer guide，
+而不是直接读 OpenSpec proposal：
+
+- [Local Job API v1 Consumer Guide](local-job-api-v1-consumer-guide.md)
+- [Local Job API v1 下游接入手册](local-job-api-v1-consumer-guide.zh-CN.md)
 
 最小可用能力：
 
@@ -171,7 +176,7 @@ permission、MCP、reconnect 和兼容性测试。
 1. 完成 Windows packaged 实机 smoke，覆盖 `run`、`jobs`、daemon、schedules、
    ACP、exit code、stdout/stderr 和 Workbench 可见性。
 2. 收紧文档和 release wording，避免把 macOS 本地完成误写成双平台 release-ready。
-3. 用 OpenSpec 定义 Local Job API v1。
+3. 保持 Local Job API v1 consumer guide 和实现、smoke evidence 对齐。
 4. 让下游项目先通过 job 边界接入。
 5. 为非 coding 场景补强 capability 和 permission gates。
 6. 只有真实外部 client 需要标准 ACP session/protocol 行为时，再做 full ACP parity。
