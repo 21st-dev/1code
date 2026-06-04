@@ -3,6 +3,7 @@ import type { AgentRuntimeId } from "./agent-runtime-capabilities"
 export const AGENT_JOB_SOURCES = [
   "desktop",
   "cli",
+  "api",
   "daemon",
   "schedule",
   "protocol",
@@ -43,6 +44,7 @@ export const AGENT_JOB_EVENT_TYPES = [
   "command_started",
   "command_output",
   "command_finished",
+  "artifact_created",
   "status",
   "error",
   "completed",

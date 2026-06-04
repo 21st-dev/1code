@@ -13,6 +13,10 @@ export type SerializedAgentJob = {
   chatId: string | null
   subChatId: string | null
   promptPreview: string | null
+  apiConsumerId: string | null
+  apiConsumerRunId: string | null
+  artifactBaseDir: string | null
+  artifactManifestPath: string | null
   createdAt: string | null
   startedAt: string | null
   finishedAt: string | null
@@ -85,6 +89,10 @@ export function serializeAgentJob(job: AgentJob): SerializedAgentJob {
     chatId: job.chatId,
     subChatId: job.subChatId,
     promptPreview: job.promptPreview,
+    apiConsumerId: job.apiConsumerId,
+    apiConsumerRunId: job.apiConsumerRunId,
+    artifactBaseDir: job.artifactBaseDir,
+    artifactManifestPath: job.artifactManifestPath,
     createdAt: toIso(job.createdAt),
     startedAt: toIso(job.startedAt),
     finishedAt: toIso(job.finishedAt),
@@ -170,6 +178,11 @@ export function formatJobText(job: AgentJob): string {
   if (job.exitCode !== null) lines.push(`exitCode: ${job.exitCode}`)
   if (job.errorCode) lines.push(`errorCode: ${job.errorCode}`)
   if (job.errorMessage) lines.push(`error: ${job.errorMessage}`)
+  if (job.apiConsumerId) lines.push(`apiConsumer: ${job.apiConsumerId}`)
+  if (job.apiConsumerRunId) lines.push(`apiRun: ${job.apiConsumerRunId}`)
+  if (job.artifactManifestPath) {
+    lines.push(`artifactManifest: ${job.artifactManifestPath}`)
+  }
   if (job.promptPreview) lines.push(`prompt: ${job.promptPreview}`)
   return `${lines.join("\n")}\n`
 }

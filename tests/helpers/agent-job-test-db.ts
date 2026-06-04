@@ -60,6 +60,10 @@ export function createAgentJobTestDb() {
       sub_chat_id text,
       prompt_preview text,
       input_json text,
+      api_consumer_id text,
+      api_consumer_run_id text,
+      artifact_base_dir text,
+      artifact_manifest_path text,
       created_at integer,
       started_at integer,
       finished_at integer,
@@ -84,6 +88,9 @@ export function createAgentJobTestDb() {
     CREATE INDEX agent_jobs_cwd_idx ON agent_jobs (cwd);
     CREATE INDEX agent_jobs_created_at_idx ON agent_jobs (created_at);
     CREATE INDEX agent_jobs_heartbeat_at_idx ON agent_jobs (heartbeat_at);
+    CREATE INDEX agent_jobs_api_consumer_id_idx ON agent_jobs (api_consumer_id);
+    CREATE INDEX agent_jobs_api_consumer_run_id_idx
+      ON agent_jobs (api_consumer_run_id);
     CREATE TABLE agent_job_events (
       id text PRIMARY KEY NOT NULL,
       job_id text NOT NULL,

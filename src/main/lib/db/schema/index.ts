@@ -239,6 +239,10 @@ export const agentJobs = sqliteTable("agent_jobs", {
   }),
   promptPreview: text("prompt_preview"),
   inputJson: text("input_json"),
+  apiConsumerId: text("api_consumer_id"),
+  apiConsumerRunId: text("api_consumer_run_id"),
+  artifactBaseDir: text("artifact_base_dir"),
+  artifactManifestPath: text("artifact_manifest_path"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
@@ -262,6 +266,8 @@ export const agentJobs = sqliteTable("agent_jobs", {
   index("agent_jobs_cwd_idx").on(table.cwd),
   index("agent_jobs_created_at_idx").on(table.createdAt),
   index("agent_jobs_heartbeat_at_idx").on(table.heartbeatAt),
+  index("agent_jobs_api_consumer_id_idx").on(table.apiConsumerId),
+  index("agent_jobs_api_consumer_run_id_idx").on(table.apiConsumerRunId),
 ])
 
 export const agentJobEvents = sqliteTable("agent_job_events", {

@@ -4,11 +4,11 @@
 - [x] 1.3 Commit the planning slice before implementation.
 
 ## 2. Shared Contract
-- [ ] 2.1 Add shared Local Job API v1 TypeScript types and validation helpers.
-- [ ] 2.2 Add API job source metadata fields and Drizzle migration.
-- [ ] 2.3 Add sanitization/rejection checks for secret-like request keys and values.
-- [ ] 2.4 Add tests for request validation, response serialization, event mapping, and secret rejection.
-- [ ] 2.5 Commit the shared contract slice.
+- [x] 2.1 Add shared Local Job API v1 TypeScript types and validation helpers.
+- [x] 2.2 Add API job source metadata fields and Drizzle migration.
+- [x] 2.3 Add sanitization/rejection checks for secret-like request keys and values.
+- [x] 2.4 Add tests for request validation, response serialization, event mapping, and secret rejection.
+- [x] 2.5 Commit the shared contract slice.
 
 ## 3. CLI API Commands
 - [ ] 3.1 Extend headless CLI parsing for `locus api runtimes list`.

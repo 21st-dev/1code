@@ -1,0 +1,114 @@
+import { describe, expect, test } from "bun:test"
+import {
+  AGENT_JOB_EVENT_TYPES,
+  AGENT_JOB_SOURCES,
+} from "../src/shared/agent-jobs"
+import {
+  LOCAL_JOB_API_VERSION,
+  validateLocalJobApiCreateRequest,
+} from "../src/shared/local-job-api"
+import { createAgentJob, getAgentJob } from "../src/main/lib/headless/job-store"
+import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
+
+describe("Local Job API v1 shared contract", () => {
+  test("normalizes a career-style create request", () => {
+    const request = validateLocalJobApiCreateRequest({
+      apiVersion: LOCAL_JOB_API_VERSION,
+      consumer: {
+        id: "career-application-kit",
+        runExternalId: "company-role-review-001",
+      },
+      project: {
+        cwd: process.cwd(),
+      },
+      runtime: {
+        id: "claude",
+        requiredCapabilities: ["planMode"],
+      },
+      mode: "plan",
+      prompt: {
+        text: "Review this application package.",
+      },
+      input: {
+        contract: "career.job-package.v1",
+        packageDir: `${process.cwd()}/fixtures/application-package`,
+      },
+      artifacts: {
+        baseDir: `${process.cwd()}/fixtures/application-package/.locus/runs`,
+        writePolicy: "proposal-only",
+      },
+    })
+
+    expect(request).toMatchObject({
+      ok: true,
+      request: {
+        apiVersion: LOCAL_JOB_API_VERSION,
+        consumer: {
+          id: "career-application-kit",
+          runExternalId: "company-role-review-001",
+        },
+        runtime: {
+          id: "claude-code",
+          requiredCapabilities: ["planMode"],
+        },
+        mode: "plan",
+        artifacts: {
+          writePolicy: "proposal-only",
+        },
+      },
+    })
+  })
+
+  test("rejects secret-like request fields and values", () => {
+    const request = validateLocalJobApiCreateRequest({
+      apiVersion: LOCAL_JOB_API_VERSION,
+      consumer: { id: "career-application-kit" },
+      project: { cwd: process.cwd() },
+      runtime: { id: "codex" },
+      mode: "plan",
+      prompt: { text: "Review this package." },
+      input: {
+        contract: "career.job-package.v1",
+        authorization: "Bearer secret-token-value",
+      },
+    })
+
+    expect(request.ok).toBe(false)
+    if (!request.ok) {
+      expect(request.errors.join("\n")).toContain(
+        "input.authorization is not accepted",
+      )
+    }
+  })
+
+  test("declares API source and artifact event type", () => {
+    expect(AGENT_JOB_SOURCES).toContain("api")
+    expect(AGENT_JOB_EVENT_TYPES).toContain("artifact_created")
+  })
+
+  test("persists sanitized API metadata on local jobs", () => {
+    const db = createAgentJobTestDb()
+    const job = createAgentJob(db, {
+      source: "api",
+      runtime: "codex",
+      mode: "plan",
+      cwd: process.cwd(),
+      prompt: "Create a proposal only.",
+      input: {
+        prompt: "Create a proposal only.",
+        consumer: { id: "career-application-kit" },
+      },
+      apiConsumerId: "career-application-kit",
+      apiConsumerRunId: "company-role-review-001",
+      artifactBaseDir: `${process.cwd()}/.tmp/locus-runs`,
+      artifactManifestPath: `${process.cwd()}/.tmp/locus-runs/${Date.now()}/artifacts.json`,
+    })
+
+    expect(getAgentJob(db, job.id)).toMatchObject({
+      source: "api",
+      apiConsumerId: "career-application-kit",
+      apiConsumerRunId: "company-role-review-001",
+      artifactBaseDir: `${process.cwd()}/.tmp/locus-runs`,
+    })
+  })
+})

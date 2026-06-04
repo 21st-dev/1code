@@ -34,6 +34,10 @@ export type CreateAgentJobInput = {
   projectId?: string | null
   chatId?: string | null
   subChatId?: string | null
+  apiConsumerId?: string | null
+  apiConsumerRunId?: string | null
+  artifactBaseDir?: string | null
+  artifactManifestPath?: string | null
   createdByVersion?: string | null
 }
 
@@ -252,6 +256,18 @@ export function createAgentJob(
       projectId: input.projectId ?? null,
       chatId: input.chatId ?? null,
       subChatId: input.subChatId ?? null,
+      apiConsumerId: input.apiConsumerId
+        ? redactSecretText(input.apiConsumerId)
+        : null,
+      apiConsumerRunId: input.apiConsumerRunId
+        ? redactSecretText(input.apiConsumerRunId)
+        : null,
+      artifactBaseDir: input.artifactBaseDir
+        ? redactSecretText(input.artifactBaseDir)
+        : null,
+      artifactManifestPath: input.artifactManifestPath
+        ? redactSecretText(input.artifactManifestPath)
+        : null,
       createdByVersion: input.createdByVersion ?? null,
       createdAt: now,
     })
