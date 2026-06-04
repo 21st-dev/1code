@@ -1,18 +1,80 @@
 # Locus
 
-Local coding agents for your own machine.
+Local-first AI workbench and agent runtime hub.
 
-Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a local-first desktop workflow. It keeps the desktop UI, local project selection, worktrees, terminal, git tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local provider storage while removing upstream hosted product surfaces from the default build.
+本地优先的 AI 工作台和 agent runtime 底座。
+
+Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a
+local-first desktop workflow. Coding remains the first strong use case, but the
+core product direction is broader: Locus is becoming a local AI workbench that
+can run, track, cancel, schedule, and observe Claude Code / Codex powered work
+through a durable local job platform.
+
+Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先桌面工作流。
+coding 仍然是第一个强场景，但项目定位不只是一款 coding chat UI。Locus 的核心方向是
+一个本地 AI 工作台：用本地 job 平台统一运行、追踪、取消、调度和观察 Claude Code /
+Codex 驱动的任务。
+
+Locus keeps the desktop UI, local project selection, worktrees, terminal, git
+tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local
+provider storage while removing upstream hosted product surfaces from the
+default build.
 
 ## Current Scope
 
 - Local projects and local SQLite state
 - Claude Code subscription, API key, and custom provider flows
 - Codex subscription, API key, and local Codex integration
+- Durable local agent jobs with event logs, cancellation, retry, heartbeat, and stale-worker recovery
+- Headless CLI commands for local runs and job inspection
+- Local daemon queue for background jobs
+- Local opt-in schedules that create visible jobs through the daemon
+- Agent Workbench visibility for chat, CLI, daemon, schedule, and protocol-created jobs
+- Minimal `locus acp` stdio surface for job-backed protocol runs
 - Local chat, tools, terminal, git diff, staging, commit generation, and worktrees
 - Ollama-first helper generation with Settings-configured provider fallback
 - Local-only guard enabled by default as defense-in-depth
 - Upstream hosted auth, subscription checks, remote sandbox, automations, inbox, analytics, error tracking, and updater UI removed or isolated from the default local-first build
+
+## Status and Boundaries
+
+Current local maturity:
+
+| Area | Status |
+| --- | --- |
+| Desktop local workbench | Implemented |
+| Claude Code and Codex desktop runs | Implemented with runtime-specific limits |
+| Local job store and job events | Implemented |
+| `locus run` and `locus jobs` | Implemented and smoked locally on macOS |
+| Local daemon queue | Implemented and smoked locally on macOS |
+| Local schedules | Implemented and smoked locally on macOS |
+| Minimal `locus acp` stdio job surface | Experimental |
+| Windows packaged real-machine smoke | Pending |
+| Full ACP parity | Not implemented |
+| Hosted/cloud agents or hosted scheduler | Not implemented |
+| Full Codex parity with Claude Code | Not implemented |
+
+当前成熟度：
+
+| 模块 | 状态 |
+| --- | --- |
+| 桌面本地工作台 | 已实现 |
+| Claude Code / Codex 桌面运行 | 已实现，但受各 runtime 能力限制 |
+| 本地 job 存储与事件日志 | 已实现 |
+| `locus run` / `locus jobs` | 已实现，并已在 macOS 本地 smoke |
+| 本地 daemon 队列 | 已实现，并已在 macOS 本地 smoke |
+| 本地 schedule | 已实现，并已在 macOS 本地 smoke |
+| 最小 `locus acp` stdio job 入口 | 实验性 |
+| Windows packaged 实机 smoke | 未完成 |
+| 完整 ACP parity | 未实现 |
+| hosted/cloud agents 或 hosted scheduler | 未实现 |
+| Codex 与 Claude Code 完整能力对齐 | 未实现 |
+
+See [docs/locus-local-agent-platform.md](docs/locus-local-agent-platform.md)
+for the platform direction, integration boundaries, and roadmap.
+
+平台定位、集成边界和路线图见
+[docs/locus-local-agent-platform.md](docs/locus-local-agent-platform.md)。
 
 ## Local-Only Mode
 
