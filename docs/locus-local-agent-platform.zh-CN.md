@@ -21,24 +21,22 @@ Locus 应该负责本地 runtime 层：
 coding 仍然是第一个强场景，但不是长期唯一场景。其他本地优先工具可以把 Locus
 作为运行、追踪、观察和控制 AI 任务的底座。
 
-## Main 状态
+## 当前可用入口
 
-这份文档描述的是 `main` 的产品方向。durable job platform 目前在 headless 分支上，审
-查并合入 `main` 之前，不应该把它描述成已经合入或已经发布的能力。
+这些入口目前已经存在，也是周边项目最适合依赖的集成点：
 
-| 入口 | 用途 | main 状态 |
+| 入口 | 用途 | 状态 |
 | --- | --- | --- |
-| Desktop Workbench | 在 UI 里查看本地桌面任务 | 已实现 |
-| `locus run` | 一次性本地任务 | headless 分支，待合入 main |
-| `locus jobs` | list/show/logs/cancel/retry | headless 分支，待合入 main |
-| `locus run --daemon` | 提交后台队列任务 | headless 分支，待合入 main |
-| `locus daemon run` | 消费 daemon 和 schedule job | headless 分支，待合入 main |
-| `locus schedules` | 创建、暂停、恢复、删除、立即运行本地 schedule | headless 分支，待合入 main |
-| `locus acp` | job-backed run 的最小 stdio 协议入口 | headless 分支上的实验性能力 |
+| Desktop Workbench | 在 UI 里查看和控制本地 job | 已实现 |
+| `locus run` | 一次性本地任务 | 已实现，macOS 已 smoke |
+| `locus jobs` | list/show/logs/cancel/retry | 已实现，macOS 已 smoke |
+| `locus run --daemon` | 提交后台队列任务 | 已实现，macOS 已 smoke |
+| `locus daemon run` | 消费 daemon 和 schedule job | 已实现，macOS 已 smoke |
+| `locus schedules` | 创建、暂停、恢复、删除、立即运行本地 schedule | 已实现，macOS 已 smoke |
+| `locus acp` | job-backed run 的最小 stdio 协议入口 | 实验性 |
 
-headless 分支已有 macOS 本地 smoke 证据和 Windows shim 源码级测试，但 Windows
-packaged 实机 smoke 仍未完成。在这些证据完成并且实现合入之前，不要把 job platform
-描述成已经完成双平台验收。
+Windows 源码和 shim 行为有测试覆盖，但 Windows packaged 实机 smoke 仍未完成。在
+这项证据完成前，不要把该平台描述成已经完成双平台验收。
 
 ## 安全和隐私边界
 
@@ -139,11 +137,11 @@ plan/review 模式，修改日历数据前必须显式确认。
 
 ## 协议策略
 
-headless 分支里的 `locus acp` 是刻意收窄的入口。它是最小 stdio job adapter，不是完整
-ACP server。只有 headless 分支完成审查并合入后，它才应该成为 `main` 的能力声明。
+当前 `locus acp` 是刻意收窄的入口。它证明外部 stdio 请求可以创建本地 job、流式返回
+job events、取消 job，并且在 shutdown 时保持 stdout 结构化。
 
-完整 ACP parity 应该作为单独项目处理，并明确协议、session、permission、MCP、
-reconnect 和兼容性测试。
+它还不是完整 ACP server。完整 ACP parity 应该作为单独项目处理，并明确协议、session、
+permission、MCP、reconnect 和兼容性测试。
 
 更推荐的下一步平台边界是 Locus 自己拥有的 Local Job API v1。ACP 可以成为这个稳定
 本地 API 之上的一个 adapter，而不是唯一平台接口。
@@ -168,15 +166,14 @@ reconnect 和兼容性测试。
 
 推荐顺序：
 
-1. 先审查 headless 分支，再把 local job platform 合入 `main`。
-2. 完成 Windows packaged 实机 smoke，覆盖 `run`、`jobs`、daemon、schedules、
+1. 完成 Windows packaged 实机 smoke，覆盖 `run`、`jobs`、daemon、schedules、
    ACP、exit code、stdout/stderr 和 Workbench 可见性。
-3. 收紧文档和 release wording，避免把 macOS 本地完成误写成双平台 release-ready。
-4. 用 OpenSpec 定义 Local Job API v1。
-5. job platform 合入后，再让下游项目通过 job 边界接入。
-6. 为非 coding 场景补强 capability 和 permission gates。
-7. 只有真实外部 client 需要标准 ACP session/protocol 行为时，再做 full ACP parity。
-8. 只有本地 daemon 和 job recovery 在 macOS/Windows 都稳定后，再做 hosted 或
+2. 收紧文档和 release wording，避免把 macOS 本地完成误写成双平台 release-ready。
+3. 用 OpenSpec 定义 Local Job API v1。
+4. 让下游项目先通过 job 边界接入。
+5. 为非 coding 场景补强 capability 和 permission gates。
+6. 只有真实外部 client 需要标准 ACP session/protocol 行为时，再做 full ACP parity。
+7. 只有本地 daemon 和 job recovery 在 macOS/Windows 都稳定后，再做 hosted 或
    OS-level scheduling。
 
 ## 文档规则
@@ -187,9 +184,10 @@ reconnect 和兼容性测试。
 
 ```text
 local-first AI workbench
-local job platform direction
+local job platform
 runtime hub for Claude Code and Codex powered work
-headless branch has macOS local smoke; Windows real-machine smoke pending
+minimal ACP stdio job surface
+macOS local smoke complete; Windows real-machine smoke pending
 ```
 
 避免使用：
@@ -203,7 +201,6 @@ offline-only
 fully private
 all API keys encrypted
 complete filesystem isolation
-main already has headless jobs before the headless branch is merged
 Claude and Codex parity
 cloud agent platform
 ```

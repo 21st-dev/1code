@@ -18,6 +18,13 @@ The goal is not to embed `cc-switch` wholesale. The goal is to learn from its
 product surface and implementation choices, then express the useful parts
 through Locus's own local-first architecture.
 
+This plan now sits next to the Locus local job platform. Runtime environment
+features should feed capability truth, provider configuration, diagnostics, and
+usage metadata into jobs; they should not create a second execution engine.
+
+这份计划现在需要和 Locus 本地 job 平台并行理解。runtime environment center 应该把
+能力真实状态、provider 配置、诊断和用量数据提供给 job 层，而不是再造一套执行系统。
+
 ## Relationship Model
 
 `cc-switch` is a reference implementation, not a Locus dependency.
@@ -422,10 +429,10 @@ Track by:
 
 - Provider profile
 - Model
-- Runtime: Claude, Codex, helper, future job runner
+- Runtime: Claude, Codex, helper, local job platform
 - Chat and sub-chat
 - Project and worktree
-- Future headless job id
+- Local job id
 
 Metrics:
 

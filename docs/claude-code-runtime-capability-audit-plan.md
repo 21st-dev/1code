@@ -63,6 +63,11 @@ Use these metadata fields:
 This table is a starting point. Update it with exact file and test references
 before using it to approve implementation.
 
+Status note: this audit predates the later `add-headless-agent-jobs` phases.
+Rows marked for headless jobs have been reconciled with the current local job
+platform evidence, while advanced Claude Code structured-output/session details
+still need capability-specific audits before public parity claims.
+
 | Capability | Locus status | Native support to verify | Current gap | Value | Risk | Needs OpenSpec | Next |
 |---|---|---|---|---|---|---|---|
 | Runtime startup | supported | Claude CLI/SDK startup | Existing runtime path is mature; may still need shared manifest extraction | high | medium | yes | proposal |
@@ -75,8 +80,8 @@ before using it to approve implementation.
 | AskUserQuestion | supported | SDK user-input/tool flow | Works in current Claude path; needs shared event naming | high | medium | yes | proposal |
 | Session resume | supported | Claude session resume | Current path persists session IDs; audit exact semantics | high | medium | yes | audit |
 | Rollback / fork | supported | `resumeSessionAt` / fork session behavior | Supported for Claude path; needs shared manifest and clearer session metadata | high | high | yes | proposal |
-| Headless run | unsupported | Claude headless/print/stream output | Locus has no `locus run` shared runner yet | high | high | yes | proposal |
-| Stream JSON / structured output | unsupported | Claude structured CLI output | Needed for Locus CLI/jobs, not desktop-only chat | high | medium | yes | proposal |
+| Headless run | supported | Claude headless/print/stream output | Basic `claude -p` backed `locus run` exists through the job platform; successful runs still depend on local Claude Code auth | high | high | yes | audit |
+| Stream JSON / structured output | degraded | Claude structured CLI output | Locus provides structured job events and CLI output rules; full Claude-native structured-output parity remains a separate capability audit | high | medium | yes | audit |
 | MCP config/auth/tools | degraded | Claude MCP config and OAuth behavior | Locus has MCP surfaces, but full runtime-scoped capability/status map needs audit | high | high | yes | audit |
 | Skills | degraded | Claude skills directories/import behavior | Install/list exists through registry surfaces; runtime application needs audit | medium | medium | yes | audit |
 | Slash/runtime commands | degraded | Claude slash/runtime command behavior | Locus has command guide/discovery, not full command execution capability model | medium | medium | yes | proposal |
@@ -99,8 +104,8 @@ changes the priority.
    - Establish the shared vocabulary: runtime-neutral, runtime-specific,
      supported, degraded, unsupported.
 2. `add-headless-agent-jobs`
-   - Add shared runner, jobs, CLI entrypoint, event persistence, and capability
-     gating.
+   - Implemented for the basic local job platform. Future work should extend
+     this layer instead of creating a second headless runner.
 3. `add-claude-dynamic-workflows-adapter`
    - Implement the existing Claude-only workflows proposal after the capability
      model is accepted.

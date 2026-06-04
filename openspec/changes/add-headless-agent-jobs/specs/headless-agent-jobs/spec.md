@@ -18,6 +18,26 @@ The system SHALL persist agent work as local jobs with append-only event history
 - **THEN** the system records a terminal status, finish timestamp, and normalized exit/error metadata
 - **AND** the job no longer accepts non-diagnostic runtime events
 
+#### Scenario: Worker heartbeat is lost
+- **WHEN** the app starts, the CLI starts, or recovery runs
+- **AND** a job is marked `running` without a recent worker heartbeat
+- **THEN** the system marks the job `interrupted`
+- **AND** preserves the existing event history
+- **AND** exposes retry only through the normal retry path
+
+#### Scenario: User requests cancellation
+- **WHEN** a desktop or CLI caller cancels a running job
+- **THEN** the system records a persisted cancel request before changing terminal status
+- **AND** the active worker observes the cancel request and stops the runtime when possible
+- **AND** the job becomes `canceled` only after the worker confirms cancellation
+- **AND** a worker that disappears before confirming cancellation leaves the job `interrupted`, not `canceled`
+
+#### Scenario: Multiple local processes write job state
+- **WHEN** the GUI process and one or more headless CLI processes access local job state
+- **THEN** writes use the existing app SQLite database with WAL, a busy timeout, and short transactions
+- **AND** event sequence numbers are monotonic per job
+- **AND** duplicate sequence numbers for one job are rejected or retried safely
+
 ### Requirement: One-Shot Headless Run
 The system SHALL provide a one-shot headless run command for local agent work without requiring a visible desktop window.
 
@@ -42,6 +62,43 @@ The system SHALL provide a one-shot headless run command for local agent work wi
 - **WHEN** the packaged CLI cannot launch or connect to the Locus Electron main process in headless CLI mode
 - **THEN** the command exits with a local process failure code
 - **AND** prints a diagnostic to stderr without writing partial structured output to stdout
+
+#### Scenario: macOS headless command starts
+- **WHEN** the user runs `locus run` or `locus jobs` on macOS
+- **THEN** the CLI shim synchronously executes the packaged Locus binary with a private headless marker
+- **AND** preserves stdin, stdout, stderr, and the process exit code
+- **AND** does not use `open -a` for the headless command
+
+#### Scenario: Windows headless command starts
+- **WHEN** the user runs `locus run` or `locus jobs` on Windows
+- **THEN** the CLI shim synchronously executes the packaged Locus executable with a private headless marker
+- **AND** preserves stdin, stdout, stderr, and the process exit code
+- **AND** does not use a detached `start` invocation for the headless command
+
+#### Scenario: Headless command runs while GUI is open
+- **WHEN** the desktop app is already running
+- **AND** the user starts a headless CLI command
+- **THEN** the headless process handles the command without creating or focusing a BrowserWindow
+- **AND** the command is not rejected merely because the GUI single-instance lock is held
+- **AND** shared job visibility and cancellation are coordinated through the durable job store
+
+#### Scenario: Structured output is requested
+- **WHEN** the user selects `json` or `stream-json` output
+- **THEN** stdout contains only documented JSON payloads
+- **AND** diagnostics, migration messages, runtime setup logs, and warnings are written to stderr or suppressed
+
+#### Scenario: CLI job has no chat link
+- **WHEN** a CLI job is created for a cwd that does not map cleanly to an existing chat or sub-chat
+- **THEN** the job is still created and runnable
+- **AND** linked chat fields remain empty
+- **AND** job history is read from `agent_jobs` and `agent_job_events`
+
+#### Scenario: User enqueues a daemon job
+- **WHEN** the user runs `locus run --daemon` with a cwd, runtime, mode, and prompt
+- **THEN** the packaged CLI launches the Locus Electron main process in headless CLI mode
+- **AND** creates a queued `source=daemon` job in the existing SQLite job store
+- **AND** does not run the runtime in the submitter process
+- **AND** prints the created job according to the selected output format
 
 ### Requirement: Job Management CLI
 The system SHALL provide CLI commands for inspecting and managing local jobs.
@@ -72,30 +129,72 @@ The system SHALL provide CLI commands for inspecting and managing local jobs.
 - **AND** increments the attempt number for the retry chain
 - **AND** preserves the original job history unchanged
 
-### Requirement: Future Local Daemon Queue Boundary
-The system SHALL support a later local daemon queue that reuses durable jobs and the shared runtime core.
+### Requirement: Local Daemon Queue
+The system SHALL provide an opt-in local daemon queue that reuses durable jobs and the shared runtime core.
 
-#### Scenario: Daemon enqueues job
-- **WHEN** daemon mode is enabled and a caller enqueues a job
-- **THEN** the daemon stores the job in SQLite
-- **AND** starts it according to local concurrency limits
-- **AND** does not require a renderer window to remain open
+#### Scenario: Daemon starts without a renderer window
+- **WHEN** the user runs `locus daemon run`
+- **THEN** the packaged CLI launches the Locus Electron main process in daemon mode
+- **AND** the daemon starts before GUI single-instance handling, menu construction, BrowserWindow creation, updater startup, auth callback server startup, and GUI-only MCP warmup
+- **AND** the daemon writes diagnostics to stderr without polluting structured stdout
+
+#### Scenario: Daemon claims queued daemon jobs
+- **WHEN** the daemon is running
+- **AND** queued `source=daemon` jobs exist
+- **THEN** the daemon starts those jobs through the shared runtime core according to configured local concurrency limits
+- **AND** writes heartbeat, cancel, runtime event, and completion state through `agent_jobs` and `agent_job_events`
+- **AND** does not claim `source=desktop`, default one-shot `source=cli`, or `source=protocol` jobs
+- **AND** claims `source=schedule` jobs only through the explicit local scheduling scenario
+
+#### Scenario: Daemon follows cancellation requests
+- **WHEN** `locus jobs cancel <job-id>` is used for a running daemon job
+- **THEN** the system records a persisted cancel request
+- **AND** the daemon worker observes the request through the job observer
+- **AND** the daemon marks the job `canceled` only after the runtime stops or the worker confirms cancellation
+
+#### Scenario: User follows daemon logs
+- **WHEN** a user follows a daemon job with `locus run --daemon --follow` or `locus jobs logs <job-id> --follow`
+- **THEN** the CLI streams persisted events in sequence
+- **AND** exits after the daemon job reaches a terminal status
 
 #### Scenario: Daemon restarts after crash
 - **WHEN** the daemon starts and finds jobs marked running without an active worker
 - **THEN** it marks those jobs as interrupted
 - **AND** exposes retry or resume only when the runtime adapter supports it
 
-### Requirement: Future Local Job Scheduling Boundary
-The system SHALL support opt-in local schedules only after durable jobs and daemon recovery are implemented.
+#### Scenario: Daemon coordination stays local
+- **WHEN** the local daemon is running
+- **THEN** it uses only local per-user coordination primitives and the app SQLite database for queue state
+- **AND** does not expose an unauthenticated TCP HTTP or WebSocket control surface by default
+- **AND** does not accept provider tokens, API keys, or raw environment values from daemon clients
+
+### Requirement: Local Job Scheduling
+The system SHALL support opt-in local schedules that create visible local jobs through the durable job store.
 
 #### Scenario: User creates schedule
 - **WHEN** the user creates a local schedule
 - **THEN** the system stores schedule metadata locally
 - **AND** shows the schedule as enabled, paused, or disabled
-- **AND** creates visible jobs when schedule triggers fire
+- **AND** creates visible `source=schedule` jobs when schedule triggers fire
 
 #### Scenario: User pauses schedule
 - **WHEN** the user pauses a schedule
 - **THEN** no new jobs are created by that schedule until it is resumed
 - **AND** existing jobs keep their current status
+
+#### Scenario: User runs schedule now
+- **WHEN** the user manually runs an enabled or paused schedule
+- **THEN** the system creates a queued `source=schedule` job immediately
+- **AND** records schedule audit metadata that links the job back to the schedule
+
+#### Scenario: Daemon evaluates due schedules
+- **WHEN** the local daemon is running
+- **AND** an enabled schedule is due
+- **THEN** the daemon creates at most one queued `source=schedule` job for that schedule fire
+- **AND** updates the next-run metadata before another daemon poll can create a duplicate
+- **AND** may claim the queued schedule job through the same runner core
+
+#### Scenario: User deletes schedule
+- **WHEN** the user deletes a local schedule
+- **THEN** the schedule no longer creates new jobs
+- **AND** previously created jobs and events remain visible in job history

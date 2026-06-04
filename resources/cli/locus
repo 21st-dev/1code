@@ -1,19 +1,45 @@
 #!/bin/bash
 # Locus CLI launcher
-# Opens Locus with the specified directory
+# Opens Locus with the specified directory or runs headless job commands.
 
-# Resolve the directory argument (default to current directory)
-DIR="${1:-.}"
+set -e
 
-# Convert to absolute path
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$SCRIPT_DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+CONTENTS_DIR="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
+LOCUS_EXE="${LOCUS_HEADLESS_EXECUTABLE:-$CONTENTS_DIR/MacOS/Locus}"
+
+COMMAND="${1:-open}"
+
+case "$COMMAND" in
+  run|jobs|daemon|schedules|schedule|acp)
+    if [ ! -x "$LOCUS_EXE" ]; then
+      echo "Error: Locus executable not found: $LOCUS_EXE" >&2
+      exit 1
+    fi
+    exec "$LOCUS_EXE" --locus-headless-cli "$@"
+    ;;
+  open|gui)
+    shift
+    DIR="${1:-.}"
+    ;;
+  *)
+    DIR="${1:-.}"
+    ;;
+esac
+
 if [[ "$DIR" != /* ]]; then
   DIR="$(cd "$DIR" 2>/dev/null && pwd)"
 fi
 
 if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then
-  echo "Error: Invalid directory"
+  echo "Error: Invalid directory" >&2
   exit 1
 fi
 
-# Open Locus with the directory argument
 open -a "Locus" --args "$DIR"

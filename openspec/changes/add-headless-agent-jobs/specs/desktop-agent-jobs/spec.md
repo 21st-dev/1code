@@ -14,6 +14,19 @@ The desktop app SHALL show active and recent local agent jobs in the agents/work
 - **THEN** the desktop job overview includes that job after refresh or subscription reconnect
 - **AND** the user can inspect its event history from the desktop app
 
+#### Scenario: Desktop chat run is persisted as a desktop job
+- **WHEN** a user sends an ordinary desktop chat message through Claude Code or Codex
+- **THEN** the system creates a linked `agent_jobs` record with `source=desktop`
+- **AND** the job links to the same project, chat, sub-chat, cwd, runtime, mode, and prompt preview
+- **AND** the existing chat/sub-chat message, session, and stream persistence remains the transcript source of truth
+- **AND** provider credentials, raw auth headers, and plaintext provider secrets are not stored in the job row or job events
+
+#### Scenario: Desktop chat job preserves current chat behavior
+- **WHEN** a desktop chat job is created around an existing Claude Code or Codex stream
+- **THEN** the current desktop chat UI continues to receive stream chunks through the existing transport
+- **AND** the current `sub_chats.messages`, `session_id`, and `stream_id` behavior is preserved
+- **AND** runtime-specific tool approval, guarded-run, rollback, attachment, and auth handling are not replaced by the job wrapper
+
 ### Requirement: Desktop Job Detail and Logs
 The desktop app SHALL provide a job detail view that replays persisted job events and follows live updates when available.
 
@@ -38,12 +51,24 @@ The desktop app SHALL expose safe local actions for jobs while reusing existing 
 #### Scenario: User cancels running job
 - **WHEN** the user cancels a running job from the desktop app
 - **THEN** the app calls the same job cancellation path used by the CLI
-- **AND** the UI reflects cancellation progress and final status
+- **AND** the UI reflects cancellation as requested until the worker confirms `canceled` or recovery marks `interrupted`
 
-#### Scenario: User retries failed job
-- **WHEN** the user retries a failed, canceled, or interrupted job from the desktop app
+#### Scenario: User cancels a desktop chat job from Workbench
+- **WHEN** the user cancels a running `source=desktop` job from the Workbench
+- **THEN** the app records a persisted cancel request for that job
+- **AND** routes cancellation to the exact active desktop stream that owns that job
+- **AND** does not cancel a newer stream in the same sub-chat when the selected job is no longer active
+
+#### Scenario: User retries failed CLI job
+- **WHEN** the user retries a failed, canceled, or interrupted non-desktop job from the desktop app
 - **THEN** the app creates a new linked job using the same retry path used by the CLI
 - **AND** the original job remains inspectable
+
+#### Scenario: Desktop chat retry is not generic
+- **WHEN** a `source=desktop` job is failed, canceled, or interrupted
+- **THEN** the app keeps the job inspectable
+- **AND** generic job retry is disabled or redirected to the linked chat
+- **AND** the system does not append a duplicate chat message or create an orphan desktop job from the generic retry action
 
 ### Requirement: Desktop Reconnect Behavior
 The desktop app SHALL recover job visibility after renderer reloads, app restarts, or CLI/daemon-created work.

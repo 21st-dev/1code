@@ -6,7 +6,8 @@
 
 Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先桌面工作流。
 coding 仍然是第一个强场景，但项目定位不只是一款 coding chat UI。Locus 的核心方向是
-一个本地 AI 工作台和 runtime hub，用来承载 Claude Code / Codex 驱动的本地任务。
+一个本地 AI 工作台：用本地 job 平台统一运行、追踪、取消、调度和观察 Claude Code /
+Codex 驱动的任务。
 
 Locus 保留桌面 UI、本地项目选择、worktrees、terminal、git 工具、Claude Code、Codex、
 custom providers、MCP、skills，以及已支持 provider 流程里的加密本地 provider profile
@@ -19,39 +20,37 @@ custom providers、MCP、skills，以及已支持 provider 流程里的加密本
 - 本地项目和本地 SQLite 状态
 - Claude Code subscription、API key 和 custom provider 流程
 - Codex subscription、API key 和本地 Codex 集成
-- 用于本地桌面任务可见性的 Agent Workbench
+- 带 event logs、取消、重试、heartbeat 和 stale-worker recovery 的 durable local agent jobs
+- 用于本地运行和 job inspection 的 headless CLI commands
+- 用于后台 job 的 local daemon queue
+- 通过 daemon 创建可见 job 的本地 opt-in schedules
+- 覆盖 chat、CLI、daemon、schedule 和 protocol-created jobs 的 Agent Workbench 可见性
+- 用于 job-backed protocol run 的最小 `locus acp` stdio 入口
 - 本地 chat、tools、terminal、git diff、staging、commit generation 和 worktrees
 - Ollama 优先的 helper generation，以及 Settings 配置的 provider fallback
 - 默认启用 local-only guard，作为 defense-in-depth
 - 上游 hosted auth、subscription checks、remote sandbox、automations、inbox、analytics、error tracking 和 updater UI 已从默认本地优先版本移除或隔离
 
-## 平台方向
-
-headless job 平台目前在独立分支开发，审查后再合入 `main`。该分支包含 durable local
-jobs、job events、`locus run`、`locus jobs`、local daemon、local schedules、桌面
-job 可见性，以及最小 `locus acp` stdio 入口。在 headless 实现完成审查并合入前，
-`main` 上只能把这些描述为平台方向，而不是已发布能力。
-
-平台定位、集成边界和路线图见
-[docs/locus-local-agent-platform.zh-CN.md](docs/locus-local-agent-platform.zh-CN.md)。
-
 ## 状态和边界
 
-当前 `main` 成熟度：
+当前本地成熟度：
 
 | 模块 | 状态 |
 | --- | --- |
 | 桌面本地工作台 | 已实现 |
 | Claude Code / Codex 桌面运行 | 已实现，但受各 runtime 能力限制 |
-| 本地 job 存储与事件日志 | 已在 headless 分支开发，待合入 main |
-| `locus run` / `locus jobs` | 已在 headless 分支开发，待合入 main |
-| 本地 daemon 队列 | 已在 headless 分支开发，待合入 main |
-| 本地 schedule | 已在 headless 分支开发，待合入 main |
-| 最小 `locus acp` stdio job 入口 | headless 分支上的实验性能力 |
+| 本地 job 存储与事件日志 | 已实现 |
+| `locus run` / `locus jobs` | 已实现，并已在 macOS 本地 smoke |
+| 本地 daemon 队列 | 已实现，并已在 macOS 本地 smoke |
+| 本地 schedule | 已实现，并已在 macOS 本地 smoke |
+| 最小 `locus acp` stdio job 入口 | 实验性 |
 | Windows packaged 实机 smoke | 未完成 |
 | 完整 ACP parity | 未实现 |
 | hosted/cloud agents 或 hosted scheduler | 未实现 |
 | Codex 与 Claude Code 完整能力对齐 | 未实现 |
+
+平台定位、集成边界和路线图见
+[docs/locus-local-agent-platform.zh-CN.md](docs/locus-local-agent-platform.zh-CN.md)。
 
 ## Local-Only 模式
 

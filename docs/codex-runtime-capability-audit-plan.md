@@ -96,6 +96,11 @@ same command help checks before opening implementation OpenSpecs.
 This table is a starting point. Update it with exact file and test references
 before using it to approve implementation.
 
+Status note: this audit predates the later `add-headless-agent-jobs` phases.
+Rows marked for headless jobs have been reconciled with the current local job
+platform evidence, but Codex-native CLI schema parity still needs a separate
+capability audit before public parity claims.
+
 | Capability | Locus status | Native support to verify | Current gap | Value | Risk | Needs OpenSpec | Next |
 |---|---|---|---|---|---|---|---|
 | Runtime startup/status | supported | Codex CLI, ACP startup, and `codex doctor --json` behavior | Existing status and preflight paths work; shared capability manifest extraction still belongs in `add-agent-runtime-capability-model`; full doctor diagnostics are not surfaced | high | medium | yes | proposal |
@@ -103,7 +108,7 @@ before using it to approve implementation.
 | Doctor diagnostics | unsupported | `codex doctor --json`, `--summary`, and detailed human output | Locus has runtime status but not the full Codex doctor report, grouping, or remediation detail | medium | medium | yes | proposal |
 | Login/session auth | supported | `codex login`, `login status`, `--with-api-key`, `--with-access-token`, `--device-auth`, and `logout` | Locus supports login/status/logout and runtime API-key paths; exact CLI auth mode coverage and diagnostics need audit | high | high | no | audit |
 | Plan mode | supported | Codex ACP read-only/plan behavior | Already guarded through ACP permission handling; needs shared manifest mapping | high | medium | yes | proposal |
-| Agent mode/basic run | supported | Codex ACP chat/run behavior | Existing desktop chat path works; headless runner still pending | high | medium | yes | proposal |
+| Agent mode/basic run | supported | Codex ACP chat/run behavior | Desktop chat path works; basic `locus run`, daemon, schedule, and protocol jobs now use the shared headless job platform; advanced session/fork/review behavior remains separate | high | medium | yes | audit |
 | Permission modes | degraded | Full Codex CLI/ACP permission mode matrix | Locus enforces guarded plan/agent semantics, but does not expose every Codex-native approval mode as product state | medium | high | yes | audit |
 | Runtime option matrix | degraded | `--config`, `--profile`, `--model`, `--oss`, `--local-provider`, `--sandbox`, `--ask-for-approval`, `--search`, `--add-dir`, `--enable`, `--disable`, and `--strict-config` | Locus exposes selected model/provider/cwd/safety concepts, but not the full Codex CLI option matrix | medium | high | yes | audit |
 | Hard tool guard | supported | ACP permission handler behavior | Locus fails closed when handler cannot attach; needs shared runtime capability model | high | high | yes | proposal |
@@ -112,8 +117,8 @@ before using it to approve implementation.
 | Session resume | degraded | `codex resume`, `codex resume --last`, `codex resume --all`, and `codex exec resume` | Locus persists chat session IDs and can pass an existing session into ACP, but has no Codex session picker/catalog or explicit resume command surface | high | medium | yes | proposal |
 | Session-level fork | unsupported | `codex fork`, `codex fork --last`, and `codex fork --all` | Codex CLI exposes session-level fork, but Locus has no fork API/UI/job integration for Codex sessions | high | high | yes | proposal |
 | Per-message rollback / fork | unsupported | Codex per-message resume/fork primitive | No reliable durable per-message primitive is exposed through the observed CLI help or wired through Locus | high | high | yes | defer |
-| Headless run | unsupported | `codex exec`, stdin prompts, `exec resume`, `--ephemeral`, and `--output-last-message` | Locus has no shared `locus run` runner yet | high | high | yes | proposal |
-| Stream JSON / structured output | unsupported | `codex exec --json`, `--output-schema`, and `--output-last-message` | Needed for jobs/CLI; not yet normalized through a shared runner contract | high | medium | yes | proposal |
+| Headless run | supported | `codex exec`, stdin prompts, `exec resume`, `--ephemeral`, and `--output-last-message` | Basic `codex exec` backed `locus run` exists through the job platform; `exec resume`, ephemeral mode, and output-last-message parity remain follow-up audit items | high | high | yes | audit |
+| Stream JSON / structured output | degraded | `codex exec --json`, `--output-schema`, and `--output-last-message` | Locus provides structured job events and CLI output rules; full Codex-native JSON/schema parity remains a separate capability audit | high | medium | yes | audit |
 | Code review | unsupported | `codex review`, `codex exec review`, `--uncommitted`, `--base`, `--commit`, and `--title` | Locus has no Codex-native review action or normalized review result surface | medium | medium | yes | proposal |
 | MCP auth | supported | Codex MCP auth/preflight behavior | Locus blocks needs-auth cases before provider work; keep reason-specific diagnostics | high | high | yes | audit |
 | MCP configuration | degraded | `codex mcp list --json`, `get --json`, `add`, `remove`, `login`, `logout`, stdio env, HTTP URL, bearer token env var, OAuth client/resource/scopes | Locus reads/listens and supports global add/remove plus login/logout, but lacks `get`, advanced auth/env fields, and safe project-scoped add/remove | high | high | yes | proposal |
@@ -143,9 +148,10 @@ changes the priority.
      supported, degraded, unsupported, and native-pass-through.
 2. `add-headless-agent-jobs`
    - Add shared runner, jobs, CLI entrypoint, event persistence, cancellation,
-     and capability gating for Claude and Codex. Codex support should use
-     `codex exec --json` and `--output-schema` only after the event contract is
-     normalized and tested.
+     and capability gating for Claude and Codex. The first implemented Codex
+     slice uses `codex exec` through the shared job platform. Native
+     `codex exec --json`, `--output-schema`, and output-last-message parity
+     remain follow-up audit work.
 3. `update-codex-bundled-version-management`
    - Decide whether Locus should track stable Codex releases or alpha Codex
      releases for bundled binaries. If alpha is accepted, update package/CI

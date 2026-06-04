@@ -2,10 +2,14 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage } from "electron
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
+import { format as formatLog } from "util"
 import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
 import { isLocalOnlyMode, openExternalUrl } from "./lib/local-only"
 import { startAutomaticAppUpdateChecks } from "./lib/app-updater"
 import { closeDatabase, initDatabase } from "./lib/db"
+import { isHeadlessCliInvocation } from "./lib/headless/cli-args"
+import { runHeadlessCliCommand } from "./lib/headless/cli-dispatcher"
+import { recoverStaleAgentJobs } from "./lib/headless/job-recovery"
 import {
   getLaunchDirectory,
   isCliInstalled,
@@ -39,6 +43,19 @@ const APP_DISPLAY_NAME = IS_DEV ? `${APP_NAME} Dev` : APP_NAME
 const LEGACY_APP_NAME = "Agent Code for Me"
 const APP_COPYRIGHT = "Copyright © 2026 Locus"
 const APP_HOMEPAGE_URL = "https://github.com/lupanpan1030/agent-code-for-me"
+const isHeadlessCliLaunch = isHeadlessCliInvocation(process.argv)
+
+function redirectHeadlessStdoutLogs(): void {
+  if (!isHeadlessCliLaunch) return
+  const writeStderr = (...args: unknown[]) => {
+    process.stderr.write(`${formatLog(...args)}\n`)
+  }
+  console.log = writeStderr as typeof console.log
+  console.info = writeStderr as typeof console.info
+  console.debug = writeStderr as typeof console.debug
+}
+
+redirectHeadlessStdoutLogs()
 
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app.
@@ -396,7 +413,50 @@ function cleanupStaleLocks(): boolean {
   return false
 }
 
+async function runHeadlessMain(): Promise<void> {
+  let exitCode = 1
+  try {
+    const db = initDatabase()
+    exitCode = await runHeadlessCliCommand({
+      argv: process.argv,
+      db,
+      appVersion: app.getVersion(),
+      env: process.env,
+      stdin: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
+      daemonLockPath: join(userDataPath, "agent-daemon.lock"),
+    })
+  } catch (error) {
+    console.error("[Headless] Failed:", error)
+    exitCode = 1
+  } finally {
+    try {
+      await closeDatabase()
+    } catch (error) {
+      console.error("[Headless] Failed to close database:", error)
+    }
+    app.exit(exitCode)
+  }
+}
+
 // Prevent multiple instances
+if (isHeadlessCliLaunch) {
+  app.whenReady().then(runHeadlessMain).catch((error) => {
+    console.error("[Headless] Startup failed:", error)
+    app.exit(1)
+  })
+
+  process.on("uncaughtException", (error) => {
+    console.error("[Headless] Uncaught exception:", error)
+    app.exit(1)
+  })
+
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("[Headless] Unhandled rejection at:", promise, "reason:", reason)
+    app.exit(1)
+  })
+} else {
 let gotTheLock = app.requestSingleInstanceLock()
 
 if (!gotTheLock) {
@@ -779,7 +839,13 @@ if (gotTheLock) {
 
     // Initialize database
     try {
-      initDatabase()
+      const db = initDatabase()
+      const interruptedJobs = recoverStaleAgentJobs(db)
+      if (interruptedJobs.length > 0) {
+        console.warn(
+          `[Headless] Marked ${interruptedJobs.length} stale agent job(s) as interrupted.`,
+        )
+      }
       console.log("[App] Database initialized")
     } catch (error) {
       console.error("[App] Failed to initialize database:", error)
@@ -853,4 +919,5 @@ if (gotTheLock) {
   process.on("unhandledRejection", (reason, promise) => {
     console.error("[App] Unhandled rejection at:", promise, "reason:", reason)
   })
+}
 }

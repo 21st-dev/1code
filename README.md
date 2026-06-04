@@ -6,55 +6,53 @@ Local-first AI workbench and agent runtime hub.
 
 Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a
 local-first desktop workflow. Coding remains the first strong use case, but the
-core product direction is broader: Locus is becoming a local AI workbench and
-runtime hub for Claude Code / Codex powered work.
+core product direction is broader: Locus is becoming a local AI workbench that
+can run, track, cancel, schedule, and observe Claude Code / Codex powered work
+through a durable local job platform.
 
 Locus keeps the desktop UI, local project selection, worktrees, terminal, git
 tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local
 provider-profile storage for supported provider flows while removing upstream
 hosted product surfaces from the default build.
 
-![Locus target local agent platform](docs/assets/locus-agent-platform.svg)
+![Locus local agent platform](docs/assets/locus-agent-platform.svg)
 
 ## Current Scope
 
 - Local projects and local SQLite state
 - Claude Code subscription, API key, and custom provider flows
 - Codex subscription, API key, and local Codex integration
-- Agent Workbench for local desktop task visibility
+- Durable local agent jobs with event logs, cancellation, retry, heartbeat, and stale-worker recovery
+- Headless CLI commands for local runs and job inspection
+- Local daemon queue for background jobs
+- Local opt-in schedules that create visible jobs through the daemon
+- Agent Workbench visibility for chat, CLI, daemon, schedule, and protocol-created jobs
+- Minimal `locus acp` stdio surface for job-backed protocol runs
 - Local chat, tools, terminal, git diff, staging, commit generation, and worktrees
 - Ollama-first helper generation with Settings-configured provider fallback
 - Local-only guard enabled by default as defense-in-depth
 - Upstream hosted auth, subscription checks, remote sandbox, automations, inbox, analytics, error tracking, and updater UI removed or isolated from the default local-first build
 
-## Platform Direction
-
-The headless job platform is being developed as a separate branch before it is
-merged into `main`. That branch adds durable local jobs, job events,
-`locus run`, `locus jobs`, a local daemon, local schedules, desktop job
-visibility, and a minimal `locus acp` stdio surface. Keep these as platform
-direction on `main` until the headless implementation is reviewed and merged.
-
-See [docs/locus-local-agent-platform.md](docs/locus-local-agent-platform.md)
-for the platform direction, integration boundaries, and roadmap.
-
 ## Status and Boundaries
 
-Current `main` maturity:
+Current local maturity:
 
 | Area | Status |
 | --- | --- |
 | Desktop local workbench | Implemented |
 | Claude Code and Codex desktop runs | Implemented with runtime-specific limits |
-| Local job store and job events | Developed on headless branch; pending main merge |
-| `locus run` and `locus jobs` | Developed on headless branch; pending main merge |
-| Local daemon queue | Developed on headless branch; pending main merge |
-| Local schedules | Developed on headless branch; pending main merge |
-| Minimal `locus acp` stdio job surface | Experimental on headless branch |
+| Local job store and job events | Implemented |
+| `locus run` and `locus jobs` | Implemented and smoked locally on macOS |
+| Local daemon queue | Implemented and smoked locally on macOS |
+| Local schedules | Implemented and smoked locally on macOS |
+| Minimal `locus acp` stdio job surface | Experimental |
 | Windows packaged real-machine smoke | Pending |
 | Full ACP parity | Not implemented |
 | Hosted/cloud agents or hosted scheduler | Not implemented |
 | Full Codex parity with Claude Code | Not implemented |
+
+See [docs/locus-local-agent-platform.md](docs/locus-local-agent-platform.md)
+for the platform direction, integration boundaries, and roadmap.
 
 ## Local-Only Mode
 

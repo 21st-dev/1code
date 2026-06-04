@@ -5,7 +5,7 @@ Languages: English | [Simplified Chinese](locus-local-agent-platform.zh-CN.md)
 Locus is moving from a coding-only desktop app toward a local-first AI
 workbench and agent runtime hub.
 
-![Locus target local agent platform](assets/locus-agent-platform.svg)
+![Locus local agent platform](assets/locus-agent-platform.svg)
 
 ## Positioning
 
@@ -23,26 +23,24 @@ Coding is still the first strong workflow, but it is not the only long-term
 workflow. Other local-first tools can use Locus as the place where AI work is
 run, tracked, observed, and controlled.
 
-## Main Status
+## Current Usable Surfaces
 
-This document describes the product direction for `main`. The durable job
-platform work exists on a headless branch and should not be described as merged
-or released until that branch is reviewed and merged into `main`.
+These surfaces exist today and are the safest integration points for nearby
+projects:
 
-| Surface | Use it for | Main status |
+| Surface | Use it for | Status |
 | --- | --- | --- |
-| Desktop Workbench | Inspect local desktop tasks from the UI | Implemented |
-| `locus run` | One-shot local tasks | Headless branch; pending main merge |
-| `locus jobs` | List, show, logs, cancel, retry | Headless branch; pending main merge |
-| `locus run --daemon` | Submit queued background work | Headless branch; pending main merge |
-| `locus daemon run` | Claim daemon and schedule jobs | Headless branch; pending main merge |
-| `locus schedules` | Create, pause, resume, delete, and run local schedules | Headless branch; pending main merge |
-| `locus acp` | Minimal stdio protocol for job-backed runs | Experimental on headless branch |
+| Desktop Workbench | Inspect and control local jobs from the UI | Implemented |
+| `locus run` | One-shot local tasks | Implemented; macOS smoked |
+| `locus jobs` | List, show, logs, cancel, retry | Implemented; macOS smoked |
+| `locus run --daemon` | Submit queued background work | Implemented; macOS smoked |
+| `locus daemon run` | Claim daemon and schedule jobs | Implemented; macOS smoked |
+| `locus schedules` | Create, pause, resume, delete, and run local schedules | Implemented; macOS smoked |
+| `locus acp` | Minimal stdio protocol for job-backed runs | Experimental |
 
-The headless branch has local macOS smoke evidence and source-level Windows shim
-tests, but packaged Windows real-machine smoke is still pending. Do not describe
-the job platform as cross-platform accepted until that evidence exists and the
-implementation is merged.
+Windows source and shim behavior are covered by tests, but packaged Windows
+real-machine smoke is still pending. Do not describe this platform as
+cross-platform accepted until that evidence exists.
 
 ## Safety and Privacy Boundaries
 
@@ -153,12 +151,13 @@ Do not claim these as implemented:
 
 ## Protocol Strategy
 
-The headless branch's `locus acp` surface is intentionally small. It is a
-minimal stdio job adapter, not a full ACP server. It should only become a `main`
-claim after the headless branch is reviewed and merged.
+The current `locus acp` surface is intentionally small. It proves that external
+stdio requests can create local jobs, stream job events, cancel jobs, and shut
+down without corrupting structured stdout.
 
-Full ACP parity should be a separate project with explicit protocol, session,
-permission, MCP, reconnect, and compatibility tests.
+It is not a full ACP server yet. Full ACP parity should be a separate project
+with explicit protocol, session, permission, MCP, reconnect, and compatibility
+tests.
 
 The recommended next platform boundary is a Locus-owned Local Job API v1. ACP
 can then be one adapter over that stable local API rather than the only platform
@@ -184,18 +183,16 @@ Minimum useful operations:
 
 Recommended order:
 
-1. Review the headless branch before merging the local job platform into `main`.
-2. Finish Windows packaged real-machine smoke for `run`, `jobs`, daemon,
+1. Finish Windows packaged real-machine smoke for `run`, `jobs`, daemon,
    schedules, ACP, exit codes, stdout/stderr, and Workbench visibility.
-3. Harden documentation and release wording so local macOS completion is not
+2. Harden documentation and release wording so local macOS completion is not
    confused with cross-platform release readiness.
-4. Define Local Job API v1 as an OpenSpec proposal.
-5. Let downstream projects integrate through the job boundary after the job
-   platform is merged.
-6. Add stronger capability and permission gates for non-coding domains.
-7. Add full ACP parity only when a real external client needs standard ACP
+3. Define Local Job API v1 as an OpenSpec proposal.
+4. Let downstream projects integrate through the job boundary.
+5. Add stronger capability and permission gates for non-coding domains.
+6. Add full ACP parity only when a real external client needs standard ACP
    session/protocol behavior.
-8. Add hosted or OS-level scheduling only after the local daemon and job
+7. Add hosted or OS-level scheduling only after the local daemon and job
    recovery model are stable on both macOS and Windows.
 
 ## Documentation Rule
@@ -206,9 +203,10 @@ Use:
 
 ```text
 local-first AI workbench
-local job platform direction
+local job platform
 runtime hub for Claude Code and Codex powered work
-headless branch has macOS local smoke; Windows real-machine smoke pending
+minimal ACP stdio job surface
+macOS local smoke complete; Windows real-machine smoke pending
 ```
 
 Avoid:
@@ -222,7 +220,6 @@ offline-only
 fully private
 all API keys encrypted
 complete filesystem isolation
-main already has headless jobs before the headless branch is merged
 Claude and Codex parity
 cloud agent platform
 ```

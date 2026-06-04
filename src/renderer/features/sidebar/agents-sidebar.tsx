@@ -1067,6 +1067,103 @@ const WorkbenchButton = memo(function WorkbenchButton() {
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const { t } = useI18n()
+  const cliJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "cli", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = (
+          (query.state.data as { jobs?: { status?: string }[] } | undefined)
+            ?.jobs ?? []
+        )
+        return jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        )
+          ? 5000
+          : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const desktopJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "desktop", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = (
+          (query.state.data as { jobs?: { status?: string }[] } | undefined)
+            ?.jobs ?? []
+        )
+        return jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        )
+          ? 5000
+          : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const daemonJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "daemon", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = (
+          (query.state.data as { jobs?: { status?: string }[] } | undefined)
+            ?.jobs ?? []
+        )
+        return jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        )
+          ? 5000
+          : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const scheduleJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "schedule", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = (
+          (query.state.data as { jobs?: { status?: string }[] } | undefined)
+            ?.jobs ?? []
+        )
+        return jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        )
+          ? 5000
+          : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const protocolJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "protocol", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = (
+          (query.state.data as { jobs?: { status?: string }[] } | undefined)
+            ?.jobs ?? []
+        )
+        return jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        )
+          ? 5000
+          : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
+  const activeJobCount = [
+    ...(cliJobsQuery.data?.jobs ?? []),
+    ...(desktopJobsQuery.data?.jobs ?? []),
+    ...(daemonJobsQuery.data?.jobs ?? []),
+    ...(scheduleJobsQuery.data?.jobs ?? []),
+    ...(protocolJobsQuery.data?.jobs ?? []),
+  ].filter((job) => job.status === "queued" || job.status === "running").length
+  const activeJobBadge = activeJobCount > 99 ? "99+" : String(activeJobCount)
+  const label =
+    activeJobCount > 0
+      ? t("sidebar.workbenchWithJobs", { count: activeJobCount })
+      : t("sidebar.workbench")
 
   const handleClick = useCallback(() => {
     setSelectedChatId(null)
@@ -1081,13 +1178,18 @@ const WorkbenchButton = memo(function WorkbenchButton() {
         <button
           type="button"
           onClick={handleClick}
-          aria-label={t("sidebar.workbench")}
-          className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+          aria-label={label}
+          className="relative flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
         >
           <LayoutDashboard className="h-4 w-4" />
+          {activeJobCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-medium leading-none text-background">
+              {activeJobBadge}
+            </span>
+          )}
         </button>
       </TooltipTrigger>
-      <TooltipContent>{t("sidebar.workbench")}</TooltipContent>
+      <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   )
 })

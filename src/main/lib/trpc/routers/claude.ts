@@ -82,6 +82,13 @@ import {
   getApprovedPluginMcpServers,
   getEnabledPlugins,
 } from "./claude-settings"
+import {
+  completeDesktopAgentJobSafely,
+  createAndStartDesktopAgentJob,
+  registerActiveDesktopAgentJob,
+  requestCancelDesktopAgentJob,
+  unregisterActiveDesktopAgentJob,
+} from "../../desktop-agent-jobs"
 
 function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "safe-mode") return "blocked-safe-mode"
@@ -237,9 +244,12 @@ const getClaudeQuery = async () => {
   return cachedClaudeQuery
 }
 
-// Active sessions for cancellation (onAbort handles stash + abort + restore)
-// Active sessions for cancellation
-const activeSessions = new Map<string, AbortController>()
+// Active sessions for cancellation. The runId guard prevents stale cleanup from
+// a superseded stream from clearing a newer stream in the same sub-chat.
+const activeSessions = new Map<
+  string,
+  { controller: AbortController; runId: string }
+>()
 
 /** Check if there are any active Claude streaming sessions */
 export function hasActiveClaudeSessions(): boolean {
@@ -248,9 +258,9 @@ export function hasActiveClaudeSessions(): boolean {
 
 /** Abort all active Claude sessions so their cleanup saves partial state */
 export function abortAllClaudeSessions(): void {
-  for (const [subChatId, controller] of activeSessions) {
+  for (const [subChatId, session] of activeSessions) {
     console.log(`[claude] Aborting session ${subChatId} before reload`)
-    controller.abort()
+    session.controller.abort()
   }
   activeSessions.clear()
 }
@@ -947,14 +957,18 @@ export const claudeRouter = router({
       return observable<UIMessageChunk>((emit) => {
         // Abort any existing session for this subChatId before starting a new one
         // This prevents race conditions if two messages are sent in quick succession
-        const existingController = activeSessions.get(input.subChatId)
-        if (existingController) {
-          existingController.abort()
+        const existingSession = activeSessions.get(input.subChatId)
+        if (existingSession) {
+          existingSession.controller.abort()
         }
 
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
-        activeSessions.set(input.subChatId, abortController)
+        const activeRunId = input.runId ?? streamId
+        activeSessions.set(input.subChatId, {
+          controller: abortController,
+          runId: activeRunId,
+        })
 
         // Stream debug logging
         const subId = input.subChatId.slice(-8) // Short ID for logs
@@ -963,6 +977,10 @@ export const claudeRouter = router({
         let lastChunkType = ""
         // Shared sessionId for cleanup to save on abort
         let currentSessionId: string | null = null
+        let desktopJobId: string | null = null
+        let desktopJobSawError = false
+        let desktopJobReachedNaturalFinish = false
+        let desktopJobDb: ReturnType<typeof getDatabase> | null = null
         console.log(
           `[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`,
         )
@@ -972,6 +990,15 @@ export const claudeRouter = router({
 
         // Helper to safely emit (no-op if already unsubscribed)
         const safeEmit = (chunk: UIMessageChunk) => {
+          const observedChunk = chunk as any
+          if (
+            observedChunk?.type === "error" ||
+            observedChunk?.type === "auth-error" ||
+            observedChunk?.type === "capability-error" ||
+            (observedChunk?.type === "runtime-status" && observedChunk?.ok === false)
+          ) {
+            desktopJobSawError = true
+          }
           if (!isObservableActive) return false
           try {
             emit.next(chunk)
@@ -1050,6 +1077,29 @@ export const claudeRouter = router({
             }
 
             const db = getDatabase()
+            desktopJobDb = db
+            const desktopJob = createAndStartDesktopAgentJob(db, {
+              runtime: "claude-code",
+              mode: input.mode,
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              cwd: input.cwd,
+              prompt: input.prompt,
+              runId: activeRunId,
+            })
+            desktopJobId = desktopJob.job.id
+            registerActiveDesktopAgentJob({
+              jobId: desktopJobId,
+              runtime: "claude-code",
+              subChatId: input.subChatId,
+              runId: activeRunId,
+              db,
+              workerId: desktopJob.workerId,
+              cancel: () => {
+                abortController.abort()
+                clearPendingApprovals("Session cancelled.", input.subChatId)
+              },
+            })
 
             // 1. Get existing messages from DB
             const existing = db
@@ -3054,6 +3104,8 @@ ${prompt}
             console.log(
               `[SD] M:END sub=${subId} reason=ok n=${chunkCount} last=${lastChunkType} t=${duration}s`,
             )
+            desktopJobReachedNaturalFinish =
+              !abortController.signal.aborted && !desktopJobSawError
             if (pendingFinishChunk) {
               safeEmit(pendingFinishChunk)
             } else {
@@ -3070,7 +3122,42 @@ ${prompt}
             safeEmit({ type: "finish" } as UIMessageChunk)
             safeComplete()
           } finally {
-            activeSessions.delete(input.subChatId)
+            if (desktopJobId) {
+              const jobDb = desktopJobDb ?? getDatabase()
+              const wasCanceled =
+                abortController.signal.aborted && !desktopJobReachedNaturalFinish
+              const status = wasCanceled
+                ? "canceled"
+                : desktopJobSawError
+                  ? "failed"
+                  : "succeeded"
+              completeDesktopAgentJobSafely(jobDb, {
+                jobId: desktopJobId,
+                status,
+                exitCode: status === "succeeded" ? 0 : status === "canceled" ? 5 : 1,
+                errorCode:
+                  status === "failed"
+                    ? "desktop_chat_failed"
+                    : status === "canceled"
+                      ? "desktop_chat_canceled"
+                      : null,
+                errorMessage:
+                  status === "failed"
+                    ? "Desktop Claude chat stream failed."
+                    : status === "canceled"
+                      ? "Desktop Claude chat stream was canceled."
+                      : null,
+                result: {
+                  runtime: "claude-code",
+                  subChatId: input.subChatId,
+                  chatId: input.chatId,
+                },
+              })
+              unregisterActiveDesktopAgentJob(desktopJobId)
+            }
+            if (activeSessions.get(input.subChatId)?.controller === abortController) {
+              activeSessions.delete(input.subChatId)
+            }
             if (guardedContract) {
               activeGuardedContracts.delete(guardedContract.id)
             }
@@ -3084,21 +3171,36 @@ ${prompt}
           )
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()
-          activeSessions.delete(input.subChatId)
+          const ownsActiveSession =
+            activeSessions.get(input.subChatId)?.controller === abortController
+          if (ownsActiveSession) {
+            activeSessions.delete(input.subChatId)
+          }
           if (guardedContract) {
             activeGuardedContracts.delete(guardedContract.id)
           }
-          clearPendingApprovals("Session ended.", input.subChatId)
+          if (ownsActiveSession) {
+            clearPendingApprovals("Session ended.", input.subChatId)
+          }
 
           // Clear streamId since we're no longer streaming.
           // sessionId is NOT saved here — the save block in the async function
           // handles it (saves on normal completion, clears on abort). This avoids
           // a redundant DB write that the cancel mutation would then overwrite.
           const db = getDatabase()
-          db.update(subChats)
-            .set({ streamId: null })
-            .where(eq(subChats.id, input.subChatId))
-            .run()
+          if (desktopJobId && !desktopJobSawError && !desktopJobReachedNaturalFinish) {
+            try {
+              requestCancelDesktopAgentJob(db, desktopJobId, "desktop-chat")
+            } catch {
+              // Job may already be terminal if cleanup raced with stream finish.
+            }
+          }
+          if (ownsActiveSession) {
+            db.update(subChats)
+              .set({ streamId: null })
+              .where(eq(subChats.id, input.subChatId))
+              .run()
+          }
         }
       })
     }),
@@ -3208,16 +3310,19 @@ ${prompt}
    * Cancel active session
    */
   cancel: publicProcedure
-    .input(z.object({ subChatId: z.string() }))
+    .input(z.object({ subChatId: z.string(), runId: z.string().optional() }))
     .mutation(({ input }) => {
-      const controller = activeSessions.get(input.subChatId)
-      if (controller) {
-        controller.abort()
+      const session = activeSessions.get(input.subChatId)
+      if (session && input.runId && session.runId !== input.runId) {
+        return { cancelled: false, ignoredStale: true }
+      }
+      if (session) {
+        session.controller.abort()
         activeSessions.delete(input.subChatId)
         clearPendingApprovals("Session cancelled.", input.subChatId)
       }
 
-      return { cancelled: !!controller }
+      return { cancelled: !!session, ignoredStale: false }
     }),
 
   /**
