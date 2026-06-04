@@ -6,6 +6,8 @@ workbench and agent runtime hub.
 Locus 正在从单一 coding 桌面应用，演进为本地优先的 AI 工作台和 agent runtime
 底座。
 
+![Locus local agent platform](assets/locus-agent-platform.svg)
+
 ## Positioning
 
 Locus should own the local runtime layer:
@@ -69,12 +71,45 @@ cross-platform accepted until that evidence exists.
 Windows 源码和 shim 行为有测试覆盖，但 Windows packaged 实机 smoke 仍未完成。在
 这项证据完成前，不要把该平台描述成已经完成双平台验收。
 
+## Safety and Privacy Boundaries
+
+Local-first means Locus stores jobs, event logs, settings, and project state
+locally by default. It does not mean offline-only. Prompts, selected file
+content, diffs, audio, tool context, or metadata may still be sent to the
+user-selected runtime, provider, MCP server, or GitHub workflow.
+
+本地优先表示 Locus 默认把 jobs、event logs、settings 和 project state 存在本地。它不
+等于 offline-only。prompt、选中的文件内容、diff、音频、tool context 或 metadata 仍
+可能发送到用户选择的 runtime、provider、MCP server 或 GitHub workflow。
+
+Locus is not an OS sandbox. Terminal, git, filesystem, MCP, runtime tools, and
+future computer-control flows can affect the local machine when authorized or
+invoked. Describe supported safeguards as project/worktree-aware controls, not
+as complete filesystem isolation.
+
+Locus 不是 OS sandbox。terminal、git、filesystem、MCP、runtime tools，以及未来的
+computer-control flows，在用户授权或调用后都可能影响本机。文档里应该把已支持的防护
+描述成 project/worktree-aware controls，而不是完整文件系统隔离。
+
+Provider credentials should be resolved in the main process and renderer APIs
+should receive only IDs, status, and redacted metadata. Job payloads, event
+logs, ACP requests, and downstream integration payloads must not carry provider
+secrets. Current exception: voice OpenAI key storage still needs hardening before
+Locus can claim all API keys are encrypted in main-process secure storage.
+
+provider credentials 应该在 main process 解析，renderer API 只应该拿到 ID、状态和脱敏
+metadata。job payload、event logs、ACP requests 和下游集成 payload 都不应该携带
+provider secrets。当前例外：voice OpenAI key storage 仍需要硬化；在完成前，不能宣称
+所有 API key 都已进入 main-process secure storage。
+
 ## Recommended Integration Model
 
 Downstream projects should call Locus at the job boundary instead of embedding
 Claude Code or Codex CLIs directly.
 
 下游项目应该在 job 边界调用 Locus，而不是各自内嵌 Claude Code 或 Codex CLI。
+
+![Downstream projects use the Locus job boundary](assets/locus-downstream-integrations.svg)
 
 Recommended shape:
 
@@ -205,6 +240,10 @@ Do not claim these as implemented:
 - automatic computer control without explicit permission gates
 - a security sandbox for arbitrary plugin or runtime code
 - cross-platform packaged acceptance before Windows real-machine smoke
+- offline-only or fully private execution
+- complete filesystem isolation
+- all API keys encrypted in main-process secure storage while the voice-key
+  hardening gap remains
 
 不要宣称这些已经实现：
 
@@ -216,6 +255,9 @@ Do not claim these as implemented:
 - 无显式授权门禁的自动电脑控制
 - 任意 plugin/runtime code 的安全沙箱
 - Windows 实机 smoke 前的双平台 packaged 验收完成
+- offline-only 或完全隐私执行
+- 完整文件系统隔离
+- voice-key hardening gap 完成前的“所有 API key 都已加密并进入 main-process secure storage”
 
 ## Protocol Strategy
 
@@ -321,6 +363,10 @@ complete ACP server
 universal automation platform
 fully cross-platform accepted
 secure sandbox for arbitrary extensions
+offline-only
+fully private
+all API keys encrypted
+complete filesystem isolation
 Claude and Codex parity
 cloud agent platform
 ```

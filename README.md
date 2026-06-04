@@ -17,8 +17,10 @@ Codex 驱动的任务。
 
 Locus keeps the desktop UI, local project selection, worktrees, terminal, git
 tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local
-provider storage while removing upstream hosted product surfaces from the
-default build.
+provider-profile storage for supported provider flows while removing upstream
+hosted product surfaces from the default build.
+
+![Locus local agent platform](docs/assets/locus-agent-platform.svg)
 
 ## Current Scope
 
@@ -90,6 +92,25 @@ MAIN_VITE_LOCAL_ONLY=false bun run dev
 
 User-configured AI provider endpoints, Ollama, local projects, Git, GitHub operations initiated by local workflows, and external links that are not upstream hosted services remain available.
 
+Local-first does not mean offline-only or "no data leaves your machine." When
+you run Claude Code, Codex, a configured provider, voice transcription, MCP
+tools, or GitHub workflows, prompts, selected file content, diffs, audio, tool
+context, or metadata may be sent to the user-selected service or runtime.
+
+Locus is not an OS sandbox. Terminal, git, filesystem, MCP, runtime tools, and
+future computer-control flows can affect the local machine when authorized or
+invoked. Project/worktree-aware checks exist for supported flows, but they
+should not be described as complete filesystem isolation.
+
+Local-first 不是 offline-only，也不代表“数据绝不会离开本机”。当你使用 Claude
+Code、Codex、配置的 provider、语音转写、MCP tools 或 GitHub workflows 时，
+prompt、选中的文件内容、diff、音频、tool context 或 metadata 可能会发送到用户选择
+的服务或 runtime。
+
+Locus 不是 OS sandbox。terminal、git、filesystem、MCP、runtime tools，以及未来的
+computer-control flows，在用户授权或调用后都可能影响本机。部分流程有 project /
+worktree-aware 检查，但不能把它描述成完整文件系统隔离。
+
 ## Development
 
 ```bash
@@ -132,7 +153,7 @@ Current repo config does not define a macOS notarization step. Local/internal ma
 
 ## Notes
 
-- Voice transcription uses a user-provided OpenAI API key only; the upstream hosted subscription fallback has been removed from the default build.
+- Voice transcription uses a user-provided OpenAI API key only; the upstream hosted subscription fallback has been removed from the default build. Voice key storage is still a known hardening gap and should not be included in broad "all API keys are encrypted" claims until migrated to main-process secure storage.
 - New worktree setup config is saved to `.locus/worktree.json`. Legacy `.1code/worktree.json` remains readable so existing projects keep working.
 - Some compatibility names and paths such as the legacy `1code` CLI, `~/Library/Application Support/Agent Code for Me`, and `~/.21st/worktrees` may still exist to avoid breaking existing local project data.
 - Some upstream compatibility names remain to avoid breaking existing local project data, but hosted product surfaces should not be reintroduced without an OpenSpec proposal.

@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="660" viewBox="0 0 1120 660" role="img" aria-labelledby="title desc">
+  <title id="title">Downstream projects integrating through Locus jobs</title>
+  <desc id="desc">A diagram showing job-search, calendar planning, and computer operation projects using Locus through the job boundary instead of embedding Claude Code or Codex directly.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbfa; }
+      .app { fill: #ffffff; stroke: #d8d8d2; stroke-width: 2; rx: 14; }
+      .locus { fill: #f7efe2; stroke: #c98d45; stroke-width: 2; rx: 14; }
+      .own { fill: #eef5f1; stroke: #5b9178; stroke-width: 2; rx: 14; }
+      .risk { fill: #fff4ed; stroke: #d47b4b; stroke-width: 2; rx: 14; }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .heading { fill: #1e1f22; font-size: 30px; font-weight: 750; }
+      .label { fill: #1e1f22; font-size: 23px; font-weight: 700; }
+      .small { fill: #5f6368; font-size: 16px; font-weight: 450; }
+      .tiny { fill: #6f7277; font-size: 14px; font-weight: 450; }
+      .arrow { stroke: #3d3f44; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#3d3f44"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1120" height="660"/>
+
+  <text class="heading" x="64" y="64">Downstream projects should integrate at the job boundary</text>
+  <text class="small" x="64" y="94">下游项目在 job 边界接入，而不是重复内嵌 Claude Code / Codex CLI</text>
+
+  <rect class="app" x="64" y="138" width="280" height="106" rx="14"/>
+  <text class="label" x="96" y="178">Job Search</text>
+  <text class="small" x="96" y="206">求职材料 / JD / 草稿</text>
+
+  <rect class="app" x="64" y="278" width="280" height="106" rx="14"/>
+  <text class="label" x="96" y="318">Calendar Planning</text>
+  <text class="small" x="96" y="346">日程复盘 / 计划建议</text>
+
+  <rect class="app" x="64" y="418" width="280" height="106" rx="14"/>
+  <text class="label" x="96" y="458">Computer Ops</text>
+  <text class="small" x="96" y="486">电脑操作 / 权限门禁</text>
+
+  <path class="arrow" d="M344 191 H454"/>
+  <path class="arrow" d="M344 331 H454"/>
+  <path class="arrow" d="M344 471 H454"/>
+
+  <rect class="locus" x="454" y="168" width="274" height="326" rx="14"/>
+  <text class="label" x="498" y="222">Locus Job Boundary</text>
+  <text class="small" x="500" y="254">create job</text>
+  <text class="small" x="500" y="282">stream events</text>
+  <text class="small" x="500" y="310">cancel / retry</text>
+  <text class="small" x="500" y="338">capability gate</text>
+  <text class="small" x="500" y="366">local audit log</text>
+  <text class="small" x="500" y="411">创建 job / 事件 / 取消</text>
+  <text class="small" x="500" y="439">能力门禁 / 本地审计</text>
+
+  <path class="arrow" d="M728 259 H814"/>
+  <path class="arrow" d="M728 401 H814"/>
+
+  <rect class="own" x="814" y="190" width="244" height="138" rx="14"/>
+  <text class="label" x="853" y="232">AI Execution</text>
+  <text class="small" x="856" y="263">Claude Code / Codex</text>
+  <text class="tiny" x="856" y="292">runtime-specific capabilities</text>
+
+  <rect class="risk" x="814" y="366" width="244" height="138" rx="14"/>
+  <text class="label" x="848" y="408">User Control</text>
+  <text class="small" x="856" y="439">explicit approval gates</text>
+  <text class="tiny" x="856" y="468">files, shell, screen, credentials</text>
+
+  <text class="tiny" x="64" y="596">Rule: downstream apps keep domain data and final UX; Locus owns local execution, logs, cancellation, and runtime capability truth.</text>
+  <text class="tiny" x="64" y="622">原则：下游应用保留业务数据和最终体验；Locus 负责本地执行、日志、取消和 runtime 能力真实状态。</text>
+</svg>

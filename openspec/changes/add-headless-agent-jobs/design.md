@@ -9,8 +9,9 @@ This change is implemented in explicit phases:
 - Phase 2: `locus jobs` inspection/cancel/retry commands and desktop visibility for persisted jobs.
 - Phase 5: ordinary desktop chat runs become linked `source=desktop` jobs without replacing the chat engine.
 - Phase 6: a local daemon queue reuses the same durable jobs and shared runtime core for bounded background execution.
+- Phase 7: opt-in local schedules and a minimal `locus acp` stdio job surface reuse the same durable jobs and shared runtime core.
 
-Schedules and `locus acp` remain future follow-up proposals. This OpenSpec may describe their compatibility boundaries, but they are not required to complete or archive this change.
+Full ACP parity, hosted schedulers, and OS-level scheduling remain future follow-up proposals. The minimal local schedule and `locus acp` surfaces are compatibility slices over the local job platform, not a separate platform.
 
 The first implementation must support both macOS and Windows. If a platform
 cannot pass the same `locus run` / `locus jobs` smoke contract, the change is
@@ -37,7 +38,7 @@ The reference projects influence separate layers:
 - Claude Code: use the `-p` headless contract as CLI UX guidance: stdin support, structured output, explicit tool/permission settings, continuation, and clear exit codes.
 - Goose: use the shared session/job management idea across desktop, CLI, and schedules. Locus should make CLI-created jobs visible in the desktop app and desktop-created jobs inspectable from CLI.
 - OpenHands: use runtime abstraction as the long-term execution boundary. Locus should start with local process/worktree execution and leave room for a future container runtime without building Docker into the MVP.
-- ACP: shape internal events so they can map to `session/new`, `session/prompt`, `session/update`, and `session/cancel` later. Do not implement `locus acp` until local jobs are stable.
+- ACP: shape internal events so they can map to `session/new`, `session/prompt`, `session/update`, and `session/cancel` later. Implement only the minimal `locus acp` stdio job surface after local jobs are stable; full ACP parity remains a separate project.
 
 Reference links:
 - OpenAI Codex Rust CLI README: https://github.com/openai/codex/blob/main/codex-rs/README.md
@@ -55,7 +56,7 @@ Reference links:
   - Make CLI and desktop job surfaces reflect the same local truth.
   - Preserve local-only and credential boundaries.
   - Add a local daemon queue after one-shot and desktop job layers are proven.
-  - Keep future schedule and ACP compatibility possible without forcing them into the Phase 6 daemon slice.
+  - Add local schedules and the minimal ACP stdio job surface only on top of the same durable job platform.
 - Non-goals:
   - Hosted queue or cloud background agents.
   - Multi-device sync, remote mobile control, or remote browser control.
@@ -494,8 +495,9 @@ For this implementation pass, "complete the first four steps" means:
 - Claude and Codex basic headless runs use the shared job platform.
 - Desktop job visibility/actions are implemented for CLI/headless jobs.
 
-It does not mean daemon, schedule, ACP server, or ordinary desktop chat
-migration are complete.
+That early gate does not mean daemon, schedule, minimal ACP, or ordinary desktop
+chat migration are complete. Later Phase 5, Phase 6, and Phase 7 gates cover
+those slices separately.
 
 For the later Phase 5 desktop-chat implementation pass, "complete desktop chat
 migration" means:
