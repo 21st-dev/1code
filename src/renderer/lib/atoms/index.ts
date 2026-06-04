@@ -10,7 +10,6 @@ export {
   LEGACY_OPENAI_API_KEY_STORAGE_KEY,
   OPENAI_TRANSCRIPTION_BASE_URL,
   OPENAI_TRANSCRIPTION_MODEL,
-  normalizeLegacyOpenAIApiKey,
 } from "../../../shared/voice-transcription-api-key"
 
 // ============================================

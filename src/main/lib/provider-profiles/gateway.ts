@@ -592,6 +592,7 @@ async function streamChatAsAnthropic(params: {
   body: any
   res: ServerResponse
 }) {
+  const redactionValues = getProviderRedactionValues(params.profile)
   const response = await fetch(params.url, {
     method: "POST",
     headers: upstreamHeaders(params.profile),
@@ -599,7 +600,9 @@ async function streamChatAsAnthropic(params: {
   })
   if (!response.ok || !response.body) {
     const text = await response.text().catch(() => response.statusText)
-    sendJson(params.res, response.status, { error: sanitizeError(text) })
+    sendJson(params.res, response.status, {
+      error: sanitizeError(text, redactionValues),
+    })
     return
   }
 
@@ -791,6 +794,7 @@ async function streamChatAsResponses(params: {
   body: any
   res: ServerResponse
 }) {
+  const redactionValues = getProviderRedactionValues(params.profile)
   const response = await fetch(params.url, {
     method: "POST",
     headers: upstreamHeaders(params.profile),
@@ -798,7 +802,9 @@ async function streamChatAsResponses(params: {
   })
   if (!response.ok || !response.body) {
     const text = await response.text().catch(() => response.statusText)
-    sendJson(params.res, response.status, { error: sanitizeError(text) })
+    sendJson(params.res, response.status, {
+      error: sanitizeError(text, redactionValues),
+    })
     return
   }
 
@@ -1079,6 +1085,7 @@ async function handleAnthropicRequest(
   body: any,
   res: ServerResponse,
 ) {
+  const redactionValues = getProviderRedactionValues(profile)
   const model = resolveProviderModel(profile, body.model)
   if (profile.protocol === "anthropic") {
     const upstream = await fetch(appendPath(profile.baseUrl, "/messages"), {
@@ -1098,7 +1105,12 @@ async function handleAnthropicRequest(
       body: requestBody,
     })
     if (!response.ok) {
-      sendJson(res, response.status, { error: sanitizeError(json?.error?.message || json?.error || response.statusText) })
+      sendJson(res, response.status, {
+        error: sanitizeError(
+          json?.error?.message || json?.error || response.statusText,
+          redactionValues,
+        ),
+      })
       return
     }
     const text =
@@ -1141,7 +1153,12 @@ async function handleAnthropicRequest(
     body: chatBody,
   })
   if (!response.ok) {
-    sendJson(res, response.status, { error: sanitizeError(json?.error?.message || json?.error || response.statusText) })
+    sendJson(res, response.status, {
+      error: sanitizeError(
+        json?.error?.message || json?.error || response.statusText,
+        redactionValues,
+      ),
+    })
     return
   }
   sendJson(res, 200, chatCompletionToAnthropicMessage(json, model))
@@ -1152,6 +1169,7 @@ async function handleResponsesRequest(
   body: any,
   res: ServerResponse,
 ) {
+  const redactionValues = getProviderRedactionValues(profile)
   const model = resolveProviderModel(profile, body.model)
   if (profile.protocol === "openai-responses") {
     const upstream = await fetch(appendPath(profile.baseUrl, "/responses"), {
@@ -1183,7 +1201,12 @@ async function handleResponsesRequest(
     body: chatBody,
   })
   if (!response.ok) {
-    sendJson(res, response.status, { error: sanitizeError(json?.error?.message || json?.error || response.statusText) })
+    sendJson(res, response.status, {
+      error: sanitizeError(
+        json?.error?.message || json?.error || response.statusText,
+        redactionValues,
+      ),
+    })
     return
   }
   sendJson(res, 200, chatCompletionToResponse(json, model))
@@ -1196,6 +1219,7 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     return
   }
 
+  let redactionValues: string[] = []
   try {
     const url = new URL(req.url || "/", current.origin)
     const match = url.pathname.match(
@@ -1226,6 +1250,7 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
       sendJson(res, 404, { error: "Provider profile not found" })
       return
     }
+    redactionValues = getProviderRedactionValues(profile)
 
     if (endpoint === "models" && req.method === "GET") {
       sendModelsList(res, profile)
@@ -1243,7 +1268,7 @@ async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
     }
     sendJson(res, 404, { error: "Unsupported provider gateway endpoint" })
   } catch (error) {
-    sendJson(res, 500, { error: sanitizeError(error) })
+    sendJson(res, 500, { error: sanitizeError(error, redactionValues) })
   }
 }
 

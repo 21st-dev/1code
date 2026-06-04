@@ -25,11 +25,8 @@ import {
   customClaudeConfigAtom,
   LEGACY_CODEX_API_KEY_STORAGE_KEY,
   LEGACY_OPENAI_API_KEY_STORAGE_KEY,
-  OPENAI_TRANSCRIPTION_BASE_URL,
-  OPENAI_TRANSCRIPTION_MODEL,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
-  normalizeLegacyOpenAIApiKey,
   repoOnboardingSkippedAtom,
 } from "./lib/atoms"
 import { I18nProvider, useI18n } from "./lib/i18n"
@@ -83,8 +80,6 @@ function AppContent() {
   const importLegacyProviderConfig =
     trpc.claudeProviderConfig.importLegacy.useMutation()
   const saveCodexApiKeyMutation = trpc.codex.saveCodexApiKey.useMutation()
-  const saveVoiceTranscriptionProviderMutation =
-    trpc.localApiProviderConfig.save.useMutation()
   const trpcUtils = trpc.useUtils()
 
   // Apply initial window params (chatId/subChatId) when opening via "Open in new window"
@@ -225,41 +220,10 @@ function AppContent() {
     if (legacyVoiceApiKeyMigrationAttemptedRef.current) return
     if (typeof window === "undefined") return
 
-    const legacyValue = window.localStorage.getItem(
-      LEGACY_OPENAI_API_KEY_STORAGE_KEY,
-    )
-    if (legacyValue === null) return
-
     legacyVoiceApiKeyMigrationAttemptedRef.current = true
     window.localStorage.removeItem(LEGACY_OPENAI_API_KEY_STORAGE_KEY)
-
-    const normalized = normalizeLegacyOpenAIApiKey(legacyValue)
-    if (!normalized) return
-
-    saveVoiceTranscriptionProviderMutation.mutate(
-      {
-        purpose: "voice_transcription",
-        model: OPENAI_TRANSCRIPTION_MODEL,
-        baseUrl: OPENAI_TRANSCRIPTION_BASE_URL,
-        token: normalized,
-      },
-      {
-        onSuccess: async () => {
-          await trpcUtils.localApiProviderConfig.get.invalidate()
-          await trpcUtils.voice.isAvailable.invalidate()
-        },
-        onError: (error) => {
-          console.warn("[App] Failed to migrate legacy voice API key:", error)
-          toast.error(t("toast.models.failedToMigrateLegacyVoiceApiKey"))
-        },
-      },
-    )
-  }, [
-    saveVoiceTranscriptionProviderMutation,
-    t,
-    trpcUtils.localApiProviderConfig.get,
-    trpcUtils.voice.isAvailable,
-  ])
+    void trpcUtils.voice.isAvailable.invalidate()
+  }, [trpcUtils.voice.isAvailable])
 
   // Migrate the legacy renderer-stored custom Claude token into secure
   // main-process storage, then clear the raw token from localStorage.

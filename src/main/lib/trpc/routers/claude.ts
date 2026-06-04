@@ -27,8 +27,8 @@ import {
   readProjectMcpJson,
   removeMcpServerConfig,
   resolveProjectPathFromWorktree,
+  updateClaudeConfigAtomic,
   updateMcpServerConfig,
-  writeClaudeConfig,
   type ClaudeConfig,
   type McpServerConfig,
 } from "../../claude-config"
@@ -3486,7 +3486,12 @@ ${prompt}
       }),
     )
     .mutation(async ({ input }) => {
-      return startMcpOAuth(input.serverName, input.projectPath)
+      const serverName = normalizeMcpServerName(input.serverName)
+      const projectPath = resolveMcpProjectPathForMutation({
+        scope: "project",
+        projectPath: input.projectPath,
+      })
+      return startMcpOAuth(serverName, projectPath)
     }),
 
   /**
@@ -3556,27 +3561,27 @@ ${prompt}
         }
       }
 
-      // Check existence before writing
-      const existingConfig = await readClaudeConfig()
-      if (projectPath) {
-        if (existingConfig.projects?.[projectPath]?.mcpServers?.[serverName]) {
-          throw new Error(
-            `Server "${serverName}" already exists in this project`,
-          )
+      await updateClaudeConfigAtomic((existingConfig) => {
+        // Check existence inside the locked read-modify-write cycle.
+        if (projectPath) {
+          if (existingConfig.projects?.[projectPath]?.mcpServers?.[serverName]) {
+            throw new Error(
+              `Server "${serverName}" already exists in this project`,
+            )
+          }
+        } else {
+          if (existingConfig.mcpServers?.[serverName]) {
+            throw new Error(`Server "${serverName}" already exists`)
+          }
         }
-      } else {
-        if (existingConfig.mcpServers?.[serverName]) {
-          throw new Error(`Server "${serverName}" already exists`)
-        }
-      }
 
-      const config = updateMcpServerConfig(
-        existingConfig,
-        projectPath,
-        serverName,
-        serverConfig,
-      )
-      await writeClaudeConfig(config)
+        return updateMcpServerConfig(
+          existingConfig,
+          projectPath,
+          serverName,
+          serverConfig,
+        )
+      })
 
       return { success: true, name: serverName }
     }),
@@ -3601,75 +3606,65 @@ ${prompt}
       }),
     )
     .mutation(async ({ input }) => {
-      const config = await readClaudeConfig()
       const serverName = normalizeMcpServerName(input.name)
       const projectPath = resolveMcpProjectPathForMutation(input)
       const newName = input.newName
         ? normalizeMcpServerName(input.newName)
         : undefined
+      let returnedName = serverName
 
-      // Check server exists
-      const servers = getMcpServersForScope(config, projectPath)
-      if (!servers?.[serverName]) {
-        throw new Error(`Server "${serverName}" not found`)
-      }
-
-      const existing = servers[serverName]
-
-      // Handle rename: create new, remove old
-      if (newName && newName !== serverName) {
-        if (servers[newName]) {
-          throw new Error(`Server "${newName}" already exists`)
+      await updateClaudeConfigAtomic((config) => {
+        // Check server exists inside the locked read-modify-write cycle.
+        const servers = getMcpServersForScope(config, projectPath)
+        if (!servers?.[serverName]) {
+          throw new Error(`Server "${serverName}" not found`)
         }
-        const updated = removeMcpServerConfig(
-          config,
-          projectPath,
-          serverName,
-        )
-        const finalConfig = updateMcpServerConfig(
-          updated,
-          projectPath,
-          newName,
-          existing,
-        )
-        await writeClaudeConfig(finalConfig)
-        return { success: true, name: newName }
-      }
 
-      // Build update object from provided fields
-      const update: Partial<McpServerConfig> = {}
-      if (input.command !== undefined) update.command = input.command
-      if (input.args !== undefined) update.args = input.args
-      if (input.env !== undefined) update.env = input.env
-      if (input.url !== undefined) update.url = input.url
-      if (input.disabled !== undefined) update.disabled = input.disabled
+        const existing = servers[serverName]
 
-      // Handle bearer token
-      if (input.bearerToken) {
-        update.authType = "bearer"
-        update.headers = { Authorization: `Bearer ${input.bearerToken}` }
-      }
-
-      // Handle authType changes
-      if (input.authType) {
-        update.authType = input.authType
-        if (input.authType === "none") {
-          // Clear auth-related fields
-          update.headers = undefined
-          update._oauth = undefined
+        // Handle rename: create new, remove old
+        if (newName && newName !== serverName) {
+          if (servers[newName]) {
+            throw new Error(`Server "${newName}" already exists`)
+          }
+          returnedName = newName
+          const updated = removeMcpServerConfig(
+            config,
+            projectPath,
+            serverName,
+          )
+          return updateMcpServerConfig(updated, projectPath, newName, existing)
         }
-      }
 
-      const merged = { ...existing, ...update }
-      const updatedConfig = updateMcpServerConfig(
-        config,
-        projectPath,
-        serverName,
-        merged,
-      )
-      await writeClaudeConfig(updatedConfig)
+        // Build update object from provided fields
+        const update: Partial<McpServerConfig> = {}
+        if (input.command !== undefined) update.command = input.command
+        if (input.args !== undefined) update.args = input.args
+        if (input.env !== undefined) update.env = input.env
+        if (input.url !== undefined) update.url = input.url
+        if (input.disabled !== undefined) update.disabled = input.disabled
 
-      return { success: true, name: serverName }
+        // Handle bearer token
+        if (input.bearerToken) {
+          update.authType = "bearer"
+          update.headers = { Authorization: `Bearer ${input.bearerToken}` }
+        }
+
+        // Handle authType changes
+        if (input.authType) {
+          update.authType = input.authType
+          if (input.authType === "none") {
+            // Clear auth-related fields
+            update.headers = undefined
+            update._oauth = undefined
+          }
+        }
+
+        const merged = { ...existing, ...update }
+        return updateMcpServerConfig(config, projectPath, serverName, merged)
+      })
+
+      return { success: true, name: returnedName }
     }),
 
   removeMcpServer: publicProcedure
@@ -3681,22 +3676,18 @@ ${prompt}
       }),
     )
     .mutation(async ({ input }) => {
-      const config = await readClaudeConfig()
       const serverName = normalizeMcpServerName(input.name)
       const projectPath = resolveMcpProjectPathForMutation(input)
 
-      // Check server exists
-      const servers = getMcpServersForScope(config, projectPath)
-      if (!servers?.[serverName]) {
-        throw new Error(`Server "${serverName}" not found`)
-      }
+      await updateClaudeConfigAtomic((config) => {
+        // Check server exists inside the locked read-modify-write cycle.
+        const servers = getMcpServersForScope(config, projectPath)
+        if (!servers?.[serverName]) {
+          throw new Error(`Server "${serverName}" not found`)
+        }
 
-      const updated = removeMcpServerConfig(
-        config,
-        projectPath,
-        serverName,
-      )
-      await writeClaudeConfig(updated)
+        return removeMcpServerConfig(config, projectPath, serverName)
+      })
 
       return { success: true }
     }),
@@ -3711,30 +3702,25 @@ ${prompt}
       }),
     )
     .mutation(async ({ input }) => {
-      const config = await readClaudeConfig()
       const serverName = normalizeMcpServerName(input.name)
       const projectPath = resolveMcpProjectPathForMutation(input)
 
-      // Check server exists
-      const servers = getMcpServersForScope(config, projectPath)
-      if (!servers?.[serverName]) {
-        throw new Error(`Server "${serverName}" not found`)
-      }
+      await updateClaudeConfigAtomic((config) => {
+        // Check server exists inside the locked read-modify-write cycle.
+        const servers = getMcpServersForScope(config, projectPath)
+        if (!servers?.[serverName]) {
+          throw new Error(`Server "${serverName}" not found`)
+        }
 
-      const existing = servers[serverName]
-      const updated: McpServerConfig = {
-        ...existing,
-        authType: "bearer",
-        headers: { Authorization: `Bearer ${input.token}` },
-      }
+        const existing = servers[serverName]
+        const updated: McpServerConfig = {
+          ...existing,
+          authType: "bearer",
+          headers: { Authorization: `Bearer ${input.token}` },
+        }
 
-      const updatedConfig = updateMcpServerConfig(
-        config,
-        projectPath,
-        serverName,
-        updated,
-      )
-      await writeClaudeConfig(updatedConfig)
+        return updateMcpServerConfig(config, projectPath, serverName, updated)
+      })
 
       return { success: true }
     }),

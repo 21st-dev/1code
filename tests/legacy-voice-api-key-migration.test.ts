@@ -5,35 +5,37 @@ import {
   LEGACY_OPENAI_API_KEY_STORAGE_KEY,
   OPENAI_TRANSCRIPTION_BASE_URL,
   OPENAI_TRANSCRIPTION_MODEL,
-  normalizeLegacyOpenAIApiKey,
 } from "../src/shared/voice-transcription-api-key"
 
-describe("legacy voice API key migration", () => {
-  test("normalizes raw and atomWithStorage JSON string API keys", () => {
-    expect(normalizeLegacyOpenAIApiKey("sk-legacy")).toBe("sk-legacy")
-    expect(normalizeLegacyOpenAIApiKey("\"sk-json-legacy\"")).toBe(
-      "sk-json-legacy",
-    )
-    expect(normalizeLegacyOpenAIApiKey("not-a-key")).toBeNull()
-    expect(normalizeLegacyOpenAIApiKey("sk-key with-space")).toBeNull()
-  })
-
-  test("migrates legacy renderer key into voice transcription helper config", () => {
+describe("legacy voice API key cleanup", () => {
+  test("cleans the legacy renderer key without reading or persisting it", () => {
     const appSource = readFileSync(
       join(process.cwd(), "src/renderer/App.tsx"),
       "utf-8",
     )
+    const voiceEffectMarker =
+      "legacyVoiceApiKeyMigrationAttemptedRef.current = true"
+    const voiceEffectStart = appSource.lastIndexOf(
+      "useEffect(() =>",
+      appSource.indexOf(voiceEffectMarker),
+    )
+    const voiceEffectEnd = appSource.indexOf(
+      "\n\n  // Migrate the legacy renderer-stored custom Claude token",
+      voiceEffectStart,
+    )
+    const voiceEffectSource = appSource.slice(voiceEffectStart, voiceEffectEnd)
 
     expect(LEGACY_OPENAI_API_KEY_STORAGE_KEY).toBe("agents:openai-api-key")
     expect(OPENAI_TRANSCRIPTION_MODEL).toBe("whisper-1")
     expect(OPENAI_TRANSCRIPTION_BASE_URL).toBe("https://api.openai.com/v1")
-    expect(appSource).toContain("LEGACY_OPENAI_API_KEY_STORAGE_KEY")
-    expect(appSource).toContain("normalizeLegacyOpenAIApiKey")
-    expect(appSource).toContain("window.localStorage.removeItem")
-    expect(appSource).toContain('purpose: "voice_transcription"')
-    expect(appSource).toContain("OPENAI_TRANSCRIPTION_MODEL")
-    expect(appSource).toContain("OPENAI_TRANSCRIPTION_BASE_URL")
-    expect(appSource).toContain("trpc.localApiProviderConfig.save.useMutation")
+    expect(voiceEffectSource).toContain("LEGACY_OPENAI_API_KEY_STORAGE_KEY")
+    expect(voiceEffectSource).toContain("window.localStorage.removeItem")
+    expect(voiceEffectSource).not.toContain("window.localStorage.getItem")
+    expect(appSource).not.toContain("normalizeLegacyOpenAIApiKey")
+    expect(appSource).not.toContain('purpose: "voice_transcription"')
+    expect(appSource).not.toContain("OPENAI_TRANSCRIPTION_MODEL")
+    expect(appSource).not.toContain("OPENAI_TRANSCRIPTION_BASE_URL")
+    expect(appSource).not.toContain("trpc.localApiProviderConfig.save.useMutation")
     expect(appSource).not.toContain("trpc.voice.setOpenAIKey")
   })
 
@@ -51,6 +53,7 @@ describe("legacy voice API key migration", () => {
     )
 
     expect(atomsSource).not.toContain("openaiApiKeyAtom")
+    expect(atomsSource).not.toContain("normalizeLegacyOpenAIApiKey")
     expect(modelsTabSource).not.toContain("openaiApiKeyAtom")
     expect(modelsTabSource).not.toContain("trpc.voice.setOpenAIKey")
     expect(modelsTabSource).not.toContain("settings.models.openaiApiKey")

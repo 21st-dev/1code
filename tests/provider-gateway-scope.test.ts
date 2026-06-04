@@ -39,6 +39,16 @@ async function createUpstreamErrorServer() {
   }
 }
 
+function expectNoGatewaySecrets(body: string, gatewayToken?: string) {
+  expect(body).not.toContain("provider-token-secret")
+  expect(body).not.toContain("Bearer provider-token-secret")
+  expect(body).not.toContain("x-extra-secret")
+  if (gatewayToken) {
+    expect(body).not.toContain(gatewayToken)
+  }
+  expect(body).toContain("***")
+}
+
 const runtimeProfiles = new Map<string, any>([
   [
     "profile_gateway_a",
@@ -176,14 +186,106 @@ describe("provider profile gateway token scope", () => {
 
       expect(anthropicResponse.status).toBe(401)
       expect(responsesResponse.status).toBe(401)
-      expect(`${anthropicBody}\n${responsesBody}`).not.toContain(
-        "provider-token-secret",
-      )
-      expect(`${anthropicBody}\n${responsesBody}`).not.toContain("x-extra-secret")
-      expect(`${anthropicBody}\n${responsesBody}`).toContain("***")
+      expectNoGatewaySecrets(anthropicBody, anthropicEndpoint.token)
+      expectNoGatewaySecrets(responsesBody, responsesEndpoint.token)
     } finally {
       runtimeProfiles.delete("profile_gateway_secret_anthropic")
       runtimeProfiles.delete("profile_gateway_secret_responses")
+      await upstream.close()
+    }
+  })
+
+  test("redacts converted and streaming upstream gateway errors", async () => {
+    const upstream = await createUpstreamErrorServer()
+    const profileIds: string[] = []
+    try {
+      const cases = [
+        {
+          id: "profile_gateway_secret_chat_to_anthropic",
+          protocol: "openai-chat",
+          kind: "anthropic" as const,
+          path: "messages",
+          body: {
+            model: "model-secret",
+            max_tokens: 16,
+            messages: [{ role: "user", content: "hello" }],
+          },
+        },
+        {
+          id: "profile_gateway_secret_responses_to_anthropic",
+          protocol: "openai-responses",
+          kind: "anthropic" as const,
+          path: "messages",
+          body: {
+            model: "model-secret",
+            max_tokens: 16,
+            messages: [{ role: "user", content: "hello" }],
+          },
+        },
+        {
+          id: "profile_gateway_secret_chat_to_responses",
+          protocol: "openai-chat",
+          kind: "responses" as const,
+          path: "responses",
+          body: { model: "model-secret", input: "hello" },
+        },
+        {
+          id: "profile_gateway_secret_chat_stream_to_anthropic",
+          protocol: "openai-chat",
+          kind: "anthropic" as const,
+          path: "messages",
+          body: {
+            model: "model-secret",
+            max_tokens: 16,
+            stream: true,
+            messages: [{ role: "user", content: "hello" }],
+          },
+        },
+        {
+          id: "profile_gateway_secret_chat_stream_to_responses",
+          protocol: "openai-chat",
+          kind: "responses" as const,
+          path: "responses",
+          body: { model: "model-secret", input: "hello", stream: true },
+        },
+      ]
+
+      for (const testCase of cases) {
+        profileIds.push(testCase.id)
+        runtimeProfiles.set(testCase.id, {
+          id: testCase.id,
+          name: testCase.id,
+          presetId: "test",
+          protocol: testCase.protocol,
+          baseUrl: upstream.baseUrl,
+          defaultModel: "model-secret",
+          authMode: "bearer",
+          token: "provider-token-secret",
+          headers: { "x-extra": "x-extra-secret" },
+          targetRuntimes:
+            testCase.kind === "anthropic" ? ["claude"] : ["codex"],
+          capabilities:
+            testCase.kind === "anthropic" ? { claude: true } : { codex: true },
+        })
+
+        const endpoint = await gatewayModule.getProviderGatewayEndpoint(
+          testCase.id,
+          testCase.kind,
+        )
+        const response = await fetch(`${endpoint.baseUrl}/${testCase.path}`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${endpoint.token}` },
+          body: JSON.stringify(testCase.body),
+        })
+        const body = await response.text()
+
+        expect(response.status).toBe(401)
+        expectNoGatewaySecrets(body, endpoint.token)
+      }
+    } finally {
+      for (const profileId of profileIds) {
+        runtimeProfiles.delete(profileId)
+      }
       await upstream.close()
     }
   })
