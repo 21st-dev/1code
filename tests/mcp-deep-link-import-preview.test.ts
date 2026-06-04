@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   parseMcpImportLink,
   sanitizeDeepLinkForLog,
+  sanitizeProcessArgsForLog,
   sanitizeMcpConfigForRenderer,
   sanitizeMcpCommandArgs,
 } from "../src/shared/mcp-import-preview"
@@ -176,6 +177,29 @@ describe("MCP deep-link import preview", () => {
     expect(sanitized).not.toContain("state-secret")
     expect(sanitized).not.toContain("access-secret")
     expect(sanitized).not.toContain("api-secret")
+  })
+
+  test("sanitizes process argv logs without adjacent secret values", () => {
+    const sanitized = sanitizeProcessArgsForLog([
+      "Locus",
+      "--token",
+      "sk-abcdefghijklmnopqrstuvwxyz123456",
+      "--api-key=ghp_abcdefghijklmnopqrstuvwxyz123456",
+      "locus://mcp/import?payload=%7B%22secret%22%3A%22payload-secret%22%7D&access_token=access-secret",
+      "--prompt",
+      "safe prompt",
+    ])
+
+    const serialized = JSON.stringify(sanitized)
+    expect(serialized).toContain("--token")
+    expect(serialized).toContain("--api-key=<redacted>")
+    expect(serialized).toContain("locus://mcp/import")
+    expect(serialized).toContain("access_token")
+    expect(serialized).toContain("safe prompt")
+    expect(serialized).not.toContain("sk-abcdefghijklmnopqrstuvwxyz123456")
+    expect(serialized).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz123456")
+    expect(serialized).not.toContain("payload-secret")
+    expect(serialized).not.toContain("access-secret")
   })
 
   test("rejects unsupported and oversized payloads without echoing secrets", () => {

@@ -32,7 +32,7 @@ import {
 import {
   parseMcpImportLink,
   sanitizeDeepLinkForLog,
-  sanitizeProcessArgForLog,
+  sanitizeProcessArgsForLog,
   type McpImportPreview,
 } from "../shared/mcp-import-preview"
 
@@ -150,7 +150,7 @@ console.log("[Protocol] Primary protocol:", PROTOCOL)
 console.log("[Protocol] Legacy protocol:", LEGACY_PROTOCOL)
 console.log("[Protocol] Is dev mode (process.defaultApp):", process.defaultApp)
 console.log("[Protocol] process.execPath:", process.execPath)
-console.log("[Protocol] process.argv:", process.argv.map(sanitizeProcessArgForLog))
+console.log("[Protocol] process.argv:", sanitizeProcessArgsForLog(process.argv))
 
 /**
  * Register the app as the handler for our custom protocol.

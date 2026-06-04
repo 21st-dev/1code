@@ -11,19 +11,19 @@
 - [x] 2.5 Commit the shared contract slice.
 
 ## 3. CLI API Commands
-- [ ] 3.1 Extend headless CLI parsing for `locus api runtimes list`.
-- [ ] 3.2 Extend headless CLI parsing for `locus api runs create/status/events/result/cancel/retry`.
-- [ ] 3.3 Implement API command dispatch with strict stdout JSON/JSONL and stderr diagnostics.
-- [ ] 3.4 Gate requested capabilities before runtime work starts.
-- [ ] 3.5 Add focused parser and dispatcher tests.
-- [ ] 3.6 Commit the CLI API slice.
+- [x] 3.1 Extend headless CLI parsing for `locus api runtimes list`.
+- [x] 3.2 Extend headless CLI parsing for `locus api runs create/status/events/result/cancel/retry`.
+- [x] 3.3 Implement API command dispatch with strict stdout JSON/JSONL and stderr diagnostics.
+- [x] 3.4 Gate requested capabilities before runtime work starts.
+- [x] 3.5 Add focused parser and dispatcher tests.
+- [x] 3.6 Commit the CLI API slice.
 
 ## 4. Artifact Contract
-- [ ] 4.1 Create run-owned artifact directories for API jobs.
-- [ ] 4.2 Persist sanitized `request.json`, `events.jsonl`, `result.json`, and `artifacts.json`.
-- [ ] 4.3 Emit or serialize `artifact_created` events only for run-owned metadata/artifacts.
-- [ ] 4.4 Add artifact tests covering path validation, sanitized writes, and final-directory non-mutation.
-- [ ] 4.5 Commit the artifact slice.
+- [x] 4.1 Create run-owned artifact directories for API jobs.
+- [x] 4.2 Persist validated `request.json`, `events.jsonl`, `result.json`, and `artifacts.json`.
+- [x] 4.3 Emit or serialize `artifact_created` events only for run-owned metadata/artifacts.
+- [x] 4.4 Add artifact tests covering path validation, secret rejection before writes, and final-directory non-mutation.
+- [x] 4.5 Commit the artifact slice.
 
 ## 5. Workbench Visibility
 - [ ] 5.1 Design a compact Workbench metadata treatment for API jobs.

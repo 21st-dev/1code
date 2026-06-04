@@ -11,6 +11,7 @@ if "%LOCUS_HEADLESS_EXECUTABLE%"=="" (
 
 if "%COMMAND%"=="run" goto headless
 if "%COMMAND%"=="jobs" goto headless
+if "%COMMAND%"=="api" goto headless
 if "%COMMAND%"=="daemon" goto headless
 if "%COMMAND%"=="schedules" goto headless
 if "%COMMAND%"=="schedule" goto headless

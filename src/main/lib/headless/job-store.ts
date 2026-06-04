@@ -642,6 +642,10 @@ export function retryAgentJob(
       subChatId: job.subChatId,
       promptPreview: job.promptPreview,
       inputJson: job.inputJson,
+      apiConsumerId: job.apiConsumerId,
+      apiConsumerRunId: job.apiConsumerRunId,
+      artifactBaseDir: job.artifactBaseDir,
+      artifactManifestPath: null,
       createdAt: now,
       createdByVersion: job.createdByVersion,
     })

@@ -30,6 +30,15 @@ const SENSITIVE_ARG_FLAGS = new Set([
   "token",
 ])
 
+const SENSITIVE_ARG_VALUE_PATTERNS = [
+  /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----/,
+  /(^|[^A-Za-z0-9_])sk-[A-Za-z0-9_-]{20,}/,
+  /github_pat_[A-Za-z0-9_]{20,}/,
+  /gh[pousr]_[A-Za-z0-9_]{20,}/,
+  /bearer\s+[A-Za-z0-9._-]+/i,
+  /authorization\s*:\s*basic\s+[A-Za-z0-9+/=_-]+/i,
+]
+
 const REQUESTED_ACTION_KEYS = [
   "apply",
   "autoStart",
@@ -202,7 +211,34 @@ export function sanitizeProcessArgForLog(arg: string): string {
   } catch {
     // Not a URL-shaped argv item.
   }
+  const equalsIndex = arg.indexOf("=")
+  if (equalsIndex > 0) {
+    const flag = arg.slice(0, equalsIndex)
+    const flagName = flag.replace(/^-+/, "").toLowerCase()
+    if (SENSITIVE_ARG_FLAGS.has(flagName)) {
+      return `${flag}=${REDACTED_VALUE}`
+    }
+  }
+  if (SENSITIVE_ARG_VALUE_PATTERNS.some((pattern) => pattern.test(arg))) {
+    return `[redacted-arg length=${arg.length}]`
+  }
   return arg
+}
+
+export function sanitizeProcessArgsForLog(args: string[]): string[] {
+  let redactNext = false
+  return args.map((arg) => {
+    if (redactNext) {
+      redactNext = false
+      return `[redacted-arg length=${arg.length}]`
+    }
+    const flagName = arg.replace(/^-+/, "").toLowerCase()
+    if (SENSITIVE_ARG_FLAGS.has(flagName) && !arg.includes("=")) {
+      redactNext = true
+      return arg
+    }
+    return sanitizeProcessArgForLog(arg)
+  })
 }
 
 function decodeBase64Url(value: string): string {

@@ -1,8 +1,10 @@
 import type { Readable } from "stream"
+import { readFileSync } from "node:fs"
 import type { AgentJob, AgentJobEvent } from "../db/schema"
 import { isTerminalAgentJobStatus, type AgentJobStatus } from "../../../shared/agent-jobs"
 import {
   completeAgentJob,
+  appendAgentJobEvent,
   createAgentJob,
   getAgentJob,
   getAgentJobPrompt,
@@ -44,6 +46,18 @@ import {
   resumeAgentSchedule,
   runAgentScheduleNow,
 } from "./schedules"
+import {
+  createLocalJobApiJob,
+  getLocalJobApiEvents,
+  getLocalJobApiJobOrThrow,
+  parseLocalJobApiCreateRequestJson,
+  toLocalJobApiJobEnvelope,
+  toLocalJobApiResultEnvelope,
+  toLocalJobApiRuntimeManifestEnvelope,
+  writeLocalJobApiFinalArtifacts,
+  writeLocalJobApiInitialArtifacts,
+} from "./local-job-api"
+import { LOCAL_JOB_API_VERSION } from "../../../shared/local-job-api"
 
 type Writer = {
   write(chunk: string): unknown
@@ -100,6 +114,17 @@ async function readStdin(stream: Readable | undefined): Promise<string> {
     chunks.push(buffer)
   }
   return Buffer.concat(chunks).toString("utf-8")
+}
+
+function readRequestFile(path: string): string {
+  if (path === "-") {
+    throw new Error("stdin request must be read asynchronously")
+  }
+  const buffer = readFileSync(path)
+  if (buffer.byteLength > HEADLESS_STDIN_MAX_BYTES) {
+    throw new Error(`request file exceeds ${HEADLESS_STDIN_MAX_BYTES} byte limit`)
+  }
+  return buffer.toString("utf-8")
 }
 
 function shouldUseJson(output: HeadlessOutputFormat): boolean {
@@ -351,6 +376,190 @@ function retryCommand(
   return 0
 }
 
+async function readApiRequestContent(
+  command: Extract<HeadlessCliCommand, { kind: "api-runs-create" }>,
+  options: RunHeadlessCliCommandOptions,
+): Promise<string> {
+  if (command.requestPath === "-") return readStdin(options.stdin)
+  return readRequestFile(command.requestPath)
+}
+
+async function apiRunsCreateCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-runs-create" }>,
+  options: RunHeadlessCliCommandOptions,
+): Promise<number> {
+  try {
+    const request = parseLocalJobApiCreateRequestJson(
+      await readApiRequestContent(command, options),
+    )
+    const prepared = createLocalJobApiJob(
+      options.db,
+      request,
+      options.appVersion,
+    )
+    const initialArtifacts = writeLocalJobApiInitialArtifacts({
+      runDir: prepared.runDir,
+      request,
+      job: prepared.job,
+      events: listAgentJobEvents(options.db, prepared.job.id),
+    })
+    if (initialArtifacts.length > 0) {
+      appendAgentJobEvent(options.db, {
+        jobId: prepared.job.id,
+        type: "artifact_created",
+        payload: {
+          artifacts: initialArtifacts,
+        },
+      })
+    }
+
+    const result = await runPersistedAgentJob({
+      db: options.db,
+      jobId: prepared.job.id,
+      runner: options.runner,
+      env: options.env,
+    })
+    const finalEvents = listAgentJobEvents(options.db, result.job.id)
+    const artifacts = writeLocalJobApiFinalArtifacts({
+      runDir: prepared.runDir,
+      job: result.job,
+      events: finalEvents,
+    })
+    writeJson(options.stdout, {
+      apiVersion: LOCAL_JOB_API_VERSION,
+      job: toLocalJobApiJobEnvelope(result.job).job,
+      result: toLocalJobApiResultEnvelope(result.job, artifacts),
+    })
+    return result.exitCode
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return commandError(
+      options.stderr,
+      message,
+      localJobApiCreateErrorCode(message),
+    )
+  }
+}
+
+function apiRuntimesListCommand(options: RunHeadlessCliCommandOptions): number {
+  writeJson(options.stdout, toLocalJobApiRuntimeManifestEnvelope())
+  return HEADLESS_EXIT_CODES.success
+}
+
+function localJobApiCreateErrorCode(message: string): number {
+  if (/registered project|project path|API run cwd/i.test(message)) {
+    return HEADLESS_EXIT_CODES.invalidCwd
+  }
+  if (/unsupported/i.test(message)) {
+    return HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode
+  }
+  return HEADLESS_EXIT_CODES.invalidArguments
+}
+
+function apiRunsStatusCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-runs-status" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    writeJson(options.stdout, toLocalJobApiJobEnvelope(getLocalJobApiJobOrThrow(options.db, command.jobId)))
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode,
+    )
+  }
+}
+
+function apiRunsResultCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-runs-result" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    const job = getLocalJobApiJobOrThrow(options.db, command.jobId)
+    writeJson(options.stdout, toLocalJobApiResultEnvelope(job))
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode,
+    )
+  }
+}
+
+async function apiRunsEventsCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-runs-events" }>,
+  options: RunHeadlessCliCommandOptions,
+): Promise<number> {
+  try {
+    let afterSequence = command.afterSequence
+    do {
+      const events = getLocalJobApiEvents(options.db, command.jobId, afterSequence)
+      for (const event of events) {
+        afterSequence = event.sequence
+        writeJson(options.stdout, event)
+      }
+      if (!command.follow) break
+      const job = getLocalJobApiJobOrThrow(options.db, command.jobId)
+      if (isTerminalAgentJobStatus(job.status as AgentJobStatus)) break
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    } while (command.follow)
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode,
+    )
+  }
+}
+
+function apiRunsCancelCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-runs-cancel" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    const job = getLocalJobApiJobOrThrow(options.db, command.jobId)
+    let updated = requestCancelAgentJob(options.db, job.id, "api")
+    if (updated.status === "queued") {
+      updated = completeAgentJob(options.db, {
+        jobId: job.id,
+        status: "canceled",
+        exitCode: HEADLESS_EXIT_CODES.canceled,
+        errorCode: "job_canceled",
+        errorMessage: "Job was canceled before it started.",
+      })
+    }
+    writeJson(options.stdout, toLocalJobApiJobEnvelope(updated))
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode,
+    )
+  }
+}
+
+function apiRunsRetryCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-runs-retry" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    getLocalJobApiJobOrThrow(options.db, command.jobId)
+    writeJson(options.stdout, toLocalJobApiJobEnvelope(retryAgentJob(options.db, command.jobId)))
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode,
+    )
+  }
+}
+
 function scheduleErrorCode(message: string): number {
   if (/cwd|project path|registered project/i.test(message)) {
     return HEADLESS_EXIT_CODES.invalidCwd
@@ -510,6 +719,10 @@ function helpCommand(options: RunHeadlessCliCommandOptions): number {
       "  locus schedules list [--status enabled|paused|disabled] [--include-disabled]",
       "  locus schedules create --name <name> --prompt <text> --interval-seconds <n> [--cwd <path>] [--runtime claude-code|codex] [--mode plan|agent]",
       "  locus schedules pause|resume|delete|run <id>",
+      "  locus api runtimes list --json",
+      "  locus api runs create --request <path|-> --json",
+      "  locus api runs status|result|cancel|retry <id> --json",
+      "  locus api runs events <id> [--after <sequence>] [--follow] --jsonl",
       "  locus acp",
       `  stdin limit: ${HEADLESS_STDIN_MAX_BYTES} bytes`,
       "  locus jobs list",
@@ -548,6 +761,20 @@ export async function runHeadlessCliCommand(
       return cancelCommand(parsed.command, options)
     case "jobs-retry":
       return retryCommand(parsed.command, options)
+    case "api-runtimes-list":
+      return apiRuntimesListCommand(options)
+    case "api-runs-create":
+      return apiRunsCreateCommand(parsed.command, options)
+    case "api-runs-status":
+      return apiRunsStatusCommand(parsed.command, options)
+    case "api-runs-events":
+      return apiRunsEventsCommand(parsed.command, options)
+    case "api-runs-result":
+      return apiRunsResultCommand(parsed.command, options)
+    case "api-runs-cancel":
+      return apiRunsCancelCommand(parsed.command, options)
+    case "api-runs-retry":
+      return apiRunsRetryCommand(parsed.command, options)
     case "schedules-list":
       return schedulesListCommand(parsed.command, options)
     case "schedules-create":

@@ -64,6 +64,35 @@ export type HeadlessCliCommand =
       output: HeadlessOutputFormat
     }
   | {
+      kind: "api-runtimes-list"
+    }
+  | {
+      kind: "api-runs-create"
+      requestPath: string
+    }
+  | {
+      kind: "api-runs-status"
+      jobId: string
+    }
+  | {
+      kind: "api-runs-result"
+      jobId: string
+    }
+  | {
+      kind: "api-runs-cancel"
+      jobId: string
+    }
+  | {
+      kind: "api-runs-retry"
+      jobId: string
+    }
+  | {
+      kind: "api-runs-events"
+      jobId: string
+      afterSequence: number
+      follow: boolean
+    }
+  | {
       kind: "daemon-run"
       once: boolean
       concurrency: number
@@ -191,6 +220,20 @@ function parsePositiveInteger(
   return parsed
 }
 
+function parseNonNegativeInteger(
+  value: string | null,
+  fallback: number,
+  name: string,
+): number {
+  const raw = value ?? String(fallback)
+  if (!/^\d+$/.test(raw)) throw new Error(`${name} must be a non-negative integer`)
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`)
+  }
+  return parsed
+}
+
 function parseCwd(value: string | null): string {
   const cwd = resolve(value ?? process.cwd())
   if (!existsSync(cwd)) {
@@ -298,6 +341,94 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
         return { ok: true, command: { kind: "jobs-retry", jobId, output } }
       }
       throw new Error(`Unknown jobs subcommand: ${subcommand}`)
+    }
+
+    if (command === "api") {
+      const group = args.shift()
+      if (group === "runtimes") {
+        const subcommand = args.shift() ?? "list"
+        takeFlag(args, "--json")
+        if (subcommand !== "list") {
+          throw new Error(`Unknown api runtimes subcommand: ${subcommand}`)
+        }
+        if (args.length > 0) {
+          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        }
+        return { ok: true, command: { kind: "api-runtimes-list" } }
+      }
+
+      if (group === "runs") {
+        const subcommand = args.shift()
+        if (subcommand === "create") {
+          takeFlag(args, "--json")
+          const requestPath = takeOption(args, "--request")
+          if (!requestPath) {
+            throw new Error("locus api runs create requires --request <path|->")
+          }
+          if (args.length > 0) {
+            throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          }
+          return {
+            ok: true,
+            command: { kind: "api-runs-create", requestPath },
+          }
+        }
+
+        if (subcommand === "events") {
+          const follow = takeFlag(args, "--follow")
+          takeFlag(args, "--jsonl")
+          const afterSequence = parseNonNegativeInteger(
+            takeOption(args, "--after"),
+            0,
+            "--after",
+          )
+          const jobId = args.shift()
+          if (!jobId) throw new Error("locus api runs events requires a job id")
+          if (args.length > 0) {
+            throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          }
+          return {
+            ok: true,
+            command: {
+              kind: "api-runs-events",
+              jobId,
+              afterSequence,
+              follow,
+            },
+          }
+        }
+
+        takeFlag(args, "--json")
+        const jobId = args.shift()
+        if (!jobId) {
+          throw new Error(`locus api runs ${subcommand ?? ""} requires a job id`)
+        }
+        if (args.length > 0) {
+          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        }
+        if (
+          subcommand === "status" ||
+          subcommand === "result" ||
+          subcommand === "cancel" ||
+          subcommand === "retry"
+        ) {
+          return {
+            ok: true,
+            command: {
+              kind: `api-runs-${subcommand}` as
+                | "api-runs-status"
+                | "api-runs-result"
+                | "api-runs-cancel"
+                | "api-runs-retry",
+              jobId,
+            },
+          }
+        }
+
+        throw new Error(`Unknown api runs subcommand: ${subcommand ?? ""}`)
+      }
+
+      throw new Error(`Unknown api command group: ${group ?? ""}`)
     }
 
     if (command === "daemon") {

@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import { realpathSync } from "node:fs"
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+} from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 import { Readable } from "stream"
 import {
   completeAgentJob,
@@ -50,6 +58,414 @@ function parseJsonLines(value: string): any[] {
 }
 
 describe("headless CLI dispatcher", () => {
+  test("runs Local Job API create/status/events/result with stable JSON output", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const artifactBaseDir = mkdtempSync(join(tmpdir(), "locus-api-runs-"))
+    const request = {
+      apiVersion: "locus.local-job.v1",
+      consumer: {
+        id: "career-application-kit",
+        runExternalId: "company-role-review-001",
+      },
+      project: {
+        cwd: process.cwd(),
+      },
+      runtime: {
+        id: "codex",
+        requiredCapabilities: ["planMode"],
+      },
+      mode: "plan",
+      prompt: {
+        text: "Review this career package.",
+      },
+      input: {
+        contract: "career.job-package.v1",
+        packageDir: artifactBaseDir,
+      },
+      artifacts: {
+        baseDir: artifactBaseDir,
+        writePolicy: "metadata-only",
+      },
+    }
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "create",
+        "--request",
+        "-",
+        "--json",
+      ],
+      stdin: Readable.from([JSON.stringify(request)]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+      appVersion: "0.0.test",
+    })
+
+    expect(code).toBe(0)
+    expect(stderr.value()).toBe("")
+    const created = JSON.parse(stdout.value())
+    expect(created).toMatchObject({
+      apiVersion: "locus.local-job.v1",
+      job: {
+        source: "api",
+        runtime: "codex",
+        status: "succeeded",
+        apiConsumerId: "career-application-kit",
+        apiConsumerRunId: "company-role-review-001",
+      },
+      result: {
+        apiVersion: "locus.local-job.v1",
+        status: "succeeded",
+        consumer: {
+          id: "career-application-kit",
+          runExternalId: "company-role-review-001",
+        },
+      },
+    })
+    const jobId = created.job.id
+    const runDir = join(artifactBaseDir, jobId)
+    expect(existsSync(join(runDir, "request.json"))).toBe(true)
+    expect(existsSync(join(runDir, "events.jsonl"))).toBe(true)
+    expect(existsSync(join(runDir, "result.json"))).toBe(true)
+    expect(existsSync(join(runDir, "artifacts.json"))).toBe(true)
+    expect(readFileSync(join(runDir, "request.json"), "utf-8")).toContain(
+      "career-application-kit",
+    )
+
+    const statusStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "status",
+        jobId,
+        "--json",
+      ],
+      stdout: statusStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(JSON.parse(statusStdout.value()).job).toMatchObject({
+      id: jobId,
+      source: "api",
+      status: "succeeded",
+    })
+
+    const eventsStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "events",
+        jobId,
+        "--after",
+        "0",
+        "--jsonl",
+      ],
+      stdout: eventsStdout.stream,
+      stderr: writer().stream,
+    })
+    const events = parseJsonLines(eventsStdout.value())
+    expect(events.every((event) => event.apiVersion === "locus.local-job.v1")).toBe(
+      true,
+    )
+    expect(events.map((event) => event.type)).toContain("artifact_created")
+    expect(events.map((event) => event.type)).toContain("completed")
+
+    const resultStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "result",
+        jobId,
+        "--json",
+      ],
+      stdout: resultStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(JSON.parse(resultStdout.value())).toMatchObject({
+      apiVersion: "locus.local-job.v1",
+      jobId,
+      status: "succeeded",
+    })
+    const manifest = JSON.parse(readFileSync(join(runDir, "artifacts.json"), "utf-8"))
+    expect(manifest.artifacts.map((artifact: { role: string }) => artifact.role)).toEqual([
+      "request",
+      "events",
+      "result",
+    ])
+  })
+
+  test("lists Local Job API runtime capabilities", async () => {
+    const db = createAgentJobTestDb()
+    const stdout = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runtimes",
+        "list",
+        "--json",
+      ],
+      stdout: stdout.stream,
+      stderr: writer().stream,
+    })
+
+    expect(code).toBe(0)
+    const parsed = JSON.parse(stdout.value())
+    expect(parsed.apiVersion).toBe("locus.local-job.v1")
+    expect(parsed.runtimes.map((runtime: { runtimeId: string }) => runtime.runtimeId)).toContain(
+      "codex",
+    )
+  })
+
+  test("rejects Local Job API secrets before job creation", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "create",
+        "--request",
+        "-",
+        "--json",
+      ],
+      stdin: Readable.from([
+        JSON.stringify({
+          apiVersion: "locus.local-job.v1",
+          consumer: { id: "career-application-kit" },
+          project: { cwd: process.cwd() },
+          runtime: { id: "codex" },
+          mode: "plan",
+          prompt: { text: "Do not start" },
+          input: { env: { GITHUB_TOKEN: "ghp_abcdefghijklmnopqrstuvwxyz" } },
+        }),
+      ]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(2)
+    expect(stdout.value()).toBe("")
+    expect(stderr.value()).toContain("input.env is not accepted")
+    expect(listAgentJobs(db, { source: "api" })).toHaveLength(0)
+  })
+
+  test("rejects unsafe Local Job API artifact directories before job creation", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const artifactBaseDir = join(mkdtempSync(join(tmpdir(), "locus-api-runs-")), "final")
+    mkdirSync(artifactBaseDir)
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "create",
+        "--request",
+        "-",
+        "--json",
+      ],
+      stdin: Readable.from([
+        JSON.stringify({
+          apiVersion: "locus.local-job.v1",
+          consumer: { id: "career-application-kit" },
+          project: { cwd: process.cwd() },
+          runtime: { id: "codex" },
+          mode: "plan",
+          prompt: { text: "Do not start" },
+          artifacts: {
+            baseDir: artifactBaseDir,
+            writePolicy: "metadata-only",
+          },
+        }),
+      ]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(2)
+    expect(stdout.value()).toBe("")
+    expect(stderr.value()).toContain("final artifact directory")
+    expect(listAgentJobs(db, { source: "api" })).toHaveLength(0)
+  })
+
+  test("rejects unsupported Local Job API runtime capabilities before job creation", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "create",
+        "--request",
+        "-",
+        "--json",
+      ],
+      stdin: Readable.from([
+        JSON.stringify({
+          apiVersion: "locus.local-job.v1",
+          consumer: { id: "career-application-kit" },
+          project: { cwd: process.cwd() },
+          runtime: {
+            id: "codex",
+            requiredCapabilities: ["rollback"],
+          },
+          mode: "plan",
+          prompt: { text: "Do not start" },
+        }),
+      ]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(3)
+    expect(stdout.value()).toBe("")
+    expect(stderr.value()).toContain("unsupported")
+    expect(listAgentJobs(db, { source: "api" })).toHaveLength(0)
+  })
+
+  test("scopes Local Job API status/result commands to API jobs", async () => {
+    const db = createAgentJobTestDb()
+    const job = createAgentJob(db, {
+      source: "cli",
+      runtime: "codex",
+      mode: "plan",
+      cwd: process.cwd(),
+      prompt: "Not an API job",
+    })
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "status",
+        job.id,
+        "--json",
+      ],
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+    })
+
+    expect(code).toBe(3)
+    expect(stdout.value()).toBe("")
+    expect(stderr.value()).toContain("is not an API job")
+  })
+
+  test("cancels and retries only Local Job API jobs", async () => {
+    const db = createAgentJobTestDb()
+    const queued = createAgentJob(db, {
+      source: "api",
+      runtime: "codex",
+      mode: "plan",
+      cwd: process.cwd(),
+      prompt: "Cancelable API job",
+      apiConsumerId: "career-application-kit",
+      apiConsumerRunId: "cancel-001",
+    })
+    const cancelStdout = writer()
+    const cancelCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "cancel",
+        queued.id,
+        "--json",
+      ],
+      stdout: cancelStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(cancelCode).toBe(0)
+    expect(JSON.parse(cancelStdout.value()).job).toMatchObject({
+      id: queued.id,
+      source: "api",
+      status: "canceled",
+    })
+
+    const failed = completeAgentJob(db, {
+      jobId: createAgentJob(db, {
+        source: "api",
+        runtime: "codex",
+        mode: "plan",
+        cwd: process.cwd(),
+        prompt: "Retryable API job",
+        apiConsumerId: "career-application-kit",
+        apiConsumerRunId: "retry-001",
+      }).id,
+      status: "failed",
+      errorCode: "test_failure",
+      errorMessage: "failed before retry",
+    })
+    const retryStdout = writer()
+    const retryCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "retry",
+        failed.id,
+        "--json",
+      ],
+      stdout: retryStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(retryCode).toBe(0)
+    expect(JSON.parse(retryStdout.value()).job).toMatchObject({
+      source: "api",
+      status: "queued",
+      retryOfJobId: failed.id,
+      apiConsumerId: "career-application-kit",
+      apiConsumerRunId: "retry-001",
+      artifactManifestPath: null,
+    })
+  })
+
   test("runs a fake job, writes durable events, and keeps JSON stdout pure", async () => {
     const db = createAgentJobTestDb()
     seedCurrentProject(db)

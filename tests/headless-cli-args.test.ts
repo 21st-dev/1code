@@ -288,6 +288,61 @@ describe("headless CLI args", () => {
     })
   })
 
+  test("parses Local Job API commands", () => {
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runtimes",
+        "list",
+        "--json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: { kind: "api-runtimes-list" },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "create",
+        "--request",
+        "-",
+        "--json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: { kind: "api-runs-create", requestPath: "-" },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "events",
+        "job_123",
+        "--after",
+        "4",
+        "--follow",
+        "--jsonl",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "api-runs-events",
+        jobId: "job_123",
+        afterSequence: 4,
+        follow: true,
+      },
+    })
+  })
+
   test("parses acp stdio command", () => {
     expect(
       parseHeadlessCliArgv([
