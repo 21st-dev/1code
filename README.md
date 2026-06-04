@@ -40,7 +40,7 @@ It provides:
 | Local schedules | Implemented and smoked locally on macOS |
 | `locus api` Local Job API v1 | Implemented and smoked locally on macOS |
 | Minimal `locus acp` stdio job surface | Experimental |
-| Windows packaged real-machine smoke | Pending |
+| Windows packaged real-machine smoke | Deferred; non-blocking for current local platform work |
 | Full ACP parity | Not implemented |
 | Hosted/cloud agents or hosted scheduler | Not implemented |
 | Full Codex parity with Claude Code | Not implemented |

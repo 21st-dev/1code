@@ -69,7 +69,8 @@ For a packaged macOS app, the launcher is under the app resources directory:
 
 For Windows, use the packaged `locus.cmd` launcher from the app resources
 directory. Source-level shim behavior is tested, but Windows packaged
-real-machine smoke remains a separate release gate.
+real-machine smoke is explicitly deferred and is not required for current
+source/macOS consumer integration.
 
 Development smoke can override the headless executable:
 

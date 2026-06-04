@@ -38,7 +38,7 @@ queue 里，Locus 就有意义。
 | 本地 schedule | 已实现，并已在 macOS 本地 smoke |
 | `locus api` Local Job API v1 | 已实现，并已在 macOS 本地 smoke |
 | 最小 `locus acp` stdio job 入口 | 实验性 |
-| Windows packaged 实机 smoke | 未完成 |
+| Windows packaged 实机 smoke | 已明确延期；不阻塞当前本地平台工作 |
 | 完整 ACP parity | 未实现 |
 | hosted/cloud agents 或 hosted scheduler | 未实现 |
 | Codex 与 Claude Code 完整能力对齐 | 未实现 |

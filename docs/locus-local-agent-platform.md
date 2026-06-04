@@ -40,9 +40,10 @@ projects:
 | `locus api` | Machine-readable Local Job API v1 for downstream consumers | Implemented; macOS smoked |
 | `locus acp` | Minimal stdio protocol for job-backed runs | Experimental |
 
-Windows source and shim behavior are covered by tests, but packaged Windows
-real-machine smoke is still pending. Do not describe this platform as
-cross-platform accepted until that evidence exists.
+Windows source and shim behavior are covered by tests. Packaged Windows
+real-machine smoke is explicitly deferred and non-blocking for current local
+platform work, Local Job API v1, and downstream integration. Do not describe the
+Windows packaged build as accepted until that evidence exists.
 
 ## Safety and Privacy Boundaries
 
@@ -145,7 +146,7 @@ Do not claim these as implemented:
 - generic safe retry for desktop chat jobs
 - automatic computer control without explicit permission gates
 - a security sandbox for arbitrary plugin or runtime code
-- cross-platform packaged acceptance before Windows real-machine smoke
+- Windows packaged acceptance claims before Windows real-machine smoke
 - offline-only or fully private execution
 - complete filesystem isolation
 - all API keys encrypted in main-process secure storage while the voice-key
@@ -189,18 +190,18 @@ Minimum useful operations:
 
 Recommended order:
 
-1. Finish Windows packaged real-machine smoke for `run`, `jobs`, daemon,
-   schedules, ACP, exit codes, stdout/stderr, and Workbench visibility.
-2. Harden documentation and release wording so local macOS completion is not
-   confused with cross-platform release readiness.
-3. Keep the Local Job API v1 consumer guide aligned with implementation and
+1. Keep the Local Job API v1 consumer guide aligned with implementation and
    smoke evidence.
-4. Let downstream projects integrate through the job boundary.
-5. Add stronger capability and permission gates for non-coding domains.
-6. Add full ACP parity only when a real external client needs standard ACP
+2. Let downstream projects integrate through the job boundary.
+3. Add stronger capability and permission gates for non-coding domains.
+4. Harden documentation and release wording so local macOS completion is not
+   confused with cross-platform release readiness.
+5. Add full ACP parity only when a real external client needs standard ACP
    session/protocol behavior.
-7. Add hosted or OS-level scheduling only after the local daemon and job
+6. Add hosted or OS-level scheduling only after the local daemon and job
    recovery model are stable on both macOS and Windows.
+7. Run Windows packaged real-machine smoke as a deferred platform/release
+   acceptance task, not as a blocker for the current local platform roadmap.
 
 ## Documentation Rule
 
@@ -213,7 +214,7 @@ local-first AI workbench
 local job platform
 runtime hub for Claude Code and Codex powered work
 minimal ACP stdio job surface
-macOS local smoke complete; Windows real-machine smoke pending
+macOS local smoke complete; Windows packaged real-machine smoke deferred
 ```
 
 Avoid:

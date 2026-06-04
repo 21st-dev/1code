@@ -38,8 +38,9 @@ coding 仍然是第一个强场景，但不是长期唯一场景。其他本地�
 | `locus api` | 面向下游 consumer 的机器可读 Local Job API v1 | 已实现，macOS 已 smoke |
 | `locus acp` | job-backed run 的最小 stdio 协议入口 | 实验性 |
 
-Windows 源码和 shim 行为有测试覆盖，但 Windows packaged 实机 smoke 仍未完成。在
-这项证据完成前，不要把该平台描述成已经完成双平台验收。
+Windows 源码和 shim 行为有测试覆盖。Windows packaged 实机 smoke 已明确延期，不阻塞
+当前本地平台工作、Local Job API v1 或下游接入。在这项证据完成前，不要把 Windows
+packaged build 描述成已经验收。
 
 ## 安全和隐私边界
 
@@ -133,7 +134,7 @@ plan/review 模式，修改日历数据前必须显式确认。
 - 普通桌面聊天 job 的通用安全 retry
 - 无显式授权门禁的自动电脑控制
 - 任意 plugin/runtime code 的安全沙箱
-- Windows 实机 smoke 前的双平台 packaged 验收完成
+- Windows 实机 smoke 前的 Windows packaged 验收完成声明
 - offline-only 或完全隐私执行
 - 完整文件系统隔离
 - voice-key hardening gap 完成前的“所有 API key 都已加密并进入 main-process secure storage”
@@ -173,15 +174,15 @@ Local Job API v1 已经实现为 `locus api` CLI group。下游项目应该读 c
 
 推荐顺序：
 
-1. 完成 Windows packaged 实机 smoke，覆盖 `run`、`jobs`、daemon、schedules、
-   ACP、exit code、stdout/stderr 和 Workbench 可见性。
-2. 收紧文档和 release wording，避免把 macOS 本地完成误写成双平台 release-ready。
-3. 保持 Local Job API v1 consumer guide 和实现、smoke evidence 对齐。
-4. 让下游项目先通过 job 边界接入。
-5. 为非 coding 场景补强 capability 和 permission gates。
-6. 只有真实外部 client 需要标准 ACP session/protocol 行为时，再做 full ACP parity。
-7. 只有本地 daemon 和 job recovery 在 macOS/Windows 都稳定后，再做 hosted 或
+1. 保持 Local Job API v1 consumer guide 和实现、smoke evidence 对齐。
+2. 让下游项目先通过 job 边界接入。
+3. 为非 coding 场景补强 capability 和 permission gates。
+4. 收紧文档和 release wording，避免把 macOS 本地完成误写成双平台 release-ready。
+5. 只有真实外部 client 需要标准 ACP session/protocol 行为时，再做 full ACP parity。
+6. 只有本地 daemon 和 job recovery 在 macOS/Windows 都稳定后，再做 hosted 或
    OS-level scheduling。
+7. Windows packaged 实机 smoke 作为已延期的平台/release 验收任务处理，不阻塞当前
+   本地平台路线图。
 
 ## 文档规则
 
@@ -194,7 +195,7 @@ local-first AI workbench
 local job platform
 runtime hub for Claude Code and Codex powered work
 minimal ACP stdio job surface
-macOS local smoke complete; Windows real-machine smoke pending
+macOS local smoke complete; Windows packaged real-machine smoke deferred
 ```
 
 避免使用：

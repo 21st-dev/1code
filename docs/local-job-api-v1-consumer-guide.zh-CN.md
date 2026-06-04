@@ -64,8 +64,8 @@ macOS packaged app 的 launcher 在 app resources 目录下：
 /Applications/Locus.app/Contents/Resources/cli/locus api runtimes list --json
 ```
 
-Windows 使用 app resources 目录下的 `locus.cmd` launcher。源码级 shim 行为已有测试覆盖，
-但 Windows packaged 实机 smoke 仍然是单独的 release gate。
+Windows 使用 app resources 目录下的 `locus.cmd` launcher。源码级 shim 行为已有测试覆盖。
+Windows packaged 实机 smoke 已明确延期，不要求它阻塞当前源码/macOS 下游接入。
 
 开发 smoke 可以覆盖 headless executable：
 

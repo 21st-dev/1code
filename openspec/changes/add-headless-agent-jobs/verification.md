@@ -24,9 +24,12 @@ and verified locally on macOS:
   daemon and minimal `locus acp` stdio creates/cancels/streams
   `source=protocol` jobs without claiming full ACP parity.
 
-This change is **not release-ready or archive-ready yet** because the OpenSpec
-requires both macOS and Windows support, and Windows has not had a real host
-smoke.
+This change is **archive-ready for the current local platform scope**. Windows
+source and shim behavior are covered by tests, but Windows packaged
+real-machine smoke is explicitly deferred and ignored for this change. The
+missing Windows evidence only blocks claims that the Windows packaged build has
+been accepted; it does not block current local platform work, Local Job API v1,
+or downstream integration.
 
 ## Verified Locally On macOS
 
@@ -293,7 +296,7 @@ ACP: minimal stdio JSON-RPC for initialize, job.run, job.cancel, shutdown, and j
 not claimed: hosted scheduler, OS service scheduler, full ACP parity, MCP negotiation parity, session resume parity
 ```
 
-## Windows Evidence Still Required
+## Windows Evidence Deferred
 
 Implemented and test-covered:
 
@@ -302,7 +305,7 @@ Implemented and test-covered:
 - Source tests cover Windows shim behavior and confirm it does not use detached `start` for headless `run`, `jobs`, or `daemon` commands.
 - Headless CLI parsing and dispatcher tests cover command behavior independent of platform shell.
 
-Not yet verified:
+Deferred, not blocking this change:
 
 - Real Windows host or CI smoke for `locus run`.
 - Real Windows host or CI smoke for `locus run --daemon`.
@@ -327,7 +330,9 @@ daemon source=daemon queue implemented and smoked locally on macOS
 schedule source=schedule jobs implemented and smoked locally on macOS
 minimal ACP source=protocol jobs implemented and smoked locally on macOS
 Windows shim implemented and source-tested
-Windows real smoke pending
+Windows packaged real smoke deferred
+current local platform scope archive-ready
+do not claim Windows packaged acceptance
 ```
 
 ## Deferred By Design

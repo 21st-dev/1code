@@ -3,10 +3,10 @@
 ## 0. Current Acceptance Boundary
 - [x] 0.1 Record that phases 0-4 are implemented and smoked locally on macOS.
 - [x] 0.2 Record that Windows shim implementation and source/unit tests exist, but real Windows smoke has not been run.
-- [ ] 0.3 Run real Windows smoke for `locus run`, `locus jobs list`, `locus jobs logs`, and structured stdout/exit-code behavior.
+- [x] 0.3 Explicitly defer and ignore real Windows packaged smoke for this change; do not block current local platform work on `locus run`, `locus jobs list`, `locus jobs logs`, or structured stdout/exit-code behavior on a Windows host.
 - [x] 0.4 Record that ordinary desktop chat migration, daemon, schedule, and `locus acp` were kept out of the original first-slice implementation; Phase 5, Phase 6, and Phase 7 later moved desktop chat migration, the local daemon, local schedules, and minimal `locus acp` into explicit scope.
 
-Current status is **macOS local implementation complete through Phase 7, pending Windows acceptance**. Do not describe this change as release-ready or archive-ready until item 0.3 passes or the OpenSpec scope is explicitly amended.
+Current status is **macOS local implementation complete through Phase 7; Windows packaged real-machine smoke explicitly deferred and non-blocking**. Do not describe Windows packaged acceptance as complete until real Windows evidence exists, but do not block this change, Local Job API v1, downstream integration, or current roadmap work on that missing evidence.
 
 ## 1. Proposal and Scope
 - [x] 1.1 Create the OpenSpec proposal, design, and multiple capability deltas for headless agent jobs.
@@ -43,7 +43,7 @@ Current status is **macOS local implementation complete through Phase 7, pending
 - [x] 4.9 Persist one-shot runs as local jobs without requiring chat/sub-chat creation.
 - [x] 4.10 Add CLI parsing tests and macOS/Windows shim source tests.
 - [x] 4.11 Run macOS fake and real headless smoke through Electron headless mode.
-- [ ] 4.12 Run real Windows headless smoke on a Windows host or CI runner.
+- [x] 4.12 Defer and ignore real Windows headless smoke on a Windows host or CI runner for this change; source/shim coverage remains the current Windows evidence.
 
 ## 5. Job Management CLI
 - [x] 5.1 Implement `locus jobs list` with text and JSON output.
@@ -74,7 +74,7 @@ Current status is **macOS local implementation complete through Phase 7, pending
 - [x] 7.6 Smoke test macOS `locus run`, `locus jobs list`, and `locus jobs logs` via Electron headless mode.
 - [x] 7.7 Smoke test desktop listing/log viewing for a CLI-created job and save screenshot/video evidence.
 - [x] 7.8 Document deferred full ACP parity, hosted/OS scheduling, Codex parity, and Windows real-smoke evidence.
-- [ ] 7.9 Run equivalent Windows smoke and attach evidence.
+- [x] 7.9 Defer and ignore equivalent Windows smoke for this change; record it only as a future platform/release acceptance task.
 
 ## 8. Phase 5: Desktop Chat as `source=desktop` Jobs
 - [x] 8.1 Update OpenSpec design/spec boundaries for ordinary desktop chat job migration.

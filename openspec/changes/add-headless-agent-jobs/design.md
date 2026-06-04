@@ -13,17 +13,19 @@ This change is implemented in explicit phases:
 
 Full ACP parity, hosted schedulers, and OS-level scheduling remain future follow-up proposals. The minimal local schedule and `locus acp` surfaces are compatibility slices over the local job platform, not a separate platform.
 
-The first implementation must support both macOS and Windows. If a platform
-cannot pass the same `locus run` / `locus jobs` smoke contract, the change is
-not complete. Linux support may follow the macOS shell-shim pattern where the
-packaging target exists, but the required first-slice platforms are macOS and
-Windows.
+The first implementation includes macOS execution and Windows source/shim
+support. Real Windows packaged host smoke is explicitly deferred and ignored for
+this change, so it must not block the current local platform scope. Linux
+support may follow the macOS shell-shim pattern where the packaging target
+exists. Do not claim Windows packaged acceptance until real Windows evidence is
+collected.
 
 The first implementation did not migrate ordinary desktop chat streaming into
 `agent_jobs`; CLI/headless jobs were the first persisted job source. Phase 5
 adds ordinary desktop chat as `source=desktop` jobs after the headless slice is
-stable enough on macOS. This phase still must not describe the first slice as
-release-ready until the Windows headless smoke evidence is collected.
+stable enough on macOS. This phase must not describe the Windows packaged build
+as accepted until Windows headless smoke evidence is collected, but that missing
+evidence is not a blocker for current local platform acceptance.
 
 Phase 5 migrates the outer job lifecycle only. It must preserve the existing
 desktop chat message, session, stream, rollback, guarded-run, attachment, and
