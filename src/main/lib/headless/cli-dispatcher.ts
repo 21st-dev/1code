@@ -34,6 +34,7 @@ import type { AgentTaskRunner } from "./agent-runtime-contract"
 import {
   HEADLESS_EXIT_CODES,
   runPersistedAgentJob,
+  type RunPersistedAgentJobResult,
 } from "./job-runner"
 import { runLocalAgentDaemon } from "./daemon"
 import { runAcpStdioServer } from "./acp-stdio"
@@ -51,6 +52,7 @@ import {
   getLocalJobApiEvents,
   getLocalJobApiJobOrThrow,
   parseLocalJobApiCreateRequestJson,
+  retryLocalJobApiJob,
   toLocalJobApiJobEnvelope,
   toLocalJobApiResultEnvelope,
   toLocalJobApiRuntimeManifestEnvelope,
@@ -370,6 +372,13 @@ function retryCommand(
       3,
     )
   }
+  if (job.source === "api") {
+    return commandError(
+      options.stderr,
+      "API jobs must be retried through locus api runs retry.",
+      3,
+    )
+  }
   getAgentJobPrompt(options.db, command.jobId)
   const retry = retryAgentJob(options.db, command.jobId)
   outputJob(options.stdout, command.output, retry)
@@ -382,6 +391,46 @@ async function readApiRequestContent(
 ): Promise<string> {
   if (command.requestPath === "-") return readStdin(options.stdin)
   return readRequestFile(command.requestPath)
+}
+
+async function runPreparedLocalJobApiJob(
+  prepared: ReturnType<typeof createLocalJobApiJob>,
+  options: RunHeadlessCliCommandOptions,
+): Promise<RunPersistedAgentJobResult> {
+  const initialArtifacts = writeLocalJobApiInitialArtifacts({
+    runDir: prepared.runDir,
+    request: prepared.request,
+    job: prepared.job,
+    events: listAgentJobEvents(options.db, prepared.job.id),
+  })
+  if (initialArtifacts.length > 0) {
+    appendAgentJobEvent(options.db, {
+      jobId: prepared.job.id,
+      type: "artifact_created",
+      payload: {
+        artifacts: initialArtifacts,
+      },
+    })
+  }
+
+  const result = await runPersistedAgentJob({
+    db: options.db,
+    jobId: prepared.job.id,
+    runner: options.runner,
+    env: options.env,
+  })
+  const finalEvents = listAgentJobEvents(options.db, result.job.id)
+  const artifacts = writeLocalJobApiFinalArtifacts({
+    runDir: prepared.runDir,
+    job: result.job,
+    events: finalEvents,
+  })
+  writeJson(options.stdout, {
+    apiVersion: LOCAL_JOB_API_VERSION,
+    job: toLocalJobApiJobEnvelope(result.job).job,
+    result: toLocalJobApiResultEnvelope(result.job, artifacts),
+  })
+  return result
 }
 
 async function apiRunsCreateCommand(
@@ -397,39 +446,7 @@ async function apiRunsCreateCommand(
       request,
       options.appVersion,
     )
-    const initialArtifacts = writeLocalJobApiInitialArtifacts({
-      runDir: prepared.runDir,
-      request,
-      job: prepared.job,
-      events: listAgentJobEvents(options.db, prepared.job.id),
-    })
-    if (initialArtifacts.length > 0) {
-      appendAgentJobEvent(options.db, {
-        jobId: prepared.job.id,
-        type: "artifact_created",
-        payload: {
-          artifacts: initialArtifacts,
-        },
-      })
-    }
-
-    const result = await runPersistedAgentJob({
-      db: options.db,
-      jobId: prepared.job.id,
-      runner: options.runner,
-      env: options.env,
-    })
-    const finalEvents = listAgentJobEvents(options.db, result.job.id)
-    const artifacts = writeLocalJobApiFinalArtifacts({
-      runDir: prepared.runDir,
-      job: result.job,
-      events: finalEvents,
-    })
-    writeJson(options.stdout, {
-      apiVersion: LOCAL_JOB_API_VERSION,
-      job: toLocalJobApiJobEnvelope(result.job).job,
-      result: toLocalJobApiResultEnvelope(result.job, artifacts),
-    })
+    const result = await runPreparedLocalJobApiJob(prepared, options)
     return result.exitCode
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -543,14 +560,17 @@ function apiRunsCancelCommand(
   }
 }
 
-function apiRunsRetryCommand(
+async function apiRunsRetryCommand(
   command: Extract<HeadlessCliCommand, { kind: "api-runs-retry" }>,
   options: RunHeadlessCliCommandOptions,
-): number {
+): Promise<number> {
   try {
-    getLocalJobApiJobOrThrow(options.db, command.jobId)
-    writeJson(options.stdout, toLocalJobApiJobEnvelope(retryAgentJob(options.db, command.jobId)))
-    return HEADLESS_EXIT_CODES.success
+    const job = getLocalJobApiJobOrThrow(options.db, command.jobId)
+    const result = await runPreparedLocalJobApiJob(
+      retryLocalJobApiJob(options.db, job),
+      options,
+    )
+    return result.exitCode
   } catch (error) {
     return commandError(
       options.stderr,

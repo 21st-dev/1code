@@ -10,10 +10,9 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs"
-import { dirname, isAbsolute, join, relative, resolve } from "node:path"
-import { eq } from "drizzle-orm"
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import type { AgentJob, AgentJobEvent } from "../db/schema"
-import { agentJobs } from "../db/schema"
+import { createId } from "../db/utils"
 import {
   checkRegisteredAgentRuntimeCapability,
   listRegisteredAgentRuntimeManifests,
@@ -33,6 +32,7 @@ import {
   createAgentJob,
   getAgentJob,
   listAgentJobEvents,
+  retryAgentJob,
   type AgentJobDatabase,
 } from "./job-store"
 import {
@@ -78,11 +78,33 @@ function isPathInside(parentPath: string, childPath: string): boolean {
   return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel))
 }
 
+function canonicalizePathWithExistingPrefix(targetPath: string): string {
+  const resolved = resolve(targetPath)
+  if (existsSync(resolved)) return realpathSync(resolved)
+
+  const pendingParts: string[] = []
+  let current = resolved
+  while (!existsSync(current)) {
+    const parent = dirname(current)
+    if (parent === current) return resolved
+    pendingParts.unshift(basename(current))
+    current = parent
+  }
+  return join(realpathSync(current), ...pendingParts)
+}
+
 function pathHasFinalComponent(path: string): boolean {
   return path
     .split(/[\\/]+/)
     .filter(Boolean)
     .some((part) => part.toLowerCase() === "final")
+}
+
+function pathHasComponent(path: string, component: string): boolean {
+  return path
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .some((part) => part.toLowerCase() === component.toLowerCase())
 }
 
 export function validateLocalJobApiArtifactBaseDir(
@@ -93,19 +115,67 @@ export function validateLocalJobApiArtifactBaseDir(
   if (pathHasFinalComponent(base)) {
     throw new Error("artifacts.baseDir cannot be inside a final artifact directory")
   }
+  if (pathHasComponent(base, ".git")) {
+    throw new Error("artifacts.baseDir cannot be inside a git metadata directory")
+  }
+  if (existsSync(base) && !lstatSync(base).isDirectory()) {
+    throw new Error("artifacts.baseDir must be a directory")
+  }
+}
+
+function assertNoSymlinkInExistingProjectPath(
+  targetPath: string,
+  projectRealPath: string,
+): void {
+  const relativePath = relative(projectRealPath, targetPath)
+  if (!relativePath) return
+  let current = projectRealPath
+  for (const part of relativePath.split(/[\\/]+/).filter(Boolean)) {
+    current = join(current, part)
+    if (!existsSync(current)) return
+    if (lstatSync(current).isSymbolicLink()) {
+      throw new Error("artifacts.baseDir cannot contain symlinks")
+    }
+  }
+}
+
+export function validateLocalJobApiArtifactBaseDirForProject(
+  artifactBaseDir: string | null,
+  projectCwd: string,
+): void {
+  validateLocalJobApiArtifactBaseDir(artifactBaseDir)
+  if (!artifactBaseDir) return
+  const base = canonicalizePathWithExistingPrefix(artifactBaseDir)
+  const projectReal = realpathSync(projectCwd)
+  if (!isPathInside(projectReal, base)) {
+    throw new Error("artifacts.baseDir must be inside project.cwd")
+  }
+  assertNoSymlinkInExistingProjectPath(base, projectReal)
 }
 
 export function prepareLocalJobApiArtifactRunDir(
   artifactBaseDir: string | null,
   jobId: string,
+  projectCwd?: string,
 ): string | null {
   if (!artifactBaseDir) return null
-  validateLocalJobApiArtifactBaseDir(artifactBaseDir)
+  if (projectCwd) {
+    validateLocalJobApiArtifactBaseDirForProject(artifactBaseDir, projectCwd)
+  } else {
+    validateLocalJobApiArtifactBaseDir(artifactBaseDir)
+  }
+  const projectReal = projectCwd ? realpathSync(projectCwd) : null
   const base = resolve(artifactBaseDir)
   mkdirSync(base, { recursive: true, mode: 0o700 })
   const baseReal = realpathSync(base)
   if (pathHasFinalComponent(baseReal)) {
     throw new Error("artifacts.baseDir cannot resolve inside a final artifact directory")
+  }
+  if (pathHasComponent(baseReal, ".git")) {
+    throw new Error("artifacts.baseDir cannot resolve inside a git metadata directory")
+  }
+  if (projectReal && !isPathInside(projectReal, baseReal)) {
+    throw new Error("artifacts.baseDir escaped project.cwd")
   }
   const runDir = join(baseReal, jobId)
   if (existsSync(runDir) && lstatSync(runDir).isSymbolicLink()) {
@@ -115,6 +185,9 @@ export function prepareLocalJobApiArtifactRunDir(
   const runReal = realpathSync(runDir)
   if (!isPathInside(baseReal, runReal)) {
     throw new Error("Artifact run directory escaped artifact base directory")
+  }
+  if (projectReal && !isPathInside(projectReal, runReal)) {
+    throw new Error("Artifact run directory escaped project.cwd")
   }
   return runReal
 }
@@ -198,6 +271,53 @@ function parseJobResult(job: AgentJob): unknown {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function parseJobInput(job: AgentJob): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(job.inputJson || "{}")
+    return isRecord(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function getLocalJobApiStoredRequest(
+  job: AgentJob,
+): NormalizedLocalJobApiCreateRequest {
+  if (job.source !== "api") throw new Error(`Job ${job.id} is not an API job`)
+  const input = parseJobInput(job)
+  const storedRuntime = isRecord(input.runtime) ? input.runtime : {}
+  const storedProject = isRecord(input.project) ? input.project : {}
+  const storedConsumer = isRecord(input.consumer) ? input.consumer : {}
+  const storedArtifacts = isRecord(input.artifacts) ? input.artifacts : {}
+  const storedInput = isRecord(input.input) ? input.input : {}
+  const prompt = typeof input.prompt === "string" ? input.prompt : ""
+  return assertLocalJobApiCreateRequest({
+    apiVersion: input.apiVersion ?? LOCAL_JOB_API_VERSION,
+    consumer: {
+      id: job.apiConsumerId ?? storedConsumer.id,
+      runExternalId: job.apiConsumerRunId ?? storedConsumer.runExternalId,
+    },
+    project: {
+      cwd: job.cwd,
+      projectId: job.projectId ?? storedProject.projectId,
+    },
+    runtime: {
+      id: job.runtime,
+      requiredCapabilities: storedRuntime.requiredCapabilities,
+    },
+    mode: job.mode,
+    prompt: {
+      text: prompt || job.promptPreview || "Retry API job",
+    },
+    input: storedInput,
+    artifacts: storedArtifacts,
+  })
+}
+
 function readArtifacts(path: string | null): LocalJobApiArtifact[] {
   if (!path || !existsSync(path)) return []
   try {
@@ -269,7 +389,15 @@ export function createLocalJobApiJob(
     request.project.projectId,
     "API run cwd",
   )
+  const jobId = createId()
+  const runDir = prepareLocalJobApiArtifactRunDir(
+    request.artifacts.baseDir,
+    jobId,
+    project.cwd,
+  )
+  const manifestPath = runDir ? join(runDir, "artifacts.json") : null
   const job = createAgentJob(db, {
+    id: jobId,
     source: "api",
     runtime: request.runtime.id,
     mode: request.mode,
@@ -278,6 +406,9 @@ export function createLocalJobApiJob(
     input: {
       apiVersion: request.apiVersion,
       consumer: request.consumer,
+      project: request.project,
+      runtime: request.runtime,
+      mode: request.mode,
       input: request.input,
       artifacts: request.artifacts,
       prompt: request.prompt.text,
@@ -285,25 +416,38 @@ export function createLocalJobApiJob(
     projectId: project.project.id,
     apiConsumerId: request.consumer.id,
     apiConsumerRunId: request.consumer.runExternalId,
-    artifactBaseDir: request.artifacts.baseDir,
+    artifactBaseDir: runDir ?? request.artifacts.baseDir,
+    artifactManifestPath: manifestPath,
     createdByVersion: appVersion ?? null,
   })
 
+  return { request, job: getAgentJob(db, job.id) ?? job, runDir }
+}
+
+export function retryLocalJobApiJob(
+  db: AgentJobDatabase,
+  job: AgentJob,
+): LocalJobApiCreatePrepared {
+  const request = getLocalJobApiStoredRequest(job)
+  validateLocalJobApiRequiredCapabilities(request)
+  const project = findRegisteredProjectForCwdWithCanonicalPath(
+    db,
+    request.project.cwd,
+    request.project.projectId,
+    "API retry cwd",
+  )
+  const retryId = createId()
   const runDir = prepareLocalJobApiArtifactRunDir(
     request.artifacts.baseDir,
-    job.id,
+    retryId,
+    project.cwd,
   )
-  if (runDir) {
-    const manifestPath = join(runDir, "artifacts.json")
-    db.update(agentJobs)
-      .set({
-        artifactBaseDir: runDir,
-        artifactManifestPath: manifestPath,
-      })
-      .where(eq(agentJobs.id, job.id))
-      .run()
-  }
-  return { request, job: getAgentJob(db, job.id) ?? job, runDir }
+  const retry = retryAgentJob(db, job.id, {
+    id: retryId,
+    artifactBaseDir: runDir ?? request.artifacts.baseDir,
+    artifactManifestPath: runDir ? join(runDir, "artifacts.json") : null,
+  })
+  return { request, job: retry, runDir }
 }
 
 export function writeLocalJobApiInitialArtifacts(input: {

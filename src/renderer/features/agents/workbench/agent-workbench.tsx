@@ -301,6 +301,7 @@ function getWorkbenchFilterCount(
 function canRetryHeadlessJob(job: HeadlessJob): boolean {
   return (
     job.source !== "desktop" &&
+    job.source !== "api" &&
     (job.status === "failed" ||
       job.status === "canceled" ||
       job.status === "interrupted")

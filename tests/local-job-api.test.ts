@@ -81,6 +81,34 @@ describe("Local Job API v1 shared contract", () => {
     }
   })
 
+  test("does not echo unsupported selector values in validation errors", () => {
+    const secretLike = "sk-abcdefghijklmnopqrstuvwxyz123456"
+    const request = validateLocalJobApiCreateRequest({
+      apiVersion: LOCAL_JOB_API_VERSION,
+      consumer: { id: "career-application-kit" },
+      project: { cwd: process.cwd() },
+      runtime: {
+        id: secretLike,
+        requiredCapabilities: [secretLike],
+      },
+      mode: secretLike,
+      prompt: { text: "Review this package." },
+      artifacts: {
+        writePolicy: secretLike,
+      },
+    })
+
+    expect(request.ok).toBe(false)
+    if (!request.ok) {
+      const message = request.errors.join("\n")
+      expect(message).toContain("Unsupported runtime.id")
+      expect(message).toContain("Unsupported required capability")
+      expect(message).toContain("Unsupported mode")
+      expect(message).toContain("Unsupported artifacts.writePolicy")
+      expect(message).not.toContain(secretLike)
+    }
+  })
+
   test("declares API source and artifact event type", () => {
     expect(AGENT_JOB_SOURCES).toContain("api")
     expect(AGENT_JOB_EVENT_TYPES).toContain("artifact_created")

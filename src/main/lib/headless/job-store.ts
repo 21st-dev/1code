@@ -25,6 +25,7 @@ import { AGENT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
 export type AgentJobDatabase = ReturnType<typeof drizzle<typeof schema>>
 
 export type CreateAgentJobInput = {
+  id?: string
   source: AgentJobSource
   runtime: AgentJobRuntime
   mode: AgentJobMode
@@ -70,6 +71,15 @@ export type ListAgentJobsInput = {
   status?: AgentJobStatus
   source?: AgentJobSource
 }
+
+export type RetryAgentJobOptions =
+  | Date
+  | {
+      now?: Date
+      id?: string
+      artifactBaseDir?: string | null
+      artifactManifestPath?: string | null
+    }
 
 const MAX_PROMPT_PREVIEW_LENGTH = 240
 const EVENT_SEQUENCE_RETRY_LIMIT = 5
@@ -238,7 +248,7 @@ export function createAgentJob(
   assertOneOf(AGENT_RUNTIME_IDS, input.runtime, "job runtime")
   assertOneOf(AGENT_JOB_MODES, input.mode, "job mode")
 
-  const id = createId()
+  const id = input.id ?? createId()
   const now = new Date()
   db.insert(agentJobs)
     .values({
@@ -614,8 +624,11 @@ export function interruptStaleAgentJobs(
 export function retryAgentJob(
   db: AgentJobDatabase,
   jobId: string,
-  now = new Date(),
+  optionsOrNow: RetryAgentJobOptions = new Date(),
 ): AgentJob {
+  const options =
+    optionsOrNow instanceof Date ? { now: optionsOrNow } : optionsOrNow
+  const now = options.now ?? new Date()
   const job = getAgentJob(db, jobId)
   if (!job) throw new Error(`Unknown job: ${jobId}`)
   if (
@@ -626,7 +639,7 @@ export function retryAgentJob(
     throw new Error(`Job ${job.id} cannot be retried from status ${job.status}`)
   }
 
-  const retryId = createId()
+  const retryId = options.id ?? createId()
   db.insert(agentJobs)
     .values({
       id: retryId,
@@ -644,8 +657,11 @@ export function retryAgentJob(
       inputJson: job.inputJson,
       apiConsumerId: job.apiConsumerId,
       apiConsumerRunId: job.apiConsumerRunId,
-      artifactBaseDir: job.artifactBaseDir,
-      artifactManifestPath: null,
+      artifactBaseDir:
+        options.artifactBaseDir !== undefined
+          ? options.artifactBaseDir
+          : job.artifactBaseDir,
+      artifactManifestPath: options.artifactManifestPath ?? null,
       createdAt: now,
       createdByVersion: job.createdByVersion,
     })

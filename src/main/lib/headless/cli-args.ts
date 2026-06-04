@@ -167,7 +167,7 @@ function takeFlag(args: string[], name: string): boolean {
 function parseOutput(args: string[]): HeadlessOutputFormat {
   const output = takeOption(args, "--output") ?? "text"
   if (!(HEADLESS_OUTPUT_FORMATS as readonly string[]).includes(output)) {
-    throw new Error(`Unsupported --output: ${output}`)
+    throw new Error("Unsupported --output")
   }
   return output as HeadlessOutputFormat
 }
@@ -175,7 +175,7 @@ function parseOutput(args: string[]): HeadlessOutputFormat {
 function parseMode(value: string | null, fallback: AgentJobMode = "agent"): AgentJobMode {
   const mode = value ?? fallback
   if (!(AGENT_JOB_MODES as readonly string[]).includes(mode)) {
-    throw new Error(`Unsupported --mode: ${mode}`)
+    throw new Error("Unsupported --mode")
   }
   return mode as AgentJobMode
 }
@@ -183,7 +183,7 @@ function parseMode(value: string | null, fallback: AgentJobMode = "agent"): Agen
 function parseRuntime(value: string | null): AgentRuntimeId {
   const runtime = toAgentRuntimeId(value ?? "claude-code")
   if (!runtime || !(AGENT_RUNTIME_IDS as readonly string[]).includes(runtime)) {
-    throw new Error(`Unsupported --runtime: ${value ?? "claude-code"}`)
+    throw new Error("Unsupported --runtime")
   }
   return runtime
 }
@@ -192,7 +192,7 @@ function parseJobSource(value: string | null): HeadlessJobSourceFilter {
   const source = value ?? "all"
   if (source === "all") return "all"
   if (!(AGENT_JOB_SOURCES as readonly string[]).includes(source)) {
-    throw new Error(`Unsupported --source: ${source}`)
+    throw new Error("Unsupported --source")
   }
   return source as AgentJobSource
 }
@@ -200,7 +200,7 @@ function parseJobSource(value: string | null): HeadlessJobSourceFilter {
 function parseScheduleStatus(value: string | null): AgentScheduleStatus | null {
   if (!value) return null
   if (!(AGENT_SCHEDULE_STATUSES as readonly string[]).includes(value)) {
-    throw new Error(`Unsupported --status: ${value}`)
+    throw new Error("Unsupported --status")
   }
   return value as AgentScheduleStatus
 }
@@ -250,19 +250,54 @@ function rejectSecretFlags(args: string[]): void {
     "--access-token",
     "--refresh-token",
   ]
-  const flag = args.find((arg) => forbidden.includes(arg))
+  const flag = args.find((arg) =>
+    forbidden.some((forbiddenFlag) =>
+      arg === forbiddenFlag || arg.startsWith(`${forbiddenFlag}=`),
+    ),
+  )
   if (flag) {
-    throw new Error(`${flag} is not accepted. Use stored provider credentials.`)
+    const safeFlag = flag.split("=", 1)[0] || "--secret"
+    throw new Error(`${safeFlag} is not accepted. Use stored provider credentials.`)
   }
+}
+
+const SECRET_ARG_VALUE_PATTERNS = [
+  /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----/,
+  /(^|[^A-Za-z0-9_])sk-[A-Za-z0-9_-]{20,}/,
+  /github_pat_[A-Za-z0-9_]{20,}/,
+  /gh[pousr]_[A-Za-z0-9_]{20,}/,
+  /bearer\s+[A-Za-z0-9._-]+/i,
+  /authorization\s*:\s*basic\s+[A-Za-z0-9+/=_-]+/i,
+]
+
+function sanitizeCliArgForError(arg: string): string {
+  const equalsIndex = arg.indexOf("=")
+  if (equalsIndex > 0) {
+    const flag = arg.slice(0, equalsIndex)
+    if (
+      /--?(api[-_]?key|token|auth[-_]?token|access[-_]?token|refresh[-_]?token|authorization|password|secret)$/i.test(flag)
+    ) {
+      return `${flag}=<redacted>`
+    }
+  }
+  if (SECRET_ARG_VALUE_PATTERNS.some((pattern) => pattern.test(arg))) {
+    return "[redacted-argument]"
+  }
+  if (arg.length > 200) return `${arg.slice(0, 197)}...`
+  return arg
+}
+
+function unexpectedArgumentsMessage(args: string[]): string {
+  return `Unexpected arguments: ${args.map(sanitizeCliArgForError).join(" ")}`
 }
 
 function errorCodeForParseMessage(message: string): number {
   if (message.startsWith("Invalid or inaccessible cwd:")) return 7
   if (
-    message.startsWith("Unsupported --runtime:") ||
-    message.startsWith("Unsupported --mode:") ||
-    message.startsWith("Unsupported --source:") ||
-    message.startsWith("Unsupported --status:")
+    message.startsWith("Unsupported --runtime") ||
+    message.startsWith("Unsupported --mode") ||
+    message.startsWith("Unsupported --source") ||
+    message.startsWith("Unsupported --status")
   ) {
     return 3
   }
@@ -294,7 +329,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
         throw new Error("locus run requires --prompt or --stdin")
       }
       if (args.length > 0) {
-        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        throw new Error(unexpectedArgumentsMessage(args))
       }
       return {
         ok: true,
@@ -319,14 +354,14 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
       if (subcommand === "list") {
         const source = parseJobSource(takeOption(args, "--source"))
         if (args.length > 0) {
-          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          throw new Error(unexpectedArgumentsMessage(args))
         }
         return { ok: true, command: { kind: "jobs-list", source, output } }
       }
       const jobId = args.shift()
       if (!jobId) throw new Error(`locus jobs ${subcommand} requires a job id`)
       if (args.length > 0) {
-        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        throw new Error(unexpectedArgumentsMessage(args))
       }
       if (subcommand === "show") {
         return { ok: true, command: { kind: "jobs-show", jobId, output } }
@@ -352,7 +387,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           throw new Error(`Unknown api runtimes subcommand: ${subcommand}`)
         }
         if (args.length > 0) {
-          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          throw new Error(unexpectedArgumentsMessage(args))
         }
         return { ok: true, command: { kind: "api-runtimes-list" } }
       }
@@ -366,7 +401,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
             throw new Error("locus api runs create requires --request <path|->")
           }
           if (args.length > 0) {
-            throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+            throw new Error(unexpectedArgumentsMessage(args))
           }
           return {
             ok: true,
@@ -385,7 +420,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           const jobId = args.shift()
           if (!jobId) throw new Error("locus api runs events requires a job id")
           if (args.length > 0) {
-            throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+            throw new Error(unexpectedArgumentsMessage(args))
           }
           return {
             ok: true,
@@ -404,7 +439,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           throw new Error(`locus api runs ${subcommand ?? ""} requires a job id`)
         }
         if (args.length > 0) {
-          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          throw new Error(unexpectedArgumentsMessage(args))
         }
         if (
           subcommand === "status" ||
@@ -451,7 +486,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
         60_000,
       )
       if (args.length > 0) {
-        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        throw new Error(unexpectedArgumentsMessage(args))
       }
       return {
         ok: true,
@@ -472,7 +507,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
         const includeDisabled = takeFlag(args, "--include-disabled")
         const status = parseScheduleStatus(takeOption(args, "--status"))
         if (args.length > 0) {
-          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          throw new Error(unexpectedArgumentsMessage(args))
         }
         return {
           ok: true,
@@ -501,7 +536,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           throw new Error("locus schedules create requires --prompt")
         }
         if (args.length > 0) {
-          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          throw new Error(unexpectedArgumentsMessage(args))
         }
         return {
           ok: true,
@@ -529,7 +564,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           throw new Error(`locus schedules ${subcommand} requires a schedule id`)
         }
         if (args.length > 0) {
-          throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+          throw new Error(unexpectedArgumentsMessage(args))
         }
         return {
           ok: true,
@@ -552,7 +587,7 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
 
     if (command === "acp") {
       if (args.length > 0) {
-        throw new Error(`Unexpected arguments: ${args.join(" ")}`)
+        throw new Error(unexpectedArgumentsMessage(args))
       }
       return { ok: true, command: { kind: "acp" } }
     }

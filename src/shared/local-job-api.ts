@@ -228,7 +228,7 @@ function normalizeRequiredCapabilities(
       typeof item !== "string" ||
       !(AGENT_RUNTIME_CAPABILITY_IDS as readonly string[]).includes(item)
     ) {
-      errors.push(`Unsupported required capability: ${String(item)}`)
+      errors.push("Unsupported required capability")
       continue
     }
     if (!capabilities.includes(item as AgentRuntimeCapabilityId)) {
@@ -285,7 +285,7 @@ export function validateLocalJobApiCreateRequest(
     typeof runtimeInput?.id === "string" ? runtimeInput.id : null,
   )
   if (!runtimeId || !(AGENT_RUNTIME_IDS as readonly string[]).includes(runtimeId)) {
-    errors.push(`Unsupported runtime.id: ${String(runtimeInput?.id ?? "")}`)
+    errors.push("Unsupported runtime.id")
   }
   const requiredCapabilities = normalizeRequiredCapabilities(
     runtimeInput?.requiredCapabilities,
@@ -294,7 +294,7 @@ export function validateLocalJobApiCreateRequest(
 
   const mode = typeof value.mode === "string" ? value.mode : ""
   if (!(AGENT_JOB_MODES as readonly string[]).includes(mode)) {
-    errors.push(`Unsupported mode: ${mode}`)
+    errors.push("Unsupported mode")
   }
 
   const prompt = isRecord(value.prompt) ? value.prompt : null
@@ -329,7 +329,7 @@ export function validateLocalJobApiCreateRequest(
     !writePolicy ||
     !(LOCAL_JOB_API_WRITE_POLICIES as readonly string[]).includes(writePolicy)
   ) {
-    errors.push(`Unsupported artifacts.writePolicy: ${String(writePolicy)}`)
+    errors.push("Unsupported artifacts.writePolicy")
   }
 
   const secretFindings: string[] = []

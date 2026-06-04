@@ -106,6 +106,11 @@ export const agentJobsRouter = router({
           "Desktop chat jobs must be retried from their linked chat.",
         )
       }
+      if (job.source === "api") {
+        throw new Error(
+          "API jobs must be retried through locus api runs retry.",
+        )
+      }
       if (!isTerminalAgentJobStatus(job.status as AgentJobStatus)) {
         throw new Error(`Job ${job.id} is not finished yet.`)
       }

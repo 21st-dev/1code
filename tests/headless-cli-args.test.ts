@@ -66,6 +66,44 @@ describe("headless CLI args", () => {
     }
   })
 
+  test("redacts secret-like CLI values from parse errors", () => {
+    const directFlag = parseHeadlessCliArgv([
+      "Locus",
+      HEADLESS_CLI_MARKER,
+      "run",
+      "--api-key=sk-abcdefghijklmnopqrstuvwxyz123456",
+      "--prompt",
+      "Do work",
+    ])
+
+    expect(directFlag).toMatchObject({
+      ok: false,
+      code: 2,
+    })
+    if (!directFlag.ok) {
+      expect(directFlag.message).toContain("--api-key is not accepted")
+      expect(directFlag.message).not.toContain("sk-abcdefghijklmnopqrstuvwxyz123456")
+    }
+
+    const unexpectedArg = parseHeadlessCliArgv([
+      "Locus",
+      HEADLESS_CLI_MARKER,
+      "jobs",
+      "show",
+      "job_123",
+      "sk-abcdefghijklmnopqrstuvwxyz123456",
+    ])
+
+    expect(unexpectedArg).toMatchObject({
+      ok: false,
+      code: 2,
+    })
+    if (!unexpectedArg.ok) {
+      expect(unexpectedArg.message).toContain("[redacted-argument]")
+      expect(unexpectedArg.message).not.toContain("sk-abcdefghijklmnopqrstuvwxyz123456")
+    }
+  })
+
   test("classifies unsupported runtime and invalid cwd with documented exit codes", () => {
     expect(
       parseHeadlessCliArgv([

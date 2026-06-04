@@ -70,6 +70,7 @@ describe("headless desktop jobs UI", () => {
       expect(source).toContain("schedules.length === 0")
       expect(source).toContain("getWorkbenchFilterCount(counts, item)")
       expect(source).toContain('job.source !== "desktop"')
+      expect(source).toContain('job.source !== "api"')
       expect(source).not.toContain("tasks.length === 0 && headlessJobs.length === 0")
   })
 
