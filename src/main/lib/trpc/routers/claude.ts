@@ -3491,6 +3491,9 @@ ${prompt}
         scope: "project",
         projectPath: input.projectPath,
       })
+      if (!projectPath) {
+        throw new Error("Project path required for MCP OAuth")
+      }
       return startMcpOAuth(serverName, projectPath)
     }),
 
