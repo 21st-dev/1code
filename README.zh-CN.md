@@ -2,43 +2,31 @@
 
 语言：[English](README.md) | 简体中文
 
-本地优先的 AI 工作台，用多个 agent runtime 操作本地项目。
+Locus 是一个本地优先的桌面 AI 工作台，用多个 agent runtime 操作本地项目。它把
+Claude Code、Codex、provider-backed agents、MCP tools、terminal commands、git
+workflows、worktrees 和本地 job automation 放在一个可见的桌面环境里。
 
-Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先桌面工作台。
-coding 仍然是第一个强场景，但 Locus 不只是 coding chat UI、CLI runner 或后台
-runtime。它是一个桌面环境：用户可以让 agent 查看和修改项目文件、运行 terminal 和
-git 工作流、管理 worktrees，并在执行过程中观察、取消、继续或控制这些工作。
-
-在这个工作台下面，Locus 统一承载 Claude Code、Codex、custom providers、MCP、
-skills，以及未来的 computer-control 或工具操作能力。durable local jobs、event logs、
-daemon、schedules 和 protocol entry points 是支撑设施，用来让 agent 工作可见、可取消、
-可恢复、可审计，并能被周边本地应用复用。
-
-Locus 保留本地项目选择、worktrees、terminal、git 工具、文件和工具执行流程、Claude
-Code、Codex、custom providers、MCP、skills，以及已支持 provider 流程里的加密本地
-provider profile 存储，同时从默认本地优先版本中移除或隔离上游 hosted 产品入口。
+Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先 runtime hub。
+coding 仍然是第一个强场景，但它不只是 coding chat UI。Locus 的目标是让本地 agent
+工作可见、可取消、可恢复、可审计，并能被周边本地应用复用。
 
 ![Locus 目标本地 agent 平台](docs/assets/locus-agent-platform.zh-CN.svg)
 
-## 当前范围
+## 为什么需要 Locus
 
-- 本地项目和本地 SQLite 状态
-- Claude Code subscription、API key 和 custom provider 流程
-- Codex subscription、API key 和本地 Codex 集成
-- 带 event logs、取消、重试、heartbeat 和 stale-worker recovery 的 durable local agent jobs
-- 用于本地运行和 job inspection 的 headless CLI commands
-- 用于后台 job 的 local daemon queue
-- 通过 daemon 创建可见 job 的本地 opt-in schedules
-- 覆盖 chat、CLI、daemon、schedule 和 protocol-created jobs 的 Agent Workbench 可见性
-- 用于 job-backed protocol run 的最小 `locus acp` stdio 入口
-- 本地 chat、tools、terminal、git diff、staging、commit generation 和 worktrees
-- Ollama 优先的 helper generation，以及 Settings 配置的 provider fallback
-- 默认启用 local-only guard，作为 defense-in-depth
-- 上游 hosted auth、subscription checks、remote sandbox、automations、inbox、analytics、error tracking 和 updater UI 已从默认本地优先版本移除或隔离
+当你希望 agent 工作绑定在本地 project 上，而不是散落在不同 runtime CLI 或 hosted
+queue 里，Locus 就有意义。
 
-## 状态和边界
+它提供：
 
-当前本地成熟度：
+- 面向本地 project、file、terminal、git 和 worktree flows 的桌面工作台
+- Claude Code 和 Codex runtime 集成，以及 runtime-specific capability truth
+- durable local jobs，支持 status、event logs、取消、重试、heartbeat 和 recovery
+- 面向自动化的 headless CLI、daemon、schedules 和 protocol surfaces
+- 面向下游工具，例如 career apps 的机器可读 Local Job API v1
+- 本地优先的 provider/profile handling，默认移除或隔离上游 hosted surfaces
+
+## 当前状态
 
 | 模块 | 状态 |
 | --- | --- |
@@ -48,39 +36,25 @@ provider profile 存储，同时从默认本地优先版本中移除或隔离上
 | `locus run` / `locus jobs` | 已实现，并已在 macOS 本地 smoke |
 | 本地 daemon 队列 | 已实现，并已在 macOS 本地 smoke |
 | 本地 schedule | 已实现，并已在 macOS 本地 smoke |
+| `locus api` Local Job API v1 | 已实现，并已在 macOS 本地 smoke |
 | 最小 `locus acp` stdio job 入口 | 实验性 |
 | Windows packaged 实机 smoke | 未完成 |
 | 完整 ACP parity | 未实现 |
 | hosted/cloud agents 或 hosted scheduler | 未实现 |
 | Codex 与 Claude Code 完整能力对齐 | 未实现 |
 
-平台定位、集成边界和路线图见
+平台定位和边界见
 [docs/locus-local-agent-platform.zh-CN.md](docs/locus-local-agent-platform.zh-CN.md)。
 
-## Local-Only 模式
+## 从源码启动
 
-Local-only mode 默认启用。如果某个 dormant compatibility path 被意外触发，它会阻止桌面应用访问上游 hosted services。Hosted auth、subscription checks、remote sandbox/import、hosted voice/TTS fallback、automations、inbox、telemetry 和 updater UI 不属于默认本地优先产品。
+前置依赖：
 
-如果需要有意测试 hosted/internal services，需要显式关闭：
+- Bun
+- Python
+- macOS 上的 Xcode Command Line Tools
 
-```bash
-LOCUS_LOCAL_ONLY=false bun run dev
-# 或
-MAIN_VITE_LOCAL_ONLY=false bun run dev
-```
-
-用户配置的 AI provider endpoints、Ollama、本地项目、Git、由本地流程发起的 GitHub 操作，以及非上游 hosted services 的外部链接仍然可用。
-
-Local-first 不是 offline-only，也不代表“数据绝不会离开本机”。当你使用 Claude
-Code、Codex、配置的 provider、语音转写、MCP tools 或 GitHub workflows 时，prompt、
-选中的文件内容、diff、音频、tool context 或 metadata 可能会发送到用户选择的服务或
-runtime。
-
-Locus 不是 OS sandbox。terminal、git、filesystem、MCP、runtime tools，以及未来的
-computer-control flows，在用户授权或调用后都可能影响本机。部分流程有 project /
-worktree-aware 检查，但不能把它描述成完整文件系统隔离。
-
-## 开发
+安装并运行：
 
 ```bash
 bun install
@@ -96,6 +70,85 @@ bun run ts:check
 bun run build
 git diff --check
 ```
+
+## 使用 Locus
+
+### Desktop Workbench
+
+运行桌面应用，选择本地 repository，然后在 workbench 里查看 agent work、project files、
+terminal/git flows、worktrees 和 job history。
+
+### Headless CLI
+
+用 CLI 做一次性本地 run 和 job inspection：
+
+```bash
+locus run --runtime codex --mode plan --prompt "Inspect this project"
+locus jobs list
+locus jobs show <job-id>
+locus jobs logs <job-id>
+```
+
+开发环境里的 launcher：
+
+```bash
+resources/cli/locus
+```
+
+打包后的 app 会把 launcher 放在 resources 目录下。
+
+### Local Job API v1
+
+下游本地应用应该使用 `locus api`，而不是 import Locus 源码或直接读取 `agents.db`：
+
+```bash
+locus api runtimes list --json
+locus api runs create --request request.json --json
+locus api runs status <job-id> --json
+locus api runs events <job-id> --after 0 --jsonl
+locus api runs result <job-id> --json
+locus api runs cancel <job-id> --json
+locus api runs retry <job-id> --json
+```
+
+接入手册：
+
+- [Local Job API v1 Consumer Guide](docs/local-job-api-v1-consumer-guide.md)
+- [Local Job API v1 下游接入手册](docs/local-job-api-v1-consumer-guide.zh-CN.md)
+
+## Local-Only 模式
+
+Local-only mode 默认启用。如果某个 dormant compatibility path 被意外触发，它会阻止
+桌面应用访问上游 hosted services。Hosted auth、subscription checks、remote
+sandbox/import、hosted voice/TTS fallback、automations、inbox、telemetry 和 updater
+UI 不属于默认本地优先产品。
+
+如果需要有意测试 hosted 或 internal services，需要显式关闭：
+
+```bash
+LOCUS_LOCAL_ONLY=false bun run dev
+# 或
+MAIN_VITE_LOCAL_ONLY=false bun run dev
+```
+
+用户配置的 AI provider endpoints、Ollama、本地项目、Git、由本地流程发起的 GitHub
+操作，以及非上游 hosted services 的外部链接仍然可用。
+
+Local-first 不是 offline-only，也不代表“数据绝不会离开本机”。当你使用 Claude Code、
+Codex、配置的 provider、语音转写、MCP tools 或 GitHub workflows 时，prompt、选中的
+文件内容、diff、音频、tool context 或 metadata 可能会发送到用户选择的服务或 runtime。
+
+Locus 不是 OS sandbox。terminal、git、filesystem、MCP、runtime tools，以及未来的
+computer-control flows，在用户授权或调用后都可能影响本机。已支持的防护是 project /
+worktree-aware controls，不是完整文件系统隔离。
+
+## 文档
+
+- [本地 agent 平台](docs/locus-local-agent-platform.zh-CN.md)
+- [Local Job API v1 下游接入手册](docs/local-job-api-v1-consumer-guide.zh-CN.md)
+- [Runtime environment center plan](docs/runtime-environment-center-plan.md)
+- [Contributing](CONTRIBUTING.md)
+- [License](LICENSE)
 
 ## 打包
 
@@ -114,18 +167,36 @@ bun run release:manifest
 bun run release:smoke:mac
 ```
 
-Packaged macOS app 和 Windows NSIS installer 可以自动检查这个 fork 的 GitHub Releases feed。下载和 restart-to-install 仍由用户在 Settings > About 中手动触发。Windows portable build 和 Linux build 继续通过 GitHub Releases 手动下载。`release:manifest` 会为当前 `*-friend.zip` artifacts 和 electron-builder 默认 ZIP 名称生成 fallback release attachment metadata；生产 updater feed 由 electron-builder publish metadata 生成。
+开源源码分发和桌面 installer 分发是两件事。即使签名基础设施还没准备好，也可以先发布
+source repo；贡献者可以 clone、检查、运行和本地构建应用，不需要 code-signing
+certificate。
 
-开源源码分发和桌面 installer 分发是两件事。即使签名基础设施还没准备好，也可以先发布 source repo；贡献者可以 clone、检查、运行和本地构建应用，不需要 code-signing certificate。
+当前 repo config 没有定义 macOS notarization step。本地或内部 macOS / Windows package
+可能是 unsigned 或 ad-hoc signed。在签名配置完成前，任何发布到 GitHub Release 的桌面
+artifacts 都应该被标注为 unsigned pre-release/test builds。更广泛的 public installer
+distribution 应等到 macOS Developer ID signing、notarization/stapling 和 Windows code
+signing 配置完成后再做。
 
-当前 repo config 没有定义 macOS notarization step。本地或内部 macOS / Windows package 可能是 unsigned 或 ad-hoc signed。在签名配置完成前，任何发布到 GitHub Release 的桌面 artifacts 都应该被标注为 unsigned pre-release/test builds，不要描述成 production-ready automatic updates。更广泛的 public installer distribution 应等到 macOS Developer ID signing、notarization/stapling 和 Windows code signing 配置完成后再做。
+## 贡献和帮助
 
-## 备注
+提交变更前请先读 [CONTRIBUTING.md](CONTRIBUTING.md)。新能力、breaking changes、
+architecture shifts 或 security-sensitive work 应该先走 OpenSpec。
 
-- Voice transcription 只使用用户提供的 OpenAI API key；默认版本已经移除上游 hosted subscription fallback。Voice key storage 仍是已知 hardening gap；迁移到 main-process secure storage 前，不要把它纳入“所有 API key 都已加密”的广泛声明。
-- 新 worktree setup config 保存到 `.locus/worktree.json`。旧的 `.1code/worktree.json` 仍可读取，保证已有项目继续可用。
-- 为避免破坏已有本地项目数据，legacy `1code` CLI、`~/Library/Application Support/Agent Code for Me`、`~/.21st/worktrees` 等兼容名称和路径可能仍然存在。
-- 部分上游兼容名称仍然保留以避免破坏已有本地项目数据，但不要在没有 OpenSpec proposal 的情况下重新引入 hosted product surfaces。
+bug、集成问题和变更建议可以通过本 repository 的 issues 或 pull requests 处理。Locus
+由这个 fork 维护；上游项目 credit 归属
+[21st-dev/1code](https://github.com/21st-dev/1code)。
+
+## 已知边界
+
+- Voice transcription 只使用用户提供的 OpenAI API key；默认版本已经移除上游 hosted
+  subscription fallback。Voice key storage 仍是已知 hardening gap；迁移到 main-process
+  secure storage 前，不要把它纳入“所有 API key 都已加密”的广泛声明。
+- 新 worktree setup config 保存到 `.locus/worktree.json`。旧的 `.1code/worktree.json`
+  仍可读取，保证已有项目继续可用。
+- 为避免破坏已有本地项目数据，legacy `1code` CLI、
+  `~/Library/Application Support/Agent Code for Me`、`~/.21st/worktrees` 等兼容名称和路径
+  可能仍然存在。
+- 不要在没有 OpenSpec proposal 的情况下重新引入 hosted product surfaces。
 
 ## License
 
