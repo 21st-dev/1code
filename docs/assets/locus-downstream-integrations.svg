@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="660" viewBox="0 0 1120 660" role="img" aria-labelledby="title desc">
   <title id="title">Downstream projects integrating through Locus jobs</title>
-  <desc id="desc">A diagram showing job-search, calendar planning, and computer operation projects using Locus through the job boundary instead of embedding Claude Code or Codex directly.</desc>
+  <desc id="desc">A diagram showing document review, calendar planning, and computer operation projects using Locus through the job boundary instead of embedding Claude Code or Codex directly.</desc>
   <defs>
     <style>
       .bg { fill: #fbfbfa; }
@@ -26,8 +26,8 @@
   <text class="small" x="64" y="94">Avoid embedding Claude Code or Codex separately in every downstream app</text>
 
   <rect class="app" x="64" y="138" width="280" height="106" rx="14"/>
-  <text class="label" x="96" y="178">Job Search</text>
-  <text class="small" x="96" y="206">resumes, JD, drafts</text>
+  <text class="label" x="96" y="178">Document Review</text>
+  <text class="small" x="96" y="206">sources, notes, drafts</text>
 
   <rect class="app" x="64" y="278" width="280" height="106" rx="14"/>
   <text class="label" x="96" y="318">Calendar Planning</text>

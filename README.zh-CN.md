@@ -23,7 +23,7 @@ queue 里，Locus 就有意义。
 - Claude Code 和 Codex runtime 集成，以及 runtime-specific capability truth
 - durable local jobs，支持 status、event logs、取消、重试、heartbeat 和 recovery
 - 面向自动化的 headless CLI、daemon、schedules 和 protocol surfaces
-- 面向下游工具，例如 career apps 的机器可读 Local Job API v1
+- 面向下游本地工具的机器可读 Local Job API v1
 - 本地优先的 provider/profile handling，默认移除或隔离上游 hosted surfaces
 
 ## 当前状态

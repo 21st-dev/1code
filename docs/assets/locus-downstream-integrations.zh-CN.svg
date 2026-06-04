@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="660" viewBox="0 0 1120 660" role="img" aria-labelledby="title desc">
   <title id="title">下游项目通过 Locus job 边界接入</title>
-  <desc id="desc">架构图：求职、日历规划和电脑操作项目通过 Locus job 边界接入，而不是各自重复内嵌 Claude Code 或 Codex。</desc>
+  <desc id="desc">架构图：文档审阅、日历规划和电脑操作项目通过 Locus job 边界接入，而不是各自重复内嵌 Claude Code 或 Codex。</desc>
   <defs>
     <style>
       .bg { fill: #fbfbfa; }
@@ -24,8 +24,8 @@
   <text class="small" x="64" y="94">不要在每个项目里重复内嵌 Claude Code 或 Codex CLI</text>
 
   <rect class="app" x="64" y="138" width="280" height="106" rx="14"/>
-  <text class="label" x="96" y="178">求职助手</text>
-  <text class="small" x="96" y="206">简历、JD、草稿</text>
+  <text class="label" x="96" y="178">文档审阅</text>
+  <text class="small" x="96" y="206">来源、笔记、草稿</text>
 
   <rect class="app" x="64" y="278" width="280" height="106" rx="14"/>
   <text class="label" x="96" y="318">日历规划</text>

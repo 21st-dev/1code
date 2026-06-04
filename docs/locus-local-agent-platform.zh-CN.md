@@ -79,15 +79,15 @@ provider secrets。当前例外：voice OpenAI key storage 仍需要硬化；在
 
 这些是推荐的集成模式，不代表所有集成都已经完成。
 
-### 本地求职助手
+### 文档审阅工作台
 
-求职应用可以自己保存简历、cover letter、决策记录和最终提交材料，同时把审阅和草稿
-生成任务交给 Locus 执行。
+文档审阅应用可以自己保存 source files、notes、drafts 和 approved artifacts，同时把
+审阅和草稿生成任务交给 Locus 执行。
 
 第一阶段适合集成：
 
 ```text
-当前职位页 / 本地材料包
+source files / 本地 package
   -> 创建 Locus job
   -> 读取 job events
   -> 用户确认后再写入草稿或 final artifact

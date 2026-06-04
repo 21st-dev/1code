@@ -11,12 +11,12 @@ import { createAgentJob, getAgentJob } from "../src/main/lib/headless/job-store"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
 describe("Local Job API v1 shared contract", () => {
-  test("normalizes a career-style create request", () => {
+  test("normalizes a generic local-package create request", () => {
     const request = validateLocalJobApiCreateRequest({
       apiVersion: LOCAL_JOB_API_VERSION,
       consumer: {
-        id: "career-application-kit",
-        runExternalId: "company-role-review-001",
+        id: "docs-workbench",
+        runExternalId: "package-review-001",
       },
       project: {
         cwd: process.cwd(),
@@ -27,14 +27,14 @@ describe("Local Job API v1 shared contract", () => {
       },
       mode: "plan",
       prompt: {
-        text: "Review this application package.",
+        text: "Review this local package.",
       },
       input: {
-        contract: "career.job-package.v1",
-        packageDir: `${process.cwd()}/fixtures/application-package`,
+        contract: "example.local-package.v1",
+        packageDir: `${process.cwd()}/fixtures/local-package`,
       },
       artifacts: {
-        baseDir: `${process.cwd()}/fixtures/application-package/.locus/runs`,
+        baseDir: `${process.cwd()}/fixtures/local-package/.locus/runs`,
         writePolicy: "proposal-only",
       },
     })
@@ -44,8 +44,8 @@ describe("Local Job API v1 shared contract", () => {
       request: {
         apiVersion: LOCAL_JOB_API_VERSION,
         consumer: {
-          id: "career-application-kit",
-          runExternalId: "company-role-review-001",
+          id: "docs-workbench",
+          runExternalId: "package-review-001",
         },
         runtime: {
           id: "claude-code",
@@ -62,13 +62,13 @@ describe("Local Job API v1 shared contract", () => {
   test("rejects secret-like request fields and values", () => {
     const request = validateLocalJobApiCreateRequest({
       apiVersion: LOCAL_JOB_API_VERSION,
-      consumer: { id: "career-application-kit" },
+      consumer: { id: "docs-workbench" },
       project: { cwd: process.cwd() },
       runtime: { id: "codex" },
       mode: "plan",
       prompt: { text: "Review this package." },
       input: {
-        contract: "career.job-package.v1",
+        contract: "example.local-package.v1",
         authorization: "Bearer secret-token-value",
       },
     })
@@ -85,7 +85,7 @@ describe("Local Job API v1 shared contract", () => {
     const secretLike = "sk-abcdefghijklmnopqrstuvwxyz123456"
     const request = validateLocalJobApiCreateRequest({
       apiVersion: LOCAL_JOB_API_VERSION,
-      consumer: { id: "career-application-kit" },
+      consumer: { id: "docs-workbench" },
       project: { cwd: process.cwd() },
       runtime: {
         id: secretLike,
@@ -124,18 +124,18 @@ describe("Local Job API v1 shared contract", () => {
       prompt: "Create a proposal only.",
       input: {
         prompt: "Create a proposal only.",
-        consumer: { id: "career-application-kit" },
+        consumer: { id: "docs-workbench" },
       },
-      apiConsumerId: "career-application-kit",
-      apiConsumerRunId: "company-role-review-001",
+      apiConsumerId: "docs-workbench",
+      apiConsumerRunId: "package-review-001",
       artifactBaseDir: `${process.cwd()}/.tmp/locus-runs`,
       artifactManifestPath: `${process.cwd()}/.tmp/locus-runs/${Date.now()}/artifacts.json`,
     })
 
     expect(getAgentJob(db, job.id)).toMatchObject({
       source: "api",
-      apiConsumerId: "career-application-kit",
-      apiConsumerRunId: "company-role-review-001",
+      apiConsumerId: "docs-workbench",
+      apiConsumerRunId: "package-review-001",
       artifactBaseDir: `${process.cwd()}/.tmp/locus-runs`,
     })
   })

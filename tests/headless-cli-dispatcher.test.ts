@@ -53,9 +53,9 @@ function seedCurrentProject(
     .run()
 }
 
-function seedCareerPackageProject(db: ReturnType<typeof createAgentJobTestDb>) {
+function seedLocalPackageProject(db: ReturnType<typeof createAgentJobTestDb>) {
   const projectRoot = realpathSync(mkdtempSync(join(tmpdir(), "locus-api-project-")))
-  const packageDir = join(projectRoot, "career-package")
+  const packageDir = join(projectRoot, "local-package")
   mkdirSync(packageDir)
   seedCurrentProject(db, projectRoot)
   return {
@@ -76,12 +76,12 @@ function parseJsonLines(value: string): any[] {
 describe("headless CLI dispatcher", () => {
   test("runs Local Job API create/status/events/result with stable JSON output", async () => {
     const db = createAgentJobTestDb()
-    const { packageDir, artifactBaseDir } = seedCareerPackageProject(db)
+    const { packageDir, artifactBaseDir } = seedLocalPackageProject(db)
     const request = {
       apiVersion: "locus.local-job.v1",
       consumer: {
-        id: "career-application-kit",
-        runExternalId: "company-role-review-001",
+        id: "docs-workbench",
+        runExternalId: "package-review-001",
       },
       project: {
         cwd: packageDir,
@@ -92,10 +92,10 @@ describe("headless CLI dispatcher", () => {
       },
       mode: "plan",
       prompt: {
-        text: "Review this career package.",
+        text: "Review this local package.",
       },
       input: {
-        contract: "career.job-package.v1",
+        contract: "example.local-package.v1",
         packageDir,
       },
       artifacts: {
@@ -133,15 +133,15 @@ describe("headless CLI dispatcher", () => {
         source: "api",
         runtime: "codex",
         status: "succeeded",
-        apiConsumerId: "career-application-kit",
-        apiConsumerRunId: "company-role-review-001",
+        apiConsumerId: "docs-workbench",
+        apiConsumerRunId: "package-review-001",
       },
       result: {
         apiVersion: "locus.local-job.v1",
         status: "succeeded",
         consumer: {
-          id: "career-application-kit",
-          runExternalId: "company-role-review-001",
+          id: "docs-workbench",
+          runExternalId: "package-review-001",
         },
       },
     })
@@ -152,7 +152,7 @@ describe("headless CLI dispatcher", () => {
     expect(existsSync(join(runDir, "result.json"))).toBe(true)
     expect(existsSync(join(runDir, "artifacts.json"))).toBe(true)
     expect(readFileSync(join(runDir, "request.json"), "utf-8")).toContain(
-      "career-application-kit",
+      "docs-workbench",
     )
 
     const statusStdout = writer()
@@ -231,7 +231,7 @@ describe("headless CLI dispatcher", () => {
   test("accepts Local Job API artifact paths whose existing prefix resolves through a path alias", async () => {
     const db = createAgentJobTestDb()
     const projectRoot = mkdtempSync("/tmp/locus-api-alias-project-")
-    const packageDir = join(projectRoot, "career-package")
+    const packageDir = join(projectRoot, "local-package")
     mkdirSync(packageDir)
     const artifactBaseDir = join(packageDir, ".locus", "runs")
     seedCurrentProject(db, projectRoot)
@@ -252,7 +252,7 @@ describe("headless CLI dispatcher", () => {
       stdin: Readable.from([
         JSON.stringify({
           apiVersion: "locus.local-job.v1",
-          consumer: { id: "career-application-kit" },
+          consumer: { id: "docs-workbench" },
           project: { cwd: packageDir },
           runtime: { id: "codex", requiredCapabilities: ["planMode"] },
           mode: "plan",
@@ -321,7 +321,7 @@ describe("headless CLI dispatcher", () => {
       stdin: Readable.from([
         JSON.stringify({
           apiVersion: "locus.local-job.v1",
-          consumer: { id: "career-application-kit" },
+          consumer: { id: "docs-workbench" },
           project: { cwd: process.cwd() },
           runtime: { id: "codex" },
           mode: "plan",
@@ -362,7 +362,7 @@ describe("headless CLI dispatcher", () => {
       stdin: Readable.from([
         JSON.stringify({
           apiVersion: "locus.local-job.v1",
-          consumer: { id: "career-application-kit" },
+          consumer: { id: "docs-workbench" },
           project: { cwd: process.cwd() },
           runtime: { id: "codex" },
           mode: "plan",
@@ -386,7 +386,7 @@ describe("headless CLI dispatcher", () => {
 
   test("rejects Local Job API artifact base files before job creation", async () => {
     const db = createAgentJobTestDb()
-    const { packageDir } = seedCareerPackageProject(db)
+    const { packageDir } = seedLocalPackageProject(db)
     const artifactBaseDir = join(packageDir, "artifact-file")
     writeFileSync(artifactBaseDir, "not a directory")
     const stdout = writer()
@@ -406,7 +406,7 @@ describe("headless CLI dispatcher", () => {
       stdin: Readable.from([
         JSON.stringify({
           apiVersion: "locus.local-job.v1",
-          consumer: { id: "career-application-kit" },
+          consumer: { id: "docs-workbench" },
           project: { cwd: packageDir },
           runtime: { id: "codex" },
           mode: "plan",
@@ -430,7 +430,7 @@ describe("headless CLI dispatcher", () => {
 
   test("rejects Local Job API artifact directories outside the request cwd", async () => {
     const db = createAgentJobTestDb()
-    const { packageDir } = seedCareerPackageProject(db)
+    const { packageDir } = seedLocalPackageProject(db)
     const artifactBaseDir = realpathSync(
       mkdtempSync(join(tmpdir(), "locus-api-outside-runs-")),
     )
@@ -451,7 +451,7 @@ describe("headless CLI dispatcher", () => {
       stdin: Readable.from([
         JSON.stringify({
           apiVersion: "locus.local-job.v1",
-          consumer: { id: "career-application-kit" },
+          consumer: { id: "docs-workbench" },
           project: { cwd: packageDir },
           runtime: { id: "codex" },
           mode: "plan",
@@ -493,7 +493,7 @@ describe("headless CLI dispatcher", () => {
       stdin: Readable.from([
         JSON.stringify({
           apiVersion: "locus.local-job.v1",
-          consumer: { id: "career-application-kit" },
+          consumer: { id: "docs-workbench" },
           project: { cwd: process.cwd() },
           runtime: {
             id: "codex",
@@ -554,7 +554,7 @@ describe("headless CLI dispatcher", () => {
       mode: "plan",
       cwd: process.cwd(),
       prompt: "Cancelable API job",
-      apiConsumerId: "career-application-kit",
+      apiConsumerId: "docs-workbench",
       apiConsumerRunId: "cancel-001",
     })
     const cancelStdout = writer()
@@ -586,7 +586,7 @@ describe("headless CLI dispatcher", () => {
         mode: "plan",
         cwd: process.cwd(),
         prompt: "Retryable API job",
-        apiConsumerId: "career-application-kit",
+        apiConsumerId: "docs-workbench",
         apiConsumerRunId: "retry-001",
       }).id,
       status: "failed",
@@ -616,14 +616,14 @@ describe("headless CLI dispatcher", () => {
         source: "api",
         status: "succeeded",
         retryOfJobId: failed.id,
-        apiConsumerId: "career-application-kit",
+        apiConsumerId: "docs-workbench",
         apiConsumerRunId: "retry-001",
         artifactManifestPath: null,
       },
       result: {
         status: "succeeded",
         consumer: {
-          id: "career-application-kit",
+          id: "docs-workbench",
           runExternalId: "retry-001",
         },
       },

@@ -4,10 +4,10 @@ CLI commands (`locus run`, `locus jobs`), daemon queueing, schedules, desktop
 job visibility, and a minimal stdio protocol. That gives Locus the internal job
 platform, but not a stable contract for downstream applications.
 
-The first downstream target is `career-application-kit`. It owns job packages,
-CV/cover-letter materials, drafts, final promoted artifacts, and application
-tracking. Locus should own local runtime execution, job state, sanitized event
-logs, cancellation, retry, runtime capability checks, and local audit trails.
+Downstream local tools should own their own domain packages, drafts, final
+promoted artifacts, and tracking state. Locus should own local runtime
+execution, job state, sanitized event logs, cancellation, retry, runtime
+capability checks, and local audit trails.
 
 ## Goals / Non-Goals
 - Goals:
@@ -19,7 +19,8 @@ logs, cancellation, retry, runtime capability checks, and local audit trails.
   - Let consumers read final result and artifact manifests without reading
     SQLite directly.
   - Make runtime capability checks part of the API contract.
-  - Show API-created jobs in Workbench without building career-specific UI.
+  - Show API-created jobs in Workbench without building downstream
+    domain-specific UI.
 - Non-goals:
   - Hosted agents, cloud queues, or remote sync.
   - HTTP/WebSocket server in v1.
@@ -56,8 +57,8 @@ The create request is JSON:
 {
   "apiVersion": "locus.local-job.v1",
   "consumer": {
-    "id": "career-application-kit",
-    "runExternalId": "company-role-review-001"
+    "id": "docs-workbench",
+    "runExternalId": "package-review-001"
   },
   "project": {
     "cwd": "/absolute/project/path",
@@ -69,14 +70,14 @@ The create request is JSON:
   },
   "mode": "plan",
   "prompt": {
-    "text": "Review this application package."
+    "text": "Review this local package."
   },
   "input": {
-    "contract": "career.job-package.v1",
-    "packageDir": "/absolute/application/package"
+    "contract": "example.local-package.v1",
+    "packageDir": "/absolute/local/package"
   },
   "artifacts": {
-    "baseDir": "/absolute/application/package/.locus/runs",
+    "baseDir": "/absolute/local/package/.locus/runs",
     "writePolicy": "proposal-only"
   }
 }
@@ -155,9 +156,9 @@ Locus owns per-run metadata under the configured artifact base:
 Downstream applications own business artifacts such as:
 
 ```text
-application-package/
-  jd.md
-  decision.md
+local-package/
+  source.md
+  notes.md
   drafts/
   final/
 ```
@@ -170,7 +171,7 @@ as part of API execution. Promotion remains a downstream/user action.
 Workbench should show API-created jobs with source `api`, consumer ID, optional
 external run ID, artifact base/manifest links, status, runtime, cwd, and log
 history. The design should stay utilitarian: compact metadata rows and existing
-job detail actions, not a career-specific page.
+job detail actions, not a downstream domain-specific page.
 
 ## Security
 - Provider tokens, OAuth tokens, raw request headers, and raw environment values

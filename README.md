@@ -25,7 +25,7 @@ It provides:
 - Claude Code and Codex runtime integration with runtime-specific capability truth
 - durable local jobs with status, event logs, cancellation, retry, heartbeat, and recovery
 - headless CLI, daemon, schedules, and protocol surfaces for automation
-- a machine-readable Local Job API v1 for downstream tools such as career apps
+- a machine-readable Local Job API v1 for downstream local tools
 - local-first provider/profile handling and hosted upstream surfaces removed or isolated by default
 
 ## Current Status

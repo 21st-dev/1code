@@ -37,7 +37,7 @@
 - [x] 6.2 Run focused Bun tests for local-job-api, CLI parsing/dispatch, job store, artifacts, runtime capabilities, and Workbench UI.
 - [x] 6.3 Run `bun run ts:check`.
 - [x] 6.4 Run `bun run build`.
-- [x] 6.5 Run real macOS smoke with a career-style local package and fake runner.
+- [x] 6.5 Run real macOS smoke with a generic local package and fake runner.
 - [x] 6.6 Record CLI/API output, artifact files, Workbench screenshot, and UI recording if Workbench UI changed.
   - Note: CLI/API output, artifact files, terminal recording, and smoke screenshot/video were captured. Workbench UI is covered by static UI tests; live Workbench automation was blocked by the local onboarding/privacy prompt on this host.
 - [x] 6.7 Run security review for request/event/artifact secret handling.

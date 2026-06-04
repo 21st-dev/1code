@@ -3,8 +3,8 @@
 语言：[English](local-job-api-v1-consumer-guide.md) | 简体中文
 
 这份手册给下游本地应用使用：它们想把 Locus 当作 runtime 层，但不应该 import Locus
-源码，也不应该直接读取 `agents.db`。第一个目标 consumer 是 `career-application-kit`，
-但这个合同本身不绑定求职场景，也不绑定某一个 runtime。
+源码，也不应该直接读取 `agents.db`。这个合同本身不绑定某一个业务场景，也不绑定某一个
+runtime。
 
 v1 的正式入口是机器可读 CLI：
 
@@ -154,17 +154,17 @@ locus api runtimes list --json
 
 ## Create Request
 
-求职 package 示例：
+通用本地 package 示例：
 
 ```json
 {
   "apiVersion": "locus.local-job.v1",
   "consumer": {
-    "id": "career-application-kit",
-    "runExternalId": "company-role-review-001"
+    "id": "docs-workbench",
+    "runExternalId": "package-review-001"
   },
   "project": {
-    "cwd": "/Users/alice/Career/packages/company-role",
+    "cwd": "/Users/alice/LocalPackages/example-package",
     "projectId": null
   },
   "runtime": {
@@ -173,15 +173,15 @@ locus api runtimes list --json
   },
   "mode": "plan",
   "prompt": {
-    "text": "Review this application package and produce a readiness note."
+    "text": "Review this local package and produce a readiness note."
   },
   "input": {
-    "contract": "career.job-package.v1",
-    "packageDir": "/Users/alice/Career/packages/company-role",
+    "contract": "example.local-package.v1",
+    "packageDir": "/Users/alice/LocalPackages/example-package",
     "sourceMetadata": "source.json"
   },
   "artifacts": {
-    "baseDir": "/Users/alice/Career/packages/company-role/.locus/runs",
+    "baseDir": "/Users/alice/LocalPackages/example-package/.locus/runs",
     "writePolicy": "metadata-only"
   }
 }
@@ -204,7 +204,7 @@ cat request.json | locus api runs create --request - --json
 | 字段 | 必填 | 含义 |
 | --- | --- | --- |
 | `apiVersion` | 是 | 必须是 `locus.local-job.v1`。 |
-| `consumer.id` | 是 | 下游应用稳定 ID，例如 `career-application-kit`。 |
+| `consumer.id` | 是 | 下游应用稳定 ID，例如 `docs-workbench`。 |
 | `consumer.runExternalId` | 否 | consumer 自己的 run ID，用于关联。 |
 | `project.cwd` | 是 | 本次 run 的绝对本地路径。必须存在，并位于 Locus 已注册 project 内。 |
 | `project.projectId` | 否 | 可选 Locus project ID。提供后，`cwd` 必须在该 project 内。 |
@@ -234,12 +234,12 @@ ID 限制：
   artifacts.json
 ```
 
-对 career package，推荐结构：
+对通用本地 package，推荐结构：
 
 ```text
-company-role/
+example-package/
   source.json
-  jd.md
+  source.md
   notes.md
   drafts/
   final/
@@ -277,8 +277,8 @@ company-role/
     "runtime": "codex",
     "mode": "plan",
     "status": "succeeded",
-    "apiConsumerId": "career-application-kit",
-    "apiConsumerRunId": "company-role-review-001",
+    "apiConsumerId": "docs-workbench",
+    "apiConsumerRunId": "package-review-001",
     "artifactManifestPath": "/.../.locus/runs/mpzcxv3xp2ji1fl2/artifacts.json"
   },
   "result": {
@@ -288,8 +288,8 @@ company-role/
     "runtime": "codex",
     "mode": "plan",
     "consumer": {
-      "id": "career-application-kit",
-      "runExternalId": "company-role-review-001"
+      "id": "docs-workbench",
+      "runExternalId": "package-review-001"
     },
     "artifactManifestPath": "/.../.locus/runs/mpzcxv3xp2ji1fl2/artifacts.json",
     "artifacts": [],
@@ -377,8 +377,8 @@ locus api runs result <job-id> --json
   "runtime": "codex",
   "mode": "plan",
   "consumer": {
-    "id": "career-application-kit",
-    "runExternalId": "company-role-review-001"
+    "id": "docs-workbench",
+    "runExternalId": "package-review-001"
   },
   "artifactManifestPath": "/.../.locus/runs/mpzcxv3xp2ji1fl2/artifacts.json",
   "artifacts": [
@@ -458,47 +458,46 @@ Locus 会通过自己的 main-process provider/runtime setup 路径解析 creden
 
 secret-like key 或 value 会在 provider work 开始前被拒绝。
 
-## Career 接入示例
+## 接入示例
 
-推荐的 `career-application-kit` 流程：
+推荐的下游应用流程：
 
 ```text
-1. 用户捕获或审核一个可见职位页。
-2. career 创建本地 package：
+1. 用户创建或审核一个本地工作 package。
+2. 下游应用创建本地 package：
 
-   packages/<company-role>/
+   packages/<example-package>/
      source.json
-     jd.md
-     resume-context.md
+     source.md
      notes.md
      drafts/
      final/
 
-3. career 写 request.json：
-   project.cwd = packages/<company-role>
-   input.packageDir = packages/<company-role>
-   artifacts.baseDir = packages/<company-role>/.locus/runs
+3. 下游应用写 request.json：
+   project.cwd = packages/<example-package>
+   input.packageDir = packages/<example-package>
+   artifacts.baseDir = packages/<example-package>/.locus/runs
 
-4. career 执行：
+4. 下游应用执行：
    locus api runs create --request request.json --json
 
-5. career 读取 result/artifacts/events。
-6. career 给用户展示 proposed output。
-7. 只有用户批准后，career 才写入或提升 final materials。
+5. 下游应用读取 result/artifacts/events。
+6. 下游应用给用户展示 proposed output。
+7. 只有用户批准后，下游应用才写入或提升 final artifacts。
 ```
 
 最小 shell 示例：
 
 ```bash
-PACKAGE_DIR="$HOME/Career/packages/acme-mobile-engineer"
+PACKAGE_DIR="$HOME/LocalPackages/example-package"
 mkdir -p "$PACKAGE_DIR/.locus/runs" "$PACKAGE_DIR/drafts" "$PACKAGE_DIR/final"
 
 cat > "$PACKAGE_DIR/request.json" <<EOF
 {
   "apiVersion": "locus.local-job.v1",
   "consumer": {
-    "id": "career-application-kit",
-    "runExternalId": "acme-mobile-engineer-001"
+    "id": "docs-workbench",
+    "runExternalId": "example-package-001"
   },
   "project": {
     "cwd": "$PACKAGE_DIR"
@@ -509,10 +508,10 @@ cat > "$PACKAGE_DIR/request.json" <<EOF
   },
   "mode": "plan",
   "prompt": {
-    "text": "Review this career package and identify missing application materials."
+    "text": "Review this local package and identify missing source material."
   },
   "input": {
-    "contract": "career.job-package.v1",
+    "contract": "example.local-package.v1",
     "packageDir": "$PACKAGE_DIR"
   },
   "artifacts": {
@@ -533,7 +532,7 @@ locus api runs create --request "$PACKAGE_DIR/request.json" --json
 | --- | --- | --- |
 | `project.cwd must be inside a registered project` | package 目录未注册，或不在 Locus 已注册 project 内。 | 在 Locus 打开/注册该 project，或传入已注册 project 内的 cwd。 |
 | `artifacts.baseDir must be inside project.cwd` | artifact base 在 run cwd 外面。 | 使用 `<project.cwd>/.locus/runs`。 |
-| `artifacts.baseDir cannot be inside a final artifact directory` | Locus 拒绝把 metadata 写入下游 final materials。 | 把 API metadata 放到 `.locus/runs`。 |
+| `artifacts.baseDir cannot be inside a final artifact directory` | Locus 拒绝把 metadata 写入下游 final artifacts。 | 把 API metadata 放到 `.locus/runs`。 |
 | `Unsupported runtime.id` | runtime ID 不被识别。 | 使用 `codex`、`claude-code` 或 `claude`。 |
 | `Unsupported required capability` | capability ID 不存在。 | 先看 `locus api runtimes list --json`。 |
 | exit `4` | runtime credentials 缺失。 | 在 Locus 里配置 runtime，不要通过 request 传 credentials。 |

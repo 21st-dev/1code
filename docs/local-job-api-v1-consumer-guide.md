@@ -4,8 +4,7 @@ Languages: English | [Simplified Chinese](local-job-api-v1-consumer-guide.zh-CN.
 
 This guide is for downstream local applications that want to use Locus as the
 runtime layer without importing Locus source code or reading `agents.db`
-directly. The first intended consumer is `career-application-kit`, but the
-contract is runtime- and domain-neutral.
+directly. The contract is runtime- and domain-neutral.
 
 The v1 entrypoint is the machine-readable CLI group:
 
@@ -163,17 +162,17 @@ Common modes:
 
 ## Create Request
 
-Example for a career package:
+Example for a generic local package:
 
 ```json
 {
   "apiVersion": "locus.local-job.v1",
   "consumer": {
-    "id": "career-application-kit",
-    "runExternalId": "company-role-review-001"
+    "id": "docs-workbench",
+    "runExternalId": "package-review-001"
   },
   "project": {
-    "cwd": "/Users/alice/Career/packages/company-role",
+    "cwd": "/Users/alice/LocalPackages/example-package",
     "projectId": null
   },
   "runtime": {
@@ -182,15 +181,15 @@ Example for a career package:
   },
   "mode": "plan",
   "prompt": {
-    "text": "Review this application package and produce a readiness note."
+    "text": "Review this local package and produce a readiness note."
   },
   "input": {
-    "contract": "career.job-package.v1",
-    "packageDir": "/Users/alice/Career/packages/company-role",
+    "contract": "example.local-package.v1",
+    "packageDir": "/Users/alice/LocalPackages/example-package",
     "sourceMetadata": "source.json"
   },
   "artifacts": {
-    "baseDir": "/Users/alice/Career/packages/company-role/.locus/runs",
+    "baseDir": "/Users/alice/LocalPackages/example-package/.locus/runs",
     "writePolicy": "metadata-only"
   }
 }
@@ -213,7 +212,7 @@ cat request.json | locus api runs create --request - --json
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `apiVersion` | yes | Must be `locus.local-job.v1`. |
-| `consumer.id` | yes | Stable downstream app ID, such as `career-application-kit`. |
+| `consumer.id` | yes | Stable downstream app ID, such as `docs-workbench`. |
 | `consumer.runExternalId` | no | Consumer-owned run ID for correlation. |
 | `project.cwd` | yes | Absolute local path for the run. Must exist and be inside a registered Locus project. |
 | `project.projectId` | no | Optional Locus project ID. If provided, `cwd` must be inside that project. |
@@ -243,12 +242,12 @@ If `artifacts.baseDir` is set, Locus writes run-owned metadata here:
   artifacts.json
 ```
 
-For a career package, the recommended layout is:
+For a generic local package, the recommended layout is:
 
 ```text
-company-role/
+example-package/
   source.json
-  jd.md
+  source.md
   notes.md
   drafts/
   final/
@@ -286,8 +285,8 @@ Use `final/` only for downstream/user-approved material.
     "runtime": "codex",
     "mode": "plan",
     "status": "succeeded",
-    "apiConsumerId": "career-application-kit",
-    "apiConsumerRunId": "company-role-review-001",
+    "apiConsumerId": "docs-workbench",
+    "apiConsumerRunId": "package-review-001",
     "artifactManifestPath": "/.../.locus/runs/mpzcxv3xp2ji1fl2/artifacts.json"
   },
   "result": {
@@ -297,8 +296,8 @@ Use `final/` only for downstream/user-approved material.
     "runtime": "codex",
     "mode": "plan",
     "consumer": {
-      "id": "career-application-kit",
-      "runExternalId": "company-role-review-001"
+      "id": "docs-workbench",
+      "runExternalId": "package-review-001"
     },
     "artifactManifestPath": "/.../.locus/runs/mpzcxv3xp2ji1fl2/artifacts.json",
     "artifacts": [],
@@ -388,8 +387,8 @@ Response:
   "runtime": "codex",
   "mode": "plan",
   "consumer": {
-    "id": "career-application-kit",
-    "runExternalId": "company-role-review-001"
+    "id": "docs-workbench",
+    "runExternalId": "package-review-001"
   },
   "artifactManifestPath": "/.../.locus/runs/mpzcxv3xp2ji1fl2/artifacts.json",
   "artifacts": [
@@ -473,47 +472,46 @@ runtime setup paths. The consumer sends domain context, not provider secrets.
 
 Secret-like keys or values are rejected before provider work starts.
 
-## Career Integration Example
+## Integration Example
 
-Recommended `career-application-kit` flow:
+Recommended downstream app flow:
 
 ```text
-1. User captures or reviews one visible job page.
-2. career creates a local package:
+1. User creates or reviews a local work package.
+2. The downstream app creates a local package:
 
-   packages/<company-role>/
+   packages/<example-package>/
      source.json
-     jd.md
-     resume-context.md
+     source.md
      notes.md
      drafts/
      final/
 
-3. career writes request.json with:
-   project.cwd = packages/<company-role>
-   input.packageDir = packages/<company-role>
-   artifacts.baseDir = packages/<company-role>/.locus/runs
+3. The downstream app writes request.json with:
+   project.cwd = packages/<example-package>
+   input.packageDir = packages/<example-package>
+   artifacts.baseDir = packages/<example-package>/.locus/runs
 
-4. career runs:
+4. The downstream app runs:
    locus api runs create --request request.json --json
 
-5. career reads result/artifacts/events.
-6. career shows the user proposed output.
-7. career writes or promotes final materials only after user approval.
+5. The downstream app reads result/artifacts/events.
+6. The downstream app shows the user proposed output.
+7. The downstream app writes or promotes final artifacts only after user approval.
 ```
 
 Minimal shell example:
 
 ```bash
-PACKAGE_DIR="$HOME/Career/packages/acme-mobile-engineer"
+PACKAGE_DIR="$HOME/LocalPackages/example-package"
 mkdir -p "$PACKAGE_DIR/.locus/runs" "$PACKAGE_DIR/drafts" "$PACKAGE_DIR/final"
 
 cat > "$PACKAGE_DIR/request.json" <<EOF
 {
   "apiVersion": "locus.local-job.v1",
   "consumer": {
-    "id": "career-application-kit",
-    "runExternalId": "acme-mobile-engineer-001"
+    "id": "docs-workbench",
+    "runExternalId": "example-package-001"
   },
   "project": {
     "cwd": "$PACKAGE_DIR"
@@ -524,10 +522,10 @@ cat > "$PACKAGE_DIR/request.json" <<EOF
   },
   "mode": "plan",
   "prompt": {
-    "text": "Review this career package and identify missing application materials."
+    "text": "Review this local package and identify missing source material."
   },
   "input": {
-    "contract": "career.job-package.v1",
+    "contract": "example.local-package.v1",
     "packageDir": "$PACKAGE_DIR"
   },
   "artifacts": {

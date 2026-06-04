@@ -88,16 +88,16 @@ background queueing, and local auditability.
 These are intended integration patterns, not claims that all integrations are
 already implemented.
 
-### Local Job Search Assistant
+### Document Review Workbench
 
-A job-search app can keep resumes, cover letters, decisions, and submitted
+A document review app can keep source files, notes, drafts, and approved
 artifacts in its own local workspace while using Locus to run review and draft
 jobs.
 
 Good first integration:
 
 ```text
-visible job page / local package
+source files / local package
   -> create Locus job
   -> stream job events
   -> write reviewed draft only after user confirmation
