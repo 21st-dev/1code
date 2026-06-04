@@ -23,10 +23,7 @@ import {
   type ProviderProfileTestStatus,
 } from "../../../shared/provider-profile-types"
 import { getActiveClaudeProviderConfig } from "../trpc/routers/claude-provider-config"
-import {
-  getActiveLocalApiProviderConfig,
-  type LocalApiProviderPurpose,
-} from "../trpc/routers/local-api-provider-config"
+import { getActiveLocalApiProviderConfig } from "../trpc/routers/local-api-provider-config"
 import {
   decryptStringFromStorage,
   encryptStringForStorage,
@@ -545,7 +542,7 @@ export function ensureLegacyProviderProfilesMigrated(): void {
       })
     }
 
-    for (const purpose of ["sub_chat_title", "commit_message"] as LocalApiProviderPurpose[]) {
+    for (const purpose of ["sub_chat_title", "commit_message"] as const) {
       const helper = getActiveLocalApiProviderConfig(purpose)
       if (!helper) continue
       insertLegacyProfile({

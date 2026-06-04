@@ -149,8 +149,13 @@ function buildChatCompletionUrl(baseUrl: string): string {
   return `${normalizedBaseUrl}/chat/completions`
 }
 
+type ChatCompletionLocalApiProviderPurpose = Extract<
+  LocalApiProviderPurpose,
+  "sub_chat_title" | "commit_message"
+>
+
 function getLocalChatCompletionProviderConfig(
-  purpose: LocalApiProviderPurpose,
+  purpose: ChatCompletionLocalApiProviderPurpose,
 ): LocalChatCompletionProviderConfig | null {
   const profile = getProviderDefaultRuntimeConfig(purpose)
   if (profile && profile.protocol === "openai-chat") {
