@@ -1,27 +1,28 @@
-# Locus as a Local Agent Platform
+# Locus as a Local AI Workbench
 
 Languages: English | [Simplified Chinese](locus-local-agent-platform.zh-CN.md)
 
 Locus is moving from a coding-only desktop app toward a local-first AI
-workbench and agent runtime hub.
+workbench for operating on local projects with multiple agent runtimes. It is a
+user-facing workspace first, with an agent runtime hub underneath it.
 
 ![Locus local agent platform](assets/locus-agent-platform.svg)
 
 ## Positioning
 
-Locus should own the local runtime layer:
+Locus should own the local workbench experience and the runtime layer behind it:
 
-- runtime setup and capability truth for Claude Code and Codex
-- local job creation, event logs, cancellation, retry, and recovery
-- desktop visibility and user control
-- headless CLI entry points
-- daemon-backed background work
-- opt-in local schedules
-- narrow protocol entry points for external clients
+- local project, worktree, file, terminal, and git workspace surfaces
+- agent interaction flows for Claude Code, Codex, custom providers, MCP, and skills
+- visible file edits, shell commands, git operations, tool use, approvals, and cancellation
+- runtime setup and capability truth for each supported agent runtime
+- local execution history, event logs, retry, recovery, and auditability
+- headless CLI, daemon, schedules, and protocol entry points for automation and integrations
+- safety boundaries for provider credentials, MCP, filesystem access, and future computer-control tools
 
 Coding is still the first strong workflow, but it is not the only long-term
-workflow. Other local-first tools can use Locus as the place where AI work is
-run, tracked, observed, and controlled.
+workflow. Other local-first tools can integrate with Locus, but the core product
+is still the desktop workbench where users operate on local projects directly.
 
 ## Current Usable Surfaces
 
@@ -62,8 +63,8 @@ Locus can claim all API keys are encrypted in main-process secure storage.
 
 ## Recommended Integration Model
 
-Downstream projects should call Locus at the job boundary instead of embedding
-Claude Code or Codex CLIs directly.
+Downstream projects should call Locus at the work or job boundary instead of
+embedding Claude Code or Codex CLIs directly.
 
 ![Downstream projects use the Locus job boundary](assets/locus-downstream-integrations.svg)
 
@@ -71,10 +72,10 @@ Recommended shape:
 
 ```text
 Downstream app
-  -> Locus CLI or future Local Job API
-  -> Locus Job Platform
+  -> Locus workbench, CLI, or future local protocol/API
+  -> Locus runtime and local execution history
   -> AgentRuntime adapter
-  -> Claude Code / Codex
+  -> Claude Code / Codex / provider runtime
 ```
 
 The downstream app should own its domain state and final user-facing workflow.

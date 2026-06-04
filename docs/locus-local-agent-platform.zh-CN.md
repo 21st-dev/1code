@@ -1,25 +1,27 @@
-# Locus 作为本地 Agent 平台
+# Locus 作为本地 AI 工作台
 
 语言：[English](locus-local-agent-platform.md) | 简体中文
 
-Locus 正在从单一 coding 桌面应用，演进为本地优先的 AI 工作台和 agent runtime 底座。
+Locus 正在从单一 coding 桌面应用，演进为一个本地优先的 AI 工作台：用户可以在本地
+项目里使用多个 agent runtime 操作文件、terminal、git、worktree 和工具。它首先是用户
+直接使用的桌面工作区，下面才是 agent runtime hub。
 
 ![Locus 目标本地 agent 平台](assets/locus-agent-platform.zh-CN.svg)
 
 ## 定位
 
-Locus 应该负责本地 runtime 层：
+Locus 应该负责本地工作台体验，以及背后的 runtime 层：
 
-- Claude Code / Codex 的 runtime 配置和能力真实状态
-- 本地 job 创建、事件日志、取消、重试和恢复
-- 桌面可见性和用户控制
-- headless CLI 入口
-- daemon 驱动的后台任务
-- 用户显式创建的本地 schedule
-- 给外部 client 使用的窄协议入口
+- 本地项目、worktree、文件、terminal 和 git 工作区
+- 面向 Claude Code、Codex、custom providers、MCP 和 skills 的 agent 交互流程
+- 可见的文件修改、shell 命令、git 操作、tool use、权限确认和取消路径
+- 每个受支持 agent runtime 的配置和能力真实状态
+- 本地执行历史、event logs、重试、恢复和审计
+- 面向自动化和集成的 headless CLI、daemon、schedules 和 protocol entry points
+- provider credentials、MCP、filesystem access 和未来 computer-control tools 的安全边界
 
-coding 仍然是第一个强场景，但不是长期唯一场景。其他本地优先工具可以把 Locus
-作为运行、追踪、观察和控制 AI 任务的底座。
+coding 仍然是第一个强场景，但不是长期唯一场景。其他本地优先工具可以集成 Locus，
+但核心产品仍然是用户直接操作本地项目的桌面工作台。
 
 ## 当前可用入口
 
@@ -55,7 +57,7 @@ provider secrets。当前例外：voice OpenAI key storage 仍需要硬化；在
 
 ## 推荐集成方式
 
-下游项目应该在 job 边界调用 Locus，而不是各自内嵌 Claude Code 或 Codex CLI。
+下游项目应该在 work 或 job 边界调用 Locus，而不是各自内嵌 Claude Code 或 Codex CLI。
 
 ![下游项目使用 Locus job 边界](assets/locus-downstream-integrations.zh-CN.svg)
 
@@ -63,10 +65,10 @@ provider secrets。当前例外：voice OpenAI key storage 仍需要硬化；在
 
 ```text
 下游应用
-  -> Locus CLI 或未来 Local Job API
-  -> Locus Job Platform
+  -> Locus 工作台、CLI 或未来本地 protocol/API
+  -> Locus runtime 和本地执行历史
   -> AgentRuntime adapter
-  -> Claude Code / Codex
+  -> Claude Code / Codex / provider runtime
 ```
 
 下游应用应该拥有自己的业务状态和最终用户流程。Locus 应该负责执行、日志、runtime

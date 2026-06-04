@@ -1,3 +1,7 @@
+## 0. Current Boundary
+- [x] 0.1 Record that this change is proposal-only, Claude-specific, and not part of the current local agent platform or `add-headless-agent-jobs` acceptance boundary.
+- [x] 0.2 Record that Dynamic Workflows must not be described as supported until this proposal is approved, implemented, tested, and smoke-tested.
+
 ## 1. Proposal
 - [x] 1.1 Review this proposal against `add-headless-agent-jobs` and confirm the adapter remains Claude-specific.
 - [x] 1.2 Validate the OpenSpec change strictly.

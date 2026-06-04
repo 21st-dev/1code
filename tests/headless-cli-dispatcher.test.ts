@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { realpathSync } from "node:fs"
 import { Readable } from "stream"
 import {
   completeAgentJob,
@@ -483,7 +484,7 @@ describe("headless CLI dispatcher", () => {
         params: {
           runtime: "codex",
           mode: "agent",
-          cwd: process.cwd(),
+          cwd: ".",
           prompt: "ACP smoke",
         },
       },
@@ -523,8 +524,10 @@ describe("headless CLI dispatcher", () => {
     expect(
       lines.filter((line) => line.method === "job/event").map((line) => line.params.event.type),
     ).toContain("completed")
-    expect(listAgentJobs(db, { source: "protocol" })).toHaveLength(1)
-    expect(listAgentJobs(db, { source: "protocol" })[0].status).toBe("succeeded")
+    const jobs = listAgentJobs(db, { source: "protocol" })
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0].cwd).toBe(realpathSync(process.cwd()))
+    expect(jobs[0].status).toBe("succeeded")
   })
 
   test("ACP shutdown cancels active protocol jobs without waiting forever", async () => {

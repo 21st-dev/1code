@@ -45,6 +45,7 @@ import {
   getProviderProfileRuntimeConfig,
 } from "../../provider-profiles/storage"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
+import { redactProviderSecrets } from "../../../../shared/provider-profile-security"
 import { createRollbackStash } from "../../git/stash"
 import { resolveChatImageAttachments } from "../../chat-attachments"
 import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
@@ -95,6 +96,55 @@ function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "review-required") return "pending-review"
   if (gate.status === "read-only") return "read-only"
   return "pending-approval"
+}
+
+function redactClaudeEnvValueForLog(value: string | undefined): string {
+  return value ? redactProviderSecrets(value) : "(default)"
+}
+
+const MCP_SERVER_NAME_REGEX = /^[a-zA-Z0-9_-]+$/
+
+function normalizeMcpServerName(value: string): string {
+  const name = value.trim()
+  if (!name || !MCP_SERVER_NAME_REGEX.test(name)) {
+    throw new Error(
+      "MCP server name must contain only letters, numbers, underscores, and hyphens",
+    )
+  }
+  return name
+}
+
+function resolveMcpProjectPathForMutation(input: {
+  scope: "global" | "project"
+  projectPath?: string
+}): string | null {
+  if (input.scope === "global") return null
+  if (!input.projectPath) {
+    throw new Error("Project path required for project-scoped servers")
+  }
+
+  const requestedPath = path.resolve(input.projectPath)
+  const resolvedProjectPath =
+    resolveProjectPathFromWorktree(requestedPath) || requestedPath
+  const normalizedResolvedPath = path.resolve(resolvedProjectPath)
+  const registeredProject = getDatabase()
+    .select({ path: projectsTable.path })
+    .from(projectsTable)
+    .all()
+    .find((project) => path.resolve(project.path) === normalizedResolvedPath)
+
+  if (!registeredProject) {
+    throw new Error("Project-scoped MCP writes require a registered project path")
+  }
+
+  return registeredProject.path
+}
+
+function getMcpServersForScope(
+  config: ClaudeConfig,
+  projectPath: string | null,
+): Record<string, McpServerConfig> | undefined {
+  return projectPath ? config.projects?.[projectPath]?.mcpServers : config.mcpServers
 }
 
 function getEffectivePluginMcpServerConfig(input: {
@@ -1762,16 +1812,17 @@ export const claudeRouter = router({
               )
             }
 
-            // Check if user has existing API key or proxy configured in their shell environment
-            // If so, use that instead of OAuth (allows using custom API proxies)
-            // Based on PR #29 by @sa4hnd
+            // Check if an explicit Locus provider/offline config injected Claude
+            // API auth or endpoint. Inherited shell/process ANTHROPIC_* values
+            // are stripped in buildClaudeEnv so they cannot silently override
+            // the selected Claude Code credential.
             const hasExistingApiConfig = !!(
               claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_AUTH_TOKEN || claudeEnv.ANTHROPIC_BASE_URL
             )
 
             if (hasExistingApiConfig) {
               console.log(
-                `[claude] Using existing CLI config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${claudeEnv.ANTHROPIC_BASE_URL || "default"}`,
+                `[claude] Using explicit Claude provider config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${redactClaudeEnvValueForLog(claudeEnv.ANTHROPIC_BASE_URL)}`,
               )
             }
 
@@ -1813,7 +1864,7 @@ export const claudeRouter = router({
             )
             console.log(
               "[claude-auth] Using ANTHROPIC_BASE_URL:",
-              finalEnv.ANTHROPIC_BASE_URL || "(default)",
+              redactClaudeEnvValueForLog(finalEnv.ANTHROPIC_BASE_URL),
             )
             console.log(
               "[claude-auth] Using ANTHROPIC_AUTH_TOKEN:",
@@ -3474,16 +3525,14 @@ ${prompt}
       }),
     )
     .mutation(async ({ input }) => {
-      const serverName = input.name.trim()
+      const serverName = normalizeMcpServerName(input.name)
+      const projectPath = resolveMcpProjectPathForMutation(input)
 
       if (input.transport === "stdio" && !input.command?.trim()) {
         throw new Error("Command is required for stdio servers")
       }
       if (input.transport === "http" && !input.url?.trim()) {
         throw new Error("URL is required for HTTP servers")
-      }
-      if (input.scope === "project" && !input.projectPath) {
-        throw new Error("Project path required for project-scoped servers")
       }
 
       const serverConfig: McpServerConfig = {}
@@ -3509,8 +3558,7 @@ ${prompt}
 
       // Check existence before writing
       const existingConfig = await readClaudeConfig()
-      const projectPath = input.projectPath
-      if (input.scope === "project" && projectPath) {
+      if (projectPath) {
         if (existingConfig.projects?.[projectPath]?.mcpServers?.[serverName]) {
           throw new Error(
             `Server "${serverName}" already exists in this project`,
@@ -3524,7 +3572,7 @@ ${prompt}
 
       const config = updateMcpServerConfig(
         existingConfig,
-        input.scope === "project" ? (projectPath ?? null) : null,
+        projectPath,
         serverName,
         serverConfig,
       )
@@ -3554,40 +3602,38 @@ ${prompt}
     )
     .mutation(async ({ input }) => {
       const config = await readClaudeConfig()
-      const projectPath =
-        input.scope === "project" ? input.projectPath : undefined
+      const serverName = normalizeMcpServerName(input.name)
+      const projectPath = resolveMcpProjectPathForMutation(input)
+      const newName = input.newName
+        ? normalizeMcpServerName(input.newName)
+        : undefined
 
       // Check server exists
-      let servers: Record<string, McpServerConfig> | undefined
-      if (projectPath) {
-        servers = config.projects?.[projectPath]?.mcpServers
-      } else {
-        servers = config.mcpServers
-      }
-      if (!servers?.[input.name]) {
-        throw new Error(`Server "${input.name}" not found`)
+      const servers = getMcpServersForScope(config, projectPath)
+      if (!servers?.[serverName]) {
+        throw new Error(`Server "${serverName}" not found`)
       }
 
-      const existing = servers[input.name]
+      const existing = servers[serverName]
 
       // Handle rename: create new, remove old
-      if (input.newName && input.newName !== input.name) {
-        if (servers[input.newName]) {
-          throw new Error(`Server "${input.newName}" already exists`)
+      if (newName && newName !== serverName) {
+        if (servers[newName]) {
+          throw new Error(`Server "${newName}" already exists`)
         }
         const updated = removeMcpServerConfig(
           config,
-          projectPath ?? null,
-          input.name,
+          projectPath,
+          serverName,
         )
         const finalConfig = updateMcpServerConfig(
           updated,
-          projectPath ?? null,
-          input.newName,
+          projectPath,
+          newName,
           existing,
         )
         await writeClaudeConfig(finalConfig)
-        return { success: true, name: input.newName }
+        return { success: true, name: newName }
       }
 
       // Build update object from provided fields
@@ -3617,13 +3663,13 @@ ${prompt}
       const merged = { ...existing, ...update }
       const updatedConfig = updateMcpServerConfig(
         config,
-        projectPath ?? null,
-        input.name,
+        projectPath,
+        serverName,
         merged,
       )
       await writeClaudeConfig(updatedConfig)
 
-      return { success: true, name: input.name }
+      return { success: true, name: serverName }
     }),
 
   removeMcpServer: publicProcedure
@@ -3636,24 +3682,19 @@ ${prompt}
     )
     .mutation(async ({ input }) => {
       const config = await readClaudeConfig()
-      const projectPath =
-        input.scope === "project" ? input.projectPath : undefined
+      const serverName = normalizeMcpServerName(input.name)
+      const projectPath = resolveMcpProjectPathForMutation(input)
 
       // Check server exists
-      let servers: Record<string, McpServerConfig> | undefined
-      if (projectPath) {
-        servers = config.projects?.[projectPath]?.mcpServers
-      } else {
-        servers = config.mcpServers
-      }
-      if (!servers?.[input.name]) {
-        throw new Error(`Server "${input.name}" not found`)
+      const servers = getMcpServersForScope(config, projectPath)
+      if (!servers?.[serverName]) {
+        throw new Error(`Server "${serverName}" not found`)
       }
 
       const updated = removeMcpServerConfig(
         config,
-        projectPath ?? null,
-        input.name,
+        projectPath,
+        serverName,
       )
       await writeClaudeConfig(updated)
 
@@ -3671,21 +3712,16 @@ ${prompt}
     )
     .mutation(async ({ input }) => {
       const config = await readClaudeConfig()
-      const projectPath =
-        input.scope === "project" ? input.projectPath : undefined
+      const serverName = normalizeMcpServerName(input.name)
+      const projectPath = resolveMcpProjectPathForMutation(input)
 
       // Check server exists
-      let servers: Record<string, McpServerConfig> | undefined
-      if (projectPath) {
-        servers = config.projects?.[projectPath]?.mcpServers
-      } else {
-        servers = config.mcpServers
-      }
-      if (!servers?.[input.name]) {
-        throw new Error(`Server "${input.name}" not found`)
+      const servers = getMcpServersForScope(config, projectPath)
+      if (!servers?.[serverName]) {
+        throw new Error(`Server "${serverName}" not found`)
       }
 
-      const existing = servers[input.name]
+      const existing = servers[serverName]
       const updated: McpServerConfig = {
         ...existing,
         authType: "bearer",
@@ -3694,8 +3730,8 @@ ${prompt}
 
       const updatedConfig = updateMcpServerConfig(
         config,
-        projectPath ?? null,
-        input.name,
+        projectPath,
+        serverName,
         updated,
       )
       await writeClaudeConfig(updatedConfig)

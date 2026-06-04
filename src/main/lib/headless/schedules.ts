@@ -198,6 +198,20 @@ export function findRegisteredProjectForCwd(
   projectId?: string | null,
   label = "Schedule cwd",
 ): Project {
+  return findRegisteredProjectForCwdWithCanonicalPath(
+    db,
+    cwd,
+    projectId,
+    label,
+  ).project
+}
+
+export function findRegisteredProjectForCwdWithCanonicalPath(
+  db: AgentJobDatabase,
+  cwd: string,
+  projectId?: string | null,
+  label = "Schedule cwd",
+): { project: Project; cwd: string } {
   const cwdReal = canonicalExistingPath(cwd, label)
 
   if (projectId) {
@@ -207,7 +221,7 @@ export function findRegisteredProjectForCwd(
     if (!isPathInside(projectReal, cwdReal)) {
       throw new Error(`${label} must be inside the registered project path`)
     }
-    return project
+    return { project, cwd: cwdReal }
   }
 
   const registeredProjects = db.select().from(projects).all()
@@ -219,7 +233,7 @@ export function findRegisteredProjectForCwd(
     } catch {
       continue
     }
-    if (isPathInside(projectReal, cwdReal)) return project
+    if (isPathInside(projectReal, cwdReal)) return { project, cwd: cwdReal }
   }
 
   throw new Error(`${label} must be inside a registered project`)

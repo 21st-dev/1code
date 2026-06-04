@@ -2,16 +2,21 @@
 
 语言：[English](README.md) | 简体中文
 
-本地优先的 AI 工作台和 agent runtime 底座。
+本地优先的 AI 工作台，用多个 agent runtime 操作本地项目。
 
-Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先桌面工作流。
-coding 仍然是第一个强场景，但项目定位不只是一款 coding chat UI。Locus 的核心方向是
-一个本地 AI 工作台：用本地 job 平台统一运行、追踪、取消、调度和观察 Claude Code /
-Codex 驱动的任务。
+Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先桌面工作台。
+coding 仍然是第一个强场景，但 Locus 不只是 coding chat UI、CLI runner 或后台
+runtime。它是一个桌面环境：用户可以让 agent 查看和修改项目文件、运行 terminal 和
+git 工作流、管理 worktrees，并在执行过程中观察、取消、继续或控制这些工作。
 
-Locus 保留桌面 UI、本地项目选择、worktrees、terminal、git 工具、Claude Code、Codex、
-custom providers、MCP、skills，以及已支持 provider 流程里的加密本地 provider profile
-存储，同时从默认本地优先版本中移除或隔离上游 hosted 产品入口。
+在这个工作台下面，Locus 统一承载 Claude Code、Codex、custom providers、MCP、
+skills，以及未来的 computer-control 或工具操作能力。durable local jobs、event logs、
+daemon、schedules 和 protocol entry points 是支撑设施，用来让 agent 工作可见、可取消、
+可恢复、可审计，并能被周边本地应用复用。
+
+Locus 保留本地项目选择、worktrees、terminal、git 工具、文件和工具执行流程、Claude
+Code、Codex、custom providers、MCP、skills，以及已支持 provider 流程里的加密本地
+provider profile 存储，同时从默认本地优先版本中移除或隔离上游 hosted 产品入口。
 
 ![Locus 目标本地 agent 平台](docs/assets/locus-agent-platform.zh-CN.svg)
 

@@ -17,19 +17,18 @@ let shellEnvRefreshStarted = false
 // Delimiter for parsing env output
 const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
 
-// Keys to strip (prevent interference from unrelated providers)
-// NOTE: We intentionally keep ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL in production
-// so users can use their existing Claude Code CLI configuration (API proxy, etc.)
-// Based on PR #29 by @sa4hnd
+// Keys to strip from inherited shell/process env. Claude auth and endpoint
+// values must come from the selected Locus credential/provider path instead of
+// stale host env silently overriding that selection.
 const STRIPPED_ENV_KEYS_BASE = [
   "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_BASE_URL",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
 ]
 
-// In dev mode, also strip ANTHROPIC_API_KEY so OAuth token is used instead
-// This allows devs to test OAuth flow without unsetting their shell env
-// Added by Sergey Bunas for dev purposes
 function isClaudeEnvPackaged(): boolean {
   return app?.isPackaged ?? process.env.NODE_ENV === "production"
 }
@@ -39,9 +38,7 @@ function getAppPath(): string {
 }
 
 function getStrippedEnvKeys(): string[] {
-  return isClaudeEnvPackaged()
-    ? STRIPPED_ENV_KEYS_BASE
-    : [...STRIPPED_ENV_KEYS_BASE, "ANTHROPIC_API_KEY"]
+  return STRIPPED_ENV_KEYS_BASE
 }
 
 // Cache the bundled binary path (only compute once)
@@ -290,9 +287,8 @@ export function buildClaudeEnv(options?: {
     env.PATH = shellPath
   }
 
-  // 2b. Strip sensitive keys again (process.env may have re-added them)
-  // This ensures ANTHROPIC_API_KEY from dev's shell doesn't override OAuth in dev mode
-  // Added by Sergey Bunas for dev purposes
+  // 2b. Strip sensitive keys again (process.env may have re-added them).
+  // Explicit custom provider env is applied after this block.
   for (const key of getStrippedEnvKeys()) {
     if (key in env) {
       console.log(`[claude-env] Stripped ${key} from final environment`)

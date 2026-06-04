@@ -324,6 +324,58 @@ async function forwardJson(params: {
   return { response, json }
 }
 
+async function sendSanitizedUpstreamError(
+  res: ServerResponse,
+  upstream: Response,
+  profile: ProviderProfileRuntimeConfig,
+): Promise<void> {
+  let text = ""
+  try {
+    text = await upstream.text()
+  } catch {
+    text = ""
+  }
+  sendJson(res, upstream.status, {
+    error: sanitizeError(
+      text || upstream.statusText,
+      getProviderRedactionValues(profile),
+    ),
+  })
+}
+
+async function pipeDirectUpstreamResponse(params: {
+  profile: ProviderProfileRuntimeConfig
+  upstream: Response
+  res: ServerResponse
+}): Promise<void> {
+  if (!params.upstream.ok) {
+    await sendSanitizedUpstreamError(params.res, params.upstream, params.profile)
+    return
+  }
+
+  params.res.writeHead(
+    params.upstream.status,
+    responseHeadersToRecord(params.upstream.headers),
+  )
+  if (params.upstream.body) {
+    await params.upstream.body.pipeTo(
+      new WritableStream({
+        write(chunk) {
+          params.res.write(Buffer.from(chunk))
+        },
+        close() {
+          params.res.end()
+        },
+        abort(error) {
+          params.res.destroy(error)
+        },
+      }),
+    )
+  } else {
+    params.res.end()
+  }
+}
+
 function providerDiagnosticCheck(
   id: ProviderDiagnosticCheckId,
   status: ProviderDiagnosticStatus,
@@ -1034,24 +1086,7 @@ async function handleAnthropicRequest(
       headers: upstreamHeaders(profile),
       body: JSON.stringify({ ...body, model }),
     })
-    res.writeHead(upstream.status, responseHeadersToRecord(upstream.headers))
-    if (upstream.body) {
-      await upstream.body.pipeTo(
-        new WritableStream({
-          write(chunk) {
-            res.write(Buffer.from(chunk))
-          },
-          close() {
-            res.end()
-          },
-          abort(error) {
-            res.destroy(error)
-          },
-        }),
-      )
-    } else {
-      res.end()
-    }
+    await pipeDirectUpstreamResponse({ profile, upstream, res })
     return
   }
 
@@ -1124,24 +1159,7 @@ async function handleResponsesRequest(
       headers: upstreamHeaders(profile),
       body: JSON.stringify({ ...body, model }),
     })
-    res.writeHead(upstream.status, responseHeadersToRecord(upstream.headers))
-    if (upstream.body) {
-      await upstream.body.pipeTo(
-        new WritableStream({
-          write(chunk) {
-            res.write(Buffer.from(chunk))
-          },
-          close() {
-            res.end()
-          },
-          abort(error) {
-            res.destroy(error)
-          },
-        }),
-      )
-    } else {
-      res.end()
-    }
+    await pipeDirectUpstreamResponse({ profile, upstream, res })
     return
   }
 

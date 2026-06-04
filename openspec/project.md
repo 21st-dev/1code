@@ -1,17 +1,17 @@
 # Project Context
 
 ## Purpose
-**Locus** - A local-first Electron desktop app for local coding agents. Users create chat sessions linked to local project folders, interact with Claude/Codex-compatible agents in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**Locus** - A local-first Electron AI workbench for operating on local projects with multiple agent runtimes. Users select local projects and worktrees, interact with Claude Code, Codex, custom providers, MCP, and local tools in Plan or Agent mode, and observe or control real-time file edits, shell commands, git workflows, and other authorized tool execution.
 
 ## Tech Stack
 | Layer | Tech |
 |-------|------|
-| Desktop | Electron 33.4.5, electron-vite, electron-builder |
+| Desktop | Electron ~39.4.0, electron-vite, electron-builder |
 | UI | React 19, TypeScript 5.4.5, Tailwind CSS |
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC, Drizzle ORM, better-sqlite3 |
-| AI | @anthropic-ai/claude-code |
+| AI | @anthropic-ai/claude-agent-sdk, bundled Claude Code and Codex runtime integrations |
 | Package Manager | bun |
 
 ## Project Conventions

@@ -20,7 +20,7 @@ import {
   runPersistedAgentJob,
 } from "./job-runner"
 import type { AgentTaskRunner } from "./agent-runtime-contract"
-import { findRegisteredProjectForCwd } from "./schedules"
+import { findRegisteredProjectForCwdWithCanonicalPath } from "./schedules"
 
 type Writer = {
   write(chunk: string): unknown
@@ -254,7 +254,7 @@ function handleJobRun(
 ): void {
   assertNoProtocolSecrets(request.params)
   const params = jobRunParamsSchema.parse(request.params ?? {})
-  const project = findRegisteredProjectForCwd(
+  const { project, cwd } = findRegisteredProjectForCwdWithCanonicalPath(
     options.db,
     params.cwd,
     null,
@@ -264,7 +264,7 @@ function handleJobRun(
     source: "protocol",
     runtime: params.runtime as AgentJobRuntime,
     mode: params.mode,
-    cwd: params.cwd,
+    cwd,
     prompt: params.prompt,
     input: {
       prompt: params.prompt,

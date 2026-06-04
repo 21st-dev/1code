@@ -2,18 +2,25 @@
 
 Languages: English | [Simplified Chinese](README.zh-CN.md)
 
-Local-first AI workbench and agent runtime hub.
+Local-first AI workbench for operating on local projects with multiple agent runtimes.
 
 Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a
-local-first desktop workflow. Coding remains the first strong use case, but the
-core product direction is broader: Locus is becoming a local AI workbench that
-can run, track, cancel, schedule, and observe Claude Code / Codex powered work
-through a durable local job platform.
+local-first desktop workbench. Coding remains the first strong use case, but
+Locus is not just a coding chat UI, a CLI runner, or a background runtime. It is
+a desktop environment where users can ask agents to inspect and edit project
+files, run terminal and git workflows, manage worktrees, and observe or control
+the work as it happens.
 
-Locus keeps the desktop UI, local project selection, worktrees, terminal, git
-tools, Claude Code, Codex, custom providers, MCP, skills, and encrypted local
-provider-profile storage for supported provider flows while removing upstream
-hosted product surfaces from the default build.
+Under that workbench, Locus provides a runtime hub for Claude Code, Codex,
+custom providers, MCP, skills, and future computer-control or tool surfaces.
+Durable local jobs, event logs, the daemon, schedules, and protocol entry points
+are infrastructure for making agent work visible, cancelable, resumable,
+auditable, and reusable by nearby local apps.
+
+Locus keeps local project selection, worktrees, terminal, git tools, file and
+tool execution flows, Claude Code, Codex, custom providers, MCP, skills, and
+encrypted local provider-profile storage for supported provider flows while
+removing upstream hosted product surfaces from the default build.
 
 ![Locus local agent platform](docs/assets/locus-agent-platform.svg)
 

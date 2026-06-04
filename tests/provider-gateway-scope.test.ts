@@ -1,4 +1,43 @@
 import { describe, expect, mock, test } from "bun:test"
+import { createServer, type IncomingMessage } from "node:http"
+
+async function readRequestBody(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks).toString("utf8")
+}
+
+async function createUpstreamErrorServer() {
+  const server = createServer((req, res) => {
+    void readRequestBody(req).then(() => {
+      res.writeHead(401, { "content-type": "text/plain" })
+      res.end(
+        "upstream leaked provider-token-secret Bearer provider-token-secret x-extra-secret",
+      )
+    })
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject)
+      resolve()
+    })
+  })
+
+  const address = server.address()
+  if (!address || typeof address === "string") {
+    server.close()
+    throw new Error("failed to start upstream error server")
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  }
+}
 
 const runtimeProfiles = new Map<string, any>([
   [
@@ -80,5 +119,72 @@ describe("provider profile gateway token scope", () => {
     expect(sameProfileResponse.status).toBe(200)
     expect(JSON.stringify(modelsBody)).toContain("model-b")
     expect(JSON.stringify(modelsBody)).not.toContain(endpointB.token)
+  })
+
+  test("redacts direct upstream error bodies before returning them", async () => {
+    const upstream = await createUpstreamErrorServer()
+    try {
+      runtimeProfiles.set("profile_gateway_secret_anthropic", {
+        id: "profile_gateway_secret_anthropic",
+        name: "Gateway Secret Anthropic",
+        presetId: "test",
+        protocol: "anthropic",
+        baseUrl: upstream.baseUrl,
+        defaultModel: "model-secret",
+        authMode: "bearer",
+        token: "provider-token-secret",
+        headers: { "x-extra": "x-extra-secret" },
+        targetRuntimes: ["claude"],
+        capabilities: { claude: true },
+      })
+      runtimeProfiles.set("profile_gateway_secret_responses", {
+        id: "profile_gateway_secret_responses",
+        name: "Gateway Secret Responses",
+        presetId: "test",
+        protocol: "openai-responses",
+        baseUrl: upstream.baseUrl,
+        defaultModel: "model-secret",
+        authMode: "bearer",
+        token: "provider-token-secret",
+        headers: { "x-extra": "x-extra-secret" },
+        targetRuntimes: ["codex"],
+        capabilities: { codex: true },
+      })
+
+      const anthropicEndpoint = await gatewayModule.getProviderGatewayEndpoint(
+        "profile_gateway_secret_anthropic",
+        "anthropic",
+      )
+      const responsesEndpoint = await gatewayModule.getProviderGatewayEndpoint(
+        "profile_gateway_secret_responses",
+        "responses",
+      )
+
+      const anthropicResponse = await fetch(`${anthropicEndpoint.baseUrl}/messages`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${anthropicEndpoint.token}` },
+        body: JSON.stringify({ model: "model-secret", messages: [] }),
+      })
+      const responsesResponse = await fetch(`${responsesEndpoint.baseUrl}/responses`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${responsesEndpoint.token}` },
+        body: JSON.stringify({ model: "model-secret", input: "hello" }),
+      })
+
+      const anthropicBody = await anthropicResponse.text()
+      const responsesBody = await responsesResponse.text()
+
+      expect(anthropicResponse.status).toBe(401)
+      expect(responsesResponse.status).toBe(401)
+      expect(`${anthropicBody}\n${responsesBody}`).not.toContain(
+        "provider-token-secret",
+      )
+      expect(`${anthropicBody}\n${responsesBody}`).not.toContain("x-extra-secret")
+      expect(`${anthropicBody}\n${responsesBody}`).toContain("***")
+    } finally {
+      runtimeProfiles.delete("profile_gateway_secret_anthropic")
+      runtimeProfiles.delete("profile_gateway_secret_responses")
+      await upstream.close()
+    }
   })
 })

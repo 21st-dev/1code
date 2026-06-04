@@ -5,6 +5,13 @@ Claude Code now exposes dynamic workflows as a research-preview runtime feature 
 
 Locus should adapt the Claude Code capability with a thin, runtime-scoped layer instead of turning it into a Locus-wide workflow engine.
 
+## Current Boundary
+This change is a planned Claude-specific adapter proposal. It is not part of the
+current local agent platform or `add-headless-agent-jobs` acceptance boundary,
+and it must not block release/archive decisions for that platform work. Do not
+describe Dynamic Workflows as supported until this proposal is approved,
+implemented, tested, and smoke-tested with a real Claude Code credential.
+
 ## What Changes
 - Add a Claude Code-specific dynamic workflow adapter that detects support, applies user settings, and keeps workflow behavior scoped to the Claude runtime.
 - Add an explicit `Off` / `Ask` / `Allow` setting for Claude dynamic workflows, defaulting to `Ask`.

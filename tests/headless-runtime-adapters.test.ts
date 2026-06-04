@@ -15,6 +15,9 @@ const { __testClaudeCodeHeadless } = await import(
 const { __testCodexHeadless } = await import(
   "../src/main/lib/headless/adapters/codex"
 )
+const { buildClaudeEnv, clearClaudeEnvCache } = await import(
+  "../src/main/lib/claude/env"
+)
 
 const baseRequest = {
   jobId: "job_123",
@@ -41,6 +44,43 @@ describe("headless runtime adapters", () => {
   test("Claude adapter uses acceptEdits for basic agent runs", () => {
     const args = __testClaudeCodeHeadless.buildClaudeArgs(baseRequest)
     expect(args[args.indexOf("--permission-mode") + 1]).toBe("acceptEdits")
+  })
+
+  test("Claude env strips inherited Anthropic auth unless explicit provider env is supplied", () => {
+    const previous = {
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+      ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+    }
+    try {
+      process.env.ANTHROPIC_API_KEY = "stale-api-key"
+      process.env.ANTHROPIC_AUTH_TOKEN = "stale-auth-token"
+      process.env.ANTHROPIC_BASE_URL = "https://stale.example.com?token=secret"
+      clearClaudeEnvCache()
+
+      const inherited = buildClaudeEnv()
+      expect(inherited.ANTHROPIC_API_KEY).toBeUndefined()
+      expect(inherited.ANTHROPIC_AUTH_TOKEN).toBeUndefined()
+      expect(inherited.ANTHROPIC_BASE_URL).toBeUndefined()
+
+      const explicit = buildClaudeEnv({
+        customEnv: {
+          ANTHROPIC_AUTH_TOKEN: "provider-token",
+          ANTHROPIC_BASE_URL: "https://provider.example.com",
+        },
+      })
+      expect(explicit.ANTHROPIC_AUTH_TOKEN).toBe("provider-token")
+      expect(explicit.ANTHROPIC_BASE_URL).toBe("https://provider.example.com")
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+      clearClaudeEnvCache()
+    }
   })
 
   test("Codex adapter maps plan to read-only and agent to workspace-write", () => {
