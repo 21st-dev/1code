@@ -73,4 +73,30 @@ describe("headless runtime adapters", () => {
       "real warning\n",
     )
   })
+
+  test("Codex adapter only forwards non-secret environment variables", () => {
+    const env = __testCodexHeadless.buildCodexEnv(
+      { ...baseRequest, runtime: "codex" },
+      {
+        PATH: "/usr/bin",
+        SAFE_FLAG: "1",
+        OPENAI_API_KEY: "sk-abcdefghijklmnopqrstuvwxyz123456",
+        CODEX_API_KEY: "codex-secret",
+        GITHUB_TOKEN: "ghp_abcdefghijklmnopqrstuvwxyz123456",
+      },
+      {
+        SHELL_SAFE: "ok",
+        ANTHROPIC_AUTH_TOKEN: "anthropic-secret",
+      },
+    )
+
+    expect(env.PATH).toBe("/usr/bin")
+    expect(env.SAFE_FLAG).toBe("1")
+    expect(env.SHELL_SAFE).toBe("ok")
+    expect(env.LOCUS_HEADLESS_JOB_ID).toBe("job_123")
+    expect(env.OPENAI_API_KEY).toBeUndefined()
+    expect(env.CODEX_API_KEY).toBeUndefined()
+    expect(env.GITHUB_TOKEN).toBeUndefined()
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined()
+  })
 })

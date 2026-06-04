@@ -255,6 +255,27 @@ describe("headless CLI args", () => {
         "Locus",
         HEADLESS_CLI_MARKER,
         "schedules",
+        "create",
+        "--name",
+        "Plan by default",
+        "--cwd",
+        process.cwd(),
+        "--prompt",
+        "Inspect",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "schedules-create",
+        mode: "plan",
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "schedules",
         "run-now",
         "schedule-1",
       ]),

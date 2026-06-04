@@ -141,6 +141,29 @@ describe("headless process runner", () => {
     expect(result.errorCode).toBe("job_canceled")
   })
 
+  test("does not spawn a process when the signal is already aborted", async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const { observer, events } = createObserver()
+    const result = await runProcessAgentTask({
+      request: request(controller.signal),
+      observer,
+      executable: "/definitely/missing/locus-headless-test-binary",
+      args: [],
+      label: "missing",
+    })
+
+    expect(result.status).toBe("canceled")
+    expect(result.errorCode).toBe("job_canceled")
+    expect(events.map((event) => event.type)).toEqual([
+      "command_started",
+      "command_finished",
+    ])
+    expect(events.at(-1)?.payload).toMatchObject({
+      status: "canceled",
+    })
+  })
+
   test("classifies login failures as runtime auth requirements", async () => {
     const controller = new AbortController()
     const { observer } = createObserver()

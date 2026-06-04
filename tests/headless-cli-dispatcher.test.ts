@@ -51,6 +51,7 @@ function parseJsonLines(value: string): any[] {
 describe("headless CLI dispatcher", () => {
   test("runs a fake job, writes durable events, and keeps JSON stdout pure", async () => {
     const db = createAgentJobTestDb()
+    seedCurrentProject(db)
     const stdout = writer()
     const stderr = writer()
     const code = await runHeadlessCliCommand({
@@ -81,6 +82,7 @@ describe("headless CLI dispatcher", () => {
       source: "cli",
       runtime: "codex",
       status: "succeeded",
+      projectId: "project-1",
       result: {
         fake: true,
         finalMessage: "Fake codex job completed.",
@@ -100,6 +102,7 @@ describe("headless CLI dispatcher", () => {
 
   test("supports stdin prompts and text logs", async () => {
     const db = createAgentJobTestDb()
+    seedCurrentProject(db)
     const runStdout = writer()
     await runHeadlessCliCommand({
       db,
@@ -143,6 +146,7 @@ describe("headless CLI dispatcher", () => {
 
   test("queues daemon runs without executing the runtime in the submitter", async () => {
     const db = createAgentJobTestDb()
+    seedCurrentProject(db)
     const stdout = writer()
     let runnerCalled = false
     const code = await runHeadlessCliCommand({
@@ -176,8 +180,39 @@ describe("headless CLI dispatcher", () => {
       source: "daemon",
       runtime: "codex",
       status: "queued",
+      projectId: "project-1",
     })
     expect(getAgentJob(db, parsed.job.id)?.status).toBe("queued")
+  })
+
+  test("rejects direct run cwd outside registered projects", async () => {
+    const db = createAgentJobTestDb()
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "run",
+        "--runtime",
+        "codex",
+        "--cwd",
+        process.cwd(),
+        "--output",
+        "json",
+        "--prompt",
+        "Should not start",
+      ],
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(7)
+    expect(stdout.value()).toBe("")
+    expect(stderr.value()).toContain("registered project")
+    expect(listAgentJobs(db, { source: "cli" })).toHaveLength(0)
   })
 
   test("runs daemon once and claims only daemon queued jobs", async () => {
@@ -265,8 +300,6 @@ describe("headless CLI dispatcher", () => {
         "Nightly",
         "--runtime",
         "codex",
-        "--mode",
-        "plan",
         "--cwd",
         process.cwd(),
         "--interval-seconds",
@@ -494,6 +527,123 @@ describe("headless CLI dispatcher", () => {
     expect(listAgentJobs(db, { source: "protocol" })[0].status).toBe("succeeded")
   })
 
+  test("ACP shutdown cancels active protocol jobs without waiting forever", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const stdout = writer()
+    const stderr = writer()
+    const input = [
+      {
+        jsonrpc: "2.0",
+        id: "run",
+        method: "job.run",
+        params: {
+          runtime: "codex",
+          mode: "agent",
+          cwd: process.cwd(),
+          prompt: "Long ACP job",
+        },
+      },
+      {
+        jsonrpc: "2.0",
+        id: "shutdown",
+        method: "shutdown",
+        params: {},
+      },
+    ].map(JSON.stringify).join("\n")
+
+    const result = await Promise.race([
+      runHeadlessCliCommand({
+        db,
+        argv: ["Locus", HEADLESS_CLI_MARKER, "acp"],
+        stdin: Readable.from([`${input}\n`]),
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        runner: async (_request, observer) => {
+          observer.appendEvent("status", { started: true })
+          await new Promise(() => {})
+          return { status: "succeeded", exitCode: 0 }
+        },
+      }),
+      new Promise<"timed-out">((resolve) =>
+        setTimeout(() => resolve("timed-out"), 1000),
+      ),
+    ])
+
+    expect(result).toBe(0)
+    expect(stderr.value()).toBe("")
+    const lines = parseJsonLines(stdout.value())
+    expect(lines.every((line) => line.jsonrpc === "2.0")).toBe(true)
+    expect(lines.find((line) => line.id === "shutdown")?.result).toEqual({
+      ok: true,
+    })
+    const completedEvent = lines
+      .filter((line) => line.method === "job/event")
+      .map((line) => line.params.event)
+      .find((event) => event.type === "completed")
+    expect(completedEvent?.payload).toMatchObject({
+      status: "canceled",
+      errorCode: "job_canceled",
+    })
+    const jobs = listAgentJobs(db, { source: "protocol" })
+    expect(jobs).toHaveLength(1)
+    expect(getAgentJob(db, jobs[0].id)).toMatchObject({
+      status: "canceled",
+      errorCode: "job_canceled",
+    })
+  })
+
+  test("ACP cancel is limited to jobs created by the current stdio session", async () => {
+    const db = createAgentJobTestDb()
+    seedCurrentProject(db)
+    const daemonJob = createAgentJob(db, {
+      source: "daemon",
+      runtime: "codex",
+      mode: "agent",
+      cwd: process.cwd(),
+      prompt: "Do not cancel from protocol",
+      projectId: "project-1",
+    })
+    const stdout = writer()
+    const stderr = writer()
+    const input = [
+      {
+        jsonrpc: "2.0",
+        id: "cancel",
+        method: "job.cancel",
+        params: {
+          jobId: daemonJob.id,
+        },
+      },
+      {
+        jsonrpc: "2.0",
+        id: "shutdown",
+        method: "shutdown",
+        params: {},
+      },
+    ].map(JSON.stringify).join("\n")
+
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: ["Locus", HEADLESS_CLI_MARKER, "acp"],
+      stdin: Readable.from([`${input}\n`]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(0)
+    expect(stderr.value()).toBe("")
+    const lines = parseJsonLines(stdout.value())
+    expect(lines.find((line) => line.id === "cancel")?.error).toMatchObject({
+      code: -32602,
+    })
+    expect(getAgentJob(db, daemonJob.id)).toMatchObject({
+      status: "queued",
+      cancelRequestedAt: null,
+    })
+  })
+
   test("rejects ACP provider secrets and raw env without creating jobs", async () => {
     const db = createAgentJobTestDb()
     seedCurrentProject(db)
@@ -585,6 +735,7 @@ describe("headless CLI dispatcher", () => {
 
   test("cancels queued jobs and retries terminal jobs", async () => {
     const db = createAgentJobTestDb()
+    seedCurrentProject(db)
     const runStdout = writer()
     await runHeadlessCliCommand({
       db,
@@ -700,6 +851,7 @@ describe("headless CLI dispatcher", () => {
 
   test("normalizes run exit codes instead of leaking runtime process codes", async () => {
     const db = createAgentJobTestDb()
+    seedCurrentProject(db)
     const cancelStdout = writer()
     const cancelCode = await runHeadlessCliCommand({
       db,
