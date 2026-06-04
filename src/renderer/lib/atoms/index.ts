@@ -6,6 +6,12 @@ export {
   LEGACY_CODEX_API_KEY_STORAGE_KEY,
   normalizeCodexApiKey,
 } from "../../../shared/codex-api-key"
+export {
+  LEGACY_OPENAI_API_KEY_STORAGE_KEY,
+  OPENAI_TRANSCRIPTION_BASE_URL,
+  OPENAI_TRANSCRIPTION_MODEL,
+  normalizeLegacyOpenAIApiKey,
+} from "../../../shared/voice-transcription-api-key"
 
 // ============================================
 // RE-EXPORT FROM FEATURES/AGENTS/ATOMS (source of truth)
@@ -265,14 +271,6 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
     token: "",
     baseUrl: "",
   },
-  undefined,
-  { getOnInit: true },
-)
-
-// OpenAI API key for voice transcription (for users without paid subscription)
-export const openaiApiKeyAtom = atomWithStorage<string>(
-  "agents:openai-api-key",
-  "",
   undefined,
   { getOnInit: true },
 )

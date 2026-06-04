@@ -453,6 +453,15 @@ export const en = {
     "Stored encrypted on this device",
   "settings.models.commitMessage.baseUrlHint":
     "Base URL or /chat/completions endpoint",
+  "settings.models.voiceTranscription.title": "Voice Transcription API",
+  "settings.models.voiceTranscription.description":
+    "Optional OpenAI-compatible speech-to-text API used only for voice input.",
+  "settings.models.voiceTranscription.modelHint":
+    "Speech-to-text model used only for voice input",
+  "settings.models.voiceTranscription.tokenHint":
+    "Stored encrypted on this device",
+  "settings.models.voiceTranscription.baseUrlHint":
+    "Base URL or /audio/transcriptions endpoint",
   "settings.models.overrideModel.title": "Custom Claude-compatible Provider",
   "settings.models.overrideModel.modelHint":
     "Model identifier to use for requests",
@@ -1701,6 +1710,10 @@ export const en = {
   "toast.models.subChatTitleSettingsReset": "Sub-chat title API reset",
   "toast.models.commitMessageSettingsSaved": "Commit message API saved",
   "toast.models.commitMessageSettingsReset": "Commit message API reset",
+  "toast.models.voiceTranscriptionSettingsSaved":
+    "Voice transcription API saved",
+  "toast.models.voiceTranscriptionSettingsReset":
+    "Voice transcription API reset",
   "toast.models.providerProfileSaved": "Provider Profile saved",
   "toast.models.providerProfileDeleted": "Provider Profile deleted",
   "toast.models.providerDefaultSaved": "Provider default saved",
@@ -1710,7 +1723,7 @@ export const en = {
   "toast.models.failedToSaveProviderDefault": "Failed to save Provider default",
   "toast.models.helperApisPrompt.title": "Claude Code is connected",
   "toast.models.helperApisPrompt.description":
-    "Optionally configure Helper APIs for sub-chat titles and commit messages.",
+    "Optionally configure Helper APIs for titles, commit messages, and voice transcription.",
   "toast.models.helperApisPrompt.action": "Configure",
   "toast.models.failedToSaveModelSettings": "Failed to save model settings",
   "toast.models.failedToResetModelSettings": "Failed to reset model settings",
@@ -1722,6 +1735,8 @@ export const en = {
     "Failed to migrate saved Codex API key. Please save it again.",
   "toast.models.failedToMigrateLegacyClaudeProvider":
     "Failed to migrate saved Claude provider token. Please save the provider again.",
+  "toast.models.failedToMigrateLegacyVoiceApiKey":
+    "Failed to migrate saved voice transcription API key. Please save it again.",
   "toast.models.failedToRemoveCodexApiKey": "Failed to remove Codex API key",
   "toast.models.failedToSaveOpenaiApiKey": "Failed to save OpenAI API key",
   "toast.models.failedToRemoveOpenaiApiKey": "Failed to remove OpenAI API key",
@@ -1733,6 +1748,10 @@ export const en = {
     "Failed to save commit message API",
   "toast.models.failedToResetCommitMessageSettings":
     "Failed to reset commit message API",
+  "toast.models.failedToSaveVoiceTranscriptionSettings":
+    "Failed to save voice transcription API",
+  "toast.models.failedToResetVoiceTranscriptionSettings":
+    "Failed to reset voice transcription API",
   "toast.models.invalidCodexApiKey":
     "Invalid Codex API key format. Key should start with 'sk-'",
   "toast.models.invalidOpenaiApiKey":
@@ -3446,6 +3465,15 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "加密保存在这台设备上",
   "settings.models.commitMessage.baseUrlHint":
     "基础 URL 或 /chat/completions 端点",
+  "settings.models.voiceTranscription.title": "语音转写 API",
+  "settings.models.voiceTranscription.description":
+    "可选的兼容 OpenAI 的语音转文字 API，只用于语音输入。",
+  "settings.models.voiceTranscription.modelHint":
+    "只用于语音输入的语音转文字模型",
+  "settings.models.voiceTranscription.tokenHint":
+    "加密保存在这台设备上",
+  "settings.models.voiceTranscription.baseUrlHint":
+    "基础 URL 或 /audio/transcriptions 端点",
   "settings.models.overrideModel.title": "自定义兼容 Claude 的提供方",
   "settings.models.overrideModel.modelHint": "请求时使用的模型标识",
   "settings.models.overrideModel.authHint":
@@ -4687,6 +4715,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.subChatTitleSettingsReset": "子对话标题 API 已重置",
   "toast.models.commitMessageSettingsSaved": "提交信息 API 已保存",
   "toast.models.commitMessageSettingsReset": "提交信息 API 已重置",
+  "toast.models.voiceTranscriptionSettingsSaved": "语音转写 API 已保存",
+  "toast.models.voiceTranscriptionSettingsReset": "语音转写 API 已重置",
   "toast.models.providerProfileSaved": "提供方配置已保存",
   "toast.models.providerProfileDeleted": "提供方配置已删除",
   "toast.models.providerDefaultSaved": "提供方默认值已保存",
@@ -4696,7 +4726,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.failedToSaveProviderDefault": "保存提供方默认值失败",
   "toast.models.helperApisPrompt.title": "Claude Code 已连接",
   "toast.models.helperApisPrompt.description":
-    "可选配置辅助 API，用于子对话标题和提交信息。",
+    "可选配置辅助 API，用于标题、提交信息和语音转写。",
   "toast.models.helperApisPrompt.action": "去配置",
   "toast.models.failedToSaveModelSettings": "保存模型设置失败",
   "toast.models.failedToResetModelSettings": "重置模型设置失败",
@@ -4708,6 +4738,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "迁移已保存的 Codex API 密钥失败，请重新保存。",
   "toast.models.failedToMigrateLegacyClaudeProvider":
     "迁移已保存的 Claude 提供方令牌失败，请重新保存提供方配置。",
+  "toast.models.failedToMigrateLegacyVoiceApiKey":
+    "迁移已保存的语音转写 API 密钥失败，请重新保存。",
   "toast.models.failedToRemoveCodexApiKey": "移除 Codex API 密钥失败",
   "toast.models.failedToSaveOpenaiApiKey": "保存 OpenAI API 密钥失败",
   "toast.models.failedToRemoveOpenaiApiKey": "移除 OpenAI API 密钥失败",
@@ -4719,6 +4751,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "保存提交信息 API 失败",
   "toast.models.failedToResetCommitMessageSettings":
     "重置提交信息 API 失败",
+  "toast.models.failedToSaveVoiceTranscriptionSettings":
+    "保存语音转写 API 失败",
+  "toast.models.failedToResetVoiceTranscriptionSettings":
+    "重置语音转写 API 失败",
   "toast.models.invalidCodexApiKey":
     "Codex API 密钥格式不正确，应以 'sk-' 开头",
   "toast.models.invalidOpenaiApiKey":

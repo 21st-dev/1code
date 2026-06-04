@@ -35,7 +35,8 @@ import {
   modelsSettingsTargetAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
-  openaiApiKeyAtom,
+  OPENAI_TRANSCRIPTION_BASE_URL,
+  OPENAI_TRANSCRIPTION_MODEL,
   type ClaudeProviderAuthMode,
 } from "../../../lib/atoms"
 import {
@@ -1204,7 +1205,10 @@ function ProviderProfilesSettingsSection() {
   )
 }
 
-type LocalApiProviderPurpose = "sub_chat_title" | "commit_message"
+type LocalApiProviderPurpose =
+  | "sub_chat_title"
+  | "commit_message"
+  | "voice_transcription"
 
 type LocalApiProviderSettingsSectionProps = {
   purpose: LocalApiProviderPurpose
@@ -1217,6 +1221,8 @@ type LocalApiProviderSettingsSectionProps = {
   resetToastKey: TranslationKey
   failedSaveToastKey: TranslationKey
   failedResetToastKey: TranslationKey
+  modelPlaceholder?: string
+  baseUrlPlaceholder?: string
 }
 
 function LocalApiProviderSettingsSection({
@@ -1230,6 +1236,8 @@ function LocalApiProviderSettingsSection({
   resetToastKey,
   failedSaveToastKey,
   failedResetToastKey,
+  modelPlaceholder = "deepseek-v4-flash",
+  baseUrlPlaceholder = "https://api.deepseek.com",
 }: LocalApiProviderSettingsSectionProps) {
   const { t } = useI18n()
   const trpcUtils = trpc.useUtils()
@@ -1382,7 +1390,7 @@ function LocalApiProviderSettingsSection({
               onBlur={handleBlurSave}
               disabled={saveProviderMutation.isPending}
               className="w-full"
-              placeholder="deepseek-v4-flash"
+              placeholder={modelPlaceholder}
             />
           </div>
         </div>
@@ -1425,7 +1433,7 @@ function LocalApiProviderSettingsSection({
               onBlur={handleBlurSave}
               disabled={saveProviderMutation.isPending}
               className="w-full"
-              placeholder="https://api.deepseek.com"
+              placeholder={baseUrlPlaceholder}
             />
           </div>
         </div>
@@ -1471,9 +1479,6 @@ export function AgentsModelsTab() {
   const setLastSelectedCodexModelSource = useSetAtom(
     lastSelectedCodexModelSourceAtom,
   )
-  const [storedOpenAIKey, setStoredOpenAIKey] = useAtom(openaiApiKeyAtom)
-  const [openaiKey, setOpenaiKey] = useState(storedOpenAIKey)
-  const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const saveCodexApiKeyMutation = trpc.codex.saveCodexApiKey.useMutation()
   const removeCodexApiKeyMutation = trpc.codex.removeCodexApiKey.useMutation()
@@ -1490,10 +1495,6 @@ export function AgentsModelsTab() {
     setAuthMode(config?.authMode ?? "auth_token")
     setToken("")
   }, [providerConfigData])
-
-  useEffect(() => {
-    setOpenaiKey(storedOpenAIKey)
-  }, [storedOpenAIKey])
 
   useEffect(() => {
     if (modelsSettingsTarget !== "helper-apis") return
@@ -1664,10 +1665,6 @@ export function AgentsModelsTab() {
   const showCodexLoading =
     isCodexLoading && !hasAppCodexApiKey && !hasLocalCodexSubscription
 
-  // OpenAI key handlers
-  const trimmedOpenAIKey = openaiKey.trim()
-  const canResetOpenAI = !!trimmedOpenAIKey
-
   const handleCodexApiKeyBlur = async () => {
     const trimmedKey = codexApiKey.trim()
 
@@ -1726,36 +1723,6 @@ export function AgentsModelsTab() {
       )
     } finally {
       setIsSavingCodexApiKey(false)
-    }
-  }
-
-  const handleSaveOpenAI = async () => {
-    if (trimmedOpenAIKey === storedOpenAIKey) return // No change
-    if (trimmedOpenAIKey && !trimmedOpenAIKey.startsWith("sk-")) {
-      toast.error(t("toast.models.invalidOpenaiApiKey"))
-      return
-    }
-
-    try {
-      await setOpenAIKeyMutation.mutateAsync({ key: trimmedOpenAIKey })
-      setStoredOpenAIKey(trimmedOpenAIKey)
-      // Invalidate voice availability check
-      await trpcUtils.voice.isAvailable.invalidate()
-      toast.success(t("toast.models.openaiApiKeySaved"))
-    } catch (err) {
-      toast.error(t("toast.models.failedToSaveOpenaiApiKey"))
-    }
-  }
-
-  const handleResetOpenAI = async () => {
-    try {
-      await setOpenAIKeyMutation.mutateAsync({ key: "" })
-      setStoredOpenAIKey("")
-      setOpenaiKey("")
-      await trpcUtils.voice.isAvailable.invalidate()
-      toast.success(t("toast.models.openaiApiKeyRemoved"))
-    } catch (err) {
-      toast.error(t("toast.models.failedToRemoveOpenaiApiKey"))
     }
   }
 
@@ -1994,6 +1961,21 @@ export function AgentsModelsTab() {
               failedSaveToastKey="toast.models.failedToSaveCommitMessageSettings"
               failedResetToastKey="toast.models.failedToResetCommitMessageSettings"
             />
+
+            <LocalApiProviderSettingsSection
+              purpose="voice_transcription"
+              titleKey="settings.models.voiceTranscription.title"
+              descriptionKey="settings.models.voiceTranscription.description"
+              modelHintKey="settings.models.voiceTranscription.modelHint"
+              tokenHintKey="settings.models.voiceTranscription.tokenHint"
+              baseUrlHintKey="settings.models.voiceTranscription.baseUrlHint"
+              savedToastKey="toast.models.voiceTranscriptionSettingsSaved"
+              resetToastKey="toast.models.voiceTranscriptionSettingsReset"
+              failedSaveToastKey="toast.models.failedToSaveVoiceTranscriptionSettings"
+              failedResetToastKey="toast.models.failedToResetVoiceTranscriptionSettings"
+              modelPlaceholder={OPENAI_TRANSCRIPTION_MODEL}
+              baseUrlPlaceholder={OPENAI_TRANSCRIPTION_BASE_URL}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -2046,41 +2028,6 @@ export function AgentsModelsTab() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
-              </div>
-            </div>
-          </div>
-
-          {/* OpenAI API Key for Voice Input */}
-          <div className="bg-background rounded-lg border border-border overflow-hidden">
-            <div className="flex items-center justify-between gap-6 p-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">{t("common.openaiApiKey")}</Label>
-                  {canResetOpenAI && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleResetOpenAI}
-                      disabled={setOpenAIKeyMutation.isPending}
-                      className="h-5 px-1.5 text-xs text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
-                    >
-                      {t("common.remove")}
-                    </Button>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {t("settings.models.openaiApiKey.description")}
-                </p>
-              </div>
-              <div className="flex-shrink-0 w-80">
-                <Input
-                  type="password"
-                  value={openaiKey}
-                  onChange={(e) => setOpenaiKey(e.target.value)}
-                  onBlur={handleSaveOpenAI}
-                  className="w-full"
-                  placeholder="sk-..."
-                />
               </div>
             </div>
           </div>
