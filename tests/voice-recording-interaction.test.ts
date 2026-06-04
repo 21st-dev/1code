@@ -14,25 +14,29 @@ describe("voice recording interaction hardening", () => {
     expect(hookSource).toContain("await startPromiseRef.current")
   })
 
-  test("send button stops hold-to-talk on mouseup instead of waiting for click state", () => {
-    const buttonSource = readFileSync(
+  test("voice control stops hold-to-talk on mouseup instead of waiting for click state", () => {
+    const controlSource = readFileSync(
       join(
         process.cwd(),
-        "src/renderer/features/agents/components/agent-send-button.tsx",
+        "src/renderer/lib/voice/voice-input-control.tsx",
       ),
       "utf-8",
     )
 
-    expect(buttonSource).toContain("voicePointerStartedRef")
-    expect(buttonSource).toContain("voiceStopRequestedRef")
-    expect(buttonSource).toContain("const handleMouseUp = () =>")
-    expect(buttonSource).toContain("onVoiceMouseUp()")
-    expect(buttonSource).not.toContain(
+    expect(controlSource).toContain("pointerStartedRef")
+    expect(controlSource).toContain("stopRequestedRef")
+    expect(controlSource).toContain("const handleStop = () =>")
+    expect(controlSource).toContain("onStop()")
+    expect(controlSource).not.toContain(
       "Click-to-toggle is handled in handleButtonClick",
     )
   })
 
-  test("chat input flows stop pending voice starts without relying only on React recording state", () => {
+  test("shared voice input hook stops pending voice starts without relying only on React recording state", () => {
+    const hookSource = readFileSync(
+      join(process.cwd(), "src/renderer/lib/hooks/use-voice-input.ts"),
+      "utf-8",
+    )
     const chatInputSource = readFileSync(
       join(
         process.cwd(),
@@ -45,15 +49,20 @@ describe("voice recording interaction hardening", () => {
       "utf-8",
     )
 
+    expect(hookSource).toContain("startRequestedRef")
+    expect(hookSource).toContain("stopInFlightRef")
+    expect(hookSource).toContain(
+      "startRequestedRef.current || isRecording",
+    )
+    expect(hookSource).not.toMatch(
+      /const stop[\s\S]{0,280}if \(!isRecording\) return/,
+    )
+
     for (const source of [chatInputSource, newChatSource]) {
-      expect(source).toContain("voiceStartRequestedRef")
-      expect(source).toContain("voiceStopInFlightRef")
-      expect(source).toContain(
-        "voiceStartRequestedRef.current || isVoiceRecording",
-      )
-      expect(source).not.toMatch(
-        /const handleVoiceMouseUp[\s\S]{0,240}if \(!isVoiceRecording\) return/,
-      )
+      expect(source).toContain("useVoiceInput(")
+      expect(source).toContain("useVoiceInputHotkey(")
+      expect(source).toContain("<VoiceInputControl")
+      expect(source).not.toContain("voiceStopInFlightRef")
     }
   })
 })

@@ -84,6 +84,7 @@ import {
 import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { AgentSendButton } from "../components/agent-send-button"
+import { VoiceInputControl } from "../../../lib/voice/voice-input-control"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
 import {
@@ -120,10 +121,9 @@ import {
 } from "../lib/agent-guard-draft"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import {
-  useVoiceRecording,
-  blobToBase64,
-  getAudioFormat,
-} from "../../../lib/hooks/use-voice-recording"
+  useVoiceInput,
+  useVoiceInputHotkey,
+} from "../../../lib/hooks/use-voice-input"
 import { getResolvedHotkey } from "../../../lib/hotkeys"
 import { customHotkeysAtom } from "../../../lib/atoms"
 import { toast } from "sonner"
@@ -1111,26 +1111,6 @@ export const ChatInputArea = memo(function ChatInputArea({
       : t("chat.placeholder.agentMode")
   const modeSelectorTitle = t("chat.mode.selectorTooltip")
 
-  // Voice input state
-  const {
-    isRecording: isVoiceRecording,
-    audioLevel: voiceAudioLevel,
-    startRecording: startVoiceRecording,
-    stopRecording: stopVoiceRecording,
-    cancelRecording: cancelVoiceRecording,
-  } = useVoiceRecording()
-  const [isTranscribing, setIsTranscribing] = useState(false)
-  const voiceMountedRef = useRef(true)
-  const voiceStartRequestedRef = useRef(false)
-  const voiceStopInFlightRef = useRef(false)
-
-  useEffect(() => {
-    voiceMountedRef.current = true
-    return () => {
-      voiceMountedRef.current = false
-    }
-  }, [])
-
   const transcribeMutation = trpc.voice.transcribe.useMutation()
 
   // Check if voice input is available through a configured transcription API.
@@ -1140,6 +1120,44 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Get resolved voice input hotkey
   const customHotkeys = useAtomValue(customHotkeysAtom)
   const voiceInputHotkey = getResolvedHotkey("voice-input", customHotkeys)
+
+  const appendVoiceText = useCallback((text: string) => {
+    const current = (editorRef.current?.getValue() || "").trim()
+    const transcribed = text.trim()
+    const needsSpace = current.length > 0 && !/\s$/.test(current)
+    const newValue = current + (needsSpace ? " " : "") + transcribed
+    editorRef.current?.setValue(newValue)
+    editorRef.current?.focus()
+  }, [editorRef])
+
+  const transcribeVoiceAudio = useCallback(
+    (input: { audio: string; format: "webm" | "mp3" | "m4a" | "wav" | "ogg" }) =>
+      transcribeMutation.mutateAsync(input),
+    [transcribeMutation],
+  )
+
+  const {
+    isRecording: isVoiceRecording,
+    audioLevel: voiceAudioLevel,
+    isTranscribing,
+    startRequestedRef: voiceStartRequestedRef,
+    start: handleVoiceMouseDown,
+    stop: handleVoiceMouseUp,
+    cancel: handleVoiceMouseLeave,
+  } = useVoiceInput({
+    disabled: isStreaming,
+    transcribeAudio: transcribeVoiceAudio,
+    onText: appendVoiceText,
+    onNoSpeech: () => toast.info(t("agent.voice.noSpeechDetected")),
+    onError: (err, phase) => {
+      if (phase === "start") {
+        toast.error(err instanceof Error ? err.message : "Failed to start recording")
+        return
+      }
+      toast.error(t("agent.voice.transcriptionFailed"))
+    },
+    logPrefix: "[VoiceInput]",
+  })
 
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
@@ -1164,207 +1182,15 @@ export const ChatInputArea = memo(function ChatInputArea({
     return () => window.removeEventListener("keydown", handleKeyDown, true)
   }, [isActive])
 
-  // Voice input handlers
-  const handleVoiceMouseDown = useCallback(async () => {
-    if (
-      isStreaming ||
-      isTranscribing ||
-      isVoiceRecording ||
-      voiceStartRequestedRef.current ||
-      voiceStopInFlightRef.current
-    ) {
-      return
-    }
-    voiceStartRequestedRef.current = true
-    try {
-      await startVoiceRecording()
-    } catch (err) {
-      voiceStartRequestedRef.current = false
-      console.error("[VoiceInput] Failed to start recording:", err)
-      toast.error(err instanceof Error ? err.message : "Failed to start recording")
-    }
-  }, [isStreaming, isTranscribing, isVoiceRecording, startVoiceRecording])
-
-  const handleVoiceMouseUp = useCallback(async () => {
-    if (
-      voiceStopInFlightRef.current ||
-      (!voiceStartRequestedRef.current && !isVoiceRecording)
-    ) {
-      return
-    }
-
-    voiceStopInFlightRef.current = true
-    // Set transcribing immediately to avoid visual flash between recording and transcribing states
-    setIsTranscribing(true)
-
-    try {
-      const blob = await stopVoiceRecording()
-      voiceStartRequestedRef.current = false
-
-      // Don't transcribe very short recordings (likely accidental clicks)
-      if (blob.size < 1000) {
-        console.log("[VoiceInput] Recording too short, ignoring")
-        if (voiceMountedRef.current) setIsTranscribing(false)
-        return
-      }
-
-      if (!voiceMountedRef.current) return
-
-      const base64 = await blobToBase64(blob)
-      const format = getAudioFormat(blob.type)
-
-      const result = await transcribeMutation.mutateAsync({
-        audio: base64,
-        format,
-      })
-
-      if (!voiceMountedRef.current) return
-
-      if (result.text && result.text.trim()) {
-        const current = (editorRef.current?.getValue() || "").trim()
-        const transcribed = result.text.trim()
-        const needsSpace = current.length > 0 && !/\s$/.test(current)
-        const newValue = current + (needsSpace ? " " : "") + transcribed
-        editorRef.current?.setValue(newValue)
-        editorRef.current?.focus()
-      } else {
-        toast.info(t("agent.voice.noSpeechDetected"))
-      }
-    } catch (err) {
-      console.error("[VoiceInput] Transcription failed:", err)
-      toast.error(t("agent.voice.transcriptionFailed"))
-    } finally {
-      voiceStartRequestedRef.current = false
-      voiceStopInFlightRef.current = false
-      if (voiceMountedRef.current) {
-        setIsTranscribing(false)
-      }
-    }
-  }, [isVoiceRecording, stopVoiceRecording, transcribeMutation, editorRef, t])
-
-  const handleVoiceMouseLeave = useCallback(() => {
-    if (voiceStartRequestedRef.current || isVoiceRecording) {
-      voiceStartRequestedRef.current = false
-      // Cancel instead of transcribing when leaving button area
-      cancelVoiceRecording()
-    }
-  }, [isVoiceRecording, cancelVoiceRecording])
-
-  // Auto-cancel recording when window loses focus (prevents stuck recording if keyup never fires)
-  useEffect(() => {
-    if (!isVoiceRecording) return
-
-    const handleFocusLoss = () => {
-      cancelVoiceRecording()
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) cancelVoiceRecording()
-    }
-
-    window.addEventListener("blur", handleFocusLoss)
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    return () => {
-      window.removeEventListener("blur", handleFocusLoss)
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
-  }, [isVoiceRecording, cancelVoiceRecording])
-
-  // Keyboard shortcut: Voice input hotkey (push-to-talk: hold to record, release to transcribe)
-  useEffect(() => {
-    if (!voiceInputHotkey) return
-    if (!isActive) return
-
-    // Parse hotkey once
-    const parts = voiceInputHotkey.split("+").map(p => p.toLowerCase())
-    const modifiers = parts.filter(p => ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
-    const mainKey = parts.find(p => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
-
-    const needsCmd = modifiers.includes("cmd") || modifiers.includes("meta")
-    const needsShift = modifiers.includes("shift")
-    const needsCtrl = modifiers.includes("ctrl")
-    const needsAlt = modifiers.includes("alt") || modifiers.includes("opt")
-
-    // For modifier-only hotkeys (like ctrl+opt), we track when all modifiers are pressed
-    const isModifierOnlyHotkey = !mainKey
-
-    const modifiersMatch = (e: KeyboardEvent) => {
-      return (
-        e.metaKey === needsCmd &&
-        e.shiftKey === needsShift &&
-        e.ctrlKey === needsCtrl &&
-        e.altKey === needsAlt
-      )
-    }
-
-    const matchesHotkey = (e: KeyboardEvent) => {
-      if (isModifierOnlyHotkey) {
-        // For modifier-only: just check if all required modifiers are pressed
-        return modifiersMatch(e)
-      }
-
-      // For regular hotkey with main key
-      const keyMatches =
-        e.key.toLowerCase() === mainKey ||
-        e.code.toLowerCase() === mainKey ||
-        e.code.toLowerCase() === `key${mainKey}` ||
-        (mainKey === "space" && e.code === "Space")
-
-      return keyMatches && modifiersMatch(e)
-    }
-
-    // Check if any modifier key is released
-    const isModifierRelease = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase()
-      return key === "control" || key === "alt" || key === "meta" || key === "shift"
-    }
-
-    // Check if the released key is the main key (not a modifier)
-    const isMainKeyRelease = (e: KeyboardEvent) => {
-      if (isModifierOnlyHotkey) {
-        return isModifierRelease(e)
-      }
-      const eventKey = e.key.toLowerCase()
-      return (
-        eventKey === mainKey ||
-        e.code.toLowerCase() === mainKey ||
-        e.code.toLowerCase() === `key${mainKey}` ||
-        (mainKey === "space" && e.code === "Space")
-      )
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!matchesHotkey(e)) return
-      if (e.repeat) return // Ignore key repeat
-
-      e.preventDefault()
-      e.stopPropagation()
-
-      // Start recording on keydown
-      if (!isVoiceRecording && !isTranscribing && !isStreaming) {
-        handleVoiceMouseDown()
-      }
-    }
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      // Stop recording when the main key (or any modifier for modifier-only hotkeys) is released
-      if (!isMainKeyRelease(e)) return
-
-      // Stop if recording has started or is still awaiting MediaRecorder setup.
-      if (voiceStartRequestedRef.current || isVoiceRecording) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleVoiceMouseUp()
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown, true)
-    window.addEventListener("keyup", handleKeyUp, true)
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown, true)
-      window.removeEventListener("keyup", handleKeyUp, true)
-    }
-  }, [voiceInputHotkey, isVoiceRecording, isTranscribing, isStreaming, handleVoiceMouseDown, handleVoiceMouseUp, isActive])
+  useVoiceInputHotkey({
+    hotkey: voiceInputHotkey,
+    enabled: isActive && !isStreaming,
+    isRecording: isVoiceRecording,
+    isTranscribing,
+    startRequestedRef: voiceStartRequestedRef,
+    onStart: handleVoiceMouseDown,
+    onStop: handleVoiceMouseUp,
+  })
 
   // Save draft on blur (with attachments and text contexts)
   const handleEditorBlur = useCallback(async () => {
@@ -1737,6 +1563,16 @@ export const ChatInputArea = memo(function ChatInputArea({
       onSend()
     }
   }, [blockUnsupportedImageSend, ensureGuardedRunReady, firstQueueItemId, files.length, hasContent, onSend, onSendFromQueue, queueLength, readyImageCount])
+
+  const hasSendButtonContent =
+    hasContent ||
+    readyImageCount > 0 ||
+    files.length > 0 ||
+    textContexts.length > 0 ||
+    (diffTextContexts?.length ?? 0) > 0 ||
+    queueLength > 0
+  const showVoiceControl =
+    isVoiceAvailable && !isStreaming && !hasSendButtonContent
 
   return (
     <div
@@ -2213,37 +2049,36 @@ export const ChatInputArea = memo(function ChatInputArea({
 
                   {/* Send/Stop/Voice button */}
                   <div className="ml-1">
-                    <AgentSendButton
-                      isStreaming={isStreaming}
-                      isSubmitting={false}
-                      disabled={
-                        (!hasContent &&
-                          readyImageCount === 0 &&
-                          files.length === 0 &&
-                          textContexts.length === 0 &&
-                          (diffTextContexts?.length ?? 0) === 0 &&
-                          queueLength === 0) ||
-                        isUploading ||
-                        imageAttachmentBlocked
-                      }
-                      hasContent={
-                        hasContent ||
-                        readyImageCount > 0 ||
-                        files.length > 0 ||
-                        textContexts.length > 0 ||
-                        (diffTextContexts?.length ?? 0) > 0
-                      }
-                      onClick={handleSendButtonClick}
-                      onStop={onStop}
-                      mode={subChatMode}
-                      // Voice input props - show mic when input is empty and voice is available
-                      showVoiceInput={isVoiceAvailable}
-                      isRecording={isVoiceRecording}
-                      isTranscribing={isTranscribing}
-                      onVoiceMouseDown={handleVoiceMouseDown}
-                      onVoiceMouseUp={handleVoiceMouseUp}
-                      onVoiceMouseLeave={handleVoiceMouseLeave}
-                    />
+                    {showVoiceControl ? (
+                      <VoiceInputControl
+                        isRecording={isVoiceRecording}
+                        isTranscribing={isTranscribing}
+                        hotkeyLabel={voiceInputHotkey}
+                        accent={subChatMode === "plan" ? "plan" : "default"}
+                        onStart={handleVoiceMouseDown}
+                        onStop={handleVoiceMouseUp}
+                        onCancel={handleVoiceMouseLeave}
+                      />
+                    ) : (
+                      <AgentSendButton
+                        isStreaming={isStreaming}
+                        isSubmitting={false}
+                        disabled={
+                          (!hasContent &&
+                            readyImageCount === 0 &&
+                            files.length === 0 &&
+                            textContexts.length === 0 &&
+                            (diffTextContexts?.length ?? 0) === 0 &&
+                            queueLength === 0) ||
+                          isUploading ||
+                          imageAttachmentBlocked
+                        }
+                        hasContent={hasSendButtonContent}
+                        onClick={handleSendButtonClick}
+                        onStop={onStop}
+                        mode={subChatMode}
+                      />
+                    )}
                   </div>
                 </div>
               </PromptInputActions>

@@ -8,12 +8,12 @@
 - [x] 2.3 Update transcription tests to target the extracted service.
 
 ## 3. Renderer
-- [ ] 3.1 Add reusable `useVoiceInput` orchestration hook.
-- [ ] 3.2 Add reusable `VoiceInputControl` component.
-- [ ] 3.3 Refactor existing chat input surfaces to use the shared hook/component.
+- [x] 3.1 Add reusable `useVoiceInput` orchestration hook.
+- [x] 3.2 Add reusable `VoiceInputControl` component.
+- [x] 3.3 Refactor existing chat input surfaces to use the shared hook/component.
 
 ## 4. Verification
-- [ ] 4.1 Add focused tests for the reusable hook/component source boundaries.
-- [ ] 4.2 Run targeted voice tests.
+- [x] 4.1 Add focused tests for the reusable hook/component source boundaries.
+- [x] 4.2 Run targeted voice tests.
 - [ ] 4.3 Run TypeScript check and build.
 - [ ] 4.4 Confirm no plaintext provider token or env fallback is introduced.
