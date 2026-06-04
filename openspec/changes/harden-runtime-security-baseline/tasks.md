@@ -21,5 +21,5 @@
 
 ## 6. Verification
 - [x] 6.1 Run targeted security tests.
-- [ ] 6.2 Run full tests, type check, native check, build, and whitespace check.
-- [ ] 6.3 Run real Electron startup smoke and capture recording evidence.
+- [x] 6.2 Run full tests, type check, native check, build, and whitespace check.
+- [x] 6.3 Run real Electron startup smoke and capture recording evidence.
