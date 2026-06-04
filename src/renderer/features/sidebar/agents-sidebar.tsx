@@ -1152,12 +1152,30 @@ const WorkbenchButton = memo(function WorkbenchButton() {
       placeholderData: (previous) => previous,
     },
   )
+  const apiJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "api", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = (
+          (query.state.data as { jobs?: { status?: string }[] } | undefined)
+            ?.jobs ?? []
+        )
+        return jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        )
+          ? 5000
+          : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
   const activeJobCount = [
     ...(cliJobsQuery.data?.jobs ?? []),
     ...(desktopJobsQuery.data?.jobs ?? []),
     ...(daemonJobsQuery.data?.jobs ?? []),
     ...(scheduleJobsQuery.data?.jobs ?? []),
     ...(protocolJobsQuery.data?.jobs ?? []),
+    ...(apiJobsQuery.data?.jobs ?? []),
   ].filter((job) => job.status === "queued" || job.status === "running").length
   const activeJobBadge = activeJobCount > 99 ? "99+" : String(activeJobCount)
   const label =

@@ -48,6 +48,7 @@ describe("headless desktop jobs UI", () => {
       expect(source).toContain('source: "daemon"')
       expect(source).toContain('source: "schedule"')
       expect(source).toContain('source: "protocol"')
+      expect(source).toContain('source: "api"')
       expect(source).toContain("trpc.agentSchedules.list.useQuery")
       expect(source).toContain("ScheduleCard")
       expect(source).toContain("trpc.agentJobs.cancel.useMutation")
@@ -72,6 +73,20 @@ describe("headless desktop jobs UI", () => {
       expect(source).not.toContain("tasks.length === 0 && headlessJobs.length === 0")
   })
 
+  test("shows Local Job API metadata in Agent Workbench without raw request payloads", () => {
+    const source = read("src/renderer/features/agents/workbench/agent-workbench.tsx")
+    expect(source).toContain("HeadlessJobApiMetadata")
+    expect(source).toContain('job.source === "api"')
+    expect(source).toContain("apiConsumerId")
+    expect(source).toContain("apiConsumerRunId")
+    expect(source).toContain("artifactManifestPath")
+    expect(source).toContain("artifactBaseDir")
+    expect(source).toContain('t("workbench.apiConsumer")')
+    expect(source).toContain('t("workbench.apiExternalRun")')
+    expect(source).toContain('t("workbench.apiArtifacts")')
+    expect(source).not.toContain("inputJson")
+  })
+
   test("adds English and Chinese run labels", () => {
     const dictionary = read("src/renderer/lib/i18n/dictionaries.ts")
     for (const key of [
@@ -81,6 +96,10 @@ describe("headless desktop jobs UI", () => {
         "workbench.jobSource.daemon",
         "workbench.jobSource.schedule",
         "workbench.jobSource.protocol",
+        "workbench.jobSource.api",
+        "workbench.apiConsumer",
+        "workbench.apiExternalRun",
+        "workbench.apiArtifacts",
         "workbench.schedules",
         "workbench.runScheduleNow",
         "workbench.pauseSchedule",
@@ -96,13 +115,14 @@ describe("headless desktop jobs UI", () => {
     }
   })
 
-  test("counts active desktop, CLI, daemon, schedule, and protocol runs in the sidebar badge", () => {
+  test("counts active desktop, CLI, daemon, schedule, protocol, and API runs in the sidebar badge", () => {
       const source = read("src/renderer/features/sidebar/agents-sidebar.tsx")
       expect(source).toContain('source: "desktop"')
       expect(source).toContain('source: "cli"')
       expect(source).toContain('source: "daemon"')
       expect(source).toContain('source: "schedule"')
       expect(source).toContain('source: "protocol"')
+      expect(source).toContain('source: "api"')
       expect(source).toContain("activeJobCount")
     expect(source).toContain('job.status === "queued" || job.status === "running"')
   })

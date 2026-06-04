@@ -26,11 +26,11 @@
 - [x] 4.5 Commit the artifact slice.
 
 ## 5. Workbench Visibility
-- [ ] 5.1 Design a compact Workbench metadata treatment for API jobs.
-- [ ] 5.2 Show API source, consumer ID, external run ID, and artifact path/manifest when present.
-- [ ] 5.3 Keep layout dense, accessible, and free of overlapping/truncated controls.
-- [ ] 5.4 Add UI tests for API job labels and metadata.
-- [ ] 5.5 Commit the Workbench slice.
+- [x] 5.1 Design a compact Workbench metadata treatment for API jobs.
+- [x] 5.2 Show API source, consumer ID, external run ID, and artifact path/manifest when present.
+- [x] 5.3 Keep layout dense, accessible, and free of overlapping/truncated controls.
+- [x] 5.4 Add UI tests for API job labels and metadata.
+- [x] 5.5 Commit the Workbench slice.
 
 ## 6. Verification
 - [ ] 6.1 Run `openspec validate add-local-job-api-v1 --strict --no-interactive`.

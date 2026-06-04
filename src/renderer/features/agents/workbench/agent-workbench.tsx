@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
   AlertCircle,
+  Braces,
   Cable,
   CalendarClock,
   CheckCircle2,
@@ -133,6 +134,10 @@ type HeadlessJob = {
   chatId: string | null
   subChatId: string | null
   promptPreview: string | null
+  apiConsumerId: string | null
+  apiConsumerRunId: string | null
+  artifactBaseDir: string | null
+  artifactManifestPath: string | null
   createdAt: Date | string | null
   startedAt: Date | string | null
   finishedAt: Date | string | null
@@ -303,6 +308,7 @@ function canRetryHeadlessJob(job: HeadlessJob): boolean {
 }
 
 function getHeadlessJobSourceIcon(job: HeadlessJob) {
+  if (job.source === "api") return Braces
   if (job.source === "schedule") return CalendarClock
   if (job.source === "protocol") return Cable
   if (job.source === "daemon") return Server
@@ -315,7 +321,73 @@ function getHeadlessJobSourceLabelKey(job: HeadlessJob): TranslationKey {
   if (job.source === "daemon") return "workbench.jobSource.daemon"
   if (job.source === "schedule") return "workbench.jobSource.schedule"
   if (job.source === "protocol") return "workbench.jobSource.protocol"
+  if (job.source === "api") return "workbench.jobSource.api"
   return "workbench.jobSource.other"
+}
+
+function HeadlessJobApiMetadata({
+  job,
+  compact = false,
+}: {
+  job: HeadlessJob
+  compact?: boolean
+}) {
+  const { t } = useI18n()
+  if (job.source !== "api") return null
+
+  const artifactPath = job.artifactManifestPath || job.artifactBaseDir
+  const metadata = [
+    job.apiConsumerId
+      ? {
+          key: "consumer",
+          label: t("workbench.apiConsumer"),
+          value: job.apiConsumerId,
+        }
+      : null,
+    job.apiConsumerRunId
+      ? {
+          key: "run",
+          label: t("workbench.apiExternalRun"),
+          value: job.apiConsumerRunId,
+        }
+      : null,
+    artifactPath
+      ? {
+          key: "artifacts",
+          label: t("workbench.apiArtifacts"),
+          value: artifactPath,
+        }
+      : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; value: string }>
+
+  if (metadata.length === 0) return null
+
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground",
+        compact ? "mt-2" : "mt-3",
+      )}
+    >
+      {metadata.map((item) => (
+        <span
+          key={item.key}
+          className="flex min-w-0 max-w-full items-baseline gap-1.5"
+          aria-label={`${item.label}: ${item.value}`}
+        >
+          <span className="flex-shrink-0 text-muted-foreground">
+            {item.label}
+          </span>
+          <span
+            className="min-w-0 truncate font-mono text-foreground/80"
+            title={item.value}
+          >
+            {item.value}
+          </span>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function formatHeadlessRuntime(runtime: string): string {
@@ -780,6 +852,8 @@ function HeadlessJobCard({
         </p>
       )}
 
+      <HeadlessJobApiMetadata job={job} />
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
@@ -872,6 +946,7 @@ function HeadlessJobLogsDialog({
           <DialogDescription className="truncate">
             {job?.id || t("workbench.headlessJobUntitled")}
           </DialogDescription>
+          {job && <HeadlessJobApiMetadata job={job} compact />}
         </DialogHeader>
 
         <div className="max-h-[68vh] overflow-y-auto px-5 py-4">
@@ -1210,6 +1285,17 @@ export function AgentWorkbench() {
       placeholderData: (previous) => previous,
     },
   )
+  const apiJobsQuery = trpc.agentJobs.list.useQuery(
+    { source: "api", limit: 20 },
+    {
+      refetchInterval: (query) => {
+        const jobs = ((query.state.data as { jobs?: HeadlessJob[] } | undefined)
+          ?.jobs ?? []) as HeadlessJob[]
+        return jobs.some(isActiveHeadlessJob) ? 5000 : 10000
+      },
+      placeholderData: (previous) => previous,
+    },
+  )
   const schedulesQuery = trpc.agentSchedules.list.useQuery(
     { includeDisabled: false, limit: 20 },
     {
@@ -1225,10 +1311,12 @@ export function AgentWorkbench() {
         ...((daemonJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((scheduleJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((protocolJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+        ...((apiJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ]).find(
         (job) => job.id === selectedJobId,
       ) ?? null,
     [
+      apiJobsQuery.data?.jobs,
       cliJobsQuery.data?.jobs,
       daemonJobsQuery.data?.jobs,
       desktopJobsQuery.data?.jobs,
@@ -1257,6 +1345,7 @@ export function AgentWorkbench() {
       ...((daemonJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ...((scheduleJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
       ...((protocolJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
+      ...((apiJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
     ]
     return jobs.sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
@@ -1264,6 +1353,7 @@ export function AgentWorkbench() {
       return bTime - aTime
     })
   }, [
+    apiJobsQuery.data?.jobs,
     cliJobsQuery.data?.jobs,
     daemonJobsQuery.data?.jobs,
     desktopJobsQuery.data?.jobs,
@@ -1291,6 +1381,7 @@ export function AgentWorkbench() {
     daemonJobsQuery.isFetching ||
     scheduleJobsQuery.isFetching ||
     protocolJobsQuery.isFetching ||
+    apiJobsQuery.isFetching ||
     schedulesQuery.isFetching
   const canCreateDraftPr =
     !!draftPrForm?.title.trim() &&
@@ -1611,6 +1702,7 @@ export function AgentWorkbench() {
                 void daemonJobsQuery.refetch()
                 void scheduleJobsQuery.refetch()
                 void protocolJobsQuery.refetch()
+                void apiJobsQuery.refetch()
                 void schedulesQuery.refetch()
               }}
               disabled={isRefreshing}
@@ -1653,6 +1745,7 @@ export function AgentWorkbench() {
           daemonJobsQuery.isLoading &&
           scheduleJobsQuery.isLoading &&
           protocolJobsQuery.isLoading &&
+          apiJobsQuery.isLoading &&
           schedulesQuery.isLoading &&
           tasksQuery.isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
