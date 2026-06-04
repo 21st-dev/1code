@@ -2,15 +2,17 @@
 
 语言：[English](README.md) | 简体中文
 
-Locus 是一个本地优先的桌面 AI 工作台，用多个 agent runtime 操作本地项目。它把
-Claude Code、Codex、provider-backed agents、MCP tools、terminal commands、git
-workflows、worktrees 和本地 job automation 放在一个可见的桌面环境里。
+Locus 是一个本地优先的桌面 AI 工作台，用成熟 agent CLI workflows 和可切换 model
+backends 操作本地项目。它把 Claude Code、Codex、provider-backed agents、MCP tools、
+terminal commands、git workflows、worktrees 和本地 job automation 放在一个可见的桌面
+环境里。
 
-Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先 runtime hub。
-coding 仍然是第一个强场景，但它不只是 coding chat UI。Locus 的目标是让本地 agent
-工作可见、可取消、可恢复、可审计，并能被周边本地应用复用。
+Locus 是基于 [1Code](https://github.com/21st-dev/1code) 改造的本地优先 AI 工作台。
+coding 仍然是第一个强场景，但它不只是 coding chat UI。Locus 的目标是让 runtime
+能力、provider 兼容性、MCP 状态、工具调用、文件变化、usage、运行历史和本地 agent
+工作可见、可审计。
 
-![Locus 目标本地 agent 平台](docs/assets/locus-agent-platform.zh-CN.svg)
+![Locus 工作台架构](docs/assets/locus-agent-platform.zh-CN.svg)
 
 ## 为什么需要 Locus
 
@@ -43,7 +45,8 @@ queue 里，Locus 就有意义。
 | hosted/cloud agents 或 hosted scheduler | 未实现 |
 | Codex 与 Claude Code 完整能力对齐 | 未实现 |
 
-平台定位和边界见
+项目定位和当前范围切割见
+[docs/locus-workbench-focus.zh-CN.md](docs/locus-workbench-focus.zh-CN.md)。集成边界见
 [docs/locus-local-agent-platform.zh-CN.md](docs/locus-local-agent-platform.zh-CN.md)。
 
 ## 从源码启动
@@ -144,7 +147,8 @@ worktree-aware controls，不是完整文件系统隔离。
 
 ## 文档
 
-- [本地 agent 平台](docs/locus-local-agent-platform.zh-CN.md)
+- [工作台定位与范围切割](docs/locus-workbench-focus.zh-CN.md)
+- [工作台和集成边界](docs/locus-local-agent-platform.zh-CN.md)
 - [Local Job API v1 下游接入手册](docs/local-job-api-v1-consumer-guide.zh-CN.md)
 - [Runtime environment center plan](docs/runtime-environment-center-plan.md)
 - [Contributing](CONTRIBUTING.md)

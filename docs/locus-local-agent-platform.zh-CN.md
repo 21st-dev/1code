@@ -3,10 +3,11 @@
 语言：[English](locus-local-agent-platform.md) | 简体中文
 
 Locus 正在从单一 coding 桌面应用，演进为一个本地优先的 AI 工作台：用户可以在本地
-项目里使用多个 agent runtime 操作文件、terminal、git、worktree 和工具。它首先是用户
-直接使用的桌面工作区，下面才是 agent runtime hub。
+项目里使用成熟 agent CLI workflows 和可切换 model backends 操作文件、terminal、git、
+worktree 和工具。它首先是用户直接使用的桌面工作区；runtime adapters、local jobs、
+daemon、schedules 和 protocol surfaces 都是下面的支撑层。
 
-![Locus 目标本地 agent 平台](assets/locus-agent-platform.zh-CN.svg)
+![Locus 工作台架构](assets/locus-agent-platform.zh-CN.svg)
 
 ## 定位
 
@@ -22,6 +23,11 @@ Locus 应该负责本地工作台体验，以及背后的 runtime 层：
 
 coding 仍然是第一个强场景，但不是长期唯一场景。其他本地优先工具可以集成 Locus，
 但核心产品仍然是用户直接操作本地项目的桌面工作台。
+
+当前范围切割见 [Locus 工作台定位与范围切割](locus-workbench-focus.zh-CN.md)。当前实现
+重点是 Codex Workbench、provider profile run binding、runtime capability display 和
+structured run trace。更大的 workflow engine、新 CLI 集成和 full ACP parity 都是后续
+切片。
 
 ## 当前可用入口
 
@@ -192,8 +198,11 @@ Local Job API v1 已经实现为 `locus api` CLI group。下游项目应该读 c
 
 ```text
 local-first AI workbench
-local job platform
-runtime hub for Claude Code and Codex powered work
+selectable model backends
+runtime capability truth
+provider compatibility and diagnostics
+MCP state, tool activity, file changes, usage, and run history
+Local Job API 作为支撑自动化基础设施
 minimal ACP stdio job surface
 macOS local smoke complete; Windows packaged real-machine smoke deferred
 ```
@@ -203,6 +212,10 @@ macOS local smoke complete; Windows packaged real-machine smoke deferred
 ```text
 complete ACP server
 universal automation platform
+AI OS
+local job platform
+runtime hub
+workflow orchestrator
 fully cross-platform accepted
 secure sandbox for arbitrary extensions
 offline-only

@@ -1,6 +1,7 @@
 ## 0. Current Boundary
-- [x] 0.1 Record that this change is proposal-only, Claude-specific, and not part of the current local agent platform or `add-headless-agent-jobs` acceptance boundary.
+- [x] 0.1 Record that this change is proposal-only, Claude-specific, and not part of the current Locus Workbench focus or `add-headless-agent-jobs` acceptance boundary.
 - [x] 0.2 Record that Dynamic Workflows must not be described as supported until this proposal is approved, implemented, tested, and smoke-tested.
+- [x] 0.3 Record that implementation is deferred behind the Codex Workbench focus: provider profile run binding, runtime capability display, and structured run trace.
 
 ## 1. Proposal
 - [x] 1.1 Review this proposal against `add-headless-agent-jobs` and confirm the adapter remains Claude-specific.

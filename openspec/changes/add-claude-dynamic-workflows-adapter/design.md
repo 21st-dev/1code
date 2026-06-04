@@ -112,10 +112,10 @@ Why: the existing Locus Claude path already has cancellation behavior. Pause/res
   - Mitigation: default to `Ask`, show usage warnings, and keep `ultracode` in advanced/runtime-command surfaces only.
 
 ## Phase Boundary
-- This proposal is independent from the current local agent platform and
-  `add-headless-agent-jobs` acceptance boundary. It can remain proposal-only
-  without blocking headless jobs, schedules, daemon, minimal ACP, or release
-  evidence for that platform work.
+- This proposal is parked behind the current Codex Workbench focus: provider
+  profile run binding, runtime capability display, and structured run trace.
+  It can remain proposal-only without blocking headless jobs, schedules,
+  daemon, minimal ACP, or release evidence for that platform work.
 - Phase 1 is complete when Locus can detect support, gate workflows with settings, approve or deny `Workflow` tool launches, show workflow progress/final state in chat, and stop active workflows.
 - Phase 2 may add richer `/workflows` browsing and save/re-run affordances after the MVP proves stable.
 - Any durable job, CLI, daemon, schedule, or protocol integration requires a separate proposal or a deliberate extension to `add-headless-agent-jobs`.

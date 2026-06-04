@@ -3,16 +3,18 @@
 Languages: English | [Simplified Chinese](README.zh-CN.md)
 
 Locus is a local-first desktop AI workbench for operating on local projects with
-multiple agent runtimes. It helps users run Claude Code, Codex, provider-backed
-agents, MCP tools, terminal commands, git workflows, worktrees, and local job
-automation from one visible desktop environment.
+mature agent CLI workflows and selectable model backends. It helps users run
+Claude Code, Codex, provider-backed agents, MCP tools, terminal commands, git
+workflows, worktrees, and local job automation from one visible desktop
+environment.
 
 Locus is a fork of [1Code](https://github.com/21st-dev/1code) adapted into a
-local-first runtime hub. Coding is still the first strong workflow, but the
-project is not only a coding chat UI. Locus is intended to make local agent work
-visible, cancelable, resumable, auditable, and reusable by nearby local apps.
+local-first AI workbench. Coding is still the first strong workflow, but the
+project is not only a coding chat UI. Locus is intended to make runtime
+capabilities, provider compatibility, MCP state, tool activity, file changes,
+usage, run history, and local agent work visible and auditable.
 
-![Locus local agent platform](docs/assets/locus-agent-platform.svg)
+![Locus workbench architecture](docs/assets/locus-agent-platform.svg)
 
 ## Why Locus
 
@@ -45,8 +47,9 @@ It provides:
 | Hosted/cloud agents or hosted scheduler | Not implemented |
 | Full Codex parity with Claude Code | Not implemented |
 
-For the platform direction and boundaries, read
-[docs/locus-local-agent-platform.md](docs/locus-local-agent-platform.md).
+For positioning and the current scope lock, read
+[docs/locus-workbench-focus.md](docs/locus-workbench-focus.md). For integration
+boundaries, read [docs/locus-local-agent-platform.md](docs/locus-local-agent-platform.md).
 
 ## Get Started From Source
 
@@ -151,7 +154,8 @@ filesystem isolation.
 
 ## Documentation
 
-- [Local agent platform](docs/locus-local-agent-platform.md)
+- [Workbench focus and scope lock](docs/locus-workbench-focus.md)
+- [Workbench and integration boundaries](docs/locus-local-agent-platform.md)
 - [Local Job API v1 Consumer Guide](docs/local-job-api-v1-consumer-guide.md)
 - [Runtime environment center plan](docs/runtime-environment-center-plan.md)
 - [Contributing](CONTRIBUTING.md)

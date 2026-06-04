@@ -100,15 +100,21 @@ still need capability-specific audits before public parity claims.
 Do not implement the whole matrix at once. Use this order unless later evidence
 changes the priority.
 
+Status note: the current Locus Workbench focus supersedes this older order for
+near-term implementation. After `add-headless-agent-jobs`, the active cut is
+Codex Workbench, provider profile run binding, runtime capability display, and
+structured run trace. Claude-specific workflow work should remain parked unless
+it is deliberately reprioritized.
+
 1. `add-agent-runtime-capability-model`
    - Establish the shared vocabulary: runtime-neutral, runtime-specific,
      supported, degraded, unsupported.
 2. `add-headless-agent-jobs`
-   - Implemented for the basic local job platform. Future work should extend
-     this layer instead of creating a second headless runner.
+   - Implemented for the job-backed local execution layer. Future work should
+     extend this layer instead of creating a second headless runner.
 3. `add-claude-dynamic-workflows-adapter`
-   - Implement the existing Claude-only workflows proposal after the capability
-     model is accepted.
+   - Parked proposal. Do not implement before the current Codex Workbench focus
+     is complete or deliberately reprioritized.
 4. `add-claude-hooks-management`
    - Make hooks visible, auditable, and controllable before treating them as a
      first-class runtime capability.

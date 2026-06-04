@@ -3,10 +3,12 @@
 Languages: English | [Simplified Chinese](locus-local-agent-platform.zh-CN.md)
 
 Locus is moving from a coding-only desktop app toward a local-first AI
-workbench for operating on local projects with multiple agent runtimes. It is a
-user-facing workspace first, with an agent runtime hub underneath it.
+workbench for operating on local projects with mature agent CLI workflows and
+selectable model backends. It is a user-facing workspace first. Runtime
+adapters, local jobs, daemon, schedules, and protocol surfaces are supporting
+infrastructure underneath the workbench.
 
-![Locus local agent platform](assets/locus-agent-platform.svg)
+![Locus workbench architecture](assets/locus-agent-platform.svg)
 
 ## Positioning
 
@@ -23,6 +25,12 @@ Locus should own the local workbench experience and the runtime layer behind it:
 Coding is still the first strong workflow, but it is not the only long-term
 workflow. Other local-first tools can integrate with Locus, but the core product
 is still the desktop workbench where users operate on local projects directly.
+
+For the current scope lock, read
+[Locus Workbench Focus and Scope Lock](locus-workbench-focus.md). The current
+implementation focus is Codex Workbench, provider profile run binding, runtime
+capability display, and structured run trace. Broader workflow engines, new CLI
+integrations, and full ACP parity are later slices.
 
 ## Current Usable Surfaces
 
@@ -211,8 +219,11 @@ Use:
 
 ```text
 local-first AI workbench
-local job platform
-runtime hub for Claude Code and Codex powered work
+selectable model backends
+runtime capability truth
+provider compatibility and diagnostics
+MCP state, tool activity, file changes, usage, and run history
+Local Job API as supporting automation infrastructure
 minimal ACP stdio job surface
 macOS local smoke complete; Windows packaged real-machine smoke deferred
 ```
@@ -222,6 +233,10 @@ Avoid:
 ```text
 complete ACP server
 universal automation platform
+AI OS
+local job platform
+runtime hub
+workflow orchestrator
 fully cross-platform accepted
 secure sandbox for arbitrary extensions
 offline-only

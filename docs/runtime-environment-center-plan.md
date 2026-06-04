@@ -18,12 +18,14 @@ The goal is not to embed `cc-switch` wholesale. The goal is to learn from its
 product surface and implementation choices, then express the useful parts
 through Locus's own local-first architecture.
 
-This plan now sits next to the Locus local job platform. Runtime environment
-features should feed capability truth, provider configuration, diagnostics, and
-usage metadata into jobs; they should not create a second execution engine.
+This plan now sits next to the Locus workbench and job-backed execution layer.
+Runtime environment features should feed capability truth, provider
+configuration, diagnostics, and usage metadata into runs and jobs; they should
+not create a second execution engine.
 
-这份计划现在需要和 Locus 本地 job 平台并行理解。runtime environment center 应该把
-能力真实状态、provider 配置、诊断和用量数据提供给 job 层，而不是再造一套执行系统。
+这份计划现在需要和 Locus 工作台及 job-backed execution layer 并行理解。runtime
+environment center 应该把能力真实状态、provider 配置、诊断和用量数据提供给 run/job
+层，而不是再造一套执行系统。
 
 ## Relationship Model
 
@@ -429,7 +431,7 @@ Track by:
 
 - Provider profile
 - Model
-- Runtime: Claude, Codex, helper, local job platform
+- Runtime or surface: Claude, Codex, helper, local job
 - Chat and sub-chat
 - Project and worktree
 - Local job id

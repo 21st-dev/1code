@@ -6,9 +6,14 @@ Claude Code now exposes dynamic workflows as a research-preview runtime feature 
 Locus should adapt the Claude Code capability with a thin, runtime-scoped layer instead of turning it into a Locus-wide workflow engine.
 
 ## Current Boundary
-This change is a planned Claude-specific adapter proposal. It is not part of the
-current local agent platform or `add-headless-agent-jobs` acceptance boundary,
-and it must not block release/archive decisions for that platform work. Do not
+This change is a planned, parked Claude-specific adapter proposal. It is not
+part of the current Locus Workbench focus or `add-headless-agent-jobs`
+acceptance boundary, and it must not block release/archive decisions for that
+platform work.
+
+The current product cut is Codex Workbench, provider profile run binding,
+runtime capability display, and structured run trace. Do not implement this
+proposal until that focus is complete or deliberately reprioritized. Do not
 describe Dynamic Workflows as supported until this proposal is approved,
 implemented, tested, and smoke-tested with a real Claude Code credential.
 
