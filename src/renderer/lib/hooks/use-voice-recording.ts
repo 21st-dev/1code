@@ -32,6 +32,8 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const isStartingRef = useRef(false) // Prevent race conditions
+  const startPromiseRef = useRef<Promise<void> | null>(null)
+  const cancelRequestedRef = useRef(false)
 
   // Audio analysis refs
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -85,20 +87,27 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
 
   // Cancel recording without returning a blob
   const cancelRecording = useCallback(() => {
+    cancelRequestedRef.current = true
     cleanup()
     setIsRecording(false)
   }, [cleanup])
 
   const startRecording = useCallback(async () => {
+    if (startPromiseRef.current) {
+      console.warn("[VoiceRecording] Already starting")
+      return startPromiseRef.current
+    }
+
     // Prevent multiple simultaneous starts
-    if (isStartingRef.current || mediaRecorderRef.current) {
-      console.warn("[VoiceRecording] Already recording or starting")
+    if (mediaRecorderRef.current) {
+      console.warn("[VoiceRecording] Already recording")
       return
     }
 
+    cancelRequestedRef.current = false
     isStartingRef.current = true
 
-    try {
+    const startPromise = (async () => {
       setError(null)
 
       // Request microphone access
@@ -109,6 +118,11 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
           sampleRate: 16000, // Whisper works well with 16kHz
         },
       })
+
+      if (cancelRequestedRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
 
       streamRef.current = stream
 
@@ -164,6 +178,11 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType })
 
+      if (cancelRequestedRef.current) {
+        cleanup()
+        return
+      }
+
       chunksRef.current = []
 
       mediaRecorder.ondataavailable = (event) => {
@@ -175,9 +194,13 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       mediaRecorderRef.current = mediaRecorder
       mediaRecorder.start(100) // Collect data every 100ms
       setIsRecording(true)
-      isStartingRef.current = false
+    })()
+
+    startPromiseRef.current = startPromise
+
+    try {
+      await startPromise
     } catch (err) {
-      isStartingRef.current = false
       cleanup()
 
       // Provide user-friendly error messages
@@ -199,10 +222,17 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       setError(error)
       console.error("[VoiceRecording] Start error:", error)
       throw error
+    } finally {
+      isStartingRef.current = false
+      startPromiseRef.current = null
     }
   }, [cleanup])
 
   const stopRecording = useCallback(async (): Promise<Blob> => {
+    if (!mediaRecorderRef.current && startPromiseRef.current) {
+      await startPromiseRef.current
+    }
+
     return new Promise((resolve, reject) => {
       const mediaRecorder = mediaRecorderRef.current
 

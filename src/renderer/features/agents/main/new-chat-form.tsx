@@ -734,31 +734,51 @@ export function NewChatForm({
     cancelRecording,
   } = useVoiceRecording()
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const voiceStartRequestedRef = useRef(false)
+  const voiceStopInFlightRef = useRef(false)
   const transcribeMutation = trpc.voice.transcribe.useMutation()
 
-  // Check if voice input is available (authenticated OR has OPENAI_API_KEY)
+  // Check if voice input is available through a configured transcription API.
   const { data: voiceAvailability } = trpc.voice.isAvailable.useQuery()
   const isVoiceAvailable = voiceAvailability?.available ?? false
 
   // Voice input handlers
   const handleVoiceMouseDown = useCallback(async () => {
-    if (isUploading || isTranscribing || isVoiceRecording) return
+    if (
+      isUploading ||
+      isTranscribing ||
+      isVoiceRecording ||
+      voiceStartRequestedRef.current ||
+      voiceStopInFlightRef.current
+    ) {
+      return
+    }
+    voiceStartRequestedRef.current = true
     try {
       await startRecording()
     } catch (err) {
+      voiceStartRequestedRef.current = false
       console.error("[NewChatForm] Failed to start recording:", err)
     }
   }, [isUploading, isTranscribing, isVoiceRecording, startRecording])
 
   const handleVoiceMouseUp = useCallback(async () => {
-    if (!isVoiceRecording) return
+    if (
+      voiceStopInFlightRef.current ||
+      (!voiceStartRequestedRef.current && !isVoiceRecording)
+    ) {
+      return
+    }
+
+    voiceStopInFlightRef.current = true
+    setIsTranscribing(true)
     try {
       const blob = await stopRecording()
+      voiceStartRequestedRef.current = false
       if (blob.size < 1000) {
         console.log("[NewChatForm] Recording too short, ignoring")
         return
       }
-      setIsTranscribing(true)
       const base64 = await blobToBase64(blob)
       const format = getAudioFormat(blob.type)
       const result = await transcribeMutation.mutateAsync({ audio: base64, format })
@@ -778,12 +798,15 @@ export function NewChatForm({
     } catch (err) {
       console.error("[NewChatForm] Transcription failed:", err)
     } finally {
+      voiceStartRequestedRef.current = false
+      voiceStopInFlightRef.current = false
       setIsTranscribing(false)
     }
   }, [isVoiceRecording, stopRecording, transcribeMutation])
 
   const handleVoiceMouseLeave = useCallback(() => {
-    if (isVoiceRecording) {
+    if (voiceStartRequestedRef.current || isVoiceRecording) {
+      voiceStartRequestedRef.current = false
       cancelRecording()
     }
   }, [isVoiceRecording, cancelRecording])
@@ -868,8 +891,8 @@ export function NewChatForm({
       // Stop recording when the main key (or any modifier for modifier-only hotkeys) is released
       if (!isMainKeyRelease(e)) return
 
-      // Only stop if we're currently recording
-      if (isVoiceRecording) {
+      // Stop if recording has started or is still awaiting MediaRecorder setup.
+      if (voiceStartRequestedRef.current || isVoiceRecording) {
         e.preventDefault()
         e.stopPropagation()
         handleVoiceMouseUp()

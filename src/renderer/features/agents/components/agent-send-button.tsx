@@ -17,6 +17,7 @@ import { useResolvedHotkeyDisplayWithAlt, useResolvedHotkeyDisplay } from "../..
 import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
 import type { AgentMode } from "../atoms"
+import { useRef } from "react"
 
 interface AgentSendButtonProps {
   /** Whether the system is currently streaming */
@@ -72,6 +73,8 @@ export function AgentSendButton({
   onVoiceMouseLeave,
 }: AgentSendButtonProps) {
   const { t } = useI18n()
+  const voicePointerStartedRef = useRef(false)
+  const voiceStopRequestedRef = useRef(false)
   // Resolved hotkeys for stop-generation tooltip
   const stopHotkey = useResolvedHotkeyDisplayWithAlt("stop-generation")
   // Resolved hotkey for voice input
@@ -227,18 +230,33 @@ export function AgentSendButton({
   // Handle button interactions for voice mode
   // Supports both hold-to-talk AND click-to-toggle
   const handleMouseDown = () => {
-    if (isVoiceMode && !isRecording && onVoiceMouseDown) {
+    if (isVoiceMode && !isTranscribing && onVoiceMouseDown) {
+      voicePointerStartedRef.current = true
+      voiceStopRequestedRef.current = false
       onVoiceMouseDown()
     }
   }
 
   const handleMouseUp = () => {
-    // Only handle mouseUp for hold-to-talk if we started recording on mouseDown
-    // Click-to-toggle is handled in handleButtonClick
+    if (
+      isVoiceMode &&
+      voicePointerStartedRef.current &&
+      !voiceStopRequestedRef.current &&
+      onVoiceMouseUp
+    ) {
+      voiceStopRequestedRef.current = true
+      onVoiceMouseUp()
+    }
   }
 
   const handleMouseLeave = () => {
-    if (isVoiceMode && isRecording && onVoiceMouseLeave) {
+    if (
+      isVoiceMode &&
+      voicePointerStartedRef.current &&
+      !voiceStopRequestedRef.current &&
+      onVoiceMouseLeave
+    ) {
+      voiceStopRequestedRef.current = true
       onVoiceMouseLeave()
     }
   }
@@ -246,10 +264,22 @@ export function AgentSendButton({
   const handleButtonClick = () => {
     // In voice mode: if recording, stop it; if not recording, start it
     if (isVoiceMode) {
-      if (isRecording && onVoiceMouseUp) {
+      if (!voicePointerStartedRef.current && !isRecording && onVoiceMouseDown) {
+        voicePointerStartedRef.current = true
+        voiceStopRequestedRef.current = false
+        onVoiceMouseDown()
+        return
+      }
+
+      if (
+        (isRecording || voicePointerStartedRef.current) &&
+        !voiceStopRequestedRef.current &&
+        onVoiceMouseUp
+      ) {
+        voiceStopRequestedRef.current = true
         onVoiceMouseUp()
       }
-      // Starting is handled by mouseDown
+      voicePointerStartedRef.current = false
       return
     }
     handleClick()

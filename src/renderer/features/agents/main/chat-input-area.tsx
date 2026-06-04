@@ -1121,6 +1121,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   } = useVoiceRecording()
   const [isTranscribing, setIsTranscribing] = useState(false)
   const voiceMountedRef = useRef(true)
+  const voiceStartRequestedRef = useRef(false)
+  const voiceStopInFlightRef = useRef(false)
 
   useEffect(() => {
     voiceMountedRef.current = true
@@ -1131,7 +1133,7 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   const transcribeMutation = trpc.voice.transcribe.useMutation()
 
-  // Check if voice input is available (authenticated OR has OPENAI_API_KEY)
+  // Check if voice input is available through a configured transcription API.
   const { data: voiceAvailability } = trpc.voice.isAvailable.useQuery()
   const isVoiceAvailable = voiceAvailability?.available ?? false
 
@@ -1164,23 +1166,40 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Voice input handlers
   const handleVoiceMouseDown = useCallback(async () => {
-    if (isStreaming || isTranscribing || isVoiceRecording) return
+    if (
+      isStreaming ||
+      isTranscribing ||
+      isVoiceRecording ||
+      voiceStartRequestedRef.current ||
+      voiceStopInFlightRef.current
+    ) {
+      return
+    }
+    voiceStartRequestedRef.current = true
     try {
       await startVoiceRecording()
     } catch (err) {
+      voiceStartRequestedRef.current = false
       console.error("[VoiceInput] Failed to start recording:", err)
       toast.error(err instanceof Error ? err.message : "Failed to start recording")
     }
   }, [isStreaming, isTranscribing, isVoiceRecording, startVoiceRecording])
 
   const handleVoiceMouseUp = useCallback(async () => {
-    if (!isVoiceRecording) return
+    if (
+      voiceStopInFlightRef.current ||
+      (!voiceStartRequestedRef.current && !isVoiceRecording)
+    ) {
+      return
+    }
 
+    voiceStopInFlightRef.current = true
     // Set transcribing immediately to avoid visual flash between recording and transcribing states
     setIsTranscribing(true)
 
     try {
       const blob = await stopVoiceRecording()
+      voiceStartRequestedRef.current = false
 
       // Don't transcribe very short recordings (likely accidental clicks)
       if (blob.size < 1000) {
@@ -1215,6 +1234,8 @@ export const ChatInputArea = memo(function ChatInputArea({
       console.error("[VoiceInput] Transcription failed:", err)
       toast.error(t("agent.voice.transcriptionFailed"))
     } finally {
+      voiceStartRequestedRef.current = false
+      voiceStopInFlightRef.current = false
       if (voiceMountedRef.current) {
         setIsTranscribing(false)
       }
@@ -1222,7 +1243,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [isVoiceRecording, stopVoiceRecording, transcribeMutation, editorRef, t])
 
   const handleVoiceMouseLeave = useCallback(() => {
-    if (isVoiceRecording) {
+    if (voiceStartRequestedRef.current || isVoiceRecording) {
+      voiceStartRequestedRef.current = false
       // Cancel instead of transcribing when leaving button area
       cancelVoiceRecording()
     }
@@ -1328,8 +1350,8 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Stop recording when the main key (or any modifier for modifier-only hotkeys) is released
       if (!isMainKeyRelease(e)) return
 
-      // Only stop if we're currently recording
-      if (isVoiceRecording) {
+      // Stop if recording has started or is still awaiting MediaRecorder setup.
+      if (voiceStartRequestedRef.current || isVoiceRecording) {
         e.preventDefault()
         e.stopPropagation()
         handleVoiceMouseUp()
