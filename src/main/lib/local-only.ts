@@ -1,4 +1,4 @@
-import { shell } from "electron"
+import * as electron from "electron"
 import {
   isOfficialCloudUrl,
   LOCAL_ONLY_BLOCKED_MESSAGE,
@@ -52,5 +52,5 @@ export async function openExternalUrl(
   url: string,
 ): Promise<void> {
   assertOfficialCloudAllowed(operation, url)
-  await shell.openExternal(url)
+  await electron.shell.openExternal(url)
 }
