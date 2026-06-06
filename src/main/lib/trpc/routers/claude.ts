@@ -83,6 +83,7 @@ import {
   startClaudeAgentSdkStreamIteration,
 } from "../../claude/agent-sdk-stream-lifecycle"
 import { recordClaudeAgentSdkIncomingMessage } from "../../claude/agent-sdk-stream-message"
+import { createClaudeAgentSdkInitialGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import {
   shouldStopClaudeAgentSdkStreamForAbort,
   shouldStopClaudeAgentSdkStreamForClosedObserver,
@@ -1193,16 +1194,8 @@ export const claudeRouter = router({
             // 4. Setup accumulation state
             const parts: any[] = []
             let currentText = ""
-            let metadata: any = guardedContract
-              ? {
-                  guardedRun: {
-                    contractId: guardedContract.id,
-                    runId: guardedContract.runId ?? guardedContract.id,
-                    runtime: "claude",
-                    enforcementMode: "hard",
-                  },
-                }
-              : {}
+            let metadata: any =
+              createClaudeAgentSdkInitialGuardMetadata(guardedContract)
 
             // Capture stderr from Claude process for debugging
             const stderrLines: string[] = []

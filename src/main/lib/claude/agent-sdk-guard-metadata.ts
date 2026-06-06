@@ -18,6 +18,23 @@ export type ClaudeAgentSdkGuardedContract = AgentScopeContract & {
   blockedPaths: AgentScopePath[]
 }
 
+export function createClaudeAgentSdkInitialGuardMetadata(
+  guardedContract: ClaudeAgentSdkGuardedContract | null,
+): Record<string, any> {
+  if (!guardedContract) {
+    return {}
+  }
+
+  return {
+    guardedRun: {
+      contractId: guardedContract.id,
+      runId: guardedContract.runId ?? guardedContract.id,
+      runtime: "claude",
+      enforcementMode: "hard",
+    },
+  }
+}
+
 export type FinalizeClaudeAgentSdkGuardMetadataOptions = {
   failed?: boolean
   stopped?: boolean

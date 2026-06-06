@@ -19,9 +19,10 @@ mock.module("electron", () => ({
   },
 }))
 
-const { finalizeClaudeAgentSdkGuardMetadata } = await import(
-  "../src/main/lib/claude/agent-sdk-guard-metadata"
-)
+const {
+  createClaudeAgentSdkInitialGuardMetadata,
+  finalizeClaudeAgentSdkGuardMetadata,
+} = await import("../src/main/lib/claude/agent-sdk-guard-metadata")
 
 type ClaudeAgentSdkGuardedContract = AgentScopeContract & {
   editableScope: AgentScopePath[]
@@ -71,6 +72,20 @@ function createStatus(files: string[]): GuardedGitStatusSnapshot {
 }
 
 describe("Claude Agent SDK guard metadata", () => {
+  test("creates initial guarded run metadata for stream state", () => {
+    const contract = createContract({ runId: undefined })
+
+    expect(createClaudeAgentSdkInitialGuardMetadata(contract)).toEqual({
+      guardedRun: {
+        contractId: "contract-1",
+        runId: "contract-1",
+        runtime: "claude",
+        enforcementMode: "hard",
+      },
+    })
+    expect(createClaudeAgentSdkInitialGuardMetadata(null)).toEqual({})
+  })
+
   test("returns metadata unchanged when guarded context is absent", async () => {
     const metadata = { sessionId: "session-1" }
     const emitted: any[] = []

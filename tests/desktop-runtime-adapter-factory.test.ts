@@ -592,14 +592,17 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).not.toContain("../../claude/agent-sdk-guard-metadata")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-guard-metadata")
+    expect(claudeRouter).toContain("createClaudeAgentSdkInitialGuardMetadata")
     expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkGuardMetadata({")
     expect(claudeRouter).not.toContain("const finalizeGuardMetadata")
     expect(claudeRouter).not.toContain("buildGuardedRunAudit")
+    expect(claudeRouter).not.toContain("contractId: guardedContract.id")
     expect(runFinalization).toContain("finalizeClaudeAgentSdkGuardMetadata({")
     expect(streamErrorFinalization).toContain(
       "finalizeClaudeAgentSdkGuardMetadata({",
     )
+    expect(guardMetadata).toContain("createClaudeAgentSdkInitialGuardMetadata")
     expect(guardMetadata).toContain("finalizeClaudeAgentSdkGuardMetadata")
     expect(guardMetadata).toContain("buildGuardedRunAudit")
     expect(guardMetadata).toContain("captureGuardedGitStatus")
