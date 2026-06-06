@@ -88,6 +88,10 @@ describe("agent guard runtime pipeline", () => {
       "src/main/lib/claude/active-sessions.ts",
       "utf8",
     )
+    const subscriptionCleanup = readFileSync(
+      "src/main/lib/claude/agent-sdk-subscription-cleanup.ts",
+      "utf8",
+    )
 
     expect(activeSessions).toContain(
       "controller: AbortController",
@@ -98,9 +102,14 @@ describe("agent guard runtime pipeline", () => {
       "const runId = input.requestedRunId ?? streamId",
     )
     expect(claude).toContain("startActiveClaudeSessionForDesktopRun")
+    expect(claude).toContain("cleanupClaudeAgentSdkDesktopRunSubscription")
+    expect(claude).toContain("finalizeClaudeAgentSdkDesktopRunAfterLifecycle")
     expect(claude).not.toContain("const activeRunId = input.runId ?? streamId")
     expect(claude).not.toContain("setActiveClaudeSession(input.subChatId")
-    expect(claude).toContain(
+    expect(claude).not.toContain(
+      "deleteActiveClaudeSessionIfController(",
+    )
+    expect(subscriptionCleanup).toContain(
       "deleteActiveClaudeSessionIfController(",
     )
     expect(claude).toContain("input.runId && session.runId !== input.runId")

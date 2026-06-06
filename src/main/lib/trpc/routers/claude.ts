@@ -43,11 +43,11 @@ import {
   prepareClaudeAgentSdkRuntimeStartupDiagnostics,
 } from "../../claude/agent-sdk-runtime-startup"
 import {
-  completeClaudeAgentSdkDesktopJobAfterRun,
   createClaudeAgentSdkDesktopRunStartup,
 } from "../../claude/agent-sdk-desktop-job"
 import {
   cleanupClaudeAgentSdkDesktopRunSubscription,
+  finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../../claude/agent-sdk-subscription-cleanup"
 import {
   createClaudeAgentSdkRuntimeStreamSetup,
@@ -55,7 +55,6 @@ import {
 } from "../../claude/agent-sdk-runtime-state"
 import {
   deleteActiveClaudeSession,
-  deleteActiveClaudeSessionIfController,
   getActiveClaudeSession,
   hasActiveClaudeSession,
   startActiveClaudeSessionForDesktopRun,
@@ -1199,25 +1198,17 @@ export const claudeRouter = router({
               complete: safeComplete,
             })
           } finally {
-            if (desktopJobId) {
-              const jobDb = desktopJobDb ?? getDatabase()
-              completeClaudeAgentSdkDesktopJobAfterRun({
-                db: jobDb,
-                jobId: desktopJobId,
-                chatId: input.chatId,
-                subChatId: input.subChatId,
-                abortSignal: abortController.signal,
-                reachedNaturalFinish: desktopJobReachedNaturalFinish,
-                sawError: desktopJobSawError,
-              })
-            }
-            deleteActiveClaudeSessionIfController(
-              input.subChatId,
+            finalizeClaudeAgentSdkDesktopRunAfterLifecycle({
+              chatId: input.chatId,
+              subChatId: input.subChatId,
               abortController,
-            )
-            if (guardedContract) {
-              deleteActiveGuardedContract(guardedContract.id)
-            }
+              guardedContract,
+              getDb: getDatabase,
+              desktopJobDb,
+              desktopJobId,
+              desktopJobSawError,
+              desktopJobReachedNaturalFinish,
+            })
           }
         })()
 

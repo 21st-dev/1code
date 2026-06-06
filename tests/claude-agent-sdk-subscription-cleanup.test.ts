@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   cleanupClaudeAgentSdkDesktopRunSubscription,
+  finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../src/main/lib/claude/agent-sdk-subscription-cleanup"
 
 function createDbRecorder() {
@@ -142,6 +143,93 @@ describe("Claude Agent SDK subscription cleanup", () => {
         sawError: false,
         reachedNaturalFinish: true,
       },
+    ])
+  })
+
+  test("finalizes lifecycle cleanup with the existing job db and guard teardown", () => {
+    const { db } = createDbRecorder()
+    const controller = new AbortController()
+    const completedJobs: any[] = []
+    const deletedSessions: any[] = []
+    const deletedContracts: string[] = []
+
+    finalizeClaudeAgentSdkDesktopRunAfterLifecycle({
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      abortController: controller,
+      guardedContract: { id: "contract-1" } as any,
+      getDb: () => {
+        throw new Error("fallback db should not be used")
+      },
+      desktopJobDb: db,
+      desktopJobId: "job-1",
+      desktopJobSawError: true,
+      desktopJobReachedNaturalFinish: false,
+      dependencies: {
+        completeClaudeAgentSdkDesktopJobAfterRun: (input) => {
+          completedJobs.push(input)
+        },
+        deleteActiveClaudeSessionIfController: (subChatId, abortController) => {
+          deletedSessions.push({ subChatId, abortController })
+          return true
+        },
+        deleteGuardedContract: (contractId) => {
+          deletedContracts.push(contractId)
+        },
+      },
+    })
+
+    expect(completedJobs).toEqual([
+      {
+        db,
+        jobId: "job-1",
+        chatId: "chat-1",
+        subChatId: "sub-1",
+        abortSignal: controller.signal,
+        reachedNaturalFinish: false,
+        sawError: true,
+      },
+    ])
+    expect(deletedSessions).toEqual([
+      { subChatId: "sub-1", abortController: controller },
+    ])
+    expect(deletedContracts).toEqual(["contract-1"])
+  })
+
+  test("finalizes lifecycle cleanup without loading a db when no job exists", () => {
+    const controller = new AbortController()
+    const completedJobs: any[] = []
+    const deletedSessions: any[] = []
+    let loadedFallbackDb = false
+
+    finalizeClaudeAgentSdkDesktopRunAfterLifecycle({
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      abortController: controller,
+      guardedContract: null,
+      getDb: () => {
+        loadedFallbackDb = true
+        return createDbRecorder().db
+      },
+      desktopJobDb: null,
+      desktopJobId: null,
+      desktopJobSawError: false,
+      desktopJobReachedNaturalFinish: true,
+      dependencies: {
+        completeClaudeAgentSdkDesktopJobAfterRun: (input) => {
+          completedJobs.push(input)
+        },
+        deleteActiveClaudeSessionIfController: (subChatId, abortController) => {
+          deletedSessions.push({ subChatId, abortController })
+          return false
+        },
+      },
+    })
+
+    expect(completedJobs).toEqual([])
+    expect(loadedFallbackDb).toBe(false)
+    expect(deletedSessions).toEqual([
+      { subChatId: "sub-1", abortController: controller },
     ])
   })
 })

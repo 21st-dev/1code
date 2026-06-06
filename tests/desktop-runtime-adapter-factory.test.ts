@@ -1142,12 +1142,17 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeDesktopJob).toContain(
       "createClaudeAgentSdkDesktopRunTraceEmitter",
     )
-    expect(claudeRouter).toContain("completeClaudeAgentSdkDesktopJobAfterRun")
+    expect(claudeRouter).not.toContain(
+      "completeClaudeAgentSdkDesktopJobAfterRun",
+    )
     expect(claudeRouter).not.toContain("requestCancelClaudeAgentSdkDesktopJob")
     expect(claudeRouter).not.toContain("completeDesktopChatAgentJobSafely")
     expect(claudeRouter).not.toContain("requestCancelDesktopChatAgentJobSafely")
     expect(claudeDesktopJob).toContain("completeDesktopChatAgentJobSafely")
     expect(claudeDesktopJob).toContain("requestCancelDesktopChatAgentJobSafely")
+    expect(claudeSubscriptionCleanup).toContain(
+      "completeClaudeAgentSdkDesktopJobAfterRun",
+    )
     expect(claudeSubscriptionCleanup).toContain(
       "requestCancelClaudeAgentSdkDesktopJob",
     )
