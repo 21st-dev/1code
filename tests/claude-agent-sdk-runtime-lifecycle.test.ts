@@ -1,10 +1,7 @@
 import { describe, expect, mock, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
-import {
-  getClaudePermissionMapping,
-  resolveDesktopPermissionPolicy,
-} from "../src/main/lib/agent-runtime/permission-policy"
+import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../src/main/lib/claude/agent-sdk-runtime-lifecycle"
 import { createClaudeAgentSdkStreamConsumerMutableState } from "../src/main/lib/claude/agent-sdk-stream-consumer"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
@@ -97,7 +94,6 @@ function createLifecycleInput(
       existingMessages: [],
       rawMcpServers: undefined,
       env: {},
-      permission: getClaudePermissionMapping(request.permissionPolicy),
       isUsingOllama: false,
       permissionPolicy: request.permissionPolicy,
       guardedContract: null,

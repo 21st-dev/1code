@@ -3,6 +3,10 @@ import {
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
 import {
+  getClaudePermissionMapping,
+  type ClaudePermissionMapping,
+} from "../agent-runtime/permission-policy"
+import {
   createClaudeAgentSdkDesktopRuntimeQueryOptions,
   prepareClaudeAgentSdkMcpServers,
   type ClaudeAgentSdkQueryParams,
@@ -24,6 +28,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   | "model"
   | "pendingToolApprovals"
   | "getGuardedContract"
+  | "permission"
 > & {
   prompt: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["prompt"]
   existingMessages: any[]
@@ -39,6 +44,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   getGuardedContract?: (
     contractId: string,
   ) => ValidatedAgentScopeContract | undefined
+  permission?: ClaudePermissionMapping
   readAgentsMd?: typeof readClaudeAgentSdkProjectAgentsMd
   log?: (...args: any[]) => void
 }
@@ -60,6 +66,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   pendingToolApprovals,
   getPendingToolApprovals = getClaudePendingToolApprovalStore,
   getGuardedContract = getActiveGuardedContract,
+  permission,
   readAgentsMd,
   log,
   ...queryInput
@@ -94,6 +101,8 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
       systemPrompt: promptContext.systemPrompt,
       mcpServers,
       model: resolvedModel,
+      permission:
+        permission ?? getClaudePermissionMapping(queryInput.permissionPolicy),
       pendingToolApprovals:
         pendingToolApprovals ?? getPendingToolApprovals(),
       getGuardedContract,

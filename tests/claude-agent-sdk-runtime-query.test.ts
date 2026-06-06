@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  getClaudePermissionMapping,
-  resolveDesktopPermissionPolicy,
-} from "../src/main/lib/agent-runtime/permission-policy"
+import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import { createClaudeDesktopRunRequest } from "../src/main/lib/claude/desktop-run-request"
 import { prepareClaudeAgentSdkDesktopRuntimeQuery } from "../src/main/lib/claude/agent-sdk-runtime-query"
 
@@ -55,7 +52,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       existingMessages: [],
       rawMcpServers: rawServers,
       env: { PATH: "/bin" },
-      permission: getClaudePermissionMapping(permissionPolicy),
       isUsingOllama: false,
       permissionPolicy,
       guardedContract: null,
@@ -99,6 +95,12 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
     expect(result.queryOptions.prompt).toBe("inspect")
     expect(result.queryOptions.options.mcpServers).toBe(refreshedServers)
     expect(result.queryOptions.options.model).toBe("claude-sonnet-4")
+    expect(result.queryOptions.options.permissionMode).toBe(
+      "bypassPermissions",
+    )
+    expect(result.queryOptions.options.allowDangerouslySkipPermissions).toBe(
+      true,
+    )
     expect(result.queryOptions.options.maxThinkingTokens).toBe(1024)
     expect(result.queryOptions.options.pathToClaudeCodeExecutable).toBe(
       "/owned/claude",
@@ -116,7 +118,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       prompt: "inspect",
       existingMessages: [],
       env: { PATH: "/bin" },
-      permission: getClaudePermissionMapping(permissionPolicy),
       isUsingOllama: false,
       permissionPolicy,
       guardedContract: null,

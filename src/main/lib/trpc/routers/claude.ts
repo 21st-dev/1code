@@ -97,7 +97,6 @@ import {
   getEnabledPlugins,
 } from "./claude-settings"
 import {
-  getClaudePermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../../agent-runtime/permission-policy"
 import {
@@ -816,7 +815,6 @@ export const claudeRouter = router({
               mode: input.mode,
               hasScopeContract: Boolean(guardedContract),
             })
-            const claudePermission = getClaudePermissionMapping(permissionPolicy)
 
             const historyEnabled = input.historyEnabled === true
             const imageAttachments =
@@ -1123,7 +1121,6 @@ export const claudeRouter = router({
                   existingMessages,
                   rawMcpServers: mcpServersForSdk,
                   env: finalEnv,
-                  permission: claudePermission,
                   isUsingOllama,
                   permissionPolicy,
                   guardedContract,
