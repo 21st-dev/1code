@@ -317,17 +317,41 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(claudeRouter).toContain("normalizeClaudeProviderRuntimeConfig")
-    expect(claudeRouter).toContain("redactClaudeProviderEnvValueForLog")
     expect(claudeRouter).not.toContain(
       "function normalizeRuntimeProviderConfig",
     )
     expect(claudeRouter).not.toContain("function redactClaudeEnvValueForLog")
+    expect(claudeRouter).not.toContain("redactClaudeProviderEnvValueForLog")
     expect(claudeProviderRuntimeConfig).toContain(
       "normalizeClaudeProviderRuntimeConfig",
     )
     expect(claudeProviderRuntimeConfig).toContain(
       "redactClaudeProviderEnvValueForLog",
     )
+  })
+
+  test("keeps Claude Agent SDK runtime diagnostics ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const runtimeDiagnostics = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-diagnostics.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-diagnostics")
+    expect(claudeRouter).toContain("logClaudeAgentSdkAuthDiagnostics")
+    expect(claudeRouter).toContain("logClaudeAgentSdkSessionDiagnostics")
+    expect(claudeRouter).toContain("logClaudeAgentSdkProviderDiagnostics")
+    expect(claudeRouter).not.toContain("AUTH METHOD USED")
+    expect(claudeRouter).not.toContain("Expected session path")
+    expect(claudeRouter).not.toContain("Using offline mode - Model")
+    expect(runtimeDiagnostics).toContain("logClaudeAgentSdkAuthDiagnostics")
+    expect(runtimeDiagnostics).toContain("logClaudeAgentSdkSessionDiagnostics")
+    expect(runtimeDiagnostics).toContain("logClaudeAgentSdkProviderDiagnostics")
+    expect(runtimeDiagnostics).toContain("AUTH METHOD USED")
+    expect(runtimeDiagnostics).toContain("Expected session path")
   })
 
   test("keeps Claude Agent SDK query option ownership out of the router", () => {

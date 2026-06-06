@@ -37,7 +37,6 @@ import { getActiveClaudeProviderConfig } from "./claude-provider-config"
 import {
   buildClaudeProviderEnv,
   normalizeClaudeProviderRuntimeConfig,
-  redactClaudeProviderEnvValueForLog,
   type ClaudeProviderRuntimeConfig,
 } from "../../claude/provider-runtime-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
@@ -52,6 +51,11 @@ import {
   logClaudeAgentSdkEmbeddedError,
   logClaudeAgentSdkErrorDetails,
 } from "../../claude/agent-sdk-error-logging"
+import {
+  logClaudeAgentSdkAuthDiagnostics,
+  logClaudeAgentSdkProviderDiagnostics,
+  logClaudeAgentSdkSessionDiagnostics,
+} from "../../claude/agent-sdk-runtime-diagnostics"
 import {
   flushClaudeAgentSdkTextAccumulator,
   processClaudeAgentSdkUiChunk,
@@ -1656,12 +1660,6 @@ export const claudeRouter = router({
               claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_AUTH_TOKEN || claudeEnv.ANTHROPIC_BASE_URL
             )
 
-            if (hasExistingApiConfig) {
-              console.log(
-                `[claude] Using explicit Claude provider config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${redactClaudeProviderEnvValueForLog(claudeEnv.ANTHROPIC_BASE_URL)}`,
-              )
-            }
-
             // Build final env - only add OAuth token if we have one AND no existing API config
             // Existing CLI config takes precedence over OAuth
             const finalEnv: Record<string, string> = {
@@ -1674,93 +1672,34 @@ export const claudeRouter = router({
               CLAUDE_CONFIG_DIR: isolatedConfigDir,
             }
 
-            // Log auth method being used
-            console.log("[claude-auth] ========== AUTH METHOD USED ==========")
-            console.log(
-              "[claude-auth] hasExistingApiConfig:",
+            logClaudeAgentSdkAuthDiagnostics({
               hasExistingApiConfig,
-            )
-            console.log(
-              "[claude-auth] claudeCodeToken available:",
-              !!claudeCodeToken,
-            )
-            console.log("[claude-auth] credential metadata:", {
-              source: claudeCredentialMetadata?.source ?? null,
-              storageFormat: claudeCredentialMetadata?.storageFormat ?? null,
-              refreshable: claudeCredentialMetadata?.refreshable ?? false,
-              expiresAt: claudeCredentialMetadata?.expiresAt ?? null,
+              claudeCodeToken,
+              credentialMetadata: claudeCredentialMetadata,
+              finalEnv,
             })
-            console.log(
-              "[claude-auth] Using CLAUDE_CODE_OAUTH_TOKEN:",
-              !!finalEnv.CLAUDE_CODE_OAUTH_TOKEN,
-            )
-            console.log(
-              "[claude-auth] Using ANTHROPIC_API_KEY:",
-              !!finalEnv.ANTHROPIC_API_KEY,
-            )
-            console.log(
-              "[claude-auth] Using ANTHROPIC_BASE_URL:",
-              redactClaudeProviderEnvValueForLog(finalEnv.ANTHROPIC_BASE_URL),
-            )
-            console.log(
-              "[claude-auth] Using ANTHROPIC_AUTH_TOKEN:",
-              !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-            )
-            console.log(
-              "[claude-auth] ============================================",
-            )
 
             // Get bundled Claude binary path
             const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-            // DEBUG: Session resume path tracing
-            const expectedSanitizedCwd = runtimeCwd.replace(/[/.]/g, "-")
-            const expectedSessionPath = path.join(
+            logClaudeAgentSdkSessionDiagnostics({
+              subChatId: input.subChatId,
+              cwd: runtimeCwd,
               isolatedConfigDir,
-              "projects",
-              expectedSanitizedCwd,
-              `${resumeSessionId}.jsonl`,
-            )
-            console.log(`[claude] ========== SESSION DEBUG ==========`)
-            console.log(`[claude] subChatId: ${input.subChatId}`)
-            console.log(`[claude] cwd: ${runtimeCwd}`)
-            console.log(
-              `[claude] sanitized cwd (expected): ${expectedSanitizedCwd}`,
-            )
-            console.log(`[claude] CLAUDE_CONFIG_DIR: ${isolatedConfigDir}`)
-            console.log(
-              `[claude] Expected session path: ${expectedSessionPath}`,
-            )
-            console.log(`[claude] Session ID to resume: ${resumeSessionId}`)
-            console.log(
-              `[claude] Existing sessionId from DB: ${existingSessionId}`,
-            )
-            console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
-            console.log(
-              `[claude] Fork resume: ${shouldForkResume}, fork UUID: ${forkResumeAtUuid}`,
-            )
-            console.log(`[claude] ========== END SESSION DEBUG ==========`)
+              resumeSessionId,
+              existingSessionId,
+              resumeAtUuid,
+              shouldForkResume,
+              forkResumeAtUuid,
+            })
 
-            console.log(
-              `[SD] Query options - cwd: ${runtimeCwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`,
-            )
-            if (finalCustomConfig) {
-              if (isUsingOllama) {
-                console.log(
-                  `[Ollama] Using offline mode - Model: ${finalCustomConfig.model}, Base URL: ${finalCustomConfig.baseUrl}`,
-                )
-              } else {
-                console.log(
-                  "[claude] Custom provider config:",
-                  {
-                    model: finalCustomConfig.model,
-                    baseUrl: finalCustomConfig.baseUrl,
-                    authMode: finalCustomConfig.authMode,
-                    hasToken: true,
-                  },
-                )
-              }
-            }
+            logClaudeAgentSdkProviderDiagnostics({
+              cwd: runtimeCwd,
+              projectPath: input.projectPath,
+              mcpServers: mcpServersForSdk,
+              finalCustomConfig,
+              isUsingOllama,
+            })
 
             const resolvedModel = finalCustomConfig?.model || input.model
 
