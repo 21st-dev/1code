@@ -58,8 +58,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       emit: () => {},
       subChatId: "sub-1",
       pendingToolApprovals: new Map(),
-      parts: [],
-      stderrLines: [],
       shouldForkResume: false,
       forkResumeAtUuid: null,
       resumeAtUuid: null,
@@ -125,8 +123,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
         emitted.push(chunk)
       },
       subChatId: "sub-1",
-      parts: [],
-      stderrLines: [],
       shouldForkResume: false,
       forkResumeAtUuid: null,
       resumeAtUuid: null,

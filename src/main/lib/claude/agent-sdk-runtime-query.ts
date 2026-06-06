@@ -31,6 +31,8 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   | "getGuardedContract"
   | "permission"
   | "guardEvents"
+  | "parts"
+  | "stderrLines"
 > & {
   prompt: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["prompt"]
   existingMessages: any[]
@@ -48,6 +50,10 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   ) => ValidatedAgentScopeContract | undefined
   permission?: ClaudePermissionMapping
   guardEvents?: AgentGuardEvent[]
+  parts?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["parts"]
+  stderrLines?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
+    "stderrLines"
+  ]
   readAgentsMd?: typeof readClaudeAgentSdkProjectAgentsMd
   log?: (...args: any[]) => void
 }
@@ -72,6 +78,8 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   getGuardedContract = getActiveGuardedContract,
   permission,
   guardEvents,
+  parts = [],
+  stderrLines = [],
   readAgentsMd,
   log,
   ...queryInput
@@ -112,6 +120,8 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
         permission ?? getClaudePermissionMapping(queryInput.permissionPolicy),
       pendingToolApprovals:
         pendingToolApprovals ?? getPendingToolApprovals(),
+      parts,
+      stderrLines,
       getGuardedContract,
       guardEvents: runtimeGuardEvents,
     }),

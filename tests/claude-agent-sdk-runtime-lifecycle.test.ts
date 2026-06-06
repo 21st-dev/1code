@@ -68,6 +68,9 @@ async function* createClaudeAssistantStream() {
     type: "assistant",
     uuid: "assistant-1",
     session_id: "session-1",
+    message: {
+      content: [{ type: "text", text: "hello" }],
+    },
   }
 }
 
@@ -82,8 +85,6 @@ function createLifecycleInput(
   const signal = input.signal ?? new AbortController().signal
   const request = createRequest()
   const emit = mock((chunk: UIMessageChunk) => true)
-  const parts: Array<Record<string, any>> = []
-  const stderrLines: string[] = []
 
   return {
     query: (input.query ?? (() => createClaudeAssistantStream())) as any,
@@ -100,8 +101,6 @@ function createLifecycleInput(
       emit,
       subChatId: "sub-1",
       pendingToolApprovals: new Map(),
-      parts,
-      stderrLines,
       shouldForkResume: false,
       forkResumeAtUuid: null,
       resumeAtUuid: null,
@@ -129,13 +128,7 @@ function createLifecycleInput(
     mode: "agent",
     resolvedModel: "claude-sonnet",
     oauthToken: null,
-    transform: () => [
-      { type: "text-delta", id: "text-1", delta: "hello" },
-      { type: "text-end", id: "text-1" },
-    ],
-    parts,
     historyEnabled: true,
-    stderrLines,
     db,
     messagesToSave: [{ id: "user-1", role: "user" }],
     guardedContract: null,
@@ -213,11 +206,12 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     expect(subChat?.streamId).toBeNull()
     expect(subChat?.sessionId).toBe("session-1")
     expect(JSON.parse(subChat?.messages ?? "[]")).toHaveLength(2)
-    expect(input.emit).toHaveBeenCalledWith({
-      type: "text-delta",
-      id: "text-1",
-      delta: "hello",
-    })
+    expect(input.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "text-delta",
+        delta: "hello",
+      }),
+    )
     expect(input.emit).toHaveBeenCalledWith({ type: "finish" })
     expect(input.complete).toHaveBeenCalledTimes(1)
   })

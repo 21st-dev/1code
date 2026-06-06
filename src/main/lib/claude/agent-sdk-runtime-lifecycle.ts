@@ -13,6 +13,10 @@ import {
   prepareClaudeAgentSdkDesktopRuntimeQuery,
   type PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
 } from "./agent-sdk-runtime-query"
+import {
+  createClaudeAgentSdkRuntimeStreamSetup,
+  type ClaudeAgentSdkRuntimeStreamSetup,
+} from "./agent-sdk-runtime-state"
 
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
   Omit<
@@ -22,6 +26,9 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     | "deleteContract"
     | "guardEvents"
     | "guardedRunStartedAt"
+    | "transform"
+    | "parts"
+    | "stderrLines"
   > & {
     runtimeQuery: PrepareClaudeAgentSdkDesktopRuntimeQueryInput
     getContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
@@ -32,6 +39,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     ]
     guardEvents?: AgentGuardEvent[]
     guardedRunStartedAt?: string
+    runtimeStreamSetup?: ClaudeAgentSdkRuntimeStreamSetup
     desktopJobSawError: boolean
     streamStart: number
     nowMs?: () => number
@@ -60,12 +68,26 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     deleteContract = deleteActiveGuardedContract,
     guardEvents,
     guardedRunStartedAt = new Date().toISOString(),
+    runtimeStreamSetup,
     ...adapterInput
   } = input
+  const streamSetup =
+    runtimeStreamSetup ??
+    createClaudeAgentSdkRuntimeStreamSetup({
+      historyEnabled: input.historyEnabled,
+      isUsingOllama: input.isUsingOllama,
+      guardedContract: input.guardedContract,
+    })
+  input.streamState.metadata = streamSetup.metadata
+  const parts = runtimeQueryInput.parts ?? streamSetup.parts
+  const stderrLines = runtimeQueryInput.stderrLines ?? streamSetup.stderrLines
+
   const runtimeQuery =
     await prepareClaudeAgentSdkDesktopRuntimeQuery({
       ...runtimeQueryInput,
       guardEvents: runtimeQueryInput.guardEvents ?? guardEvents,
+      parts,
+      stderrLines,
     })
   const adapterResult =
     await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
@@ -75,6 +97,9 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       runtimeQuery,
       guardEvents: runtimeQuery.guardEvents,
       guardedRunStartedAt,
+      transform: streamSetup.transform,
+      parts,
+      stderrLines,
     })
   if (adapterResult.status === "failed") {
     return {
@@ -90,7 +115,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       chatId: input.chatId,
       subChatId: input.subChatId,
       messagesToSave: input.messagesToSave,
-      parts: input.parts,
+      parts,
       state: input.streamState,
       historyEnabled: input.historyEnabled,
       cwd: input.cwd,

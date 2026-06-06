@@ -52,7 +52,6 @@ import {
   finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../../claude/agent-sdk-desktop-run-cleanup"
 import {
-  createClaudeAgentSdkRuntimeStreamSetup,
   createClaudeAgentSdkRuntimeStreamState,
 } from "../../claude/agent-sdk-runtime-state"
 import {
@@ -893,15 +892,6 @@ export const claudeRouter = router({
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
 
-            const runtimeStreamSetup =
-              createClaudeAgentSdkRuntimeStreamSetup({
-                historyEnabled,
-                isUsingOllama,
-                guardedContract,
-              })
-            const { transform, parts, stderrLines } = runtimeStreamSetup
-            streamState.metadata = runtimeStreamSetup.metadata
-
             const promptResult =
               await prepareClaudeAgentSdkRuntimePromptForDesktopRun({
                 prompt: input.prompt,
@@ -1121,8 +1111,6 @@ export const claudeRouter = router({
                   guardedContract,
                   emit: safeEmit,
                   subChatId: input.subChatId,
-                  parts,
-                  stderrLines,
                   shouldForkResume,
                   forkResumeAtUuid,
                   resumeAtUuid,
@@ -1147,10 +1135,7 @@ export const claudeRouter = router({
                 mode: input.mode,
                 resolvedModel,
                 oauthToken: claudeCodeToken,
-                transform,
-                parts,
                 historyEnabled,
-                stderrLines,
                 db,
                 messagesToSave,
                 guardedContract,

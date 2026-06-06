@@ -854,6 +854,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-state.ts",
       "utf8",
     )
+    const runtimeLifecycle = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
+      "utf8",
+    )
     const runFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-run-finalization.ts",
       "utf8",
@@ -864,7 +868,8 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-state")
-    expect(claudeRouter).toContain("createClaudeAgentSdkRuntimeStreamSetup")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkRuntimeStreamSetup")
+    expect(claudeRouter).not.toContain("streamState.metadata =")
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-guard-metadata")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkInitialGuardMetadata")
     expect(claudeRouter).not.toContain("createTransformer")
@@ -886,6 +891,8 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeState).toContain("createClaudeAgentSdkRuntimeStreamSetup")
     expect(runtimeState).toContain("createTransformer")
     expect(runtimeState).toContain("createClaudeAgentSdkInitialGuardMetadata")
+    expect(runtimeLifecycle).toContain("createClaudeAgentSdkRuntimeStreamSetup")
+    expect(runtimeLifecycle).toContain("input.streamState.metadata")
   })
 
   test("keeps Claude Agent SDK message persistence ownership out of the router", () => {
