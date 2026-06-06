@@ -128,3 +128,44 @@ export function logClaudeAgentSdkProviderDiagnostics(input: {
     hasToken: true,
   })
 }
+
+export function logClaudeAgentSdkStartupDiagnostics(input: {
+  auth: {
+    hasExistingApiConfig: boolean
+    claudeCodeToken?: string | null
+    credentialMetadata?: ClaudeAgentSdkCredentialMetadataForLog | null
+    finalEnv: Record<string, string | undefined>
+  }
+  session: {
+    subChatId: string
+    cwd: string
+    isolatedConfigDir: string
+    resumeSessionId?: string | null
+    existingSessionId?: string | null
+    resumeAtUuid?: string | null
+    shouldForkResume: boolean
+    forkResumeAtUuid?: string | null
+  }
+  provider: {
+    cwd: string
+    projectPath?: string
+    mcpServers?: Record<string, any>
+    finalCustomConfig?: ClaudeProviderRuntimeConfig
+    isUsingOllama: boolean
+  }
+  logger?: Logger
+}): void {
+  const logger = input.logger
+  logClaudeAgentSdkAuthDiagnostics({
+    ...input.auth,
+    logger,
+  })
+  logClaudeAgentSdkSessionDiagnostics({
+    ...input.session,
+    logger,
+  })
+  logClaudeAgentSdkProviderDiagnostics({
+    ...input.provider,
+    logger,
+  })
+}

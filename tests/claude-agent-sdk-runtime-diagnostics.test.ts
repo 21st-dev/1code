@@ -3,6 +3,7 @@ import {
   logClaudeAgentSdkAuthDiagnostics,
   logClaudeAgentSdkProviderDiagnostics,
   logClaudeAgentSdkSessionDiagnostics,
+  logClaudeAgentSdkStartupDiagnostics,
 } from "../src/main/lib/claude/agent-sdk-runtime-diagnostics"
 
 function captureLogger() {
@@ -108,6 +109,48 @@ describe("Claude Agent SDK runtime diagnostics", () => {
     })
     expect(JSON.stringify(providerLogs.calls)).toContain(
       "Custom provider config",
+    )
+  })
+
+  test("logs startup diagnostics through the Claude runtime owner helper", () => {
+    const { calls, logger } = captureLogger()
+
+    logClaudeAgentSdkStartupDiagnostics({
+      auth: {
+        hasExistingApiConfig: true,
+        claudeCodeToken: "oauth-token",
+        credentialMetadata: { source: "stored" },
+        finalEnv: {
+          ANTHROPIC_API_KEY: "sk-secret",
+          CLAUDE_CODE_OAUTH_TOKEN: "oauth-token",
+        },
+      },
+      session: {
+        subChatId: "sub-1",
+        cwd: "/repo",
+        isolatedConfigDir: "/tmp/claude-sessions/sub-1",
+        resumeSessionId: "session-1",
+        existingSessionId: "session-0",
+        shouldForkResume: false,
+      },
+      provider: {
+        cwd: "/repo",
+        projectPath: "/project",
+        mcpServers: { git: {} },
+        isUsingOllama: false,
+      },
+      logger,
+    })
+
+    const serialized = JSON.stringify(calls)
+    expect(serialized).toContain("AUTH METHOD USED")
+    expect(serialized).toContain("SESSION DEBUG")
+    expect(serialized).toContain("mcpServers: git")
+    expect(serialized.indexOf("AUTH METHOD USED")).toBeLessThan(
+      serialized.indexOf("SESSION DEBUG"),
+    )
+    expect(serialized.indexOf("SESSION DEBUG")).toBeLessThan(
+      serialized.indexOf("mcpServers: git"),
     )
   })
 })

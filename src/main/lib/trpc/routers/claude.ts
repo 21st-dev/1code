@@ -34,11 +34,7 @@ import {
   completeClaudeAgentSdkRunAfterAdapterWithStreamState,
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
-import {
-  logClaudeAgentSdkAuthDiagnostics,
-  logClaudeAgentSdkProviderDiagnostics,
-  logClaudeAgentSdkSessionDiagnostics,
-} from "../../claude/agent-sdk-runtime-diagnostics"
+import { logClaudeAgentSdkStartupDiagnostics } from "../../claude/agent-sdk-runtime-diagnostics"
 import { runClaudeAgentSdkDesktopAdapterWithStreamConsumer } from "../../claude/agent-sdk-adapter-runner"
 import {
   createClaudeAgentSdkStreamConsumerMutableState,
@@ -1215,30 +1211,30 @@ export const claudeRouter = router({
               )
             }
 
-            logClaudeAgentSdkAuthDiagnostics({
-              hasExistingApiConfig,
-              claudeCodeToken,
-              credentialMetadata: claudeCredentialMetadata,
-              finalEnv,
-            })
-
-            logClaudeAgentSdkSessionDiagnostics({
-              subChatId: input.subChatId,
-              cwd: runtimeCwd,
-              isolatedConfigDir,
-              resumeSessionId,
-              existingSessionId,
-              resumeAtUuid,
-              shouldForkResume,
-              forkResumeAtUuid,
-            })
-
-            logClaudeAgentSdkProviderDiagnostics({
-              cwd: runtimeCwd,
-              projectPath: input.projectPath,
-              mcpServers: mcpServersForSdk,
-              finalCustomConfig,
-              isUsingOllama,
+            logClaudeAgentSdkStartupDiagnostics({
+              auth: {
+                hasExistingApiConfig,
+                claudeCodeToken,
+                credentialMetadata: claudeCredentialMetadata,
+                finalEnv,
+              },
+              session: {
+                subChatId: input.subChatId,
+                cwd: runtimeCwd,
+                isolatedConfigDir,
+                resumeSessionId,
+                existingSessionId,
+                resumeAtUuid,
+                shouldForkResume,
+                forkResumeAtUuid,
+              },
+              provider: {
+                cwd: runtimeCwd,
+                projectPath: input.projectPath,
+                mcpServers: mcpServersForSdk,
+                finalCustomConfig,
+                isUsingOllama,
+              },
             })
 
             const mcpServersFiltered = await prepareClaudeAgentSdkMcpServers({
