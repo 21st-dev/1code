@@ -19,8 +19,8 @@
 - [x] 3.5 Add permission policy tests for Claude and Codex.
 
 ## 4. Desktop Runtime Contract
-- [ ] 4.1 Define desktop-capable `DesktopRunRequest`, `DesktopRunContext`, `DesktopRunResult`, and cancellation/session metadata types.
-- [ ] 4.2 Define ordered, renderer-safe `RunEvent` categories and redaction context.
+- [x] 4.1 Define desktop-capable `DesktopRunRequest`, `DesktopRunContext`, `DesktopRunResult`, and cancellation/session metadata types.
+- [x] 4.2 Define ordered, renderer-safe `RunEvent` categories and redaction context.
 - [ ] 4.3 Add desktop runtime adapter interface/factory.
 - [ ] 4.4 Wrap the current Claude desktop path behind the adapter interface without regressing current renderer behavior.
 - [ ] 4.5 Wrap the current Codex ACP desktop path as a `temporary-compat` adapter without claiming app-server support.
