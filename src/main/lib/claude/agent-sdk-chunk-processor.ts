@@ -18,6 +18,15 @@ export type ClaudeAgentSdkFileChangeNotification = {
   subChatId: string
 }
 
+export function flushClaudeAgentSdkTextAccumulator(input: {
+  currentText: string
+  parts: Array<Record<string, any>>
+}): string {
+  if (!input.currentText.trim()) return input.currentText
+  input.parts.push({ type: "text", text: input.currentText })
+  return ""
+}
+
 export function processClaudeAgentSdkUiChunk(input: {
   chunk: UIMessageChunk
   state: ClaudeAgentSdkChunkProcessorState
@@ -70,10 +79,10 @@ export function processClaudeAgentSdkUiChunk(input: {
       currentText += chunk.delta
       break
     case "text-end":
-      if (currentText.trim()) {
-        parts.push({ type: "text", text: currentText })
-        currentText = ""
-      }
+      currentText = flushClaudeAgentSdkTextAccumulator({
+        currentText,
+        parts,
+      })
       break
     case "tool-input-available":
       console.log(

@@ -416,10 +416,13 @@ describe("desktop runtime adapter factory", () => {
       "../../claude/agent-sdk-chunk-processor",
     )
     expect(claudeRouter).toContain("processClaudeAgentSdkUiChunk")
+    expect(claudeRouter).toContain("flushClaudeAgentSdkTextAccumulator")
     expect(claudeRouter).not.toContain('case "tool-input-available"')
     expect(claudeRouter).not.toContain('case "tool-output-available"')
     expect(claudeRouter).not.toContain("toolPart.result = chunk.output")
+    expect(claudeRouter).not.toContain("currentText.trim()")
     expect(chunkProcessor).toContain("processClaudeAgentSdkUiChunk")
+    expect(chunkProcessor).toContain("flushClaudeAgentSdkTextAccumulator")
     expect(chunkProcessor).toContain('case "tool-input-available"')
     expect(chunkProcessor).toContain('case "tool-output-available"')
   })

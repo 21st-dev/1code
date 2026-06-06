@@ -49,7 +49,10 @@ import {
   logClaudeAgentSdkEmbeddedError,
   logClaudeAgentSdkErrorDetails,
 } from "../../claude/agent-sdk-error-logging"
-import { processClaudeAgentSdkUiChunk } from "../../claude/agent-sdk-chunk-processor"
+import {
+  flushClaudeAgentSdkTextAccumulator,
+  processClaudeAgentSdkUiChunk,
+} from "../../claude/agent-sdk-chunk-processor"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -2546,9 +2549,10 @@ ${prompt}
                 console.log(
                   `[SD] M:CATCH_SAVE sub=${subId} aborted=${abortController.signal.aborted} parts=${parts.length}`,
                 )
-                if (currentText.trim()) {
-                  parts.push({ type: "text", text: currentText })
-                }
+                currentText = flushClaudeAgentSdkTextAccumulator({
+                  currentText,
+                  parts,
+                })
                 metadata = await finalizeGuardMetadata(metadata, {
                   failed: !abortController.signal.aborted,
                   stopped: abortController.signal.aborted,
@@ -2627,9 +2631,10 @@ ${prompt}
             )
 
             // Flush any remaining text
-            if (currentText.trim()) {
-              parts.push({ type: "text", text: currentText })
-            }
+            currentText = flushClaudeAgentSdkTextAccumulator({
+              currentText,
+              parts,
+            })
 
             metadata = await finalizeGuardMetadata(metadata, {
               stopped: abortController.signal.aborted,

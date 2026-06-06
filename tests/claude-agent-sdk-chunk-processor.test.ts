@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  flushClaudeAgentSdkTextAccumulator,
   processClaudeAgentSdkUiChunk,
   type ClaudeAgentSdkChunkProcessorState,
 } from "../src/main/lib/claude/agent-sdk-chunk-processor"
@@ -46,6 +47,26 @@ function processChunk(input: {
 }
 
 describe("Claude Agent SDK chunk processor", () => {
+  test("flushes accumulated text only when it contains non-whitespace content", () => {
+    const parts: Array<Record<string, any>> = []
+
+    expect(
+      flushClaudeAgentSdkTextAccumulator({
+        currentText: "   ",
+        parts,
+      }),
+    ).toBe("   ")
+    expect(parts).toEqual([])
+
+    expect(
+      flushClaudeAgentSdkTextAccumulator({
+        currentText: "hello",
+        parts,
+      }),
+    ).toBe("")
+    expect(parts).toEqual([{ type: "text", text: "hello" }])
+  })
+
   test("defers finish chunks until route persistence can complete", () => {
     const emitted: UIMessageChunk[] = []
     const finishChunk: UIMessageChunk = { type: "finish" }
