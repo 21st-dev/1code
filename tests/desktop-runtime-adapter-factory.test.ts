@@ -1637,4 +1637,27 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeErrorLogging).toContain("[SD] SDK Error details:")
   })
+
+  test("keeps Claude runtime error emission ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const runtimeErrors = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-errors.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-errors")
+    expect(claudeRouter).toContain("createClaudeAgentSdkRuntimeErrorHandlers")
+    expect(claudeRouter).not.toContain("const errorMessage =")
+    expect(claudeRouter).not.toContain("const errorStack =")
+    expect(claudeRouter).not.toContain("PATH: process.env.PATH")
+    expect(claudeRouter).not.toContain("new DesktopRunPreflightError(blocker)")
+    expect(claudeRouter).not.toContain("Desktop run preflight blocked")
+    expect(runtimeErrors).toContain("createClaudeAgentSdkRuntimeErrorHandlers")
+    expect(runtimeErrors).toContain("new DesktopRunPreflightError(blocker)")
+    expect(runtimeErrors).toContain("Desktop run preflight blocked")
+    expect(runtimeErrors).toContain("PATH: env.PATH?.slice")
+  })
 })

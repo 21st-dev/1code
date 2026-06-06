@@ -24,6 +24,7 @@ import { chats, getDatabase, projects as projectsTable, subChats } from "../../d
 import {
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
+import { createClaudeAgentSdkRuntimeErrorHandlers } from "../../claude/agent-sdk-runtime-errors"
 import { logClaudeAgentSdkStartupDiagnostics } from "../../claude/agent-sdk-runtime-diagnostics"
 import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../../claude/agent-sdk-runtime-lifecycle"
 import {
@@ -113,9 +114,7 @@ import {
   requestCancelDesktopChatAgentJobSafely,
 } from "../../desktop-agent-jobs"
 import {
-  DesktopRunPreflightError,
   verifyDesktopRunPreflight,
-  type DesktopRunPreflightBlocker,
 } from "../../agent-runtime/preflight"
 
 function getPluginGateMcpStatus(gate: { status: string }): string {
@@ -782,30 +781,13 @@ export const claudeRouter = router({
           }
         }
 
-        // Helper to emit error to frontend
-        const emitError = (error: unknown, context: string) => {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error)
-          const errorStack = error instanceof Error ? error.stack : undefined
-
-          console.error(`[claude] ${context}:`, errorMessage)
-          if (errorStack) console.error("[claude] Stack:", errorStack)
-
-          // Send detailed error to frontend (safely)
-          safeEmit({
-            type: "error",
-            errorText: `${context}: ${errorMessage}`,
-            // Include extra debug info
-            ...(process.env.NODE_ENV !== "production" && {
-              debugInfo: {
-                context,
-                cwd: input.cwd,
-                mode: input.mode,
-                PATH: process.env.PATH?.slice(0, 200),
-              },
-            }),
-          } as UIMessageChunk)
-        }
+        const { emitError, emitPreflightBlocker } =
+          createClaudeAgentSdkRuntimeErrorHandlers({
+            cwd: input.cwd,
+            mode: input.mode,
+            emit: safeEmit,
+            complete: safeComplete,
+          })
 
         let guardedContract: ValidatedAgentScopeContract | null = null
         let guardedPreRunStatus: GuardedGitStatusSnapshot | null = null
@@ -854,17 +836,6 @@ export const claudeRouter = router({
               hasScopeContract: Boolean(guardedContract),
             })
             const claudePermission = getClaudePermissionMapping(permissionPolicy)
-
-            const emitPreflightBlocker = (
-              blocker: DesktopRunPreflightBlocker,
-            ) => {
-              emitError(
-                new DesktopRunPreflightError(blocker),
-                "Desktop run preflight blocked",
-              )
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
-            }
 
             const historyEnabled = input.historyEnabled === true
             let resolvedImages: ResolvedChatImageAttachment[] = []
