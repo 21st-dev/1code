@@ -32,6 +32,20 @@ export type DesktopAgentJobHandle = {
   cwd: string
 }
 
+export type ResolveDesktopChatJobCompletionInput = {
+  runtime: DesktopAgentRuntime
+  aborted: boolean
+  reachedNaturalFinish: boolean
+  sawError: boolean
+}
+
+export type DesktopChatJobCompletion = {
+  status: "succeeded" | "failed" | "canceled"
+  exitCode: number
+  errorCode: string | null
+  errorMessage: string | null
+}
+
 type CancelRegistration = {
   jobId: string
   runtime: DesktopAgentRuntime
@@ -150,6 +164,38 @@ export function requestCancelDesktopAgentJob(
   return {
     job: updated,
     activeCancelDelivered: cancelActiveDesktopAgentJob(jobId),
+  }
+}
+
+function desktopRuntimeLabel(runtime: DesktopAgentRuntime): "Claude" | "Codex" {
+  return runtime === "claude-code" ? "Claude" : "Codex"
+}
+
+export function resolveDesktopChatJobCompletion({
+  runtime,
+  aborted,
+  reachedNaturalFinish,
+  sawError,
+}: ResolveDesktopChatJobCompletionInput): DesktopChatJobCompletion {
+  const wasCanceled = aborted && !reachedNaturalFinish
+  const status = wasCanceled ? "canceled" : sawError ? "failed" : "succeeded"
+  const runtimeLabel = desktopRuntimeLabel(runtime)
+
+  return {
+    status,
+    exitCode: status === "succeeded" ? 0 : status === "canceled" ? 5 : 1,
+    errorCode:
+      status === "failed"
+        ? "desktop_chat_failed"
+        : status === "canceled"
+          ? "desktop_chat_canceled"
+          : null,
+    errorMessage:
+      status === "failed"
+        ? `Desktop ${runtimeLabel} chat stream failed.`
+        : status === "canceled"
+          ? `Desktop ${runtimeLabel} chat stream was canceled.`
+          : null,
   }
 }
 

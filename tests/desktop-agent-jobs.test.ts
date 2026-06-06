@@ -5,6 +5,7 @@ import {
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
   requestCancelDesktopAgentJob,
+  resolveDesktopChatJobCompletion,
   unregisterActiveDesktopAgentJob,
 } from "../src/main/lib/desktop-agent-jobs"
 import { getAgentJob, listAgentJobEvents } from "../src/main/lib/headless/job-store"
@@ -214,5 +215,49 @@ describe("desktop agent jobs", () => {
       exitCode: 1,
     })
     expect(ignored?.status).toBe("succeeded")
+  })
+
+  test("resolves desktop chat completion status consistently across runtimes", () => {
+    expect(
+      resolveDesktopChatJobCompletion({
+        runtime: "claude-code",
+        aborted: false,
+        reachedNaturalFinish: true,
+        sawError: false,
+      }),
+    ).toEqual({
+      status: "succeeded",
+      exitCode: 0,
+      errorCode: null,
+      errorMessage: null,
+    })
+
+    expect(
+      resolveDesktopChatJobCompletion({
+        runtime: "claude-code",
+        aborted: false,
+        reachedNaturalFinish: false,
+        sawError: true,
+      }),
+    ).toEqual({
+      status: "failed",
+      exitCode: 1,
+      errorCode: "desktop_chat_failed",
+      errorMessage: "Desktop Claude chat stream failed.",
+    })
+
+    expect(
+      resolveDesktopChatJobCompletion({
+        runtime: "codex",
+        aborted: true,
+        reachedNaturalFinish: false,
+        sawError: true,
+      }),
+    ).toEqual({
+      status: "canceled",
+      exitCode: 5,
+      errorCode: "desktop_chat_canceled",
+      errorMessage: "Desktop Codex chat stream was canceled.",
+    })
   })
 })

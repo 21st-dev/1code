@@ -570,6 +570,31 @@ describe("desktop runtime adapter factory", () => {
     expect(streamEventMapper).toContain('chunkType !== "finish"')
   })
 
+  test("keeps desktop chat job completion planning out of runtime routes", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const codexRouter = readFileSync(
+      "src/main/lib/trpc/routers/codex.ts",
+      "utf8",
+    )
+    const desktopAgentJobs = readFileSync(
+      "src/main/lib/desktop-agent-jobs.ts",
+      "utf8",
+    )
+
+    for (const route of [claudeRouter, codexRouter]) {
+      expect(route).toContain("resolveDesktopChatJobCompletion({")
+      expect(route).not.toContain("desktop_chat_failed")
+      expect(route).not.toContain("desktop_chat_canceled")
+      expect(route).not.toContain('status === "succeeded" ? 0')
+    }
+    expect(desktopAgentJobs).toContain("resolveDesktopChatJobCompletion")
+    expect(desktopAgentJobs).toContain("desktop_chat_failed")
+    expect(desktopAgentJobs).toContain("desktop_chat_canceled")
+  })
+
   test("keeps Claude Agent SDK prompt ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

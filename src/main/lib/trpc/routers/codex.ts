@@ -110,6 +110,7 @@ import {
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
   requestCancelDesktopAgentJob,
+  resolveDesktopChatJobCompletion,
   unregisterActiveDesktopAgentJob,
 } from "../../desktop-agent-jobs"
 
@@ -1493,29 +1494,15 @@ export const codexRouter = router({
           } finally {
             if (desktopJobId) {
               const jobDb = desktopJobDb ?? getDatabase()
-              const wasCanceled =
-                abortController.signal.aborted && !desktopJobReachedNaturalFinish
-              const status = wasCanceled
-                ? "canceled"
-                : desktopJobSawError
-                  ? "failed"
-                  : "succeeded"
+              const completion = resolveDesktopChatJobCompletion({
+                runtime: "codex",
+                aborted: abortController.signal.aborted,
+                reachedNaturalFinish: desktopJobReachedNaturalFinish,
+                sawError: desktopJobSawError,
+              })
               completeDesktopAgentJobSafely(jobDb, {
                 jobId: desktopJobId,
-                status,
-                exitCode: status === "succeeded" ? 0 : status === "canceled" ? 5 : 1,
-                errorCode:
-                  status === "failed"
-                    ? "desktop_chat_failed"
-                    : status === "canceled"
-                      ? "desktop_chat_canceled"
-                      : null,
-                errorMessage:
-                  status === "failed"
-                    ? "Desktop Codex chat stream failed."
-                    : status === "canceled"
-                      ? "Desktop Codex chat stream was canceled."
-                      : null,
+                ...completion,
                 result: {
                   runtime: "codex",
                   subChatId: input.subChatId,
