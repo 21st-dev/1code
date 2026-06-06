@@ -50,7 +50,7 @@ import {
   ensureClaudeAgentSdkIsolatedConfigDir,
 } from "../../claude/agent-sdk-config-dir"
 import { prepareClaudeAgentSdkRuntimeStartupContext } from "../../claude/agent-sdk-runtime-startup"
-import { createClaudeAgentSdkDesktopJob } from "../../claude/agent-sdk-desktop-job"
+import { createClaudeAgentSdkDesktopRunStartup } from "../../claude/agent-sdk-desktop-job"
 import {
   createClaudeAgentSdkRuntimeStreamSetup,
   createClaudeAgentSdkRuntimeStreamState,
@@ -76,9 +76,6 @@ import {
   imageAttachmentSchema,
   longTextAttachmentSchema,
 } from "../../claude/chat-input-schema"
-import {
-  createClaudeDesktopRunRequestFromRuntimeStartup,
-} from "../../claude/desktop-run-request"
 import type { ResolvedChatImageAttachment } from "../../../../shared/chat-attachments"
 import { resolveChatImageAttachments } from "../../chat-attachments"
 import {
@@ -955,7 +952,7 @@ export const claudeRouter = router({
               isUsingOllama,
             } = providerStartup.startup
 
-            const desktopJob = createClaudeAgentSdkDesktopJob({
+            const desktopRunStartup = createClaudeAgentSdkDesktopRunStartup({
               db,
               mode: input.mode,
               chatId: input.chatId,
@@ -970,33 +967,27 @@ export const claudeRouter = router({
                   input.subChatId,
                 )
               },
+              streamId,
+              preflight: verifiedRunContext,
+              permissionPolicy,
+              customConfig: finalCustomConfig,
+              requestedModel: input.model,
+              modelSource: input.modelSource,
+              selectedProviderProfileId,
+              images: input.images,
+              longTextAttachments: input.longTextAttachments,
+              signal: abortController.signal,
+              requestedSessionId: input.sessionId,
+              existingSessionId,
+              emitTrace: (event) => {
+                appendRunEventsToAgentJob(db, [event])
+              },
             })
-            desktopJobId = desktopJob.jobId
-            desktopStreamEventMapper = desktopJob.streamEventMapper
-
-            const desktopRunRequest =
-              createClaudeDesktopRunRequestFromRuntimeStartup({
-                runId: activeRunId,
-                streamId,
-                jobId: desktopJobId,
-                mode: input.mode,
-                preflight: verifiedRunContext,
-                prompt: input.prompt,
-                permissionPolicy,
-                customConfig: finalCustomConfig,
-                requestedModel: input.model,
-                modelSource: input.modelSource,
-                selectedProviderProfileId,
-                images: input.images,
-                longTextAttachments: input.longTextAttachments,
-                signal: abortController.signal,
-                requestedSessionId: input.sessionId,
-                existingSessionId,
-                emitTrace: (event) => {
-                  appendRunEventsToAgentJob(db, [event])
-                },
-              })
-            const { resumeSessionId } = desktopRunRequest.session
+            desktopJobId = desktopRunStartup.desktopJob.jobId
+            desktopStreamEventMapper =
+              desktopRunStartup.desktopJob.streamEventMapper
+            const desktopRunRequest = desktopRunStartup.desktopRunRequest
+            const resumeSessionId = desktopRunStartup.resumeSessionId
 
             recordClaudeAgentSdkConnectionMethod({
               finalCustomConfig,

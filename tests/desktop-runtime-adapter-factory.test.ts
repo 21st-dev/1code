@@ -288,13 +288,21 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/desktop-run-request.ts",
       "utf8",
     )
+    const claudeDesktopJob = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-job.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/desktop-run-request")
     expect(claudeRouter).toContain(
+      "createClaudeAgentSdkDesktopRunStartup({",
+    )
+    expect(claudeRouter).not.toContain("../../claude/desktop-run-request")
+    expect(claudeRouter).not.toContain(
       "createClaudeDesktopRunRequestFromRuntimeStartup({",
     )
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopJob({")
     expect(claudeRouter).not.toContain("createClaudeDesktopProviderBinding")
-    expect(claudeRouter).not.toContain("const resumeSessionId =")
+    expect(claudeRouter).not.toContain("desktopRunRequest.session")
     expect(claudeRouter).not.toContain("authMode: selectedProviderProfileId")
     expect(claudeRouter).not.toContain("createDesktopRunContextFromPreflight")
     expect(claudeRouter).not.toContain(
@@ -306,6 +314,11 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeDesktopRunRequest).toContain(
       "createClaudeDesktopRunRequestFromRuntimeStartup",
     )
+    expect(claudeDesktopJob).toContain("createClaudeAgentSdkDesktopRunStartup")
+    expect(claudeDesktopJob).toContain(
+      "createClaudeDesktopRunRequestFromRuntimeStartup",
+    )
+    expect(claudeDesktopJob).toContain("createClaudeAgentSdkDesktopJob")
     expect(claudeDesktopRunRequest).toContain(
       "createClaudeDesktopProviderBinding",
     )
@@ -1047,7 +1060,8 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopJob")
+    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunStartup")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopJob({")
     expect(claudeRouter).not.toContain("createAndRegisterDesktopChatAgentJob")
     expect(claudeRouter).not.toContain("createDesktopStreamEventMapper")
     expect(codexRouter).toContain("createAndRegisterDesktopChatAgentJob")

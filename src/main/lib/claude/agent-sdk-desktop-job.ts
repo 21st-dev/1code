@@ -3,11 +3,16 @@ import {
   createDesktopStreamEventMapper,
   type DesktopStreamEventMapper,
 } from "../agent-runtime/stream-event-mapper"
+import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
 import {
   createAndRegisterDesktopChatAgentJob,
   type DesktopAgentJobHandle,
 } from "../desktop-agent-jobs"
 import type { AgentJobDatabase } from "../headless/job-store"
+import {
+  createClaudeDesktopRunRequestFromRuntimeStartup,
+  type CreateClaudeDesktopRunRequestFromRuntimeStartupInput,
+} from "./desktop-run-request"
 
 export type CreateClaudeAgentSdkDesktopJobDependencies = {
   createAndRegisterDesktopChatAgentJob:
@@ -31,6 +36,21 @@ export type ClaudeAgentSdkDesktopJobSetup = {
   handle: DesktopAgentJobHandle
   jobId: string
   streamEventMapper: DesktopStreamEventMapper
+}
+
+export type CreateClaudeAgentSdkDesktopRunStartupInput =
+  CreateClaudeAgentSdkDesktopJobInput &
+    Omit<
+      CreateClaudeDesktopRunRequestFromRuntimeStartupInput,
+      "jobId" | "runId" | "mode" | "prompt"
+    > & {
+      createDesktopRunRequest?: typeof createClaudeDesktopRunRequestFromRuntimeStartup
+    }
+
+export type ClaudeAgentSdkDesktopRunStartup = {
+  desktopJob: ClaudeAgentSdkDesktopJobSetup
+  desktopRunRequest: DesktopRunRequest
+  resumeSessionId?: string | null
 }
 
 const defaultDependencies: CreateClaudeAgentSdkDesktopJobDependencies = {
@@ -70,5 +90,37 @@ export function createClaudeAgentSdkDesktopJob(
       runId: input.runId,
       jobId,
     }),
+  }
+}
+
+export function createClaudeAgentSdkDesktopRunStartup({
+  createDesktopRunRequest = createClaudeDesktopRunRequestFromRuntimeStartup,
+  ...input
+}: CreateClaudeAgentSdkDesktopRunStartupInput): ClaudeAgentSdkDesktopRunStartup {
+  const desktopJob = createClaudeAgentSdkDesktopJob(input)
+  const desktopRunRequest = createDesktopRunRequest({
+    runId: input.runId,
+    streamId: input.streamId,
+    jobId: desktopJob.jobId,
+    mode: input.mode,
+    preflight: input.preflight,
+    prompt: input.prompt,
+    permissionPolicy: input.permissionPolicy,
+    customConfig: input.customConfig,
+    requestedModel: input.requestedModel,
+    modelSource: input.modelSource,
+    selectedProviderProfileId: input.selectedProviderProfileId,
+    images: input.images,
+    longTextAttachments: input.longTextAttachments,
+    signal: input.signal,
+    requestedSessionId: input.requestedSessionId,
+    existingSessionId: input.existingSessionId,
+    emitTrace: input.emitTrace,
+  })
+
+  return {
+    desktopJob,
+    desktopRunRequest,
+    resumeSessionId: desktopRunRequest.session.resumeSessionId,
   }
 }
