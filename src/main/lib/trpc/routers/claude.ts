@@ -62,6 +62,10 @@ import {
   clearClaudeAgentSdkQueryCache,
   getClaudeAgentSdkQuery,
 } from "../../claude/agent-sdk-query-loader"
+import {
+  createClaudeAgentSdkSystemPromptConfig,
+  readClaudeAgentSdkProjectAgentsMd,
+} from "../../claude/agent-sdk-project-context"
 import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
   logClaudeOllamaEmptyStreamDiagnosis,
@@ -1849,19 +1853,12 @@ export const claudeRouter = router({
             }
 
             // Read AGENTS.md from project root if it exists
-            let agentsMdContent: string | undefined
-            try {
-              const agentsMdPath = path.join(runtimeCwd, "AGENTS.md")
-              agentsMdContent = await fs.readFile(agentsMdPath, "utf-8")
-              if (agentsMdContent.trim()) {
-                console.log(
-                  `[claude] Found AGENTS.md at ${agentsMdPath} (${agentsMdContent.length} chars)`,
-                )
-              } else {
-                agentsMdContent = undefined
-              }
-            } catch {
-              // AGENTS.md doesn't exist or can't be read - that's fine
+            const agentsMd = await readClaudeAgentSdkProjectAgentsMd(runtimeCwd)
+            const agentsMdContent = agentsMd?.content
+            if (agentsMdContent) {
+              console.log(
+                `[claude] Found AGENTS.md at ${agentsMd.path} (${agentsMdContent.length} chars)`,
+              )
             }
 
             // For Ollama: embed context AND history directly in prompt
@@ -1885,18 +1882,8 @@ export const claudeRouter = router({
               console.log("[Ollama] Context prefix added to prompt")
             }
 
-            // System prompt config - use preset for both Claude and Ollama
-            // If AGENTS.md exists, append its content to the system prompt
-            const systemPromptConfig = agentsMdContent
-              ? {
-                  type: "preset" as const,
-                  preset: "claude_code" as const,
-                  append: `\n\n# AGENTS.md\nThe following are the project's AGENTS.md instructions:\n\n${agentsMdContent}`,
-                }
-              : {
-                  type: "preset" as const,
-                  preset: "claude_code" as const,
-                }
+            const systemPromptConfig =
+              createClaudeAgentSdkSystemPromptConfig(agentsMdContent)
 
             const queryOptions = createClaudeAgentSdkQueryOptions({
               request: desktopRunRequest,

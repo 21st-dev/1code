@@ -418,6 +418,26 @@ describe("desktop runtime adapter factory", () => {
     expect(claudePrompt).toContain("media_type: image.mediaType")
   })
 
+  test("keeps Claude Agent SDK project context ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const projectContext = readFileSync(
+      "src/main/lib/claude/agent-sdk-project-context.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-project-context")
+    expect(claudeRouter).toContain("readClaudeAgentSdkProjectAgentsMd")
+    expect(claudeRouter).toContain("createClaudeAgentSdkSystemPromptConfig")
+    expect(claudeRouter).not.toContain('path.join(runtimeCwd, "AGENTS.md")')
+    expect(claudeRouter).not.toContain("The following are the project's")
+    expect(projectContext).toContain("readClaudeAgentSdkProjectAgentsMd")
+    expect(projectContext).toContain("createClaudeAgentSdkSystemPromptConfig")
+    expect(projectContext).toContain('path.join(cwd, "AGENTS.md")')
+  })
+
   test("keeps Claude Ollama stream diagnostics ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
