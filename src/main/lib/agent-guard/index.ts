@@ -38,3 +38,11 @@ export {
   type GuardedRunCheckpointAvailability,
   type GuardedRunCheckpointAvailabilityInput,
 } from "./checkpoint"
+export {
+  applyActiveGuardedScopeExpansion,
+  clearActiveGuardedContractsForTest,
+  deleteActiveGuardedContract,
+  getActiveGuardedContract,
+  setActiveGuardedContract,
+  type ApplyActiveGuardedScopeExpansionResult,
+} from "./active-contracts"
