@@ -448,6 +448,35 @@ describe("desktop runtime adapter factory", () => {
     )
   })
 
+  test("keeps Claude Agent SDK stream lifecycle ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const streamLifecycle = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-lifecycle.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-lifecycle")
+    expect(claudeRouter).toContain("createClaudeAgentSdkStreamIterationState()")
+    expect(claudeRouter).toContain("recordClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).toContain("completeClaudeAgentSdkStreamIteration")
+    expect(claudeRouter).not.toContain("let firstMessageReceived")
+    expect(claudeRouter).not.toContain("streamIterationStart")
+    expect(claudeRouter).not.toContain("messageCount++")
+    expect(claudeRouter).not.toContain("logClaudeOllamaFirstMessageLatency")
+    expect(claudeRouter).not.toContain("logClaudeOllamaMessage")
+    expect(claudeRouter).not.toContain("logClaudeOllamaStreamComplete")
+    expect(claudeRouter).not.toContain("logClaudeOllamaEmptyStreamDiagnosis")
+    expect(claudeRouter).not.toContain("logClaudeOllamaSingleMessageWarning")
+    expect(streamLifecycle).toContain("recordClaudeAgentSdkStreamMessage")
+    expect(streamLifecycle).toContain("completeClaudeAgentSdkStreamIteration")
+    expect(streamLifecycle).toContain("logClaudeOllamaFirstMessageLatency")
+    expect(streamLifecycle).toContain("logClaudeOllamaStreamComplete")
+    expect(streamLifecycle).toContain("logClaudeOllamaEmptyStreamDiagnosis")
+  })
+
   test("keeps Claude Agent SDK prompt ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

@@ -76,18 +76,18 @@ import {
 } from "../../claude/agent-sdk-project-context"
 import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
-  logClaudeOllamaEmptyStreamDiagnosis,
-  logClaudeOllamaFirstMessageLatency,
-  logClaudeOllamaMessage,
   logClaudeOllamaSdkConfiguration,
-  logClaudeOllamaSingleMessageWarning,
   logClaudeOllamaStreamAborted,
-  logClaudeOllamaStreamComplete,
   logClaudeOllamaStreamError,
   logClaudeOllamaStreamStart,
   probeClaudeOllamaConnectivity,
 } from "../../claude/agent-sdk-ollama-diagnostics"
 import { createClaudeOllamaPrompt } from "../../claude/agent-sdk-ollama-prompt"
+import {
+  completeClaudeAgentSdkStreamIteration,
+  createClaudeAgentSdkStreamIterationState,
+  recordClaudeAgentSdkStreamMessage,
+} from "../../claude/agent-sdk-stream-lifecycle"
 import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
@@ -1826,228 +1826,199 @@ export const claudeRouter = router({
             const claudeAdapter = createClaudeAgentSdkAdapter({
               queryOptions,
               consumeStream: async ({ stream }) => {
-              let firstMessageReceived = false
-              // Track last assistant message UUID for rollback support
-              // Only assigned to metadata AFTER the stream completes (not during generation)
-              let lastAssistantUuid: string | null = null
-              const streamIterationStart = Date.now()
+                const streamIteration =
+                  createClaudeAgentSdkStreamIterationState()
+                // Track last assistant message UUID for rollback support.
+                // Only assigned to metadata after the stream completes.
+                let lastAssistantUuid: string | null = null
 
-              // Plan mode: track ExitPlanMode to stop after plan is complete
-              let exitPlanModeToolCallId: string | null = null
+                // Plan mode: track ExitPlanMode to stop after plan is complete.
+                let exitPlanModeToolCallId: string | null = null
 
-              if (isUsingOllama) {
-                logClaudeOllamaStreamStart({
-                  model: finalCustomConfig?.model,
-                  baseUrl: finalCustomConfig?.baseUrl,
-                  prompt: input.prompt,
-                  cwd: runtimeCwd,
-                })
-              }
-
-              try {
-                for await (const msg of stream) {
-                  if (abortController.signal.aborted) {
-                    if (isUsingOllama)
-                      logClaudeOllamaStreamAborted()
-                    break
-                  }
-
-                  messageCount++
-
-                  // Extra logging for Ollama to diagnose issues
-                  if (isUsingOllama) {
-                    logClaudeOllamaMessage({
-                      messageCount,
-                      message: msg,
-                    })
-                  }
-
-                  // Warn if SDK initialization is slow (MCP delay)
-                  if (!firstMessageReceived) {
-                    firstMessageReceived = true
-                    const timeToFirstMessage = Date.now() - streamIterationStart
-                    if (isUsingOllama) {
-                      logClaudeOllamaFirstMessageLatency(timeToFirstMessage)
-                    }
-                    if (timeToFirstMessage > 5000) {
-                      console.warn(
-                        `[claude] SDK initialization took ${(timeToFirstMessage / 1000).toFixed(1)}s (MCP servers loading?)`,
-                      )
-                    }
-                  }
-
-                  // Log raw message for debugging
-                  logRawClaudeMessage(input.chatId, msg)
-
-                  // Check for error messages from SDK (error can be embedded in message payload!)
-                  const msgAny = msg as any
-                  if (msgAny.type === "error" || msgAny.error) {
-                    const sdkError =
-                      extractClaudeAgentSdkEmbeddedErrorText(msgAny)
-
-                    logClaudeAgentSdkEmbeddedError({
-                      sdkError,
-                      message: msgAny,
-                      subChatId: input.subChatId,
-                      chatId: input.chatId,
-                      cwd: runtimeCwd,
-                      mode: input.mode,
-                      hasCustomConfig: !!finalCustomConfig,
-                      isUsingOllama,
-                      model: resolvedModel,
-                      hasOAuthToken: !!claudeCodeToken,
-                      mcpServerNames: mcpServersFiltered
-                        ? Object.keys(mcpServersFiltered)
-                        : [],
-                    })
-
-                    const errorDiagnostic =
-                      classifyClaudeAgentSdkEmbeddedError({
-                        rawErrorCode: msgAny.error,
-                        sdkError,
-                        usesApiKeyAuth: Boolean(
-                          finalCustomConfig || hasExistingApiConfig,
-                        ),
-                        policyRetryCount,
-                        maxPolicyRetries: CLAUDE_MAX_POLICY_RETRIES,
-                        aborted: abortController.signal.aborted,
-                      })
-                    const rawErrorCode = errorDiagnostic.rawErrorCode
-                    const errorCategory = errorDiagnostic.category
-                    const errorContext = errorDiagnostic.context
-
-                    // Auto-retry on false-positive policy violations (gateway-level rejections)
-                    if (errorDiagnostic.shouldRetryPolicy) {
-                      policyRetryCount++
-                      policyRetryNeeded = true
-                      console.log(
-                        `[claude] USAGE_POLICY_VIOLATION - silent retry (attempt ${policyRetryCount}/${CLAUDE_MAX_POLICY_RETRIES})`,
-                      )
-                      break // break for-await loop to retry
-                    }
-
-                    // Emit auth-error for authentication failures, regular error otherwise
-                    if (errorDiagnostic.shouldEmitAuthError) {
-                      safeEmit({
-                        type: "auth-error",
-                        errorText: errorContext,
-                      } as UIMessageChunk)
-                    } else {
-                      safeEmit({
-                        type: "error",
-                        errorText: errorContext,
-                        debugInfo: {
-                          category: errorCategory,
-                          rawErrorCode,
-                          sessionId: msgAny.session_id,
-                          messageId: msgAny.message?.id,
-                        },
-                      } as UIMessageChunk)
-                    }
-
-                    console.log(
-                      `[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`,
-                    )
-                    logClaudeAgentSdkErrorDetails({
-                      errorCategory,
-                      errorContext,
-                      rawErrorCode,
-                      message: msgAny,
-                    })
-                    safeEmit({ type: "finish" } as UIMessageChunk)
-                    safeComplete()
-                    return {
-                      status: "failed" as const,
-                      error: {
-                        message: errorContext,
-                        code: errorCategory,
-                      },
-                    }
-                  }
-
-                  const trackedMessageMetadata =
-                    trackClaudeAgentSdkMessageMetadata({
-                      message: msgAny,
-                      state: {
-                        metadata,
-                        currentSessionId,
-                        lastAssistantUuid,
-                      },
-                      historyEnabled,
-                      aborted: abortController.signal.aborted,
-                    })
-                  metadata = trackedMessageMetadata.metadata
-                  currentSessionId = trackedMessageMetadata.currentSessionId
-                  lastAssistantUuid =
-                    trackedMessageMetadata.lastAssistantUuid
-
-                  // Transform and emit + accumulate
-                  for (const chunk of transform(msg)) {
-                    chunkCount++
-                    lastChunkType = chunk.type
-
-                    const processedChunk = processClaudeAgentSdkUiChunk({
-                      chunk,
-                      state: {
-                        metadata,
-                        currentText,
-                        pendingFinishChunk,
-                        exitPlanModeToolCallId,
-                      },
-                      parts,
-                      mode: input.mode,
-                      subId,
-                      subChatId: input.subChatId,
-                      chunkCount,
-                      emit: safeEmit,
-                      notifyFileChanged: ({ filePath, type, subChatId }) => {
-                        const windows = BrowserWindow.getAllWindows()
-                        for (const win of windows) {
-                          win.webContents.send("file-changed", {
-                            filePath,
-                            type,
-                            subChatId,
-                          })
-                        }
-                      },
-                    })
-                    metadata = processedChunk.metadata
-                    currentText = processedChunk.currentText
-                    pendingFinishChunk = processedChunk.pendingFinishChunk
-                    exitPlanModeToolCallId =
-                      processedChunk.exitPlanModeToolCallId
-
-                    if (processedChunk.emitClosed) {
-                      break
-                    }
-                  }
-                  // Break from stream loop if observer closed (user clicked Stop)
-                  if (!isObservableActive) {
-                    console.log(`[SD] M:OBSERVER_CLOSED_STREAM sub=${subId}`)
-                    break
-                  }
-                }
-
-                // Warn if stream yielded no messages (offline mode issue)
-                const streamDuration = Date.now() - streamIterationStart
                 if (isUsingOllama) {
-                  logClaudeOllamaStreamComplete({
-                    messageCount,
-                    durationMs: streamDuration,
-                    chunkCount,
+                  logClaudeOllamaStreamStart({
+                    model: finalCustomConfig?.model,
+                    baseUrl: finalCustomConfig?.baseUrl,
+                    prompt: input.prompt,
+                    cwd: runtimeCwd,
                   })
                 }
 
-                if (messageCount === 0) {
-                  console.error(
-                    `[claude] Stream yielded no messages - model not responding`,
-                  )
-                  if (isUsingOllama) {
-                    logClaudeOllamaEmptyStreamDiagnosis(finalCustomConfig?.model)
-                  }
-                } else if (messageCount === 1 && isUsingOllama) {
-                  logClaudeOllamaSingleMessageWarning()
+                try {
+                  for await (const msg of stream) {
+                    if (abortController.signal.aborted) {
+                      if (isUsingOllama) logClaudeOllamaStreamAborted()
+                      break
+                    }
+
+                    messageCount = recordClaudeAgentSdkStreamMessage({
+                      state: streamIteration,
+                      message: msg,
+                      isUsingOllama,
+                    }).messageCount
+
+                    // Log raw message for debugging
+                    logRawClaudeMessage(input.chatId, msg)
+
+                    // Check for error messages from SDK (error can be embedded in message payload!)
+                    const msgAny = msg as any
+                    if (msgAny.type === "error" || msgAny.error) {
+                      const sdkError =
+                        extractClaudeAgentSdkEmbeddedErrorText(msgAny)
+
+                      logClaudeAgentSdkEmbeddedError({
+                        sdkError,
+                        message: msgAny,
+                        subChatId: input.subChatId,
+                        chatId: input.chatId,
+                        cwd: runtimeCwd,
+                        mode: input.mode,
+                        hasCustomConfig: !!finalCustomConfig,
+                        isUsingOllama,
+                        model: resolvedModel,
+                        hasOAuthToken: !!claudeCodeToken,
+                        mcpServerNames: mcpServersFiltered
+                          ? Object.keys(mcpServersFiltered)
+                          : [],
+                      })
+
+                      const errorDiagnostic =
+                        classifyClaudeAgentSdkEmbeddedError({
+                          rawErrorCode: msgAny.error,
+                          sdkError,
+                          usesApiKeyAuth: Boolean(
+                            finalCustomConfig || hasExistingApiConfig,
+                          ),
+                          policyRetryCount,
+                          maxPolicyRetries: CLAUDE_MAX_POLICY_RETRIES,
+                          aborted: abortController.signal.aborted,
+                        })
+                      const rawErrorCode = errorDiagnostic.rawErrorCode
+                      const errorCategory = errorDiagnostic.category
+                      const errorContext = errorDiagnostic.context
+
+                      // Auto-retry on false-positive policy violations (gateway-level rejections)
+                      if (errorDiagnostic.shouldRetryPolicy) {
+                        policyRetryCount++
+                        policyRetryNeeded = true
+                        console.log(
+                          `[claude] USAGE_POLICY_VIOLATION - silent retry (attempt ${policyRetryCount}/${CLAUDE_MAX_POLICY_RETRIES})`,
+                        )
+                        break // break for-await loop to retry
+                      }
+
+                      // Emit auth-error for authentication failures, regular error otherwise
+                      if (errorDiagnostic.shouldEmitAuthError) {
+                        safeEmit({
+                          type: "auth-error",
+                          errorText: errorContext,
+                        } as UIMessageChunk)
+                      } else {
+                        safeEmit({
+                          type: "error",
+                          errorText: errorContext,
+                          debugInfo: {
+                            category: errorCategory,
+                            rawErrorCode,
+                            sessionId: msgAny.session_id,
+                            messageId: msgAny.message?.id,
+                          },
+                        } as UIMessageChunk)
+                      }
+
+                      console.log(
+                        `[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`,
+                      )
+                      logClaudeAgentSdkErrorDetails({
+                        errorCategory,
+                        errorContext,
+                        rawErrorCode,
+                        message: msgAny,
+                      })
+                      safeEmit({ type: "finish" } as UIMessageChunk)
+                      safeComplete()
+                      return {
+                        status: "failed" as const,
+                        error: {
+                          message: errorContext,
+                          code: errorCategory,
+                        },
+                      }
+                    }
+
+                    const trackedMessageMetadata =
+                      trackClaudeAgentSdkMessageMetadata({
+                        message: msgAny,
+                        state: {
+                          metadata,
+                          currentSessionId,
+                          lastAssistantUuid,
+                        },
+                        historyEnabled,
+                        aborted: abortController.signal.aborted,
+                      })
+                    metadata = trackedMessageMetadata.metadata
+                    currentSessionId = trackedMessageMetadata.currentSessionId
+                    lastAssistantUuid =
+                      trackedMessageMetadata.lastAssistantUuid
+
+                    // Transform and emit + accumulate
+                    for (const chunk of transform(msg)) {
+                      chunkCount++
+                      lastChunkType = chunk.type
+
+                      const processedChunk = processClaudeAgentSdkUiChunk({
+                        chunk,
+                        state: {
+                          metadata,
+                          currentText,
+                          pendingFinishChunk,
+                          exitPlanModeToolCallId,
+                        },
+                        parts,
+                        mode: input.mode,
+                        subId,
+                        subChatId: input.subChatId,
+                        chunkCount,
+                        emit: safeEmit,
+                        notifyFileChanged: ({
+                          filePath,
+                          type,
+                          subChatId,
+                        }) => {
+                          const windows = BrowserWindow.getAllWindows()
+                          for (const win of windows) {
+                            win.webContents.send("file-changed", {
+                              filePath,
+                              type,
+                              subChatId,
+                            })
+                          }
+                        },
+                      })
+                      metadata = processedChunk.metadata
+                      currentText = processedChunk.currentText
+                      pendingFinishChunk = processedChunk.pendingFinishChunk
+                      exitPlanModeToolCallId =
+                        processedChunk.exitPlanModeToolCallId
+
+                      if (processedChunk.emitClosed) {
+                        break
+                      }
+                    }
+                    // Break from stream loop if observer closed (user clicked Stop)
+                    if (!isObservableActive) {
+                      console.log(`[SD] M:OBSERVER_CLOSED_STREAM sub=${subId}`)
+                      break
+                    }
                 }
+
+                messageCount = completeClaudeAgentSdkStreamIteration({
+                  state: streamIteration,
+                  isUsingOllama,
+                  chunkCount,
+                  model: finalCustomConfig?.model,
+                }).messageCount
               } catch (streamError) {
                 // This catches errors during streaming (like process exit)
                 const err = streamError as Error
