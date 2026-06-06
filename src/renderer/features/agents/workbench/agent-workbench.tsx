@@ -419,6 +419,39 @@ function formatPayload(payload: unknown): string {
   }
 }
 
+const JOB_EVENT_LABEL_KEYS: Record<string, TranslationKey> = {
+  assistant_delta: "workbench.event.assistantDelta",
+  reasoning_delta: "workbench.event.reasoningDelta",
+  tool_started: "workbench.event.toolStarted",
+  tool_delta: "workbench.event.toolDelta",
+  tool_finished: "workbench.event.toolFinished",
+  guard_decision: "workbench.event.guardDecision",
+  permission_requested: "workbench.event.permissionRequested",
+  scope_expansion_requested: "workbench.event.scopeExpansionRequested",
+  question_pending: "workbench.event.questionPending",
+  question_result: "workbench.event.questionResult",
+  mcp_needs_auth: "workbench.event.mcpNeedsAuth",
+  usage_update: "workbench.event.usageUpdate",
+  command_started: "workbench.event.commandStarted",
+  command_output: "workbench.event.commandOutput",
+  command_finished: "workbench.event.commandFinished",
+  artifact_created: "workbench.event.artifactCreated",
+  status: "workbench.event.status",
+  error: "workbench.event.error",
+  completed: "workbench.event.completed",
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function getSemanticPayload(event: HeadlessJobEvent): unknown {
+  if (isRecord(event.payload) && "runEventSequence" in event.payload) {
+    return event.payload.payload
+  }
+  return event.payload
+}
+
 function getReviewDisabledReason(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"]) {
   if (task.actions.canReviewDiff) return null
   if (!task.worktreePath) return t("workbench.noWorkspacePath")
@@ -965,17 +998,32 @@ function HeadlessJobLogsDialog({
               {events.map((event) => (
                 <div
                   key={event.id}
-                  className="grid grid-cols-[3.5rem_9rem_minmax(0,1fr)] gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs"
+                  className="grid grid-cols-[3.5rem_11rem_minmax(0,1fr)] gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs"
                 >
                   <span className="font-mono text-muted-foreground">
                     #{event.sequence}
                   </span>
-                  <span className="truncate font-medium text-foreground">
-                    {event.type}
-                  </span>
-                  <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-muted-foreground">
-                    {formatPayload(event.payload)}
-                  </pre>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-foreground">
+                      {t(JOB_EVENT_LABEL_KEYS[event.type] ?? "workbench.event.unknown")}
+                    </div>
+                    <div className="truncate font-mono text-[11px] text-muted-foreground">
+                      {event.type}
+                    </div>
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-muted-foreground">
+                      {formatPayload(getSemanticPayload(event))}
+                    </pre>
+                    <details className="text-muted-foreground">
+                      <summary className="cursor-pointer text-[11px] font-medium">
+                        {t("workbench.rawPayload")}
+                      </summary>
+                      <pre className="mt-1 min-w-0 whitespace-pre-wrap break-words font-mono">
+                        {formatPayload(event.payload)}
+                      </pre>
+                    </details>
+                  </div>
                 </div>
               ))}
             </div>

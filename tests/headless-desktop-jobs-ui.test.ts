@@ -58,6 +58,9 @@ describe("headless desktop jobs UI", () => {
       expect(source).toContain("trpc.agentSchedules.resume.useMutation")
       expect(source).toContain("trpc.agentSchedules.delete.useMutation")
       expect(source).toContain("HeadlessJobLogsDialog")
+      expect(source).toContain("JOB_EVENT_LABEL_KEYS")
+      expect(source).toContain("getSemanticPayload(event)")
+      expect(source).toContain('t("workbench.rawPayload")')
       expect(source).toContain("trpc.agentWorkbench.listTasks.useQuery")
     })
 
@@ -92,8 +95,13 @@ describe("headless desktop jobs UI", () => {
     const dictionary = read("src/renderer/lib/i18n/dictionaries.ts")
     for (const key of [
       "workbench.headlessJobs",
-        "workbench.jobSource.desktop",
-        "workbench.jobSource.cli",
+      "workbench.jobSource.desktop",
+      "workbench.rawPayload",
+      "workbench.event.assistantDelta",
+      "workbench.event.guardDecision",
+      "workbench.event.mcpNeedsAuth",
+      "workbench.event.completed",
+      "workbench.jobSource.cli",
         "workbench.jobSource.daemon",
         "workbench.jobSource.schedule",
         "workbench.jobSource.protocol",
