@@ -146,10 +146,40 @@ function assertGuardDecisionSingleOwner() {
   }
 }
 
+function assertRuntimeEventStateOwner() {
+  const owner = "src/renderer/features/agents/lib/runtime-event-state.ts"
+  const transportDir = "src/renderer/features/agents/lib"
+  const ownerOnlyAtoms = [
+    "askUserQuestionResultsAtom",
+    "expiredUserQuestionsAtom",
+    "guardedRunAuditsAtom",
+    "guardedRunEventsAtom",
+    "pendingScopeExpansionRequestsAtom",
+    "pendingUserQuestionsAtom",
+  ]
+
+  readText(owner)
+
+  for (const absolutePath of walkFiles(transportDir, [".ts", ".tsx"])) {
+    const filePath = relative(absolutePath)
+    if (filePath === owner) {
+      continue
+    }
+
+    const content = readFileSync(absolutePath, "utf8")
+    for (const atomName of ownerOnlyAtoms) {
+      if (content.includes(atomName)) {
+        fail(`${atomName} mutations belong in ${owner}, not ${filePath}.`)
+      }
+    }
+  }
+}
+
 assertOwnershipDocs()
 assertPackageScripts()
 assertRuntimeCapabilitySingleOwner()
 assertGuardDecisionSingleOwner()
+assertRuntimeEventStateOwner()
 
 if (failures.length > 0) {
   console.error("Architecture guard failed:")

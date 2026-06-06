@@ -20,21 +20,19 @@ import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attach
 import { trpcClient } from "../../../lib/trpc"
 import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
-  askUserQuestionResultsAtom,
   compactingSubChatsAtom,
-  expiredUserQuestionsAtom,
   MODEL_ID_MAP,
   approvedGuardedRunContractsAtom,
   pendingAuthRetryMessageAtom,
-  guardedRunAuditsAtom,
-  guardedRunEventsAtom,
-  pendingScopeExpansionRequestsAtom,
-  pendingUserQuestionsAtom,
   subChatClaudeModelSourceAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
+import {
+  applyRuntimeEventStateChunk,
+  clearPendingUserQuestionForRuntimeChunk,
+} from "./runtime-event-state"
 
 function tr(key: TranslationKey, values?: Record<string, string | number>) {
   const useZh =
@@ -257,83 +255,13 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               chunkCount++
               lastChunkType = chunk.type
 
-              // Handle AskUserQuestion - show question UI
-              if (chunk.type === "ask-user-question") {
-                const currentMap = appStore.get(pendingUserQuestionsAtom)
-                const newMap = new Map(currentMap)
-                newMap.set(this.config.subChatId, {
+              applyRuntimeEventStateChunk(
+                {
                   subChatId: this.config.subChatId,
                   parentChatId: this.config.chatId,
-                  toolUseId: chunk.toolUseId,
-                  questions: chunk.questions,
-                })
-                appStore.set(pendingUserQuestionsAtom, newMap)
-
-                // Clear any expired question (new question replaces it)
-                const currentExpired = appStore.get(expiredUserQuestionsAtom)
-                if (currentExpired.has(this.config.subChatId)) {
-                  const newExpiredMap = new Map(currentExpired)
-                  newExpiredMap.delete(this.config.subChatId)
-                  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
-                }
-              }
-
-              // Handle AskUserQuestion timeout - move to expired (keep UI visible)
-              if (chunk.type === "ask-user-question-timeout") {
-                const currentMap = appStore.get(pendingUserQuestionsAtom)
-                const pending = currentMap.get(this.config.subChatId)
-                if (pending && pending.toolUseId === chunk.toolUseId) {
-                  // Remove from pending
-                  const newPendingMap = new Map(currentMap)
-                  newPendingMap.delete(this.config.subChatId)
-                  appStore.set(pendingUserQuestionsAtom, newPendingMap)
-
-                  // Move to expired (so UI keeps showing the question)
-                  const currentExpired = appStore.get(expiredUserQuestionsAtom)
-                  const newExpiredMap = new Map(currentExpired)
-                  newExpiredMap.set(this.config.subChatId, pending)
-                  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
-                }
-              }
-
-              // Handle AskUserQuestion result - store for real-time updates
-              if (chunk.type === "ask-user-question-result") {
-                const currentResults = appStore.get(askUserQuestionResultsAtom)
-                const newResults = new Map(currentResults)
-                newResults.set(chunk.toolUseId, chunk.result)
-                appStore.set(askUserQuestionResultsAtom, newResults)
-              }
-
-              if (chunk.type === "guard-event") {
-                const currentEvents = appStore.get(guardedRunEventsAtom)
-                const nextEvents = new Map(currentEvents)
-                const events = nextEvents.get(this.config.subChatId) ?? []
-                nextEvents.set(this.config.subChatId, [...events, chunk.event])
-                appStore.set(guardedRunEventsAtom, nextEvents)
-
-                if (chunk.event?.type === "scope-expansion-request") {
-                  const currentRequests = appStore.get(pendingScopeExpansionRequestsAtom)
-                  const nextRequests = new Map(currentRequests)
-                  nextRequests.set(this.config.subChatId, {
-                    subChatId: this.config.subChatId,
-                    parentChatId: this.config.chatId,
-                    toolUseId: chunk.event.toolUseId,
-                    contractId: chunk.event.contractId,
-                    path: chunk.event.path,
-                    paths: chunk.event.paths,
-                    toolName: chunk.event.toolName,
-                    reason: chunk.event.reason,
-                  })
-                  appStore.set(pendingScopeExpansionRequestsAtom, nextRequests)
-                }
-              }
-
-              if (chunk.type === "guard-audit") {
-                const currentAudits = appStore.get(guardedRunAuditsAtom)
-                const nextAudits = new Map(currentAudits)
-                nextAudits.set(this.config.subChatId, chunk.audit)
-                appStore.set(guardedRunAuditsAtom, nextAudits)
-              }
+                },
+                chunk,
+              )
 
               // Handle compacting status - track in atom for UI display
               if (
@@ -375,29 +303,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 })
               }
 
-              // Clear pending questions ONLY when agent has moved on
-              // Don't clear on tool-input-* chunks (still building the question input)
-              // Clear when we get tool-output-* (answer received) or text-delta (agent moved on)
-              const shouldClearOnChunk =
-                chunk.type !== "ask-user-question" &&
-                chunk.type !== "ask-user-question-timeout" &&
-                chunk.type !== "ask-user-question-result" &&
-                !chunk.type.startsWith("tool-input") && // Don't clear while input is being built
-                chunk.type !== "start" &&
-                chunk.type !== "start-step"
-
-              if (shouldClearOnChunk) {
-                const currentMap = appStore.get(pendingUserQuestionsAtom)
-                if (currentMap.has(this.config.subChatId)) {
-                  const newMap = new Map(currentMap)
-                  newMap.delete(this.config.subChatId)
-                  appStore.set(pendingUserQuestionsAtom, newMap)
-                }
-                // NOTE: Do NOT clear expired questions here. After a timeout,
-                // the agent continues and emits new chunks — that's expected.
-                // Expired questions should persist until the user answers,
-                // dismisses, or sends a new message.
-              }
+              clearPendingUserQuestionForRuntimeChunk({
+                subChatId: this.config.subChatId,
+                chunk,
+              })
 
               // Handle authentication errors - show Claude login modal
               if (chunk.type === "auth-error") {

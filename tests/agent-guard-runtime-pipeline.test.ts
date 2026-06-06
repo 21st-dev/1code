@@ -8,6 +8,10 @@ describe("agent guard runtime pipeline", () => {
       "src/renderer/features/agents/lib/ipc-chat-transport.ts",
       "utf8",
     )
+    const runtimeEventState = readFileSync(
+      "src/renderer/features/agents/lib/runtime-event-state.ts",
+      "utf8",
+    )
     const atoms = readFileSync(
       "src/renderer/features/agents/atoms/index.ts",
       "utf8",
@@ -22,8 +26,9 @@ describe("agent guard runtime pipeline", () => {
     expect(atoms).toContain("pendingScopeExpansionRequestsAtom")
     expect(ipc).toContain("runId: crypto.randomUUID()")
     expect(ipc).toContain("scopeContract")
-    expect(ipc).toContain('chunk.type === "guard-event"')
-    expect(ipc).toContain('chunk.type === "guard-audit"')
+    expect(ipc).toContain("applyRuntimeEventStateChunk")
+    expect(runtimeEventState).toContain('chunk.type === "guard-event"')
+    expect(runtimeEventState).toContain('chunk.type === "guard-audit"')
     expect(claude).toContain(
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
@@ -61,10 +66,15 @@ describe("agent guard runtime pipeline", () => {
       "src/renderer/features/agents/lib/acp-chat-transport.ts",
       "utf8",
     )
+    const runtimeEventState = readFileSync(
+      "src/renderer/features/agents/lib/runtime-event-state.ts",
+      "utf8",
+    )
 
     expect(acp).toContain("approvedGuardedRunContractsAtom")
     expect(acp).toContain("scopeContract")
-    expect(acp).toContain('chunk.type === "guard-event"')
+    expect(acp).toContain("applyRuntimeEventStateChunk")
+    expect(runtimeEventState).toContain('chunk.type === "guard-event"')
     expect(acp).toContain('chunk.type === "capability-error"')
     expect(codex).toContain("codexChatInputSchema")
     expect(codexChatInputSchema).toContain(
@@ -83,9 +93,9 @@ describe("agent guard runtime pipeline", () => {
     expect(codex).toContain('enforcementMode: "hard"')
     expect(codex).not.toContain('enforcementMode: "contract-and-audit"')
     expect(codex).toContain("buildGuardedRunAudit")
-    expect(acp).toContain('chunk.type === "ask-user-question"')
-    expect(acp).toContain('chunk.type === "ask-user-question-timeout"')
-    expect(acp).toContain('chunk.type === "ask-user-question-result"')
+    expect(runtimeEventState).toContain('chunk.type === "ask-user-question"')
+    expect(runtimeEventState).toContain('chunk.type === "ask-user-question-timeout"')
+    expect(runtimeEventState).toContain('chunk.type === "ask-user-question-result"')
     expect(codex).toContain("getCodexErrorDiagnostics(error)")
     expect(codex).not.toContain('console.error("[codex] chat stream error:", error)')
   })
