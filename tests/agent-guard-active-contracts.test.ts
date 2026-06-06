@@ -18,6 +18,7 @@ const {
   applyActiveGuardedScopeExpansion,
   clearActiveGuardedContractsForTest,
   getActiveGuardedContract,
+  prepareActiveGuardedRunContract,
   setActiveGuardedContract,
 } = await import("../src/main/lib/agent-guard/active-contracts")
 const { validateAgentScopeContract } = await import(
@@ -66,6 +67,79 @@ async function activate(contract: AgentScopeContract = baseContract()) {
 describe("active guarded contract owner", () => {
   afterEach(() => {
     clearActiveGuardedContractsForTest()
+  })
+
+  test("skips activation when no guarded scope contract is provided", async () => {
+    await expect(
+      prepareActiveGuardedRunContract({
+        cwd,
+        projectPath: cwd,
+        chatId: "chat-1",
+        subChatId: "sub-1",
+        runId: "run-1",
+        fallbackRunId: "fallback-run",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      contract: null,
+      preRunStatus: null,
+    })
+  })
+
+  test("validates, activates, and captures guarded pre-run status", async () => {
+    const capturedCwds: string[] = []
+    const result = await prepareActiveGuardedRunContract({
+      scopeContract: baseContract({ runId: undefined }),
+      cwd,
+      projectPath: cwd,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      fallbackRunId: "fallback-run",
+      validateOptions: { requireRegisteredWorktree: false },
+      captureStatus: async (captureCwd) => {
+        capturedCwds.push(captureCwd)
+        return {
+          dirty: false,
+          files: [],
+          capturedAt: "2026-06-07T00:00:02.000Z",
+          available: true,
+        }
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error)
+    expect(result.contract?.runId).toBe("fallback-run")
+    expect(result.preRunStatus).toEqual({
+      dirty: false,
+      files: [],
+      capturedAt: "2026-06-07T00:00:02.000Z",
+      available: true,
+    })
+    expect(capturedCwds).toEqual([cwd])
+    expect(getActiveGuardedContract("contract-1")).toBe(result.contract)
+  })
+
+  test("returns stable validation errors without activating the contract", async () => {
+    const result = await prepareActiveGuardedRunContract({
+      scopeContract: baseContract({ chatId: "other-chat" }),
+      cwd,
+      projectPath: cwd,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      runId: "run-1",
+      fallbackRunId: "fallback-run",
+      validateOptions: { requireRegisteredWorktree: false },
+      captureStatus: async () => {
+        throw new Error("capture should not run")
+      },
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("chat"),
+    })
+    expect(getActiveGuardedContract("contract-1")).toBeUndefined()
   })
 
   test("returns a stable error when the guarded run is no longer active", async () => {

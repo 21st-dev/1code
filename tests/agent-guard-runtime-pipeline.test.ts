@@ -33,6 +33,10 @@ describe("agent guard runtime pipeline", () => {
       "src/main/lib/claude/agent-sdk-run-finalization.ts",
       "utf8",
     )
+    const activeContracts = readFileSync(
+      "src/main/lib/agent-guard/active-contracts.ts",
+      "utf8",
+    )
     const input = readFileSync(
       "src/renderer/features/agents/main/chat-input-area.tsx",
       "utf8",
@@ -48,8 +52,15 @@ describe("agent guard runtime pipeline", () => {
     expect(claude).toContain(
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
-    expect(claude).toContain("validateAgentScopeContract(input.scopeContract")
-    expect(claude).toContain("permissionHandler: {")
+    expect(claude).toContain("prepareActiveGuardedRunContract")
+    expect(claude).not.toContain("validateAgentScopeContract(input.scopeContract")
+    expect(claude).not.toContain("setActiveGuardedContract(guardedContract)")
+    expect(claude).not.toContain("captureGuardedGitStatus(runtimeCwd)")
+    expect(activeContracts).toContain("validateAgentScopeContract(scopeContract")
+    expect(activeContracts).toContain("setActiveGuardedContract(contract)")
+    expect(activeContracts).toContain("captureGuardedGitStatus")
+    expect(claude).not.toContain("permissionHandler: {")
+    expect(claudeQueryOptions).toContain("permissionHandler: {")
     expect(claude).not.toContain("createClaudeAgentSdkToolPermissionHandler")
     expect(claudeQueryOptions).toContain(
       "createClaudeAgentSdkToolPermissionHandler",

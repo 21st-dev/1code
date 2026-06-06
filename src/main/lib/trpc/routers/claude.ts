@@ -82,13 +82,10 @@ import { discoverPluginMcpServers, type PluginMcpConfig } from "../../plugins"
 import { publicProcedure, router } from "../index"
 import {
   agentScopeContractInputSchema,
-  captureGuardedGitStatus,
   applyActiveGuardedScopeExpansion,
   deleteActiveGuardedContract,
-  formatScopeValidationError,
   getActiveGuardedContract,
-  setActiveGuardedContract,
-  validateAgentScopeContract,
+  prepareActiveGuardedRunContract,
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
@@ -805,31 +802,27 @@ export const claudeRouter = router({
             })
             const runtimeCwd = verifiedRunContext.cwd
 
-            if (input.scopeContract) {
-              try {
-                const validated = await validateAgentScopeContract(input.scopeContract, {
-                  cwd: runtimeCwd,
-                  projectPath: input.projectPath,
-                  chatId: input.chatId,
-                  subChatId: input.subChatId,
-                  runId: input.runId,
-                })
-                guardedContract = {
-                  ...validated,
-                  runId: validated.runId ?? input.runId ?? streamId,
-                }
-                setActiveGuardedContract(guardedContract)
-                guardedPreRunStatus = await captureGuardedGitStatus(runtimeCwd)
-              } catch (guardError) {
-                emitError(
-                  new Error(formatScopeValidationError(guardError)),
-                  "Guarded run contract rejected",
-                )
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
-                return
-              }
+            const activeGuardedRun =
+              await prepareActiveGuardedRunContract({
+                scopeContract: input.scopeContract,
+                cwd: runtimeCwd,
+                projectPath: input.projectPath,
+                chatId: input.chatId,
+                subChatId: input.subChatId,
+                runId: input.runId,
+                fallbackRunId: streamId,
+              })
+            if (!activeGuardedRun.ok) {
+              emitError(
+                new Error(activeGuardedRun.error),
+                "Guarded run contract rejected",
+              )
+              safeEmit({ type: "finish" } as UIMessageChunk)
+              safeComplete()
+              return
             }
+            guardedContract = activeGuardedRun.contract
+            guardedPreRunStatus = activeGuardedRun.preRunStatus
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: "claude-code",
               mode: input.mode,

@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto"
 import type {
   AgentScopeExpansion,
+  AgentScopeContract,
   AgentScopePath,
 } from "../../../shared/agent-scope-contracts"
+import {
+  captureGuardedGitStatus,
+  type GuardedGitStatusSnapshot,
+} from "./audit"
 import {
   formatScopeValidationError,
   validateAgentScopeContract,
@@ -30,6 +35,75 @@ export function deleteActiveGuardedContract(contractId: string): boolean {
 
 export function clearActiveGuardedContractsForTest(): void {
   activeGuardedContracts.clear()
+}
+
+export type PrepareActiveGuardedRunContractInput = {
+  scopeContract?: AgentScopeContract
+  cwd: string
+  projectPath?: string
+  chatId: string
+  subChatId: string
+  runId?: string
+  fallbackRunId: string
+  validateOptions?: Partial<ValidateAgentScopeContractOptions>
+  captureStatus?: typeof captureGuardedGitStatus
+}
+
+export type PrepareActiveGuardedRunContractResult =
+  | {
+      ok: true
+      contract: ValidatedAgentScopeContract | null
+      preRunStatus: GuardedGitStatusSnapshot | null
+    }
+  | {
+      ok: false
+      error: string
+    }
+
+export async function prepareActiveGuardedRunContract({
+  scopeContract,
+  cwd,
+  projectPath,
+  chatId,
+  subChatId,
+  runId,
+  fallbackRunId,
+  validateOptions,
+  captureStatus = captureGuardedGitStatus,
+}: PrepareActiveGuardedRunContractInput): Promise<PrepareActiveGuardedRunContractResult> {
+  if (!scopeContract) {
+    return {
+      ok: true,
+      contract: null,
+      preRunStatus: null,
+    }
+  }
+
+  try {
+    const validated = await validateAgentScopeContract(scopeContract, {
+      cwd,
+      projectPath,
+      chatId,
+      subChatId,
+      runId,
+      ...validateOptions,
+    })
+    const contract = {
+      ...validated,
+      runId: validated.runId ?? runId ?? fallbackRunId,
+    }
+    setActiveGuardedContract(contract)
+    return {
+      ok: true,
+      contract,
+      preRunStatus: await captureStatus(cwd),
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: formatScopeValidationError(error),
+    }
+  }
 }
 
 export type ApplyActiveGuardedScopeExpansionResult =

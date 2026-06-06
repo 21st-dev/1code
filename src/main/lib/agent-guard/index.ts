@@ -43,6 +43,8 @@ export {
   clearActiveGuardedContractsForTest,
   deleteActiveGuardedContract,
   getActiveGuardedContract,
+  prepareActiveGuardedRunContract,
   setActiveGuardedContract,
   type ApplyActiveGuardedScopeExpansionResult,
+  type PrepareActiveGuardedRunContractResult,
 } from "./active-contracts"
