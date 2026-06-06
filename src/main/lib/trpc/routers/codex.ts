@@ -84,6 +84,10 @@ import { isLocalOnlyMode } from "../../local-only"
 import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
 import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
 import {
+  getCodexPermissionMapping,
+  resolveDesktopPermissionPolicy,
+} from "../../agent-runtime/permission-policy"
+import {
   fetchMcpTools,
   fetchMcpToolsStdio,
   type McpToolInfo,
@@ -1630,10 +1634,6 @@ function preprocessCodexModelName(params: {
   return params.modelId
 }
 
-function getCodexAcpModeId(mode: "plan" | "agent"): string {
-  return mode === "plan" ? "read-only" : "auto"
-}
-
 function getAuthFingerprint(appManagedApiKey?: string | null): string | null {
   if (!appManagedApiKey) return null
   return createHash("sha256").update(appManagedApiKey).digest("hex")
@@ -2195,6 +2195,12 @@ export const codexRouter = router({
                 return
               }
             }
+            const permissionPolicy = resolveDesktopPermissionPolicy({
+              runtimeId: "codex",
+              mode: input.mode,
+              hasScopeContract: Boolean(guardedContract),
+            })
+            const codexPermission = getCodexPermissionMapping(permissionPolicy)
 
             const requiredSafetyCapability = getCodexRunRequiredCapability({
               mode: input.mode,
@@ -2604,7 +2610,7 @@ export const codexRouter = router({
 
             const model = provider.languageModel(
               selectedModelId,
-              getCodexAcpModeId(input.mode),
+              codexPermission.acpMode,
             )
             installCodexAskUserQuestionAcpResultNormalizer(model)
             const codexRuntimeTools = {
@@ -2621,7 +2627,7 @@ export const codexRouter = router({
               }),
             }
 
-            if (requiredSafetyCapability) {
+            if (codexPermission.requiresPermissionHandler) {
               const installResult = await installCodexAcpPermissionHandler({
                 model,
                 handler: createCodexAcpPermissionHandler({

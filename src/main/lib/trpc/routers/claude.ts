@@ -84,6 +84,10 @@ import {
   getEnabledPlugins,
 } from "./claude-settings"
 import {
+  getClaudePermissionMapping,
+  resolveDesktopPermissionPolicy,
+} from "../../agent-runtime/permission-policy"
+import {
   completeDesktopAgentJobSafely,
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
@@ -1135,6 +1139,12 @@ export const claudeRouter = router({
                 return
               }
             }
+            const permissionPolicy = resolveDesktopPermissionPolicy({
+              runtimeId: "claude-code",
+              mode: input.mode,
+              hasScopeContract: Boolean(guardedContract),
+            })
+            const claudePermission = getClaudePermissionMapping(permissionPolicy)
 
             const desktopJob = createAndStartDesktopAgentJob(db, {
               runtime: "claude-code",
@@ -2198,11 +2208,8 @@ ${prompt}
                     mcpServers: mcpServersFiltered,
                   }),
                 env: finalEnv,
-                permissionMode:
-                  input.mode === "plan"
-                    ? ("plan" as const)
-                    : ("bypassPermissions" as const),
-                ...(input.mode !== "plan" && {
+                permissionMode: claudePermission.sdkPermissionMode,
+                ...(claudePermission.allowDangerouslySkipPermissions && {
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,
@@ -2294,25 +2301,20 @@ ${prompt}
                     }
                   }
 
-                  if (input.mode === "plan") {
+                  if (permissionPolicy.planWorkspaceSideEffects === "deny") {
                     if (toolName === "Edit" || toolName === "Write") {
-                      const filePath =
-                        typeof toolInput.file_path === "string"
-                          ? toolInput.file_path
-                          : ""
-                      if (!/\.md$/i.test(filePath)) {
-                        return {
-                          behavior: "deny",
-                          message:
-                            'Only ".md" files can be modified in plan mode.',
-                        }
+                      return {
+                        behavior: "deny",
+                        message: `Tool "${toolName}" blocked in plan mode.`,
                       }
-                    } else if (toolName == "ExitPlanMode") {
+                    }
+                    if (toolName == "ExitPlanMode") {
                       return {
                         behavior: "deny",
                         message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
                       }
-                    } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
+                    }
+                    if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
                         behavior: "deny",
                         message: `Tool "${toolName}" blocked in plan mode.`,
@@ -2321,7 +2323,7 @@ ${prompt}
                   }
                   if (
                     guardedContract &&
-                    input.mode !== "plan" &&
+                    permissionPolicy.enforcement === "locus-guarded-tool-policy" &&
                     toolName !== "AskUserQuestion"
                   ) {
                     const currentGuardedContract =

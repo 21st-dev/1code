@@ -166,3 +166,21 @@ export function resolveDesktopPermissionPolicy({
     ],
   }
 }
+
+export function getClaudePermissionMapping(
+  policy: DesktopPermissionPolicy,
+): ClaudePermissionMapping {
+  if (policy.runtimeMapping.runtime !== "claude-code") {
+    throw new Error(`Permission policy is not for Claude: ${policy.runtimeId}`)
+  }
+  return policy.runtimeMapping
+}
+
+export function getCodexPermissionMapping(
+  policy: DesktopPermissionPolicy,
+): CodexPermissionMapping {
+  if (policy.runtimeMapping.runtime !== "codex") {
+    throw new Error(`Permission policy is not for Codex: ${policy.runtimeId}`)
+  }
+  return policy.runtimeMapping
+}

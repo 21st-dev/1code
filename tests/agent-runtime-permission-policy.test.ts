@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 
 describe("desktop runtime permission policy", () => {
@@ -62,5 +63,21 @@ describe("desktop runtime permission policy", () => {
       acpMode: "auto",
       requiresPermissionHandler: true,
     })
+  })
+
+  test("desktop routes consume the shared permission policy owner", () => {
+    const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+
+    expect(claude).toContain("resolveDesktopPermissionPolicy")
+    expect(claude).toContain("getClaudePermissionMapping")
+    expect(claude).toContain("permissionPolicy.planWorkspaceSideEffects")
+    expect(claude).not.toContain('Only ".md" files can be modified in plan mode.')
+
+    expect(codex).toContain("resolveDesktopPermissionPolicy")
+    expect(codex).toContain("getCodexPermissionMapping")
+    expect(codex).toContain("codexPermission.acpMode")
+    expect(codex).toContain("codexPermission.requiresPermissionHandler")
+    expect(codex).not.toContain("function getCodexAcpModeId")
   })
 })
