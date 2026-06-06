@@ -330,6 +330,28 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeQueryOptions).toContain("createAbortControllerFromSignal")
   })
 
+  test("keeps Claude prompt mention parsing ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeMentions = readFileSync(
+      "src/main/lib/claude/mentions.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/mentions")
+    expect(claudeRouter).toContain("parseClaudePromptMentions(input.prompt)")
+    expect(claudeRouter).not.toContain("function parseMentions")
+    expect(claudeRouter).not.toContain(
+      "const mentionRegex = /@\\[(file|folder|skill|agent|tool):",
+    )
+    expect(claudeMentions).toContain("parseClaudePromptMentions")
+    expect(claudeMentions).toContain(
+      "const mentionRegex = /@\\[(file|folder|skill|agent|tool):",
+    )
+  })
+
   test("keeps Claude Agent SDK query loader ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
