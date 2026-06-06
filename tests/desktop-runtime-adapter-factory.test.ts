@@ -356,19 +356,28 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/provider-runtime-config.ts",
       "utf8",
     )
+    const claudeEnv = readFileSync("src/main/lib/claude/env.ts", "utf8")
 
     expect(claudeRouter).toContain("normalizeClaudeProviderRuntimeConfig")
+    expect(claudeRouter).toContain("createClaudeAgentSdkRuntimeEnv")
     expect(claudeRouter).not.toContain(
       "function normalizeRuntimeProviderConfig",
     )
     expect(claudeRouter).not.toContain("function redactClaudeEnvValueForLog")
     expect(claudeRouter).not.toContain("redactClaudeProviderEnvValueForLog")
+    expect(claudeRouter).not.toContain("claudeEnv.ANTHROPIC_API_KEY")
+    expect(claudeRouter).not.toContain(
+      "CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken",
+    )
     expect(claudeProviderRuntimeConfig).toContain(
       "normalizeClaudeProviderRuntimeConfig",
     )
     expect(claudeProviderRuntimeConfig).toContain(
       "redactClaudeProviderEnvValueForLog",
     )
+    expect(claudeEnv).toContain("createClaudeAgentSdkRuntimeEnv")
+    expect(claudeEnv).toContain("CLAUDE_CODE_OAUTH_TOKEN")
+    expect(claudeEnv).toContain("CLAUDE_CONFIG_DIR")
   })
 
   test("keeps Claude Agent SDK runtime diagnostics ownership out of the router", () => {

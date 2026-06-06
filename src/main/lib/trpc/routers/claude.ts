@@ -10,6 +10,7 @@ import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import {
   buildClaudeEnv,
   checkOfflineFallback,
+  createClaudeAgentSdkRuntimeEnv,
   createTransformer,
   getBundledClaudeBinaryPath,
   logClaudeEnv,
@@ -1583,25 +1584,13 @@ export const claudeRouter = router({
               )
             }
 
-            // Check if an explicit Locus provider/offline config injected Claude
-            // API auth or endpoint. Inherited shell/process ANTHROPIC_* values
-            // are stripped in buildClaudeEnv so they cannot silently override
-            // the selected Claude Code credential.
-            const hasExistingApiConfig = !!(
-              claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_AUTH_TOKEN || claudeEnv.ANTHROPIC_BASE_URL
-            )
-
-            // Build final env - only add OAuth token if we have one AND no existing API config
-            // Existing CLI config takes precedence over OAuth
-            const finalEnv: Record<string, string> = {
-              ...claudeEnv,
-              ...(claudeCodeToken &&
-                !hasExistingApiConfig && {
-                  CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
-                }),
-              // Re-enable CLAUDE_CONFIG_DIR now that we properly map MCP configs
-              CLAUDE_CONFIG_DIR: isolatedConfigDir,
-            }
+            const runtimeEnv = createClaudeAgentSdkRuntimeEnv({
+              claudeEnv,
+              claudeCodeToken,
+              isolatedConfigDir,
+            })
+            const hasExistingApiConfig = runtimeEnv.hasExistingApiConfig
+            const finalEnv = runtimeEnv.env
 
             logClaudeAgentSdkAuthDiagnostics({
               hasExistingApiConfig,

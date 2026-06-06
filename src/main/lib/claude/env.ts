@@ -41,6 +41,35 @@ function getStrippedEnvKeys(): string[] {
   return STRIPPED_ENV_KEYS_BASE
 }
 
+export type ClaudeAgentSdkRuntimeEnvResult = {
+  env: Record<string, string>
+  hasExistingApiConfig: boolean
+}
+
+export function createClaudeAgentSdkRuntimeEnv(input: {
+  claudeEnv: Record<string, string>
+  claudeCodeToken?: string | null
+  isolatedConfigDir: string
+}): ClaudeAgentSdkRuntimeEnvResult {
+  const hasExistingApiConfig = Boolean(
+    input.claudeEnv.ANTHROPIC_API_KEY ||
+      input.claudeEnv.ANTHROPIC_AUTH_TOKEN ||
+      input.claudeEnv.ANTHROPIC_BASE_URL,
+  )
+
+  return {
+    hasExistingApiConfig,
+    env: {
+      ...input.claudeEnv,
+      ...(input.claudeCodeToken &&
+        !hasExistingApiConfig && {
+          CLAUDE_CODE_OAUTH_TOKEN: input.claudeCodeToken,
+        }),
+      CLAUDE_CONFIG_DIR: input.isolatedConfigDir,
+    },
+  }
+}
+
 // Cache the bundled binary path (only compute once)
 let cachedBinaryPath: string | null = null
 let binaryPathComputed = false

@@ -7,6 +7,7 @@ export {
 } from "./raw-logger"
 export {
   buildClaudeEnv,
+  createClaudeAgentSdkRuntimeEnv,
   getClaudeShellEnvironment,
   clearClaudeEnvCache,
   logClaudeEnv,
