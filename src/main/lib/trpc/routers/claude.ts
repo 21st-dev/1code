@@ -49,6 +49,10 @@ import {
 } from "../../claude/agent-sdk-errors"
 import { finalizeClaudeAgentSdkGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import {
+  prepareClaudeAgentSdkAssistantPersistence,
+  shouldCreateClaudeAgentSdkRollbackStash,
+} from "../../claude/agent-sdk-message-persistence"
+import {
   logClaudeAgentSdkEmbeddedError,
   logClaudeAgentSdkErrorDetails,
 } from "../../claude/agent-sdk-error-logging"
@@ -2057,19 +2061,17 @@ export const claudeRouter = router({
                   getContract: getActiveGuardedContract,
                   deleteContract: deleteActiveGuardedContract,
                 })
-                if (parts.length > 0) {
-                  const assistantMessage = {
-                    id: crypto.randomUUID(),
-                    role: "assistant",
-                    createdAt: new Date().toISOString(),
+                const persistence =
+                  prepareClaudeAgentSdkAssistantPersistence({
+                    messagesToSave,
                     parts,
                     metadata,
-                  }
-                  const finalMessages = [...messagesToSave, assistantMessage]
+                  })
+                if (persistence.assistantMessage) {
                   db.update(subChats)
                     .set({
-                      messages: JSON.stringify(finalMessages),
-                      sessionId: metadata.sessionId,
+                      messages: JSON.stringify(persistence.messages),
+                      sessionId: persistence.sessionId,
                       streamId: null,
                       updatedAt: new Date(),
                     })
@@ -2081,7 +2083,13 @@ export const claudeRouter = router({
                     .run()
 
                   // Create snapshot stash for rollback support (on error)
-                  if (historyEnabled && metadata.sdkMessageUuid && runtimeCwd) {
+                  if (
+                    shouldCreateClaudeAgentSdkRollbackStash({
+                      historyEnabled,
+                      metadata,
+                      cwd: runtimeCwd,
+                    })
+                  ) {
                     await createRollbackStash(
                       runtimeCwd,
                       metadata.sdkMessageUuid,
@@ -2208,23 +2216,17 @@ export const claudeRouter = router({
               deleteContract: deleteActiveGuardedContract,
             })
 
-            const savedSessionId = metadata.sessionId
+            const persistence = prepareClaudeAgentSdkAssistantPersistence({
+              messagesToSave,
+              parts,
+              metadata,
+            })
 
-            if (parts.length > 0) {
-              const assistantMessage = {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                createdAt: new Date().toISOString(),
-                parts,
-                metadata,
-              }
-
-              const finalMessages = [...messagesToSave, assistantMessage]
-
+            if (persistence.assistantMessage) {
               db.update(subChats)
                 .set({
-                  messages: JSON.stringify(finalMessages),
-                  sessionId: savedSessionId,
+                  messages: JSON.stringify(persistence.messages),
+                  sessionId: persistence.sessionId,
                   streamId: null,
                   updatedAt: new Date(),
                 })
@@ -2234,7 +2236,7 @@ export const claudeRouter = router({
               // No assistant response - just clear streamId
               db.update(subChats)
                 .set({
-                  sessionId: savedSessionId,
+                  sessionId: persistence.sessionId,
                   streamId: null,
                   updatedAt: new Date(),
                 })
@@ -2249,7 +2251,13 @@ export const claudeRouter = router({
               .run()
 
             // Create snapshot stash for rollback support
-            if (historyEnabled && metadata.sdkMessageUuid && runtimeCwd) {
+            if (
+              shouldCreateClaudeAgentSdkRollbackStash({
+                historyEnabled,
+                metadata,
+                cwd: runtimeCwd,
+              })
+            ) {
               await createRollbackStash(runtimeCwd, metadata.sdkMessageUuid)
             }
 

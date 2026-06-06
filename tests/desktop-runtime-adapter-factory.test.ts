@@ -497,6 +497,34 @@ describe("desktop runtime adapter factory", () => {
     expect(guardMetadata).toContain('emit({ type: "guard-audit", audit })')
   })
 
+  test("keeps Claude Agent SDK message persistence ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const messagePersistence = readFileSync(
+      "src/main/lib/claude/agent-sdk-message-persistence.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-message-persistence",
+    )
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkAssistantPersistence")
+    expect(claudeRouter).toContain("shouldCreateClaudeAgentSdkRollbackStash")
+    expect(claudeRouter).not.toContain("const assistantMessage =")
+    expect(claudeRouter).not.toContain("const finalMessages =")
+    expect(claudeRouter).not.toContain(
+      "historyEnabled && metadata.sdkMessageUuid && runtimeCwd",
+    )
+    expect(messagePersistence).toContain(
+      "prepareClaudeAgentSdkAssistantPersistence",
+    )
+    expect(messagePersistence).toContain("shouldCreateClaudeAgentSdkRollbackStash")
+    expect(messagePersistence).toContain('role: "assistant"')
+    expect(messagePersistence).toContain("messages: [...messagesToSave")
+  })
+
   test("keeps Claude Agent SDK prompt ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
