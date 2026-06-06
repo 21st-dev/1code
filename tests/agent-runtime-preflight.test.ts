@@ -109,18 +109,18 @@ describe("desktop runtime preflight", () => {
     const blockerIndex = claude.indexOf("new DesktopRunPreflightError(blocker)")
     const attachmentIndex = claude.indexOf("resolveChatImageAttachments(input.images)")
     const jobIndex = claude.indexOf("createAndStartDesktopAgentJob(db, {")
-    const queryCwdIndex = claude.indexOf(
-      "cwd: desktopRunRequest.context.cwd,\n                systemPrompt",
-    )
     const runRequestIndex = claude.indexOf(
       "const desktopRunRequest = createClaudeDesktopRunRequest({",
+    )
+    const queryOptionsIndex = claude.indexOf(
+      "const queryOptions = createClaudeAgentSdkQueryOptions({",
     )
 
     expect(blockerIndex).toBeGreaterThan(0)
     expect(attachmentIndex).toBeGreaterThan(blockerIndex)
     expect(jobIndex).toBeGreaterThan(attachmentIndex)
     expect(runRequestIndex).toBeGreaterThan(jobIndex)
-    expect(queryCwdIndex).toBeGreaterThan(runRequestIndex)
+    expect(queryOptionsIndex).toBeGreaterThan(runRequestIndex)
     expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")
   })
 

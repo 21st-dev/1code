@@ -293,7 +293,6 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "const desktopRunRequest = createClaudeDesktopRunRequest({",
     )
-    expect(claudeRouter).toContain("cwd: desktopRunRequest.context.cwd")
     expect(claudeRouter).not.toContain("createDesktopRunContextFromPreflight")
     expect(claudeRouter).not.toContain(
       "const desktopRunRequest: DesktopRunRequest",
@@ -305,5 +304,29 @@ describe("desktop runtime adapter factory", () => {
       "createDesktopRunContextFromPreflight",
     )
     expect(claudeDesktopRunRequest).toContain('status: "skipped"')
+  })
+
+  test("keeps Claude Agent SDK query option ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeQueryOptions = readFileSync(
+      "src/main/lib/claude/agent-sdk-query-options.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-query-options")
+    expect(claudeRouter).toContain(
+      "const queryOptions = createClaudeAgentSdkQueryOptions({",
+    )
+    expect(claudeRouter).not.toContain("cwd: desktopRunRequest.context.cwd")
+    expect(claudeRouter).not.toContain("includePartialMessages: true")
+    expect(claudeQueryOptions).toContain("cwd: request.context.cwd")
+    expect(claudeQueryOptions).toContain(
+      "permissionMode: permission.sdkPermissionMode",
+    )
+    expect(claudeQueryOptions).toContain("includePartialMessages: true")
+    expect(claudeQueryOptions).toContain("createAbortControllerFromSignal")
   })
 })

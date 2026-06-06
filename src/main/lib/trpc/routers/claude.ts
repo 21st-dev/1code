@@ -39,6 +39,7 @@ import {
   getActiveClaudeProviderConfig,
   type ClaudeProviderRuntimeConfig,
 } from "./claude-provider-config"
+import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
 import { createClaudeDesktopRunRequest } from "../../claude/desktop-run-request"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import {
@@ -2282,32 +2283,19 @@ ${prompt}
                   preset: "claude_code" as const,
                 }
 
-            const queryOptions = {
+            const queryOptions = createClaudeAgentSdkQueryOptions({
+              request: desktopRunRequest,
               prompt: finalQueryPrompt,
-              options: {
-                abortController, // Must be inside options!
-                cwd: desktopRunRequest.context.cwd,
-                systemPrompt: systemPromptConfig,
-                // Pass filtered MCP servers (only working/unknown ones, skip failed/needs-auth)
-                ...(mcpServersFiltered &&
-                  Object.keys(mcpServersFiltered).length > 0 && {
-                    mcpServers: mcpServersFiltered,
-                  }),
-                env: finalEnv,
-                permissionMode: claudePermission.sdkPermissionMode,
-                ...(claudePermission.allowDangerouslySkipPermissions && {
-                  allowDangerouslySkipPermissions: true,
-                }),
-                includePartialMessages: true,
-                // Load skills from project and user directories (skip for Ollama - not supported)
-                ...(!isUsingOllama && {
-                  settingSources: ["project" as const, "user" as const],
-                }),
-                canUseTool: async (
-                  toolName: string,
-                  toolInput: Record<string, unknown>,
-                  options: { toolUseID: string },
-                ): Promise<PermissionResult> => {
+              systemPrompt: systemPromptConfig,
+              env: finalEnv,
+              permission: claudePermission,
+              mcpServers: mcpServersFiltered,
+              isUsingOllama,
+              canUseTool: async (
+                toolName: string,
+                toolInput: Record<string, unknown>,
+                options: { toolUseID: string },
+              ): Promise<PermissionResult> => {
                   // Fix common parameter mistakes from Ollama models
                   // Local models often use slightly wrong parameter names
                   if (isUsingOllama) {
@@ -2511,41 +2499,28 @@ ${prompt}
                     behavior: "allow",
                     updatedInput: toolInput,
                   }
-                },
-                stderr: (data: string) => {
-                  stderrLines.push(data)
-                  if (isUsingOllama) {
-                    console.error("[Ollama stderr]", data)
-                  } else {
-                    console.error("[claude stderr]", data)
-                  }
-                },
-                // Use bundled binary
-                pathToClaudeCodeExecutable: claudeBinaryPath,
-                // Session handling: For Ollama, use resume with session ID to maintain history
-                // For Claude API, use resume with rollback/fork support
-                ...(resumeSessionId && {
-                  resume: resumeSessionId,
-                  // Fork support - resume at specific point and create new session
-                  ...(shouldForkResume && forkResumeAtUuid && !isUsingOllama
-                    ? {
-                        resumeSessionAt: forkResumeAtUuid,
-                        forkSession: true,
-                      }
-                    : // Rollback support - resume at specific message UUID (from DB)
-                      resumeAtUuid && !isUsingOllama
-                      ? { resumeSessionAt: resumeAtUuid }
-                      : { continue: true }),
-                }),
-                // For first message in chat (no session ID yet), use continue mode
-                ...(!resumeSessionId && { continue: true }),
-                ...(resolvedModel && { model: resolvedModel }),
-                // fallbackModel: "claude-opus-4-7",
-                ...(input.maxThinkingTokens && {
-                  maxThinkingTokens: input.maxThinkingTokens,
-                }),
               },
-            }
+              stderr: (data: string) => {
+                stderrLines.push(data)
+                if (isUsingOllama) {
+                  console.error("[Ollama stderr]", data)
+                } else {
+                  console.error("[claude stderr]", data)
+                }
+              },
+              pathToClaudeCodeExecutable: claudeBinaryPath,
+              resumeSessionAt:
+                shouldForkResume && forkResumeAtUuid && !isUsingOllama
+                  ? forkResumeAtUuid
+                  : resumeAtUuid && !isUsingOllama
+                    ? resumeAtUuid
+                    : null,
+              forkSession: Boolean(
+                shouldForkResume && forkResumeAtUuid && !isUsingOllama,
+              ),
+              model: resolvedModel,
+              maxThinkingTokens: input.maxThinkingTokens,
+            })
 
             // Auto-retry for transient API errors (e.g., false-positive USAGE_POLICY_VIOLATION)
             const MAX_POLICY_RETRIES = 2
