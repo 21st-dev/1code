@@ -352,6 +352,26 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeToolPermission).toContain('type: "ask-user-question"')
   })
 
+  test("keeps Claude tool approval state ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeToolApprovals = readFileSync(
+      "src/main/lib/claude/tool-approvals.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/tool-approvals")
+    expect(claudeRouter).toContain("getClaudePendingToolApprovalStore()")
+    expect(claudeRouter).toContain("resolveClaudePendingToolApproval")
+    expect(claudeRouter).not.toContain("const pendingToolApprovals")
+    expect(claudeRouter).not.toContain("pendingToolApprovals.delete")
+    expect(claudeToolApprovals).toContain("const pendingToolApprovals")
+    expect(claudeToolApprovals).toContain("resolveClaudePendingToolApproval")
+    expect(claudeToolApprovals).toContain("clearClaudePendingToolApprovals")
+  })
+
   test("keeps Claude Agent SDK error classification ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

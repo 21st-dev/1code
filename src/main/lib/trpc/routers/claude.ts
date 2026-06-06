@@ -54,8 +54,12 @@ import {
 } from "../../claude/active-sessions"
 import {
   createClaudeAgentSdkToolPermissionHandler,
-  type ClaudeAskUserQuestionPending,
 } from "../../claude/agent-sdk-tool-permission"
+import {
+  clearClaudePendingToolApprovals,
+  getClaudePendingToolApprovalStore,
+  resolveClaudePendingToolApproval,
+} from "../../claude/tool-approvals"
 import { createClaudeDesktopRunRequest } from "../../claude/desktop-run-request"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import {
@@ -383,19 +387,7 @@ async function readProjectMcpJsonCached(
   }
 }
 
-const pendingToolApprovals = new Map<
-  string,
-  ClaudeAskUserQuestionPending
->()
 const activeGuardedContracts = new Map<string, ValidatedAgentScopeContract>()
-
-const clearPendingApprovals = (message: string, subChatId?: string) => {
-  for (const [toolUseId, pending] of pendingToolApprovals) {
-    if (subChatId && pending.subChatId !== subChatId) continue
-    pending.resolve({ approved: false, message })
-    pendingToolApprovals.delete(toolUseId)
-  }
-}
 
 const imageAttachmentSchema = z.object({
   base64Data: z.string().optional(),
@@ -1412,7 +1404,10 @@ export const claudeRouter = router({
               workerId: desktopJob.workerId,
               cancel: () => {
                 abortController.abort()
-                clearPendingApprovals("Session cancelled.", input.subChatId)
+                clearClaudePendingToolApprovals(
+                  "Session cancelled.",
+                  input.subChatId,
+                )
               },
             })
 
@@ -2286,7 +2281,7 @@ ${prompt}
                 },
                 emit: safeEmit,
                 subChatId: input.subChatId,
-                pendingToolApprovals,
+                pendingToolApprovals: getClaudePendingToolApprovalStore(),
                 parts,
               }),
               stderr: (data: string) => {
@@ -3007,7 +3002,7 @@ ${prompt}
             activeGuardedContracts.delete(guardedContract.id)
           }
           if (ownsActiveSession) {
-            clearPendingApprovals("Session ended.", input.subChatId)
+            clearClaudePendingToolApprovals("Session ended.", input.subChatId)
           }
 
           // Clear streamId since we're no longer streaming.
@@ -3146,7 +3141,7 @@ ${prompt}
       if (session) {
         session.controller.abort()
         deleteActiveClaudeSession(input.subChatId)
-        clearPendingApprovals("Session cancelled.", input.subChatId)
+        clearClaudePendingToolApprovals("Session cancelled.", input.subChatId)
       }
 
       return { cancelled: !!session, ignoredStale: false }
@@ -3168,17 +3163,16 @@ ${prompt}
       }),
     )
     .mutation(({ input }) => {
-      const pending = pendingToolApprovals.get(input.toolUseId)
-      if (!pending) {
-        return { ok: false }
+      return {
+        ok: resolveClaudePendingToolApproval({
+          toolUseId: input.toolUseId,
+          decision: {
+            approved: input.approved,
+            message: input.message,
+            updatedInput: input.updatedInput,
+          },
+        }),
       }
-      pending.resolve({
-        approved: input.approved,
-        message: input.message,
-        updatedInput: input.updatedInput,
-      })
-      pendingToolApprovals.delete(input.toolUseId)
-      return { ok: true }
     }),
   respondScopeExpansion: publicProcedure
     .input(
