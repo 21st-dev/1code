@@ -39,9 +39,6 @@ import {
 } from "../../claude/agent-sdk-project-context"
 import { prepareClaudeAgentSdkRuntimePromptForDesktopRun } from "../../claude/agent-sdk-prompt"
 import {
-  prepareClaudeAgentSdkOllamaStartupDiagnostics,
-} from "../../claude/agent-sdk-ollama-diagnostics"
-import {
   recordClaudeAgentSdkConnectionMethod,
   resolveClaudeAgentSdkProviderStartup,
 } from "../../claude/agent-sdk-provider-startup"
@@ -49,7 +46,10 @@ import {
   clearClaudeAgentSdkIsolatedConfigDirCache,
   ensureClaudeAgentSdkIsolatedConfigDir,
 } from "../../claude/agent-sdk-config-dir"
-import { prepareClaudeAgentSdkRuntimeStartupContext } from "../../claude/agent-sdk-runtime-startup"
+import {
+  prepareClaudeAgentSdkRuntimeStartupContext,
+  prepareClaudeAgentSdkRuntimeStartupDiagnostics,
+} from "../../claude/agent-sdk-runtime-startup"
 import { createClaudeAgentSdkDesktopRunStartup } from "../../claude/agent-sdk-desktop-job"
 import {
   createClaudeAgentSdkRuntimeStreamSetup,
@@ -1211,14 +1211,11 @@ export const claudeRouter = router({
               ensureTokensFresh: ensureMcpTokensFresh,
             })
 
-            await prepareClaudeAgentSdkOllamaStartupDiagnostics({
+            await prepareClaudeAgentSdkRuntimeStartupDiagnostics({
               isUsingOllama,
               customConfig: finalCustomConfig,
-              model: resolvedModel,
-              baseUrl: finalEnv.ANTHROPIC_BASE_URL,
+              runtimeStartup,
               cwd: runtimeCwd,
-              configDir: isolatedConfigDir,
-              hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
               resumeSessionId,
             })
 

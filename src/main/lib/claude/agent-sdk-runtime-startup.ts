@@ -7,6 +7,12 @@ import {
   prepareClaudeAgentSdkRuntimeStartupEnvironment,
   type PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
 } from "./env"
+import {
+  prepareClaudeAgentSdkOllamaStartupDiagnostics,
+} from "./agent-sdk-ollama-diagnostics"
+
+type PrepareClaudeAgentSdkOllamaStartupDiagnostics =
+  typeof prepareClaudeAgentSdkOllamaStartupDiagnostics
 
 export type PrepareClaudeAgentSdkRuntimeStartupContextInput = Omit<
   PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
@@ -23,6 +29,15 @@ export type PreparedClaudeAgentSdkRuntimeStartupContext = ReturnType<
 > & {
   isolatedConfig: ClaudeAgentSdkIsolatedConfig
   isolatedConfigDir: string
+}
+
+export type PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput = {
+  isUsingOllama: boolean
+  customConfig?: { model?: string | null; baseUrl?: string | null } | null
+  runtimeStartup: PreparedClaudeAgentSdkRuntimeStartupContext
+  cwd: string
+  resumeSessionId?: string | null
+  prepareOllamaStartupDiagnostics?: PrepareClaudeAgentSdkOllamaStartupDiagnostics
 }
 
 export function prepareClaudeAgentSdkRuntimeStartupContext({
@@ -48,4 +63,31 @@ export function prepareClaudeAgentSdkRuntimeStartupContext({
     isolatedConfig,
     isolatedConfigDir: isolatedConfig.isolatedConfigDir,
   }
+}
+
+export async function prepareClaudeAgentSdkRuntimeStartupDiagnostics({
+  isUsingOllama,
+  customConfig,
+  runtimeStartup,
+  cwd,
+  resumeSessionId,
+  prepareOllamaStartupDiagnostics =
+    prepareClaudeAgentSdkOllamaStartupDiagnostics,
+}: PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput): Promise<void> {
+  await prepareOllamaStartupDiagnostics({
+    isUsingOllama,
+    customConfig:
+      customConfig?.model && customConfig.baseUrl
+        ? {
+            model: customConfig.model,
+            baseUrl: customConfig.baseUrl,
+          }
+        : null,
+    model: runtimeStartup.resolvedModel,
+    baseUrl: runtimeStartup.finalEnv.ANTHROPIC_BASE_URL,
+    cwd,
+    configDir: runtimeStartup.isolatedConfigDir,
+    hasAuthToken: !!runtimeStartup.finalEnv.ANTHROPIC_AUTH_TOKEN,
+    resumeSessionId,
+  })
 }

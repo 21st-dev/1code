@@ -1161,17 +1161,25 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-ollama-diagnostics.ts",
       "utf8",
     )
+    const runtimeStartup = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-startup.ts",
+      "utf8",
+    )
     const streamErrorFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
       "utf8",
     )
 
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-ollama-diagnostics",
     )
     expect(claudeRouter).toContain(
+      "prepareClaudeAgentSdkRuntimeStartupDiagnostics",
+    )
+    expect(claudeRouter).not.toContain(
       "prepareClaudeAgentSdkOllamaStartupDiagnostics",
     )
+    expect(claudeRouter).not.toContain("ANTHROPIC_AUTH_TOKEN")
     expect(claudeRouter).not.toContain("logClaudeOllamaStreamStart")
     expect(claudeRouter).not.toContain("logClaudeOllamaStreamError")
     expect(claudeRouter).not.toContain("logClaudeOllamaSdkConfiguration")
@@ -1194,6 +1202,13 @@ describe("desktop runtime adapter factory", () => {
     expect(ollamaDiagnostics).toContain(
       "prepareClaudeAgentSdkOllamaStartupDiagnostics",
     )
+    expect(runtimeStartup).toContain(
+      "prepareClaudeAgentSdkRuntimeStartupDiagnostics",
+    )
+    expect(runtimeStartup).toContain(
+      "prepareClaudeAgentSdkOllamaStartupDiagnostics",
+    )
+    expect(runtimeStartup).toContain("ANTHROPIC_AUTH_TOKEN")
     expect(ollamaDiagnostics).toContain("probeClaudeOllamaConnectivity")
     expect(ollamaDiagnostics).toContain("/api/tags")
     expect(ollamaDiagnostics).toContain("logClaudeOllamaSdkConfiguration")
