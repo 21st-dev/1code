@@ -82,6 +82,7 @@ import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import { isLocalOnlyMode } from "../../local-only"
 import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
+import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
 import {
   fetchMcpTools,
   fetchMcpToolsStdio,
@@ -2161,10 +2162,19 @@ export const codexRouter = router({
 
         ;(async () => {
           try {
+            const db = getDatabase()
+            desktopJobDb = db
+            const verifiedRunContext = verifyDesktopRunPreflight(db, {
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              cwd: input.cwd,
+            })
+            const runtimeCwd = verifiedRunContext.cwd
+
             if (input.scopeContract) {
               try {
                 const validated = await validateAgentScopeContract(input.scopeContract, {
-                  cwd: input.cwd,
+                  cwd: runtimeCwd,
                   projectPath: input.projectPath,
                   chatId: input.chatId,
                   subChatId: input.subChatId,
@@ -2174,7 +2184,7 @@ export const codexRouter = router({
                   ...validated,
                   runId: validated.runId ?? input.runId,
                 }
-                guardedPreRunStatus = await captureGuardedGitStatus(input.cwd)
+                guardedPreRunStatus = await captureGuardedGitStatus(runtimeCwd)
               } catch (guardError) {
                 safeEmit({
                   type: "error",
@@ -2206,14 +2216,12 @@ export const codexRouter = router({
               safeComplete()
             }
 
-            const db = getDatabase()
-            desktopJobDb = db
             const desktopJob = createAndStartDesktopAgentJob(db, {
               runtime: "codex",
               mode: input.mode,
               chatId: input.chatId,
               subChatId: input.subChatId,
-              cwd: input.cwd,
+              cwd: runtimeCwd,
               prompt: input.prompt,
               runId: input.runId,
             })

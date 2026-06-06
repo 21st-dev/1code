@@ -90,6 +90,7 @@ import {
   requestCancelDesktopAgentJob,
   unregisterActiveDesktopAgentJob,
 } from "../../desktop-agent-jobs"
+import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
 
 function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "safe-mode") return "blocked-safe-mode"
@@ -1100,10 +1101,19 @@ export const claudeRouter = router({
 
         ;(async () => {
           try {
+            const db = getDatabase()
+            desktopJobDb = db
+            const verifiedRunContext = verifyDesktopRunPreflight(db, {
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              cwd: input.cwd,
+            })
+            const runtimeCwd = verifiedRunContext.cwd
+
             if (input.scopeContract) {
               try {
                 const validated = await validateAgentScopeContract(input.scopeContract, {
-                  cwd: input.cwd,
+                  cwd: runtimeCwd,
                   projectPath: input.projectPath,
                   chatId: input.chatId,
                   subChatId: input.subChatId,
@@ -1114,7 +1124,7 @@ export const claudeRouter = router({
                   runId: validated.runId ?? input.runId ?? streamId,
                 }
                 activeGuardedContracts.set(guardedContract.id, guardedContract)
-                guardedPreRunStatus = await captureGuardedGitStatus(input.cwd)
+                guardedPreRunStatus = await captureGuardedGitStatus(runtimeCwd)
               } catch (guardError) {
                 emitError(
                   new Error(formatScopeValidationError(guardError)),
@@ -1126,14 +1136,12 @@ export const claudeRouter = router({
               }
             }
 
-            const db = getDatabase()
-            desktopJobDb = db
             const desktopJob = createAndStartDesktopAgentJob(db, {
               runtime: "claude-code",
               mode: input.mode,
               chatId: input.chatId,
               subChatId: input.subChatId,
-              cwd: input.cwd,
+              cwd: runtimeCwd,
               prompt: input.prompt,
               runId: activeRunId,
             })
