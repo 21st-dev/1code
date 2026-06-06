@@ -105,4 +105,71 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       "/owned/claude",
     )
   })
+
+  test("defaults pending tool approvals through the runtime query owner", async () => {
+    const request = createRequest()
+    const permissionPolicy = request.permissionPolicy
+    const approvalStore = new Map()
+    const emitted: any[] = []
+
+    const result = await prepareClaudeAgentSdkDesktopRuntimeQuery({
+      request,
+      prompt: "inspect",
+      existingMessages: [],
+      env: { PATH: "/bin" },
+      permission: getClaudePermissionMapping(permissionPolicy),
+      isUsingOllama: false,
+      permissionPolicy,
+      guardedContract: null,
+      getGuardedContract: () => undefined,
+      guardEvents: [],
+      emit: (chunk) => {
+        emitted.push(chunk)
+      },
+      subChatId: "sub-1",
+      parts: [],
+      stderrLines: [],
+      shouldForkResume: false,
+      forkResumeAtUuid: null,
+      resumeAtUuid: null,
+      resolvedModel: "claude-sonnet-4",
+      maxThinkingTokens: 1024,
+      projectPath: "/project",
+      cwd: "/repo",
+      ensureTokensFresh: async (servers) => servers,
+      getPendingToolApprovals: () => approvalStore as any,
+      readAgentsMd: async () => null,
+      log: () => {},
+      getClaudeBinaryPath: () => "/owned/claude",
+    })
+
+    const canUseTool = result.queryOptions.options.canUseTool!
+    const decision = canUseTool(
+      "AskUserQuestion",
+      { questions: ["Proceed?"] },
+      { toolUseID: "tool-1" } as any,
+    )
+
+    expect(approvalStore.has("tool-1")).toBe(true)
+    approvalStore.get("tool-1")?.resolve({
+      approved: false,
+      message: "No",
+    })
+    await expect(decision).resolves.toEqual({
+      behavior: "deny",
+      message: "No",
+    })
+    expect(emitted).toEqual([
+      {
+        type: "ask-user-question",
+        toolUseId: "tool-1",
+        questions: ["Proceed?"],
+      },
+      {
+        type: "ask-user-question-result",
+        toolUseId: "tool-1",
+        result: "No",
+      },
+    ])
+  })
 })

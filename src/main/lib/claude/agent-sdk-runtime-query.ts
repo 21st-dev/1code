@@ -10,10 +10,11 @@ import {
   type PrepareClaudeAgentSdkPromptContextResult,
   type readClaudeAgentSdkProjectAgentsMd,
 } from "./agent-sdk-project-context"
+import { getClaudePendingToolApprovalStore } from "./tool-approvals"
 
 export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput,
-  "prompt" | "systemPrompt" | "mcpServers" | "model"
+  "prompt" | "systemPrompt" | "mcpServers" | "model" | "pendingToolApprovals"
 > & {
   prompt: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["prompt"]
   existingMessages: any[]
@@ -22,6 +23,10 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   cwd: string
   resolvedModel?: string | null
   ensureTokensFresh: PrepareClaudeAgentSdkMcpServersInput["ensureTokensFresh"]
+  pendingToolApprovals?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
+    "pendingToolApprovals"
+  ]
+  getPendingToolApprovals?: typeof getClaudePendingToolApprovalStore
   readAgentsMd?: typeof readClaudeAgentSdkProjectAgentsMd
   log?: (...args: any[]) => void
 }
@@ -40,6 +45,8 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   cwd,
   resolvedModel,
   ensureTokensFresh,
+  pendingToolApprovals,
+  getPendingToolApprovals = getClaudePendingToolApprovalStore,
   readAgentsMd,
   log,
   ...queryInput
@@ -74,6 +81,8 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
       systemPrompt: promptContext.systemPrompt,
       mcpServers,
       model: resolvedModel,
+      pendingToolApprovals:
+        pendingToolApprovals ?? getPendingToolApprovals(),
     }),
   }
 }

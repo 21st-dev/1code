@@ -60,7 +60,6 @@ import {
   startActiveClaudeSessionForDesktopRun,
 } from "../../claude/active-sessions"
 import {
-  getClaudePendingToolApprovalStore,
   resolveClaudePendingToolApproval,
 } from "../../claude/tool-approvals"
 import {
@@ -1134,7 +1133,6 @@ export const claudeRouter = router({
                   guardEvents,
                   emit: safeEmit,
                   subChatId: input.subChatId,
-                  pendingToolApprovals: getClaudePendingToolApprovalStore(),
                   parts,
                   stderrLines,
                   shouldForkResume,

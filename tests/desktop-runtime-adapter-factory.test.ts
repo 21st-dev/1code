@@ -630,8 +630,10 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeRouter).not.toContain("permissionHandler: {")
     expect(claudeRouter).not.toContain("guardEvents.push(event)")
+    expect(claudeRouter).not.toContain("getClaudePendingToolApprovalStore()")
     expect(claudeRouter).not.toContain("prepareClaudeAgentSdkMcpServers")
     expect(runtimeQuery).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(runtimeQuery).toContain("getClaudePendingToolApprovalStore")
     expect(runtimeQuery).toContain(
       "createClaudeAgentSdkDesktopRuntimeQueryOptions",
     )
@@ -1581,7 +1583,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "cleanupClaudeAgentSdkDesktopRunSubscription",
     )
-    expect(claudeRouter).toContain("getClaudePendingToolApprovalStore()")
+    expect(claudeRouter).not.toContain("getClaudePendingToolApprovalStore()")
     expect(claudeRouter).toContain("resolveClaudePendingToolApproval")
     expect(claudeRouter).not.toContain("clearClaudePendingToolApprovals")
     expect(claudeRouter).not.toContain('"Session ended."')
