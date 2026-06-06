@@ -31,7 +31,7 @@
 - [x] 5.2 Map Codex desktop stream chunks to the same semantic run/job events.
 - [ ] 5.3 Redact events before persistence and renderer emission.
 - [x] 5.4 Update Workbench logs to show semantic timeline categories with raw payload as debug fallback.
-- [ ] 5.5 Add tests for event ordering, redaction, terminal events, cancellation, and Workbench-readable trace.
+- [x] 5.5 Add tests for event ordering, redaction, terminal events, cancellation, and Workbench-readable trace.
 
 ## 6. Verification
 - [x] 6.1 Run `openspec validate add-runtime-control-layer --strict --no-interactive`.

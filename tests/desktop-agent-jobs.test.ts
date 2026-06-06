@@ -140,6 +140,15 @@ describe("desktop agent jobs", () => {
     expect(result.activeCancelDelivered).toBe(true)
     expect(result.job.cancelRequestedBy).toBe("desktop")
     expect(cancelCount).toBe(1)
+    expect(
+      listAgentJobEvents(db, job.id).map((event) => ({
+        type: event.type,
+        payload: JSON.parse(event.payloadJson || "{}"),
+      })),
+    ).toContainEqual({
+      type: "status",
+      payload: { status: "cancel_requested", requestedBy: "desktop" },
+    })
 
     unregisterActiveDesktopAgentJob(job.id)
   })
@@ -195,6 +204,9 @@ describe("desktop agent jobs", () => {
       exitCode: 0,
     })
     expect(completed?.status).toBe("succeeded")
+    expect(listAgentJobEvents(db, job.id).at(-1)).toMatchObject({
+      type: "completed",
+    })
 
     const ignored = completeDesktopAgentJobSafely(db, {
       jobId: job.id,
