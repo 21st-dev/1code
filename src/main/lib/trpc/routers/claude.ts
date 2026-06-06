@@ -56,7 +56,11 @@ import {
   logClaudeAgentSdkProviderDiagnostics,
   logClaudeAgentSdkSessionDiagnostics,
 } from "../../claude/agent-sdk-runtime-diagnostics"
-import { createClaudeAgentSdkAdapter } from "../../claude/agent-sdk-adapter"
+import {
+  ClaudeAgentSdkLoadError,
+  ClaudeAgentSdkQueryStartError,
+  createClaudeAgentSdkAdapter,
+} from "../../claude/agent-sdk-adapter"
 import {
   flushClaudeAgentSdkTextAccumulator,
   processClaudeAgentSdkUiChunk,
@@ -65,7 +69,6 @@ import { trackClaudeAgentSdkMessageMetadata } from "../../claude/agent-sdk-messa
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
-  getClaudeAgentSdkQuery,
 } from "../../claude/agent-sdk-query-loader"
 import {
   createClaudeAgentSdkSystemPromptConfig,
@@ -1251,20 +1254,6 @@ export const claudeRouter = router({
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
 
-            // 3. Get Claude Agent SDK query entrypoint.
-            let claudeQuery
-            try {
-              claudeQuery = await getClaudeAgentSdkQuery()
-            } catch (sdkError) {
-              emitError(sdkError, "Failed to load Claude Agent SDK")
-              console.log(
-                `[SD] M:END sub=${subId} reason=sdk_load_error n=${chunkCount}`,
-              )
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
-              return
-            }
-
             const transform = createTransformer({
               emitSdkMessageUuid: historyEnabled,
               isUsingOllama,
@@ -1835,7 +1824,6 @@ export const claudeRouter = router({
             let pendingFinishChunk: UIMessageChunk | null = null
 
             const claudeAdapter = createClaudeAgentSdkAdapter({
-              query: claudeQuery,
               queryOptions,
               consumeStream: async ({ stream }) => {
               let firstMessageReceived = false
@@ -2186,7 +2174,24 @@ export const claudeRouter = router({
                 if (adapterResult.status === "failed") {
                   return
                 }
-              } catch (queryError) {
+              } catch (adapterError) {
+                if (adapterError instanceof ClaudeAgentSdkLoadError) {
+                  emitError(
+                    adapterError.originalError,
+                    "Failed to load Claude Agent SDK",
+                  )
+                  console.log(
+                    `[SD] M:END sub=${subId} reason=sdk_load_error n=${chunkCount}`,
+                  )
+                  safeEmit({ type: "finish" } as UIMessageChunk)
+                  safeComplete()
+                  return
+                }
+
+                const queryError =
+                  adapterError instanceof ClaudeAgentSdkQueryStartError
+                    ? adapterError.originalError
+                    : adapterError
                 console.error(
                   "[CLAUDE] ✗ Failed to create SDK query:",
                   queryError,

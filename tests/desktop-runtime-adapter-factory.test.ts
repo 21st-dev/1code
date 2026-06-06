@@ -326,7 +326,8 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeAgentSdkAdapter).toContain(
       "async run(request: DesktopRunRequest)",
     )
-    expect(claudeAgentSdkAdapter).toContain("query(queryOptions)")
+    expect(claudeAgentSdkAdapter).toContain("getClaudeAgentSdkQuery")
+    expect(claudeAgentSdkAdapter).toContain("sdkQuery(queryOptions)")
     expect(claudeAgentSdkAdapter).toContain("consumeStream({ request, stream })")
   })
 
@@ -435,7 +436,7 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-query-loader")
-    expect(claudeRouter).toContain("getClaudeAgentSdkQuery()")
+    expect(claudeRouter).not.toContain("getClaudeAgentSdkQuery()")
     expect(claudeRouter).toContain("clearClaudeAgentSdkQueryCache()")
     expect(claudeRouter).not.toContain("let cachedClaudeQuery")
     expect(claudeRouter).not.toContain(

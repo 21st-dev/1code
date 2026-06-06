@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
-import { createClaudeAgentSdkAdapter } from "../src/main/lib/claude/agent-sdk-adapter"
+import {
+  ClaudeAgentSdkLoadError,
+  ClaudeAgentSdkQueryStartError,
+  createClaudeAgentSdkAdapter,
+} from "../src/main/lib/claude/agent-sdk-adapter"
 
 function createRequest(): DesktopRunRequest {
   return {
@@ -66,6 +70,34 @@ describe("Claude Agent SDK adapter", () => {
     expect(consumedMessages).toEqual([{ type: "message", text: "hello" }])
   })
 
+  test("loads the SDK query inside the adapter when a query is not injected", async () => {
+    const queryOptions = { prompt: "hello", options: {} } as any
+    const loadCalls: string[] = []
+    const queryCalls: any[] = []
+    const adapter = createClaudeAgentSdkAdapter({
+      loadQuery: async () => {
+        loadCalls.push("load")
+        return ((params: any) => {
+          queryCalls.push(params)
+          return createStream()
+        }) as any
+      },
+      queryOptions,
+      consumeStream: async ({ stream }) => {
+        for await (const _message of stream) {
+          // Consume the stream.
+        }
+        return { status: "succeeded" }
+      },
+    })
+
+    await expect(adapter.run(createRequest())).resolves.toEqual({
+      status: "succeeded",
+    })
+    expect(loadCalls).toEqual(["load"])
+    expect(queryCalls).toEqual([queryOptions])
+  })
+
   test("propagates SDK query startup failures to the route boundary", async () => {
     const adapter = createClaudeAgentSdkAdapter({
       query: (() => {
@@ -75,6 +107,28 @@ describe("Claude Agent SDK adapter", () => {
       consumeStream: async () => ({ status: "succeeded" }),
     })
 
-    await expect(adapter.run(createRequest())).rejects.toThrow("query failed")
+    await expect(adapter.run(createRequest())).rejects.toThrow(
+      ClaudeAgentSdkQueryStartError,
+    )
+    await expect(adapter.run(createRequest())).rejects.toMatchObject({
+      originalError: expect.objectContaining({ message: "query failed" }),
+    })
+  })
+
+  test("wraps SDK loader failures for route-level load diagnostics", async () => {
+    const adapter = createClaudeAgentSdkAdapter({
+      loadQuery: async () => {
+        throw new Error("load failed")
+      },
+      queryOptions: { prompt: "hello", options: {} } as any,
+      consumeStream: async () => ({ status: "succeeded" }),
+    })
+
+    await expect(adapter.run(createRequest())).rejects.toThrow(
+      ClaudeAgentSdkLoadError,
+    )
+    await expect(adapter.run(createRequest())).rejects.toMatchObject({
+      originalError: expect.objectContaining({ message: "load failed" }),
+    })
   })
 })
