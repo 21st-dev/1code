@@ -883,6 +883,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-file-change-notification.ts",
       "utf8",
     )
+    const transformedChunks = readFileSync(
+      "src/main/lib/claude/agent-sdk-transformed-chunks.ts",
+      "utf8",
+    )
     const runFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-run-finalization.ts",
       "utf8",
@@ -892,14 +896,18 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-chunk-processor",
     )
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-file-change-notification",
     )
-    expect(claudeRouter).toContain("processClaudeAgentSdkUiChunk")
-    expect(claudeRouter).toContain("notifyClaudeAgentSdkFileChanged")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-transformed-chunks")
+    expect(claudeRouter).toContain("processClaudeAgentSdkTransformedChunks")
+    expect(claudeRouter).not.toContain("processClaudeAgentSdkUiChunk")
+    expect(claudeRouter).not.toContain("notifyClaudeAgentSdkFileChanged")
+    expect(claudeRouter).not.toContain("chunkCount++")
+    expect(claudeRouter).not.toContain("lastChunkType = chunk.type")
     expect(claudeRouter).not.toContain("flushClaudeAgentSdkTextAccumulator")
     expect(claudeRouter).not.toContain("BrowserWindow.getAllWindows")
     expect(claudeRouter).not.toContain('"file-changed"')
@@ -915,6 +923,10 @@ describe("desktop runtime adapter factory", () => {
     expect(chunkProcessor).toContain("flushClaudeAgentSdkTextAccumulator")
     expect(chunkProcessor).toContain('case "tool-input-available"')
     expect(chunkProcessor).toContain('case "tool-output-available"')
+    expect(transformedChunks).toContain("processClaudeAgentSdkUiChunk")
+    expect(transformedChunks).toContain("notifyClaudeAgentSdkFileChanged")
+    expect(transformedChunks).toContain("chunkCount++")
+    expect(transformedChunks).toContain("lastChunkType = chunk.type")
     expect(fileChangeNotification).toContain(
       "notifyClaudeAgentSdkFileChanged",
     )

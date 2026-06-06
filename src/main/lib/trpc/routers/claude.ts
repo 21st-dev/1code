@@ -54,10 +54,7 @@ import {
   createClaudeAgentSdkAdapter,
 } from "../../claude/agent-sdk-adapter"
 import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-adapter-runner"
-import {
-  processClaudeAgentSdkUiChunk,
-} from "../../claude/agent-sdk-chunk-processor"
-import { notifyClaudeAgentSdkFileChanged } from "../../claude/agent-sdk-file-change-notification"
+import { processClaudeAgentSdkTransformedChunks } from "../../claude/agent-sdk-transformed-chunks"
 import { trackClaudeAgentSdkMessageMetadata } from "../../claude/agent-sdk-message-metadata"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
@@ -1859,37 +1856,31 @@ export const claudeRouter = router({
                     lastAssistantUuid =
                       trackedMessageMetadata.lastAssistantUuid
 
-                    // Transform and emit + accumulate
-                    for (const chunk of transform(msg)) {
-                      chunkCount++
-                      lastChunkType = chunk.type
-
-                      const processedChunk = processClaudeAgentSdkUiChunk({
-                        chunk,
+                    const processedChunks =
+                      processClaudeAgentSdkTransformedChunks({
+                        message: msg,
+                        transform,
                         state: {
                           metadata,
                           currentText,
                           pendingFinishChunk,
                           exitPlanModeToolCallId,
+                          chunkCount,
+                          lastChunkType,
                         },
                         parts,
                         mode: input.mode,
                         subId,
                         subChatId: input.subChatId,
-                        chunkCount,
                         emit: safeEmit,
-                        notifyFileChanged: notifyClaudeAgentSdkFileChanged,
                       })
-                      metadata = processedChunk.metadata
-                      currentText = processedChunk.currentText
-                      pendingFinishChunk = processedChunk.pendingFinishChunk
-                      exitPlanModeToolCallId =
-                        processedChunk.exitPlanModeToolCallId
-
-                      if (processedChunk.emitClosed) {
-                        break
-                      }
-                    }
+                    metadata = processedChunks.metadata
+                    currentText = processedChunks.currentText
+                    pendingFinishChunk = processedChunks.pendingFinishChunk
+                    exitPlanModeToolCallId =
+                      processedChunks.exitPlanModeToolCallId
+                    chunkCount = processedChunks.chunkCount
+                    lastChunkType = processedChunks.lastChunkType
                     if (
                       shouldStopClaudeAgentSdkStreamForClosedObserver({
                         isActive: isObservableActive,
