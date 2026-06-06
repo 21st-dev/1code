@@ -426,7 +426,11 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "const providerStartup =\n              await resolveClaudeAgentSdkProviderStartup",
     )
+    expect(claudeRouter).toContain("getClaudeAgentSdkConnectionMethod")
     expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimeEnvironment")
+    expect(claudeRouter).not.toContain("let connectionMethod")
+    expect(claudeRouter).not.toContain('connectionMethod = "offline-ollama"')
+    expect(claudeRouter).not.toContain('connectionMethod = isDefaultAnthropicUrl')
     expect(claudeRouter).not.toContain("normalizeClaudeProviderRuntimeConfig")
     expect(claudeRouter).not.toContain("checkOfflineFallback")
     expect(claudeRouter).not.toContain("getValidClaudeCodeCredential")
@@ -462,6 +466,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeEnv).toContain("CLAUDE_CONFIG_DIR")
     expect(claudeProviderStartup).toContain(
       "resolveClaudeAgentSdkProviderStartup",
+    )
+    expect(claudeProviderStartup).toContain(
+      "getClaudeAgentSdkConnectionMethod",
     )
     expect(claudeProviderStartup).toContain("parseProviderProfileSource")
     expect(claudeProviderStartup).toContain("getProviderProfileRuntimeConfig")

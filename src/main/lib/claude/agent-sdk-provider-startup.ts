@@ -33,6 +33,12 @@ export type ClaudeAgentSdkProviderStartup = {
   isUsingOllama: boolean
 }
 
+export type ClaudeAgentSdkConnectionMethod =
+  | "claude-subscription"
+  | "offline-ollama"
+  | "api-key"
+  | "custom-model"
+
 export type ClaudeAgentSdkProviderStartupResult =
   | {
       ok: true
@@ -279,4 +285,22 @@ export async function resolveClaudeAgentSdkProviderStartup(input: {
       isUsingOllama,
     },
   }
+}
+
+export function getClaudeAgentSdkConnectionMethod(input: {
+  finalCustomConfig?: ClaudeProviderRuntimeConfig
+  isUsingOllama: boolean
+}): ClaudeAgentSdkConnectionMethod {
+  if (input.isUsingOllama) {
+    return "offline-ollama"
+  }
+
+  if (!input.finalCustomConfig) {
+    return "claude-subscription"
+  }
+
+  const baseUrl = input.finalCustomConfig.baseUrl
+  return !baseUrl || baseUrl.includes("anthropic.com")
+    ? "api-key"
+    : "custom-model"
 }

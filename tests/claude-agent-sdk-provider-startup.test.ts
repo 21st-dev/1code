@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  getClaudeAgentSdkConnectionMethod,
   resolveClaudeAgentSdkProviderStartup,
   type ClaudeAgentSdkProviderStartupDependencies,
 } from "../src/main/lib/claude/agent-sdk-provider-startup"
@@ -225,5 +226,49 @@ describe("Claude Agent SDK provider startup", () => {
         message: "Official cloud endpoints are blocked in local-only mode.",
       },
     })
+  })
+
+  test("maps provider startup state to analytics connection methods", () => {
+    expect(
+      getClaudeAgentSdkConnectionMethod({
+        isUsingOllama: false,
+      }),
+    ).toBe("claude-subscription")
+
+    expect(
+      getClaudeAgentSdkConnectionMethod({
+        isUsingOllama: true,
+        finalCustomConfig: {
+          model: "qwen",
+          baseUrl: "http://localhost:11434/v1",
+          token: "token",
+          authMode: "auth_token",
+        },
+      }),
+    ).toBe("offline-ollama")
+
+    expect(
+      getClaudeAgentSdkConnectionMethod({
+        isUsingOllama: false,
+        finalCustomConfig: {
+          model: "claude",
+          baseUrl: "https://api.anthropic.com",
+          token: "token",
+          authMode: "auth_token",
+        },
+      }),
+    ).toBe("api-key")
+
+    expect(
+      getClaudeAgentSdkConnectionMethod({
+        isUsingOllama: false,
+        finalCustomConfig: {
+          model: "claude",
+          baseUrl: "https://provider.example.com",
+          token: "token",
+          authMode: "auth_token",
+        },
+      }),
+    ).toBe("custom-model")
   })
 })

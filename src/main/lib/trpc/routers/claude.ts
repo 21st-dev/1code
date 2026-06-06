@@ -57,7 +57,10 @@ import {
 import {
   prepareClaudeAgentSdkOllamaStartupDiagnostics,
 } from "../../claude/agent-sdk-ollama-diagnostics"
-import { resolveClaudeAgentSdkProviderStartup } from "../../claude/agent-sdk-provider-startup"
+import {
+  getClaudeAgentSdkConnectionMethod,
+  resolveClaudeAgentSdkProviderStartup,
+} from "../../claude/agent-sdk-provider-startup"
 import { createClaudeAgentSdkInitialGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import {
   deleteActiveClaudeSession,
@@ -1016,20 +1019,12 @@ export const claudeRouter = router({
               },
             })
 
-            // Track connection method for analytics
-            let connectionMethod = "claude-subscription" // default (Claude Code OAuth)
-            if (isUsingOllama) {
-              connectionMethod = "offline-ollama"
-            } else if (finalCustomConfig) {
-              // Has custom config = either API key or custom model
-              const isDefaultAnthropicUrl =
-                !finalCustomConfig.baseUrl ||
-                finalCustomConfig.baseUrl.includes("anthropic.com")
-              connectionMethod = isDefaultAnthropicUrl
-                ? "api-key"
-                : "custom-model"
-            }
-            setConnectionMethod(connectionMethod)
+            setConnectionMethod(
+              getClaudeAgentSdkConnectionMethod({
+                finalCustomConfig,
+                isUsingOllama,
+              }),
+            )
 
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
