@@ -50,6 +50,17 @@ export type ClaudeAgentSdkProviderStartupResult =
       blocker: DesktopRunPreflightBlocker
     }
 
+export type ClaudeAgentSdkProviderDesktopStartupResult =
+  | {
+      ok: true
+      startup: ClaudeAgentSdkProviderStartup
+      connectionMethod: ClaudeAgentSdkConnectionMethod
+    }
+  | {
+      ok: false
+      blocker: DesktopRunPreflightBlocker
+    }
+
 export type ClaudeAgentSdkProviderStartupDependencies = {
   parseProviderProfileSource: (
     source: string | undefined | null,
@@ -316,4 +327,35 @@ export function recordClaudeAgentSdkConnectionMethod(input: {
     input.setConnectionMethod ?? recordAnalyticsConnectionMethod
   setConnectionMethod(connectionMethod)
   return connectionMethod
+}
+
+export async function prepareClaudeAgentSdkProviderStartupForDesktopRun(input: {
+  modelSource?: string | null
+  offlineModeEnabled?: boolean
+  dependencies?: Partial<ClaudeAgentSdkProviderStartupDependencies>
+  emitPreflightBlocker?: (blocker: DesktopRunPreflightBlocker) => void
+  setConnectionMethod?: (method: ClaudeAgentSdkConnectionMethod) => void
+}): Promise<ClaudeAgentSdkProviderDesktopStartupResult> {
+  const providerStartup = await resolveClaudeAgentSdkProviderStartup({
+    modelSource: input.modelSource,
+    offlineModeEnabled: input.offlineModeEnabled,
+    dependencies: input.dependencies,
+  })
+
+  if (!providerStartup.ok) {
+    input.emitPreflightBlocker?.(providerStartup.blocker)
+    return providerStartup
+  }
+
+  const connectionMethod = recordClaudeAgentSdkConnectionMethod({
+    finalCustomConfig: providerStartup.startup.finalCustomConfig,
+    isUsingOllama: providerStartup.startup.isUsingOllama,
+    setConnectionMethod: input.setConnectionMethod,
+  })
+
+  return {
+    ok: true,
+    startup: providerStartup.startup,
+    connectionMethod,
+  }
 }

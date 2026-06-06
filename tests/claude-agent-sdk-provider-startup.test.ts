@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   getClaudeAgentSdkConnectionMethod,
+  prepareClaudeAgentSdkProviderStartupForDesktopRun,
   recordClaudeAgentSdkConnectionMethod,
   resolveClaudeAgentSdkProviderStartup,
   type ClaudeAgentSdkProviderStartupDependencies,
@@ -291,5 +292,54 @@ describe("Claude Agent SDK provider startup", () => {
 
     expect(connectionMethod).toBe("custom-model")
     expect(recorded).toEqual(["custom-model"])
+  })
+
+  test("prepares desktop provider startup and records its connection method", async () => {
+    const recorded: string[] = []
+
+    const result = await prepareClaudeAgentSdkProviderStartupForDesktopRun({
+      modelSource: "provider-profile:profile-1",
+      dependencies: dependencies({
+        getProviderProfileRuntimeConfig: (id) => providerProfile({ id }),
+      }),
+      setConnectionMethod: (method) => {
+        recorded.push(method)
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected desktop provider startup")
+    expect(result.connectionMethod).toBe("custom-model")
+    expect(recorded).toEqual(["custom-model"])
+    expect(result.startup.selectedProviderProfileId).toBe("profile-1")
+  })
+
+  test("emits provider startup blockers without recording connection method", async () => {
+    const blockers: unknown[] = []
+    const recorded: string[] = []
+
+    const result = await prepareClaudeAgentSdkProviderStartupForDesktopRun({
+      modelSource: "provider-profile:codex-only",
+      dependencies: dependencies({
+        getProviderProfileRuntimeConfig: () =>
+          providerProfile({ id: "codex-only", targetRuntimes: ["codex"] }),
+      }),
+      emitPreflightBlocker: (blocker) => {
+        blockers.push(blocker)
+      },
+      setConnectionMethod: (method) => {
+        recorded.push(method)
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("expected desktop provider blocker")
+    expect(result.blocker).toMatchObject({
+      id: "provider-profile",
+      status: "blocked",
+      message: "Provider profile is not available for Claude.",
+    })
+    expect(blockers).toEqual([result.blocker])
+    expect(recorded).toEqual([])
   })
 })

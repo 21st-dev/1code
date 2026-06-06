@@ -32,8 +32,7 @@ import {
 } from "../../claude/agent-sdk-query-loader"
 import { prepareClaudeAgentSdkRuntimePromptForDesktopRun } from "../../claude/agent-sdk-prompt"
 import {
-  recordClaudeAgentSdkConnectionMethod,
-  resolveClaudeAgentSdkProviderStartup,
+  prepareClaudeAgentSdkProviderStartupForDesktopRun,
 } from "../../claude/agent-sdk-provider-startup"
 import {
   clearClaudeAgentSdkIsolatedConfigDirCache,
@@ -865,12 +864,12 @@ export const claudeRouter = router({
             } = chatHistory
 
             const providerStartup =
-              await resolveClaudeAgentSdkProviderStartup({
+              await prepareClaudeAgentSdkProviderStartupForDesktopRun({
                 modelSource: input.modelSource,
                 offlineModeEnabled: input.offlineModeEnabled ?? false,
+                emitPreflightBlocker,
               })
             if (!providerStartup.ok) {
-              emitPreflightBlocker(providerStartup.blocker)
               return
             }
             const {
@@ -917,11 +916,6 @@ export const claudeRouter = router({
               desktopRunStartup.desktopJob.streamEventMapper
             const desktopRunRequest = desktopRunStartup.desktopRunRequest
             const resumeSessionId = desktopRunStartup.resumeSessionId
-
-            recordClaudeAgentSdkConnectionMethod({
-              finalCustomConfig,
-              isUsingOllama,
-            })
 
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)

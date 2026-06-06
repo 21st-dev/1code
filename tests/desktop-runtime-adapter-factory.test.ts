@@ -484,9 +484,11 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-startup")
     expect(claudeRouter).toContain("../../claude/agent-sdk-config-dir")
     expect(claudeRouter).toContain(
-      "const providerStartup =\n              await resolveClaudeAgentSdkProviderStartup",
+      "const providerStartup =\n              await prepareClaudeAgentSdkProviderStartupForDesktopRun",
     )
-    expect(claudeRouter).toContain("recordClaudeAgentSdkConnectionMethod")
+    expect(claudeRouter).not.toContain("resolveClaudeAgentSdkProviderStartup({")
+    expect(claudeRouter).not.toContain("recordClaudeAgentSdkConnectionMethod")
+    expect(claudeRouter).not.toContain("emitPreflightBlocker(providerStartup.blocker)")
     expect(claudeRouter).not.toContain("getClaudeAgentSdkConnectionMethod")
     expect(claudeRouter).not.toContain("../../analytics")
     expect(claudeRouter).not.toContain("setConnectionMethod(")
@@ -538,6 +540,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeEnv).toContain("createClaudeAgentSdkRuntimeEnv")
     expect(claudeEnv).toContain("CLAUDE_CODE_OAUTH_TOKEN")
     expect(claudeEnv).toContain("CLAUDE_CONFIG_DIR")
+    expect(claudeProviderStartup).toContain(
+      "prepareClaudeAgentSdkProviderStartupForDesktopRun",
+    )
     expect(claudeProviderStartup).toContain(
       "resolveClaudeAgentSdkProviderStartup",
     )
