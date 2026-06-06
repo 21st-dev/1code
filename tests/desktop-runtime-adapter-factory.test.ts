@@ -525,6 +525,31 @@ describe("desktop runtime adapter factory", () => {
     expect(messagePersistence).toContain("messages: [...messagesToSave")
   })
 
+  test("keeps Claude Agent SDK policy retry ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const policyRetry = readFileSync(
+      "src/main/lib/claude/agent-sdk-policy-retry.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-policy-retry")
+    expect(claudeRouter).toContain("createClaudeAgentSdkPolicyRetryState()")
+    expect(claudeRouter).toContain("recordClaudeAgentSdkPolicyRetry")
+    expect(claudeRouter).toContain("waitForClaudeAgentSdkPolicyRetry")
+    expect(claudeRouter).not.toContain("let policyRetryNeeded")
+    expect(claudeRouter).not.toContain("let policyRetryCount")
+    expect(claudeRouter).not.toContain("policyRetryCount++")
+    expect(claudeRouter).not.toContain("getClaudePolicyRetryDelayMs")
+    expect(claudeRouter).not.toContain("CLAUDE_MAX_POLICY_RETRIES")
+    expect(policyRetry).toContain("CLAUDE_MAX_POLICY_RETRIES")
+    expect(policyRetry).toContain("getClaudePolicyRetryDelayMs")
+    expect(policyRetry).toContain("recordClaudeAgentSdkPolicyRetry")
+    expect(policyRetry).toContain("waitForClaudeAgentSdkPolicyRetry")
+  })
+
   test("keeps Claude Agent SDK prompt ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

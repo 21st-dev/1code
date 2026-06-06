@@ -41,17 +41,22 @@ import {
 } from "../../claude/provider-runtime-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
 import {
-  CLAUDE_MAX_POLICY_RETRIES,
   classifyClaudeAgentSdkEmbeddedError,
   classifyClaudeAgentSdkStreamError,
   extractClaudeAgentSdkEmbeddedErrorText,
-  getClaudePolicyRetryDelayMs,
 } from "../../claude/agent-sdk-errors"
 import { finalizeClaudeAgentSdkGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import {
   prepareClaudeAgentSdkAssistantPersistence,
   shouldCreateClaudeAgentSdkRollbackStash,
 } from "../../claude/agent-sdk-message-persistence"
+import {
+  CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
+  createClaudeAgentSdkPolicyRetryState,
+  recordClaudeAgentSdkPolicyRetry,
+  resetClaudeAgentSdkPolicyRetryAttempt,
+  waitForClaudeAgentSdkPolicyRetry,
+} from "../../claude/agent-sdk-policy-retry"
 import {
   logClaudeAgentSdkEmbeddedError,
   logClaudeAgentSdkErrorDetails,
@@ -1789,8 +1794,7 @@ export const claudeRouter = router({
             })
 
             // Auto-retry for transient API errors (e.g., false-positive USAGE_POLICY_VIOLATION)
-            let policyRetryCount = 0
-            let policyRetryNeeded = false
+            const policyRetry = createClaudeAgentSdkPolicyRetryState()
             let messageCount = 0
             let pendingFinishChunk: UIMessageChunk | null = null
 
@@ -1860,8 +1864,9 @@ export const claudeRouter = router({
                           usesApiKeyAuth: Boolean(
                             finalCustomConfig || hasExistingApiConfig,
                           ),
-                          policyRetryCount,
-                          maxPolicyRetries: CLAUDE_MAX_POLICY_RETRIES,
+                          policyRetryCount: policyRetry.count,
+                          maxPolicyRetries:
+                            CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
                           aborted: abortController.signal.aborted,
                         })
                       const rawErrorCode = errorDiagnostic.rawErrorCode
@@ -1870,11 +1875,9 @@ export const claudeRouter = router({
 
                       // Auto-retry on false-positive policy violations (gateway-level rejections)
                       if (errorDiagnostic.shouldRetryPolicy) {
-                        policyRetryCount++
-                        policyRetryNeeded = true
-                        console.log(
-                          `[claude] USAGE_POLICY_VIOLATION - silent retry (attempt ${policyRetryCount}/${CLAUDE_MAX_POLICY_RETRIES})`,
-                        )
+                        recordClaudeAgentSdkPolicyRetry({
+                          state: policyRetry,
+                        })
                         break // break for-await loop to retry
                       }
 
@@ -2120,7 +2123,7 @@ export const claudeRouter = router({
 
             // eslint-disable-next-line no-constant-condition
             while (true) {
-              policyRetryNeeded = false
+              resetClaudeAgentSdkPolicyRetryAttempt(policyRetry)
               messageCount = 0
               pendingFinishChunk = null
 
@@ -2164,12 +2167,11 @@ export const claudeRouter = router({
 
               // Retry if policy violation detected (transient false positive)
               // Escalating delay: 3s first retry, 6s second retry
-              if (policyRetryNeeded) {
-                const delayMs = getClaudePolicyRetryDelayMs(policyRetryCount)
-                console.log(
-                  `[claude] Policy retry ${policyRetryCount}/${CLAUDE_MAX_POLICY_RETRIES} - waiting ${delayMs / 1000}s`,
-                )
-                await new Promise((resolve) => setTimeout(resolve, delayMs))
+              if (
+                await waitForClaudeAgentSdkPolicyRetry({
+                  state: policyRetry,
+                })
+              ) {
                 continue
               }
               break
