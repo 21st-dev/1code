@@ -151,6 +151,10 @@ describe("long text send pipeline", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
+    const codexAcpTextStream = readFileSync(
+      "src/main/lib/codex/acp-text-stream.ts",
+      "utf8",
+    )
     const ipc = readFileSync(
       "src/renderer/features/agents/lib/ipc-chat-transport.ts",
       "utf8",
@@ -170,7 +174,8 @@ describe("long text send pipeline", () => {
     expect(codex).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(codex).toContain("input.longTextAttachments")
-    expect(codex).toContain("streamText({")
+    expect(codex).toContain("createCodexAcpUiMessageStream")
+    expect(codexAcpTextStream).toContain("streamText({")
     expect(ipc).toContain("extractLongTextAttachments(lastUser)")
     expect(ipc).toContain("{ longTextAttachments }")
     expect(acp).toContain("extractLongTextAttachments(lastUser)")

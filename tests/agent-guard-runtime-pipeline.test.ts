@@ -67,6 +67,10 @@ describe("agent guard runtime pipeline", () => {
       "src/main/lib/codex/acp-runtime.ts",
       "utf8",
     )
+    const codexAcpTextStream = readFileSync(
+      "src/main/lib/codex/acp-text-stream.ts",
+      "utf8",
+    )
     const codexPersistence = readFileSync(
       "src/main/lib/codex/acp-message-persistence.ts",
       "utf8",
@@ -101,7 +105,7 @@ describe("agent guard runtime pipeline", () => {
     expect(codex).toContain("buildCodexRuntimeCapabilityErrorChunk")
     expect(codex).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("buildGuardedRunPromptBlock(guardedContract)")
-    expect(codex).toContain('enforcementMode: "hard"')
+    expect(codexAcpTextStream).toContain('enforcementMode: "hard"')
     expect(codex).not.toContain('enforcementMode: "contract-and-audit"')
     expect(codex).toContain("persistCodexAcpResponseMessage")
     expect(codexPersistence).toContain("buildGuardedRunAudit")

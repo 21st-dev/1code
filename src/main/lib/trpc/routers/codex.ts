@@ -1,5 +1,4 @@
 import { observable } from "@trpc/server/observable"
-import { streamText } from "ai"
 import { eq } from "drizzle-orm"
 import { app } from "electron"
 import { spawn, type ChildProcess } from "node:child_process"
@@ -60,6 +59,7 @@ import {
 } from "../../codex/usage-metadata"
 import { prepareCodexAcpPrompt } from "../../codex/prompt"
 import { createCodexAcpRuntimeModel } from "../../codex/acp-runtime"
+import { createCodexAcpUiMessageStream } from "../../codex/acp-text-stream"
 import { emitCodexAcpUiStream } from "../../codex/acp-ui-stream"
 import { persistCodexAcpResponseMessage } from "../../codex/acp-message-persistence"
 import {
@@ -1460,33 +1460,6 @@ function buildUserParts(
   return parts
 }
 
-function buildModelMessageContent(
-  prompt: string,
-  images:
-    | Array<{
-        base64Data: string
-        mediaType: string
-        filename?: string
-      }>
-    | undefined,
-): any[] {
-  const content: any[] = [{ type: "text", text: prompt }]
-
-  if (images && images.length > 0) {
-    for (const image of images) {
-      if (!image.base64Data || !image.mediaType) continue
-      content.push({
-        type: "file",
-        mediaType: image.mediaType,
-        data: image.base64Data,
-        ...(image.filename ? { filename: image.filename } : {}),
-      })
-    }
-  }
-
-  return content
-}
-
 function resolveCodexMcpProjectPathForCli(
   projectPath: string | undefined,
 ): string | undefined {
@@ -2438,67 +2411,22 @@ export const codexRouter = router({
             }
             const { model, tools: codexRuntimeTools } = runtimeModel
 
-            const result = streamText({
+            const uiStream = createCodexAcpUiMessageStream({
               model,
-              messages: [
-                {
-                  role: "user",
-                  content: buildModelMessageContent(
-                    finalPrompt,
-                    resolvedImages,
-                  ),
-                },
-              ],
               tools: codexRuntimeTools,
+              prompt: finalPrompt,
+              images: resolvedImages,
               abortSignal: abortController.signal,
-            })
-
-            const uiStream = result.toUIMessageStream({
               originalMessages: messagesForStream,
-              generateMessageId: () => crypto.randomUUID(),
-              messageMetadata: ({ part }) => {
-                const sessionId = provider.getSessionId() || undefined
-                if (sessionId) {
-                  latestSessionId = sessionId
-                }
-                const guardedRunMetadata = guardedContract
-                  ? {
-                      guardedRun: {
-                        contractId: guardedContract.id,
-                        runId: guardedContract.runId ?? input.runId,
-                        runtime: "codex",
-                        enforcementMode: "hard",
-                      },
-                    }
-                  : {}
-
-                if (part.type === "finish") {
-                  return {
-                    provider: "codex",
-                    model: metadataModel,
-                    sessionId,
-                    durationMs: Date.now() - startedAt,
-                    resultSubtype:
-                      part.finishReason === "error" ? "error" : "success",
-                    ...guardedRunMetadata,
-                  }
-                }
-
-                if (sessionId) {
-                  return {
-                    provider: "codex",
-                    model: metadataModel,
-                    sessionId,
-                    ...guardedRunMetadata,
-                  }
-                }
-
-                return {
-                  provider: "codex",
-                  model: metadataModel,
-                  ...guardedRunMetadata,
-                }
+              provider,
+              metadataModel,
+              runId: input.runId,
+              startedAt,
+              guardedContract,
+              onSessionId: (sessionId) => {
+                latestSessionId = sessionId
               },
+              generateMessageId: () => crypto.randomUUID(),
               onFinish: async ({ responseMessage, isContinuation }) => {
                 try {
                   await persistCodexAcpResponseMessage({

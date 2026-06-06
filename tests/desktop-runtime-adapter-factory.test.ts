@@ -87,6 +87,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/acp-runtime.ts",
       "utf8",
     )
+    const codexAcpTextStream = readFileSync(
+      "src/main/lib/codex/acp-text-stream.ts",
+      "utf8",
+    )
     const codexAcpUiStream = readFileSync(
       "src/main/lib/codex/acp-ui-stream.ts",
       "utf8",
@@ -103,6 +107,7 @@ describe("desktop runtime adapter factory", () => {
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
     expect(codexRouter).toContain("../../codex/acp-runtime")
+    expect(codexRouter).toContain("../../codex/acp-text-stream")
     expect(codexRouter).toContain("../../codex/acp-ui-stream")
     expect(codexRouter).toContain("../../codex/acp-message-persistence")
     expect(codexRouter).toContain("../../codex/usage-metadata")
@@ -118,6 +123,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
+    expect(codexRouter).not.toContain("streamText")
+    expect(codexRouter).not.toContain("buildCodexAcpModelMessageContent")
+    expect(codexRouter).not.toContain("toUIMessageStream")
     expect(codexRouter).not.toContain("pendingFinishChunk")
     expect(codexRouter).not.toContain("cleanCodexAssistantMessageForPersistence")
     expect(codexAcpAdapter).toContain("createACPProvider")
@@ -125,6 +133,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpAdapter).toContain("runRequest: DesktopRunRequest")
     expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
+    expect(codexAcpTextStream).toContain("createCodexAcpUiMessageStream")
+    expect(codexAcpTextStream).toContain("streamText")
+    expect(codexAcpTextStream).toContain("toUIMessageStream")
     expect(codexAcpUiStream).toContain("emitCodexAcpUiStream")
     expect(codexAcpMessagePersistence).toContain("persistCodexAcpResponseMessage")
     expect(codexAcpMessagePersistence).toContain("buildGuardedRunAudit")
