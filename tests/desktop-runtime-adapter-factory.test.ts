@@ -99,6 +99,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/acp-message-persistence.ts",
       "utf8",
     )
+    const codexErrors = readFileSync(
+      "src/main/lib/codex/errors.ts",
+      "utf8",
+    )
     const codexUsageMetadata = readFileSync(
       "src/main/lib/codex/usage-metadata.ts",
       "utf8",
@@ -124,6 +128,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/acp-ui-stream")
     expect(codexRouter).toContain("../../codex/acp-message-persistence")
     expect(codexRouter).toContain("../../codex/chat-history")
+    expect(codexRouter).toContain("../../codex/errors")
     expect(codexRouter).toContain("../../codex/model-selection")
     expect(codexRouter).toContain("../../codex/usage-metadata")
     expect(codexRouter).toContain("../../codex/prompt")
@@ -148,6 +153,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("function buildUserParts")
     expect(codexRouter).not.toContain("function extractCodexModelId")
     expect(codexRouter).not.toContain("function preprocessCodexModelName")
+    expect(codexRouter).not.toContain("function getCodexErrorDiagnostics")
+    expect(codexRouter).not.toContain("function isCodexAuthError")
+    expect(codexRouter).not.toContain("const AUTH_HINTS")
     expect(codexRouter).not.toContain("pendingFinishChunk")
     expect(codexRouter).not.toContain("cleanCodexAssistantMessageForPersistence")
     expect(codexAcpAdapter).toContain("createACPProvider")
@@ -161,6 +169,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpUiStream).toContain("emitCodexAcpUiStream")
     expect(codexAcpMessagePersistence).toContain("persistCodexAcpResponseMessage")
     expect(codexAcpMessagePersistence).toContain("buildGuardedRunAudit")
+    expect(codexErrors).toContain("extractCodexError")
+    expect(codexErrors).toContain("getCodexErrorDiagnostics")
+    expect(codexErrors).toContain("isCodexAuthError")
     expect(codexUsageMetadata).toContain("createCodexUsageMetadataResolver")
     expect(codexUsageMetadata).toContain("pollCodexUsageMetadata")
     expect(codexUsageMetadata).toContain("readLatestTokenCountInfo")

@@ -75,6 +75,10 @@ describe("agent guard runtime pipeline", () => {
       "src/main/lib/codex/acp-message-persistence.ts",
       "utf8",
     )
+    const codexErrors = readFileSync(
+      "src/main/lib/codex/errors.ts",
+      "utf8",
+    )
     const acp = readFileSync(
       "src/renderer/features/agents/lib/acp-chat-transport.ts",
       "utf8",
@@ -113,6 +117,8 @@ describe("agent guard runtime pipeline", () => {
     expect(runtimeEventState).toContain('chunk.type === "ask-user-question-timeout"')
     expect(runtimeEventState).toContain('chunk.type === "ask-user-question-result"')
     expect(codex).toContain("getCodexErrorDiagnostics(error)")
+    expect(codexErrors).toContain("getCodexErrorDiagnostics")
+    expect(codexErrors).toContain("isCodexAuthError")
     expect(codex).not.toContain('console.error("[codex] chat stream error:", error)')
   })
 

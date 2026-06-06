@@ -11,7 +11,6 @@ import {
   normalizeCodexStreamChunk,
 } from "../../../../shared/codex-tool-normalizer"
 import type { AgentGuardEvent } from "../../../../shared/agent-scope-contracts"
-import { redactProviderSecrets } from "../../../../shared/provider-profile-security"
 import {
   buildCodexCapabilityErrorChunk,
   buildCodexRuntimeAvailability,
@@ -45,6 +44,11 @@ import {
   getLastCodexSessionId,
   parseCodexStoredMessages,
 } from "../../codex/chat-history"
+import {
+  extractCodexError as extractCodexErrorWithProviderRedaction,
+  getCodexErrorDiagnostics,
+  isCodexAuthError,
+} from "../../codex/errors"
 import { resolveCodexSelectedModelId } from "../../codex/model-selection"
 import {
   getCodexApiKeyStatus,
@@ -224,19 +228,6 @@ const URL_CANDIDATE_REGEX = /https?:\/\/[^\s]+/g
 const ANSI_ESCAPE_REGEX = /\u001B\[[0-?]*[ -/]*[@-~]/g
 const ANSI_OSC_REGEX = /\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g
 
-const AUTH_HINTS = [
-  "not logged in",
-  "authentication required",
-  "auth required",
-  "login required",
-  "missing credentials",
-  "no credentials",
-  "unauthorized",
-  "forbidden",
-  "codex login",
-  "401",
-  "403",
-]
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS = 5_000
 
@@ -693,47 +684,9 @@ function getActiveLoginSession(): CodexLoginSession | null {
 }
 
 function extractCodexError(error: unknown): { message: string; code?: string } {
-  const anyError = error as any
-  const message =
-    anyError?.data?.message ||
-    anyError?.errorText ||
-    anyError?.message ||
-    anyError?.error ||
-    String(error)
-  const code = anyError?.data?.code || anyError?.code
-
-  const rawMessage = typeof message === "string" ? message : String(message)
-  const redactedMessage = redactCodexLoginOutput(redactProviderSecrets(rawMessage))
-
-  return {
-    message: redactedMessage,
-    code: typeof code === "string" ? code : undefined,
-  }
-}
-
-function getCodexErrorDiagnostics(error: unknown) {
-  const anyError = error as any
-  const code = anyError?.data?.code || anyError?.code || anyError?.cause?.code
-  const exitCode =
-    anyError?.data?.exitCode ??
-    anyError?.exitCode ??
-    anyError?.status ??
-    anyError?.cause?.exitCode ??
-    null
-
-  return {
-    name: typeof anyError?.name === "string" ? anyError.name : null,
-    code: typeof code === "string" ? code : null,
-    exitCode: typeof exitCode === "number" ? exitCode : null,
-  }
-}
-
-function isCodexAuthError(params: {
-  message?: string | null
-  code?: string | null
-}): boolean {
-  const searchableText = `${params.code || ""} ${params.message || ""}`.toLowerCase()
-  return AUTH_HINTS.some((hint) => searchableText.includes(hint))
+  return extractCodexErrorWithProviderRedaction(error, {
+    redactLoginOutput: redactCodexLoginOutput,
+  })
 }
 
 type RunCodexCliOptions = {
