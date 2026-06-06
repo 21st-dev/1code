@@ -997,8 +997,12 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
+    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopJob")
+    expect(claudeRouter).not.toContain("createAndRegisterDesktopChatAgentJob")
+    expect(claudeRouter).not.toContain("createDesktopStreamEventMapper")
+    expect(codexRouter).toContain("createAndRegisterDesktopChatAgentJob")
+
     for (const route of [claudeRouter, codexRouter]) {
-      expect(route).toContain("createAndRegisterDesktopChatAgentJob")
       expect(route).toContain("completeDesktopChatAgentJobSafely")
       expect(route).toContain("requestCancelDesktopChatAgentJobSafely")
       expect(route).not.toContain("createAndStartDesktopAgentJob")

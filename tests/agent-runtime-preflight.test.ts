@@ -108,9 +108,9 @@ describe("desktop runtime preflight", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const blockerIndex = claude.indexOf("new DesktopRunPreflightError(blocker)")
     const attachmentIndex = claude.indexOf("resolveChatImageAttachments(input.images)")
-    const jobIndex = claude.indexOf("createAndRegisterDesktopChatAgentJob(db, {")
+    const jobIndex = claude.indexOf("createClaudeAgentSdkDesktopJob({")
     const runRequestIndex = claude.indexOf(
-      "const desktopRunRequest = createClaudeDesktopRunRequest({",
+      "createClaudeDesktopRunRequestFromRuntimeStartup({",
     )
     const queryOptionsIndex = claude.indexOf(
       "const queryOptions = createClaudeAgentSdkRuntimeQueryOptions({",

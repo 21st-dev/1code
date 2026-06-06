@@ -65,6 +65,7 @@ import {
   ensureClaudeAgentSdkIsolatedConfigDir,
   resolveClaudeAgentSdkIsolatedConfig,
 } from "../../claude/agent-sdk-config-dir"
+import { createClaudeAgentSdkDesktopJob } from "../../claude/agent-sdk-desktop-job"
 import { createClaudeAgentSdkRuntimeStreamSetup } from "../../claude/agent-sdk-runtime-state"
 import {
   deleteActiveClaudeSession,
@@ -129,12 +130,11 @@ import {
 } from "../../agent-runtime/permission-policy"
 import {
   appendRunEventsToAgentJob,
-  createDesktopStreamEventMapper,
+  type DesktopStreamEventMapper,
   createRuntimeRendererChunkEmitter,
 } from "../../agent-runtime/stream-event-mapper"
 import {
   completeDesktopChatAgentJobSafely,
-  createAndRegisterDesktopChatAgentJob,
   requestCancelDesktopChatAgentJobSafely,
 } from "../../desktop-agent-jobs"
 import {
@@ -770,9 +770,7 @@ export const claudeRouter = router({
         let desktopJobSawError = false
         let desktopJobReachedNaturalFinish = false
         let desktopJobDb: ReturnType<typeof getDatabase> | null = null
-        let desktopStreamEventMapper: ReturnType<
-          typeof createDesktopStreamEventMapper
-        > | null = null
+        let desktopStreamEventMapper: DesktopStreamEventMapper | null = null
         console.log(
           `[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`,
         )
@@ -969,8 +967,8 @@ export const claudeRouter = router({
               isUsingOllama,
             } = providerStartup.startup
 
-            const desktopJob = createAndRegisterDesktopChatAgentJob(db, {
-              runtime: "claude-code",
+            const desktopJob = createClaudeAgentSdkDesktopJob({
+              db,
               mode: input.mode,
               chatId: input.chatId,
               subChatId: input.subChatId,
@@ -985,12 +983,8 @@ export const claudeRouter = router({
                 )
               },
             })
-            desktopJobId = desktopJob.job.id
-            desktopStreamEventMapper = createDesktopStreamEventMapper({
-              runtimeId: "claude-code",
-              runId: activeRunId,
-              jobId: desktopJobId,
-            })
+            desktopJobId = desktopJob.jobId
+            desktopStreamEventMapper = desktopJob.streamEventMapper
 
             const desktopRunRequest =
               createClaudeDesktopRunRequestFromRuntimeStartup({
