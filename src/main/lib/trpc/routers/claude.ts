@@ -27,7 +27,7 @@ import {
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
 import { logClaudeAgentSdkStartupDiagnostics } from "../../claude/agent-sdk-runtime-diagnostics"
-import { runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer } from "../../claude/agent-sdk-adapter-runner"
+import { runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery } from "../../claude/agent-sdk-adapter-runner"
 import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
@@ -1231,13 +1231,11 @@ export const claudeRouter = router({
               cwd: runtimeCwd,
               ensureTokensFresh: ensureMcpTokensFresh,
             })
-            const { queryOptions } = runtimeQuery
-            const mcpServersFiltered = runtimeQuery.mcpServers
 
             const adapterResult =
-              await runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
+              await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
                 request: desktopRunRequest,
-                queryOptions,
+                runtimeQuery,
                 streamState,
                 isUsingOllama,
                 model: finalCustomConfig?.model,
@@ -1253,7 +1251,6 @@ export const claudeRouter = router({
                 mode: input.mode,
                 resolvedModel,
                 oauthToken: claudeCodeToken,
-                mcpServers: mcpServersFiltered as Record<string, unknown> | undefined,
                 transform,
                 parts,
                 historyEnabled,

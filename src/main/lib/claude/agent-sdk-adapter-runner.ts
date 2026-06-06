@@ -21,6 +21,7 @@ import {
   type ClaudeAgentSdkStreamConsumerMutableState,
   type CreateClaudeAgentSdkStreamConsumerInput,
 } from "./agent-sdk-stream-consumer"
+import type { PrepareClaudeAgentSdkDesktopRuntimeQueryResult } from "./agent-sdk-runtime-query"
 import type { UIMessageChunk } from "./types"
 
 export type RunClaudeAgentSdkAdapterWithPolicyRetryInput = {
@@ -69,6 +70,16 @@ export type RunClaudeAgentSdkDesktopAdapterWithRuntimeConsumerInput = Omit<
   > & {
     emit: CreateClaudeAgentSdkStreamConsumerInput["emit"]
   }
+
+export type RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput = Omit<
+  RunClaudeAgentSdkDesktopAdapterWithRuntimeConsumerInput,
+  "queryOptions" | "mcpServers"
+> & {
+  runtimeQuery: Pick<
+    PrepareClaudeAgentSdkDesktopRuntimeQueryResult,
+    "queryOptions" | "mcpServers"
+  >
+}
 
 export async function runClaudeAgentSdkDesktopAdapter({
   query,
@@ -123,6 +134,17 @@ export async function runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
     sleep,
     log,
     error,
+  })
+}
+
+export async function runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
+  runtimeQuery,
+  ...input
+}: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput): Promise<DesktopRunResult> {
+  return runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
+    ...input,
+    queryOptions: runtimeQuery.queryOptions,
+    mcpServers: runtimeQuery.mcpServers as Record<string, unknown> | undefined,
   })
 }
 

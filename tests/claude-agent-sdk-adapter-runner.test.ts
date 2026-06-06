@@ -9,6 +9,7 @@ import {
 import {
   runClaudeAgentSdkAdapterWithPolicyRetry,
   runClaudeAgentSdkDesktopAdapter,
+  runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery,
   runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer,
 } from "../src/main/lib/claude/agent-sdk-adapter-runner"
 import {
@@ -191,6 +192,76 @@ describe("Claude Agent SDK adapter runner", () => {
       messageCount: 1,
       pendingFinishChunk: null,
     })
+  })
+
+  test("runs a prepared runtime query through owned adapter wiring", async () => {
+    const request = createRequest()
+    const queryOptions = { prompt: "prepared", options: {} } as any
+    const streamState = createClaudeAgentSdkStreamConsumerMutableState()
+    const queryCalls: unknown[] = []
+    const emitted: UIMessageChunk[] = []
+
+    await expect(
+      runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
+        query: ((params: any) => {
+          queryCalls.push(params)
+          return createClaudeAssistantStream()
+        }) as any,
+        request,
+        runtimeQuery: {
+          queryOptions,
+          mcpServers: {
+            github: { type: "http", url: "https://mcp.example.com" },
+          } as any,
+        },
+        streamState,
+        isUsingOllama: false,
+        model: "claude-sonnet",
+        baseUrl: undefined,
+        prompt: "hello",
+        cwd: "/repo",
+        abortSignal: new AbortController().signal,
+        isObservableActive: () => true,
+        chatId: "chat-1",
+        subChatId: "sub-1",
+        customConfig: null,
+        hasExistingApiConfig: false,
+        mode: "agent",
+        resolvedModel: "claude-sonnet",
+        oauthToken: null,
+        transform: () => [
+          { type: "text-delta", id: "text-1", delta: "prepared" },
+          { type: "text-end", id: "text-1" },
+        ],
+        parts: [],
+        historyEnabled: true,
+        stderrLines: [],
+        db: null,
+        messagesToSave: [],
+        guardedContract: null,
+        guardedPreRunStatus: null,
+        guardEvents: [],
+        guardedRunStartedAt: "2026-06-01T00:00:00.000Z",
+        getContract: () => null,
+        deleteContract: () => undefined,
+        subId: "sub-1",
+        emitError: () => {
+          throw new Error("emitError should not run")
+        },
+        emit: (chunk) => {
+          emitted.push(chunk)
+          return true
+        },
+        complete: () => {},
+      }),
+    ).resolves.toEqual({ status: "succeeded" })
+
+    expect(queryCalls).toEqual([queryOptions])
+    expect(emitted).toEqual([
+      { type: "text-delta", id: "text-1", delta: "prepared" },
+      { type: "text-end", id: "text-1" },
+    ])
+    expect(streamState.currentSessionId).toBe("session-1")
   })
 
   test("retries adapter runs when the stream records a policy retry", async () => {

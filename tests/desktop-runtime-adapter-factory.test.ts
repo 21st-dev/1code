@@ -360,6 +360,9 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeRouter).not.toContain("createClaudeAgentSdkAdapter({")
     expect(claudeRouter).toContain(
+      "runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({",
+    )
+    expect(claudeRouter).not.toContain(
       "runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({",
     )
     expect(claudeRouter).not.toContain(
@@ -420,6 +423,9 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeAgentSdkAdapterRunner).toContain(
       "runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer",
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      "runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery",
     )
     expect(claudeAgentSdkAdapterRunner).toContain(
       "runClaudeAgentSdkDesktopAdapterWithStreamConsumer",
@@ -1000,16 +1006,22 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("createClaudeAgentSdkPolicyRetryState()")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).toContain(
-      "runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer",
+      "runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery",
     )
     expect(claudeRouter).not.toContain(
       "runClaudeAgentSdkDesktopAdapterWithStreamConsumer",
+    )
+    expect(claudeRouter).not.toContain(
+      "runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer",
     )
     expect(claudeRouter).not.toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
     expect(claudeRouter).not.toContain("handleClaudeAgentSdkEmbeddedErrorMessage")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkEmbeddedErrorContext")
     expect(claudeRouter).not.toContain("usesApiKeyAuth: Boolean(")
+    expect(claudeRouter).not.toContain("runtimeQuery.queryOptions")
+    expect(claudeRouter).not.toContain("runtimeQuery.mcpServers")
     expect(claudeRouter).not.toContain("mcpServerNames: mcpServersFiltered")
+    expect(claudeRouter).not.toContain("mcpServersFiltered")
     expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkEmbeddedError")
     expect(claudeRouter).not.toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).not.toContain("let policyRetryNeeded")
@@ -1021,6 +1033,11 @@ describe("desktop runtime adapter factory", () => {
     expect(policyRetry).toContain("getClaudePolicyRetryDelayMs")
     expect(policyRetry).toContain("recordClaudeAgentSdkPolicyRetry")
     expect(policyRetry).toContain("waitForClaudeAgentSdkPolicyRetry")
+    expect(adapterRunner).toContain(
+      "runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery",
+    )
+    expect(adapterRunner).toContain("queryOptions: runtimeQuery.queryOptions")
+    expect(adapterRunner).toContain("mcpServers: runtimeQuery.mcpServers")
     expect(adapterRunner).toContain("createClaudeAgentSdkPolicyRetryState")
     expect(adapterRunner).toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(adapterRunner).toContain("resetClaudeAgentSdkPolicyRetryAttempt")
