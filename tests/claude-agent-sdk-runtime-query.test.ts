@@ -122,7 +122,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       resolvedModel: "claude-sonnet-4",
       maxThinkingTokens: 1024,
       projectPath: "/project",
-      ensureTokensFresh: async (servers) => servers,
       getPendingToolApprovals: () => approvalStore as any,
       readAgentsMd: async () => null,
       log: () => {},

@@ -1112,7 +1112,6 @@ export const claudeRouter = router({
                   resolvedModel,
                   maxThinkingTokens: input.maxThinkingTokens,
                   projectPath: input.projectPath,
-                  ensureTokensFresh: ensureMcpTokensFresh,
                 },
                 streamState,
                 isUsingOllama,

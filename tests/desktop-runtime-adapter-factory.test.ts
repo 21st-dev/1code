@@ -640,6 +640,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("getClaudePendingToolApprovalStore()")
     expect(claudeRouter).not.toContain("prepareClaudeAgentSdkMcpServers")
     expect(runtimeQuery).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(runtimeQuery).toContain("ensureMcpTokensFresh")
     expect(runtimeQuery).toContain("getActiveGuardedContract")
     expect(runtimeQuery).toContain("getClaudePendingToolApprovalStore")
     expect(runtimeQuery).toContain("const runtimeGuardEvents = guardEvents ?? []")

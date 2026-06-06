@@ -102,7 +102,6 @@ function createLifecycleInput(
       resolvedModel: "claude-sonnet",
       maxThinkingTokens: null,
       projectPath: "/repo",
-      ensureTokensFresh: async (servers) => servers,
       readAgentsMd: async () => null,
       getClaudeBinaryPath: () => "/owned/claude",
     },

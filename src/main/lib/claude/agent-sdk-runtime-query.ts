@@ -21,6 +21,13 @@ import {
 } from "./agent-sdk-project-context"
 import { getClaudePendingToolApprovalStore } from "./tool-approvals"
 
+const ensureClaudeAgentSdkMcpTokensFresh: PrepareClaudeAgentSdkMcpServersInput[
+  "ensureTokensFresh"
+] = async (servers, projectPath) => {
+  const { ensureMcpTokensFresh } = await import("../mcp-auth")
+  return ensureMcpTokensFresh(servers, projectPath)
+}
+
 export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput,
   | "prompt"
@@ -42,7 +49,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   projectPath?: string
   cwd?: string
   resolvedModel?: string | null
-  ensureTokensFresh: PrepareClaudeAgentSdkMcpServersInput["ensureTokensFresh"]
+  ensureTokensFresh?: PrepareClaudeAgentSdkMcpServersInput["ensureTokensFresh"]
   pendingToolApprovals?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
     "pendingToolApprovals"
   ]
@@ -79,7 +86,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   projectPath,
   cwd,
   resolvedModel,
-  ensureTokensFresh,
+  ensureTokensFresh = ensureClaudeAgentSdkMcpTokensFresh,
   pendingToolApprovals,
   getPendingToolApprovals = getClaudePendingToolApprovalStore,
   getGuardedContract = getActiveGuardedContract,
