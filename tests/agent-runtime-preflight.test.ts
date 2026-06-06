@@ -110,13 +110,17 @@ describe("desktop runtime preflight", () => {
     const attachmentIndex = claude.indexOf("resolveChatImageAttachments(input.images)")
     const jobIndex = claude.indexOf("createAndStartDesktopAgentJob(db, {")
     const queryCwdIndex = claude.indexOf(
-      "cwd: runtimeCwd,\n                systemPrompt",
+      "cwd: desktopRunRequest.context.cwd,\n                systemPrompt",
+    )
+    const runRequestIndex = claude.indexOf(
+      "const desktopRunRequest = createClaudeDesktopRunRequest({",
     )
 
     expect(blockerIndex).toBeGreaterThan(0)
     expect(attachmentIndex).toBeGreaterThan(blockerIndex)
     expect(jobIndex).toBeGreaterThan(attachmentIndex)
-    expect(queryCwdIndex).toBeGreaterThan(jobIndex)
+    expect(runRequestIndex).toBeGreaterThan(jobIndex)
+    expect(queryCwdIndex).toBeGreaterThan(runRequestIndex)
     expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")
   })
 
@@ -137,8 +141,11 @@ describe("desktop runtime preflight", () => {
     const runRequestIndex = codex.indexOf(
       "const desktopRunRequest = createCodexDesktopRunRequest({",
     )
-    const providerIndex = codex.indexOf(
-      "const provider = getOrCreateCodexAcpProvider({",
+    const adapterIndex = codex.indexOf(
+      "const codexAdapter = createCodexAcpTemporaryCompatAdapter({",
+    )
+    const adapterRunIndex = codex.indexOf(
+      "await codexAdapter.run(desktopRunRequest)",
     )
 
     expect(blockerIndex).toBeGreaterThan(0)
@@ -149,10 +156,10 @@ describe("desktop runtime preflight", () => {
     expect(jobIndex).toBeGreaterThan(localOnlyIndex)
     expect(jobIndex).toBeGreaterThan(mcpIndex)
     expect(runRequestIndex).toBeGreaterThan(jobIndex)
-    expect(providerIndex).toBeGreaterThan(runRequestIndex)
+    expect(adapterIndex).toBeGreaterThan(runRequestIndex)
+    expect(adapterRunIndex).toBeGreaterThan(adapterIndex)
     expect(codex).toContain("cwd: runtimeCwd")
-    expect(codex).toContain("runRequest: desktopRunRequest")
-    expect(codex).toContain("command: resolveCodexAcpBinaryPath()")
+    expect(codex).toContain("await codexAdapter.run(desktopRunRequest)")
     expect(codex).toContain('id: "local-only"')
     expect(codex).not.toContain("cwd: input.cwd,\n              mcpServers")
   })

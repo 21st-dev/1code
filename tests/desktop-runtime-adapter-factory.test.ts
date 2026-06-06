@@ -278,4 +278,32 @@ describe("desktop runtime adapter factory", () => {
     expect(codexDesktopRunRequest).toContain("createCodexDesktopRunRequest")
     expect(codexDesktopRunRequest).toContain("createDesktopRunContextFromPreflight")
   })
+
+  test("keeps Claude desktop run request ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeDesktopRunRequest = readFileSync(
+      "src/main/lib/claude/desktop-run-request.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/desktop-run-request")
+    expect(claudeRouter).toContain(
+      "const desktopRunRequest = createClaudeDesktopRunRequest({",
+    )
+    expect(claudeRouter).toContain("cwd: desktopRunRequest.context.cwd")
+    expect(claudeRouter).not.toContain("createDesktopRunContextFromPreflight")
+    expect(claudeRouter).not.toContain(
+      "const desktopRunRequest: DesktopRunRequest",
+    )
+    expect(claudeDesktopRunRequest).toContain(
+      "createClaudeDesktopRunRequest",
+    )
+    expect(claudeDesktopRunRequest).toContain(
+      "createDesktopRunContextFromPreflight",
+    )
+    expect(claudeDesktopRunRequest).toContain('status: "skipped"')
+  })
 })

@@ -39,6 +39,7 @@ import {
   getActiveClaudeProviderConfig,
   type ClaudeProviderRuntimeConfig,
 } from "./claude-provider-config"
+import { createClaudeDesktopRunRequest } from "../../claude/desktop-run-request"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import {
   getLegacyClaudeProviderProfileId,
@@ -1430,6 +1431,37 @@ export const claudeRouter = router({
               },
             })
 
+            const resumeSessionId =
+              input.sessionId || existingSessionId || undefined
+            const desktopRunRequest = createClaudeDesktopRunRequest({
+              runId: activeRunId,
+              streamId,
+              jobId: desktopJobId,
+              mode: input.mode,
+              preflight: verifiedRunContext,
+              prompt: input.prompt,
+              permissionPolicy,
+              providerBinding: {
+                model: finalCustomConfig?.model ?? input.model ?? null,
+                modelSource: input.modelSource ?? null,
+                providerProfileId: selectedProviderProfileId ?? null,
+                gatewayEndpoint: finalCustomConfig?.baseUrl ?? null,
+                authMode: selectedProviderProfileId
+                  ? "provider-profile"
+                  : finalCustomConfig
+                    ? "app-managed"
+                    : "runtime-managed",
+              },
+              images: input.images,
+              longTextAttachments: input.longTextAttachments,
+              signal: abortController.signal,
+              resumeSessionId,
+              parentSessionId: input.sessionId ?? null,
+              emitTrace: (event) => {
+                appendRunEventsToAgentJob(db, [event])
+              },
+            })
+
             // Track connection method for analytics
             let connectionMethod = "claude-subscription" // default (Claude Code OAuth)
             if (isUsingOllama) {
@@ -1952,9 +1984,6 @@ export const claudeRouter = router({
             // Get bundled Claude binary path
             const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-            const resumeSessionId =
-              input.sessionId || existingSessionId || undefined
-
             // DEBUG: Session resume path tracing
             const expectedSanitizedCwd = runtimeCwd.replace(/[/.]/g, "-")
             const expectedSessionPath = path.join(
@@ -2257,7 +2286,7 @@ ${prompt}
               prompt: finalQueryPrompt,
               options: {
                 abortController, // Must be inside options!
-                cwd: runtimeCwd,
+                cwd: desktopRunRequest.context.cwd,
                 systemPrompt: systemPromptConfig,
                 // Pass filtered MCP servers (only working/unknown ones, skip failed/needs-auth)
                 ...(mcpServersFiltered &&
