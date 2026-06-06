@@ -3,6 +3,7 @@ import {
   completeClaudeAgentSdkStreamIteration,
   createClaudeAgentSdkStreamIterationState,
   recordClaudeAgentSdkStreamMessage,
+  startClaudeAgentSdkStreamIteration,
 } from "../src/main/lib/claude/agent-sdk-stream-lifecycle"
 
 const originalConsoleLog = console.log
@@ -20,6 +21,30 @@ describe("Claude Agent SDK stream lifecycle", () => {
     console.log = originalConsoleLog
     console.error = originalConsoleError
     console.warn = originalConsoleWarn
+  })
+
+  test("starts stream iteration and logs Ollama stream context", () => {
+    console.log = mock(() => {}) as typeof console.log
+
+    const state = startClaudeAgentSdkStreamIteration({
+      isUsingOllama: true,
+      model: "qwen",
+      baseUrl: "http://localhost:11434",
+      prompt: "hello",
+      cwd: "/repo",
+      startedAt: 1000,
+    })
+
+    expect(state).toEqual({
+      firstMessageReceived: false,
+      messageCount: 0,
+      startedAt: 1000,
+    })
+    const logCalls = flattenedCalls(console.log)
+    expect(logCalls).toContain("[Ollama] ===== STARTING STREAM ITERATION =====")
+    expect(logCalls).toContain("[Ollama] Model: qwen")
+    expect(logCalls).toContain("[Ollama] Base URL: http://localhost:11434")
+    expect(logCalls).toContain("[Ollama] CWD: /repo")
   })
 
   test("records message count, Ollama message logs, first latency, and slow startup warning", () => {

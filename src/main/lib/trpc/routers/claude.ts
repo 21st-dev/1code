@@ -67,13 +67,12 @@ import {
 import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
   logClaudeOllamaSdkConfiguration,
-  logClaudeOllamaStreamStart,
   probeClaudeOllamaConnectivity,
 } from "../../claude/agent-sdk-ollama-diagnostics"
 import { createClaudeOllamaPrompt } from "../../claude/agent-sdk-ollama-prompt"
 import {
   completeClaudeAgentSdkStreamIteration,
-  createClaudeAgentSdkStreamIterationState,
+  startClaudeAgentSdkStreamIteration,
 } from "../../claude/agent-sdk-stream-lifecycle"
 import { recordClaudeAgentSdkIncomingMessage } from "../../claude/agent-sdk-stream-message"
 import {
@@ -1769,22 +1768,19 @@ export const claudeRouter = router({
               queryOptions,
               consumeStream: async ({ stream }) => {
                 const streamIteration =
-                  createClaudeAgentSdkStreamIterationState()
+                  startClaudeAgentSdkStreamIteration({
+                    isUsingOllama,
+                    model: finalCustomConfig?.model,
+                    baseUrl: finalCustomConfig?.baseUrl,
+                    prompt: input.prompt,
+                    cwd: runtimeCwd,
+                  })
                 // Track last assistant message UUID for rollback support.
                 // Only assigned to metadata after the stream completes.
                 let lastAssistantUuid: string | null = null
 
                 // Plan mode: track ExitPlanMode to stop after plan is complete.
                 let exitPlanModeToolCallId: string | null = null
-
-                if (isUsingOllama) {
-                  logClaudeOllamaStreamStart({
-                    model: finalCustomConfig?.model,
-                    baseUrl: finalCustomConfig?.baseUrl,
-                    prompt: input.prompt,
-                    cwd: runtimeCwd,
-                  })
-                }
 
                 try {
                   for await (const msg of stream) {

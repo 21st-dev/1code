@@ -480,7 +480,10 @@ describe("desktop runtime adapter factory", () => {
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-stream-lifecycle")
     expect(claudeRouter).toContain("../../claude/agent-sdk-stream-message")
-    expect(claudeRouter).toContain("createClaudeAgentSdkStreamIterationState()")
+    expect(claudeRouter).toContain("startClaudeAgentSdkStreamIteration")
+    expect(claudeRouter).not.toContain(
+      "createClaudeAgentSdkStreamIterationState()",
+    )
     expect(claudeRouter).toContain("recordClaudeAgentSdkIncomingMessage")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkStreamMessage")
     expect(claudeRouter).not.toContain("logRawClaudeMessage")
@@ -493,8 +496,12 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("logClaudeOllamaStreamComplete")
     expect(claudeRouter).not.toContain("logClaudeOllamaEmptyStreamDiagnosis")
     expect(claudeRouter).not.toContain("logClaudeOllamaSingleMessageWarning")
+    expect(claudeRouter).not.toContain("logClaudeOllamaStreamStart")
+    expect(streamLifecycle).toContain("startClaudeAgentSdkStreamIteration")
+    expect(streamLifecycle).toContain("createClaudeAgentSdkStreamIterationState")
     expect(streamLifecycle).toContain("recordClaudeAgentSdkStreamMessage")
     expect(streamLifecycle).toContain("completeClaudeAgentSdkStreamIteration")
+    expect(streamLifecycle).toContain("logClaudeOllamaStreamStart")
     expect(streamLifecycle).toContain("logClaudeOllamaFirstMessageLatency")
     expect(streamLifecycle).toContain("logClaudeOllamaStreamComplete")
     expect(streamLifecycle).toContain("logClaudeOllamaEmptyStreamDiagnosis")
@@ -793,7 +800,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "../../claude/agent-sdk-ollama-diagnostics",
     )
-    expect(claudeRouter).toContain("logClaudeOllamaStreamStart")
+    expect(claudeRouter).not.toContain("logClaudeOllamaStreamStart")
     expect(claudeRouter).not.toContain("logClaudeOllamaStreamError")
     expect(claudeRouter).toContain("logClaudeOllamaSdkConfiguration")
     expect(claudeRouter).toContain("probeClaudeOllamaConnectivity")

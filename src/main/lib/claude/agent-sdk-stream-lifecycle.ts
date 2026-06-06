@@ -4,6 +4,7 @@ import {
   logClaudeOllamaMessage,
   logClaudeOllamaSingleMessageWarning,
   logClaudeOllamaStreamComplete,
+  logClaudeOllamaStreamStart,
 } from "./agent-sdk-ollama-diagnostics"
 
 export type ClaudeAgentSdkStreamIterationState = {
@@ -20,6 +21,26 @@ export function createClaudeAgentSdkStreamIterationState(
     messageCount: 0,
     startedAt,
   }
+}
+
+export function startClaudeAgentSdkStreamIteration(input: {
+  isUsingOllama: boolean
+  model?: string | null
+  baseUrl?: string | null
+  prompt: string
+  cwd: string
+  startedAt?: number
+}): ClaudeAgentSdkStreamIterationState {
+  const state = createClaudeAgentSdkStreamIterationState(input.startedAt)
+  if (input.isUsingOllama) {
+    logClaudeOllamaStreamStart({
+      model: input.model,
+      baseUrl: input.baseUrl,
+      prompt: input.prompt,
+      cwd: input.cwd,
+    })
+  }
+  return state
 }
 
 export function recordClaudeAgentSdkStreamMessage(input: {
