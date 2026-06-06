@@ -3,7 +3,11 @@ import type { DesktopRuntimeAdapter } from "../agent-runtime/desktop-runner"
 import {
   ClaudeAgentSdkLoadError,
   ClaudeAgentSdkQueryStartError,
+  createClaudeAgentSdkAdapter,
+  type ClaudeAgentSdkStreamConsumer,
 } from "./agent-sdk-adapter"
+import type { ClaudeAgentSdkQuery } from "./agent-sdk-query-loader"
+import type { ClaudeAgentSdkQueryParams } from "./agent-sdk-query-options"
 import {
   resetClaudeAgentSdkPolicyRetryAttempt,
   waitForClaudeAgentSdkPolicyRetry,
@@ -24,6 +28,35 @@ export type RunClaudeAgentSdkAdapterWithPolicyRetryInput = {
   sleep?: (delayMs: number) => Promise<unknown>
   log?: (...args: any[]) => void
   error?: (...args: any[]) => void
+}
+
+export type RunClaudeAgentSdkDesktopAdapterInput = Omit<
+  RunClaudeAgentSdkAdapterWithPolicyRetryInput,
+  "adapter"
+> & {
+  query?: ClaudeAgentSdkQuery
+  loadQuery?: () => Promise<ClaudeAgentSdkQuery>
+  queryOptions: ClaudeAgentSdkQueryParams
+  consumeStream: ClaudeAgentSdkStreamConsumer
+}
+
+export async function runClaudeAgentSdkDesktopAdapter({
+  query,
+  loadQuery,
+  queryOptions,
+  consumeStream,
+  ...runnerInput
+}: RunClaudeAgentSdkDesktopAdapterInput): Promise<DesktopRunResult> {
+  const adapter = createClaudeAgentSdkAdapter({
+    query,
+    loadQuery,
+    queryOptions,
+    consumeStream,
+  })
+  return runClaudeAgentSdkAdapterWithPolicyRetry({
+    adapter,
+    ...runnerInput,
+  })
 }
 
 export async function runClaudeAgentSdkAdapterWithPolicyRetry({

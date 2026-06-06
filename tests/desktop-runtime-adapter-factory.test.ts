@@ -332,10 +332,13 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-adapter")
     expect(claudeRouter).toContain("../../claude/agent-sdk-adapter-runner")
     expect(claudeRouter).toContain("../../claude/agent-sdk-stream-consumer")
-    expect(claudeRouter).toContain("createClaudeAgentSdkAdapter({")
+    expect(claudeRouter).not.toContain(
+      'from "../../claude/agent-sdk-adapter"',
+    )
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkAdapter({")
+    expect(claudeRouter).toContain("runClaudeAgentSdkDesktopAdapter({")
     expect(claudeRouter).toContain("createClaudeAgentSdkStreamConsumer({")
     expect(claudeRouter).toContain(
       "createClaudeAgentSdkStreamConsumerMutableState",
@@ -349,7 +352,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("state: {")
     expect(claudeRouter).not.toContain("getMetadata: () =>")
     expect(claudeRouter).not.toContain("setMessageCount: (value)")
-    expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
+    expect(claudeRouter).not.toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
     expect(claudeRouter).not.toContain("await claudeAdapter.run(desktopRunRequest)")
     expect(claudeRouter).not.toContain("ClaudeAgentSdkLoadError")
     expect(claudeRouter).not.toContain("ClaudeAgentSdkQueryStartError")
@@ -377,6 +380,12 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeAgentSdkAdapterRunner).toContain(
       "runClaudeAgentSdkAdapterWithPolicyRetry",
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      "runClaudeAgentSdkDesktopAdapter",
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      "createClaudeAgentSdkAdapter({",
     )
     expect(claudeAgentSdkAdapterRunner).toContain("ClaudeAgentSdkLoadError")
     expect(claudeAgentSdkAdapterRunner).toContain("ClaudeAgentSdkQueryStartError")
@@ -785,7 +794,8 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain("../../claude/agent-sdk-policy-retry")
     expect(claudeRouter).toContain("createClaudeAgentSdkPolicyRetryState()")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkPolicyRetry")
-    expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
+    expect(claudeRouter).toContain("runClaudeAgentSdkDesktopAdapter")
+    expect(claudeRouter).not.toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
     expect(claudeRouter).not.toContain("handleClaudeAgentSdkEmbeddedErrorMessage")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkEmbeddedErrorContext")
     expect(claudeRouter).not.toContain("usesApiKeyAuth: Boolean(")

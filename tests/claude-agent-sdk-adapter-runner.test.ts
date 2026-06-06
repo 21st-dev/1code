@@ -6,7 +6,10 @@ import {
   ClaudeAgentSdkLoadError,
   ClaudeAgentSdkQueryStartError,
 } from "../src/main/lib/claude/agent-sdk-adapter"
-import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../src/main/lib/claude/agent-sdk-adapter-runner"
+import {
+  runClaudeAgentSdkAdapterWithPolicyRetry,
+  runClaudeAgentSdkDesktopAdapter,
+} from "../src/main/lib/claude/agent-sdk-adapter-runner"
 import {
   createClaudeAgentSdkPolicyRetryState,
   recordClaudeAgentSdkPolicyRetry,
@@ -55,7 +58,51 @@ function flattenedCalls(fn: unknown): string[] {
     .map((item) => String(item))
 }
 
+async function* createStream() {
+  yield { type: "assistant", text: "hello" }
+}
+
 describe("Claude Agent SDK adapter runner", () => {
+  test("creates the current Claude Agent SDK adapter before the policy retry loop", async () => {
+    const request = createRequest()
+    const policyRetry = createClaudeAgentSdkPolicyRetryState()
+    const queryOptions = { prompt: "hello", options: {} } as any
+    const queryCalls: unknown[] = []
+    const consumedMessages: unknown[] = []
+    const beforeAttempts: string[] = []
+
+    await expect(
+      runClaudeAgentSdkDesktopAdapter({
+        query: ((params: any) => {
+          queryCalls.push(params)
+          return createStream()
+        }) as any,
+        request,
+        queryOptions,
+        consumeStream: async ({ request: consumedRequest, stream }) => {
+          expect(consumedRequest).toBe(request)
+          for await (const message of stream) {
+            consumedMessages.push(message)
+          }
+          return { status: "succeeded" }
+        },
+        policyRetry,
+        beforeAttempt: () => beforeAttempts.push("attempt"),
+        getChunkCount: () => consumedMessages.length,
+        subId: "sub-1",
+        emitError: () => {
+          throw new Error("emitError should not run")
+        },
+        emit: () => {},
+        complete: () => {},
+      }),
+    ).resolves.toEqual({ status: "succeeded" })
+
+    expect(queryCalls).toEqual([queryOptions])
+    expect(consumedMessages).toEqual([{ type: "assistant", text: "hello" }])
+    expect(beforeAttempts).toEqual(["attempt"])
+  })
+
   test("retries adapter runs when the stream records a policy retry", async () => {
     const policyRetry = createClaudeAgentSdkPolicyRetryState()
     const beforeAttempts: string[] = []

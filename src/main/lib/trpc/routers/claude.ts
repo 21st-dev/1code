@@ -57,10 +57,7 @@ import {
   logClaudeAgentSdkProviderDiagnostics,
   logClaudeAgentSdkSessionDiagnostics,
 } from "../../claude/agent-sdk-runtime-diagnostics"
-import {
-  createClaudeAgentSdkAdapter,
-} from "../../claude/agent-sdk-adapter"
-import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-adapter-runner"
+import { runClaudeAgentSdkDesktopAdapter } from "../../claude/agent-sdk-adapter-runner"
 import {
   createClaudeAgentSdkStreamConsumer,
   createClaudeAgentSdkStreamConsumerMutableState,
@@ -1628,7 +1625,8 @@ export const claudeRouter = router({
 
             // Auto-retry for transient API errors (e.g., false-positive USAGE_POLICY_VIOLATION)
             const policyRetry = createClaudeAgentSdkPolicyRetryState()
-            const claudeAdapter = createClaudeAgentSdkAdapter({
+            const adapterResult = await runClaudeAgentSdkDesktopAdapter({
+              request: desktopRunRequest,
               queryOptions,
               consumeStream: createClaudeAgentSdkStreamConsumer({
                 isUsingOllama,
@@ -1665,22 +1663,16 @@ export const claudeRouter = router({
                 state:
                   createClaudeAgentSdkStreamConsumerStateAccess(streamState),
               }),
+              policyRetry,
+              beforeAttempt: () => {
+                resetClaudeAgentSdkStreamConsumerAttemptState(streamState)
+              },
+              getChunkCount: () => streamState.chunkCount,
+              subId,
+              emitError,
+              emit: safeEmit,
+              complete: safeComplete,
             })
-
-            const adapterResult =
-              await runClaudeAgentSdkAdapterWithPolicyRetry({
-                adapter: claudeAdapter,
-                request: desktopRunRequest,
-                policyRetry,
-                beforeAttempt: () => {
-                  resetClaudeAgentSdkStreamConsumerAttemptState(streamState)
-                },
-                getChunkCount: () => streamState.chunkCount,
-                subId,
-                emitError,
-                emit: safeEmit,
-                complete: safeComplete,
-              })
             if (adapterResult.status === "failed") {
               return
             }

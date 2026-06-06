@@ -115,11 +115,8 @@ describe("desktop runtime preflight", () => {
     const queryOptionsIndex = claude.indexOf(
       "const queryOptions = createClaudeAgentSdkQueryOptions({",
     )
-    const adapterIndex = claude.indexOf(
-      "const claudeAdapter = createClaudeAgentSdkAdapter({",
-    )
     const adapterRunIndex = claude.indexOf(
-      "await runClaudeAgentSdkAdapterWithPolicyRetry({",
+      "const adapterResult = await runClaudeAgentSdkDesktopAdapter({",
     )
 
     expect(blockerIndex).toBeGreaterThan(0)
@@ -127,8 +124,7 @@ describe("desktop runtime preflight", () => {
     expect(jobIndex).toBeGreaterThan(attachmentIndex)
     expect(runRequestIndex).toBeGreaterThan(jobIndex)
     expect(queryOptionsIndex).toBeGreaterThan(runRequestIndex)
-    expect(adapterIndex).toBeGreaterThan(queryOptionsIndex)
-    expect(adapterRunIndex).toBeGreaterThan(adapterIndex)
+    expect(adapterRunIndex).toBeGreaterThan(queryOptionsIndex)
     expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")
   })
 
