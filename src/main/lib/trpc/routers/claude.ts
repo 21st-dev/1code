@@ -61,6 +61,11 @@ import {
   getClaudeAgentSdkConnectionMethod,
   resolveClaudeAgentSdkProviderStartup,
 } from "../../claude/agent-sdk-provider-startup"
+import {
+  clearClaudeAgentSdkIsolatedConfigDirCache,
+  ensureClaudeAgentSdkIsolatedConfigDir,
+  resolveClaudeAgentSdkIsolatedConfig,
+} from "../../claude/agent-sdk-config-dir"
 import { createClaudeAgentSdkInitialGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import {
   deleteActiveClaudeSession,
@@ -99,7 +104,6 @@ import {
 } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { discoverPluginMcpServers, type PluginMcpConfig } from "../../plugins"
-import { getPluginSafeModeState } from "../../plugins/update-review-state"
 import { publicProcedure, router } from "../index"
 import {
   agentScopeContractInputSchema,
@@ -226,9 +230,6 @@ function mcpCacheKey(scope: string | null, serverName: string): string {
   return `${scope ?? GLOBAL_SCOPE}::${serverName}`
 }
 
-// Cache for symlinks (track which subChatIds have already set up symlinks)
-const symlinksCreated = new Set<string>()
-
 // Cache for MCP config (avoid re-reading ~/.claude.json on every message)
 const mcpConfigCache = new Map<
   string,
@@ -279,7 +280,7 @@ async function readProjectMcpJsonCached(
  */
 export function clearClaudeCaches() {
   clearClaudeAgentSdkQueryCache()
-  symlinksCreated.clear()
+  clearClaudeAgentSdkIsolatedConfigDirCache()
   mcpConfigCache.clear()
   projectMcpJsonCache.clear()
   console.log("[claude] All caches cleared")
@@ -1068,11 +1069,13 @@ export const claudeRouter = router({
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
             // For Ollama: use chatId instead of subChatId so all messages in the same chat share history
-            const isolatedConfigDir = path.join(
-              app.getPath("userData"),
-              "claude-sessions",
-              isUsingOllama ? input.chatId : input.subChatId,
-            )
+            const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
+              userDataDir: app.getPath("userData"),
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              isUsingOllama,
+            })
+            const isolatedConfigDir = isolatedConfig.isolatedConfigDir
 
             const runtimeEnvironment =
               prepareClaudeAgentSdkRuntimeEnvironment({
@@ -1093,127 +1096,7 @@ export const claudeRouter = router({
             // This is needed because SDK looks for these under $CLAUDE_CONFIG_DIR/
             // OPTIMIZATION: Only create symlinks once per subChatId (cached)
             try {
-              await fs.mkdir(isolatedConfigDir, { recursive: true })
-
-              // Only create symlinks if not already created for this config dir
-              const cacheKey = isUsingOllama ? input.chatId : input.subChatId
-              const pluginSafeMode = await getPluginSafeModeState()
-              if (!symlinksCreated.has(cacheKey) || pluginSafeMode.enabled) {
-                const homeClaudeDir = path.join(os.homedir(), ".claude")
-                const symlinkType =
-                  process.platform === "win32" ? "junction" : "dir"
-
-                const skillsSource = path.join(homeClaudeDir, "skills")
-                const skillsTarget = path.join(isolatedConfigDir, "skills")
-                const commandsSource = path.join(homeClaudeDir, "commands")
-                const commandsTarget = path.join(isolatedConfigDir, "commands")
-                const agentsSource = path.join(homeClaudeDir, "agents")
-                const agentsTarget = path.join(isolatedConfigDir, "agents")
-                const pluginsTarget = path.join(isolatedConfigDir, "plugins")
-                const settingsSource = path.join(homeClaudeDir, "settings.json")
-                const settingsTarget = path.join(
-                  isolatedConfigDir,
-                  "settings.json",
-                )
-
-                let symlinkSetupComplete = true
-                let symlinkSetupHadErrors = false
-
-                const removeManagedSymlink = async (
-                  targetPath: string,
-                  label: string,
-                ) => {
-                  try {
-                    const stat = await fs
-                      .lstat(targetPath)
-                      .catch(() => undefined)
-                    if (stat?.isSymbolicLink()) {
-                      await fs.unlink(targetPath)
-                    }
-                  } catch (symlinkErr) {
-                    symlinkSetupHadErrors = true
-                    console.warn(
-                      `[claude] Failed to remove ${label} symlink for plugin safe mode:`,
-                      (symlinkErr as Error).message,
-                    )
-                  }
-                }
-
-                const ensureSymlink = async (
-                  sourcePath: string,
-                  targetPath: string,
-                  label: string,
-                  targetKind: "dir" | "file",
-                ) => {
-                  try {
-                    const sourceExists = await fs
-                      .stat(sourcePath)
-                      .then(() => true)
-                      .catch(() => false)
-                    const targetExists = await fs
-                      .lstat(targetPath)
-                      .then(() => true)
-                      .catch(() => false)
-
-                    if (sourceExists && !targetExists) {
-                      if (targetKind === "dir") {
-                        await fs.symlink(sourcePath, targetPath, symlinkType)
-                      } else {
-                        await fs.symlink(sourcePath, targetPath)
-                      }
-                    }
-
-                    // Keep rechecking on next request when source is not created yet.
-                    if (!sourceExists && !targetExists) {
-                      symlinkSetupComplete = false
-                    }
-                  } catch (symlinkErr) {
-                    symlinkSetupComplete = false
-                    symlinkSetupHadErrors = true
-                    console.warn(
-                      `[claude] Failed to symlink ${label}:`,
-                      (symlinkErr as Error).message,
-                    )
-                  }
-                }
-
-                await ensureSymlink(
-                  skillsSource,
-                  skillsTarget,
-                  "skills directory",
-                  "dir",
-                )
-                await ensureSymlink(
-                  commandsSource,
-                  commandsTarget,
-                  "commands directory",
-                  "dir",
-                )
-                await ensureSymlink(
-                  agentsSource,
-                  agentsTarget,
-                  "agents directory",
-                  "dir",
-                )
-                // Do not expose the whole Claude plugin directory to Locus-managed
-                // runs. Reviewed plugin MCP servers are injected explicitly below;
-                // commands/skills/agents need a future allowlisted mount design.
-                await removeManagedSymlink(pluginsTarget, "plugins directory")
-                await ensureSymlink(
-                  settingsSource,
-                  settingsTarget,
-                  "settings.json",
-                  "file",
-                )
-
-                if (symlinkSetupComplete) {
-                  symlinksCreated.add(cacheKey)
-                } else if (symlinkSetupHadErrors) {
-                  console.warn(
-                    "[claude] Symlink setup incomplete, will retry on next request",
-                  )
-                }
-              }
+              await ensureClaudeAgentSdkIsolatedConfigDir(isolatedConfig)
 
               // Read MCP servers from all sources for the original project path
               // These will be passed directly to the SDK via options.mcpServers

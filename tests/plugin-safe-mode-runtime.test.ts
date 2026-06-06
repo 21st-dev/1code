@@ -7,6 +7,10 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/trpc/routers/claude.ts"),
     "utf8",
   )
+  const claudeConfigDirSource = readFileSync(
+    join(process.cwd(), "src/main/lib/claude/agent-sdk-config-dir.ts"),
+    "utf8",
+  )
   const claudeSettingsSource = readFileSync(
     join(process.cwd(), "src/main/lib/trpc/routers/claude-settings.ts"),
     "utf8",
@@ -86,10 +90,11 @@ describe("plugin safe mode runtime source guards", () => {
   })
 
   test("removes the plugin directory symlink while plugin safe mode is enabled", () => {
-    expect(claudeRouterSource).toContain("getPluginSafeModeState")
-    expect(claudeRouterSource).toContain("removeManagedSymlink(pluginsTarget")
-    expect(claudeRouterSource).toContain("pluginSafeMode.enabled")
-    expect(claudeRouterSource).not.toContain("ensureSymlink(\n                    pluginsSource")
+    expect(claudeRouterSource).toContain("ensureClaudeAgentSdkIsolatedConfigDir")
+    expect(claudeConfigDirSource).toContain("getPluginSafeModeState")
+    expect(claudeConfigDirSource).toContain("removeManagedSymlink({")
+    expect(claudeConfigDirSource).toContain("pluginSafeMode.enabled")
+    expect(claudeConfigDirSource).not.toContain("pluginsSource")
   })
 
   test("gates plugin enablement and MCP approval in Claude settings", () => {

@@ -1,0 +1,130 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readlink,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import {
+  clearClaudeAgentSdkIsolatedConfigDirCache,
+  ensureClaudeAgentSdkIsolatedConfigDir,
+  resolveClaudeAgentSdkIsolatedConfig,
+} from "../src/main/lib/claude/agent-sdk-config-dir"
+
+const roots: string[] = []
+
+async function createRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "locus-claude-config-dir-"))
+  roots.push(root)
+  return root
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  return lstat(path)
+    .then(() => true)
+    .catch(() => false)
+}
+
+async function createHomeClaudeDir(root: string): Promise<string> {
+  const homeDir = join(root, "home")
+  const homeClaudeDir = join(homeDir, ".claude")
+  await mkdir(join(homeClaudeDir, "skills"), { recursive: true })
+  await mkdir(join(homeClaudeDir, "commands"), { recursive: true })
+  await mkdir(join(homeClaudeDir, "agents"), { recursive: true })
+  await mkdir(join(homeClaudeDir, "plugins"), { recursive: true })
+  await writeFile(join(homeClaudeDir, "settings.json"), "{}\n", "utf-8")
+  return homeDir
+}
+
+beforeEach(() => {
+  clearClaudeAgentSdkIsolatedConfigDirCache()
+})
+
+afterEach(async () => {
+  clearClaudeAgentSdkIsolatedConfigDirCache()
+  await Promise.all(
+    roots.splice(0).map((root) =>
+      rm(root, { recursive: true, force: true }),
+    ),
+  )
+})
+
+describe("Claude Agent SDK isolated config dir", () => {
+  test("resolves normal runs by sub-chat and Ollama runs by chat", async () => {
+    const userDataDir = join(await createRoot(), "user-data")
+
+    expect(
+      resolveClaudeAgentSdkIsolatedConfig({
+        userDataDir,
+        chatId: "chat-1",
+        subChatId: "sub-1",
+        isUsingOllama: false,
+      }),
+    ).toEqual({
+      isolatedConfigDir: join(userDataDir, "claude-sessions", "sub-1"),
+      cacheKey: "sub-1",
+    })
+
+    expect(
+      resolveClaudeAgentSdkIsolatedConfig({
+        userDataDir,
+        chatId: "chat-1",
+        subChatId: "sub-1",
+        isUsingOllama: true,
+      }),
+    ).toEqual({
+      isolatedConfigDir: join(userDataDir, "claude-sessions", "chat-1"),
+      cacheKey: "chat-1",
+    })
+  })
+
+  test("links selected Claude assets and removes plugin symlink in safe mode", async () => {
+    const root = await createRoot()
+    const userDataDir = join(root, "user-data")
+    const homeDir = await createHomeClaudeDir(root)
+    const homeClaudeDir = join(homeDir, ".claude")
+    const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
+      userDataDir,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+    })
+
+    await mkdir(isolatedConfig.isolatedConfigDir, { recursive: true })
+    await symlink(
+      join(homeClaudeDir, "plugins"),
+      join(isolatedConfig.isolatedConfigDir, "plugins"),
+      "dir",
+    )
+
+    await ensureClaudeAgentSdkIsolatedConfigDir({
+      ...isolatedConfig,
+      dependencies: {
+        homeDir: () => homeDir,
+        getPluginSafeModeState: async () => ({ enabled: true }),
+        logger: { warn() {} },
+      },
+    })
+
+    await expect(
+      readlink(join(isolatedConfig.isolatedConfigDir, "skills")),
+    ).resolves.toBe(join(homeClaudeDir, "skills"))
+    await expect(
+      readlink(join(isolatedConfig.isolatedConfigDir, "commands")),
+    ).resolves.toBe(join(homeClaudeDir, "commands"))
+    await expect(
+      readlink(join(isolatedConfig.isolatedConfigDir, "agents")),
+    ).resolves.toBe(join(homeClaudeDir, "agents"))
+    await expect(
+      readlink(join(isolatedConfig.isolatedConfigDir, "settings.json")),
+    ).resolves.toBe(join(homeClaudeDir, "settings.json"))
+    expect(
+      await pathExists(join(isolatedConfig.isolatedConfigDir, "plugins")),
+    ).toBe(false)
+  })
+})

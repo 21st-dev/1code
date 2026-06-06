@@ -421,8 +421,13 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-provider-startup.ts",
       "utf8",
     )
+    const claudeConfigDir = readFileSync(
+      "src/main/lib/claude/agent-sdk-config-dir.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-provider-startup")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-config-dir")
     expect(claudeRouter).toContain(
       "const providerStartup =\n              await resolveClaudeAgentSdkProviderStartup",
     )
@@ -444,6 +449,10 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("buildClaudeEnv")
     expect(claudeRouter).not.toContain("buildClaudeProviderEnv")
     expect(claudeRouter).not.toContain("logClaudeEnv")
+    expect(claudeRouter).not.toContain("symlinksCreated")
+    expect(claudeRouter).not.toContain("removeManagedSymlink")
+    expect(claudeRouter).not.toContain("ensureSymlink")
+    expect(claudeRouter).not.toContain("const skillsSource")
     expect(claudeRouter).not.toContain(
       "function normalizeRuntimeProviderConfig",
     )
@@ -476,6 +485,12 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeProviderStartup).toContain("getValidClaudeCodeCredential")
     expect(claudeProviderStartup).toContain("checkOfflineFallback")
     expect(claudeProviderStartup).toContain("assertOfficialCloudAllowed")
+    expect(claudeConfigDir).toContain("resolveClaudeAgentSdkIsolatedConfig")
+    expect(claudeConfigDir).toContain("ensureClaudeAgentSdkIsolatedConfigDir")
+    expect(claudeConfigDir).toContain("clearClaudeAgentSdkIsolatedConfigDirCache")
+    expect(claudeConfigDir).toContain("getPluginSafeModeState")
+    expect(claudeConfigDir).toContain("removeManagedSymlink")
+    expect(claudeConfigDir).toContain("ensureSymlink")
   })
 
   test("keeps Claude Agent SDK runtime diagnostics ownership out of the router", () => {
