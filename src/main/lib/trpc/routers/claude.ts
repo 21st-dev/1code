@@ -48,7 +48,7 @@ import {
 import {
   cleanupClaudeAgentSdkDesktopRunSubscription,
   finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
-} from "../../claude/agent-sdk-subscription-cleanup"
+} from "../../claude/agent-sdk-desktop-run-cleanup"
 import {
   createClaudeAgentSdkRuntimeStreamSetup,
   createClaudeAgentSdkRuntimeStreamState,

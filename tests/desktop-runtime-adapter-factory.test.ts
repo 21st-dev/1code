@@ -1128,7 +1128,7 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
     const claudeSubscriptionCleanup = readFileSync(
-      "src/main/lib/claude/agent-sdk-subscription-cleanup.ts",
+      "src/main/lib/claude/agent-sdk-desktop-run-cleanup.ts",
       "utf8",
     )
 
@@ -1573,7 +1573,7 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
     const subscriptionCleanup = readFileSync(
-      "src/main/lib/claude/agent-sdk-subscription-cleanup.ts",
+      "src/main/lib/claude/agent-sdk-desktop-run-cleanup.ts",
       "utf8",
     )
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   cleanupClaudeAgentSdkDesktopRunSubscription,
   finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
-} from "../src/main/lib/claude/agent-sdk-subscription-cleanup"
+} from "../src/main/lib/claude/agent-sdk-desktop-run-cleanup"
 
 function createDbRecorder() {
   const updates: any[] = []
@@ -31,7 +31,7 @@ function createDbRecorder() {
   return { db: db as any, updates }
 }
 
-describe("Claude Agent SDK subscription cleanup", () => {
+describe("Claude Agent SDK desktop run cleanup", () => {
   test("cleans owned active sessions, guard contracts, pending approvals, jobs, and stream id", () => {
     const { db, updates } = createDbRecorder()
     const controller = new AbortController()

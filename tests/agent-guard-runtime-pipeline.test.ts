@@ -89,7 +89,7 @@ describe("agent guard runtime pipeline", () => {
       "utf8",
     )
     const subscriptionCleanup = readFileSync(
-      "src/main/lib/claude/agent-sdk-subscription-cleanup.ts",
+      "src/main/lib/claude/agent-sdk-desktop-run-cleanup.ts",
       "utf8",
     )
 
