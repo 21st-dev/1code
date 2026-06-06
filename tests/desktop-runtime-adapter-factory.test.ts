@@ -634,11 +634,16 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-adapter-runner.ts",
       "utf8",
     )
+    const embeddedErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-embedded-error-finalization.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-policy-retry")
     expect(claudeRouter).toContain("createClaudeAgentSdkPolicyRetryState()")
-    expect(claudeRouter).toContain("recordClaudeAgentSdkPolicyRetry")
+    expect(claudeRouter).not.toContain("recordClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
+    expect(claudeRouter).toContain("finalizeClaudeAgentSdkEmbeddedError")
     expect(claudeRouter).not.toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).not.toContain("let policyRetryNeeded")
     expect(claudeRouter).not.toContain("let policyRetryCount")
@@ -651,6 +656,9 @@ describe("desktop runtime adapter factory", () => {
     expect(policyRetry).toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(adapterRunner).toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(adapterRunner).toContain("resetClaudeAgentSdkPolicyRetryAttempt")
+    expect(embeddedErrorFinalization).toContain(
+      "recordClaudeAgentSdkPolicyRetry",
+    )
   })
 
   test("keeps Claude renderer stream emission redaction in runtime owner", () => {
@@ -947,12 +955,16 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
       "utf8",
     )
+    const embeddedErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-embedded-error-finalization.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-errors")
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-errors")
+    expect(claudeRouter).not.toContain(
       "extractClaudeAgentSdkEmbeddedErrorText",
     )
-    expect(claudeRouter).toContain("classifyClaudeAgentSdkEmbeddedError")
+    expect(claudeRouter).not.toContain("classifyClaudeAgentSdkEmbeddedError")
     expect(claudeRouter).not.toContain("classifyClaudeAgentSdkStreamError")
     expect(claudeRouter).not.toContain(
       "const messageText = msgAny.message?.content?.[0]?.text",
@@ -966,6 +978,12 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(streamErrorFinalization).toContain(
       "classifyClaudeAgentSdkStreamError",
+    )
+    expect(embeddedErrorFinalization).toContain(
+      "extractClaudeAgentSdkEmbeddedErrorText",
+    )
+    expect(embeddedErrorFinalization).toContain(
+      "classifyClaudeAgentSdkEmbeddedError",
     )
     expect(claudeErrors).toContain("extractClaudeAgentSdkEmbeddedErrorText")
     expect(claudeErrors).toContain("classifyClaudeAgentSdkEmbeddedError")
@@ -983,14 +1001,24 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-error-logging.ts",
       "utf8",
     )
+    const embeddedErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-embedded-error-finalization.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-error-logging")
-    expect(claudeRouter).toContain("logClaudeAgentSdkEmbeddedError")
-    expect(claudeRouter).toContain("logClaudeAgentSdkErrorDetails")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-error-logging")
+    expect(claudeRouter).not.toContain("logClaudeAgentSdkEmbeddedError")
+    expect(claudeRouter).not.toContain("logClaudeAgentSdkErrorDetails")
     expect(claudeRouter).not.toContain(
       "[CLAUDE SDK ERROR] ========================================",
     )
     expect(claudeRouter).not.toContain("[SD] SDK Error details:")
+    expect(embeddedErrorFinalization).toContain(
+      "logClaudeAgentSdkEmbeddedError",
+    )
+    expect(embeddedErrorFinalization).toContain(
+      "logClaudeAgentSdkErrorDetails",
+    )
     expect(claudeErrorLogging).toContain("logClaudeAgentSdkEmbeddedError")
     expect(claudeErrorLogging).toContain(
       "[CLAUDE SDK ERROR] ========================================",

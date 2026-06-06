@@ -40,21 +40,12 @@ import {
   type ClaudeProviderRuntimeConfig,
 } from "../../claude/provider-runtime-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
-import {
-  classifyClaudeAgentSdkEmbeddedError,
-  extractClaudeAgentSdkEmbeddedErrorText,
-} from "../../claude/agent-sdk-errors"
+import { finalizeClaudeAgentSdkEmbeddedError } from "../../claude/agent-sdk-embedded-error-finalization"
 import { completeClaudeAgentSdkRunAfterAdapter } from "../../claude/agent-sdk-run-finalization"
 import { finalizeClaudeAgentSdkStreamError } from "../../claude/agent-sdk-stream-error-finalization"
 import {
-  CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
   createClaudeAgentSdkPolicyRetryState,
-  recordClaudeAgentSdkPolicyRetry,
 } from "../../claude/agent-sdk-policy-retry"
-import {
-  logClaudeAgentSdkEmbeddedError,
-  logClaudeAgentSdkErrorDetails,
-} from "../../claude/agent-sdk-error-logging"
 import {
   logClaudeAgentSdkAuthDiagnostics,
   logClaudeAgentSdkProviderDiagnostics,
@@ -1814,85 +1805,36 @@ export const claudeRouter = router({
                     // Check for error messages from SDK (error can be embedded in message payload!)
                     const msgAny = msg as any
                     if (msgAny.type === "error" || msgAny.error) {
-                      const sdkError =
-                        extractClaudeAgentSdkEmbeddedErrorText(msgAny)
-
-                      logClaudeAgentSdkEmbeddedError({
-                        sdkError,
-                        message: msgAny,
-                        subChatId: input.subChatId,
-                        chatId: input.chatId,
-                        cwd: runtimeCwd,
-                        mode: input.mode,
-                        hasCustomConfig: !!finalCustomConfig,
-                        isUsingOllama,
-                        model: resolvedModel,
-                        hasOAuthToken: !!claudeCodeToken,
-                        mcpServerNames: mcpServersFiltered
-                          ? Object.keys(mcpServersFiltered)
-                          : [],
-                      })
-
-                      const errorDiagnostic =
-                        classifyClaudeAgentSdkEmbeddedError({
-                          rawErrorCode: msgAny.error,
-                          sdkError,
+                      const embeddedError =
+                        finalizeClaudeAgentSdkEmbeddedError({
+                          message: msgAny,
+                          policyRetry,
                           usesApiKeyAuth: Boolean(
                             finalCustomConfig || hasExistingApiConfig,
                           ),
-                          policyRetryCount: policyRetry.count,
-                          maxPolicyRetries:
-                            CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
                           aborted: abortController.signal.aborted,
+                          subChatId: input.subChatId,
+                          chatId: input.chatId,
+                          cwd: runtimeCwd,
+                          mode: input.mode,
+                          hasCustomConfig: !!finalCustomConfig,
+                          isUsingOllama,
+                          model: resolvedModel,
+                          hasOAuthToken: !!claudeCodeToken,
+                          mcpServerNames: mcpServersFiltered
+                            ? Object.keys(mcpServersFiltered)
+                            : [],
+                          subId,
+                          chunkCount,
+                          emit: safeEmit,
+                          complete: safeComplete,
                         })
-                      const rawErrorCode = errorDiagnostic.rawErrorCode
-                      const errorCategory = errorDiagnostic.category
-                      const errorContext = errorDiagnostic.context
-
-                      // Auto-retry on false-positive policy violations (gateway-level rejections)
-                      if (errorDiagnostic.shouldRetryPolicy) {
-                        recordClaudeAgentSdkPolicyRetry({
-                          state: policyRetry,
-                        })
-                        break // break for-await loop to retry
+                      if (embeddedError.status === "retry") {
+                        break
                       }
-
-                      // Emit auth-error for authentication failures, regular error otherwise
-                      if (errorDiagnostic.shouldEmitAuthError) {
-                        safeEmit({
-                          type: "auth-error",
-                          errorText: errorContext,
-                        } as UIMessageChunk)
-                      } else {
-                        safeEmit({
-                          type: "error",
-                          errorText: errorContext,
-                          debugInfo: {
-                            category: errorCategory,
-                            rawErrorCode,
-                            sessionId: msgAny.session_id,
-                            messageId: msgAny.message?.id,
-                          },
-                        } as UIMessageChunk)
-                      }
-
-                      console.log(
-                        `[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`,
-                      )
-                      logClaudeAgentSdkErrorDetails({
-                        errorCategory,
-                        errorContext,
-                        rawErrorCode,
-                        message: msgAny,
-                      })
-                      safeEmit({ type: "finish" } as UIMessageChunk)
-                      safeComplete()
                       return {
                         status: "failed" as const,
-                        error: {
-                          message: errorContext,
-                          code: errorCategory,
-                        },
+                        error: embeddedError.error,
                       }
                     }
 
