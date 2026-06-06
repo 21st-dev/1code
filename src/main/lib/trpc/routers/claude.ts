@@ -37,9 +37,6 @@ import {
 import { logClaudeAgentSdkStartupDiagnostics } from "../../claude/agent-sdk-runtime-diagnostics"
 import { runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer } from "../../claude/agent-sdk-adapter-runner"
 import {
-  createClaudeAgentSdkStreamConsumerMutableState,
-} from "../../claude/agent-sdk-stream-consumer"
-import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
 import {
@@ -62,7 +59,10 @@ import {
   resolveClaudeAgentSdkIsolatedConfig,
 } from "../../claude/agent-sdk-config-dir"
 import { createClaudeAgentSdkDesktopJob } from "../../claude/agent-sdk-desktop-job"
-import { createClaudeAgentSdkRuntimeStreamSetup } from "../../claude/agent-sdk-runtime-state"
+import {
+  createClaudeAgentSdkRuntimeStreamSetup,
+  createClaudeAgentSdkRuntimeStreamState,
+} from "../../claude/agent-sdk-runtime-state"
 import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
@@ -761,7 +761,7 @@ export const claudeRouter = router({
         // Stream debug logging
         const subId = input.subChatId.slice(-8) // Short ID for logs
         const streamStart = Date.now()
-        const streamState = createClaudeAgentSdkStreamConsumerMutableState()
+        const streamState = createClaudeAgentSdkRuntimeStreamState()
         let desktopJobId: string | null = null
         let desktopJobSawError = false
         let desktopJobReachedNaturalFinish = false

@@ -3,12 +3,20 @@ import {
   createClaudeAgentSdkInitialGuardMetadata,
   type ClaudeAgentSdkGuardedContract,
 } from "./agent-sdk-guard-metadata"
+import {
+  createClaudeAgentSdkStreamConsumerMutableState,
+  type ClaudeAgentSdkStreamConsumerMutableState,
+} from "./agent-sdk-stream-consumer"
 
 export type ClaudeAgentSdkRuntimeStreamSetup = {
   transform: ReturnType<typeof createTransformer>
   parts: any[]
   stderrLines: string[]
   metadata: Record<string, any>
+}
+
+export function createClaudeAgentSdkRuntimeStreamState(): ClaudeAgentSdkStreamConsumerMutableState {
+  return createClaudeAgentSdkStreamConsumerMutableState()
 }
 
 export function createClaudeAgentSdkRuntimeStreamSetup(input: {
