@@ -329,4 +329,26 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeQueryOptions).toContain("includePartialMessages: true")
     expect(claudeQueryOptions).toContain("createAbortControllerFromSignal")
   })
+
+  test("keeps Claude Agent SDK tool permission ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeToolPermission = readFileSync(
+      "src/main/lib/claude/agent-sdk-tool-permission.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-tool-permission")
+    expect(claudeRouter).toContain(
+      "canUseTool: createClaudeAgentSdkToolPermissionHandler({",
+    )
+    expect(claudeRouter).not.toContain("PLAN_MODE_BLOCKED_TOOLS")
+    expect(claudeRouter).not.toContain("toClaudePermissionResult(decision)")
+    expect(claudeToolPermission).toContain("PLAN_MODE_BLOCKED_TOOLS")
+    expect(claudeToolPermission).toContain("fixOllamaToolInputAliases")
+    expect(claudeToolPermission).toContain("toClaudePermissionResult(decision)")
+    expect(claudeToolPermission).toContain('type: "ask-user-question"')
+  })
 })

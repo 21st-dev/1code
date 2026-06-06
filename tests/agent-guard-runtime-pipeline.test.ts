@@ -17,6 +17,10 @@ describe("agent guard runtime pipeline", () => {
       "utf8",
     )
     const chunks = readFileSync("src/main/lib/claude/types.ts", "utf8")
+    const claudeToolPermission = readFileSync(
+      "src/main/lib/claude/agent-sdk-tool-permission.ts",
+      "utf8",
+    )
     const input = readFileSync(
       "src/renderer/features/agents/main/chat-input-area.tsx",
       "utf8",
@@ -33,8 +37,9 @@ describe("agent guard runtime pipeline", () => {
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
     expect(claude).toContain("validateAgentScopeContract(input.scopeContract")
-    expect(claude).toContain("decideClaudeToolUse")
-    expect(claude).toContain("toClaudePermissionResult(decision)")
+    expect(claude).toContain("createClaudeAgentSdkToolPermissionHandler")
+    expect(claudeToolPermission).toContain("decideClaudeToolUse")
+    expect(claudeToolPermission).toContain("toClaudePermissionResult(decision)")
     expect(claude).toContain("respondScopeExpansion")
     expect(claude).toContain("activeGuardedContracts")
     expect(claude).toContain("buildGuardedRunAudit")

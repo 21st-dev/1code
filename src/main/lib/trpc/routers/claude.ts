@@ -1,5 +1,4 @@
 import { observable } from "@trpc/server/observable"
-import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow } from "electron"
 import * as fs from "fs/promises"
@@ -40,6 +39,10 @@ import {
   type ClaudeProviderRuntimeConfig,
 } from "./claude-provider-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
+import {
+  createClaudeAgentSdkToolPermissionHandler,
+  type ClaudeAskUserQuestionPending,
+} from "../../claude/agent-sdk-tool-permission"
 import { createClaudeDesktopRunRequest } from "../../claude/desktop-run-request"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import {
@@ -68,9 +71,7 @@ import {
   agentScopeContractInputSchema,
   buildGuardedRunAudit,
   captureGuardedGitStatus,
-  decideClaudeToolUse,
   formatScopeValidationError,
-  toClaudePermissionResult,
   validateAgentScopeContract,
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
@@ -392,18 +393,9 @@ async function readProjectMcpJsonCached(
 
 const pendingToolApprovals = new Map<
   string,
-  {
-    subChatId: string
-    resolve: (decision: {
-      approved: boolean
-      message?: string
-      updatedInput?: unknown
-    }) => void
-  }
+  ClaudeAskUserQuestionPending
 >()
 const activeGuardedContracts = new Map<string, ValidatedAgentScopeContract>()
-
-const PLAN_MODE_BLOCKED_TOOLS = new Set(["Bash", "NotebookEdit"])
 
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
@@ -2291,215 +2283,20 @@ ${prompt}
               permission: claudePermission,
               mcpServers: mcpServersFiltered,
               isUsingOllama,
-              canUseTool: async (
-                toolName: string,
-                toolInput: Record<string, unknown>,
-                options: { toolUseID: string },
-              ): Promise<PermissionResult> => {
-                  // Fix common parameter mistakes from Ollama models
-                  // Local models often use slightly wrong parameter names
-                  if (isUsingOllama) {
-                    // Read: "file" -> "file_path"
-                    if (
-                      toolName === "Read" &&
-                      toolInput.file &&
-                      !toolInput.file_path
-                    ) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log("[Ollama] Fixed Read tool: file -> file_path")
-                    }
-                    // Write: "file" -> "file_path", "content" is usually correct
-                    if (
-                      toolName === "Write" &&
-                      toolInput.file &&
-                      !toolInput.file_path
-                    ) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log(
-                        "[Ollama] Fixed Write tool: file -> file_path",
-                      )
-                    }
-                    // Edit: "file" -> "file_path"
-                    if (
-                      toolName === "Edit" &&
-                      toolInput.file &&
-                      !toolInput.file_path
-                    ) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log("[Ollama] Fixed Edit tool: file -> file_path")
-                    }
-                    // Glob: "path" might be passed as "directory" or "dir"
-                    if (toolName === "Glob") {
-                      if (toolInput.directory && !toolInput.path) {
-                        toolInput.path = toolInput.directory
-                        delete toolInput.directory
-                        console.log(
-                          "[Ollama] Fixed Glob tool: directory -> path",
-                        )
-                      }
-                      if (toolInput.dir && !toolInput.path) {
-                        toolInput.path = toolInput.dir
-                        delete toolInput.dir
-                        console.log("[Ollama] Fixed Glob tool: dir -> path")
-                      }
-                    }
-                    // Grep: "query" -> "pattern", "directory" -> "path"
-                    if (toolName === "Grep") {
-                      if (toolInput.query && !toolInput.pattern) {
-                        toolInput.pattern = toolInput.query
-                        delete toolInput.query
-                        console.log(
-                          "[Ollama] Fixed Grep tool: query -> pattern",
-                        )
-                      }
-                      if (toolInput.directory && !toolInput.path) {
-                        toolInput.path = toolInput.directory
-                        delete toolInput.directory
-                        console.log(
-                          "[Ollama] Fixed Grep tool: directory -> path",
-                        )
-                      }
-                    }
-                    // Bash: "cmd" -> "command"
-                    if (
-                      toolName === "Bash" &&
-                      toolInput.cmd &&
-                      !toolInput.command
-                    ) {
-                      toolInput.command = toolInput.cmd
-                      delete toolInput.cmd
-                      console.log("[Ollama] Fixed Bash tool: cmd -> command")
-                    }
-                  }
-
-                  if (permissionPolicy.planWorkspaceSideEffects === "deny") {
-                    if (toolName === "Edit" || toolName === "Write") {
-                      return {
-                        behavior: "deny",
-                        message: `Tool "${toolName}" blocked in plan mode.`,
-                      }
-                    }
-                    if (toolName == "ExitPlanMode") {
-                      return {
-                        behavior: "deny",
-                        message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
-                      }
-                    }
-                    if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
-                      return {
-                        behavior: "deny",
-                        message: `Tool "${toolName}" blocked in plan mode.`,
-                      }
-                    }
-                  }
-                  if (
-                    guardedContract &&
-                    permissionPolicy.enforcement === "locus-guarded-tool-policy" &&
-                    toolName !== "AskUserQuestion"
-                  ) {
-                    const currentGuardedContract =
-                      activeGuardedContracts.get(guardedContract.id) ??
-                      guardedContract
-                    const decision = decideClaudeToolUse({
-                      contract: currentGuardedContract,
-                      toolName,
-                      toolInput,
-                      toolUseId: options.toolUseID,
-                    })
-                    guardEvents.push(decision.event)
-                    safeEmit({
-                      type: "guard-event",
-                      event: decision.event,
-                    })
-                    return toClaudePermissionResult(decision)
-                  }
-                  if (toolName === "AskUserQuestion") {
-                    const { toolUseID } = options
-                    // Emit to UI (safely in case observer is closed)
-                    safeEmit({
-                      type: "ask-user-question",
-                      toolUseId: toolUseID,
-                      questions: (toolInput as any).questions,
-                    } as UIMessageChunk)
-
-                    // Wait for response (60s timeout)
-                    const response = await new Promise<{
-                      approved: boolean
-                      message?: string
-                      updatedInput?: unknown
-                    }>((resolve) => {
-                      const timeoutId = setTimeout(() => {
-                        pendingToolApprovals.delete(toolUseID)
-                        // Emit chunk to notify UI that the question has timed out
-                        // This ensures the pending question dialog is cleared
-                        safeEmit({
-                          type: "ask-user-question-timeout",
-                          toolUseId: toolUseID,
-                        } as UIMessageChunk)
-                        resolve({ approved: false, message: "Timed out" })
-                      }, 60000)
-
-                      pendingToolApprovals.set(toolUseID, {
-                        subChatId: input.subChatId,
-                        resolve: (d) => {
-                          clearTimeout(timeoutId)
-                          resolve(d)
-                        },
-                      })
-                    })
-
-                    // Find the tool part in accumulated parts
-                    const askToolPart = parts.find(
-                      (p) =>
-                        p.toolCallId === toolUseID &&
-                        p.type === "tool-AskUserQuestion",
-                    )
-
-                    if (!response.approved) {
-                      // Update the tool part with error result for skipped/denied
-                      const errorMessage = response.message || "Skipped"
-                      if (askToolPart) {
-                        askToolPart.result = errorMessage
-                        askToolPart.state = "result"
-                      }
-                      // Emit result to frontend so it updates in real-time
-                      safeEmit({
-                        type: "ask-user-question-result",
-                        toolUseId: toolUseID,
-                        result: errorMessage,
-                      } as UIMessageChunk)
-                      return {
-                        behavior: "deny",
-                        message: errorMessage,
-                      }
-                    }
-
-                    // Update the tool part with answers result for approved
-                    const answers = (response.updatedInput as any)?.answers
-                    const answerResult = { answers }
-                    if (askToolPart) {
-                      askToolPart.result = answerResult
-                      askToolPart.state = "result"
-                    }
-                    // Emit result to frontend so it updates in real-time
-                    safeEmit({
-                      type: "ask-user-question-result",
-                      toolUseId: toolUseID,
-                      result: answerResult,
-                    } as UIMessageChunk)
-                    return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput as Record<string, unknown>,
-                    }
-                  }
-                  return {
-                    behavior: "allow",
-                    updatedInput: toolInput,
-                  }
-              },
+              canUseTool: createClaudeAgentSdkToolPermissionHandler({
+                isUsingOllama,
+                permissionPolicy,
+                guardedContract,
+                getGuardedContract: (contractId) =>
+                  activeGuardedContracts.get(contractId),
+                recordGuardEvent: (event) => {
+                  guardEvents.push(event)
+                },
+                emit: safeEmit,
+                subChatId: input.subChatId,
+                pendingToolApprovals,
+                parts,
+              }),
               stderr: (data: string) => {
                 stderrLines.push(data)
                 if (isUsingOllama) {

@@ -68,6 +68,10 @@ describe("desktop runtime permission policy", () => {
   test("desktop routes consume the shared permission policy owner", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const claudeToolPermission = readFileSync(
+      "src/main/lib/claude/agent-sdk-tool-permission.ts",
+      "utf8",
+    )
     const codexAcpTemporaryCompatAdapter = readFileSync(
       "src/main/lib/codex/acp-temporary-compat-adapter.ts",
       "utf8",
@@ -79,7 +83,10 @@ describe("desktop runtime permission policy", () => {
 
     expect(claude).toContain("resolveDesktopPermissionPolicy")
     expect(claude).toContain("getClaudePermissionMapping")
-    expect(claude).toContain("permissionPolicy.planWorkspaceSideEffects")
+    expect(claude).toContain("createClaudeAgentSdkToolPermissionHandler")
+    expect(claudeToolPermission).toContain(
+      "permissionPolicy.planWorkspaceSideEffects",
+    )
     expect(claude).not.toContain('Only ".md" files can be modified in plan mode.')
 
     expect(codex).toContain("resolveDesktopPermissionPolicy")
