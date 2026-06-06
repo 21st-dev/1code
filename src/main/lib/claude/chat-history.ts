@@ -166,6 +166,47 @@ export function isDuplicateClaudeUserMessage(input: {
   )
 }
 
+export function prepareClaudeUserMessageForHistory(input: {
+  messages: Array<Record<string, any>>
+  prompt: string
+  images: z.infer<typeof imageAttachmentSchema>[] | undefined
+  longTextAttachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+  createId: () => string
+  now?: () => Date
+}): {
+  isDuplicate: boolean
+  userMessage: Record<string, any>
+  messagesToSave: Array<Record<string, any>>
+} {
+  const isDuplicate = isDuplicateClaudeUserMessage(input)
+  const lastMessage = input.messages[input.messages.length - 1]
+
+  if (isDuplicate) {
+    return {
+      isDuplicate: true,
+      userMessage: lastMessage,
+      messagesToSave: input.messages,
+    }
+  }
+
+  const userMessage = {
+    id: input.createId(),
+    role: "user",
+    createdAt: (input.now?.() ?? new Date()).toISOString(),
+    parts: buildClaudeUserParts(
+      input.prompt,
+      input.images,
+      input.longTextAttachments,
+    ),
+  }
+
+  return {
+    isDuplicate: false,
+    userMessage,
+    messagesToSave: [...input.messages, userMessage],
+  }
+}
+
 export function buildClaudeChatImageAttachmentParts(
   images: z.infer<typeof imageAttachmentSchema>[] | undefined,
 ): any[] {

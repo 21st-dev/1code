@@ -103,9 +103,8 @@ import {
   resolveClaudePendingToolApproval,
 } from "../../claude/tool-approvals"
 import {
-  buildClaudeUserParts,
   consumeClaudeChatForkResumeFlags,
-  isDuplicateClaudeUserMessage,
+  prepareClaudeUserMessageForHistory,
   resolveClaudeChatResumeMetadata,
 } from "../../claude/chat-history"
 import {
@@ -969,35 +968,17 @@ export const claudeRouter = router({
                 .run()
             }
 
-            // Check if last message is already this user message (avoid duplicate)
-            const lastMsg = existingMessages[existingMessages.length - 1]
-            const isDuplicate = isDuplicateClaudeUserMessage({
+            // Create user message and save BEFORE streaming (skip if duplicate)
+            const userMessageHistory = prepareClaudeUserMessageForHistory({
               messages: existingMessages,
               prompt: input.prompt,
               images: input.images,
               longTextAttachments: input.longTextAttachments,
+              createId: () => crypto.randomUUID(),
             })
+            const { isDuplicate, messagesToSave } = userMessageHistory
 
-            // 2. Create user message and save BEFORE streaming (skip if duplicate)
-            let userMessage: any
-            let messagesToSave: any[]
-
-            if (isDuplicate) {
-              userMessage = lastMsg
-              messagesToSave = existingMessages
-            } else {
-              userMessage = {
-                id: crypto.randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                parts: buildClaudeUserParts(
-                  input.prompt,
-                  input.images,
-                  input.longTextAttachments,
-                ),
-              }
-              messagesToSave = [...existingMessages, userMessage]
-
+            if (!isDuplicate) {
               db.update(subChats)
                 .set({
                   messages: JSON.stringify(messagesToSave),

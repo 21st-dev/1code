@@ -7,6 +7,7 @@ import {
   claudeLongTextAttachmentSignatureFromParts,
   consumeClaudeChatForkResumeFlags,
   isDuplicateClaudeUserMessage,
+  prepareClaudeUserMessageForHistory,
   resolveClaudeChatResumeMetadata,
 } from "../src/main/lib/claude/chat-history"
 
@@ -249,5 +250,53 @@ describe("Claude chat history helpers", () => {
         longTextAttachments,
       }),
     ).toBe(false)
+  })
+
+  test("prepares user history message by reusing duplicates or appending a new message", () => {
+    const existingUserMessage = {
+      role: "user",
+      parts: buildClaudeUserParts("hello", [], []),
+    }
+    const duplicate = prepareClaudeUserMessageForHistory({
+      messages: [existingUserMessage],
+      prompt: "hello",
+      images: [],
+      longTextAttachments: [],
+      createId: () => "new-id",
+      now: () => new Date("2026-01-01T00:00:00.000Z"),
+    })
+
+    expect(duplicate).toEqual({
+      isDuplicate: true,
+      userMessage: existingUserMessage,
+      messagesToSave: [existingUserMessage],
+    })
+
+    const created = prepareClaudeUserMessageForHistory({
+      messages: [],
+      prompt: "hello",
+      images: [],
+      longTextAttachments: [],
+      createId: () => "message-1",
+      now: () => new Date("2026-01-01T00:00:00.000Z"),
+    })
+
+    expect(created).toEqual({
+      isDuplicate: false,
+      userMessage: {
+        id: "message-1",
+        role: "user",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        parts: [{ type: "text", text: "hello" }],
+      },
+      messagesToSave: [
+        {
+          id: "message-1",
+          role: "user",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          parts: [{ type: "text", text: "hello" }],
+        },
+      ],
+    })
   })
 })

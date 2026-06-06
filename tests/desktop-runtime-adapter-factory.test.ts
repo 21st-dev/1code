@@ -935,10 +935,11 @@ describe("desktop runtime adapter factory", () => {
 
     expect(claudeRouter).toContain("../../claude/chat-history")
     expect(claudeRouter).toContain("../../claude/chat-input-schema")
-    expect(claudeRouter).toContain("buildClaudeUserParts(")
+    expect(claudeRouter).toContain("prepareClaudeUserMessageForHistory")
     expect(claudeRouter).toContain("resolveClaudeChatResumeMetadata")
     expect(claudeRouter).toContain("consumeClaudeChatForkResumeFlags")
-    expect(claudeRouter).toContain("isDuplicateClaudeUserMessage")
+    expect(claudeRouter).not.toContain("buildClaudeUserParts(")
+    expect(claudeRouter).not.toContain("isDuplicateClaudeUserMessage")
     expect(claudeRouter).not.toContain(
       "function buildLongTextAttachmentParts",
     )
@@ -955,6 +956,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeChatHistory).toContain("resolveClaudeChatResumeMetadata")
     expect(claudeChatHistory).toContain("consumeClaudeChatForkResumeFlags")
     expect(claudeChatHistory).toContain("isDuplicateClaudeUserMessage")
+    expect(claudeChatHistory).toContain("prepareClaudeUserMessageForHistory")
     expect(claudeChatHistory).toContain("lastAssistantMessage")
     expect(claudeChatHistory).toContain("delete metadata.shouldForkResume")
     expect(claudeChatHistory).toContain("buildClaudeUserParts")
