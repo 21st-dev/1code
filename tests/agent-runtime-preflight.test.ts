@@ -135,7 +135,7 @@ describe("desktop runtime preflight", () => {
     )
     const jobIndex = codex.indexOf("createAndStartDesktopAgentJob(db, {")
     const runRequestIndex = codex.indexOf(
-      "const desktopRunRequest: DesktopRunRequest = {",
+      "const desktopRunRequest = createCodexDesktopRunRequest({",
     )
     const providerIndex = codex.indexOf(
       "const provider = getOrCreateCodexAcpProvider({",

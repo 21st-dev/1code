@@ -57,6 +57,7 @@ import {
   createCodexUsageMetadataResolver,
 } from "../../codex/usage-metadata"
 import { prepareCodexAcpPrompt } from "../../codex/prompt"
+import { createCodexDesktopRunRequest } from "../../codex/desktop-run-request"
 import { createCodexAcpRuntimeModel } from "../../codex/acp-runtime"
 import { createCodexAcpUiMessageStream } from "../../codex/acp-text-stream"
 import { emitCodexAcpUiStream } from "../../codex/acp-ui-stream"
@@ -76,10 +77,6 @@ import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage
 import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
 import { CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA } from "../../agent-runtime/desktop-adapter-metadata"
-import {
-  createDesktopRunContextFromPreflight,
-  type DesktopRunRequest,
-} from "../../agent-runtime/desktop-run-request"
 import {
   DesktopRunPreflightError,
   verifyDesktopRunPreflight,
@@ -2263,16 +2260,11 @@ export const codexRouter = router({
               },
             })
 
-            const desktopRunRequest: DesktopRunRequest = {
-              identity: {
-                runId: input.runId,
-                jobId: desktopJobId,
-              },
-              context: createDesktopRunContextFromPreflight(
-                "codex",
-                input.mode,
-                verifiedRunContext,
-              ),
+            const desktopRunRequest = createCodexDesktopRunRequest({
+              runId: input.runId,
+              jobId: desktopJobId,
+              mode: input.mode,
+              preflight: verifiedRunContext,
               prompt: input.prompt,
               permissionPolicy,
               providerBinding: {
@@ -2285,49 +2277,19 @@ export const codexRouter = router({
                   : appManagedCodexApiKey
                     ? "app-managed"
                     : "runtime-managed",
-                diagnostics: permissionPolicy.diagnostics.map((message, index) => ({
-                  id: `permission-policy-${index + 1}`,
-                  status: "ready",
-                  message,
-                })),
               },
-              mcp: {
-                status: "ready",
-                serverNames: mcpSnapshot.mcpServersForSession.map(
-                  (server) => server.name,
-                ),
-                blockers: [],
-              },
-              attachments: [
-                ...(input.images ?? []).map((image) => ({
-                  kind: "image" as const,
-                  attachmentId: image.attachmentId,
-                  localRef: image.localRef,
-                  mediaType: image.mediaType,
-                  filename: image.filename,
-                  byteLength: image.sizeBytes,
-                })),
-                ...(input.longTextAttachments ?? []).map((attachment) => ({
-                  kind: "long-text" as const,
-                  attachmentId: attachment.attachmentId,
-                  localRef: attachment.localRef,
-                  filename: attachment.filename,
-                  byteLength: attachment.byteLength,
-                })),
-              ],
-              trace: {
-                emit: (event) => {
-                  appendRunEventsToAgentJob(db, [event])
-                },
-              },
+              mcpServers: mcpSnapshot.mcpServersForSession,
+              images: input.images,
+              longTextAttachments: input.longTextAttachments,
               signal: abortController.signal,
-              session: {
-                resumeSessionId: input.forceNewSession
-                  ? null
-                  : input.sessionId ?? getLastSessionId(existingMessages) ?? null,
-                parentSessionId: input.sessionId ?? null,
+              resumeSessionId: input.forceNewSession
+                ? null
+                : input.sessionId ?? getLastSessionId(existingMessages) ?? null,
+              parentSessionId: input.sessionId ?? null,
+              emitTrace: (event) => {
+                appendRunEventsToAgentJob(db, [event])
               },
-            }
+            })
 
             const provider = getOrCreateCodexAcpProvider({
               runRequest: desktopRunRequest,

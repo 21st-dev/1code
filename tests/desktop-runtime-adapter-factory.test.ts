@@ -104,16 +104,20 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
+    const codexDesktopRunRequest = readFileSync(
+      "src/main/lib/codex/desktop-run-request.ts",
+      "utf8",
+    )
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
+    expect(codexRouter).toContain("../../codex/desktop-run-request")
     expect(codexRouter).toContain("../../codex/acp-runtime")
     expect(codexRouter).toContain("../../codex/acp-text-stream")
     expect(codexRouter).toContain("../../codex/acp-ui-stream")
     expect(codexRouter).toContain("../../codex/acp-message-persistence")
     expect(codexRouter).toContain("../../codex/usage-metadata")
     expect(codexRouter).toContain("../../codex/prompt")
-    expect(codexRouter).toContain("createDesktopRunContextFromPreflight")
-    expect(codexRouter).toContain("const desktopRunRequest: DesktopRunRequest")
+    expect(codexRouter).toContain("const desktopRunRequest = createCodexDesktopRunRequest")
     expect(codexRouter).toContain("getOrCreateCodexAcpProvider")
     expect(codexRouter).toContain("runRequest: desktopRunRequest")
     expect(codexRouter).not.toContain("readLatestTokenCountInfo")
@@ -126,6 +130,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("streamText")
     expect(codexRouter).not.toContain("buildCodexAcpModelMessageContent")
     expect(codexRouter).not.toContain("toUIMessageStream")
+    expect(codexRouter).not.toContain("createDesktopRunContextFromPreflight")
+    expect(codexRouter).not.toContain("const desktopRunRequest: DesktopRunRequest")
     expect(codexRouter).not.toContain("pollCodexUsageMetadata")
     expect(codexRouter).not.toContain("usagePromise")
     expect(codexRouter).not.toContain("pendingFinishChunk")
@@ -146,5 +152,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexUsageMetadata).toContain("readLatestTokenCountInfo")
     expect(codexPrompt).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("preparePromptWithAppAgents")
+    expect(codexDesktopRunRequest).toContain("createCodexDesktopRunRequest")
+    expect(codexDesktopRunRequest).toContain("createDesktopRunContextFromPreflight")
   })
 })
