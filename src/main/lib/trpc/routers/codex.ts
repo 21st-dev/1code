@@ -82,7 +82,11 @@ import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import { isLocalOnlyMode } from "../../local-only"
 import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
-import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
+import {
+  DesktopRunPreflightError,
+  verifyDesktopRunPreflight,
+  type DesktopRunPreflightBlocker,
+} from "../../agent-runtime/preflight"
 import {
   getCodexPermissionMapping,
   resolveDesktopPermissionPolicy,
@@ -2222,31 +2226,21 @@ export const codexRouter = router({
               safeComplete()
             }
 
-            const desktopJob = createAndStartDesktopAgentJob(db, {
-              runtime: "codex",
-              mode: input.mode,
-              chatId: input.chatId,
-              subChatId: input.subChatId,
-              cwd: runtimeCwd,
-              prompt: input.prompt,
-              runId: input.runId,
-            })
-            desktopJobId = desktopJob.job.id
-            registerActiveDesktopAgentJob({
-              jobId: desktopJobId,
-              runtime: "codex",
-              subChatId: input.subChatId,
-              runId: input.runId,
-              db,
-              workerId: desktopJob.workerId,
-              cancel: () => {
-                const activeStream = activeStreams.get(input.subChatId)
-                if (activeStream?.runId !== input.runId) return
-                activeStream.cancelRequested = true
-                activeStream.controller.abort()
-                clearPendingCodexApprovals("Session cancelled.", input.subChatId)
-              },
-            })
+            const emitPreflightBlocker = (
+              blocker: DesktopRunPreflightBlocker,
+              chunks: any[] = [],
+            ) => {
+              for (const chunk of chunks) safeEmit(chunk)
+              const error = new DesktopRunPreflightError(blocker)
+              safeEmit({
+                type: blocker.status === "needs-auth" ? "auth-error" : "error",
+                errorText: blocker.hint
+                  ? `${error.message} ${blocker.hint}`
+                  : error.message,
+              })
+              safeEmit({ type: "finish" })
+              safeComplete()
+            }
 
             const runtimeStatus = await getCodexRuntimeStatus()
             if (!runtimeStatus.ok) {
@@ -2260,15 +2254,15 @@ export const codexRouter = router({
                   message: "Codex runtime is unavailable.",
                   hint: "Check Codex runtime status and try again.",
                 })
-              safeEmit(buildCodexRuntimeStatusChunk(blocker))
-              safeEmit({
-                type: "error",
-                errorText: blocker.hint
-                  ? `${blocker.message} ${blocker.hint}`
-                  : blocker.message,
-              })
-              safeEmit({ type: "finish" })
-              safeComplete()
+              emitPreflightBlocker(
+                {
+                  id: "unsupported-capability",
+                  status: "blocked",
+                  message: blocker.message,
+                  hint: blocker.hint,
+                },
+                [buildCodexRuntimeStatusChunk(blocker)],
+              )
               return
             }
 
@@ -2291,15 +2285,14 @@ export const codexRouter = router({
             try {
               resolvedImages = await resolveChatImageAttachments(input.images)
             } catch (attachmentError) {
-              safeEmit({
-                type: "error",
-                errorText:
+              emitPreflightBlocker({
+                id: "attachment",
+                status: "blocked",
+                message:
                   attachmentError instanceof Error
                     ? `Image attachment unavailable: ${attachmentError.message}`
                     : `Image attachment unavailable: ${String(attachmentError)}`,
               })
-              safeEmit({ type: "finish" })
-              safeComplete()
               return
             }
             let codexProviderProfile:
@@ -2325,14 +2318,18 @@ export const codexRouter = router({
                   message: "Provider profile is not available for Codex.",
                   hint: "Choose a provider profile that targets Codex.",
                 })
-                safeEmit(buildCodexRuntimeStatusChunk(blocker))
-                safeEmit(buildCodexCapabilityErrorChunk(blocker))
-                safeEmit({
-                  type: "error",
-                  errorText: blocker.message,
-                })
-                safeEmit({ type: "finish" })
-                safeComplete()
+                emitPreflightBlocker(
+                  {
+                    id: "provider-profile",
+                    status: "blocked",
+                    message: blocker.message,
+                    hint: blocker.hint,
+                  },
+                  [
+                    buildCodexRuntimeStatusChunk(blocker),
+                    buildCodexCapabilityErrorChunk(blocker),
+                  ],
+                )
                 return
               }
               const gateway = await getProviderGatewayEndpoint(profile.id, "responses")
@@ -2353,14 +2350,18 @@ export const codexRouter = router({
                   message: "Saved Codex API key is required.",
                   hint: "Save a Codex API key again from onboarding or Settings > Models.",
                 })
-                safeEmit(buildCodexRuntimeStatusChunk(blocker))
-                safeEmit(buildCodexCapabilityErrorChunk(blocker))
-                safeEmit({
-                  type: "auth-error",
-                  errorText: blocker.message,
-                })
-                safeEmit({ type: "finish" })
-                safeComplete()
+                emitPreflightBlocker(
+                  {
+                    id: "provider-profile",
+                    status: "needs-auth",
+                    message: blocker.message,
+                    hint: blocker.hint,
+                  },
+                  [
+                    buildCodexRuntimeStatusChunk(blocker),
+                    buildCodexCapabilityErrorChunk(blocker),
+                  ],
+                )
                 return
               }
             } else {
@@ -2374,14 +2375,18 @@ export const codexRouter = router({
                   message: "Codex login or API key is required.",
                   hint: "Connect Codex with ChatGPT login or choose a Codex API key/provider profile.",
                 })
-                safeEmit(buildCodexRuntimeStatusChunk(blocker))
-                safeEmit(buildCodexCapabilityErrorChunk(blocker))
-                safeEmit({
-                  type: "auth-error",
-                  errorText: blocker.message,
-                })
-                safeEmit({ type: "finish" })
-                safeComplete()
+                emitPreflightBlocker(
+                  {
+                    id: "provider-profile",
+                    status: "needs-auth",
+                    message: blocker.message,
+                    hint: blocker.hint,
+                  },
+                  [
+                    buildCodexRuntimeStatusChunk(blocker),
+                    buildCodexCapabilityErrorChunk(blocker),
+                  ],
+                )
                 return
               }
             }
@@ -2483,10 +2488,10 @@ export const codexRouter = router({
             }
             try {
               const resolvedProjectPathFromCwd = resolveProjectPathFromWorktree(
-                input.cwd,
+                runtimeCwd,
               )
               const mcpLookupPath =
-                input.projectPath || resolvedProjectPathFromCwd || input.cwd
+                input.projectPath || resolvedProjectPathFromCwd || runtimeCwd
               mcpSnapshot = await resolveCodexMcpSnapshot({
                 lookupPath: mcpLookupPath,
               })
@@ -2501,14 +2506,18 @@ export const codexRouter = router({
                 hint: "Fix Codex MCP configuration or disable the failing MCP server.",
               })
               console.error("[codex] Failed to resolve MCP servers:", message)
-              safeEmit(buildCodexRuntimeStatusChunk(blocker))
-              safeEmit(buildCodexCapabilityErrorChunk(blocker))
-              safeEmit({
-                type: "error",
-                errorText: blocker.message,
-              })
-              safeEmit({ type: "finish" })
-              safeComplete()
+              emitPreflightBlocker(
+                {
+                  id: "mcp",
+                  status: "blocked",
+                  message: blocker.message,
+                  hint: blocker.hint,
+                },
+                [
+                  buildCodexRuntimeStatusChunk(blocker),
+                  buildCodexCapabilityErrorChunk(blocker),
+                ],
+              )
               return
             }
 
@@ -2524,20 +2533,50 @@ export const codexRouter = router({
                 message: `Codex MCP server '${needsAuthMcpServer.name}' needs authentication.`,
                 hint: "Authenticate the MCP server before starting this Codex run.",
               })
-              safeEmit(buildCodexRuntimeStatusChunk(blocker))
-              safeEmit(buildCodexCapabilityErrorChunk(blocker))
-              safeEmit({
-                type: "error",
-                errorText: blocker.message,
-              })
-              safeEmit({ type: "finish" })
-              safeComplete()
+              emitPreflightBlocker(
+                {
+                  id: "mcp",
+                  status: "needs-auth",
+                  message: blocker.message,
+                  hint: blocker.hint,
+                },
+                [
+                  buildCodexRuntimeStatusChunk(blocker),
+                  buildCodexCapabilityErrorChunk(blocker),
+                ],
+              )
               return
             }
 
+            const desktopJob = createAndStartDesktopAgentJob(db, {
+              runtime: "codex",
+              mode: input.mode,
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              cwd: runtimeCwd,
+              prompt: input.prompt,
+              runId: input.runId,
+            })
+            desktopJobId = desktopJob.job.id
+            registerActiveDesktopAgentJob({
+              jobId: desktopJobId,
+              runtime: "codex",
+              subChatId: input.subChatId,
+              runId: input.runId,
+              db,
+              workerId: desktopJob.workerId,
+              cancel: () => {
+                const activeStream = activeStreams.get(input.subChatId)
+                if (activeStream?.runId !== input.runId) return
+                activeStream.cancelRequested = true
+                activeStream.controller.abort()
+                clearPendingCodexApprovals("Session cancelled.", input.subChatId)
+              },
+            })
+
             const provider = getOrCreateProvider({
               subChatId: input.subChatId,
-              cwd: input.cwd,
+              cwd: runtimeCwd,
               mcpServers: mcpSnapshot.mcpServersForSession,
               mcpFingerprint: mcpSnapshot.fingerprint,
               existingSessionId:
@@ -2716,7 +2755,7 @@ export const codexRouter = router({
                           runtime: "codex",
                           enforcementMode: "hard",
                           preRunStatus: guardedPreRunStatus,
-                          postRunStatus: await captureGuardedGitStatus(input.cwd),
+                          postRunStatus: await captureGuardedGitStatus(runtimeCwd),
                           guardEvents: guardedRunEvents,
                           startedAt: guardedRunStartedAt,
                           stopped: abortController.signal.aborted,

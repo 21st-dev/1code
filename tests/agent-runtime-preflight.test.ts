@@ -119,4 +119,26 @@ describe("desktop runtime preflight", () => {
     expect(queryCwdIndex).toBeGreaterThan(jobIndex)
     expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")
   })
+
+  test("Codex route blocks desktop preflight before creating a job", () => {
+    const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const blockerIndex = codex.indexOf("new DesktopRunPreflightError(blocker)")
+    const runtimeStatusIndex = codex.indexOf("const runtimeStatus = await getCodexRuntimeStatus()")
+    const attachmentIndex = codex.indexOf("resolveChatImageAttachments(input.images)")
+    const mcpIndex = codex.indexOf(
+      "mcpSnapshot = await resolveCodexMcpSnapshot({",
+      attachmentIndex,
+    )
+    const jobIndex = codex.indexOf("createAndStartDesktopAgentJob(db, {")
+    const providerIndex = codex.indexOf("const provider = getOrCreateProvider({")
+
+    expect(blockerIndex).toBeGreaterThan(0)
+    expect(runtimeStatusIndex).toBeGreaterThan(blockerIndex)
+    expect(attachmentIndex).toBeGreaterThan(runtimeStatusIndex)
+    expect(mcpIndex).toBeGreaterThan(attachmentIndex)
+    expect(jobIndex).toBeGreaterThan(mcpIndex)
+    expect(providerIndex).toBeGreaterThan(jobIndex)
+    expect(codex).toContain("cwd: runtimeCwd")
+    expect(codex).not.toContain("cwd: input.cwd,\n              mcpServers")
+  })
 })
