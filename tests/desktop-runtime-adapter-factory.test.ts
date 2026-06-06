@@ -420,6 +420,10 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeRouter).toContain("createClaudeAgentSdkStderrHandler")
     expect(claudeRouter).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(claudeRouter).toContain("resolveClaudeAgentSdkResumeOptions")
+    expect(claudeRouter).not.toContain(
+      "shouldForkResume && forkResumeAtUuid && !isUsingOllama",
+    )
     expect(claudeRouter).not.toContain("cwd: desktopRunRequest.context.cwd")
     expect(claudeRouter).not.toContain("includePartialMessages: true")
     expect(claudeRouter).not.toContain("stderrLines.push(data)")
@@ -442,6 +446,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeQueryOptions).toContain("[Ollama stderr]")
     expect(claudeQueryOptions).toContain("[claude stderr]")
     expect(claudeQueryOptions).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(claudeQueryOptions).toContain("resolveClaudeAgentSdkResumeOptions")
+    expect(claudeQueryOptions).toContain("shouldForkResume")
+    expect(claudeQueryOptions).toContain("forkResumeAtUuid")
     expect(claudeQueryOptions).toContain(
       "[Ollama] Skipping MCP servers to speed up initialization",
     )

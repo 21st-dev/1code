@@ -47,6 +47,34 @@ export type PrepareClaudeAgentSdkMcpServersInput = {
   log?: (...args: any[]) => void
 }
 
+export type ClaudeAgentSdkResumeOptions = {
+  resumeSessionAt: string | null
+  forkSession: boolean
+}
+
+export function resolveClaudeAgentSdkResumeOptions(input: {
+  isUsingOllama: boolean
+  shouldForkResume: boolean
+  forkResumeAtUuid?: string | null
+  resumeAtUuid?: string | null
+}): ClaudeAgentSdkResumeOptions {
+  if (input.isUsingOllama) {
+    return { resumeSessionAt: null, forkSession: false }
+  }
+
+  if (input.shouldForkResume && input.forkResumeAtUuid) {
+    return {
+      resumeSessionAt: input.forkResumeAtUuid,
+      forkSession: true,
+    }
+  }
+
+  return {
+    resumeSessionAt: input.resumeAtUuid || null,
+    forkSession: false,
+  }
+}
+
 function createAbortControllerFromSignal(signal: AbortSignal): AbortController {
   const controller = new AbortController()
   if (signal.aborted) {

@@ -43,6 +43,7 @@ import {
   createClaudeAgentSdkQueryOptions,
   createClaudeAgentSdkStderrHandler,
   prepareClaudeAgentSdkMcpServers,
+  resolveClaudeAgentSdkResumeOptions,
 } from "../../claude/agent-sdk-query-options"
 import { handleClaudeAgentSdkEmbeddedErrorMessage } from "../../claude/agent-sdk-embedded-error-finalization"
 import {
@@ -1676,15 +1677,12 @@ export const claudeRouter = router({
                 isUsingOllama,
               }),
               pathToClaudeCodeExecutable: claudeBinaryPath,
-              resumeSessionAt:
-                shouldForkResume && forkResumeAtUuid && !isUsingOllama
-                  ? forkResumeAtUuid
-                  : resumeAtUuid && !isUsingOllama
-                    ? resumeAtUuid
-                    : null,
-              forkSession: Boolean(
-                shouldForkResume && forkResumeAtUuid && !isUsingOllama,
-              ),
+              ...resolveClaudeAgentSdkResumeOptions({
+                isUsingOllama,
+                shouldForkResume,
+                forkResumeAtUuid,
+                resumeAtUuid,
+              }),
               model: resolvedModel,
               maxThinkingTokens: input.maxThinkingTokens,
             })

@@ -7,6 +7,7 @@ import {
   createClaudeAgentSdkQueryOptions,
   createClaudeAgentSdkStderrHandler,
   prepareClaudeAgentSdkMcpServers,
+  resolveClaudeAgentSdkResumeOptions,
 } from "../src/main/lib/claude/agent-sdk-query-options"
 import { createClaudeDesktopRunRequest } from "../src/main/lib/claude/desktop-run-request"
 
@@ -113,6 +114,44 @@ describe("Claude Agent SDK query options", () => {
       }),
     ).resolves.toEqual({ refreshed: servers })
     expect(refreshCalls).toEqual([[servers, "/project"]])
+  })
+
+  test("resolves SDK resume options for fork, rollback, and Ollama mode", () => {
+    expect(
+      resolveClaudeAgentSdkResumeOptions({
+        isUsingOllama: false,
+        shouldForkResume: true,
+        forkResumeAtUuid: "fork-uuid",
+        resumeAtUuid: "resume-uuid",
+      }),
+    ).toEqual({
+      resumeSessionAt: "fork-uuid",
+      forkSession: true,
+    })
+
+    expect(
+      resolveClaudeAgentSdkResumeOptions({
+        isUsingOllama: false,
+        shouldForkResume: false,
+        forkResumeAtUuid: null,
+        resumeAtUuid: "resume-uuid",
+      }),
+    ).toEqual({
+      resumeSessionAt: "resume-uuid",
+      forkSession: false,
+    })
+
+    expect(
+      resolveClaudeAgentSdkResumeOptions({
+        isUsingOllama: true,
+        shouldForkResume: true,
+        forkResumeAtUuid: "fork-uuid",
+        resumeAtUuid: "resume-uuid",
+      }),
+    ).toEqual({
+      resumeSessionAt: null,
+      forkSession: false,
+    })
   })
 
   test("maps run request and runtime controls into SDK query params", () => {
