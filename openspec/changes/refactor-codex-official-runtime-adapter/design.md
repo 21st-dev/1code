@@ -71,6 +71,17 @@ Keep ACP only as an explicit migration fallback when app-server cannot yet prese
 
 This Codex migration depends on the cross-runtime `add-runtime-control-layer` proposal for shared Preflight, PermissionPolicy, desktop RunRequest, RunEvent, and Trace ownership. Codex app-server implementation must consume that control layer instead of rebuilding equivalent behavior inside `src/main/lib/trpc/routers/codex.ts`.
 
+## ACP Temporary Compatibility Policy
+ACP is not a product completion target. It is allowed only as a temporary compatibility adapter during app-server migration when the matrix records a concrete app-server blocker.
+
+ACP fallback must include:
+
+- Gate: explicit adapter selection or migration flag; no silent fallback from app-server to ACP.
+- Diagnostic label: `temporary-compat`, selected adapter source, fallback reason, app-server blocker, and renderer-safe remediation.
+- Capability truth: ACP-supported behavior does not make the app-server adapter `supported`.
+- Default-disable condition: once app-server passes schema/client pinning, pre-execution fail-closed tests, provider-profile binding, MCP readiness, AskUserQuestion, supported attachment, stream/session/usage, cancellation, redaction, and desktop smoke evidence for required desktop behavior, ACP fallback defaults off.
+- Removal condition: after app-server covers required desktop behavior or a separate approved rescope downgrades missing behavior, ACP dependency and route paths are removed or placed behind a separately approved compatibility gate with a deletion follow-up.
+
 ## Architecture
 Add a main-process Codex adapter boundary rather than wiring official packages directly into renderer code or unrelated routers.
 
@@ -125,7 +136,7 @@ Implementation cannot mark the app-server adapter enabled by default until these
 2. Adapter introduction:
    - Add the Codex app-server adapter behind a main-process factory.
    - Keep current tRPC input/output stable.
-   - Keep ACP fallback gated, labeled `temporary-compat`, and tied to a disable/remove condition.
+   - Keep ACP fallback gated, labeled `temporary-compat`, and tied to the default-disable and removal conditions above.
 3. Behavior preservation:
    - Port AskUserQuestion, plan mode, guarded-run, attachments, MCP readiness, usage/session metadata, cancellation, and diagnostics.
    - Update capability states only when tests prove behavior.

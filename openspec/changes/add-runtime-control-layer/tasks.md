@@ -14,7 +14,7 @@
 ## 3. Permission Policy
 - [ ] 3.1 Define `PermissionPolicy` for plan, agent, and guarded desktop runs.
 - [ ] 3.2 Route Claude and Codex plan/agent/guarded behavior through the shared policy owner.
-- [ ] 3.3 Decide and document Claude native permission/bypass strategy.
+- [x] 3.3 Decide and document Claude native permission/bypass strategy.
 - [ ] 3.4 Remove or strictly limit Claude route-local plan `.md` write exceptions.
 - [ ] 3.5 Add permission policy tests for Claude and Codex.
 

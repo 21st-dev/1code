@@ -11,7 +11,7 @@
 - [ ] 2.2 Generate or inspect `codex app-server` TypeScript/JSON schema for the Codex runtime version Locus will bundle.
 - [ ] 2.3 Compare ACP, SDK, and app-server for provider profile binding, MCP, approvals, AskUserQuestion, attachments, streaming, usage/session metadata, resume/fork/rollback, cancellation, diagnostics, and local-only behavior; app-server is the desktop/chat target unless this matrix explicitly disproves it.
 - [ ] 2.4 Record app-server as the desktop/chat adapter target and record SDK as internal automation/tooling only unless a separate approved use case says otherwise.
-- [ ] 2.5 Define ACP as a `temporary-compat` migration fallback only, including diagnostic label, fallback reason, default-disable condition, and removal condition.
+- [x] 2.5 Define ACP as a `temporary-compat` migration fallback only, including diagnostic label, fallback reason, default-disable condition, and removal condition.
 - [ ] 2.6 Prove pre-execution approval/permission interception for app-server, including fail-closed behavior when the hook is missing or delayed.
 - [ ] 2.7 Prove SDK/app-server runtime startup uses an explicit env allowlist and cannot inherit stale host provider tokens.
 - [ ] 2.8 Prove provider gateway tokens, MCP env/header/OAuth values, and app-server diagnostics remain renderer-safe and redacted.

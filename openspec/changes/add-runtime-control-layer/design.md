@@ -32,6 +32,13 @@ The next runtime work would touch runtime, provider, guard, capability, chat, an
 - Decision: introduce `src/main/lib/agent-runtime/permission-policy.ts` as the shared policy owner.
   - It maps Locus plan, agent, and guarded modes to runtime-specific native controls or Locus guard enforcement.
   - It records whether Claude native permission bypass is allowed, denied, or allowed only because Locus guarded policy is installed first.
+- Decision: lock plan mode as read-only for project/workspace side effects.
+  - Plan mode may persist Locus-owned app state such as messages, job rows, semantic events, diagnostics, and session metadata.
+  - Plan mode must not write project/workspace files, run side-effecting shell commands, mutate MCP/runtime configuration, or rely on route-local file exceptions.
+  - Future Locus-owned artifact writes require an explicit owner, path policy, and tests before they are allowed; there is no default `.md` write exception.
+- Decision: do not allow Claude native permission bypass as a silent durable policy.
+  - If implementation keeps Claude SDK bypass behavior during migration, it must be justified by an installed Locus `PermissionPolicy`, guarded decision path, diagnostics, and tests before runtime startup.
+  - If that evidence is absent, the policy must use native controls or fail closed before side effects.
 - Decision: introduce desktop runtime contracts under `src/main/lib/agent-runtime/`.
   - `desktop-run-request.ts` owns `DesktopRunRequest`, `DesktopRunContext`, `DesktopRunResult`, and cancellation/session metadata.
   - `runtime-events.ts` owns ordered, redacted `RunEvent` categories that map to persisted `agent_job_events`.
@@ -69,6 +76,7 @@ Claude and Codex adapter internals do not need to be identical. They only need t
 - Runtime events, diagnostics, and persisted trace must be redacted before leaving the main process owner.
 - MCP needs-auth and provider-profile blockers must stop runs before provider work starts when readiness is required.
 - Plan mode and guarded scope contracts must fail closed when the selected runtime cannot enforce the policy before side effects.
+- Plan mode does not block local Locus persistence of messages, jobs, events, diagnostics, or session metadata, but it blocks runtime-caused project/workspace writes unless a later approved owner/path policy explicitly allows Locus-owned artifacts.
 
 ## Risks / Trade-offs
 - Route extraction can create duplicate paths.
@@ -81,7 +89,5 @@ Claude and Codex adapter internals do not need to be identical. They only need t
   - Mitigation: only semantic events with verified categories drive timeline status; raw payloads remain debug-only.
 
 ## Open Questions
-- Should plan mode be fully read-only, or should it allow writes only to explicit Locus-owned artifact paths?
-- If Claude Agent mode continues to use native permission bypass, what exact Locus policy evidence is required before that is acceptable?
 - Which desktop event categories must be persisted in the first implementation slice versus left as debug-only?
 - Should rich desktop trace later expand Local Job API v1, or stay internal until a separate v2 proposal?

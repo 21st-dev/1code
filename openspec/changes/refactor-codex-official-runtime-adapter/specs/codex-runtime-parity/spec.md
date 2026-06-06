@@ -15,6 +15,13 @@ The system SHALL require a documented decision matrix before replacing the curre
 - **THEN** runtime status and documentation identify ACP as the `temporary-compat` adapter
 - **AND** Locus does not describe ACP as the long-term official OpenAI integration surface
 - **AND** the fallback reason, default-disable condition, and removal condition are recorded in non-secret diagnostics or implementation notes
+- **AND** fallback is selected only through an explicit adapter gate or migration flag, not silent app-server fallback
+- **AND** ACP-supported behavior does not upgrade app-server capability states to `supported`
+
+#### Scenario: ACP fallback is disabled after app-server proof
+- **WHEN** app-server passes schema/client pinning, pre-execution fail-closed tests, provider-profile binding, MCP readiness, AskUserQuestion, supported attachment, stream/session/usage, cancellation, redaction, and desktop smoke evidence for required desktop behavior
+- **THEN** ACP fallback defaults off for desktop Codex chat
+- **AND** any remaining ACP route, dependency, or package path has an explicit approved compatibility gate and deletion follow-up
 
 ### Requirement: Codex App-Server Behavior Preservation
 The system SHALL preserve existing Codex desktop/chat safety and runtime behavior when migrating to app-server, or explicitly rescope unavailable behavior before enabling app-server by default.

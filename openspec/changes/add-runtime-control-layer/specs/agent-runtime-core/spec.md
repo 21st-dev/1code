@@ -27,6 +27,17 @@ The runtime core SHALL map Locus plan, agent, and guarded desktop runs through a
 - **THEN** the run fails closed or uses an explicitly supported fallback according to policy before provider work starts
 - **AND** the capability state remains degraded or unsupported for that adapter until tests prove enforcement
 
+#### Scenario: Plan mode is read-only for workspace side effects
+- **WHEN** a desktop Claude or Codex run starts in plan mode
+- **THEN** the `PermissionPolicy` disallows project or workspace file writes, side-effecting shell commands, MCP/runtime configuration mutation, and provider configuration writes before execution
+- **AND** the app may still persist Locus-owned messages, job rows, semantic events, diagnostics, and session metadata
+- **AND** any future Locus-owned artifact write requires an explicit owner, path policy, and tests rather than a route-local `.md` exception
+
+#### Scenario: Claude native permission bypass is considered
+- **WHEN** the Claude desktop adapter would use native permission bypass for agent or guarded behavior
+- **THEN** the `PermissionPolicy` records the Locus-owned enforcement evidence required before runtime startup
+- **AND** the run fails closed or uses native controls when guarded decisions, plan-mode enforcement, diagnostics, and tests cannot prove pre-execution side-effect control
+
 ### Requirement: Desktop Run Request Contract
 The runtime core SHALL define a desktop-capable run request, event, cancellation, and result contract for desktop Claude and Codex adapters.
 
