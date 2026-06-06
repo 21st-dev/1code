@@ -745,8 +745,11 @@ describe("desktop runtime adapter factory", () => {
     )
 
     for (const route of [claudeRouter, codexRouter]) {
+      expect(route).toContain("createAndRegisterDesktopChatAgentJob")
       expect(route).toContain("completeDesktopChatAgentJobSafely")
       expect(route).toContain("requestCancelDesktopChatAgentJobSafely")
+      expect(route).not.toContain("createAndStartDesktopAgentJob")
+      expect(route).not.toContain("registerActiveDesktopAgentJob")
       expect(route).not.toContain("resolveDesktopChatJobCompletion({")
       expect(route).not.toContain("completeDesktopAgentJobSafely")
       expect(route).not.toContain("requestCancelDesktopAgentJob(")
@@ -756,6 +759,9 @@ describe("desktop runtime adapter factory", () => {
       expect(route).not.toContain('status === "succeeded" ? 0')
     }
     expect(desktopAgentJobs).toContain("resolveDesktopChatJobCompletion")
+    expect(desktopAgentJobs).toContain("createAndRegisterDesktopChatAgentJob")
+    expect(desktopAgentJobs).toContain("createAndStartDesktopAgentJob")
+    expect(desktopAgentJobs).toContain("registerActiveDesktopAgentJob")
     expect(desktopAgentJobs).toContain("completeDesktopChatAgentJobSafely")
     expect(desktopAgentJobs).toContain(
       "requestCancelDesktopChatAgentJobSafely",

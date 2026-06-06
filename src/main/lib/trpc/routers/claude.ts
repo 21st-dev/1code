@@ -164,8 +164,7 @@ import {
 } from "../../agent-runtime/stream-event-mapper"
 import {
   completeDesktopChatAgentJobSafely,
-  createAndStartDesktopAgentJob,
-  registerActiveDesktopAgentJob,
+  createAndRegisterDesktopChatAgentJob,
   requestCancelDesktopChatAgentJobSafely,
 } from "../../desktop-agent-jobs"
 import {
@@ -1152,7 +1151,7 @@ export const claudeRouter = router({
               }
             }
 
-            const desktopJob = createAndStartDesktopAgentJob(db, {
+            const desktopJob = createAndRegisterDesktopChatAgentJob(db, {
               runtime: "claude-code",
               mode: input.mode,
               chatId: input.chatId,
@@ -1160,20 +1159,6 @@ export const claudeRouter = router({
               cwd: runtimeCwd,
               prompt: input.prompt,
               runId: activeRunId,
-            })
-            desktopJobId = desktopJob.job.id
-            desktopStreamEventMapper = createDesktopStreamEventMapper({
-              runtimeId: "claude-code",
-              runId: activeRunId,
-              jobId: desktopJobId,
-            })
-            registerActiveDesktopAgentJob({
-              jobId: desktopJobId,
-              runtime: "claude-code",
-              subChatId: input.subChatId,
-              runId: activeRunId,
-              db,
-              workerId: desktopJob.workerId,
               cancel: () => {
                 abortController.abort()
                 clearClaudePendingToolApprovals(
@@ -1181,6 +1166,12 @@ export const claudeRouter = router({
                   input.subChatId,
                 )
               },
+            })
+            desktopJobId = desktopJob.job.id
+            desktopStreamEventMapper = createDesktopStreamEventMapper({
+              runtimeId: "claude-code",
+              runId: activeRunId,
+              jobId: desktopJobId,
             })
 
             const resumeSessionId =

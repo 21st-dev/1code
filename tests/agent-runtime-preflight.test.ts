@@ -108,7 +108,7 @@ describe("desktop runtime preflight", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const blockerIndex = claude.indexOf("new DesktopRunPreflightError(blocker)")
     const attachmentIndex = claude.indexOf("resolveChatImageAttachments(input.images)")
-    const jobIndex = claude.indexOf("createAndStartDesktopAgentJob(db, {")
+    const jobIndex = claude.indexOf("createAndRegisterDesktopChatAgentJob(db, {")
     const runRequestIndex = claude.indexOf(
       "const desktopRunRequest = createClaudeDesktopRunRequest({",
     )
@@ -119,7 +119,7 @@ describe("desktop runtime preflight", () => {
       "const claudeAdapter = createClaudeAgentSdkAdapter({",
     )
     const adapterRunIndex = claude.indexOf(
-      "await claudeAdapter.run(desktopRunRequest)",
+      "await runClaudeAgentSdkAdapterWithPolicyRetry({",
     )
 
     expect(blockerIndex).toBeGreaterThan(0)
@@ -145,7 +145,7 @@ describe("desktop runtime preflight", () => {
       '"use Codex provider endpoint"',
       attachmentIndex,
     )
-    const jobIndex = codex.indexOf("createAndStartDesktopAgentJob(db, {")
+    const jobIndex = codex.indexOf("createAndRegisterDesktopChatAgentJob(db, {")
     const runRequestIndex = codex.indexOf(
       "const desktopRunRequest = createCodexDesktopRunRequest({",
     )

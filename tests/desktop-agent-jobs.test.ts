@@ -3,6 +3,7 @@ import { chats, projects, subChats } from "../src/main/lib/db/schema"
 import {
   completeDesktopAgentJobSafely,
   completeDesktopChatAgentJobSafely,
+  createAndRegisterDesktopChatAgentJob,
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
   requestCancelDesktopAgentJob,
@@ -153,6 +154,31 @@ describe("desktop agent jobs", () => {
       payload: { status: "cancel_requested", requestedBy: "desktop" },
     })
 
+    unregisterActiveDesktopAgentJob(job.id)
+  })
+
+  test("creates and registers a desktop chat job in one owner call", () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+    let cancelCount = 0
+
+    const { job, workerId } = createAndRegisterDesktopChatAgentJob(db, {
+      runtime: "claude-code",
+      mode: "agent",
+      chatId: "chat-1",
+      subChatId: "sub-chat-1",
+      cwd: "/tmp/project-worktree",
+      prompt: "Run",
+      runId: "stream-registered",
+      cancel: () => {
+        cancelCount += 1
+      },
+    })
+
+    expect(workerId).toBe("desktop:claude-code:stream-registered")
+    const canceled = requestCancelDesktopAgentJob(db, job.id, "desktop")
+    expect(canceled.activeCancelDelivered).toBe(true)
+    expect(cancelCount).toBe(1)
     unregisterActiveDesktopAgentJob(job.id)
   })
 

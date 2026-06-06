@@ -107,8 +107,7 @@ import {
 import { publicProcedure, router } from "../index"
 import {
   completeDesktopChatAgentJobSafely,
-  createAndStartDesktopAgentJob,
-  registerActiveDesktopAgentJob,
+  createAndRegisterDesktopChatAgentJob,
   requestCancelDesktopChatAgentJobSafely,
 } from "../../desktop-agent-jobs"
 
@@ -1376,7 +1375,7 @@ export const codexRouter = router({
               return
             }
 
-            const desktopJob = createAndStartDesktopAgentJob(db, {
+            const desktopJob = createAndRegisterDesktopChatAgentJob(db, {
               runtime: "codex",
               mode: input.mode,
               chatId: input.chatId,
@@ -1384,20 +1383,6 @@ export const codexRouter = router({
               cwd: runtimeCwd,
               prompt: input.prompt,
               runId: input.runId,
-            })
-            desktopJobId = desktopJob.job.id
-            desktopStreamEventMapper = createDesktopStreamEventMapper({
-              runtimeId: "codex",
-              runId: input.runId,
-              jobId: desktopJobId,
-            })
-            registerActiveDesktopAgentJob({
-              jobId: desktopJobId,
-              runtime: "codex",
-              subChatId: input.subChatId,
-              runId: input.runId,
-              db,
-              workerId: desktopJob.workerId,
               cancel: () => {
                 const activeStream = activeStreams.get(input.subChatId)
                 if (activeStream?.runId !== input.runId) return
@@ -1405,6 +1390,12 @@ export const codexRouter = router({
                 activeStream.controller.abort()
                 clearPendingCodexApprovals("Session cancelled.", input.subChatId)
               },
+            })
+            desktopJobId = desktopJob.job.id
+            desktopStreamEventMapper = createDesktopStreamEventMapper({
+              runtimeId: "codex",
+              runId: input.runId,
+              jobId: desktopJobId,
             })
 
             const desktopRunRequest = createCodexDesktopRunRequest({

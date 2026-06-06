@@ -290,7 +290,7 @@ describe("desktop stream event mapper", () => {
     ] as const) {
       const source = readFileSync(routePath, "utf8")
       const safeEmitIndex = source.indexOf("const safeEmit")
-      const jobIndex = source.indexOf("createAndStartDesktopAgentJob(db, {")
+      const jobIndex = source.indexOf("createAndRegisterDesktopChatAgentJob(db, {")
       const mapperCreateIndex = source.indexOf(
         "desktopStreamEventMapper = createDesktopStreamEventMapper",
         jobIndex,

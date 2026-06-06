@@ -32,6 +32,12 @@ export type DesktopAgentJobHandle = {
   cwd: string
 }
 
+export type CreateAndRegisterDesktopChatAgentJobInput =
+  CreateDesktopAgentJobInput & {
+    cancel: () => void
+    heartbeatIntervalMs?: number
+  }
+
 export type ResolveDesktopChatJobCompletionInput = {
   runtime: DesktopAgentRuntime
   aborted: boolean
@@ -149,6 +155,24 @@ export function registerActiveDesktopAgentJob(
     ...registration,
     heartbeatTimer,
   })
+}
+
+export function createAndRegisterDesktopChatAgentJob(
+  db: AgentJobDatabase,
+  input: CreateAndRegisterDesktopChatAgentJobInput,
+): DesktopAgentJobHandle {
+  const handle = createAndStartDesktopAgentJob(db, input)
+  registerActiveDesktopAgentJob({
+    jobId: handle.job.id,
+    runtime: input.runtime,
+    subChatId: input.subChatId,
+    runId: input.runId,
+    db,
+    workerId: handle.workerId,
+    heartbeatIntervalMs: input.heartbeatIntervalMs,
+    cancel: input.cancel,
+  })
+  return handle
 }
 
 export function unregisterActiveDesktopAgentJob(jobId: string): void {
