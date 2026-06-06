@@ -2,6 +2,7 @@ import { createACPProvider, type ACPProvider } from "@mcpc-tech/acp-ai-provider"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
 import { getRuntimeExecutableStatus } from "../runtime-executable"
+import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
 import {
   buildCodexProviderEnv,
   buildCodexProviderProfileArgs,
@@ -36,14 +37,12 @@ type CodexAcpProviderSession = {
 }
 
 export type GetOrCreateCodexAcpProviderInput = {
-  subChatId: string
-  cwd: string
+  runRequest: DesktopRunRequest
   command: string
   shellEnv?: EnvSource
   processEnv?: EnvSource
   mcpServers: CodexAcpMcpServerForSession[]
   mcpFingerprint: string
-  existingSessionId?: string
   appManagedApiKey?: string | null
   providerProfile?: CodexProviderProfileBinding
 }
@@ -58,12 +57,13 @@ function getAuthFingerprint(appManagedApiKey?: string | null): string | null {
 export function getOrCreateCodexAcpProvider(
   params: GetOrCreateCodexAcpProviderInput,
 ): ACPProvider {
+  const { context, permissionPolicy, session } = params.runRequest
   const authFingerprint = getAuthFingerprint(params.appManagedApiKey)
-  const existing = providerSessions.get(params.subChatId)
+  const existing = providerSessions.get(context.subChatId)
 
   if (
     existing &&
-    existing.cwd === params.cwd &&
+    existing.cwd === context.cwd &&
     existing.authFingerprint === authFingerprint &&
     existing.mcpFingerprint === params.mcpFingerprint &&
     existing.providerProfileId === (params.providerProfile?.id ?? null)
@@ -73,7 +73,7 @@ export function getOrCreateCodexAcpProvider(
 
   if (existing) {
     existing.provider.cleanup()
-    providerSessions.delete(params.subChatId)
+    providerSessions.delete(context.subChatId)
   }
 
   const hasAppManagedApiKey = Boolean(params.appManagedApiKey?.trim())
@@ -81,7 +81,7 @@ export function getOrCreateCodexAcpProvider(
   // Those can be tied to unauthenticated/CLI-auth state and trigger auth loops.
   const existingSessionIdForProvider = hasAppManagedApiKey
     ? undefined
-    : params.existingSessionId
+    : session.resumeSessionId ?? undefined
   const providerProfileArgs = params.providerProfile
     ? buildCodexProviderProfileArgs(params.providerProfile)
     : undefined
@@ -100,12 +100,17 @@ export function getOrCreateCodexAcpProvider(
   )
 
   console.info("[codex-acp] starting provider", {
-    subChatId: params.subChatId.slice(-8),
+    subChatId: context.subChatId.slice(-8),
     command: params.command,
     commandOk: commandStatus.ok,
     commandError: commandStatus.error,
-    cwd: params.cwd,
-    cwdExists: existsSync(params.cwd),
+    cwd: context.cwd,
+    cwdExists: existsSync(context.cwd),
+    runId: params.runRequest.identity.runId,
+    adapterSource: permissionPolicy.runtimeMapping.runtime === "codex"
+      ? permissionPolicy.runtimeMapping.adapterSource
+      : null,
+    enforcement: permissionPolicy.enforcement,
     args: providerProfileArgs ? redactCodexProviderProfileArgs(providerProfileArgs) : [],
     authMethodId: authMethodId ?? null,
     providerSource,
@@ -124,7 +129,7 @@ export function getOrCreateCodexAcpProvider(
     ...(providerProfileArgs ? { args: providerProfileArgs } : {}),
     authMethodId,
     session: {
-      cwd: params.cwd,
+      cwd: context.cwd,
       mcpServers: params.mcpServers,
     },
     ...(existingSessionIdForProvider
@@ -133,9 +138,9 @@ export function getOrCreateCodexAcpProvider(
     persistSession: true,
   })
 
-  providerSessions.set(params.subChatId, {
+  providerSessions.set(context.subChatId, {
     provider,
-    cwd: params.cwd,
+    cwd: context.cwd,
     authFingerprint,
     mcpFingerprint: params.mcpFingerprint,
     providerProfileId: params.providerProfile?.id ?? null,
@@ -158,4 +163,3 @@ export function cleanupAllCodexAcpProviders(): void {
   }
   providerSessions.clear()
 }
-

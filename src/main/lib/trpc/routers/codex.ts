@@ -82,6 +82,10 @@ import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
 import { CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA } from "../../agent-runtime/desktop-adapter-metadata"
 import {
+  createDesktopRunContextFromPreflight,
+  type DesktopRunRequest,
+} from "../../agent-runtime/desktop-run-request"
+import {
   DesktopRunPreflightError,
   verifyDesktopRunPreflight,
   type DesktopRunPreflightBlocker,
@@ -2549,18 +2553,79 @@ export const codexRouter = router({
               },
             })
 
+            const desktopRunRequest: DesktopRunRequest = {
+              identity: {
+                runId: input.runId,
+                jobId: desktopJobId,
+              },
+              context: createDesktopRunContextFromPreflight(
+                "codex",
+                input.mode,
+                verifiedRunContext,
+              ),
+              prompt: input.prompt,
+              permissionPolicy,
+              providerBinding: {
+                model: metadataModel,
+                modelSource: input.model ? "request" : "default",
+                providerProfileId: codexProviderProfile?.id ?? null,
+                gatewayEndpoint: codexProviderProfile?.baseUrl ?? null,
+                authMode: codexProviderProfile
+                  ? "provider-profile"
+                  : appManagedCodexApiKey
+                    ? "app-managed"
+                    : "runtime-managed",
+                diagnostics: permissionPolicy.diagnostics.map((message, index) => ({
+                  id: `permission-policy-${index + 1}`,
+                  status: "ready",
+                  message,
+                })),
+              },
+              mcp: {
+                status: "ready",
+                serverNames: mcpSnapshot.mcpServersForSession.map(
+                  (server) => server.name,
+                ),
+                blockers: [],
+              },
+              attachments: [
+                ...(input.images ?? []).map((image) => ({
+                  kind: "image" as const,
+                  attachmentId: image.attachmentId,
+                  localRef: image.localRef,
+                  mediaType: image.mediaType,
+                  filename: image.filename,
+                  byteLength: image.sizeBytes,
+                })),
+                ...(input.longTextAttachments ?? []).map((attachment) => ({
+                  kind: "long-text" as const,
+                  attachmentId: attachment.attachmentId,
+                  localRef: attachment.localRef,
+                  filename: attachment.filename,
+                  byteLength: attachment.byteLength,
+                })),
+              ],
+              trace: {
+                emit: (event) => {
+                  appendRunEventsToAgentJob(db, [event])
+                },
+              },
+              signal: abortController.signal,
+              session: {
+                resumeSessionId: input.forceNewSession
+                  ? null
+                  : input.sessionId ?? getLastSessionId(existingMessages) ?? null,
+                parentSessionId: input.sessionId ?? null,
+              },
+            }
+
             const provider = getOrCreateCodexAcpProvider({
-              subChatId: input.subChatId,
-              cwd: runtimeCwd,
+              runRequest: desktopRunRequest,
               command: resolveCodexAcpBinaryPath(),
               shellEnv: getClaudeShellEnvironment(),
               processEnv: process.env,
               mcpServers: mcpSnapshot.mcpServersForSession,
               mcpFingerprint: mcpSnapshot.fingerprint,
-              existingSessionId:
-                input.forceNewSession
-                  ? undefined
-                  : input.sessionId ?? getLastSessionId(existingMessages),
               appManagedApiKey: codexProviderProfile
                 ? null
                 : appManagedCodexApiKey,
