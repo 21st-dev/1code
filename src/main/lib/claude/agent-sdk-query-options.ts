@@ -29,6 +29,12 @@ export type CreateClaudeAgentSdkQueryOptionsInput = {
   maxThinkingTokens?: number | null
 }
 
+export type CreateClaudeAgentSdkStderrHandlerInput = {
+  stderrLines: string[]
+  isUsingOllama: boolean
+  error?: (...args: any[]) => void
+}
+
 function createAbortControllerFromSignal(signal: AbortSignal): AbortController {
   const controller = new AbortController()
   if (signal.aborted) {
@@ -44,6 +50,23 @@ function createAbortControllerFromSignal(signal: AbortSignal): AbortController {
     { once: true },
   )
   return controller
+}
+
+export function createClaudeAgentSdkStderrHandler({
+  stderrLines,
+  isUsingOllama,
+  error = console.error,
+}: CreateClaudeAgentSdkStderrHandlerInput): NonNullable<
+  ClaudeAgentSdkOptions["stderr"]
+> {
+  return (data: string) => {
+    stderrLines.push(data)
+    if (isUsingOllama) {
+      error("[Ollama stderr]", data)
+    } else {
+      error("[claude stderr]", data)
+    }
+  }
 }
 
 export function createClaudeAgentSdkQueryOptions({

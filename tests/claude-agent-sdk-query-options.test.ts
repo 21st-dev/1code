@@ -3,7 +3,10 @@ import {
   getClaudePermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
-import { createClaudeAgentSdkQueryOptions } from "../src/main/lib/claude/agent-sdk-query-options"
+import {
+  createClaudeAgentSdkQueryOptions,
+  createClaudeAgentSdkStderrHandler,
+} from "../src/main/lib/claude/agent-sdk-query-options"
 import { createClaudeDesktopRunRequest } from "../src/main/lib/claude/desktop-run-request"
 
 function createRequest(options: {
@@ -43,6 +46,35 @@ function createRequest(options: {
 }
 
 describe("Claude Agent SDK query options", () => {
+  test("captures stderr lines with runtime-specific diagnostics", () => {
+    const stderrLines: string[] = []
+    const errors: unknown[][] = []
+
+    const handler = createClaudeAgentSdkStderrHandler({
+      stderrLines,
+      isUsingOllama: true,
+      error: (...args) => {
+        errors.push(args)
+      },
+    })
+    handler("ollama warning")
+
+    const claudeHandler = createClaudeAgentSdkStderrHandler({
+      stderrLines,
+      isUsingOllama: false,
+      error: (...args) => {
+        errors.push(args)
+      },
+    })
+    claudeHandler("claude warning")
+
+    expect(stderrLines).toEqual(["ollama warning", "claude warning"])
+    expect(errors).toEqual([
+      ["[Ollama stderr]", "ollama warning"],
+      ["[claude stderr]", "claude warning"],
+    ])
+  })
+
   test("maps run request and runtime controls into SDK query params", () => {
     const sourceController = new AbortController()
     const request = createRequest({

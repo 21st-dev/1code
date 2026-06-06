@@ -409,14 +409,22 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "const queryOptions = createClaudeAgentSdkQueryOptions({",
     )
+    expect(claudeRouter).toContain("createClaudeAgentSdkStderrHandler")
     expect(claudeRouter).not.toContain("cwd: desktopRunRequest.context.cwd")
     expect(claudeRouter).not.toContain("includePartialMessages: true")
+    expect(claudeRouter).not.toContain("stderrLines.push(data)")
+    expect(claudeRouter).not.toContain("[Ollama stderr]")
+    expect(claudeRouter).not.toContain("[claude stderr]")
     expect(claudeQueryOptions).toContain("cwd: request.context.cwd")
     expect(claudeQueryOptions).toContain(
       "permissionMode: permission.sdkPermissionMode",
     )
     expect(claudeQueryOptions).toContain("includePartialMessages: true")
     expect(claudeQueryOptions).toContain("createAbortControllerFromSignal")
+    expect(claudeQueryOptions).toContain("createClaudeAgentSdkStderrHandler")
+    expect(claudeQueryOptions).toContain("stderrLines.push(data)")
+    expect(claudeQueryOptions).toContain("[Ollama stderr]")
+    expect(claudeQueryOptions).toContain("[claude stderr]")
   })
 
   test("keeps Claude prompt mention parsing ownership out of the router", () => {

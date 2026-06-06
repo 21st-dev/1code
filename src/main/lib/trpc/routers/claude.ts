@@ -38,7 +38,10 @@ import {
   normalizeClaudeProviderRuntimeConfig,
   type ClaudeProviderRuntimeConfig,
 } from "../../claude/provider-runtime-config"
-import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
+import {
+  createClaudeAgentSdkQueryOptions,
+  createClaudeAgentSdkStderrHandler,
+} from "../../claude/agent-sdk-query-options"
 import { handleClaudeAgentSdkEmbeddedErrorMessage } from "../../claude/agent-sdk-embedded-error-finalization"
 import {
   completeClaudeAgentSdkRunAfterAdapter,
@@ -1731,14 +1734,10 @@ export const claudeRouter = router({
                 pendingToolApprovals: getClaudePendingToolApprovalStore(),
                 parts,
               }),
-              stderr: (data: string) => {
-                stderrLines.push(data)
-                if (isUsingOllama) {
-                  console.error("[Ollama stderr]", data)
-                } else {
-                  console.error("[claude stderr]", data)
-                }
-              },
+              stderr: createClaudeAgentSdkStderrHandler({
+                stderrLines,
+                isUsingOllama,
+              }),
               pathToClaudeCodeExecutable: claudeBinaryPath,
               resumeSessionAt:
                 shouldForkResume && forkResumeAtUuid && !isUsingOllama
