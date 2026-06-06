@@ -68,6 +68,10 @@ describe("desktop runtime permission policy", () => {
   test("desktop routes consume the shared permission policy owner", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const codexAcpRuntime = readFileSync(
+      "src/main/lib/codex/acp-runtime.ts",
+      "utf8",
+    )
 
     expect(claude).toContain("resolveDesktopPermissionPolicy")
     expect(claude).toContain("getClaudePermissionMapping")
@@ -76,8 +80,9 @@ describe("desktop runtime permission policy", () => {
 
     expect(codex).toContain("resolveDesktopPermissionPolicy")
     expect(codex).toContain("getCodexPermissionMapping")
-    expect(codex).toContain("codexPermission.acpMode")
-    expect(codex).toContain("codexPermission.requiresPermissionHandler")
+    expect(codex).toContain("permission: codexPermission")
+    expect(codexAcpRuntime).toContain("permission.acpMode")
+    expect(codexAcpRuntime).toContain("permission.requiresPermissionHandler")
     expect(codex).not.toContain("function getCodexAcpModeId")
   })
 })

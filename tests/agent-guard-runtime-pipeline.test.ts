@@ -63,6 +63,10 @@ describe("agent guard runtime pipeline", () => {
       "utf8",
     )
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
+    const codexAcpRuntime = readFileSync(
+      "src/main/lib/codex/acp-runtime.ts",
+      "utf8",
+    )
     const acp = readFileSync(
       "src/renderer/features/agents/lib/acp-chat-transport.ts",
       "utf8",
@@ -82,10 +86,11 @@ describe("agent guard runtime pipeline", () => {
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
     expect(codex).toContain("getCodexRunRequiredCapability")
-    expect(codex).toContain("installCodexAcpPermissionHandler")
-    expect(codex).toContain("createCodexAcpPermissionHandler")
-    expect(codex).toContain("createCodexAskUserQuestionTools")
-    expect(codex).toContain(
+    expect(codex).toContain("createCodexAcpRuntimeModel")
+    expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
+    expect(codexAcpRuntime).toContain("createCodexAcpPermissionHandler")
+    expect(codexAcpRuntime).toContain("createCodexAskUserQuestionTools")
+    expect(codexAcpRuntime).toContain(
       "installCodexAskUserQuestionAcpResultNormalizer",
     )
     expect(codex).toContain("respondToolApproval")

@@ -83,6 +83,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/acp-adapter.ts",
       "utf8",
     )
+    const codexAcpRuntime = readFileSync(
+      "src/main/lib/codex/acp-runtime.ts",
+      "utf8",
+    )
     const codexUsageMetadata = readFileSync(
       "src/main/lib/codex/usage-metadata.ts",
       "utf8",
@@ -90,6 +94,7 @@ describe("desktop runtime adapter factory", () => {
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
+    expect(codexRouter).toContain("../../codex/acp-runtime")
     expect(codexRouter).toContain("../../codex/usage-metadata")
     expect(codexRouter).toContain("../../codex/prompt")
     expect(codexRouter).toContain("createDesktopRunContextFromPreflight")
@@ -102,9 +107,12 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("providerSessions")
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
+    expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
     expect(codexAcpAdapter).toContain("createACPProvider")
     expect(codexAcpAdapter).toContain("providerSessions")
     expect(codexAcpAdapter).toContain("runRequest: DesktopRunRequest")
+    expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
+    expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexUsageMetadata).toContain("pollCodexUsageMetadata")
     expect(codexUsageMetadata).toContain("readLatestTokenCountInfo")
     expect(codexPrompt).toContain("prepareCodexAcpPrompt")

@@ -36,10 +36,6 @@ import {
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
 import {
-  createCodexAcpPermissionHandler,
-  installCodexAcpPermissionHandler,
-} from "../../codex/acp-permission"
-import {
   codexChatInputSchema,
   imageAttachmentSchema,
   longTextAttachmentSchema,
@@ -65,9 +61,8 @@ import {
   type CodexUsageMetadata,
 } from "../../codex/usage-metadata"
 import { prepareCodexAcpPrompt } from "../../codex/prompt"
+import { createCodexAcpRuntimeModel } from "../../codex/acp-runtime"
 import {
-  createCodexAskUserQuestionTools,
-  installCodexAskUserQuestionAcpResultNormalizer,
   type CodexAskUserQuestionApproval,
   type CodexAskUserQuestionPending,
 } from "../../codex/ask-user-question"
@@ -2440,42 +2435,30 @@ export const codexRouter = router({
               return
             }
 
-            const model = provider.languageModel(
-              selectedModelId,
-              codexPermission.acpMode,
-            )
-            installCodexAskUserQuestionAcpResultNormalizer(model)
-            const codexRuntimeTools = {
-              ...(provider.tools || {}),
-              ...createCodexAskUserQuestionTools({
-                subChatId: input.subChatId,
-                emit: (chunk) => safeEmit(chunk as UIMessageChunk),
-                registerPending: (toolUseId, pending) => {
-                  pendingCodexToolApprovals.set(toolUseId, pending)
-                },
-                unregisterPending: (toolUseId) => {
-                  pendingCodexToolApprovals.delete(toolUseId)
-                },
-              }),
+            const runtimeModel = await createCodexAcpRuntimeModel({
+              provider,
+              modelId: selectedModelId,
+              permission: codexPermission,
+              mode: input.mode,
+              guardedContract,
+              subChatId: input.subChatId,
+              emit: (chunk) => safeEmit(chunk as UIMessageChunk),
+              registerPendingQuestion: (toolUseId, pending) => {
+                pendingCodexToolApprovals.set(toolUseId, pending)
+              },
+              unregisterPendingQuestion: (toolUseId) => {
+                pendingCodexToolApprovals.delete(toolUseId)
+              },
+              onGuardEvent: (event) => {
+                guardedRunEvents.push(event)
+                safeEmit({ type: "guard-event", event })
+              },
+            })
+            if (!runtimeModel.ok) {
+              emitUnsupportedSafetyCapability(runtimeModel.error)
+              return
             }
-
-            if (codexPermission.requiresPermissionHandler) {
-              const installResult = await installCodexAcpPermissionHandler({
-                model,
-                handler: createCodexAcpPermissionHandler({
-                  mode: input.mode,
-                  contract: guardedContract,
-                  onGuardEvent: (event) => {
-                    guardedRunEvents.push(event)
-                    safeEmit({ type: "guard-event", event })
-                  },
-                }),
-              })
-              if (!installResult.ok) {
-                emitUnsupportedSafetyCapability(installResult.error)
-                return
-              }
-            }
+            const { model, tools: codexRuntimeTools } = runtimeModel
 
             const result = streamText({
               model,
