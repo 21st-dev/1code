@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm"
 import { app } from "electron"
 import { spawn, type ChildProcess } from "node:child_process"
 import { createHash } from "node:crypto"
-import { homedir } from "node:os"
 import { basename, isAbsolute, join, resolve } from "node:path"
 import { z } from "zod"
 import {
@@ -50,6 +49,10 @@ import {
 } from "../../codex/errors"
 import { resolveCodexSelectedModelId } from "../../codex/model-selection"
 import { resolveCodexAcpBinaryPath } from "../../codex/acp-path"
+import {
+  probeCodexAcpSpawn,
+  stripCodexAnsi,
+} from "../../codex/acp-spawn-probe"
 import {
   getCodexApiKeyStatus,
   readCodexApiKey,
@@ -225,11 +228,7 @@ const loginSessions = new Map<string, CodexLoginSession>()
 const codexMcpCache = new Map<string, CodexMcpSnapshot>()
 
 const URL_CANDIDATE_REGEX = /https?:\/\/[^\s]+/g
-const ANSI_ESCAPE_REGEX = /\u001B\[[0-?]*[ -/]*[@-~]/g
-const ANSI_OSC_REGEX = /\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g
-
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
-const CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS = 5_000
 
 const codexMcpListEntrySchema = z
   .object({
@@ -255,129 +254,6 @@ const codexMcpListEntrySchema = z
   .passthrough()
 
 type CodexMcpListEntry = z.infer<typeof codexMcpListEntrySchema>
-
-type CodexAcpSpawnProbeStatus = {
-  ok: boolean
-  exitCode: number | null
-  signal: string | null
-  error: string | null
-  stdoutPreview: string
-  stderrPreview: string
-  durationMs: number
-}
-
-function previewProcessOutput(output: string): string {
-  return stripAnsi(output).replace(/\s+/g, " ").trim().slice(0, 240)
-}
-
-async function probeCodexAcpSpawn(
-  acpPath: string | null,
-): Promise<CodexAcpSpawnProbeStatus> {
-  const startedAt = Date.now()
-
-  if (!acpPath) {
-    return {
-      ok: false,
-      exitCode: null,
-      signal: null,
-      error: "Codex ACP runtime path could not be resolved.",
-      stdoutPreview: "",
-      stderrPreview: "",
-      durationMs: Date.now() - startedAt,
-    }
-  }
-
-  return await new Promise((resolvePromise) => {
-    let child: ChildProcess | null = null
-    let timeout: ReturnType<typeof setTimeout> | null = null
-    let stdout = ""
-    let stderr = ""
-    let settled = false
-
-    const appendOutput = (current: string, chunk: Buffer | string): string =>
-      `${current}${chunk.toString()}`.slice(-8_000)
-
-    const finish = (
-      status: Omit<CodexAcpSpawnProbeStatus, "durationMs">,
-    ) => {
-      if (settled) return
-      settled = true
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-      resolvePromise({
-        ...status,
-        durationMs: Date.now() - startedAt,
-      })
-    }
-
-    try {
-      child = spawn(acpPath, ["--help"], {
-        stdio: ["ignore", "pipe", "pipe"],
-        cwd: homedir(),
-      })
-    } catch (error) {
-      finish({
-        ok: false,
-        exitCode: null,
-        signal: null,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Codex ACP spawn probe failed before process start.",
-        stdoutPreview: "",
-        stderrPreview: "",
-      })
-      return
-    }
-
-    timeout = setTimeout(() => {
-      try {
-        child?.kill("SIGTERM")
-      } catch {}
-      finish({
-        ok: false,
-        exitCode: null,
-        signal: "timeout",
-        error: `codex-acp --help timed out after ${CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS}ms.`,
-        stdoutPreview: previewProcessOutput(stdout),
-        stderrPreview: previewProcessOutput(stderr),
-      })
-    }, CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS)
-
-    child.stdout?.on("data", (chunk) => {
-      stdout = appendOutput(stdout, chunk)
-    })
-    child.stderr?.on("data", (chunk) => {
-      stderr = appendOutput(stderr, chunk)
-    })
-    child.once("error", (error) => {
-      finish({
-        ok: false,
-        exitCode: null,
-        signal: null,
-        error: error.message,
-        stdoutPreview: previewProcessOutput(stdout),
-        stderrPreview: previewProcessOutput(stderr),
-      })
-    })
-    child.once("close", (exitCode, signal) => {
-      finish({
-        ok: exitCode === 0,
-        exitCode,
-        signal,
-        error:
-          exitCode === 0
-            ? null
-            : `codex-acp --help exited with code ${exitCode ?? "null"}${
-                signal ? ` and signal ${signal}` : ""
-              }.`,
-        stdoutPreview: previewProcessOutput(stdout),
-        stderrPreview: previewProcessOutput(stderr),
-      })
-    })
-  })
-}
 
 async function getCodexRuntimeStatus() {
   const cliHint = app.isPackaged
@@ -527,10 +403,6 @@ async function getCodexRuntimeStatus() {
   }
 }
 
-function stripAnsi(input: string): string {
-  return input.replace(ANSI_OSC_REGEX, "").replace(ANSI_ESCAPE_REGEX, "")
-}
-
 function isLocalhostHostname(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase()
   return (
@@ -543,7 +415,7 @@ function isLocalhostHostname(hostname: string): boolean {
 }
 
 function extractFirstNonLocalhostUrl(output: string): string | null {
-  const matches = stripAnsi(output).match(URL_CANDIDATE_REGEX)
+  const matches = stripCodexAnsi(output).match(URL_CANDIDATE_REGEX)
   if (!matches) return null
 
   for (const match of matches) {
@@ -602,7 +474,7 @@ function redactCodexLoginOutput(output: string): string {
 }
 
 function appendLoginOutput(session: CodexLoginSession, chunk: string): void {
-  const cleanChunk = stripAnsi(chunk)
+  const cleanChunk = stripCodexAnsi(chunk)
   if (!cleanChunk) return
 
   session.rawOutput += cleanChunk
@@ -683,8 +555,8 @@ async function runCodexCli(
 
     child.once("close", (exitCode) => {
       resolvePromise({
-        stdout: stripAnsi(stdout),
-        stderr: stripAnsi(stderr),
+        stdout: stripCodexAnsi(stdout),
+        stderr: stripCodexAnsi(stderr),
         exitCode,
       })
     })

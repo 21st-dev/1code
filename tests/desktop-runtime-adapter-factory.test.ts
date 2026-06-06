@@ -87,6 +87,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/acp-path.ts",
       "utf8",
     )
+    const codexAcpSpawnProbe = readFileSync(
+      "src/main/lib/codex/acp-spawn-probe.ts",
+      "utf8",
+    )
     const codexAcpRuntime = readFileSync(
       "src/main/lib/codex/acp-runtime.ts",
       "utf8",
@@ -127,6 +131,7 @@ describe("desktop runtime adapter factory", () => {
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
     expect(codexRouter).toContain("../../codex/acp-path")
+    expect(codexRouter).toContain("../../codex/acp-spawn-probe")
     expect(codexRouter).toContain("../../codex/desktop-run-request")
     expect(codexRouter).toContain("../../codex/acp-runtime")
     expect(codexRouter).toContain("../../codex/acp-text-stream")
@@ -146,6 +151,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("providerSessions")
     expect(codexRouter).not.toContain("function getCodexPackageName")
     expect(codexRouter).not.toContain("function toUnpackedAsarPath")
+    expect(codexRouter).not.toContain("function previewProcessOutput")
+    expect(codexRouter).not.toContain("function stripAnsi")
+    expect(codexRouter).not.toContain("async function probeCodexAcpSpawn")
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
@@ -170,6 +178,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpAdapter).toContain("runRequest: DesktopRunRequest")
     expect(codexAcpPath).toContain("resolveCodexAcpBinaryPath")
     expect(codexAcpPath).toContain("getCodexAcpPackageName")
+    expect(codexAcpSpawnProbe).toContain("probeCodexAcpSpawn")
+    expect(codexAcpSpawnProbe).toContain("stripCodexAnsi")
     expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexAcpTextStream).toContain("createCodexAcpUiMessageStream")
