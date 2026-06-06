@@ -9,7 +9,6 @@ import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path"
 import { z } from "zod"
 import {
-  normalizeCodexAssistantMessage,
   normalizeCodexStreamChunk,
 } from "../../../../shared/codex-tool-normalizer"
 import type { AgentGuardEvent } from "../../../../shared/agent-scope-contracts"
@@ -28,7 +27,6 @@ import {
   getCodexRunRequiredCapability,
 } from "../../../../shared/codex-runtime-capabilities"
 import {
-  buildGuardedRunAudit,
   captureGuardedGitStatus,
   formatScopeValidationError,
   validateAgentScopeContract,
@@ -63,6 +61,7 @@ import {
 import { prepareCodexAcpPrompt } from "../../codex/prompt"
 import { createCodexAcpRuntimeModel } from "../../codex/acp-runtime"
 import { emitCodexAcpUiStream } from "../../codex/acp-ui-stream"
+import { persistCodexAcpResponseMessage } from "../../codex/acp-message-persistence"
 import {
   type CodexAskUserQuestionApproval,
   type CodexAskUserQuestionPending,
@@ -2164,28 +2163,6 @@ export const codexRouter = router({
               return true
             }
 
-            const cleanAssistantMessageForPersistence = (message: any) => {
-              if (!message || message.role !== "assistant") return message
-              if (!Array.isArray(message.parts)) return message
-
-              const cleanedParts = message.parts.filter(
-                (part: any) => part?.state !== "input-streaming",
-              )
-
-              if (cleanedParts.length === 0) {
-                return null
-              }
-
-              const cleanedMessage = {
-                ...message,
-                parts: cleanedParts,
-              }
-
-              return normalizeCodexAssistantMessage(cleanedMessage, {
-                normalizeState: true,
-              })
-            }
-
             if (!isDuplicatePrompt) {
               const userMessage = {
                 id: crypto.randomUUID(),
@@ -2524,60 +2501,25 @@ export const codexRouter = router({
               },
               onFinish: async ({ responseMessage, isContinuation }) => {
                 try {
-                  const usageMetadata = await resolveUsageOnce()
-                  const guardedRunAudit =
-                    guardedContract && guardedPreRunStatus
-                      ? buildGuardedRunAudit({
-                          contract: guardedContract,
-                          runtime: "codex",
-                          enforcementMode: "hard",
-                          preRunStatus: guardedPreRunStatus,
-                          postRunStatus: await captureGuardedGitStatus(runtimeCwd),
-                          guardEvents: guardedRunEvents,
-                          startedAt: guardedRunStartedAt,
-                          stopped: abortController.signal.aborted,
-                        })
-                      : null
-                  if (guardedRunAudit) {
-                    safeEmit({ type: "guard-audit", audit: guardedRunAudit })
-                  }
-                  const responseWithUsage = {
-                    ...responseMessage,
-                    createdAt:
-                      (responseMessage as any)?.createdAt ??
-                      new Date().toISOString(),
-                    metadata: {
-                      ...((responseMessage as any)?.metadata || {}),
-                      ...(usageMetadata || {}),
-                      ...(guardedRunAudit
+                  await persistCodexAcpResponseMessage({
+                    responseMessage,
+                    isContinuation,
+                    messagesForStream,
+                    usageMetadata: await resolveUsageOnce(),
+                    guardedRun:
+                      guardedContract && guardedPreRunStatus
                         ? {
-                            guardedRun: {
-                              contractId: guardedRunAudit.contractId,
-                              runId: guardedRunAudit.runId,
-                              runtime: "codex",
-                              enforcementMode: guardedRunAudit.enforcementMode,
-                              audit: guardedRunAudit,
-                            },
+                            contract: guardedContract,
+                            preRunStatus: guardedPreRunStatus,
+                            cwd: runtimeCwd,
+                            guardEvents: guardedRunEvents,
+                            startedAt: guardedRunStartedAt,
+                            stopped: abortController.signal.aborted,
                           }
-                        : {}),
-                    },
-                  }
-                  const cleanedResponseMessage =
-                    cleanAssistantMessageForPersistence(responseWithUsage)
-
-                  if (!cleanedResponseMessage) {
-                    persistSubChatMessages(messagesForStream)
-                    return
-                  }
-
-                  const messagesToPersist = [
-                    ...(isContinuation
-                      ? messagesForStream.slice(0, -1)
-                      : messagesForStream),
-                    cleanedResponseMessage,
-                  ]
-
-                  persistSubChatMessages(messagesToPersist)
+                        : null,
+                    emit: safeEmit,
+                    persistMessages: persistSubChatMessages,
+                  })
                 } catch (error) {
                   console.error("[codex] Failed to persist messages:", error)
                 }
