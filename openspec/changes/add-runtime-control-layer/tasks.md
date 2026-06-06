@@ -34,9 +34,9 @@
 - [ ] 5.5 Add tests for event ordering, redaction, terminal events, cancellation, and Workbench-readable trace.
 
 ## 6. Verification
-- [ ] 6.1 Run `openspec validate add-runtime-control-layer --strict --no-interactive`.
-- [ ] 6.2 Run `bun run architecture:check`.
-- [ ] 6.3 Run focused preflight, permission policy, adapter boundary, redaction, and desktop job event tests.
-- [ ] 6.4 Run `bun run ts:check`.
-- [ ] 6.5 Run `bun run build`.
+- [x] 6.1 Run `openspec validate add-runtime-control-layer --strict --no-interactive`.
+- [x] 6.2 Run `bun run architecture:check`.
+- [x] 6.3 Run focused preflight, permission policy, adapter boundary, redaction, and desktop job event tests.
+- [x] 6.4 Run `bun run ts:check`.
+- [x] 6.5 Run `bun run build`.
 - [ ] 6.6 Record desktop smoke evidence for Claude plan/guard and Codex temporary-compat plan/guard using verified preflight and semantic trace.
