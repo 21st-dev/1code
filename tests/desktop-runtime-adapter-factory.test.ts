@@ -427,6 +427,30 @@ describe("desktop runtime adapter factory", () => {
     expect(chunkProcessor).toContain('case "tool-output-available"')
   })
 
+  test("keeps Claude Agent SDK message metadata ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const messageMetadata = readFileSync(
+      "src/main/lib/claude/agent-sdk-message-metadata.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-message-metadata",
+    )
+    expect(claudeRouter).toContain("trackClaudeAgentSdkMessageMetadata")
+    expect(claudeRouter).not.toContain("metadata.sessionId = msgAny.session_id")
+    expect(claudeRouter).not.toContain('msgAny.type === "system"')
+    expect(claudeRouter).not.toContain(
+      "metadata.sdkMessageUuid = lastAssistantUuid",
+    )
+    expect(messageMetadata).toContain("trackClaudeAgentSdkMessageMetadata")
+    expect(messageMetadata).toContain('msgAny.type === "system"')
+    expect(messageMetadata).toContain("sdkMessageUuid: lastAssistantUuid")
+  })
+
   test("keeps Claude Agent SDK tool permission ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

@@ -53,6 +53,7 @@ import {
   flushClaudeAgentSdkTextAccumulator,
   processClaudeAgentSdkUiChunk,
 } from "../../claude/agent-sdk-chunk-processor"
+import { trackClaudeAgentSdkMessageMetadata } from "../../claude/agent-sdk-message-metadata"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -2389,46 +2390,21 @@ ${prompt}
                     return
                   }
 
-                  // Track sessionId for rollback support (available on all messages)
-                  if (msgAny.session_id) {
-                    metadata.sessionId = msgAny.session_id
-                    currentSessionId = msgAny.session_id // Share with cleanup
-                  }
-
-                  // Track UUID from assistant messages for resumeSessionAt
-                  if (msgAny.type === "assistant" && msgAny.uuid) {
-                    lastAssistantUuid = msgAny.uuid
-                  }
-
-                  // When result arrives, assign the last assistant UUID to metadata
-                  // It will be emitted as part of the merged message-metadata chunk below
-                  if (
-                    msgAny.type === "result" &&
-                    historyEnabled &&
-                    lastAssistantUuid &&
-                    !abortController.signal.aborted
-                  ) {
-                    metadata.sdkMessageUuid = lastAssistantUuid
-                  }
-
-                  // Debug: Log system messages from SDK
-                  if (msgAny.type === "system") {
-                    // Full log to see all fields including MCP errors
-                    console.log(
-                      `[SD] SYSTEM message: subtype=${msgAny.subtype}`,
-                      JSON.stringify(
-                        {
-                          cwd: msgAny.cwd,
-                          mcp_servers: msgAny.mcp_servers,
-                          tools: msgAny.tools,
-                          plugins: msgAny.plugins,
-                          permissionMode: msgAny.permissionMode,
-                        },
-                        null,
-                        2,
-                      ),
-                    )
-                  }
+                  const trackedMessageMetadata =
+                    trackClaudeAgentSdkMessageMetadata({
+                      message: msgAny,
+                      state: {
+                        metadata,
+                        currentSessionId,
+                        lastAssistantUuid,
+                      },
+                      historyEnabled,
+                      aborted: abortController.signal.aborted,
+                    })
+                  metadata = trackedMessageMetadata.metadata
+                  currentSessionId = trackedMessageMetadata.currentSessionId
+                  lastAssistantUuid =
+                    trackedMessageMetadata.lastAssistantUuid
 
                   // Transform and emit + accumulate
                   for (const chunk of transform(msg)) {
