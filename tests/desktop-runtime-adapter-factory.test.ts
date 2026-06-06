@@ -1127,6 +1127,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-desktop-job.ts",
       "utf8",
     )
+    const claudeSubscriptionCleanup = readFileSync(
+      "src/main/lib/claude/agent-sdk-subscription-cleanup.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunStartup")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopJob({")
@@ -1139,11 +1143,14 @@ describe("desktop runtime adapter factory", () => {
       "createClaudeAgentSdkDesktopRunTraceEmitter",
     )
     expect(claudeRouter).toContain("completeClaudeAgentSdkDesktopJobAfterRun")
-    expect(claudeRouter).toContain("requestCancelClaudeAgentSdkDesktopJob")
+    expect(claudeRouter).not.toContain("requestCancelClaudeAgentSdkDesktopJob")
     expect(claudeRouter).not.toContain("completeDesktopChatAgentJobSafely")
     expect(claudeRouter).not.toContain("requestCancelDesktopChatAgentJobSafely")
     expect(claudeDesktopJob).toContain("completeDesktopChatAgentJobSafely")
     expect(claudeDesktopJob).toContain("requestCancelDesktopChatAgentJobSafely")
+    expect(claudeSubscriptionCleanup).toContain(
+      "requestCancelClaudeAgentSdkDesktopJob",
+    )
     expect(codexRouter).toContain("completeDesktopChatAgentJobSafely")
     expect(codexRouter).toContain("requestCancelDesktopChatAgentJobSafely")
 
@@ -1560,15 +1567,29 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/tool-approvals.ts",
       "utf8",
     )
+    const subscriptionCleanup = readFileSync(
+      "src/main/lib/claude/agent-sdk-subscription-cleanup.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/tool-approvals")
+    expect(claudeRouter).toContain(
+      "cleanupClaudeAgentSdkDesktopRunSubscription",
+    )
     expect(claudeRouter).toContain("getClaudePendingToolApprovalStore()")
     expect(claudeRouter).toContain("resolveClaudePendingToolApproval")
+    expect(claudeRouter).not.toContain('"Session ended."')
+    expect(claudeRouter).not.toContain(".set({ streamId: null })")
     expect(claudeRouter).not.toContain("const pendingToolApprovals")
     expect(claudeRouter).not.toContain("pendingToolApprovals.delete")
     expect(claudeToolApprovals).toContain("const pendingToolApprovals")
     expect(claudeToolApprovals).toContain("resolveClaudePendingToolApproval")
     expect(claudeToolApprovals).toContain("clearClaudePendingToolApprovals")
+    expect(subscriptionCleanup).toContain('"Session ended."')
+    expect(subscriptionCleanup).toContain(".set({ streamId: null })")
+    expect(subscriptionCleanup).toContain(
+      "requestCancelClaudeAgentSdkDesktopJob",
+    )
   })
 
   test("keeps Claude Agent SDK error classification ownership out of the router", () => {

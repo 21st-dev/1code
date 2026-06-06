@@ -45,8 +45,10 @@ import {
 import {
   completeClaudeAgentSdkDesktopJobAfterRun,
   createClaudeAgentSdkDesktopRunStartup,
-  requestCancelClaudeAgentSdkDesktopJob,
 } from "../../claude/agent-sdk-desktop-job"
+import {
+  cleanupClaudeAgentSdkDesktopRunSubscription,
+} from "../../claude/agent-sdk-subscription-cleanup"
 import {
   createClaudeAgentSdkRuntimeStreamSetup,
   createClaudeAgentSdkRuntimeStreamState,
@@ -1221,39 +1223,20 @@ export const claudeRouter = router({
 
         // Cleanup on unsubscribe
         return () => {
-          console.log(
-            `[SD] M:CLEANUP sub=${subId} sessionId=${streamState.currentSessionId || "none"}`,
-          )
-          isObservableActive = false // Prevent emit after unsubscribe
-          abortController.abort()
-          const ownsActiveSession = deleteActiveClaudeSessionIfController(
-            input.subChatId,
+          cleanupClaudeAgentSdkDesktopRunSubscription({
+            subId,
+            subChatId: input.subChatId,
+            sessionId: streamState.currentSessionId,
             abortController,
-          )
-          if (guardedContract) {
-            deleteActiveGuardedContract(guardedContract.id)
-          }
-          if (ownsActiveSession) {
-            clearClaudePendingToolApprovals("Session ended.", input.subChatId)
-          }
-
-          // Clear streamId since we're no longer streaming.
-          // sessionId is NOT saved here — the save block in the async function
-          // handles it (saves on normal completion, clears on abort). This avoids
-          // a redundant DB write that the cancel mutation would then overwrite.
-          const db = getDatabase()
-          requestCancelClaudeAgentSdkDesktopJob({
-            db,
-            jobId: desktopJobId,
-            sawError: desktopJobSawError,
-            reachedNaturalFinish: desktopJobReachedNaturalFinish,
+            guardedContract,
+            getDb: getDatabase,
+            markInactive: () => {
+              isObservableActive = false
+            },
+            desktopJobId,
+            desktopJobSawError,
+            desktopJobReachedNaturalFinish,
           })
-          if (ownsActiveSession) {
-            db.update(subChats)
-              .set({ streamId: null })
-              .where(eq(subChats.id, input.subChatId))
-              .run()
-          }
         }
       })
     }),
