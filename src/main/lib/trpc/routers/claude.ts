@@ -71,7 +71,6 @@ import {
 import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
   logClaudeOllamaSdkConfiguration,
-  logClaudeOllamaStreamAborted,
   logClaudeOllamaStreamStart,
   probeClaudeOllamaConnectivity,
 } from "../../claude/agent-sdk-ollama-diagnostics"
@@ -81,6 +80,10 @@ import {
   createClaudeAgentSdkStreamIterationState,
   recordClaudeAgentSdkStreamMessage,
 } from "../../claude/agent-sdk-stream-lifecycle"
+import {
+  shouldStopClaudeAgentSdkStreamForAbort,
+  shouldStopClaudeAgentSdkStreamForClosedObserver,
+} from "../../claude/agent-sdk-stream-control"
 import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
@@ -1789,8 +1792,12 @@ export const claudeRouter = router({
 
                 try {
                   for await (const msg of stream) {
-                    if (abortController.signal.aborted) {
-                      if (isUsingOllama) logClaudeOllamaStreamAborted()
+                    if (
+                      shouldStopClaudeAgentSdkStreamForAbort({
+                        signal: abortController.signal,
+                        isUsingOllama,
+                      })
+                    ) {
                       break
                     }
 
@@ -1886,9 +1893,12 @@ export const claudeRouter = router({
                         break
                       }
                     }
-                    // Break from stream loop if observer closed (user clicked Stop)
-                    if (!isObservableActive) {
-                      console.log(`[SD] M:OBSERVER_CLOSED_STREAM sub=${subId}`)
+                    if (
+                      shouldStopClaudeAgentSdkStreamForClosedObserver({
+                        isActive: isObservableActive,
+                        subId,
+                      })
+                    ) {
                       break
                     }
                 }

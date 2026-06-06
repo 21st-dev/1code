@@ -493,6 +493,27 @@ describe("desktop runtime adapter factory", () => {
     expect(streamLifecycle).toContain("logClaudeOllamaEmptyStreamDiagnosis")
   })
 
+  test("keeps Claude Agent SDK stream stop control out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const streamControl = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-control.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-control")
+    expect(claudeRouter).toContain("shouldStopClaudeAgentSdkStreamForAbort")
+    expect(claudeRouter).toContain(
+      "shouldStopClaudeAgentSdkStreamForClosedObserver",
+    )
+    expect(claudeRouter).not.toContain("logClaudeOllamaStreamAborted")
+    expect(claudeRouter).not.toContain("M:OBSERVER_CLOSED_STREAM")
+    expect(streamControl).toContain("logClaudeOllamaStreamAborted")
+    expect(streamControl).toContain("M:OBSERVER_CLOSED_STREAM")
+  })
+
   test("keeps Claude guarded audit metadata ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
