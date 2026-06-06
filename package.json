@@ -37,6 +37,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "test": "bun test tests",
+    "architecture:check": "node scripts/check-architecture-guards.mjs",
+    "check": "bun run architecture:check && bun run ts:check && bun run test",
     "ts:check": "tsc --noEmit",
     "native:check": "node scripts/ensure-electron-native-modules.mjs --check-only",
     "native:rebuild": "node scripts/ensure-electron-native-modules.mjs --force",
