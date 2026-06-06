@@ -104,6 +104,10 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
+    const codexModelSelection = readFileSync(
+      "src/main/lib/codex/model-selection.ts",
+      "utf8",
+    )
     const codexChatHistory = readFileSync(
       "src/main/lib/codex/chat-history.ts",
       "utf8",
@@ -120,6 +124,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/acp-ui-stream")
     expect(codexRouter).toContain("../../codex/acp-message-persistence")
     expect(codexRouter).toContain("../../codex/chat-history")
+    expect(codexRouter).toContain("../../codex/model-selection")
     expect(codexRouter).toContain("../../codex/usage-metadata")
     expect(codexRouter).toContain("../../codex/prompt")
     expect(codexRouter).toContain("const desktopRunRequest = createCodexDesktopRunRequest")
@@ -141,6 +146,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("usagePromise")
     expect(codexRouter).not.toContain("function parseStoredMessages")
     expect(codexRouter).not.toContain("function buildUserParts")
+    expect(codexRouter).not.toContain("function extractCodexModelId")
+    expect(codexRouter).not.toContain("function preprocessCodexModelName")
     expect(codexRouter).not.toContain("pendingFinishChunk")
     expect(codexRouter).not.toContain("cleanCodexAssistantMessageForPersistence")
     expect(codexAcpAdapter).toContain("createACPProvider")
@@ -159,6 +166,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexUsageMetadata).toContain("readLatestTokenCountInfo")
     expect(codexPrompt).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("preparePromptWithAppAgents")
+    expect(codexModelSelection).toContain("resolveCodexSelectedModelId")
+    expect(codexModelSelection).toContain("DEFAULT_CODEX_MODEL")
     expect(codexChatHistory).toContain("parseCodexStoredMessages")
     expect(codexChatHistory).toContain("buildCodexUserParts")
     expect(codexDesktopRunRequest).toContain("createCodexDesktopRunRequest")

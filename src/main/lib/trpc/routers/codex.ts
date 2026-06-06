@@ -45,6 +45,7 @@ import {
   getLastCodexSessionId,
   parseCodexStoredMessages,
 } from "../../codex/chat-history"
+import { resolveCodexSelectedModelId } from "../../codex/model-selection"
 import {
   getCodexApiKeyStatus,
   readCodexApiKey,
@@ -236,7 +237,6 @@ const AUTH_HINTS = [
   "401",
   "403",
 ]
-const DEFAULT_CODEX_MODEL = "gpt-5.5/high"
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_ACP_SPAWN_PROBE_TIMEOUT_MS = 5_000
 
@@ -1268,32 +1268,6 @@ async function getCodexIntegrationStatus() {
   }
 }
 
-function extractCodexModelId(rawModel: unknown): string | undefined {
-  if (typeof rawModel !== "string" || rawModel.length === 0) {
-    return undefined
-  }
-
-  const normalizedModel = rawModel.trim()
-
-  if (!normalizedModel || normalizedModel === "codex") {
-    return undefined
-  }
-
-  return normalizedModel
-}
-
-function preprocessCodexModelName(params: {
-  modelId: string
-  hasAppManagedApiKey?: boolean
-}): string {
-  if (!params.hasAppManagedApiKey) {
-    return params.modelId
-  }
-
-  // All model IDs now match the real API; pass through as-is
-  return params.modelId
-}
-
 function resolveCodexMcpProjectPathForCli(
   projectPath: string | undefined,
 ): string | undefined {
@@ -1933,11 +1907,8 @@ export const codexRouter = router({
                 return
               }
             }
-            const requestedModelId =
-              extractCodexModelId(input.model) ||
-              DEFAULT_CODEX_MODEL
-            const selectedModelId = preprocessCodexModelName({
-              modelId: requestedModelId,
+            const selectedModelId = resolveCodexSelectedModelId({
+              requestedModel: input.model,
               hasAppManagedApiKey: Boolean(appManagedCodexApiKey),
             })
             const metadataModel = selectedModelId
