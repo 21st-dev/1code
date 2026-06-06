@@ -154,6 +154,10 @@ describe("long text send pipeline", () => {
       "src/main/lib/codex/acp-temporary-compat-adapter.ts",
       "utf8",
     )
+    const claudePrompt = readFileSync(
+      "src/main/lib/claude/agent-sdk-prompt.ts",
+      "utf8",
+    )
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
     const codexAcpTextStream = readFileSync(
       "src/main/lib/codex/acp-text-stream.ts",
@@ -172,9 +176,10 @@ describe("long text send pipeline", () => {
       "utf8",
     )
 
-    expect(claude).toContain("prependLongTextAttachmentPromptBlocks")
+    expect(claude).not.toContain("prependLongTextAttachmentPromptBlocks")
     expect(claude).toContain("input.longTextAttachments")
     expect(claude).toContain("Long text attachment unavailable")
+    expect(claudePrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(codexAcpTemporaryCompatAdapter).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(codex).toContain("input.longTextAttachments")

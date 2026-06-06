@@ -55,14 +55,16 @@ import { runClaudeAgentSdkDesktopAdapterWithStreamConsumer } from "../../claude/
 import {
   createClaudeAgentSdkStreamConsumerMutableState,
 } from "../../claude/agent-sdk-stream-consumer"
-import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
 import {
   prepareClaudeAgentSdkPromptContext,
 } from "../../claude/agent-sdk-project-context"
-import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
+import {
+  ClaudeAgentSdkLongTextAttachmentPromptError,
+  prepareClaudeAgentSdkRuntimePrompt,
+} from "../../claude/agent-sdk-prompt"
 import {
   prepareClaudeAgentSdkOllamaStartupDiagnostics,
 } from "../../claude/agent-sdk-ollama-diagnostics"
@@ -100,7 +102,6 @@ import {
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import type { ResolvedChatImageAttachment } from "../../../../shared/chat-attachments"
 import { resolveChatImageAttachments } from "../../chat-attachments"
-import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import {
   ensureMcpTokensFresh,
   fetchMcpTools,
@@ -113,7 +114,6 @@ import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { discoverPluginMcpServers, type PluginMcpConfig } from "../../plugins"
 import { getPluginSafeModeState } from "../../plugins/update-review-state"
 import { publicProcedure, router } from "../index"
-import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import {
   agentScopeContractInputSchema,
   captureGuardedGitStatus,
@@ -1172,59 +1172,27 @@ export const claudeRouter = router({
             // Capture stderr from Claude process for debugging
             const stderrLines: string[] = []
 
-            // Parse mentions from prompt (App Agents, skills, files, folders)
-            const { cleanedPrompt, agentMentions, skillMentions } =
-              parseClaudePromptMentions(input.prompt)
-
-            if (agentMentions.length > 0) {
-              console.log(`[claude] App Agents mentioned:`, agentMentions)
-            }
-
-            // Log if skills were mentioned
-            if (skillMentions.length > 0) {
-              console.log(`[claude] Skills mentioned:`, skillMentions)
-            }
-
-            const appAgentPrompt = await preparePromptWithAppAgents(
-              cleanedPrompt,
-              agentMentions,
-            )
-            if (appAgentPrompt.missingAppAgents.length > 0) {
-              console.warn(
-                `[claude] Missing App Agents:`,
-                appAgentPrompt.missingAppAgents,
-              )
-            }
-
-            // Build final prompt with App Agent and skill instructions if needed
-            let finalPrompt = appAgentPrompt.prompt
-
-            // Handle empty prompt when only mentions are present
-            if (!finalPrompt.trim()) {
-              if (skillMentions.length > 0) {
-                finalPrompt = `Invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
-              }
-            } else if (skillMentions.length > 0) {
-              // Append skill instruction to existing prompt
-              finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
-            }
-
+            let prompt
             try {
-              finalPrompt = await prependLongTextAttachmentPromptBlocks(
-                finalPrompt,
-                input.longTextAttachments,
+              prompt = await prepareClaudeAgentSdkRuntimePrompt({
+                prompt: input.prompt,
+                images: resolvedImages,
+                longTextAttachments: input.longTextAttachments,
+              })
+            } catch (promptError) {
+              if (
+                !(promptError instanceof ClaudeAgentSdkLongTextAttachmentPromptError)
+              ) {
+                throw promptError
+              }
+              emitError(
+                promptError.originalError,
+                "Long text attachment unavailable",
               )
-            } catch (attachmentError) {
-              emitError(attachmentError, "Long text attachment unavailable")
               safeEmit({ type: "finish" } as UIMessageChunk)
               safeComplete()
               return
             }
-
-            const prompt = createClaudeAgentSdkPrompt({
-              prompt: finalPrompt,
-              images: resolvedImages,
-            })
 
             // Build full environment for the Claude runtime (includes HOME, PATH, etc.)
             const claudeEnv = buildClaudeEnv({

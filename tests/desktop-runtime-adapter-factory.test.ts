@@ -540,13 +540,18 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/mentions.ts",
       "utf8",
     )
+    const claudePrompt = readFileSync(
+      "src/main/lib/claude/agent-sdk-prompt.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/mentions")
-    expect(claudeRouter).toContain("parseClaudePromptMentions(input.prompt)")
+    expect(claudeRouter).not.toContain("../../claude/mentions")
+    expect(claudeRouter).not.toContain("parseClaudePromptMentions(input.prompt)")
     expect(claudeRouter).not.toContain("function parseMentions")
     expect(claudeRouter).not.toContain(
       "const mentionRegex = /@\\[(file|folder|skill|agent|tool):",
     )
+    expect(claudePrompt).toContain("parseClaudePromptMentions(prompt)")
     expect(claudeMentions).toContain("parseClaudePromptMentions")
     expect(claudeMentions).toContain(
       "const mentionRegex = /@\\[(file|folder|skill|agent|tool):",
@@ -954,9 +959,21 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-prompt")
-    expect(claudeRouter).toContain("createClaudeAgentSdkPrompt({")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimePrompt({")
+    expect(claudeRouter).toContain(
+      "ClaudeAgentSdkLongTextAttachmentPromptError",
+    )
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkPrompt({")
+    expect(claudeRouter).not.toContain("preparePromptWithAppAgents")
+    expect(claudeRouter).not.toContain("prependLongTextAttachmentPromptBlocks")
     expect(claudeRouter).not.toContain("async function* createPromptWithImages")
     expect(claudeRouter).not.toContain("media_type: img.mediaType")
+    expect(claudePrompt).toContain("prepareClaudeAgentSdkRuntimePrompt")
+    expect(claudePrompt).toContain(
+      "ClaudeAgentSdkLongTextAttachmentPromptError",
+    )
+    expect(claudePrompt).toContain("preparePromptWithAppAgents")
+    expect(claudePrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(claudePrompt).toContain("createClaudeAgentSdkPrompt")
     expect(claudePrompt).toContain("createClaudeAgentSdkImagePrompt")
     expect(claudePrompt).toContain("media_type: image.mediaType")
