@@ -99,6 +99,14 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/cli-runner.ts",
       "utf8",
     )
+    const codexIntegrationStatus = readFileSync(
+      "src/main/lib/codex/integration-status.ts",
+      "utf8",
+    )
+    const codexIntegrationState = readFileSync(
+      "src/main/lib/codex/integration-state.ts",
+      "utf8",
+    )
     const codexAcpRuntime = readFileSync(
       "src/main/lib/codex/acp-runtime.ts",
       "utf8",
@@ -148,6 +156,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/chat-history")
     expect(codexRouter).toContain("../../codex/cli-runner")
     expect(codexRouter).toContain("../../codex/errors")
+    expect(codexRouter).toContain("../../codex/integration-status")
     expect(codexRouter).toContain("../../codex/login-output")
     expect(codexRouter).toContain("../../codex/model-selection")
     expect(codexRouter).toContain("../../codex/usage-metadata")
@@ -169,6 +178,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("function appendLoginOutput")
     expect(codexRouter).not.toContain("async function runCodexCli")
     expect(codexRouter).not.toContain("async function runCodexCliChecked")
+    expect(codexRouter).not.toContain("function normalizeCodexIntegrationState")
+    expect(codexRouter).not.toContain("async function getCodexIntegrationStatus")
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
@@ -199,6 +210,10 @@ describe("desktop runtime adapter factory", () => {
     expect(codexLoginOutput).toContain("appendCodexLoginOutput")
     expect(codexCliRunner).toContain("runCodexCli")
     expect(codexCliRunner).toContain("runCodexCliChecked")
+    expect(codexIntegrationState).toContain("normalizeCodexIntegrationState")
+    expect(codexIntegrationState).toContain("isCodexIntegrationConnected")
+    expect(codexIntegrationStatus).toContain("./integration-state")
+    expect(codexIntegrationStatus).toContain("getCodexIntegrationStatus")
     expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexAcpTextStream).toContain("createCodexAcpUiMessageStream")

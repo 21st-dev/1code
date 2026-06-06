@@ -68,6 +68,11 @@ import {
   runCodexCli,
   runCodexCliChecked,
 } from "../../codex/cli-runner"
+import {
+  getCodexIntegrationStatus,
+  isCodexIntegrationConnected,
+  normalizeCodexIntegrationState,
+} from "../../codex/integration-status"
 import type { CodexProviderProfileBinding } from "../../codex/provider-runtime-binding"
 import {
   cleanupAllCodexAcpProviders,
@@ -142,12 +147,6 @@ type CodexLoginSession = {
   error: string | null
   exitCode: number | null
 }
-
-type CodexIntegrationState =
-  | "connected_chatgpt"
-  | "connected_api_key"
-  | "not_logged_in"
-  | "unknown"
 
 type CodexMcpServerForSession =
   | {
@@ -854,45 +853,6 @@ export async function getAllCodexMcpConfigHandler() {
   return { groups }
 }
 
-function normalizeCodexIntegrationState(rawOutput: string): CodexIntegrationState {
-  const normalizedOutput = rawOutput.toLowerCase()
-
-  if (normalizedOutput.includes("logged in using chatgpt")) {
-    return "connected_chatgpt"
-  }
-
-  if (
-    normalizedOutput.includes("logged in using an api key") ||
-    normalizedOutput.includes("logged in using api key")
-  ) {
-    return "connected_api_key"
-  }
-
-  if (normalizedOutput.includes("not logged in")) {
-    return "not_logged_in"
-  }
-
-  return "unknown"
-}
-
-async function getCodexIntegrationStatus() {
-  const result = await runCodexCli(["login", "status"])
-  const combinedOutput = [result.stdout, result.stderr]
-    .filter((chunk) => chunk.trim().length > 0)
-    .join("\n")
-    .trim()
-
-  const state = normalizeCodexIntegrationState(combinedOutput)
-
-  return {
-    state,
-    isConnected:
-      state === "connected_chatgpt" || state === "connected_api_key",
-    rawOutput: combinedOutput,
-    exitCode: result.exitCode,
-  }
-}
-
 function resolveCodexMcpProjectPathForCli(
   projectPath: string | undefined,
 ): string | undefined {
@@ -944,8 +904,7 @@ export const codexRouter = router({
       .trim()
 
     const state = normalizeCodexIntegrationState(statusOutput)
-    const isConnected =
-      state === "connected_chatgpt" || state === "connected_api_key"
+    const isConnected = isCodexIntegrationConnected(state)
 
     if (isConnected) {
       throw new Error("Failed to log out from Codex. Please try again.")
