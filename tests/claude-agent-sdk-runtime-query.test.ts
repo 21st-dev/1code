@@ -37,7 +37,6 @@ function createRequest() {
 describe("Claude Agent SDK desktop runtime query startup", () => {
   test("prepares MCP servers, prompt context, and SDK query options together", async () => {
     const request = createRequest()
-    const permissionPolicy = request.permissionPolicy
     const rawServers = {
       github: { type: "http", url: "https://mcp.example.com" },
     } as any
@@ -53,10 +52,8 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       rawMcpServers: rawServers,
       env: { PATH: "/bin" },
       isUsingOllama: false,
-      permissionPolicy,
       guardedContract: null,
       emit: () => {},
-      subChatId: "sub-1",
       pendingToolApprovals: new Map(),
       shouldForkResume: false,
       forkResumeAtUuid: null,
@@ -64,7 +61,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       resolvedModel: "claude-sonnet-4",
       maxThinkingTokens: 1024,
       projectPath: "/project",
-      cwd: "/repo",
       ensureTokensFresh: async (...args) => {
         refreshCalls.push(args)
         return refreshedServers
@@ -107,7 +103,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
 
   test("defaults pending tool approvals through the runtime query owner", async () => {
     const request = createRequest()
-    const permissionPolicy = request.permissionPolicy
     const approvalStore = new Map()
     const emitted: any[] = []
 
@@ -117,19 +112,16 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       existingMessages: [],
       env: { PATH: "/bin" },
       isUsingOllama: false,
-      permissionPolicy,
       guardedContract: null,
       emit: (chunk) => {
         emitted.push(chunk)
       },
-      subChatId: "sub-1",
       shouldForkResume: false,
       forkResumeAtUuid: null,
       resumeAtUuid: null,
       resolvedModel: "claude-sonnet-4",
       maxThinkingTokens: 1024,
       projectPath: "/project",
-      cwd: "/repo",
       ensureTokensFresh: async (servers) => servers,
       getPendingToolApprovals: () => approvalStore as any,
       readAgentsMd: async () => null,

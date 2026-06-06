@@ -643,6 +643,9 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeQuery).toContain("getActiveGuardedContract")
     expect(runtimeQuery).toContain("getClaudePendingToolApprovalStore")
     expect(runtimeQuery).toContain("const runtimeGuardEvents = guardEvents ?? []")
+    expect(runtimeQuery).toContain("const runtimeCwd = cwd ?? request.context.cwd")
+    expect(runtimeQuery).toContain("request.permissionPolicy")
+    expect(runtimeQuery).toContain("request.context.subChatId")
     expect(runtimeQuery).toContain("guardEvents: runtimeGuardEvents")
     expect(runtimeQuery).toContain(
       "createClaudeAgentSdkDesktopRuntimeQueryOptions",

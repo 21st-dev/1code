@@ -33,12 +33,14 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   | "guardEvents"
   | "parts"
   | "stderrLines"
+  | "permissionPolicy"
+  | "subChatId"
 > & {
   prompt: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["prompt"]
   existingMessages: any[]
   rawMcpServers?: PrepareClaudeAgentSdkMcpServersInput["mcpServers"]
   projectPath?: string
-  cwd: string
+  cwd?: string
   resolvedModel?: string | null
   ensureTokensFresh: PrepareClaudeAgentSdkMcpServersInput["ensureTokensFresh"]
   pendingToolApprovals?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
@@ -49,6 +51,10 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
     contractId: string,
   ) => ValidatedAgentScopeContract | undefined
   permission?: ClaudePermissionMapping
+  permissionPolicy?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
+    "permissionPolicy"
+  ]
+  subChatId?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["subChatId"]
   guardEvents?: AgentGuardEvent[]
   parts?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["parts"]
   stderrLines?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
@@ -67,6 +73,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryResult = {
 
 export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   prompt,
+  request,
   existingMessages,
   rawMcpServers,
   projectPath,
@@ -87,11 +94,15 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   PrepareClaudeAgentSdkDesktopRuntimeQueryResult
 > {
   const runtimeGuardEvents = guardEvents ?? []
+  const runtimeCwd = cwd ?? request.context.cwd
+  const runtimePermissionPolicy =
+    queryInput.permissionPolicy ?? request.permissionPolicy
+  const runtimeSubChatId = queryInput.subChatId ?? request.context.subChatId
   const mcpServers = await prepareClaudeAgentSdkMcpServers({
     mcpServers: rawMcpServers,
     isUsingOllama: queryInput.isUsingOllama,
     projectPath,
-    cwd,
+    cwd: runtimeCwd,
     ensureTokensFresh,
   })
 
@@ -101,7 +112,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
     isUsingOllama: queryInput.isUsingOllama,
     resolvedModel,
     projectPath,
-    cwd,
+    cwd: runtimeCwd,
     readAgentsMd,
     log,
   })
@@ -112,12 +123,15 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
     guardEvents: runtimeGuardEvents,
     queryOptions: createClaudeAgentSdkDesktopRuntimeQueryOptions({
       ...queryInput,
+      request,
       prompt: promptContext.prompt,
       systemPrompt: promptContext.systemPrompt,
       mcpServers,
       model: resolvedModel,
       permission:
-        permission ?? getClaudePermissionMapping(queryInput.permissionPolicy),
+        permission ?? getClaudePermissionMapping(runtimePermissionPolicy),
+      permissionPolicy: runtimePermissionPolicy,
+      subChatId: runtimeSubChatId,
       pendingToolApprovals:
         pendingToolApprovals ?? getPendingToolApprovals(),
       parts,
