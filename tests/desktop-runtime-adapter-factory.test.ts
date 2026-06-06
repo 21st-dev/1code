@@ -83,6 +83,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/acp-adapter.ts",
       "utf8",
     )
+    const codexAcpPath = readFileSync(
+      "src/main/lib/codex/acp-path.ts",
+      "utf8",
+    )
     const codexAcpRuntime = readFileSync(
       "src/main/lib/codex/acp-runtime.ts",
       "utf8",
@@ -122,6 +126,7 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
+    expect(codexRouter).toContain("../../codex/acp-path")
     expect(codexRouter).toContain("../../codex/desktop-run-request")
     expect(codexRouter).toContain("../../codex/acp-runtime")
     expect(codexRouter).toContain("../../codex/acp-text-stream")
@@ -139,6 +144,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("findSessionFileById")
     expect(codexRouter).not.toContain("createACPProvider")
     expect(codexRouter).not.toContain("providerSessions")
+    expect(codexRouter).not.toContain("function getCodexPackageName")
+    expect(codexRouter).not.toContain("function toUnpackedAsarPath")
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
@@ -161,6 +168,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpAdapter).toContain("createACPProvider")
     expect(codexAcpAdapter).toContain("providerSessions")
     expect(codexAcpAdapter).toContain("runRequest: DesktopRunRequest")
+    expect(codexAcpPath).toContain("resolveCodexAcpBinaryPath")
+    expect(codexAcpPath).toContain("getCodexAcpPackageName")
     expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexAcpTextStream).toContain("createCodexAcpUiMessageStream")

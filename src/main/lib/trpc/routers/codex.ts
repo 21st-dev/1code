@@ -3,9 +3,8 @@ import { eq } from "drizzle-orm"
 import { app } from "electron"
 import { spawn, type ChildProcess } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync } from "node:fs"
 import { homedir } from "node:os"
-import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path"
+import { basename, isAbsolute, join, resolve } from "node:path"
 import { z } from "zod"
 import {
   normalizeCodexStreamChunk,
@@ -50,6 +49,7 @@ import {
   isCodexAuthError,
 } from "../../codex/errors"
 import { resolveCodexSelectedModelId } from "../../codex/model-selection"
+import { resolveCodexAcpBinaryPath } from "../../codex/acp-path"
 import {
   getCodexApiKeyStatus,
   readCodexApiKey,
@@ -264,55 +264,6 @@ type CodexAcpSpawnProbeStatus = {
   stdoutPreview: string
   stderrPreview: string
   durationMs: number
-}
-
-function getCodexPackageName(): string {
-  const platform = process.platform
-  const arch = process.arch
-
-  if (platform === "darwin") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-darwin-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-darwin-x64"
-  }
-
-  if (platform === "linux") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-linux-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-linux-x64"
-  }
-
-  if (platform === "win32") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-win32-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-win32-x64"
-  }
-
-  throw new Error(`Unsupported platform/arch for codex-acp: ${platform}/${arch}`)
-}
-
-function toUnpackedAsarPath(filePath: string): string {
-  const unpackedPath = filePath.replace(
-    `${sep}app.asar${sep}`,
-    `${sep}app.asar.unpacked${sep}`,
-  )
-
-  if (unpackedPath !== filePath && existsSync(unpackedPath)) {
-    return unpackedPath
-  }
-
-  return filePath
-}
-
-function resolveCodexAcpBinaryPath(): string {
-  const packageName = getCodexPackageName()
-  const binaryName = process.platform === "win32" ? "codex-acp.exe" : "codex-acp"
-  const codexPackageRoot = dirname(
-    require.resolve("@zed-industries/codex-acp/package.json"),
-  )
-  const resolvedPath = require.resolve(`${packageName}/bin/${binaryName}`, {
-    // Resolve relative to the wrapper package so nested optional deps work in packaged apps.
-    paths: [codexPackageRoot],
-  })
-
-  return toUnpackedAsarPath(resolvedPath)
 }
 
 function previewProcessOutput(output: string): string {
