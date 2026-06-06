@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { finalizeClaudeAgentSdkEmbeddedError } from "../src/main/lib/claude/agent-sdk-embedded-error-finalization"
+import {
+  finalizeClaudeAgentSdkEmbeddedError,
+  handleClaudeAgentSdkEmbeddedErrorMessage,
+} from "../src/main/lib/claude/agent-sdk-embedded-error-finalization"
 import { createClaudeAgentSdkPolicyRetryState } from "../src/main/lib/claude/agent-sdk-policy-retry"
 
 let originalConsoleError: typeof console.error
@@ -45,6 +48,19 @@ function baseInput() {
 }
 
 describe("Claude Agent SDK embedded error finalization", () => {
+  test("ignores non-error SDK messages before finalization", () => {
+    const input = {
+      ...baseInput(),
+      message: { type: "assistant", message: { content: [] } },
+    }
+
+    expect(handleClaudeAgentSdkEmbeddedErrorMessage(input)).toEqual({
+      status: "none",
+    })
+    expect(input.emit).not.toHaveBeenCalled()
+    expect(input.complete).not.toHaveBeenCalled()
+  })
+
   test("records a policy retry instead of emitting a terminal error", () => {
     const input = {
       ...baseInput(),
@@ -58,6 +74,16 @@ describe("Claude Agent SDK embedded error finalization", () => {
     }
 
     expect(finalizeClaudeAgentSdkEmbeddedError(input)).toEqual({
+      status: "retry",
+    })
+    const handledInput = {
+      ...input,
+      policyRetry: createClaudeAgentSdkPolicyRetryState(),
+      emit: mock(() => {}),
+      complete: mock(() => {}),
+      log: mock(() => {}),
+    }
+    expect(handleClaudeAgentSdkEmbeddedErrorMessage(handledInput)).toEqual({
       status: "retry",
     })
     expect(input.policyRetry).toMatchObject({ count: 1, needed: true })

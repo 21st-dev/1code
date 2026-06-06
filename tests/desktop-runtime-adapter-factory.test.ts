@@ -688,7 +688,8 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain("createClaudeAgentSdkPolicyRetryState()")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
-    expect(claudeRouter).toContain("finalizeClaudeAgentSdkEmbeddedError")
+    expect(claudeRouter).toContain("handleClaudeAgentSdkEmbeddedErrorMessage")
+    expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkEmbeddedError")
     expect(claudeRouter).not.toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).not.toContain("let policyRetryNeeded")
     expect(claudeRouter).not.toContain("let policyRetryCount")
@@ -703,6 +704,9 @@ describe("desktop runtime adapter factory", () => {
     expect(adapterRunner).toContain("resetClaudeAgentSdkPolicyRetryAttempt")
     expect(embeddedErrorFinalization).toContain(
       "recordClaudeAgentSdkPolicyRetry",
+    )
+    expect(embeddedErrorFinalization).toContain(
+      "handleClaudeAgentSdkEmbeddedErrorMessage",
     )
   })
 
@@ -1058,6 +1062,8 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain(
       "const messageText = msgAny.message?.content?.[0]?.text",
     )
+    expect(claudeRouter).not.toContain('msgAny.type === "error"')
+    expect(claudeRouter).not.toContain("msgAny.error")
     expect(claudeRouter).not.toContain(
       'rawErrorCode === "authentication_failed"',
     )
@@ -1074,6 +1080,7 @@ describe("desktop runtime adapter factory", () => {
     expect(embeddedErrorFinalization).toContain(
       "classifyClaudeAgentSdkEmbeddedError",
     )
+    expect(embeddedErrorFinalization).toContain('msgAny.type !== "error"')
     expect(claudeErrors).toContain("extractClaudeAgentSdkEmbeddedErrorText")
     expect(claudeErrors).toContain("classifyClaudeAgentSdkEmbeddedError")
     expect(claudeErrors).toContain("classifyClaudeAgentSdkStreamError")

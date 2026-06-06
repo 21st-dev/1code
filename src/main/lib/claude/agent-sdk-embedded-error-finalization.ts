@@ -44,6 +44,20 @@ export type FinalizeClaudeAgentSdkEmbeddedErrorResult =
       }
     }
 
+export type HandleClaudeAgentSdkEmbeddedErrorMessageResult =
+  | { status: "none" }
+  | FinalizeClaudeAgentSdkEmbeddedErrorResult
+
+export function handleClaudeAgentSdkEmbeddedErrorMessage(
+  input: FinalizeClaudeAgentSdkEmbeddedErrorInput,
+): HandleClaudeAgentSdkEmbeddedErrorMessageResult {
+  const msgAny = input.message as any
+  if (msgAny.type !== "error" && !msgAny.error) {
+    return { status: "none" }
+  }
+  return finalizeClaudeAgentSdkEmbeddedError(input)
+}
+
 export function finalizeClaudeAgentSdkEmbeddedError({
   message,
   policyRetry,

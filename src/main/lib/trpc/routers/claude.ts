@@ -39,7 +39,7 @@ import {
   type ClaudeProviderRuntimeConfig,
 } from "../../claude/provider-runtime-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
-import { finalizeClaudeAgentSdkEmbeddedError } from "../../claude/agent-sdk-embedded-error-finalization"
+import { handleClaudeAgentSdkEmbeddedErrorMessage } from "../../claude/agent-sdk-embedded-error-finalization"
 import {
   completeClaudeAgentSdkRunAfterAdapter,
   finalizeClaudeAgentSdkUnexpectedError,
@@ -1808,36 +1808,34 @@ export const claudeRouter = router({
                       isUsingOllama,
                     }).messageCount
 
-                    // Check for error messages from SDK (error can be embedded in message payload!)
-                    const msgAny = msg as any
-                    if (msgAny.type === "error" || msgAny.error) {
-                      const embeddedError =
-                        finalizeClaudeAgentSdkEmbeddedError({
-                          message: msgAny,
-                          policyRetry,
-                          usesApiKeyAuth: Boolean(
-                            finalCustomConfig || hasExistingApiConfig,
-                          ),
-                          aborted: abortController.signal.aborted,
-                          subChatId: input.subChatId,
-                          chatId: input.chatId,
-                          cwd: runtimeCwd,
-                          mode: input.mode,
-                          hasCustomConfig: !!finalCustomConfig,
-                          isUsingOllama,
-                          model: resolvedModel,
-                          hasOAuthToken: !!claudeCodeToken,
-                          mcpServerNames: mcpServersFiltered
-                            ? Object.keys(mcpServersFiltered)
-                            : [],
-                          subId,
-                          chunkCount,
-                          emit: safeEmit,
-                          complete: safeComplete,
-                        })
-                      if (embeddedError.status === "retry") {
-                        break
-                      }
+                    const embeddedError =
+                      handleClaudeAgentSdkEmbeddedErrorMessage({
+                        message: msg,
+                        policyRetry,
+                        usesApiKeyAuth: Boolean(
+                          finalCustomConfig || hasExistingApiConfig,
+                        ),
+                        aborted: abortController.signal.aborted,
+                        subChatId: input.subChatId,
+                        chatId: input.chatId,
+                        cwd: runtimeCwd,
+                        mode: input.mode,
+                        hasCustomConfig: !!finalCustomConfig,
+                        isUsingOllama,
+                        model: resolvedModel,
+                        hasOAuthToken: !!claudeCodeToken,
+                        mcpServerNames: mcpServersFiltered
+                          ? Object.keys(mcpServersFiltered)
+                          : [],
+                        subId,
+                        chunkCount,
+                        emit: safeEmit,
+                        complete: safeComplete,
+                      })
+                    if (embeddedError.status === "retry") {
+                      break
+                    }
+                    if (embeddedError.status === "failed") {
                       return {
                         status: "failed" as const,
                         error: embeddedError.error,
