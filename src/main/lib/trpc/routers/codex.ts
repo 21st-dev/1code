@@ -95,6 +95,7 @@ import {
 import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
+  redactRendererDiagnosticChunk,
 } from "../../agent-runtime/stream-event-mapper"
 import {
   fetchMcpTools,
@@ -2190,7 +2191,13 @@ export const codexRouter = router({
           }
           if (!isActive) return
           try {
-            emit.next(chunk)
+            const rendererChunk = redactRendererDiagnosticChunk({
+              runtimeId: "codex",
+              runId: input.runId,
+              jobId: desktopJobId,
+              chunk,
+            })
+            emit.next(rendererChunk)
           } catch {
             isActive = false
           }

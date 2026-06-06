@@ -90,6 +90,7 @@ import {
 import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
+  redactRendererDiagnosticChunk,
 } from "../../agent-runtime/stream-event-mapper"
 import {
   completeDesktopAgentJobSafely,
@@ -1075,7 +1076,13 @@ export const claudeRouter = router({
           }
           if (!isObservableActive) return false
           try {
-            emit.next(chunk)
+            const rendererChunk = redactRendererDiagnosticChunk({
+              runtimeId: "claude-code",
+              runId: activeRunId,
+              jobId: desktopJobId,
+              chunk,
+            }) as UIMessageChunk
+            emit.next(rendererChunk)
             return true
           } catch {
             isObservableActive = false

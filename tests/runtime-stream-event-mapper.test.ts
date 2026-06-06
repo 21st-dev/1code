@@ -4,6 +4,7 @@ import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
   mapDesktopStreamChunkToRunEvents,
+  redactRendererDiagnosticChunk,
 } from "../src/main/lib/agent-runtime/stream-event-mapper"
 import {
   createAgentJob,
@@ -107,6 +108,54 @@ describe("desktop stream event mapper", () => {
         message: "api_key=<redacted>",
       },
     })
+  })
+
+  test("redacts renderer diagnostics without changing normal stream content", () => {
+    const diagnostic = redactRendererDiagnosticChunk({
+      runtimeId: "codex",
+      runId: "run-renderer-redaction",
+      chunk: {
+        type: "runtime-status",
+        ok: false,
+        blocker: {
+          component: "provider-profile",
+          message: "failed with api_key=sk-supersecretvalue123456",
+          authorization: "Bearer secret-token",
+        },
+      },
+    })
+
+    expect(diagnostic).toMatchObject({
+      type: "runtime-status",
+      blocker: {
+        message: "failed with api_key=<redacted>",
+        authorization: "<redacted>",
+      },
+    })
+
+    const textChunk = { type: "text-delta", id: "text-1", delta: "api_key=visible" }
+    expect(
+      redactRendererDiagnosticChunk({
+        runtimeId: "codex",
+        runId: "run-renderer-redaction",
+        chunk: textChunk,
+      }),
+    ).toBe(textChunk)
+  })
+
+  test("Claude and Codex routes redact renderer diagnostics through the mapper", () => {
+    for (const [runtimeName, routePath] of [
+      ["Claude", "src/main/lib/trpc/routers/claude.ts"],
+      ["Codex", "src/main/lib/trpc/routers/codex.ts"],
+    ] as const) {
+      const source = readFileSync(routePath, "utf8")
+      const safeEmitIndex = source.indexOf("const safeEmit")
+      const redactIndex = source.indexOf("redactRendererDiagnosticChunk", safeEmitIndex)
+      const emitIndex = source.indexOf("emit.next(rendererChunk", safeEmitIndex)
+
+      expect(redactIndex, `${runtimeName} renderer redaction`).toBeGreaterThan(safeEmitIndex)
+      expect(emitIndex, `${runtimeName} renderer emission`).toBeGreaterThan(redactIndex)
+    }
   })
 
   test("appends mapped run events through the existing job store", () => {

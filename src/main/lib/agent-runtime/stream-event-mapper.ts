@@ -31,6 +31,19 @@ export type DesktopStreamEventMapper = {
   map(chunk: unknown): RunEvent[]
 }
 
+export type RedactRendererDiagnosticChunkInput = DesktopStreamEventMapperContext & {
+  chunk: unknown
+}
+
+const RENDERER_DIAGNOSTIC_CHUNK_TYPES = new Set([
+  "auth-error",
+  "capability-error",
+  "error",
+  "guard-audit",
+  "retry-notification",
+  "runtime-status",
+])
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -277,6 +290,25 @@ export function createDesktopStreamEventMapper(
   }
 }
 
+export function redactRendererDiagnosticChunk(
+  input: RedactRendererDiagnosticChunkInput,
+): unknown {
+  if (!isObject(input.chunk)) return input.chunk
+  const chunkType = getString(input.chunk, "type")
+  if (!chunkType || !RENDERER_DIAGNOSTIC_CHUNK_TYPES.has(chunkType)) {
+    return input.chunk
+  }
+
+  const redacted = redactRuntimePayload(toJsonValue(input.chunk), {
+    runtimeId: input.runtimeId,
+    runId: input.runId,
+    jobId: input.jobId,
+    source: input.source ?? "runtime-diagnostic",
+    secretHints: input.secretHints,
+  })
+  return redacted.payload
+}
+
 function persistedPayloadForRunEvent(event: RunEvent): JsonValue {
   return {
     runId: event.runId,
@@ -307,4 +339,3 @@ export function appendRunEventsToAgentJob(
   }
   return appended
 }
-
