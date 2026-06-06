@@ -477,9 +477,12 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeRouter).toContain("logClaudeOllamaStreamStart")
     expect(claudeRouter).toContain("logClaudeOllamaStreamError")
+    expect(claudeRouter).toContain("logClaudeOllamaSdkConfiguration")
     expect(claudeRouter).toContain("probeClaudeOllamaConnectivity")
     expect(claudeRouter).not.toContain("/api/tags")
     expect(claudeRouter).not.toContain("Ollama is responding")
+    expect(claudeRouter).not.toContain("SDK Configuration:")
+    expect(claudeRouter).not.toContain("Session settings:")
     expect(claudeRouter).not.toContain(
       "[Ollama] ===== STARTING STREAM ITERATION =====",
     )
@@ -492,6 +495,8 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(ollamaDiagnostics).toContain("probeClaudeOllamaConnectivity")
     expect(ollamaDiagnostics).toContain("/api/tags")
+    expect(ollamaDiagnostics).toContain("logClaudeOllamaSdkConfiguration")
+    expect(ollamaDiagnostics).toContain("SDK Configuration:")
   })
 
   test("keeps Claude Ollama prompt ownership out of the router", () => {

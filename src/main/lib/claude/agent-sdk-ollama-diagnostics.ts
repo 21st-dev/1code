@@ -54,6 +54,30 @@ export async function probeClaudeOllamaConnectivity(input: {
   }
 }
 
+export function logClaudeOllamaSdkConfiguration(input: {
+  model?: string | null
+  baseUrl?: string
+  cwd: string
+  configDir: string
+  hasAuthToken: boolean
+  resumeSessionId?: string | null
+}): void {
+  console.log("[Ollama Debug] SDK Configuration:", {
+    model: input.model,
+    baseUrl: input.baseUrl,
+    cwd: input.cwd,
+    configDir: input.configDir,
+    hasAuthToken: input.hasAuthToken,
+  })
+  console.log("[Ollama Debug] Session settings:", {
+    resumeSessionId: input.resumeSessionId || "none (first message)",
+    mode: input.resumeSessionId ? "resume" : "continue",
+    note: input.resumeSessionId
+      ? "Resuming existing session to maintain chat history"
+      : "Starting new session with continue mode",
+  })
+}
+
 export function logClaudeOllamaStreamStart(input: {
   model?: string | null
   baseUrl?: string | null

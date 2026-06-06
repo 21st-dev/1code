@@ -3,6 +3,7 @@ import {
   logClaudeOllamaEmptyStreamDiagnosis,
   logClaudeOllamaFirstMessageLatency,
   logClaudeOllamaMessage,
+  logClaudeOllamaSdkConfiguration,
   logClaudeOllamaSingleMessageWarning,
   logClaudeOllamaStreamComplete,
   logClaudeOllamaStreamError,
@@ -100,6 +101,40 @@ describe("Claude Agent SDK Ollama diagnostics", () => {
     expect(warnCalls).toContain(
       "[Ollama] Only received 1 message (likely just init). No actual content generated.",
     )
+  })
+
+  test("logs Ollama SDK configuration and session settings", () => {
+    console.log = mock(() => {}) as typeof console.log
+
+    logClaudeOllamaSdkConfiguration({
+      model: "qwen",
+      baseUrl: "http://127.0.0.1:11434",
+      cwd: "/repo",
+      configDir: "/tmp/claude",
+      hasAuthToken: true,
+      resumeSessionId: "session-1",
+    })
+
+    const calls = (console.log as unknown as { mock: { calls: any[][] } }).mock
+      .calls
+    expect(calls[0]).toEqual([
+      "[Ollama Debug] SDK Configuration:",
+      {
+        model: "qwen",
+        baseUrl: "http://127.0.0.1:11434",
+        cwd: "/repo",
+        configDir: "/tmp/claude",
+        hasAuthToken: true,
+      },
+    ])
+    expect(calls[1]).toEqual([
+      "[Ollama Debug] Session settings:",
+      {
+        resumeSessionId: "session-1",
+        mode: "resume",
+        note: "Resuming existing session to maintain chat history",
+      },
+    ])
   })
 
   test("probes Ollama connectivity and reports model availability", async () => {

@@ -75,6 +75,7 @@ import {
   logClaudeOllamaEmptyStreamDiagnosis,
   logClaudeOllamaFirstMessageLatency,
   logClaudeOllamaMessage,
+  logClaudeOllamaSdkConfiguration,
   logClaudeOllamaSingleMessageWarning,
   logClaudeOllamaStreamAborted,
   logClaudeOllamaStreamComplete,
@@ -1739,19 +1740,13 @@ export const claudeRouter = router({
 
             // Log SDK configuration for debugging
             if (isUsingOllama) {
-              console.log("[Ollama Debug] SDK Configuration:", {
+              logClaudeOllamaSdkConfiguration({
                 model: resolvedModel,
                 baseUrl: finalEnv.ANTHROPIC_BASE_URL,
                 cwd: runtimeCwd,
                 configDir: isolatedConfigDir,
                 hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-              })
-              console.log("[Ollama Debug] Session settings:", {
-                resumeSessionId: resumeSessionId || "none (first message)",
-                mode: resumeSessionId ? "resume" : "continue",
-                note: resumeSessionId
-                  ? "Resuming existing session to maintain chat history"
-                  : "Starting new session with continue mode",
+                resumeSessionId,
               })
             }
 
