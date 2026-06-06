@@ -107,6 +107,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/integration-state.ts",
       "utf8",
     )
+    const codexRuntimeStatus = readFileSync(
+      "src/main/lib/codex/runtime-status.ts",
+      "utf8",
+    )
     const codexAcpRuntime = readFileSync(
       "src/main/lib/codex/acp-runtime.ts",
       "utf8",
@@ -147,7 +151,6 @@ describe("desktop runtime adapter factory", () => {
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
     expect(codexRouter).toContain("../../codex/acp-path")
-    expect(codexRouter).toContain("../../codex/acp-spawn-probe")
     expect(codexRouter).toContain("../../codex/desktop-run-request")
     expect(codexRouter).toContain("../../codex/acp-runtime")
     expect(codexRouter).toContain("../../codex/acp-text-stream")
@@ -159,6 +162,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/integration-status")
     expect(codexRouter).toContain("../../codex/login-output")
     expect(codexRouter).toContain("../../codex/model-selection")
+    expect(codexRouter).toContain("../../codex/runtime-status")
     expect(codexRouter).toContain("../../codex/usage-metadata")
     expect(codexRouter).toContain("../../codex/prompt")
     expect(codexRouter).toContain("const desktopRunRequest = createCodexDesktopRunRequest")
@@ -180,6 +184,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("async function runCodexCliChecked")
     expect(codexRouter).not.toContain("function normalizeCodexIntegrationState")
     expect(codexRouter).not.toContain("async function getCodexIntegrationStatus")
+    expect(codexRouter).not.toContain("async function getCodexRuntimeStatus")
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
@@ -214,6 +219,12 @@ describe("desktop runtime adapter factory", () => {
     expect(codexIntegrationState).toContain("isCodexIntegrationConnected")
     expect(codexIntegrationStatus).toContain("./integration-state")
     expect(codexIntegrationStatus).toContain("getCodexIntegrationStatus")
+    expect(codexRuntimeStatus).toContain("buildCodexRuntimeAvailability")
+    expect(codexRuntimeStatus).toContain("./acp-spawn-probe")
+    expect(codexRuntimeStatus).toContain("getRegisteredAgentRuntimeManifest")
+    expect(codexRuntimeStatus).toContain(
+      "CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA",
+    )
     expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexAcpTextStream).toContain("createCodexAcpUiMessageStream")
