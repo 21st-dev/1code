@@ -49,6 +49,7 @@ import {
   logClaudeAgentSdkEmbeddedError,
   logClaudeAgentSdkErrorDetails,
 } from "../../claude/agent-sdk-error-logging"
+import { processClaudeAgentSdkUiChunk } from "../../claude/agent-sdk-chunk-processor"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -2431,105 +2432,39 @@ ${prompt}
                     chunkCount++
                     lastChunkType = chunk.type
 
-                    // For message-metadata, inject sdkMessageUuid before emitting
-                    // so the frontend receives the full merged metadata in one chunk
-                    if (
-                      chunk.type === "message-metadata" &&
-                      metadata.sdkMessageUuid
-                    ) {
-                      chunk.messageMetadata = {
-                        ...chunk.messageMetadata,
-                        sdkMessageUuid: metadata.sdkMessageUuid,
-                      }
-                    }
+                    const processedChunk = processClaudeAgentSdkUiChunk({
+                      chunk,
+                      state: {
+                        metadata,
+                        currentText,
+                        pendingFinishChunk,
+                        exitPlanModeToolCallId,
+                      },
+                      parts,
+                      mode: input.mode,
+                      subId,
+                      subChatId: input.subChatId,
+                      chunkCount,
+                      emit: safeEmit,
+                      notifyFileChanged: ({ filePath, type, subChatId }) => {
+                        const windows = BrowserWindow.getAllWindows()
+                        for (const win of windows) {
+                          win.webContents.send("file-changed", {
+                            filePath,
+                            type,
+                            subChatId,
+                          })
+                        }
+                      },
+                    })
+                    metadata = processedChunk.metadata
+                    currentText = processedChunk.currentText
+                    pendingFinishChunk = processedChunk.pendingFinishChunk
+                    exitPlanModeToolCallId =
+                      processedChunk.exitPlanModeToolCallId
 
-                    // IMPORTANT: Defer the protocol "finish" chunk until after DB persistence.
-                    // If we emit finish early, the UI can send the next user message before
-                    // this assistant message is written, and the next save overwrites it.
-                    if (chunk.type === "finish") {
-                      pendingFinishChunk = chunk
-                      continue
-                    }
-
-                    // Use safeEmit to prevent throws when observer is closed
-                    if (!safeEmit(chunk)) {
-                      // Observer closed (user clicked Stop), break out of loop
-                      console.log(
-                        `[SD] M:EMIT_CLOSED sub=${subId} type=${chunk.type} n=${chunkCount}`,
-                      )
+                    if (processedChunk.emitClosed) {
                       break
-                    }
-
-                    // Accumulate based on chunk type
-                    switch (chunk.type) {
-                      case "text-delta":
-                        currentText += chunk.delta
-                        break
-                      case "text-end":
-                        if (currentText.trim()) {
-                          parts.push({ type: "text", text: currentText })
-                          currentText = ""
-                        }
-                        break
-                      case "tool-input-available":
-                        // DEBUG: Log tool calls
-                        console.log(
-                          `[SD] M:TOOL_CALL sub=${subId} toolName="${chunk.toolName}" mode=${input.mode} callId=${chunk.toolCallId}`,
-                        )
-
-                        // Track ExitPlanMode toolCallId so we can stop when it completes
-                        if (
-                          input.mode === "plan" &&
-                          chunk.toolName === "ExitPlanMode"
-                        ) {
-                          console.log(
-                            `[SD] M:PLAN_TOOL_DETECTED sub=${subId} callId=${chunk.toolCallId}`,
-                          )
-                          exitPlanModeToolCallId = chunk.toolCallId
-                        }
-
-                        parts.push({
-                          type: `tool-${chunk.toolName}`,
-                          toolCallId: chunk.toolCallId,
-                          toolName: chunk.toolName,
-                          input: chunk.input,
-                          state: "call",
-                          startedAt: Date.now(),
-                        })
-                        break
-                      case "tool-output-available":
-                        const toolPart = parts.find(
-                          (p) =>
-                            p.type?.startsWith("tool-") &&
-                            p.toolCallId === chunk.toolCallId,
-                        )
-                        if (toolPart) {
-                          toolPart.result = chunk.output
-                          toolPart.output = chunk.output // Backwards compatibility for the UI that relies on output field
-                          toolPart.state = "result"
-
-                          // Notify renderer about file changes for Write/Edit tools
-                          if (
-                            toolPart.type === "tool-Write" ||
-                            toolPart.type === "tool-Edit"
-                          ) {
-                            const filePath = toolPart.input?.file_path
-                            if (filePath) {
-                              const windows = BrowserWindow.getAllWindows()
-                              for (const win of windows) {
-                                win.webContents.send("file-changed", {
-                                  filePath,
-                                  type: toolPart.type,
-                                  subChatId: input.subChatId,
-                                })
-                              }
-                            }
-                          }
-                        }
-                        break
-                      case "message-metadata":
-                        metadata = { ...metadata, ...chunk.messageMetadata }
-                        break
                     }
                   }
                   // Break from stream loop if observer closed (user clicked Stop)

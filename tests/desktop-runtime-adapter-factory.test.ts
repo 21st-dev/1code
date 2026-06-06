@@ -402,6 +402,28 @@ describe("desktop runtime adapter factory", () => {
     )
   })
 
+  test("keeps Claude Agent SDK chunk processing ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const chunkProcessor = readFileSync(
+      "src/main/lib/claude/agent-sdk-chunk-processor.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-chunk-processor",
+    )
+    expect(claudeRouter).toContain("processClaudeAgentSdkUiChunk")
+    expect(claudeRouter).not.toContain('case "tool-input-available"')
+    expect(claudeRouter).not.toContain('case "tool-output-available"')
+    expect(claudeRouter).not.toContain("toolPart.result = chunk.output")
+    expect(chunkProcessor).toContain("processClaudeAgentSdkUiChunk")
+    expect(chunkProcessor).toContain('case "tool-input-available"')
+    expect(chunkProcessor).toContain('case "tool-output-available"')
+  })
+
   test("keeps Claude Agent SDK tool permission ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
