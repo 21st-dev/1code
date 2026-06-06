@@ -52,7 +52,7 @@ import {
   deleteActiveClaudeSessionIfController,
   getActiveClaudeSession,
   hasActiveClaudeSession,
-  setActiveClaudeSession,
+  startActiveClaudeSessionForDesktopRun,
 } from "../../claude/active-sessions"
 import {
   clearClaudePendingToolApprovals,
@@ -716,20 +716,14 @@ export const claudeRouter = router({
     )
     .subscription(({ input }) => {
       return observable<UIMessageChunk>((emit) => {
-        // Abort any existing session for this subChatId before starting a new one
-        // This prevents race conditions if two messages are sent in quick succession
-        const existingSession = getActiveClaudeSession(input.subChatId)
-        if (existingSession) {
-          existingSession.controller.abort()
-        }
-
-        const abortController = new AbortController()
-        const streamId = crypto.randomUUID()
-        const activeRunId = input.runId ?? streamId
-        setActiveClaudeSession(input.subChatId, {
-          controller: abortController,
-          runId: activeRunId,
+        const activeSessionStartup = startActiveClaudeSessionForDesktopRun({
+          subChatId: input.subChatId,
+          requestedRunId: input.runId,
+          createId: () => crypto.randomUUID(),
         })
+        const abortController = activeSessionStartup.controller
+        const streamId = activeSessionStartup.streamId
+        const activeRunId = activeSessionStartup.runId
 
         // Stream debug logging
         const subId = input.subChatId.slice(-8) // Short ID for logs

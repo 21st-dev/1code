@@ -3,6 +3,13 @@ export type ClaudeActiveSession = {
   runId: string
 }
 
+export type ClaudeDesktopSessionStartup = {
+  controller: AbortController
+  streamId: string
+  runId: string
+  previousSessionAborted: boolean
+}
+
 const activeSessions = new Map<string, ClaudeActiveSession>()
 
 export function getActiveClaudeSession(
@@ -38,6 +45,33 @@ export function deleteActiveClaudeSessionIfController(
   if (session?.controller !== controller) return false
   activeSessions.delete(subChatId)
   return true
+}
+
+export function startActiveClaudeSessionForDesktopRun(input: {
+  subChatId: string
+  requestedRunId?: string | null
+  createId?: () => string
+  createAbortController?: () => AbortController
+}): ClaudeDesktopSessionStartup {
+  const existingSession = getActiveClaudeSession(input.subChatId)
+  existingSession?.controller.abort()
+
+  const createId = input.createId ?? crypto.randomUUID
+  const controller = input.createAbortController?.() ?? new AbortController()
+  const streamId = createId()
+  const runId = input.requestedRunId ?? streamId
+
+  setActiveClaudeSession(input.subChatId, {
+    controller,
+    runId,
+  })
+
+  return {
+    controller,
+    streamId,
+    runId,
+    previousSessionAborted: Boolean(existingSession),
+  }
 }
 
 export function abortAllClaudeSessions(): void {

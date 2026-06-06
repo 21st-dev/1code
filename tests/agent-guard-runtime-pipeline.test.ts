@@ -93,7 +93,13 @@ describe("agent guard runtime pipeline", () => {
       "controller: AbortController",
     )
     expect(activeSessions).toContain("runId: string")
-    expect(claude).toContain("const activeRunId = input.runId ?? streamId")
+    expect(activeSessions).toContain("startActiveClaudeSessionForDesktopRun")
+    expect(activeSessions).toContain(
+      "const runId = input.requestedRunId ?? streamId",
+    )
+    expect(claude).toContain("startActiveClaudeSessionForDesktopRun")
+    expect(claude).not.toContain("const activeRunId = input.runId ?? streamId")
+    expect(claude).not.toContain("setActiveClaudeSession(input.subChatId")
     expect(claude).toContain(
       "deleteActiveClaudeSessionIfController(",
     )
