@@ -18,6 +18,17 @@ import {
   type ClaudeAgentSdkRuntimeStreamSetup,
 } from "./agent-sdk-runtime-state"
 
+export type RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput = Omit<
+  PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
+  "isUsingOllama" | "guardedContract" | "emit"
+> &
+  Partial<
+    Pick<
+      PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
+      "isUsingOllama" | "guardedContract" | "emit"
+    >
+  >
+
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
   Omit<
     RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput,
@@ -38,7 +49,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     | "subChatId"
     | "mode"
   > & {
-    runtimeQuery: PrepareClaudeAgentSdkDesktopRuntimeQueryInput
+    runtimeQuery: RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput
     getContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
       "getContract"
     ]
@@ -95,6 +106,10 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   const runtimeQuery =
     await prepareClaudeAgentSdkDesktopRuntimeQuery({
       ...runtimeQueryInput,
+      isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama,
+      guardedContract:
+        runtimeQueryInput.guardedContract ?? input.guardedContract,
+      emit: runtimeQueryInput.emit ?? input.emit,
       guardEvents: runtimeQueryInput.guardEvents ?? guardEvents,
       parts,
       stderrLines,

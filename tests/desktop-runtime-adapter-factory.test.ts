@@ -661,6 +661,10 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeLifecycle).toContain("prompt: request.prompt")
     expect(runtimeLifecycle).toContain("abortSignal: request.signal")
     expect(runtimeLifecycle).toContain("model: input.customConfig?.model")
+    expect(runtimeLifecycle).toContain(
+      "isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama",
+    )
+    expect(runtimeLifecycle).toContain("runtimeQueryInput.emit ?? input.emit")
     expect(runtimeLifecycle).toContain("getActiveGuardedContract")
     expect(runtimeLifecycle).toContain("deleteActiveGuardedContract")
     expect(claudeQueryOptions).toContain(
