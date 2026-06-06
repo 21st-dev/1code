@@ -1327,9 +1327,12 @@ describe("desktop runtime adapter factory", () => {
 
     expect(claudeRouter).toContain("../../claude/chat-history")
     expect(claudeRouter).toContain("../../claude/chat-input-schema")
-    expect(claudeRouter).toContain("prepareClaudeUserMessageForHistory")
-    expect(claudeRouter).toContain("resolveClaudeChatResumeMetadata")
-    expect(claudeRouter).toContain("consumeClaudeChatForkResumeFlags")
+    expect(claudeRouter).toContain("prepareClaudeChatHistoryForDesktopRun")
+    expect(claudeRouter).not.toContain("prepareClaudeUserMessageForHistory")
+    expect(claudeRouter).not.toContain("resolveClaudeChatResumeMetadata")
+    expect(claudeRouter).not.toContain("consumeClaudeChatForkResumeFlags")
+    expect(claudeRouter).not.toContain("JSON.parse(existing?.messages")
+    expect(claudeRouter).not.toContain("messages: JSON.stringify(messagesToSave)")
     expect(claudeRouter).not.toContain("buildClaudeUserParts(")
     expect(claudeRouter).not.toContain("isDuplicateClaudeUserMessage")
     expect(claudeRouter).not.toContain(
@@ -1349,6 +1352,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeChatHistory).toContain("consumeClaudeChatForkResumeFlags")
     expect(claudeChatHistory).toContain("isDuplicateClaudeUserMessage")
     expect(claudeChatHistory).toContain("prepareClaudeUserMessageForHistory")
+    expect(claudeChatHistory).toContain("prepareClaudeChatHistoryForDesktopRun")
     expect(claudeChatHistory).toContain("lastAssistantMessage")
     expect(claudeChatHistory).toContain("delete metadata.shouldForkResume")
     expect(claudeChatHistory).toContain("buildClaudeUserParts")

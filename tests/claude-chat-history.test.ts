@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { eq } from "drizzle-orm"
 import {
   buildClaudeUserParts,
   claudeImageAttachmentSignatureFromInput,
@@ -7,9 +8,43 @@ import {
   claudeLongTextAttachmentSignatureFromParts,
   consumeClaudeChatForkResumeFlags,
   isDuplicateClaudeUserMessage,
+  prepareClaudeChatHistoryForDesktopRun,
   prepareClaudeUserMessageForHistory,
   resolveClaudeChatResumeMetadata,
 } from "../src/main/lib/claude/chat-history"
+import { chats, projects, subChats } from "../src/main/lib/db/schema"
+import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
+
+function seedChatHistory(
+  db: ReturnType<typeof createAgentJobTestDb>,
+  messages: Array<Record<string, any>>,
+) {
+  db.insert(projects)
+    .values({
+      id: "project-1",
+      name: "Project",
+      path: "/repo",
+    })
+    .run()
+  db.insert(chats)
+    .values({
+      id: "chat-1",
+      projectId: "project-1",
+      worktreePath: "/repo",
+      updatedAt: new Date("2026-05-31T00:00:00.000Z"),
+    })
+    .run()
+  db.insert(subChats)
+    .values({
+      id: "sub-1",
+      chatId: "chat-1",
+      sessionId: "session-old",
+      streamId: null,
+      messages: JSON.stringify(messages),
+      updatedAt: new Date("2026-05-31T00:00:00.000Z"),
+    })
+    .run()
+}
 
 describe("Claude chat history helpers", () => {
   test("resolves rollback and fork resume metadata from the latest assistant message", () => {
@@ -298,5 +333,103 @@ describe("Claude chat history helpers", () => {
         },
       ],
     })
+  })
+
+  test("prepares desktop run history, consumes fork flags, and saves the user message", () => {
+    const db = createAgentJobTestDb()
+    seedChatHistory(db, [
+      {
+        role: "assistant",
+        metadata: {
+          shouldForkResume: true,
+          sdkMessageUuid: "assistant-1",
+        },
+      },
+    ])
+
+    const result = prepareClaudeChatHistoryForDesktopRun({
+      db,
+      subChatId: "sub-1",
+      streamId: "stream-1",
+      prompt: "next",
+      images: [],
+      longTextAttachments: [],
+      createId: () => "user-1",
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+    })
+
+    expect(result).toMatchObject({
+      existingSessionId: "session-old",
+      existingMessages: [
+        {
+          role: "assistant",
+          metadata: {
+            sdkMessageUuid: "assistant-1",
+          },
+        },
+      ],
+      resumeAtUuid: null,
+      shouldForkResume: true,
+      forkResumeAtUuid: "assistant-1",
+      isDuplicate: false,
+    })
+    expect(result.messagesToSave).toEqual([
+      {
+        role: "assistant",
+        metadata: {
+          sdkMessageUuid: "assistant-1",
+        },
+      },
+      {
+        id: "user-1",
+        role: "user",
+        createdAt: "2026-06-01T00:00:00.000Z",
+        parts: [{ type: "text", text: "next" }],
+      },
+    ])
+
+    const saved = db
+      .select()
+      .from(subChats)
+      .where(eq(subChats.id, "sub-1"))
+      .get()
+    expect(saved?.streamId).toBe("stream-1")
+    expect(JSON.parse(saved?.messages ?? "[]")).toEqual(result.messagesToSave)
+  })
+
+  test("prepares desktop run history without rewriting duplicate user messages", () => {
+    const db = createAgentJobTestDb()
+    const duplicateMessage = {
+      id: "user-existing",
+      role: "user",
+      parts: buildClaudeUserParts("same", [], []),
+    }
+    seedChatHistory(db, [duplicateMessage])
+
+    const result = prepareClaudeChatHistoryForDesktopRun({
+      db,
+      subChatId: "sub-1",
+      streamId: "stream-duplicate",
+      prompt: "same",
+      images: [],
+      longTextAttachments: [],
+      createId: () => "user-new",
+    })
+
+    expect(result).toMatchObject({
+      existingSessionId: "session-old",
+      existingMessages: [duplicateMessage],
+      isDuplicate: true,
+      userMessage: duplicateMessage,
+      messagesToSave: [duplicateMessage],
+    })
+
+    const saved = db
+      .select()
+      .from(subChats)
+      .where(eq(subChats.id, "sub-1"))
+      .get()
+    expect(saved?.streamId).toBeNull()
+    expect(JSON.parse(saved?.messages ?? "[]")).toEqual([duplicateMessage])
   })
 })

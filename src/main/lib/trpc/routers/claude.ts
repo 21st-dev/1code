@@ -60,9 +60,7 @@ import {
   resolveClaudePendingToolApproval,
 } from "../../claude/tool-approvals"
 import {
-  consumeClaudeChatForkResumeFlags,
-  prepareClaudeUserMessageForHistory,
-  resolveClaudeChatResumeMetadata,
+  prepareClaudeChatHistoryForDesktopRun,
 } from "../../claude/chat-history"
 import {
   imageAttachmentSchema,
@@ -868,17 +866,6 @@ export const claudeRouter = router({
               safeComplete()
             }
 
-            // 1. Get existing messages from DB
-            const existing = db
-              .select()
-              .from(subChats)
-              .where(eq(subChats.id, input.subChatId))
-              .get()
-            let existingMessages = JSON.parse(existing?.messages || "[]")
-            const existingSessionId = existing?.sessionId || null
-
-            const { resumeAtUuid, shouldForkResume, forkResumeAtUuid } =
-              resolveClaudeChatResumeMetadata(existingMessages)
             const historyEnabled = input.historyEnabled === true
             let resolvedImages: ResolvedChatImageAttachment[] = []
             try {
@@ -895,37 +882,23 @@ export const claudeRouter = router({
               return
             }
 
-            // Clear shouldForkResume flag after reading (consumed once) and persist to DB
-            if (shouldForkResume) {
-              const forkResumeFlags =
-                consumeClaudeChatForkResumeFlags(existingMessages)
-              existingMessages = forkResumeFlags.messages
-              db.update(subChats)
-                .set({ messages: JSON.stringify(existingMessages) })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            }
-
-            // Create user message and save BEFORE streaming (skip if duplicate)
-            const userMessageHistory = prepareClaudeUserMessageForHistory({
-              messages: existingMessages,
+            const chatHistory = prepareClaudeChatHistoryForDesktopRun({
+              db,
+              subChatId: input.subChatId,
+              streamId,
               prompt: input.prompt,
               images: input.images,
               longTextAttachments: input.longTextAttachments,
               createId: () => crypto.randomUUID(),
             })
-            const { isDuplicate, messagesToSave } = userMessageHistory
-
-            if (!isDuplicate) {
-              db.update(subChats)
-                .set({
-                  messages: JSON.stringify(messagesToSave),
-                  streamId,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            }
+            const {
+              existingMessages,
+              existingSessionId,
+              resumeAtUuid,
+              shouldForkResume,
+              forkResumeAtUuid,
+              messagesToSave,
+            } = chatHistory
 
             const providerStartup =
               await resolveClaudeAgentSdkProviderStartup({

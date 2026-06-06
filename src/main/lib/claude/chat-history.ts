@@ -1,4 +1,6 @@
+import { eq } from "drizzle-orm"
 import { z } from "zod"
+import { subChats } from "../db"
 import {
   imageAttachmentSchema,
   longTextAttachmentSchema,
@@ -204,6 +206,82 @@ export function prepareClaudeUserMessageForHistory(input: {
     isDuplicate: false,
     userMessage,
     messagesToSave: [...input.messages, userMessage],
+  }
+}
+
+export type PrepareClaudeChatHistoryForDesktopRunInput = {
+  db: any
+  subChatId: string
+  streamId: string
+  prompt: string
+  images: z.infer<typeof imageAttachmentSchema>[] | undefined
+  longTextAttachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+  createId: () => string
+  now?: () => Date
+}
+
+export type PrepareClaudeChatHistoryForDesktopRunResult =
+  ClaudeChatResumeMetadata & {
+    existingMessages: Array<Record<string, any>>
+    existingSessionId: string | null
+    isDuplicate: boolean
+    userMessage: Record<string, any>
+    messagesToSave: Array<Record<string, any>>
+  }
+
+export function prepareClaudeChatHistoryForDesktopRun({
+  db,
+  subChatId,
+  streamId,
+  prompt,
+  images,
+  longTextAttachments,
+  createId,
+  now,
+}: PrepareClaudeChatHistoryForDesktopRunInput): PrepareClaudeChatHistoryForDesktopRunResult {
+  const existing = db
+    .select()
+    .from(subChats)
+    .where(eq(subChats.id, subChatId))
+    .get()
+  let existingMessages = JSON.parse(existing?.messages || "[]")
+  const existingSessionId = existing?.sessionId || null
+
+  const resumeMetadata = resolveClaudeChatResumeMetadata(existingMessages)
+  if (resumeMetadata.shouldForkResume) {
+    const forkResumeFlags = consumeClaudeChatForkResumeFlags(existingMessages)
+    existingMessages = forkResumeFlags.messages
+    db.update(subChats)
+      .set({ messages: JSON.stringify(existingMessages) })
+      .where(eq(subChats.id, subChatId))
+      .run()
+  }
+
+  const userMessageHistory = prepareClaudeUserMessageForHistory({
+    messages: existingMessages,
+    prompt,
+    images,
+    longTextAttachments,
+    createId,
+    now,
+  })
+
+  if (!userMessageHistory.isDuplicate) {
+    db.update(subChats)
+      .set({
+        messages: JSON.stringify(userMessageHistory.messagesToSave),
+        streamId,
+        updatedAt: now?.() ?? new Date(),
+      })
+      .where(eq(subChats.id, subChatId))
+      .run()
+  }
+
+  return {
+    ...resumeMetadata,
+    existingMessages,
+    existingSessionId,
+    ...userMessageHistory,
   }
 }
 
