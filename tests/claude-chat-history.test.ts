@@ -6,6 +6,7 @@ import {
   claudeLongTextAttachmentSignatureFromInput,
   claudeLongTextAttachmentSignatureFromParts,
   consumeClaudeChatForkResumeFlags,
+  isDuplicateClaudeUserMessage,
   resolveClaudeChatResumeMetadata,
 } from "../src/main/lib/claude/chat-history"
 
@@ -194,5 +195,59 @@ describe("Claude chat history helpers", () => {
         },
       ]),
     )
+  })
+
+  test("detects duplicate user messages across text and long-text attachments", () => {
+    const longTextAttachments = [
+      {
+        attachmentId: "text-1",
+        localRef: "local-text",
+        filename: "notes.txt",
+        byteLength: 50,
+        preview: "preview",
+        kind: "pasted" as const,
+      },
+    ]
+    const images: any[] = []
+    const messages = [
+      {
+        role: "user",
+        parts: buildClaudeUserParts("hello", images, longTextAttachments),
+      },
+    ]
+
+    expect(
+      isDuplicateClaudeUserMessage({
+        messages,
+        prompt: "hello",
+        images,
+        longTextAttachments,
+      }),
+    ).toBe(true)
+
+    expect(
+      isDuplicateClaudeUserMessage({
+        messages,
+        prompt: "hello",
+        images: [
+          {
+            attachmentId: "image-1",
+            localRef: "local-image",
+            mediaType: "image/png",
+            filename: "screen.png",
+            sizeBytes: 100,
+          },
+        ],
+        longTextAttachments,
+      }),
+    ).toBe(false)
+    expect(
+      isDuplicateClaudeUserMessage({
+        messages: [{ role: "assistant", parts: messages[0].parts }],
+        prompt: "hello",
+        images,
+        longTextAttachments,
+      }),
+    ).toBe(false)
   })
 })

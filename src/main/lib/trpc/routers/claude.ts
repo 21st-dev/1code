@@ -104,11 +104,8 @@ import {
 } from "../../claude/tool-approvals"
 import {
   buildClaudeUserParts,
-  claudeImageAttachmentSignatureFromInput,
-  claudeImageAttachmentSignatureFromParts,
-  claudeLongTextAttachmentSignatureFromInput,
-  claudeLongTextAttachmentSignatureFromParts,
   consumeClaudeChatForkResumeFlags,
+  isDuplicateClaudeUserMessage,
   resolveClaudeChatResumeMetadata,
 } from "../../claude/chat-history"
 import {
@@ -974,18 +971,12 @@ export const claudeRouter = router({
 
             // Check if last message is already this user message (avoid duplicate)
             const lastMsg = existingMessages[existingMessages.length - 1]
-            const lastMsgText = lastMsg?.parts?.find(
-              (p: any) => p.type === "text",
-            )?.text
-            const isDuplicate =
-              lastMsg?.role === "user" &&
-              lastMsgText === input.prompt &&
-              claudeLongTextAttachmentSignatureFromParts(lastMsg?.parts) ===
-                claudeLongTextAttachmentSignatureFromInput(
-                  input.longTextAttachments,
-                ) &&
-              claudeImageAttachmentSignatureFromParts(lastMsg?.parts) ===
-                claudeImageAttachmentSignatureFromInput(input.images)
+            const isDuplicate = isDuplicateClaudeUserMessage({
+              messages: existingMessages,
+              prompt: input.prompt,
+              images: input.images,
+              longTextAttachments: input.longTextAttachments,
+            })
 
             // 2. Create user message and save BEFORE streaming (skip if duplicate)
             let userMessage: any

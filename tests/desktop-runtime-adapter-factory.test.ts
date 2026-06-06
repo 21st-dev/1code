@@ -938,6 +938,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain("buildClaudeUserParts(")
     expect(claudeRouter).toContain("resolveClaudeChatResumeMetadata")
     expect(claudeRouter).toContain("consumeClaudeChatForkResumeFlags")
+    expect(claudeRouter).toContain("isDuplicateClaudeUserMessage")
     expect(claudeRouter).not.toContain(
       "function buildLongTextAttachmentParts",
     )
@@ -946,9 +947,14 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeRouter).not.toContain("lastAssistantMsg")
     expect(claudeRouter).not.toContain("delete m.metadata.shouldForkResume")
+    expect(claudeRouter).not.toContain(
+      "claudeLongTextAttachmentSignatureFromParts",
+    )
+    expect(claudeRouter).not.toContain("claudeImageAttachmentSignatureFromParts")
     expect(claudeRouter).not.toContain("const imageAttachmentSchema = z.object")
     expect(claudeChatHistory).toContain("resolveClaudeChatResumeMetadata")
     expect(claudeChatHistory).toContain("consumeClaudeChatForkResumeFlags")
+    expect(claudeChatHistory).toContain("isDuplicateClaudeUserMessage")
     expect(claudeChatHistory).toContain("lastAssistantMessage")
     expect(claudeChatHistory).toContain("delete metadata.shouldForkResume")
     expect(claudeChatHistory).toContain("buildClaudeUserParts")

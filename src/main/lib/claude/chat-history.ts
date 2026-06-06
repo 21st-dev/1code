@@ -145,6 +145,27 @@ export function claudeImageAttachmentSignatureFromInput(
   )
 }
 
+export function isDuplicateClaudeUserMessage(input: {
+  messages: Array<Record<string, any>>
+  prompt: string
+  images: z.infer<typeof imageAttachmentSchema>[] | undefined
+  longTextAttachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
+}): boolean {
+  const lastMessage = input.messages[input.messages.length - 1]
+  const lastMessageText = lastMessage?.parts?.find(
+    (part: any) => part.type === "text",
+  )?.text
+
+  return (
+    lastMessage?.role === "user" &&
+    lastMessageText === input.prompt &&
+    claudeLongTextAttachmentSignatureFromParts(lastMessage?.parts) ===
+      claudeLongTextAttachmentSignatureFromInput(input.longTextAttachments) &&
+    claudeImageAttachmentSignatureFromParts(lastMessage?.parts) ===
+      claudeImageAttachmentSignatureFromInput(input.images)
+  )
+}
+
 export function buildClaudeChatImageAttachmentParts(
   images: z.infer<typeof imageAttachmentSchema>[] | undefined,
 ): any[] {
