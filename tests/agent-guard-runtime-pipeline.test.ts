@@ -102,17 +102,25 @@ describe("agent guard runtime pipeline", () => {
       "const runId = input.requestedRunId ?? streamId",
     )
     expect(claude).toContain("startActiveClaudeSessionForDesktopRun")
+    expect(claude).toContain("cancelClaudeAgentSdkActiveDesktopRun")
     expect(claude).toContain("cleanupClaudeAgentSdkDesktopRunSubscription")
     expect(claude).toContain("finalizeClaudeAgentSdkDesktopRunAfterLifecycle")
     expect(claude).not.toContain("const activeRunId = input.runId ?? streamId")
     expect(claude).not.toContain("setActiveClaudeSession(input.subChatId")
+    expect(claude).not.toContain("getActiveClaudeSession")
+    expect(claude).not.toContain("deleteActiveClaudeSession(input.subChatId")
     expect(claude).not.toContain(
       "deleteActiveClaudeSessionIfController(",
     )
     expect(subscriptionCleanup).toContain(
       "deleteActiveClaudeSessionIfController(",
     )
-    expect(claude).toContain("input.runId && session.runId !== input.runId")
+    expect(claude).not.toContain(
+      "input.runId && session.runId !== input.runId",
+    )
+    expect(subscriptionCleanup).toContain(
+      "input.runId && session.runId !== input.runId",
+    )
     expect(claude).not.toContain("activeSessions.get")
     expect(claude).not.toContain("const activeSessions")
   })

@@ -4,7 +4,9 @@ import {
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
 import {
+  deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
+  getActiveClaudeSession,
 } from "./active-sessions"
 import { clearClaudePendingToolApprovals } from "./tool-approvals"
 import {
@@ -17,6 +19,8 @@ import type { AgentJobDatabase } from "../headless/job-store"
 export type CleanupClaudeAgentSdkDesktopRunSubscriptionDependencies = {
   deleteActiveClaudeSessionIfController:
     typeof deleteActiveClaudeSessionIfController
+  deleteActiveClaudeSession: typeof deleteActiveClaudeSession
+  getActiveClaudeSession: typeof getActiveClaudeSession
   clearClaudePendingToolApprovals: typeof clearClaudePendingToolApprovals
   completeClaudeAgentSdkDesktopJobAfterRun:
     typeof completeClaudeAgentSdkDesktopJobAfterRun
@@ -57,12 +61,32 @@ export type FinalizeClaudeAgentSdkDesktopRunAfterLifecycleInput = {
   dependencies?: Partial<CleanupClaudeAgentSdkDesktopRunSubscriptionDependencies>
 }
 
+export type AbortClaudeAgentSdkDesktopRunRequestInput = {
+  subChatId: string
+  abortController: AbortController
+  message?: string
+  dependencies?: Partial<CleanupClaudeAgentSdkDesktopRunSubscriptionDependencies>
+}
+
+export type CancelClaudeAgentSdkActiveDesktopRunInput = {
+  subChatId: string
+  runId?: string
+  dependencies?: Partial<CleanupClaudeAgentSdkDesktopRunSubscriptionDependencies>
+}
+
+export type CancelClaudeAgentSdkActiveDesktopRunResult = {
+  cancelled: boolean
+  ignoredStale: boolean
+}
+
 const defaultDependencies: CleanupClaudeAgentSdkDesktopRunSubscriptionDependencies =
   {
     clearClaudePendingToolApprovals,
     completeClaudeAgentSdkDesktopJobAfterRun,
+    deleteActiveClaudeSession,
     deleteActiveClaudeSessionIfController,
     deleteGuardedContract: deleteActiveGuardedContract,
+    getActiveClaudeSession,
     log: console.log,
     requestCancelClaudeAgentSdkDesktopJob,
   }
@@ -145,4 +169,38 @@ export function finalizeClaudeAgentSdkDesktopRunAfterLifecycle(
   if (input.guardedContract) {
     dependencies.deleteGuardedContract(input.guardedContract.id)
   }
+}
+
+export function abortClaudeAgentSdkDesktopRunRequest(
+  input: AbortClaudeAgentSdkDesktopRunRequestInput,
+): void {
+  const dependencies = withDefaultDependencies(input.dependencies)
+
+  input.abortController.abort()
+  dependencies.clearClaudePendingToolApprovals(
+    input.message ?? "Session cancelled.",
+    input.subChatId,
+  )
+}
+
+export function cancelClaudeAgentSdkActiveDesktopRun(
+  input: CancelClaudeAgentSdkActiveDesktopRunInput,
+): CancelClaudeAgentSdkActiveDesktopRunResult {
+  const dependencies = withDefaultDependencies(input.dependencies)
+  const session = dependencies.getActiveClaudeSession(input.subChatId)
+
+  if (session && input.runId && session.runId !== input.runId) {
+    return { cancelled: false, ignoredStale: true }
+  }
+
+  if (session) {
+    abortClaudeAgentSdkDesktopRunRequest({
+      subChatId: input.subChatId,
+      abortController: session.controller,
+      dependencies,
+    })
+    dependencies.deleteActiveClaudeSession(input.subChatId)
+  }
+
+  return { cancelled: Boolean(session), ignoredStale: false }
 }

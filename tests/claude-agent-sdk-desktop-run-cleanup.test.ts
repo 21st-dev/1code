@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
+  abortClaudeAgentSdkDesktopRunRequest,
+  cancelClaudeAgentSdkActiveDesktopRun,
   cleanupClaudeAgentSdkDesktopRunSubscription,
   finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../src/main/lib/claude/agent-sdk-desktop-run-cleanup"
@@ -231,5 +233,90 @@ describe("Claude Agent SDK desktop run cleanup", () => {
     expect(deletedSessions).toEqual([
       { subChatId: "sub-1", abortController: controller },
     ])
+  })
+
+  test("aborts a desktop run request and clears pending approvals", () => {
+    const controller = new AbortController()
+    const clearedApprovals: any[] = []
+
+    abortClaudeAgentSdkDesktopRunRequest({
+      subChatId: "sub-1",
+      abortController: controller,
+      dependencies: {
+        clearClaudePendingToolApprovals: (message, subChatId) => {
+          clearedApprovals.push({ message, subChatId })
+        },
+      },
+    })
+
+    expect(controller.signal.aborted).toBe(true)
+    expect(clearedApprovals).toEqual([
+      { message: "Session cancelled.", subChatId: "sub-1" },
+    ])
+  })
+
+  test("cancels the active desktop run with run identity fencing", () => {
+    const controller = new AbortController()
+    const clearedApprovals: any[] = []
+    const deletedSessions: string[] = []
+
+    const result = cancelClaudeAgentSdkActiveDesktopRun({
+      subChatId: "sub-1",
+      runId: "run-1",
+      dependencies: {
+        getActiveClaudeSession: () => ({ controller, runId: "run-1" }),
+        clearClaudePendingToolApprovals: (message, subChatId) => {
+          clearedApprovals.push({ message, subChatId })
+        },
+        deleteActiveClaudeSession: (subChatId) => {
+          deletedSessions.push(subChatId)
+          return true
+        },
+      },
+    })
+
+    expect(result).toEqual({ cancelled: true, ignoredStale: false })
+    expect(controller.signal.aborted).toBe(true)
+    expect(clearedApprovals).toEqual([
+      { message: "Session cancelled.", subChatId: "sub-1" },
+    ])
+    expect(deletedSessions).toEqual(["sub-1"])
+  })
+
+  test("ignores stale active desktop run cancellation by run id", () => {
+    const controller = new AbortController()
+    const clearedApprovals: any[] = []
+    const deletedSessions: string[] = []
+
+    const result = cancelClaudeAgentSdkActiveDesktopRun({
+      subChatId: "sub-1",
+      runId: "newer-run",
+      dependencies: {
+        getActiveClaudeSession: () => ({ controller, runId: "older-run" }),
+        clearClaudePendingToolApprovals: (message, subChatId) => {
+          clearedApprovals.push({ message, subChatId })
+        },
+        deleteActiveClaudeSession: (subChatId) => {
+          deletedSessions.push(subChatId)
+          return true
+        },
+      },
+    })
+
+    expect(result).toEqual({ cancelled: false, ignoredStale: true })
+    expect(controller.signal.aborted).toBe(false)
+    expect(clearedApprovals).toEqual([])
+    expect(deletedSessions).toEqual([])
+  })
+
+  test("reports no cancellation when there is no active desktop run", () => {
+    const result = cancelClaudeAgentSdkActiveDesktopRun({
+      subChatId: "sub-1",
+      dependencies: {
+        getActiveClaudeSession: () => undefined,
+      },
+    })
+
+    expect(result).toEqual({ cancelled: false, ignoredStale: false })
   })
 })

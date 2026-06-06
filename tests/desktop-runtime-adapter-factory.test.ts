@@ -1583,7 +1583,9 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeRouter).toContain("getClaudePendingToolApprovalStore()")
     expect(claudeRouter).toContain("resolveClaudePendingToolApproval")
+    expect(claudeRouter).not.toContain("clearClaudePendingToolApprovals")
     expect(claudeRouter).not.toContain('"Session ended."')
+    expect(claudeRouter).not.toContain('"Session cancelled."')
     expect(claudeRouter).not.toContain(".set({ streamId: null })")
     expect(claudeRouter).not.toContain("const pendingToolApprovals")
     expect(claudeRouter).not.toContain("pendingToolApprovals.delete")
@@ -1591,7 +1593,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeToolApprovals).toContain("resolveClaudePendingToolApproval")
     expect(claudeToolApprovals).toContain("clearClaudePendingToolApprovals")
     expect(subscriptionCleanup).toContain('"Session ended."')
+    expect(subscriptionCleanup).toContain('"Session cancelled."')
     expect(subscriptionCleanup).toContain(".set({ streamId: null })")
+    expect(subscriptionCleanup).toContain("clearClaudePendingToolApprovals")
     expect(subscriptionCleanup).toContain(
       "requestCancelClaudeAgentSdkDesktopJob",
     )

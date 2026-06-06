@@ -46,6 +46,8 @@ import {
   createClaudeAgentSdkDesktopRunStartup,
 } from "../../claude/agent-sdk-desktop-job"
 import {
+  abortClaudeAgentSdkDesktopRunRequest,
+  cancelClaudeAgentSdkActiveDesktopRun,
   cleanupClaudeAgentSdkDesktopRunSubscription,
   finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../../claude/agent-sdk-desktop-run-cleanup"
@@ -54,13 +56,10 @@ import {
   createClaudeAgentSdkRuntimeStreamState,
 } from "../../claude/agent-sdk-runtime-state"
 import {
-  deleteActiveClaudeSession,
-  getActiveClaudeSession,
   hasActiveClaudeSession,
   startActiveClaudeSessionForDesktopRun,
 } from "../../claude/active-sessions"
 import {
-  clearClaudePendingToolApprovals,
   getClaudePendingToolApprovalStore,
   resolveClaudePendingToolApproval,
 } from "../../claude/tool-approvals"
@@ -877,11 +876,10 @@ export const claudeRouter = router({
               prompt: input.prompt,
               runId: activeRunId,
               cancel: () => {
-                abortController.abort()
-                clearClaudePendingToolApprovals(
-                  "Session cancelled.",
-                  input.subChatId,
-                )
+                abortClaudeAgentSdkDesktopRunRequest({
+                  subChatId: input.subChatId,
+                  abortController,
+                })
               },
               streamId,
               preflight: verifiedRunContext,
@@ -1339,17 +1337,7 @@ export const claudeRouter = router({
   cancel: publicProcedure
     .input(z.object({ subChatId: z.string(), runId: z.string().optional() }))
     .mutation(({ input }) => {
-      const session = getActiveClaudeSession(input.subChatId)
-      if (session && input.runId && session.runId !== input.runId) {
-        return { cancelled: false, ignoredStale: true }
-      }
-      if (session) {
-        session.controller.abort()
-        deleteActiveClaudeSession(input.subChatId)
-        clearClaudePendingToolApprovals("Session cancelled.", input.subChatId)
-      }
-
-      return { cancelled: !!session, ignoredStale: false }
+      return cancelClaudeAgentSdkActiveDesktopRun(input)
     }),
 
   /**
