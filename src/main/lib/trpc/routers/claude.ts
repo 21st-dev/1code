@@ -46,6 +46,10 @@ import {
   getClaudePolicyRetryDelayMs,
 } from "../../claude/agent-sdk-errors"
 import {
+  clearClaudeAgentSdkQueryCache,
+  getClaudeAgentSdkQuery,
+} from "../../claude/agent-sdk-query-loader"
+import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
   getActiveClaudeSession,
@@ -317,19 +321,6 @@ function normalizeRuntimeProviderConfig(config: {
   }
 }
 
-// Dynamic import for ESM module - CACHED to avoid re-importing on every message
-let cachedClaudeQuery:
-  | typeof import("@anthropic-ai/claude-agent-sdk").query
-  | null = null
-const getClaudeQuery = async () => {
-  if (cachedClaudeQuery) {
-    return cachedClaudeQuery
-  }
-  const sdk = await import("@anthropic-ai/claude-agent-sdk")
-  cachedClaudeQuery = sdk.query
-  return cachedClaudeQuery
-}
-
 // In-memory cache of working MCP server names (resets on app restart)
 // Key: "scope::serverName" where scope is "__global__" or projectPath
 // Value: true if working (has tools), false if failed
@@ -527,7 +518,7 @@ function buildChatImageAttachmentParts(
  * Clear all performance caches (for testing/debugging)
  */
 export function clearClaudeCaches() {
-  cachedClaudeQuery = null
+  clearClaudeAgentSdkQueryCache()
   symlinksCreated.clear()
   mcpConfigCache.clear()
   projectMcpJsonCache.clear()
@@ -1463,7 +1454,7 @@ export const claudeRouter = router({
             // 3. Get Claude Agent SDK query entrypoint.
             let claudeQuery
             try {
-              claudeQuery = await getClaudeQuery()
+              claudeQuery = await getClaudeAgentSdkQuery()
             } catch (sdkError) {
               emitError(sdkError, "Failed to load Claude Agent SDK")
               console.log(

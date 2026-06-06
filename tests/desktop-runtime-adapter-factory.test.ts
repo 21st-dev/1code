@@ -330,6 +330,29 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeQueryOptions).toContain("createAbortControllerFromSignal")
   })
 
+  test("keeps Claude Agent SDK query loader ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeQueryLoader = readFileSync(
+      "src/main/lib/claude/agent-sdk-query-loader.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-query-loader")
+    expect(claudeRouter).toContain("getClaudeAgentSdkQuery()")
+    expect(claudeRouter).toContain("clearClaudeAgentSdkQueryCache()")
+    expect(claudeRouter).not.toContain("let cachedClaudeQuery")
+    expect(claudeRouter).not.toContain(
+      'await import("@anthropic-ai/claude-agent-sdk")',
+    )
+    expect(claudeQueryLoader).toContain("let cachedClaudeQuery")
+    expect(claudeQueryLoader).toContain(
+      'await import("@anthropic-ai/claude-agent-sdk")',
+    )
+  })
+
   test("keeps Claude Agent SDK tool permission ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
