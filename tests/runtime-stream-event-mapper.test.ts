@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
+  createRuntimeRendererChunkEmitter,
   mapDesktopStreamChunkToRunEvents,
   redactRendererDiagnosticChunk,
 } from "../src/main/lib/agent-runtime/stream-event-mapper"
@@ -143,19 +144,108 @@ describe("desktop stream event mapper", () => {
     ).toBe(textChunk)
   })
 
-  test("Claude and Codex routes redact renderer diagnostics through the mapper", () => {
-    for (const [runtimeName, routePath] of [
-      ["Claude", "src/main/lib/trpc/routers/claude.ts"],
-      ["Codex", "src/main/lib/trpc/routers/codex.ts"],
-    ] as const) {
-      const source = readFileSync(routePath, "utf8")
-      const safeEmitIndex = source.indexOf("const safeEmit")
-      const redactIndex = source.indexOf("redactRendererDiagnosticChunk", safeEmitIndex)
-      const emitIndex = source.indexOf("emit.next(rendererChunk", safeEmitIndex)
+  test("runtime renderer chunk emitter redacts, persists, and marks failures", () => {
+    const db = createAgentJobTestDb()
+    const job = createAgentJob(db, {
+      source: "desktop",
+      runtime: "claude-code",
+      mode: "agent",
+      cwd: "/tmp/project",
+      prompt: "Run",
+    })
+    startAgentJob(db, { jobId: job.id, workerId: "worker-1" })
+    const mapper = createDesktopStreamEventMapper({
+      runtimeId: "claude-code",
+      runId: "run-emitter",
+      jobId: job.id,
+    })
+    const emitted: unknown[] = []
+    let active = true
+    let failed = false
 
-      expect(redactIndex, `${runtimeName} renderer redaction`).toBeGreaterThan(safeEmitIndex)
-      expect(emitIndex, `${runtimeName} renderer emission`).toBeGreaterThan(redactIndex)
-    }
+    const safeEmit = createRuntimeRendererChunkEmitter({
+      runtimeId: "claude-code",
+      runId: "run-emitter",
+      getJobId: () => job.id,
+      getDb: () => db,
+      getMapper: () => mapper,
+      isActive: () => active,
+      markInactive: () => {
+        active = false
+      },
+      markFailed: () => {
+        failed = true
+      },
+      emitNext: (chunk) => emitted.push(chunk),
+      warningLabel: "[test]",
+    })
+
+    expect(
+      safeEmit({
+        type: "runtime-status",
+        ok: false,
+        blocker: {
+          component: "provider-profile",
+          message: "failed with api_key=sk-supersecretvalue123456",
+          authorization: "Bearer secret-token",
+        },
+      }),
+    ).toBe(true)
+    expect(failed).toBe(true)
+    expect(emitted[0]).toMatchObject({
+      type: "runtime-status",
+      blocker: {
+        message: "failed with api_key=<redacted>",
+        authorization: "<redacted>",
+      },
+    })
+
+    const persisted = listAgentJobEvents(db, job.id)
+    expect(persisted.map((event) => event.type)).toEqual([
+      "job_created",
+      "job_started",
+      "status",
+    ])
+    expect(JSON.parse(persisted[2].payloadJson)).toMatchObject({
+      runId: "run-emitter",
+      runtimeId: "claude-code",
+      payload: {
+        ok: false,
+        blocker: {
+          component: "provider-profile",
+          message: "failed with api_key=[redacted]",
+          authorization: "[redacted]",
+        },
+      },
+      redaction: {
+        status: "redacted",
+        appliedRules: ["secret-key", "secret-text"],
+      },
+    })
+  })
+
+  test("Claude route delegates renderer diagnostics to the runtime emitter", () => {
+    const source = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const safeEmitIndex = source.indexOf("const safeEmit")
+    const emitterIndex = source.indexOf(
+      "createRuntimeRendererChunkEmitter",
+      safeEmitIndex,
+    )
+    const emitIndex = source.indexOf("emit.next(chunk as UIMessageChunk)", safeEmitIndex)
+
+    expect(emitterIndex, "Claude runtime emitter").toBeGreaterThan(safeEmitIndex)
+    expect(emitIndex, "Claude renderer emission").toBeGreaterThan(emitterIndex)
+    expect(source).not.toContain("redactRendererDiagnosticChunk")
+  })
+
+  test("Codex route redacts renderer diagnostics through the mapper", () => {
+    const source = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const safeEmitIndex = source.indexOf("const safeEmit")
+    const redactIndex = source.indexOf("redactRendererDiagnosticChunk", safeEmitIndex)
+    const emitIndex = source.indexOf("emit.next(rendererChunk", safeEmitIndex)
+
+    expect(redactIndex, "Codex renderer redaction").toBeGreaterThan(safeEmitIndex)
+    expect(emitIndex, "Codex renderer emission").toBeGreaterThan(redactIndex)
   })
 
   test("appends mapped run events through the existing job store", () => {
@@ -205,14 +295,25 @@ describe("desktop stream event mapper", () => {
         "desktopStreamEventMapper = createDesktopStreamEventMapper",
         jobIndex,
       )
-      const appendIndex = source.indexOf("appendRunEventsToAgentJob", safeEmitIndex)
+      const appendIndex =
+        runtimeName === "Claude"
+          ? source.indexOf("createRuntimeRendererChunkEmitter", safeEmitIndex)
+          : source.indexOf("appendRunEventsToAgentJob", safeEmitIndex)
 
       expect(safeEmitIndex, `${runtimeName} safeEmit`).toBeGreaterThan(0)
       expect(jobIndex, `${runtimeName} desktop job`).toBeGreaterThan(safeEmitIndex)
       expect(mapperCreateIndex, `${runtimeName} mapper creation`).toBeGreaterThan(jobIndex)
       expect(appendIndex, `${runtimeName} mapper append`).toBeGreaterThan(safeEmitIndex)
       expect(source).toContain(`runtimeId: "${runtimeId}"`)
-      expect(source).toContain('type !== "finish"')
+      if (runtimeName === "Claude") {
+        const emitter = readFileSync(
+          "src/main/lib/agent-runtime/stream-event-mapper.ts",
+          "utf8",
+        )
+        expect(emitter).toContain('chunkType !== "finish"')
+      } else {
+        expect(source).toContain('type !== "finish"')
+      }
     }
   })
 })

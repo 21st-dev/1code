@@ -550,6 +550,26 @@ describe("desktop runtime adapter factory", () => {
     expect(policyRetry).toContain("waitForClaudeAgentSdkPolicyRetry")
   })
 
+  test("keeps Claude renderer stream emission redaction in runtime owner", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const streamEventMapper = readFileSync(
+      "src/main/lib/agent-runtime/stream-event-mapper.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("createRuntimeRendererChunkEmitter({")
+    expect(claudeRouter).not.toContain("redactRendererDiagnosticChunk")
+    expect(claudeRouter).not.toContain("observedChunk?.type === \"error\"")
+    expect(claudeRouter).not.toContain("type !== \"finish\"")
+    expect(streamEventMapper).toContain("createRuntimeRendererChunkEmitter")
+    expect(streamEventMapper).toContain("redactRendererDiagnosticChunk")
+    expect(streamEventMapper).toContain("isDesktopRuntimeFailureChunk")
+    expect(streamEventMapper).toContain('chunkType !== "finish"')
+  })
+
   test("keeps Claude Agent SDK prompt ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

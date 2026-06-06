@@ -175,7 +175,7 @@ import {
 import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
-  redactRendererDiagnosticChunk,
+  createRuntimeRendererChunkEmitter,
 } from "../../agent-runtime/stream-event-mapper"
 import {
   completeDesktopAgentJobSafely,
@@ -834,39 +834,24 @@ export const claudeRouter = router({
         let isObservableActive = true
 
         // Helper to safely emit (no-op if already unsubscribed)
-        const safeEmit = (chunk: UIMessageChunk) => {
-          const observedChunk = chunk as any
-          if (
-            observedChunk?.type === "error" ||
-            observedChunk?.type === "auth-error" ||
-            observedChunk?.type === "capability-error" ||
-            (observedChunk?.type === "runtime-status" && observedChunk?.ok === false)
-          ) {
-            desktopJobSawError = true
-          }
-          if (desktopJobDb && desktopStreamEventMapper && observedChunk?.type !== "finish") {
-            try {
-              const events = desktopStreamEventMapper.map(observedChunk)
-              appendRunEventsToAgentJob(desktopJobDb, events)
-            } catch (eventError) {
-              console.warn("[claude] Failed to persist desktop run events:", eventError)
-            }
-          }
-          if (!isObservableActive) return false
-          try {
-            const rendererChunk = redactRendererDiagnosticChunk({
-              runtimeId: "claude-code",
-              runId: activeRunId,
-              jobId: desktopJobId,
-              chunk,
-            }) as UIMessageChunk
-            emit.next(rendererChunk)
-            return true
-          } catch {
+        const safeEmit = createRuntimeRendererChunkEmitter({
+          runtimeId: "claude-code",
+          runId: activeRunId,
+          getJobId: () => desktopJobId,
+          getDb: () => desktopJobDb,
+          getMapper: () => desktopStreamEventMapper,
+          isActive: () => isObservableActive,
+          markInactive: () => {
             isObservableActive = false
-            return false
-          }
-        }
+          },
+          markFailed: () => {
+            desktopJobSawError = true
+          },
+          emitNext: (chunk) => {
+            emit.next(chunk as UIMessageChunk)
+          },
+          warningLabel: "[claude]",
+        }) as (chunk: UIMessageChunk) => boolean
 
         // Helper to safely complete (no-op if already closed)
         const safeComplete = () => {

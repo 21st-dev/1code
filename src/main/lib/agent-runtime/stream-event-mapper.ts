@@ -35,6 +35,20 @@ export type RedactRendererDiagnosticChunkInput = DesktopStreamEventMapperContext
   chunk: unknown
 }
 
+export type RuntimeRendererChunkEmitterInput = {
+  runtimeId: AgentRuntimeId
+  runId: string
+  getJobId: () => string | null | undefined
+  getDb: () => AgentJobDatabase | null | undefined
+  getMapper: () => DesktopStreamEventMapper | null | undefined
+  isActive: () => boolean
+  markInactive: () => void
+  markFailed: () => void
+  emitNext: (chunk: unknown) => void
+  warn?: (...args: any[]) => void
+  warningLabel?: string
+}
+
 const RENDERER_DIAGNOSTIC_CHUNK_TYPES = new Set([
   "auth-error",
   "capability-error",
@@ -307,6 +321,64 @@ export function redactRendererDiagnosticChunk(
     secretHints: input.secretHints,
   })
   return redacted.payload
+}
+
+export function isDesktopRuntimeFailureChunk(chunk: unknown): boolean {
+  if (!isObject(chunk)) return false
+  return (
+    chunk.type === "error" ||
+    chunk.type === "auth-error" ||
+    chunk.type === "capability-error" ||
+    (chunk.type === "runtime-status" && chunk.ok === false)
+  )
+}
+
+export function createRuntimeRendererChunkEmitter({
+  runtimeId,
+  runId,
+  getJobId,
+  getDb,
+  getMapper,
+  isActive,
+  markInactive,
+  markFailed,
+  emitNext,
+  warn = console.warn,
+  warningLabel = "[runtime]",
+}: RuntimeRendererChunkEmitterInput): (chunk: unknown) => boolean {
+  return (chunk: unknown) => {
+    if (isDesktopRuntimeFailureChunk(chunk)) {
+      markFailed()
+    }
+
+    const mapper = getMapper()
+    const db = getDb()
+    const chunkType = isObject(chunk) ? chunk.type : undefined
+    if (db && mapper && chunkType !== "finish") {
+      try {
+        const events = mapper.map(chunk)
+        appendRunEventsToAgentJob(db, events)
+      } catch (eventError) {
+        warn(`${warningLabel} Failed to persist desktop run events:`, eventError)
+      }
+    }
+
+    if (!isActive()) return false
+    try {
+      emitNext(
+        redactRendererDiagnosticChunk({
+          runtimeId,
+          runId,
+          jobId: getJobId(),
+          chunk,
+        }),
+      )
+      return true
+    } catch {
+      markInactive()
+      return false
+    }
+  }
 }
 
 function persistedPayloadForRunEvent(event: RunEvent): JsonValue {
