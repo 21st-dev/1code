@@ -4,7 +4,6 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import path from "path"
 import { z } from "zod"
-import { setConnectionMethod } from "../../analytics"
 import type { UIMessageChunk } from "../../claude"
 import {
   getMergedGlobalMcpServers,
@@ -46,7 +45,7 @@ import {
   prepareClaudeAgentSdkOllamaStartupDiagnostics,
 } from "../../claude/agent-sdk-ollama-diagnostics"
 import {
-  getClaudeAgentSdkConnectionMethod,
+  recordClaudeAgentSdkConnectionMethod,
   resolveClaudeAgentSdkProviderStartup,
 } from "../../claude/agent-sdk-provider-startup"
 import {
@@ -1002,12 +1001,10 @@ export const claudeRouter = router({
               })
             const { resumeSessionId } = desktopRunRequest.session
 
-            setConnectionMethod(
-              getClaudeAgentSdkConnectionMethod({
-                finalCustomConfig,
-                isUsingOllama,
-              }),
-            )
+            recordClaudeAgentSdkConnectionMethod({
+              finalCustomConfig,
+              isUsingOllama,
+            })
 
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)

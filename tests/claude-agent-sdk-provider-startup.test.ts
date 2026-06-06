@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   getClaudeAgentSdkConnectionMethod,
+  recordClaudeAgentSdkConnectionMethod,
   resolveClaudeAgentSdkProviderStartup,
   type ClaudeAgentSdkProviderStartupDependencies,
 } from "../src/main/lib/claude/agent-sdk-provider-startup"
@@ -270,5 +271,25 @@ describe("Claude Agent SDK provider startup", () => {
         },
       }),
     ).toBe("custom-model")
+  })
+
+  test("records analytics connection method through provider startup owner", () => {
+    const recorded: string[] = []
+
+    const connectionMethod = recordClaudeAgentSdkConnectionMethod({
+      isUsingOllama: false,
+      finalCustomConfig: {
+        model: "claude",
+        baseUrl: "https://provider.example.com",
+        token: "token",
+        authMode: "auth_token",
+      },
+      setConnectionMethod: (method) => {
+        recorded.push(method)
+      },
+    })
+
+    expect(connectionMethod).toBe("custom-model")
+    expect(recorded).toEqual(["custom-model"])
   })
 })

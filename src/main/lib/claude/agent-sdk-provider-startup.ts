@@ -1,4 +1,5 @@
 import type { DesktopRunPreflightBlocker } from "../agent-runtime/preflight"
+import { setConnectionMethod as recordAnalyticsConnectionMethod } from "../analytics"
 import type { ClaudeCodeCredentialMetadata } from "../claude-credentials"
 import type { ProviderProfileRuntimeConfig } from "../provider-profiles/storage"
 import { parseProviderProfileSource } from "../../../shared/provider-profile-types"
@@ -303,4 +304,16 @@ export function getClaudeAgentSdkConnectionMethod(input: {
   return !baseUrl || baseUrl.includes("anthropic.com")
     ? "api-key"
     : "custom-model"
+}
+
+export function recordClaudeAgentSdkConnectionMethod(input: {
+  finalCustomConfig?: ClaudeProviderRuntimeConfig
+  isUsingOllama: boolean
+  setConnectionMethod?: (method: ClaudeAgentSdkConnectionMethod) => void
+}): ClaudeAgentSdkConnectionMethod {
+  const connectionMethod = getClaudeAgentSdkConnectionMethod(input)
+  const setConnectionMethod =
+    input.setConnectionMethod ?? recordAnalyticsConnectionMethod
+  setConnectionMethod(connectionMethod)
+  return connectionMethod
 }

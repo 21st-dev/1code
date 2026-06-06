@@ -458,7 +458,10 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "const providerStartup =\n              await resolveClaudeAgentSdkProviderStartup",
     )
-    expect(claudeRouter).toContain("getClaudeAgentSdkConnectionMethod")
+    expect(claudeRouter).toContain("recordClaudeAgentSdkConnectionMethod")
+    expect(claudeRouter).not.toContain("getClaudeAgentSdkConnectionMethod")
+    expect(claudeRouter).not.toContain("../../analytics")
+    expect(claudeRouter).not.toContain("setConnectionMethod(")
     expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimeStartupContext")
     expect(claudeRouter).not.toContain("prepareClaudeAgentSdkRuntimeStartupEnvironment")
     expect(claudeRouter).not.toContain("resolveClaudeAgentSdkIsolatedConfig({")
@@ -513,6 +516,10 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeProviderStartup).toContain(
       "getClaudeAgentSdkConnectionMethod",
     )
+    expect(claudeProviderStartup).toContain(
+      "recordClaudeAgentSdkConnectionMethod",
+    )
+    expect(claudeProviderStartup).toContain("recordAnalyticsConnectionMethod")
     expect(claudeProviderStartup).toContain("parseProviderProfileSource")
     expect(claudeProviderStartup).toContain("getProviderProfileRuntimeConfig")
     expect(claudeProviderStartup).toContain("getProviderGatewayEndpoint")
