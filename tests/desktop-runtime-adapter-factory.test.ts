@@ -447,4 +447,28 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeErrors).toContain("USAGE_POLICY_VIOLATION")
     expect(claudeErrors).toContain("No conversation found with session ID")
   })
+
+  test("keeps Claude Agent SDK error logging ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeErrorLogging = readFileSync(
+      "src/main/lib/claude/agent-sdk-error-logging.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-error-logging")
+    expect(claudeRouter).toContain("logClaudeAgentSdkEmbeddedError")
+    expect(claudeRouter).toContain("logClaudeAgentSdkErrorDetails")
+    expect(claudeRouter).not.toContain(
+      "[CLAUDE SDK ERROR] ========================================",
+    )
+    expect(claudeRouter).not.toContain("[SD] SDK Error details:")
+    expect(claudeErrorLogging).toContain("logClaudeAgentSdkEmbeddedError")
+    expect(claudeErrorLogging).toContain(
+      "[CLAUDE SDK ERROR] ========================================",
+    )
+    expect(claudeErrorLogging).toContain("[SD] SDK Error details:")
+  })
 })

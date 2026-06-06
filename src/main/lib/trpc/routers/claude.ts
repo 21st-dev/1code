@@ -46,6 +46,10 @@ import {
   getClaudePolicyRetryDelayMs,
 } from "../../claude/agent-sdk-errors"
 import {
+  logClaudeAgentSdkEmbeddedError,
+  logClaudeAgentSdkErrorDetails,
+} from "../../claude/agent-sdk-error-logging"
+import {
   clearClaudeAgentSdkQueryCache,
   getClaudeAgentSdkQuery,
 } from "../../claude/agent-sdk-query-loader"
@@ -2404,45 +2408,21 @@ ${prompt}
                       "Unknown SDK error"
                     lastError = new Error(sdkError)
 
-                    // Detailed SDK error logging in main process
-                    console.error(
-                      `[CLAUDE SDK ERROR] ========================================`,
-                    )
-                    console.error(`[CLAUDE SDK ERROR] Raw error: ${sdkError}`)
-                    console.error(
-                      `[CLAUDE SDK ERROR] Message type: ${msgAny.type}`,
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] SubChat ID: ${input.subChatId}`,
-                    )
-                    console.error(`[CLAUDE SDK ERROR] Chat ID: ${input.chatId}`)
-                    console.error(`[CLAUDE SDK ERROR] CWD: ${runtimeCwd}`)
-                    console.error(`[CLAUDE SDK ERROR] Mode: ${input.mode}`)
-                    console.error(
-                      `[CLAUDE SDK ERROR] Session ID: ${msgAny.session_id || "none"}`,
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] Has custom config: ${!!finalCustomConfig}`,
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] Is using Ollama: ${isUsingOllama}`,
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] Model: ${resolvedModel || "default"}`,
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] Has OAuth token: ${!!claudeCodeToken}`,
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] MCP servers: ${mcpServersFiltered ? Object.keys(mcpServersFiltered).join(", ") : "none"}`,
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] Full message:`,
-                      JSON.stringify(msgAny, null, 2),
-                    )
-                    console.error(
-                      `[CLAUDE SDK ERROR] ========================================`,
-                    )
+                    logClaudeAgentSdkEmbeddedError({
+                      sdkError,
+                      message: msgAny,
+                      subChatId: input.subChatId,
+                      chatId: input.chatId,
+                      cwd: runtimeCwd,
+                      mode: input.mode,
+                      hasCustomConfig: !!finalCustomConfig,
+                      isUsingOllama,
+                      model: resolvedModel,
+                      hasOAuthToken: !!claudeCodeToken,
+                      mcpServerNames: mcpServersFiltered
+                        ? Object.keys(mcpServersFiltered)
+                        : [],
+                    })
 
                     const errorDiagnostic =
                       classifyClaudeAgentSdkEmbeddedError({
@@ -2491,13 +2471,11 @@ ${prompt}
                     console.log(
                       `[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`,
                     )
-                    console.error(`[SD] SDK Error details:`, {
+                    logClaudeAgentSdkErrorDetails({
                       errorCategory,
-                      errorContext: errorContext.slice(0, 200), // Truncate for log readability
+                      errorContext,
                       rawErrorCode,
-                      sessionId: msgAny.session_id,
-                      messageId: msgAny.message?.id,
-                      fullMessage: JSON.stringify(msgAny, null, 2),
+                      message: msgAny,
                     })
                     safeEmit({ type: "finish" } as UIMessageChunk)
                     safeComplete()
