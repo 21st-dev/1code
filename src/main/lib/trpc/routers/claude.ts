@@ -7,7 +7,7 @@ import path from "path"
 import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
 import {
-  prepareClaudeAgentSdkRuntimeEnvironment,
+  prepareClaudeAgentSdkRuntimeStartupEnvironment,
   type UIMessageChunk,
 } from "../../claude"
 import {
@@ -1070,8 +1070,9 @@ export const claudeRouter = router({
             const isolatedConfigDir = isolatedConfig.isolatedConfigDir
 
             const runtimeEnvironment =
-              prepareClaudeAgentSdkRuntimeEnvironment({
+              prepareClaudeAgentSdkRuntimeStartupEnvironment({
                 customConfig: finalCustomConfig,
+                requestedModel: input.model,
                 enableTasks: input.enableTasks ?? true,
                 claudeCodeToken,
                 isolatedConfigDir,
@@ -1080,6 +1081,7 @@ export const claudeRouter = router({
             const hasExistingApiConfig =
               runtimeEnvironment.hasExistingApiConfig
             const finalEnv = runtimeEnvironment.finalEnv
+            const resolvedModel = runtimeEnvironment.resolvedModel
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
@@ -1244,8 +1246,6 @@ export const claudeRouter = router({
               finalCustomConfig,
               isUsingOllama,
             })
-
-            const resolvedModel = finalCustomConfig?.model || input.model
 
             const mcpServersFiltered = await prepareClaudeAgentSdkMcpServers({
               mcpServers: mcpServersForSdk,

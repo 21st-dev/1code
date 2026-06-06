@@ -9,6 +9,7 @@ export {
   buildClaudeEnv,
   createClaudeAgentSdkRuntimeEnv,
   prepareClaudeAgentSdkRuntimeEnvironment,
+  prepareClaudeAgentSdkRuntimeStartupEnvironment,
   getClaudeShellEnvironment,
   clearClaudeEnvCache,
   logClaudeEnv,

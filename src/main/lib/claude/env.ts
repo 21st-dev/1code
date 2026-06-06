@@ -67,6 +67,16 @@ export type PreparedClaudeAgentSdkRuntimeEnvironment = {
   hasExistingApiConfig: boolean
 }
 
+export type PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput =
+  PrepareClaudeAgentSdkRuntimeEnvironmentInput & {
+    requestedModel?: string | null
+  }
+
+export type PreparedClaudeAgentSdkRuntimeStartupEnvironment =
+  PreparedClaudeAgentSdkRuntimeEnvironment & {
+    resolvedModel?: string | null
+  }
+
 export function createClaudeAgentSdkRuntimeEnv(input: {
   claudeEnv: Record<string, string>
   claudeCodeToken?: string | null
@@ -122,6 +132,16 @@ export function prepareClaudeAgentSdkRuntimeEnvironment({
     claudeEnv,
     finalEnv: runtimeEnv.env,
     hasExistingApiConfig: runtimeEnv.hasExistingApiConfig,
+  }
+}
+
+export function prepareClaudeAgentSdkRuntimeStartupEnvironment(
+  input: PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
+): PreparedClaudeAgentSdkRuntimeStartupEnvironment {
+  const runtimeEnvironment = prepareClaudeAgentSdkRuntimeEnvironment(input)
+  return {
+    ...runtimeEnvironment,
+    resolvedModel: input.customConfig?.model || input.requestedModel,
   }
 }
 

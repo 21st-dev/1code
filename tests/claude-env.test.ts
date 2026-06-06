@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   createClaudeAgentSdkRuntimeEnv,
   prepareClaudeAgentSdkRuntimeEnvironment,
+  prepareClaudeAgentSdkRuntimeStartupEnvironment,
 } from "../src/main/lib/claude/env"
 
 describe("Claude runtime environment", () => {
@@ -110,5 +111,37 @@ describe("Claude runtime environment", () => {
       },
       hasExistingApiConfig: true,
     })
+  })
+
+  test("prepares runtime startup environment with resolved provider model", () => {
+    const startupEnvironment = prepareClaudeAgentSdkRuntimeStartupEnvironment({
+      customConfig: {
+        model: "provider-model",
+        baseUrl: "https://provider.example.com",
+        token: "provider-token",
+        authMode: "auth_token",
+      },
+      requestedModel: "requested-model",
+      isolatedConfigDir: "/tmp/claude-config",
+      nodeEnv: "production",
+      buildEnv: (options) => ({
+        ...(options?.customEnv ?? {}),
+      }),
+    })
+
+    expect(startupEnvironment.resolvedModel).toBe("provider-model")
+    expect(startupEnvironment.finalEnv).toMatchObject({
+      ANTHROPIC_BASE_URL: "https://provider.example.com",
+      ANTHROPIC_AUTH_TOKEN: "provider-token",
+      CLAUDE_CONFIG_DIR: "/tmp/claude-config",
+    })
+
+    const fallbackEnvironment = prepareClaudeAgentSdkRuntimeStartupEnvironment({
+      requestedModel: "requested-model",
+      isolatedConfigDir: "/tmp/claude-config",
+      nodeEnv: "production",
+      buildEnv: () => ({}),
+    })
+    expect(fallbackEnvironment.resolvedModel).toBe("requested-model")
   })
 })
