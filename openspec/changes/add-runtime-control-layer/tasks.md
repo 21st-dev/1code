@@ -7,16 +7,16 @@
 ## 2. Ownership and Preflight
 - [x] 2.1 Update `docs/OWNERSHIP_MAP.md` with canonical owners for runtime preflight, permission policy, desktop run request, runtime events, and trace redaction.
 - [x] 2.2 Extract reusable desktop run preflight from `desktop-agent-jobs.ts` context validation.
-- [ ] 2.3 Make Claude and Codex routes use verified preflight context before provider, MCP, attachment, or runtime startup.
+- [x] 2.3 Make Claude and Codex routes use verified preflight context before provider, MCP, attachment, or runtime startup.
 - [ ] 2.4 Add blockers for unregistered cwd/project/subChat mismatch, provider profile readiness, MCP needs-auth, unsupported attachments, and local-only mode before provider work starts.
 - [x] 2.5 Add focused preflight tests.
 
 ## 3. Permission Policy
-- [ ] 3.1 Define `PermissionPolicy` for plan, agent, and guarded desktop runs.
+- [x] 3.1 Define `PermissionPolicy` for plan, agent, and guarded desktop runs.
 - [ ] 3.2 Route Claude and Codex plan/agent/guarded behavior through the shared policy owner.
 - [x] 3.3 Decide and document Claude native permission/bypass strategy.
 - [ ] 3.4 Remove or strictly limit Claude route-local plan `.md` write exceptions.
-- [ ] 3.5 Add permission policy tests for Claude and Codex.
+- [x] 3.5 Add permission policy tests for Claude and Codex.
 
 ## 4. Desktop Runtime Contract
 - [ ] 4.1 Define desktop-capable `DesktopRunRequest`, `DesktopRunContext`, `DesktopRunResult`, and cancellation/session metadata types.
