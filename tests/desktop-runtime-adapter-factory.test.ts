@@ -936,13 +936,21 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain("../../claude/chat-history")
     expect(claudeRouter).toContain("../../claude/chat-input-schema")
     expect(claudeRouter).toContain("buildClaudeUserParts(")
+    expect(claudeRouter).toContain("resolveClaudeChatResumeMetadata")
+    expect(claudeRouter).toContain("consumeClaudeChatForkResumeFlags")
     expect(claudeRouter).not.toContain(
       "function buildLongTextAttachmentParts",
     )
     expect(claudeRouter).not.toContain(
       "function chatImageAttachmentSignatureFromParts",
     )
+    expect(claudeRouter).not.toContain("lastAssistantMsg")
+    expect(claudeRouter).not.toContain("delete m.metadata.shouldForkResume")
     expect(claudeRouter).not.toContain("const imageAttachmentSchema = z.object")
+    expect(claudeChatHistory).toContain("resolveClaudeChatResumeMetadata")
+    expect(claudeChatHistory).toContain("consumeClaudeChatForkResumeFlags")
+    expect(claudeChatHistory).toContain("lastAssistantMessage")
+    expect(claudeChatHistory).toContain("delete metadata.shouldForkResume")
     expect(claudeChatHistory).toContain("buildClaudeUserParts")
     expect(claudeChatHistory).toContain("buildClaudeChatImageAttachmentParts")
     expect(claudeChatHistory).toContain(

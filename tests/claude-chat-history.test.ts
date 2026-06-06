@@ -5,9 +5,96 @@ import {
   claudeImageAttachmentSignatureFromParts,
   claudeLongTextAttachmentSignatureFromInput,
   claudeLongTextAttachmentSignatureFromParts,
+  consumeClaudeChatForkResumeFlags,
+  resolveClaudeChatResumeMetadata,
 } from "../src/main/lib/claude/chat-history"
 
 describe("Claude chat history helpers", () => {
+  test("resolves rollback and fork resume metadata from the latest assistant message", () => {
+    expect(
+      resolveClaudeChatResumeMetadata([
+        {
+          role: "assistant",
+          metadata: {
+            shouldResume: true,
+            sdkMessageUuid: "older-uuid",
+          },
+        },
+        { role: "user", parts: [{ type: "text", text: "next" }] },
+        {
+          role: "assistant",
+          metadata: {
+            shouldForkResume: true,
+            sdkMessageUuid: "latest-uuid",
+          },
+        },
+      ]),
+    ).toEqual({
+      resumeAtUuid: null,
+      shouldForkResume: true,
+      forkResumeAtUuid: "latest-uuid",
+    })
+
+    expect(
+      resolveClaudeChatResumeMetadata([
+        {
+          role: "assistant",
+          metadata: {
+            shouldResume: true,
+            sdkMessageUuid: "rollback-uuid",
+          },
+        },
+      ]),
+    ).toEqual({
+      resumeAtUuid: "rollback-uuid",
+      shouldForkResume: false,
+      forkResumeAtUuid: null,
+    })
+
+    expect(resolveClaudeChatResumeMetadata([{ role: "user" }])).toEqual({
+      resumeAtUuid: null,
+      shouldForkResume: false,
+      forkResumeAtUuid: null,
+    })
+  })
+
+  test("consumes one-shot fork resume flags without mutating original messages", () => {
+    const messages = [
+      {
+        role: "assistant",
+        metadata: {
+          shouldForkResume: true,
+          sdkMessageUuid: "assistant-1",
+        },
+      },
+      {
+        role: "assistant",
+        metadata: {
+          sdkMessageUuid: "assistant-2",
+        },
+      },
+    ]
+
+    const result = consumeClaudeChatForkResumeFlags(messages)
+
+    expect(result.changed).toBe(true)
+    expect(result.messages).toEqual([
+      {
+        role: "assistant",
+        metadata: {
+          sdkMessageUuid: "assistant-1",
+        },
+      },
+      {
+        role: "assistant",
+        metadata: {
+          sdkMessageUuid: "assistant-2",
+        },
+      },
+    ])
+    expect(messages[0].metadata.shouldForkResume).toBe(true)
+  })
+
   test("builds user parts and stable duplicate-detection signatures", () => {
     const longTextAttachments = [
       {

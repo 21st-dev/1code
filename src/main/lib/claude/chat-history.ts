@@ -4,6 +4,62 @@ import {
   longTextAttachmentSchema,
 } from "./chat-input-schema"
 
+export type ClaudeChatResumeMetadata = {
+  resumeAtUuid: string | null
+  shouldForkResume: boolean
+  forkResumeAtUuid: string | null
+}
+
+export function resolveClaudeChatResumeMetadata(
+  messages: Array<Record<string, any>>,
+): ClaudeChatResumeMetadata {
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message: any) => message.role === "assistant")
+
+  const resumeAtUuid = lastAssistantMessage?.metadata?.shouldResume
+    ? lastAssistantMessage?.metadata?.sdkMessageUuid || null
+    : null
+  const shouldForkResume =
+    lastAssistantMessage?.metadata?.shouldForkResume === true
+  const forkResumeAtUuid = shouldForkResume
+    ? lastAssistantMessage?.metadata?.sdkMessageUuid || null
+    : null
+
+  return {
+    resumeAtUuid,
+    shouldForkResume,
+    forkResumeAtUuid,
+  }
+}
+
+export function consumeClaudeChatForkResumeFlags(
+  messages: Array<Record<string, any>>,
+): {
+  messages: Array<Record<string, any>>
+  changed: boolean
+} {
+  let changed = false
+  const nextMessages = messages.map((message) => {
+    if (!message.metadata?.shouldForkResume) {
+      return message
+    }
+
+    changed = true
+    const metadata = { ...message.metadata }
+    delete metadata.shouldForkResume
+    return {
+      ...message,
+      metadata,
+    }
+  })
+
+  return {
+    messages: changed ? nextMessages : messages,
+    changed,
+  }
+}
+
 export function buildClaudeLongTextAttachmentParts(
   attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined,
 ): any[] {

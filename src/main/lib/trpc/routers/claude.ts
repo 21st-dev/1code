@@ -108,6 +108,8 @@ import {
   claudeImageAttachmentSignatureFromParts,
   claudeLongTextAttachmentSignatureFromInput,
   claudeLongTextAttachmentSignatureFromParts,
+  consumeClaudeChatForkResumeFlags,
+  resolveClaudeChatResumeMetadata,
 } from "../../claude/chat-history"
 import {
   imageAttachmentSchema,
@@ -938,22 +940,11 @@ export const claudeRouter = router({
               .from(subChats)
               .where(eq(subChats.id, input.subChatId))
               .get()
-            const existingMessages = JSON.parse(existing?.messages || "[]")
+            let existingMessages = JSON.parse(existing?.messages || "[]")
             const existingSessionId = existing?.sessionId || null
 
-            // Get resumeSessionAt UUID only if shouldResume flag was set (by rollbackToMessage)
-            // or shouldForkResume flag was set (by forkSubChat)
-            const lastAssistantMsg = [...existingMessages]
-              .reverse()
-              .find((m: any) => m.role === "assistant")
-            const resumeAtUuid = lastAssistantMsg?.metadata?.shouldResume
-              ? lastAssistantMsg?.metadata?.sdkMessageUuid || null
-              : null
-            const shouldForkResume =
-              lastAssistantMsg?.metadata?.shouldForkResume === true
-            const forkResumeAtUuid = shouldForkResume
-              ? lastAssistantMsg?.metadata?.sdkMessageUuid || null
-              : null
+            const { resumeAtUuid, shouldForkResume, forkResumeAtUuid } =
+              resolveClaudeChatResumeMetadata(existingMessages)
             const historyEnabled = input.historyEnabled === true
             let resolvedImages: ResolvedChatImageAttachment[] = []
             try {
@@ -972,11 +963,9 @@ export const claudeRouter = router({
 
             // Clear shouldForkResume flag after reading (consumed once) and persist to DB
             if (shouldForkResume) {
-              for (const m of existingMessages) {
-                if (m.metadata?.shouldForkResume) {
-                  delete m.metadata.shouldForkResume
-                }
-              }
+              const forkResumeFlags =
+                consumeClaudeChatForkResumeFlags(existingMessages)
+              existingMessages = forkResumeFlags.messages
               db.update(subChats)
                 .set({ messages: JSON.stringify(existingMessages) })
                 .where(eq(subChats.id, input.subChatId))
