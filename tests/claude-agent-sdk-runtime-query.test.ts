@@ -59,7 +59,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       isUsingOllama: false,
       permissionPolicy,
       guardedContract: null,
-      getGuardedContract: () => undefined,
       guardEvents: [],
       emit: () => {},
       subChatId: "sub-1",
@@ -121,7 +120,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       isUsingOllama: false,
       permissionPolicy,
       guardedContract: null,
-      getGuardedContract: () => undefined,
       guardEvents: [],
       emit: (chunk) => {
         emitted.push(chunk)

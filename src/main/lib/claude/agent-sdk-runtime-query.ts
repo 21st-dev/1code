@@ -1,4 +1,8 @@
 import {
+  getActiveGuardedContract,
+  type ValidatedAgentScopeContract,
+} from "../agent-guard"
+import {
   createClaudeAgentSdkDesktopRuntimeQueryOptions,
   prepareClaudeAgentSdkMcpServers,
   type ClaudeAgentSdkQueryParams,
@@ -14,7 +18,12 @@ import { getClaudePendingToolApprovalStore } from "./tool-approvals"
 
 export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput,
-  "prompt" | "systemPrompt" | "mcpServers" | "model" | "pendingToolApprovals"
+  | "prompt"
+  | "systemPrompt"
+  | "mcpServers"
+  | "model"
+  | "pendingToolApprovals"
+  | "getGuardedContract"
 > & {
   prompt: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["prompt"]
   existingMessages: any[]
@@ -27,6 +36,9 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
     "pendingToolApprovals"
   ]
   getPendingToolApprovals?: typeof getClaudePendingToolApprovalStore
+  getGuardedContract?: (
+    contractId: string,
+  ) => ValidatedAgentScopeContract | undefined
   readAgentsMd?: typeof readClaudeAgentSdkProjectAgentsMd
   log?: (...args: any[]) => void
 }
@@ -47,6 +59,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   ensureTokensFresh,
   pendingToolApprovals,
   getPendingToolApprovals = getClaudePendingToolApprovalStore,
+  getGuardedContract = getActiveGuardedContract,
   readAgentsMd,
   log,
   ...queryInput
@@ -83,6 +96,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
       model: resolvedModel,
       pendingToolApprovals:
         pendingToolApprovals ?? getPendingToolApprovals(),
+      getGuardedContract,
     }),
   }
 }

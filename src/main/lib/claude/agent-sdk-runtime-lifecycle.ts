@@ -1,5 +1,9 @@
 import type { DesktopRunResult } from "../agent-runtime/desktop-run-request"
 import {
+  deleteActiveGuardedContract,
+  getActiveGuardedContract,
+} from "../agent-guard"
+import {
   runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery,
   type RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput,
 } from "./agent-sdk-adapter-runner"
@@ -12,9 +16,15 @@ import {
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
   Omit<
     RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput,
-    "runtimeQuery"
+    "runtimeQuery" | "getContract" | "deleteContract"
   > & {
     runtimeQuery: PrepareClaudeAgentSdkDesktopRuntimeQueryInput
+    getContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
+      "getContract"
+    ]
+    deleteContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
+      "deleteContract"
+    ]
     desktopJobSawError: boolean
     streamStart: number
     nowMs?: () => number
@@ -39,6 +49,8 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     desktopJobSawError,
     streamStart,
     nowMs,
+    getContract = getActiveGuardedContract,
+    deleteContract = deleteActiveGuardedContract,
     ...adapterInput
   } = input
   const runtimeQuery =
@@ -46,6 +58,8 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   const adapterResult =
     await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
       ...adapterInput,
+      getContract,
+      deleteContract,
       runtimeQuery,
     })
   if (adapterResult.status === "failed") {
@@ -77,8 +91,8 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       emitError: input.emitError,
       emit: input.emit,
       complete: input.complete,
-      getContract: input.getContract,
-      deleteContract: input.deleteContract,
+      getContract,
+      deleteContract,
       log: input.log,
       nowMs,
     })
