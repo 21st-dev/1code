@@ -419,7 +419,11 @@ describe("desktop runtime adapter factory", () => {
     const claudeEnv = readFileSync("src/main/lib/claude/env.ts", "utf8")
 
     expect(claudeRouter).toContain("normalizeClaudeProviderRuntimeConfig")
-    expect(claudeRouter).toContain("createClaudeAgentSdkRuntimeEnv")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimeEnvironment")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkRuntimeEnv")
+    expect(claudeRouter).not.toContain("buildClaudeEnv")
+    expect(claudeRouter).not.toContain("buildClaudeProviderEnv")
+    expect(claudeRouter).not.toContain("logClaudeEnv")
     expect(claudeRouter).not.toContain(
       "function normalizeRuntimeProviderConfig",
     )
@@ -435,6 +439,8 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeProviderRuntimeConfig).toContain(
       "redactClaudeProviderEnvValueForLog",
     )
+    expect(claudeEnv).toContain("prepareClaudeAgentSdkRuntimeEnvironment")
+    expect(claudeEnv).toContain("buildClaudeProviderEnv(customConfig)")
     expect(claudeEnv).toContain("createClaudeAgentSdkRuntimeEnv")
     expect(claudeEnv).toContain("CLAUDE_CODE_OAUTH_TOKEN")
     expect(claudeEnv).toContain("CLAUDE_CONFIG_DIR")

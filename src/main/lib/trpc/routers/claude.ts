@@ -8,11 +8,9 @@ import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
 import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import {
-  buildClaudeEnv,
   checkOfflineFallback,
-  createClaudeAgentSdkRuntimeEnv,
   createTransformer,
-  logClaudeEnv,
+  prepareClaudeAgentSdkRuntimeEnvironment,
   type UIMessageChunk,
 } from "../../claude"
 import {
@@ -34,7 +32,6 @@ import { getValidClaudeCodeCredential } from "../../claude-credentials"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
 import { getActiveClaudeProviderConfig } from "./claude-provider-config"
 import {
-  buildClaudeProviderEnv,
   normalizeClaudeProviderRuntimeConfig,
   type ClaudeProviderRuntimeConfig,
 } from "../../claude/provider-runtime-config"
@@ -1194,19 +1191,6 @@ export const claudeRouter = router({
               return
             }
 
-            // Build full environment for the Claude runtime (includes HOME, PATH, etc.)
-            const claudeEnv = buildClaudeEnv({
-              ...(finalCustomConfig && {
-                customEnv: buildClaudeProviderEnv(finalCustomConfig),
-              }),
-              enableTasks: input.enableTasks ?? true,
-            })
-
-            // Debug logging in dev
-            if (process.env.NODE_ENV !== "production") {
-              logClaudeEnv(claudeEnv, `[${input.subChatId}] `)
-            }
-
             // Create isolated config directory per subChat to prevent session contamination
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
@@ -1216,6 +1200,18 @@ export const claudeRouter = router({
               "claude-sessions",
               isUsingOllama ? input.chatId : input.subChatId,
             )
+
+            const runtimeEnvironment =
+              prepareClaudeAgentSdkRuntimeEnvironment({
+                customConfig: finalCustomConfig,
+                enableTasks: input.enableTasks ?? true,
+                claudeCodeToken,
+                isolatedConfigDir,
+                logPrefix: `[${input.subChatId}] `,
+              })
+            const hasExistingApiConfig =
+              runtimeEnvironment.hasExistingApiConfig
+            const finalEnv = runtimeEnvironment.finalEnv
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
@@ -1474,14 +1470,6 @@ export const claudeRouter = router({
                 mkdirErr,
               )
             }
-
-            const runtimeEnv = createClaudeAgentSdkRuntimeEnv({
-              claudeEnv,
-              claudeCodeToken,
-              isolatedConfigDir,
-            })
-            const hasExistingApiConfig = runtimeEnv.hasExistingApiConfig
-            const finalEnv = runtimeEnv.env
 
             logClaudeAgentSdkAuthDiagnostics({
               hasExistingApiConfig,

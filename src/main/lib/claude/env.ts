@@ -9,6 +9,10 @@ import {
   isWindows,
   platform
 } from "../platform"
+import {
+  buildClaudeProviderEnv,
+  type ClaudeProviderRuntimeConfig,
+} from "./provider-runtime-config"
 
 // Cache the shell environment
 let cachedShellEnv: Record<string, string> | null = null
@@ -46,6 +50,23 @@ export type ClaudeAgentSdkRuntimeEnvResult = {
   hasExistingApiConfig: boolean
 }
 
+export type PrepareClaudeAgentSdkRuntimeEnvironmentInput = {
+  customConfig?: ClaudeProviderRuntimeConfig | null
+  enableTasks?: boolean
+  claudeCodeToken?: string | null
+  isolatedConfigDir: string
+  logPrefix?: string
+  nodeEnv?: string
+  buildEnv?: typeof buildClaudeEnv
+  logEnv?: typeof logClaudeEnv
+}
+
+export type PreparedClaudeAgentSdkRuntimeEnvironment = {
+  claudeEnv: Record<string, string>
+  finalEnv: Record<string, string>
+  hasExistingApiConfig: boolean
+}
+
 export function createClaudeAgentSdkRuntimeEnv(input: {
   claudeEnv: Record<string, string>
   claudeCodeToken?: string | null
@@ -67,6 +88,40 @@ export function createClaudeAgentSdkRuntimeEnv(input: {
         }),
       CLAUDE_CONFIG_DIR: input.isolatedConfigDir,
     },
+  }
+}
+
+export function prepareClaudeAgentSdkRuntimeEnvironment({
+  customConfig,
+  enableTasks,
+  claudeCodeToken,
+  isolatedConfigDir,
+  logPrefix,
+  nodeEnv = process.env.NODE_ENV,
+  buildEnv = buildClaudeEnv,
+  logEnv = logClaudeEnv,
+}: PrepareClaudeAgentSdkRuntimeEnvironmentInput): PreparedClaudeAgentSdkRuntimeEnvironment {
+  const claudeEnv = buildEnv({
+    ...(customConfig && {
+      customEnv: buildClaudeProviderEnv(customConfig),
+    }),
+    enableTasks,
+  })
+
+  if (nodeEnv !== "production") {
+    logEnv(claudeEnv, logPrefix)
+  }
+
+  const runtimeEnv = createClaudeAgentSdkRuntimeEnv({
+    claudeEnv,
+    claudeCodeToken,
+    isolatedConfigDir,
+  })
+
+  return {
+    claudeEnv,
+    finalEnv: runtimeEnv.env,
+    hasExistingApiConfig: runtimeEnv.hasExistingApiConfig,
   }
 }
 
