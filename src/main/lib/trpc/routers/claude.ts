@@ -75,8 +75,7 @@ import {
 } from "../../claude/agent-sdk-project-context"
 import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
-  logClaudeOllamaSdkConfiguration,
-  probeClaudeOllamaConnectivity,
+  prepareClaudeAgentSdkOllamaStartupDiagnostics,
 } from "../../claude/agent-sdk-ollama-diagnostics"
 import {
   completeClaudeAgentSdkStreamIteration,
@@ -1622,14 +1621,6 @@ export const claudeRouter = router({
 
             const resolvedModel = finalCustomConfig?.model || input.model
 
-            // DEBUG: If using Ollama, test if it's actually responding
-            if (isUsingOllama && finalCustomConfig) {
-              await probeClaudeOllamaConnectivity({
-                baseUrl: finalCustomConfig.baseUrl,
-                model: finalCustomConfig.model,
-              })
-            }
-
             const mcpServersFiltered = await prepareClaudeAgentSdkMcpServers({
               mcpServers: mcpServersForSdk,
               isUsingOllama,
@@ -1638,17 +1629,16 @@ export const claudeRouter = router({
               ensureTokensFresh: ensureMcpTokensFresh,
             })
 
-            // Log SDK configuration for debugging
-            if (isUsingOllama) {
-              logClaudeOllamaSdkConfiguration({
-                model: resolvedModel,
-                baseUrl: finalEnv.ANTHROPIC_BASE_URL,
-                cwd: runtimeCwd,
-                configDir: isolatedConfigDir,
-                hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-                resumeSessionId,
-              })
-            }
+            await prepareClaudeAgentSdkOllamaStartupDiagnostics({
+              isUsingOllama,
+              customConfig: finalCustomConfig,
+              model: resolvedModel,
+              baseUrl: finalEnv.ANTHROPIC_BASE_URL,
+              cwd: runtimeCwd,
+              configDir: isolatedConfigDir,
+              hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
+              resumeSessionId,
+            })
 
             const promptContext = await prepareClaudeAgentSdkPromptContext({
               prompt,

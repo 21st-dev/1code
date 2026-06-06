@@ -857,10 +857,13 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "../../claude/agent-sdk-ollama-diagnostics",
     )
+    expect(claudeRouter).toContain(
+      "prepareClaudeAgentSdkOllamaStartupDiagnostics",
+    )
     expect(claudeRouter).not.toContain("logClaudeOllamaStreamStart")
     expect(claudeRouter).not.toContain("logClaudeOllamaStreamError")
-    expect(claudeRouter).toContain("logClaudeOllamaSdkConfiguration")
-    expect(claudeRouter).toContain("probeClaudeOllamaConnectivity")
+    expect(claudeRouter).not.toContain("logClaudeOllamaSdkConfiguration")
+    expect(claudeRouter).not.toContain("probeClaudeOllamaConnectivity")
     expect(claudeRouter).not.toContain("/api/tags")
     expect(claudeRouter).not.toContain("Ollama is responding")
     expect(claudeRouter).not.toContain("SDK Configuration:")
@@ -875,6 +878,9 @@ describe("desktop runtime adapter factory", () => {
     expect(streamErrorFinalization).toContain("logClaudeOllamaStreamError")
     expect(ollamaDiagnostics).toContain(
       "[Ollama] ===== STARTING STREAM ITERATION =====",
+    )
+    expect(ollamaDiagnostics).toContain(
+      "prepareClaudeAgentSdkOllamaStartupDiagnostics",
     )
     expect(ollamaDiagnostics).toContain("probeClaudeOllamaConnectivity")
     expect(ollamaDiagnostics).toContain("/api/tags")

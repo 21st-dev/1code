@@ -8,6 +8,7 @@ import {
   logClaudeOllamaStreamComplete,
   logClaudeOllamaStreamError,
   logClaudeOllamaStreamStart,
+  prepareClaudeAgentSdkOllamaStartupDiagnostics,
   probeClaudeOllamaConnectivity,
 } from "../src/main/lib/claude/agent-sdk-ollama-diagnostics"
 
@@ -134,6 +135,100 @@ describe("Claude Agent SDK Ollama diagnostics", () => {
         mode: "resume",
         note: "Resuming existing session to maintain chat history",
       },
+    ])
+  })
+
+  test("prepares Ollama startup diagnostics with connectivity probe and SDK configuration log", async () => {
+    const probes: Array<{ baseUrl: string; model: string }> = []
+    const logs: Array<{
+      model?: string | null
+      baseUrl?: string
+      cwd: string
+      configDir: string
+      hasAuthToken: boolean
+      resumeSessionId?: string | null
+    }> = []
+
+    await prepareClaudeAgentSdkOllamaStartupDiagnostics({
+      isUsingOllama: true,
+      customConfig: {
+        baseUrl: "http://127.0.0.1:11434",
+        model: "qwen",
+      },
+      model: "qwen",
+      baseUrl: "http://127.0.0.1:11434",
+      cwd: "/repo",
+      configDir: "/tmp/claude",
+      hasAuthToken: true,
+      resumeSessionId: "session-1",
+      probeConnectivity: async (input) => {
+        probes.push(input)
+      },
+      logSdkConfiguration: (input) => {
+        logs.push(input)
+      },
+    })
+
+    expect(probes).toEqual([
+      { baseUrl: "http://127.0.0.1:11434", model: "qwen" },
+    ])
+    expect(logs).toEqual([
+      {
+        model: "qwen",
+        baseUrl: "http://127.0.0.1:11434",
+        cwd: "/repo",
+        configDir: "/tmp/claude",
+        hasAuthToken: true,
+        resumeSessionId: "session-1",
+      },
+    ])
+  })
+
+  test("skips Ollama startup diagnostics outside Ollama mode", async () => {
+    const probeConnectivity = mock(async () => {})
+    const logSdkConfiguration = mock(() => {})
+
+    await prepareClaudeAgentSdkOllamaStartupDiagnostics({
+      isUsingOllama: false,
+      customConfig: {
+        baseUrl: "http://127.0.0.1:11434",
+        model: "qwen",
+      },
+      model: "qwen",
+      baseUrl: "http://127.0.0.1:11434",
+      cwd: "/repo",
+      configDir: "/tmp/claude",
+      hasAuthToken: false,
+      probeConnectivity,
+      logSdkConfiguration,
+    })
+
+    expect(probeConnectivity).not.toHaveBeenCalled()
+    expect(logSdkConfiguration).not.toHaveBeenCalled()
+  })
+
+  test("logs Ollama startup diagnostics without probing when custom config is absent", async () => {
+    const probeConnectivity = mock(async () => {})
+    const logs: Array<{ model?: string | null }> = []
+
+    await prepareClaudeAgentSdkOllamaStartupDiagnostics({
+      isUsingOllama: true,
+      customConfig: null,
+      model: "qwen",
+      cwd: "/repo",
+      configDir: "/tmp/claude",
+      hasAuthToken: false,
+      probeConnectivity,
+      logSdkConfiguration: (input) => {
+        logs.push(input)
+      },
+    })
+
+    expect(probeConnectivity).not.toHaveBeenCalled()
+    expect(logs).toEqual([
+      expect.objectContaining({
+        model: "qwen",
+      }),
     ])
   })
 

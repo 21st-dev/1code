@@ -54,6 +54,49 @@ export async function probeClaudeOllamaConnectivity(input: {
   }
 }
 
+type ClaudeOllamaStartupCustomConfig = {
+  baseUrl: string
+  model: string
+}
+
+type ProbeClaudeOllamaConnectivity = typeof probeClaudeOllamaConnectivity
+type LogClaudeOllamaSdkConfiguration = typeof logClaudeOllamaSdkConfiguration
+
+export async function prepareClaudeAgentSdkOllamaStartupDiagnostics(input: {
+  isUsingOllama: boolean
+  customConfig?: ClaudeOllamaStartupCustomConfig | null
+  model?: string | null
+  baseUrl?: string
+  cwd: string
+  configDir: string
+  hasAuthToken: boolean
+  resumeSessionId?: string | null
+  probeConnectivity?: ProbeClaudeOllamaConnectivity
+  logSdkConfiguration?: LogClaudeOllamaSdkConfiguration
+}): Promise<void> {
+  if (!input.isUsingOllama) {
+    return
+  }
+
+  if (input.customConfig) {
+    await (input.probeConnectivity ?? probeClaudeOllamaConnectivity)({
+      baseUrl: input.customConfig.baseUrl,
+      model: input.customConfig.model,
+    })
+  }
+
+  const logSdkConfiguration =
+    input.logSdkConfiguration ?? logClaudeOllamaSdkConfiguration
+  logSdkConfiguration({
+    model: input.model,
+    baseUrl: input.baseUrl,
+    cwd: input.cwd,
+    configDir: input.configDir,
+    hasAuthToken: input.hasAuthToken,
+    resumeSessionId: input.resumeSessionId,
+  })
+}
+
 export function logClaudeOllamaSdkConfiguration(input: {
   model?: string | null
   baseUrl?: string
