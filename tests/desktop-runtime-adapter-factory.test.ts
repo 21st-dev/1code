@@ -502,11 +502,23 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-guard-metadata.ts",
       "utf8",
     )
+    const runFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-run-finalization.ts",
+      "utf8",
+    )
+    const streamErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-guard-metadata")
-    expect(claudeRouter).toContain("finalizeClaudeAgentSdkGuardMetadata({")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-guard-metadata")
+    expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkGuardMetadata({")
     expect(claudeRouter).not.toContain("const finalizeGuardMetadata")
     expect(claudeRouter).not.toContain("buildGuardedRunAudit")
+    expect(runFinalization).toContain("finalizeClaudeAgentSdkGuardMetadata({")
+    expect(streamErrorFinalization).toContain(
+      "finalizeClaudeAgentSdkGuardMetadata({",
+    )
     expect(guardMetadata).toContain("finalizeClaudeAgentSdkGuardMetadata")
     expect(guardMetadata).toContain("buildGuardedRunAudit")
     expect(guardMetadata).toContain("captureGuardedGitStatus")
@@ -522,17 +534,29 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-message-persistence.ts",
       "utf8",
     )
+    const runFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-run-finalization.ts",
+      "utf8",
+    )
+    const streamErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-message-persistence",
     )
-    expect(claudeRouter).toContain("persistClaudeAgentSdkAssistantResponse")
+    expect(claudeRouter).not.toContain("persistClaudeAgentSdkAssistantResponse")
     expect(claudeRouter).not.toContain("const assistantMessage =")
     expect(claudeRouter).not.toContain("const finalMessages =")
     expect(claudeRouter).not.toContain("messages: JSON.stringify(persistence.messages)")
     expect(claudeRouter).not.toContain("createRollbackStash")
     expect(claudeRouter).not.toContain(
       "historyEnabled && metadata.sdkMessageUuid && runtimeCwd",
+    )
+    expect(runFinalization).toContain("persistClaudeAgentSdkAssistantResponse")
+    expect(streamErrorFinalization).toContain(
+      "persistClaudeAgentSdkAssistantResponse",
     )
     expect(messagePersistence).toContain("persistClaudeAgentSdkAssistantResponse")
     expect(messagePersistence).toContain(
@@ -566,6 +590,35 @@ describe("desktop runtime adapter factory", () => {
     expect(runFinalization).toContain("persistClaudeAgentSdkAssistantResponse")
     expect(runFinalization).toContain("finalizeClaudeAgentSdkGuardMetadata")
     expect(runFinalization).toContain("flushClaudeAgentSdkTextAccumulator")
+  })
+
+  test("keeps Claude Agent SDK stream error finalization ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const streamErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-stream-error-finalization",
+    )
+    expect(claudeRouter).toContain("finalizeClaudeAgentSdkStreamError")
+    expect(claudeRouter).not.toContain("classifyClaudeAgentSdkStreamError")
+    expect(claudeRouter).not.toContain("reason=stream_error")
+    expect(claudeRouter).not.toContain("M:CATCH_SAVE")
+    expect(claudeRouter).not.toContain("Session not found")
+    expect(streamErrorFinalization).toContain(
+      "finalizeClaudeAgentSdkStreamError",
+    )
+    expect(streamErrorFinalization).toContain(
+      "classifyClaudeAgentSdkStreamError",
+    )
+    expect(streamErrorFinalization).toContain("reason=stream_error")
+    expect(streamErrorFinalization).toContain("M:CATCH_SAVE")
+    expect(streamErrorFinalization).toContain("persistClaudeAgentSdkAssistantResponse")
   })
 
   test("keeps Claude Agent SDK policy retry ownership out of the router", () => {
@@ -693,12 +746,16 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-ollama-diagnostics.ts",
       "utf8",
     )
+    const streamErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain(
       "../../claude/agent-sdk-ollama-diagnostics",
     )
     expect(claudeRouter).toContain("logClaudeOllamaStreamStart")
-    expect(claudeRouter).toContain("logClaudeOllamaStreamError")
+    expect(claudeRouter).not.toContain("logClaudeOllamaStreamError")
     expect(claudeRouter).toContain("logClaudeOllamaSdkConfiguration")
     expect(claudeRouter).toContain("probeClaudeOllamaConnectivity")
     expect(claudeRouter).not.toContain("/api/tags")
@@ -712,6 +769,7 @@ describe("desktop runtime adapter factory", () => {
     expect(ollamaDiagnostics).toContain(
       "logClaudeOllamaEmptyStreamDiagnosis",
     )
+    expect(streamErrorFinalization).toContain("logClaudeOllamaStreamError")
     expect(ollamaDiagnostics).toContain(
       "[Ollama] ===== STARTING STREAM ITERATION =====",
     )
@@ -782,16 +840,28 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-chunk-processor.ts",
       "utf8",
     )
+    const runFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-run-finalization.ts",
+      "utf8",
+    )
+    const streamErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain(
       "../../claude/agent-sdk-chunk-processor",
     )
     expect(claudeRouter).toContain("processClaudeAgentSdkUiChunk")
-    expect(claudeRouter).toContain("flushClaudeAgentSdkTextAccumulator")
+    expect(claudeRouter).not.toContain("flushClaudeAgentSdkTextAccumulator")
     expect(claudeRouter).not.toContain('case "tool-input-available"')
     expect(claudeRouter).not.toContain('case "tool-output-available"')
     expect(claudeRouter).not.toContain("toolPart.result = chunk.output")
     expect(claudeRouter).not.toContain("currentText.trim()")
+    expect(runFinalization).toContain("flushClaudeAgentSdkTextAccumulator")
+    expect(streamErrorFinalization).toContain(
+      "flushClaudeAgentSdkTextAccumulator",
+    )
     expect(chunkProcessor).toContain("processClaudeAgentSdkUiChunk")
     expect(chunkProcessor).toContain("flushClaudeAgentSdkTextAccumulator")
     expect(chunkProcessor).toContain('case "tool-input-available"')
@@ -873,13 +943,17 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-errors.ts",
       "utf8",
     )
+    const streamErrorFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-errors")
     expect(claudeRouter).toContain(
       "extractClaudeAgentSdkEmbeddedErrorText",
     )
     expect(claudeRouter).toContain("classifyClaudeAgentSdkEmbeddedError")
-    expect(claudeRouter).toContain("classifyClaudeAgentSdkStreamError")
+    expect(claudeRouter).not.toContain("classifyClaudeAgentSdkStreamError")
     expect(claudeRouter).not.toContain(
       "const messageText = msgAny.message?.content?.[0]?.text",
     )
@@ -889,6 +963,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain('err.message?.includes("ENOENT")')
     expect(claudeRouter).not.toContain(
       "No conversation found with session ID",
+    )
+    expect(streamErrorFinalization).toContain(
+      "classifyClaudeAgentSdkStreamError",
     )
     expect(claudeErrors).toContain("extractClaudeAgentSdkEmbeddedErrorText")
     expect(claudeErrors).toContain("classifyClaudeAgentSdkEmbeddedError")

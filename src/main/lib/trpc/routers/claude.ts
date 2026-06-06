@@ -42,12 +42,10 @@ import {
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
 import {
   classifyClaudeAgentSdkEmbeddedError,
-  classifyClaudeAgentSdkStreamError,
   extractClaudeAgentSdkEmbeddedErrorText,
 } from "../../claude/agent-sdk-errors"
-import { finalizeClaudeAgentSdkGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
-import { persistClaudeAgentSdkAssistantResponse } from "../../claude/agent-sdk-message-persistence"
 import { completeClaudeAgentSdkRunAfterAdapter } from "../../claude/agent-sdk-run-finalization"
+import { finalizeClaudeAgentSdkStreamError } from "../../claude/agent-sdk-stream-error-finalization"
 import {
   CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
   createClaudeAgentSdkPolicyRetryState,
@@ -67,7 +65,6 @@ import {
 } from "../../claude/agent-sdk-adapter"
 import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-adapter-runner"
 import {
-  flushClaudeAgentSdkTextAccumulator,
   processClaudeAgentSdkUiChunk,
 } from "../../claude/agent-sdk-chunk-processor"
 import { trackClaudeAgentSdkMessageMetadata } from "../../claude/agent-sdk-message-metadata"
@@ -83,7 +80,6 @@ import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
   logClaudeOllamaSdkConfiguration,
   logClaudeOllamaStreamAborted,
-  logClaudeOllamaStreamError,
   logClaudeOllamaStreamStart,
   probeClaudeOllamaConnectivity,
 } from "../../claude/agent-sdk-ollama-diagnostics"
@@ -1974,100 +1970,39 @@ export const claudeRouter = router({
                   model: finalCustomConfig?.model,
                 }).messageCount
               } catch (streamError) {
-                // This catches errors during streaming (like process exit)
-                const err = streamError as Error
-                const stderrOutput = stderrLines.join("\n")
-
-                if (isUsingOllama) {
-                  logClaudeOllamaStreamError({
-                    error: err,
-                    messageCount,
-                    stderrOutput,
-                  })
-                }
-
-                const streamDiagnostic = classifyClaudeAgentSdkStreamError({
-                  error: err,
-                  stderrOutput,
-                })
-                const errorContext = streamDiagnostic.context
-                const errorCategory = streamDiagnostic.category
-
-                if (streamDiagnostic.isSessionNotFound) {
-                  // Clear the invalid session ID from database so next attempt starts fresh
-                  console.log(
-                    `[claude] Session not found - clearing invalid sessionId from database`,
-                  )
-                  db.update(subChats)
-                    .set({ sessionId: null })
-                    .where(eq(subChats.id, input.subChatId))
-                    .run()
-                }
-
-                // Send error with stderr output to frontend (only if not aborted by user)
-                if (!abortController.signal.aborted) {
-                  safeEmit({
-                    type: "error",
-                    errorText: stderrOutput
-                      ? `${errorContext}: ${err.message}\n\nProcess output:\n${stderrOutput}`
-                      : `${errorContext}: ${err.message}`,
-                    debugInfo: {
-                      context: errorContext,
-                      category: errorCategory,
-                      cwd: runtimeCwd,
-                      mode: input.mode,
-                      stderr: stderrOutput || "(no stderr captured)",
-                    },
-                  } as UIMessageChunk)
-                }
-
-                // ALWAYS save accumulated parts before returning (even on abort/error)
-                console.log(
-                  `[SD] M:CATCH_SAVE sub=${subId} aborted=${abortController.signal.aborted} parts=${parts.length}`,
-                )
-                currentText = flushClaudeAgentSdkTextAccumulator({
-                  currentText,
-                  parts,
-                })
-                metadata = await finalizeClaudeAgentSdkGuardMetadata({
-                  currentMetadata: metadata,
-                  guardedContract,
-                  guardedPreRunStatus,
-                  runtimeCwd,
-                  guardEvents,
-                  startedAt: guardedRunStartedAt,
-                  options: {
-                    failed: !abortController.signal.aborted,
-                    stopped: abortController.signal.aborted,
-                  },
-                  emit: safeEmit,
-                  getContract: getActiveGuardedContract,
-                  deleteContract: deleteActiveGuardedContract,
-                })
-                await persistClaudeAgentSdkAssistantResponse({
+                const streamFailure = await finalizeClaudeAgentSdkStreamError({
+                  streamError,
+                  stderrLines,
+                  isUsingOllama,
+                  messageCount,
                   db,
                   chatId: input.chatId,
                   subChatId: input.subChatId,
                   messagesToSave,
                   parts,
                   metadata,
+                  currentText,
                   historyEnabled,
                   cwd: runtimeCwd,
-                  clearStreamWhenEmpty: false,
-                  touchChatWhenEmpty: false,
+                  mode: input.mode,
+                  aborted: abortController.signal.aborted,
+                  guardedContract,
+                  guardedPreRunStatus,
+                  guardEvents,
+                  guardedRunStartedAt,
+                  subId,
+                  chunkCount,
+                  lastChunkType,
+                  emit: safeEmit,
+                  complete: safeComplete,
+                  getContract: getActiveGuardedContract,
+                  deleteContract: deleteActiveGuardedContract,
                 })
-
-                console.log(
-                  `[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`,
-                )
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
+                currentText = streamFailure.currentText
+                metadata = streamFailure.metadata
                 return {
                   status: "failed" as const,
-                  error: {
-                    message: errorContext,
-                    code: errorCategory,
-                  },
+                  error: streamFailure.error,
                 }
               }
 
