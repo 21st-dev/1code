@@ -84,3 +84,26 @@ export function processClaudeAgentSdkStreamMessage(input: {
     lastAssistantUuid: metadataState.lastAssistantUuid,
   }
 }
+
+export function syncClaudeAgentSdkStreamProcessingState(
+  state: ClaudeAgentSdkStreamProcessingState,
+  sink: {
+    setMetadata: (
+      metadata: ClaudeAgentSdkStreamProcessingState["metadata"],
+    ) => void
+    setCurrentSessionId: (currentSessionId: string | null) => void
+    setCurrentText: (currentText: string) => void
+    setPendingFinishChunk: (
+      pendingFinishChunk: ClaudeAgentSdkStreamProcessingState["pendingFinishChunk"],
+    ) => void
+    setChunkCount: (chunkCount: number) => void
+    setLastChunkType: (lastChunkType: string) => void
+  },
+): void {
+  sink.setMetadata(state.metadata)
+  sink.setCurrentSessionId(state.currentSessionId)
+  sink.setCurrentText(state.currentText)
+  sink.setPendingFinishChunk(state.pendingFinishChunk)
+  sink.setChunkCount(state.chunkCount)
+  sink.setLastChunkType(state.lastChunkType)
+}

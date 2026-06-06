@@ -69,6 +69,7 @@ import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-
 import {
   createClaudeAgentSdkStreamProcessingState,
   processClaudeAgentSdkStreamMessage,
+  syncClaudeAgentSdkStreamProcessingState,
 } from "../../claude/agent-sdk-stream-processor"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
@@ -1730,12 +1731,29 @@ export const claudeRouter = router({
                       subChatId: input.subChatId,
                       emit: safeEmit,
                     })
-                    metadata = streamProcessing.metadata
-                    currentSessionId = streamProcessing.currentSessionId
-                    currentText = streamProcessing.currentText
-                    pendingFinishChunk = streamProcessing.pendingFinishChunk
-                    chunkCount = streamProcessing.chunkCount
-                    lastChunkType = streamProcessing.lastChunkType
+                    syncClaudeAgentSdkStreamProcessingState(
+                      streamProcessing,
+                      {
+                        setMetadata: (value) => {
+                          metadata = value
+                        },
+                        setCurrentSessionId: (value) => {
+                          currentSessionId = value
+                        },
+                        setCurrentText: (value) => {
+                          currentText = value
+                        },
+                        setPendingFinishChunk: (value) => {
+                          pendingFinishChunk = value
+                        },
+                        setChunkCount: (value) => {
+                          chunkCount = value
+                        },
+                        setLastChunkType: (value) => {
+                          lastChunkType = value
+                        },
+                      },
+                    )
                     if (
                       streamProcessing.emitClosed ||
                       shouldStopClaudeAgentSdkStreamForClosedObserver({

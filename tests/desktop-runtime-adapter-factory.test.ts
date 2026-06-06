@@ -1024,6 +1024,25 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeRouter).toContain("../../claude/agent-sdk-stream-processor")
     expect(claudeRouter).toContain("processClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).toContain(
+      "syncClaudeAgentSdkStreamProcessingState",
+    )
+    expect(claudeRouter).not.toContain("metadata = streamProcessing.metadata")
+    expect(claudeRouter).not.toContain(
+      "currentSessionId = streamProcessing.currentSessionId",
+    )
+    expect(claudeRouter).not.toContain(
+      "currentText = streamProcessing.currentText",
+    )
+    expect(claudeRouter).not.toContain(
+      "pendingFinishChunk = streamProcessing.pendingFinishChunk",
+    )
+    expect(claudeRouter).not.toContain(
+      "chunkCount = streamProcessing.chunkCount",
+    )
+    expect(claudeRouter).not.toContain(
+      "lastChunkType = streamProcessing.lastChunkType",
+    )
     expect(claudeRouter).not.toContain(
       "processClaudeAgentSdkTransformedChunks",
     )
@@ -1051,6 +1070,9 @@ describe("desktop runtime adapter factory", () => {
     expect(transformedChunks).toContain("chunkCount++")
     expect(transformedChunks).toContain("lastChunkType = chunk.type")
     expect(streamProcessor).toContain("processClaudeAgentSdkStreamMessage")
+    expect(streamProcessor).toContain(
+      "syncClaudeAgentSdkStreamProcessingState",
+    )
     expect(streamProcessor).toContain("processClaudeAgentSdkTransformedChunks")
     expect(fileChangeNotification).toContain(
       "notifyClaudeAgentSdkFileChanged",

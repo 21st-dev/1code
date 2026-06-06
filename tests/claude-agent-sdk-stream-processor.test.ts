@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   createClaudeAgentSdkStreamProcessingState,
   processClaudeAgentSdkStreamMessage,
+  syncClaudeAgentSdkStreamProcessingState,
 } from "../src/main/lib/claude/agent-sdk-stream-processor"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
 
@@ -142,5 +143,47 @@ describe("Claude Agent SDK stream processor", () => {
     ])
     expect(state.emitClosed).toBe(true)
     expect(state.chunkCount).toBe(1)
+  })
+
+  test("syncs processed stream state into the route-owned finalization sink", () => {
+    const state = baseState({
+      metadata: { sessionId: "session-1" },
+      currentSessionId: "session-1",
+      currentText: "hello",
+      pendingFinishChunk: { type: "finish" },
+      chunkCount: 3,
+      lastChunkType: "finish",
+    })
+    const synced: Record<string, unknown> = {}
+
+    syncClaudeAgentSdkStreamProcessingState(state, {
+      setMetadata: (value) => {
+        synced.metadata = value
+      },
+      setCurrentSessionId: (value) => {
+        synced.currentSessionId = value
+      },
+      setCurrentText: (value) => {
+        synced.currentText = value
+      },
+      setPendingFinishChunk: (value) => {
+        synced.pendingFinishChunk = value
+      },
+      setChunkCount: (value) => {
+        synced.chunkCount = value
+      },
+      setLastChunkType: (value) => {
+        synced.lastChunkType = value
+      },
+    })
+
+    expect(synced).toEqual({
+      metadata: { sessionId: "session-1" },
+      currentSessionId: "session-1",
+      currentText: "hello",
+      pendingFinishChunk: { type: "finish" },
+      chunkCount: 3,
+      lastChunkType: "finish",
+    })
   })
 })
