@@ -1,5 +1,14 @@
 # Change: Add Claude Dynamic Workflows Adapter
 
+## Archive Status
+Deferred proposal. This change was archived with `--skip-specs` on
+2026-06-06 because Claude Dynamic Workflows are not part of the current runtime
+workbench acceptance path and are expected to be revisited much later.
+
+Do not treat this archive as implemented product behavior. If the feature is
+revived, move it back into `openspec/changes/`, revalidate the proposal against
+the current Claude runtime, and get approval before product code starts.
+
 ## Why
 Claude Code now exposes dynamic workflows as a research-preview runtime feature for large parallel subagent work. Locus already bundles a compatible Claude Code runtime, but it does not make workflows visible, controllable, or safe inside the local-first desktop chat surface.
 

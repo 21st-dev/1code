@@ -1,3 +1,8 @@
+## Archive Status
+Deferred proposal archived with `--skip-specs` on 2026-06-06. The unchecked
+implementation tasks below are intentionally parked and are not part of the
+current runtime workbench acceptance path.
+
 ## 0. Current Boundary
 - [x] 0.1 Record that this change is proposal-only, Claude-specific, and not part of the current Locus Workbench focus or `add-headless-agent-jobs` acceptance boundary.
 - [x] 0.2 Record that Dynamic Workflows must not be described as supported until this proposal is approved, implemented, tested, and smoke-tested.
