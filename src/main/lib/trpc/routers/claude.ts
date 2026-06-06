@@ -100,7 +100,6 @@ import {
   resolveDesktopPermissionPolicy,
 } from "../../agent-runtime/permission-policy"
 import {
-  appendRunEventsToAgentJob,
   type DesktopStreamEventMapper,
   createRuntimeRendererChunkEmitter,
 } from "../../agent-runtime/stream-event-mapper"
@@ -895,9 +894,6 @@ export const claudeRouter = router({
               signal: abortController.signal,
               requestedSessionId: input.sessionId,
               existingSessionId,
-              emitTrace: (event) => {
-                appendRunEventsToAgentJob(db, [event])
-              },
             })
             desktopJobId = desktopRunStartup.desktopJob.jobId
             desktopStreamEventMapper =

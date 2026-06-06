@@ -1,9 +1,11 @@
 import type { AgentJobMode } from "../../../shared/agent-jobs"
 import {
+  appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
   type DesktopStreamEventMapper,
 } from "../agent-runtime/stream-event-mapper"
 import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
+import type { RunEvent } from "../agent-runtime/runtime-events"
 import {
   createAndRegisterDesktopChatAgentJob,
   type DesktopAgentJobHandle,
@@ -18,6 +20,7 @@ export type CreateClaudeAgentSdkDesktopJobDependencies = {
   createAndRegisterDesktopChatAgentJob:
     typeof createAndRegisterDesktopChatAgentJob
   createDesktopStreamEventMapper: typeof createDesktopStreamEventMapper
+  appendRunEventsToAgentJob: typeof appendRunEventsToAgentJob
 }
 
 export type CreateClaudeAgentSdkDesktopJobInput = {
@@ -42,8 +45,9 @@ export type CreateClaudeAgentSdkDesktopRunStartupInput =
   CreateClaudeAgentSdkDesktopJobInput &
     Omit<
       CreateClaudeDesktopRunRequestFromRuntimeStartupInput,
-      "jobId" | "runId" | "mode" | "prompt"
+      "jobId" | "runId" | "mode" | "prompt" | "emitTrace"
     > & {
+      emitTrace?: (event: RunEvent) => void
       createDesktopRunRequest?: typeof createClaudeDesktopRunRequestFromRuntimeStartup
     }
 
@@ -54,6 +58,7 @@ export type ClaudeAgentSdkDesktopRunStartup = {
 }
 
 const defaultDependencies: CreateClaudeAgentSdkDesktopJobDependencies = {
+  appendRunEventsToAgentJob,
   createAndRegisterDesktopChatAgentJob,
   createDesktopStreamEventMapper,
 }
@@ -93,11 +98,27 @@ export function createClaudeAgentSdkDesktopJob(
   }
 }
 
+export function createClaudeAgentSdkDesktopRunTraceEmitter(input: {
+  db: AgentJobDatabase
+  dependencies?: Partial<CreateClaudeAgentSdkDesktopJobDependencies>
+}): (event: RunEvent) => void {
+  const dependencies = withDefaultDependencies(input.dependencies)
+  return (event) => {
+    dependencies.appendRunEventsToAgentJob(input.db, [event])
+  }
+}
+
 export function createClaudeAgentSdkDesktopRunStartup({
   createDesktopRunRequest = createClaudeDesktopRunRequestFromRuntimeStartup,
   ...input
 }: CreateClaudeAgentSdkDesktopRunStartupInput): ClaudeAgentSdkDesktopRunStartup {
   const desktopJob = createClaudeAgentSdkDesktopJob(input)
+  const emitTrace =
+    input.emitTrace ??
+    createClaudeAgentSdkDesktopRunTraceEmitter({
+      db: input.db,
+      dependencies: input.dependencies,
+    })
   const desktopRunRequest = createDesktopRunRequest({
     runId: input.runId,
     streamId: input.streamId,
@@ -115,7 +136,7 @@ export function createClaudeAgentSdkDesktopRunStartup({
     signal: input.signal,
     requestedSessionId: input.requestedSessionId,
     existingSessionId: input.existingSessionId,
-    emitTrace: input.emitTrace,
+    emitTrace,
   })
 
   return {

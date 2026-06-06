@@ -292,12 +292,12 @@ describe("desktop stream event mapper", () => {
       const safeEmitIndex = source.indexOf("const safeEmit")
       const jobIndex =
         runtimeName === "Claude"
-          ? source.indexOf("createClaudeAgentSdkDesktopJob({")
+          ? source.indexOf("createClaudeAgentSdkDesktopRunStartup({")
           : source.indexOf("createAndRegisterDesktopChatAgentJob(db, {")
       const mapperCreateIndex =
         runtimeName === "Claude"
           ? source.indexOf(
-              "desktopStreamEventMapper = desktopJob.streamEventMapper",
+              "desktopStreamEventMapper =\n              desktopRunStartup.desktopJob.streamEventMapper",
               jobIndex,
             )
           : source.indexOf(

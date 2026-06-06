@@ -66,7 +66,7 @@ describe("Claude Agent SDK desktop job setup", () => {
   test("creates desktop job and DesktopRunRequest as one startup unit", () => {
     const db = {} as any
     const cancel = () => {}
-    const emitted: any[] = []
+    const appended: any[] = []
     const abortController = new AbortController()
     const permissionPolicy = resolveDesktopPermissionPolicy({
       runtimeId: "claude-code",
@@ -100,8 +100,10 @@ describe("Claude Agent SDK desktop job setup", () => {
       signal: abortController.signal,
       requestedSessionId: "session-1",
       existingSessionId: "session-0",
-      emitTrace: (event) => emitted.push(event),
       dependencies: {
+        appendRunEventsToAgentJob: (dbArg, events) => {
+          appended.push({ db: dbArg, events })
+        },
         createAndRegisterDesktopChatAgentJob: (_dbArg, input) =>
           ({
             job: { id: "job-1" },
@@ -138,6 +140,12 @@ describe("Claude Agent SDK desktop job setup", () => {
       parentSessionId: "session-1",
     })
     expect(startup.desktopRunRequest.trace.emit).toBeDefined()
-    expect(emitted).toEqual([])
+    startup.desktopRunRequest.trace.emit({ category: "status" } as any)
+    expect(appended).toEqual([
+      {
+        db,
+        events: [{ category: "status" }],
+      },
+    ])
   })
 })

@@ -1123,12 +1123,21 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/desktop-agent-jobs.ts",
       "utf8",
     )
+    const claudeDesktopJob = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-job.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunStartup")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopJob({")
     expect(claudeRouter).not.toContain("createAndRegisterDesktopChatAgentJob")
     expect(claudeRouter).not.toContain("createDesktopStreamEventMapper")
+    expect(claudeRouter).not.toContain("appendRunEventsToAgentJob")
     expect(codexRouter).toContain("createAndRegisterDesktopChatAgentJob")
+    expect(claudeDesktopJob).toContain("appendRunEventsToAgentJob")
+    expect(claudeDesktopJob).toContain(
+      "createClaudeAgentSdkDesktopRunTraceEmitter",
+    )
 
     for (const route of [claudeRouter, codexRouter]) {
       expect(route).toContain("completeDesktopChatAgentJobSafely")
