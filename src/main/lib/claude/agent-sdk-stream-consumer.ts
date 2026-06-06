@@ -40,6 +40,73 @@ export type ClaudeAgentSdkStreamConsumerStateAccess = {
   setMessageCount: (messageCount: number) => void
 }
 
+export type ClaudeAgentSdkStreamConsumerMutableState = {
+  metadata: any
+  currentSessionId: string | null
+  currentText: string
+  pendingFinishChunk: UIMessageChunk | null
+  chunkCount: number
+  lastChunkType: string
+  messageCount: number
+}
+
+export function createClaudeAgentSdkStreamConsumerMutableState(
+  input: Partial<ClaudeAgentSdkStreamConsumerMutableState> = {},
+): ClaudeAgentSdkStreamConsumerMutableState {
+  return {
+    metadata: {},
+    currentSessionId: null,
+    currentText: "",
+    pendingFinishChunk: null,
+    chunkCount: 0,
+    lastChunkType: "",
+    messageCount: 0,
+    ...input,
+  }
+}
+
+export function createClaudeAgentSdkStreamConsumerStateAccess(
+  state: ClaudeAgentSdkStreamConsumerMutableState,
+): ClaudeAgentSdkStreamConsumerStateAccess {
+  return {
+    getMetadata: () => state.metadata,
+    setMetadata: (value) => {
+      state.metadata = value
+    },
+    getCurrentSessionId: () => state.currentSessionId,
+    setCurrentSessionId: (value) => {
+      state.currentSessionId = value
+    },
+    getCurrentText: () => state.currentText,
+    setCurrentText: (value) => {
+      state.currentText = value
+    },
+    getPendingFinishChunk: () => state.pendingFinishChunk,
+    setPendingFinishChunk: (value) => {
+      state.pendingFinishChunk = value
+    },
+    getChunkCount: () => state.chunkCount,
+    setChunkCount: (value) => {
+      state.chunkCount = value
+    },
+    getLastChunkType: () => state.lastChunkType,
+    setLastChunkType: (value) => {
+      state.lastChunkType = value
+    },
+    getMessageCount: () => state.messageCount,
+    setMessageCount: (value) => {
+      state.messageCount = value
+    },
+  }
+}
+
+export function resetClaudeAgentSdkStreamConsumerAttemptState(
+  state: ClaudeAgentSdkStreamConsumerMutableState,
+): void {
+  state.messageCount = 0
+  state.pendingFinishChunk = null
+}
+
 export type CreateClaudeAgentSdkStreamConsumerInput = {
   isUsingOllama: boolean
   model?: string | null

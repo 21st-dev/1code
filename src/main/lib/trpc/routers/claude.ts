@@ -61,7 +61,12 @@ import {
   createClaudeAgentSdkAdapter,
 } from "../../claude/agent-sdk-adapter"
 import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-adapter-runner"
-import { createClaudeAgentSdkStreamConsumer } from "../../claude/agent-sdk-stream-consumer"
+import {
+  createClaudeAgentSdkStreamConsumer,
+  createClaudeAgentSdkStreamConsumerMutableState,
+  createClaudeAgentSdkStreamConsumerStateAccess,
+  resetClaudeAgentSdkStreamConsumerAttemptState,
+} from "../../claude/agent-sdk-stream-consumer"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -789,10 +794,7 @@ export const claudeRouter = router({
         // Stream debug logging
         const subId = input.subChatId.slice(-8) // Short ID for logs
         const streamStart = Date.now()
-        let chunkCount = 0
-        let lastChunkType = ""
-        // Shared sessionId for cleanup to save on abort
-        let currentSessionId: string | null = null
+        const streamState = createClaudeAgentSdkStreamConsumerMutableState()
         let desktopJobId: string | null = null
         let desktopJobSawError = false
         let desktopJobReachedNaturalFinish = false
@@ -1179,8 +1181,7 @@ export const claudeRouter = router({
 
             // 4. Setup accumulation state
             const parts: any[] = []
-            let currentText = ""
-            let metadata: any =
+            streamState.metadata =
               createClaudeAgentSdkInitialGuardMetadata(guardedContract)
 
             // Capture stderr from Claude process for debugging
@@ -1627,9 +1628,6 @@ export const claudeRouter = router({
 
             // Auto-retry for transient API errors (e.g., false-positive USAGE_POLICY_VIOLATION)
             const policyRetry = createClaudeAgentSdkPolicyRetryState()
-            let messageCount = 0
-            let pendingFinishChunk: UIMessageChunk | null = null
-
             const claudeAdapter = createClaudeAgentSdkAdapter({
               queryOptions,
               consumeStream: createClaudeAgentSdkStreamConsumer({
@@ -1664,36 +1662,8 @@ export const claudeRouter = router({
                 complete: safeComplete,
                 getContract: getActiveGuardedContract,
                 deleteContract: deleteActiveGuardedContract,
-                state: {
-                  getMetadata: () => metadata,
-                  setMetadata: (value) => {
-                    metadata = value
-                  },
-                  getCurrentSessionId: () => currentSessionId,
-                  setCurrentSessionId: (value) => {
-                    currentSessionId = value
-                  },
-                  getCurrentText: () => currentText,
-                  setCurrentText: (value) => {
-                    currentText = value
-                  },
-                  getPendingFinishChunk: () => pendingFinishChunk,
-                  setPendingFinishChunk: (value) => {
-                    pendingFinishChunk = value
-                  },
-                  getChunkCount: () => chunkCount,
-                  setChunkCount: (value) => {
-                    chunkCount = value
-                  },
-                  getLastChunkType: () => lastChunkType,
-                  setLastChunkType: (value) => {
-                    lastChunkType = value
-                  },
-                  getMessageCount: () => messageCount,
-                  setMessageCount: (value) => {
-                    messageCount = value
-                  },
-                },
+                state:
+                  createClaudeAgentSdkStreamConsumerStateAccess(streamState),
               }),
             })
 
@@ -1703,10 +1673,9 @@ export const claudeRouter = router({
                 request: desktopRunRequest,
                 policyRetry,
                 beforeAttempt: () => {
-                  messageCount = 0
-                  pendingFinishChunk = null
+                  resetClaudeAgentSdkStreamConsumerAttemptState(streamState)
                 },
-                getChunkCount: () => chunkCount,
+                getChunkCount: () => streamState.chunkCount,
                 subId,
                 emitError,
                 emit: safeEmit,
@@ -1723,11 +1692,11 @@ export const claudeRouter = router({
                 subChatId: input.subChatId,
                 messagesToSave,
                 parts,
-                metadata,
-                currentText,
+                metadata: streamState.metadata,
+                currentText: streamState.currentText,
                 historyEnabled,
                 cwd: runtimeCwd,
-                messageCount,
+                messageCount: streamState.messageCount,
                 aborted: abortController.signal.aborted,
                 desktopJobSawError,
                 guardedContract,
@@ -1735,9 +1704,9 @@ export const claudeRouter = router({
                 guardEvents,
                 guardedRunStartedAt,
                 subId,
-                chunkCount,
-                lastChunkType,
-                pendingFinishChunk,
+                chunkCount: streamState.chunkCount,
+                lastChunkType: streamState.lastChunkType,
+                pendingFinishChunk: streamState.pendingFinishChunk,
                 streamStart,
                 emitError,
                 emit: safeEmit,
@@ -1745,8 +1714,8 @@ export const claudeRouter = router({
                 getContract: getActiveGuardedContract,
                 deleteContract: deleteActiveGuardedContract,
               })
-            currentText = finalization.currentText
-            metadata = finalization.metadata
+            streamState.currentText = finalization.currentText
+            streamState.metadata = finalization.metadata
             if (finalization.status === "failed") {
               return
             }
@@ -1756,7 +1725,7 @@ export const claudeRouter = router({
             finalizeClaudeAgentSdkUnexpectedError({
               error,
               subId,
-              chunkCount,
+              chunkCount: streamState.chunkCount,
               streamStart,
               emitError,
               emit: safeEmit,
@@ -1791,7 +1760,7 @@ export const claudeRouter = router({
         // Cleanup on unsubscribe
         return () => {
           console.log(
-            `[SD] M:CLEANUP sub=${subId} sessionId=${currentSessionId || "none"}`,
+            `[SD] M:CLEANUP sub=${subId} sessionId=${streamState.currentSessionId || "none"}`,
           )
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()

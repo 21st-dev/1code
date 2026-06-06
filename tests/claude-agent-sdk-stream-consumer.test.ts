@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { createClaudeAgentSdkStreamConsumer } from "../src/main/lib/claude/agent-sdk-stream-consumer"
+import {
+  createClaudeAgentSdkStreamConsumer,
+  createClaudeAgentSdkStreamConsumerMutableState,
+  createClaudeAgentSdkStreamConsumerStateAccess,
+  resetClaudeAgentSdkStreamConsumerAttemptState,
+} from "../src/main/lib/claude/agent-sdk-stream-consumer"
 import { createClaudeAgentSdkPolicyRetryState } from "../src/main/lib/claude/agent-sdk-policy-retry"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
 
@@ -10,58 +15,42 @@ async function* streamFrom(messages: any[]) {
 }
 
 function createState() {
-  let metadata: any = {}
-  let currentSessionId: string | null = null
-  let currentText = ""
-  let pendingFinishChunk: UIMessageChunk | null = null
-  let chunkCount = 0
-  let lastChunkType = ""
-  let messageCount = 0
-
+  const mutableState = createClaudeAgentSdkStreamConsumerMutableState()
   return {
-    state: {
-      getMetadata: () => metadata,
-      setMetadata: (value: any) => {
-        metadata = value
-      },
-      getCurrentSessionId: () => currentSessionId,
-      setCurrentSessionId: (value: string | null) => {
-        currentSessionId = value
-      },
-      getCurrentText: () => currentText,
-      setCurrentText: (value: string) => {
-        currentText = value
-      },
-      getPendingFinishChunk: () => pendingFinishChunk,
-      setPendingFinishChunk: (value: UIMessageChunk | null) => {
-        pendingFinishChunk = value
-      },
-      getChunkCount: () => chunkCount,
-      setChunkCount: (value: number) => {
-        chunkCount = value
-      },
-      getLastChunkType: () => lastChunkType,
-      setLastChunkType: (value: string) => {
-        lastChunkType = value
-      },
-      getMessageCount: () => messageCount,
-      setMessageCount: (value: number) => {
-        messageCount = value
-      },
-    },
-    snapshot: () => ({
-      metadata,
-      currentSessionId,
-      currentText,
-      pendingFinishChunk,
-      chunkCount,
-      lastChunkType,
-      messageCount,
-    }),
+    mutableState,
+    state: createClaudeAgentSdkStreamConsumerStateAccess(mutableState),
+    snapshot: () => ({ ...mutableState }),
   }
 }
 
 describe("Claude Agent SDK stream consumer", () => {
+  test("creates mutable state access and resets retry attempt state", () => {
+    const mutableState = createClaudeAgentSdkStreamConsumerMutableState({
+      metadata: { sessionId: "session-1" },
+      pendingFinishChunk: { type: "finish" },
+      messageCount: 2,
+    })
+    const access = createClaudeAgentSdkStreamConsumerStateAccess(mutableState)
+
+    access.setCurrentSessionId("session-1")
+    access.setCurrentText("hello")
+    access.setChunkCount(3)
+    access.setLastChunkType("text-delta")
+
+    expect(access.getMetadata()).toEqual({ sessionId: "session-1" })
+    expect(mutableState).toMatchObject({
+      currentSessionId: "session-1",
+      currentText: "hello",
+      chunkCount: 3,
+      lastChunkType: "text-delta",
+      messageCount: 2,
+    })
+
+    resetClaudeAgentSdkStreamConsumerAttemptState(mutableState)
+    expect(mutableState.messageCount).toBe(0)
+    expect(mutableState.pendingFinishChunk).toBeNull()
+  })
+
   test("consumes SDK messages through the stream owner and updates route state", async () => {
     const emitted: UIMessageChunk[] = []
     const { state, snapshot } = createState()
