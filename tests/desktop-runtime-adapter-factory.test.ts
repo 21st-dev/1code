@@ -543,6 +543,31 @@ describe("desktop runtime adapter factory", () => {
     expect(messagePersistence).toContain("messages: [...messagesToSave")
   })
 
+  test("keeps Claude Agent SDK run finalization ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const runFinalization = readFileSync(
+      "src/main/lib/claude/agent-sdk-run-finalization.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-run-finalization")
+    expect(claudeRouter).toContain("completeClaudeAgentSdkRunAfterAdapter")
+    expect(claudeRouter).not.toContain("reason=no_response")
+    expect(claudeRouter).not.toContain("[SD] M:SAVE")
+    expect(claudeRouter).not.toContain("reason=ok")
+    expect(claudeRouter).not.toContain("No response received from Claude")
+    expect(runFinalization).toContain(
+      "completeClaudeAgentSdkRunAfterAdapter",
+    )
+    expect(runFinalization).toContain("reason=no_response")
+    expect(runFinalization).toContain("persistClaudeAgentSdkAssistantResponse")
+    expect(runFinalization).toContain("finalizeClaudeAgentSdkGuardMetadata")
+    expect(runFinalization).toContain("flushClaudeAgentSdkTextAccumulator")
+  })
+
   test("keeps Claude Agent SDK policy retry ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

@@ -47,6 +47,7 @@ import {
 } from "../../claude/agent-sdk-errors"
 import { finalizeClaudeAgentSdkGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import { persistClaudeAgentSdkAssistantResponse } from "../../claude/agent-sdk-message-persistence"
+import { completeClaudeAgentSdkRunAfterAdapter } from "../../claude/agent-sdk-run-finalization"
 import {
   CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
   createClaudeAgentSdkPolicyRetryState,
@@ -2096,71 +2097,42 @@ export const claudeRouter = router({
               return
             }
 
-            // 6. Check if we got any response
-            if (messageCount === 0 && !abortController.signal.aborted) {
-              emitError(
-                new Error("No response received from Claude"),
-                "Empty response",
-              )
-              console.log(
-                `[SD] M:END sub=${subId} reason=no_response n=${chunkCount}`,
-              )
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
+            const finalization =
+              await completeClaudeAgentSdkRunAfterAdapter({
+                db,
+                chatId: input.chatId,
+                subChatId: input.subChatId,
+                messagesToSave,
+                parts,
+                metadata,
+                currentText,
+                historyEnabled,
+                cwd: runtimeCwd,
+                messageCount,
+                aborted: abortController.signal.aborted,
+                desktopJobSawError,
+                guardedContract,
+                guardedPreRunStatus,
+                guardEvents,
+                guardedRunStartedAt,
+                subId,
+                chunkCount,
+                lastChunkType,
+                pendingFinishChunk,
+                streamStart,
+                emitError,
+                emit: safeEmit,
+                complete: safeComplete,
+                getContract: getActiveGuardedContract,
+                deleteContract: deleteActiveGuardedContract,
+              })
+            currentText = finalization.currentText
+            metadata = finalization.metadata
+            if (finalization.status === "failed") {
               return
             }
-
-            // 7. Save final messages to DB
-            // ALWAYS save accumulated parts, even on abort (so user sees partial responses after reload)
-            console.log(
-              `[SD] M:SAVE sub=${subId} aborted=${abortController.signal.aborted} parts=${parts.length}`,
-            )
-
-            // Flush any remaining text
-            currentText = flushClaudeAgentSdkTextAccumulator({
-              currentText,
-              parts,
-            })
-
-            metadata = await finalizeClaudeAgentSdkGuardMetadata({
-              currentMetadata: metadata,
-              guardedContract,
-              guardedPreRunStatus,
-              runtimeCwd,
-              guardEvents,
-              startedAt: guardedRunStartedAt,
-              options: {
-                stopped: abortController.signal.aborted,
-              },
-              emit: safeEmit,
-              getContract: getActiveGuardedContract,
-              deleteContract: deleteActiveGuardedContract,
-            })
-
-            await persistClaudeAgentSdkAssistantResponse({
-              db,
-              chatId: input.chatId,
-              subChatId: input.subChatId,
-              messagesToSave,
-              parts,
-              metadata,
-              historyEnabled,
-              cwd: runtimeCwd,
-            })
-
-            const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
-            console.log(
-              `[SD] M:END sub=${subId} reason=ok n=${chunkCount} last=${lastChunkType} t=${duration}s`,
-            )
             desktopJobReachedNaturalFinish =
-              !abortController.signal.aborted && !desktopJobSawError
-            if (pendingFinishChunk) {
-              safeEmit(pendingFinishChunk)
-            } else {
-              // Keep protocol invariant for consumers that wait for finish.
-              safeEmit({ type: "finish" } as UIMessageChunk)
-            }
-            safeComplete()
+              finalization.reachedNaturalFinish
           } catch (error) {
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
             console.log(
