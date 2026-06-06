@@ -3,6 +3,7 @@ import {
   ClaudeAgentSdkLongTextAttachmentPromptError,
   createClaudeAgentSdkPrompt,
   prepareClaudeAgentSdkRuntimePrompt,
+  prepareClaudeAgentSdkRuntimePromptForDesktopRun,
 } from "../src/main/lib/claude/agent-sdk-prompt"
 
 async function collectAsyncIterable(value: AsyncIterable<any>): Promise<any[]> {
@@ -121,6 +122,68 @@ describe("Claude Agent SDK prompt", () => {
           log: () => {},
           warn: () => {},
         },
+      }),
+    ).rejects.toThrow("app agent store failed")
+  })
+
+  test("handles long text prompt failures for desktop runs", async () => {
+    const originalError = new Error("missing attachment")
+    const errors: unknown[][] = []
+    const chunks: unknown[] = []
+    let completed = false
+
+    const result = await prepareClaudeAgentSdkRuntimePromptForDesktopRun({
+      prompt: "send",
+      images: [],
+      prepareAppAgentPrompt: async (cleanedPrompt) => ({
+        prompt: cleanedPrompt,
+        appAgentMentions: [],
+        resolvedAppAgents: [],
+        missingAppAgents: [],
+      }),
+      prependLongTextPromptBlocks: async () => {
+        throw originalError
+      },
+      logger: {
+        log: () => {},
+        warn: () => {},
+      },
+      emitError: (...args) => {
+        errors.push(args)
+      },
+      emit: (chunk) => {
+        chunks.push(chunk)
+      },
+      complete: () => {
+        completed = true
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "long-text-attachment-unavailable",
+    })
+    expect(errors).toEqual([
+      [originalError, "Long text attachment unavailable"],
+    ])
+    expect(chunks).toEqual([{ type: "finish" }])
+    expect(completed).toBe(true)
+
+    await expect(
+      prepareClaudeAgentSdkRuntimePromptForDesktopRun({
+        prompt: "send",
+        images: [],
+        prepareAppAgentPrompt: async () => {
+          throw new Error("app agent store failed")
+        },
+        prependLongTextPromptBlocks: async (basePrompt) => basePrompt,
+        logger: {
+          log: () => {},
+          warn: () => {},
+        },
+        emitError: () => {},
+        emit: () => {},
+        complete: () => {},
       }),
     ).rejects.toThrow("app agent store failed")
   })

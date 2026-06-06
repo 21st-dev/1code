@@ -5,6 +5,7 @@ import {
 } from "../app-agents/prompt"
 import type { ResolveLongTextAttachmentInput } from "../long-text-attachments"
 import { parseClaudePromptMentions } from "./mentions"
+import type { UIMessageChunk } from "./types"
 
 export type ClaudeAgentSdkPrompt = string | AsyncIterable<any>
 
@@ -22,6 +23,17 @@ export type PrepareClaudeAgentSdkRuntimePromptInput = {
   ) => Promise<string>
   logger?: Pick<Console, "log" | "warn">
 }
+
+export type PrepareClaudeAgentSdkRuntimePromptForDesktopRunInput =
+  PrepareClaudeAgentSdkRuntimePromptInput & {
+    emitError: (error: unknown, context: string) => void
+    emit: (chunk: UIMessageChunk) => unknown
+    complete: () => void
+  }
+
+export type PrepareClaudeAgentSdkRuntimePromptForDesktopRunResult =
+  | { ok: true; prompt: ClaudeAgentSdkPrompt }
+  | { ok: false; reason: "long-text-attachment-unavailable" }
 
 export class ClaudeAgentSdkLongTextAttachmentPromptError extends Error {
   originalError: unknown
@@ -121,6 +133,28 @@ export async function prepareClaudeAgentSdkRuntimePrompt({
     prompt: finalPrompt,
     images,
   })
+}
+
+export async function prepareClaudeAgentSdkRuntimePromptForDesktopRun({
+  emitError,
+  emit,
+  complete,
+  ...input
+}: PrepareClaudeAgentSdkRuntimePromptForDesktopRunInput): Promise<
+  PrepareClaudeAgentSdkRuntimePromptForDesktopRunResult
+> {
+  try {
+    const prompt = await prepareClaudeAgentSdkRuntimePrompt(input)
+    return { ok: true, prompt }
+  } catch (promptError) {
+    if (!(promptError instanceof ClaudeAgentSdkLongTextAttachmentPromptError)) {
+      throw promptError
+    }
+    emitError(promptError.originalError, "Long text attachment unavailable")
+    emit({ type: "finish" })
+    complete()
+    return { ok: false, reason: "long-text-attachment-unavailable" }
+  }
 }
 
 async function* createClaudeAgentSdkImagePrompt(messageContent: any[]) {

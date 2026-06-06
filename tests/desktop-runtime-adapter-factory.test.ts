@@ -1088,16 +1088,23 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-prompt")
-    expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimePrompt({")
     expect(claudeRouter).toContain(
+      "prepareClaudeAgentSdkRuntimePromptForDesktopRun",
+    )
+    expect(claudeRouter).not.toContain("prepareClaudeAgentSdkRuntimePrompt({")
+    expect(claudeRouter).not.toContain(
       "ClaudeAgentSdkLongTextAttachmentPromptError",
     )
+    expect(claudeRouter).not.toContain("Long text attachment unavailable")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkPrompt({")
     expect(claudeRouter).not.toContain("preparePromptWithAppAgents")
     expect(claudeRouter).not.toContain("prependLongTextAttachmentPromptBlocks")
     expect(claudeRouter).not.toContain("async function* createPromptWithImages")
     expect(claudeRouter).not.toContain("media_type: img.mediaType")
     expect(claudePrompt).toContain("prepareClaudeAgentSdkRuntimePrompt")
+    expect(claudePrompt).toContain(
+      "prepareClaudeAgentSdkRuntimePromptForDesktopRun",
+    )
     expect(claudePrompt).toContain(
       "ClaudeAgentSdkLongTextAttachmentPromptError",
     )

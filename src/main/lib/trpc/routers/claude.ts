@@ -37,10 +37,7 @@ import {
 import {
   prepareClaudeAgentSdkPromptContext,
 } from "../../claude/agent-sdk-project-context"
-import {
-  ClaudeAgentSdkLongTextAttachmentPromptError,
-  prepareClaudeAgentSdkRuntimePrompt,
-} from "../../claude/agent-sdk-prompt"
+import { prepareClaudeAgentSdkRuntimePromptForDesktopRun } from "../../claude/agent-sdk-prompt"
 import {
   prepareClaudeAgentSdkOllamaStartupDiagnostics,
 } from "../../claude/agent-sdk-ollama-diagnostics"
@@ -1018,27 +1015,19 @@ export const claudeRouter = router({
             const { transform, parts, stderrLines } = runtimeStreamSetup
             streamState.metadata = runtimeStreamSetup.metadata
 
-            let prompt
-            try {
-              prompt = await prepareClaudeAgentSdkRuntimePrompt({
+            const promptResult =
+              await prepareClaudeAgentSdkRuntimePromptForDesktopRun({
                 prompt: input.prompt,
                 images: resolvedImages,
                 longTextAttachments: input.longTextAttachments,
+                emitError,
+                emit: safeEmit,
+                complete: safeComplete,
               })
-            } catch (promptError) {
-              if (
-                !(promptError instanceof ClaudeAgentSdkLongTextAttachmentPromptError)
-              ) {
-                throw promptError
-              }
-              emitError(
-                promptError.originalError,
-                "Long text attachment unavailable",
-              )
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
+            if (!promptResult.ok) {
               return
             }
+            const prompt = promptResult.prompt
 
             // Create isolated config directory per subChat to prevent session contamination
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
