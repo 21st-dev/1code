@@ -1,6 +1,6 @@
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
-import { app, BrowserWindow } from "electron"
+import { app } from "electron"
 import * as fs from "fs/promises"
 import * as os from "os"
 import path from "path"
@@ -58,6 +58,7 @@ import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-
 import {
   processClaudeAgentSdkUiChunk,
 } from "../../claude/agent-sdk-chunk-processor"
+import { notifyClaudeAgentSdkFileChanged } from "../../claude/agent-sdk-file-change-notification"
 import { trackClaudeAgentSdkMessageMetadata } from "../../claude/agent-sdk-message-metadata"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
@@ -1873,20 +1874,7 @@ export const claudeRouter = router({
                         subChatId: input.subChatId,
                         chunkCount,
                         emit: safeEmit,
-                        notifyFileChanged: ({
-                          filePath,
-                          type,
-                          subChatId,
-                        }) => {
-                          const windows = BrowserWindow.getAllWindows()
-                          for (const win of windows) {
-                            win.webContents.send("file-changed", {
-                              filePath,
-                              type,
-                              subChatId,
-                            })
-                          }
-                        },
+                        notifyFileChanged: notifyClaudeAgentSdkFileChanged,
                       })
                       metadata = processedChunk.metadata
                       currentText = processedChunk.currentText

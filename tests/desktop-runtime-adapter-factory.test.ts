@@ -848,6 +848,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-chunk-processor.ts",
       "utf8",
     )
+    const fileChangeNotification = readFileSync(
+      "src/main/lib/claude/agent-sdk-file-change-notification.ts",
+      "utf8",
+    )
     const runFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-run-finalization.ts",
       "utf8",
@@ -860,8 +864,14 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "../../claude/agent-sdk-chunk-processor",
     )
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-file-change-notification",
+    )
     expect(claudeRouter).toContain("processClaudeAgentSdkUiChunk")
+    expect(claudeRouter).toContain("notifyClaudeAgentSdkFileChanged")
     expect(claudeRouter).not.toContain("flushClaudeAgentSdkTextAccumulator")
+    expect(claudeRouter).not.toContain("BrowserWindow.getAllWindows")
+    expect(claudeRouter).not.toContain('"file-changed"')
     expect(claudeRouter).not.toContain('case "tool-input-available"')
     expect(claudeRouter).not.toContain('case "tool-output-available"')
     expect(claudeRouter).not.toContain("toolPart.result = chunk.output")
@@ -874,6 +884,11 @@ describe("desktop runtime adapter factory", () => {
     expect(chunkProcessor).toContain("flushClaudeAgentSdkTextAccumulator")
     expect(chunkProcessor).toContain('case "tool-input-available"')
     expect(chunkProcessor).toContain('case "tool-output-available"')
+    expect(fileChangeNotification).toContain(
+      "notifyClaudeAgentSdkFileChanged",
+    )
+    expect(fileChangeNotification).toContain("BrowserWindow.getAllWindows")
+    expect(fileChangeNotification).toContain('"file-changed"')
   })
 
   test("keeps Claude Agent SDK message metadata ownership out of the router", () => {
