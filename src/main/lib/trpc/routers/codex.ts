@@ -80,7 +80,7 @@ import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachmen
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
-import { isLocalOnlyMode } from "../../local-only"
+import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
 import {
   DesktopRunPreflightError,
@@ -2241,6 +2241,41 @@ export const codexRouter = router({
               safeEmit({ type: "finish" })
               safeComplete()
             }
+            const emitLocalOnlyPreflightBlocker = (
+              operation: string,
+              url?: string | null,
+            ) => {
+              try {
+                assertOfficialCloudAllowed(operation, url)
+                return false
+              } catch (localOnlyError) {
+                const message =
+                  localOnlyError instanceof Error
+                    ? localOnlyError.message
+                    : String(localOnlyError)
+                const blocker = createCodexRuntimeBlocker({
+                  id: "local-only",
+                  label: "Local-only policy",
+                  status: "blocked",
+                  ok: false,
+                  message,
+                  hint: "Choose a user-configured provider endpoint that is not an official upstream hosted URL, or explicitly disable local-only mode for hosted/internal testing.",
+                })
+                emitPreflightBlocker(
+                  {
+                    id: "local-only",
+                    status: "blocked",
+                    message: blocker.message,
+                    hint: blocker.hint,
+                  },
+                  [
+                    buildCodexRuntimeStatusChunk(blocker),
+                    buildCodexCapabilityErrorChunk(blocker),
+                  ],
+                )
+                return true
+              }
+            }
 
             const runtimeStatus = await getCodexRuntimeStatus()
             if (!runtimeStatus.ok) {
@@ -2330,6 +2365,14 @@ export const codexRouter = router({
                     buildCodexCapabilityErrorChunk(blocker),
                   ],
                 )
+                return
+              }
+              if (
+                emitLocalOnlyPreflightBlocker(
+                  "use Codex provider endpoint",
+                  profile.baseUrl,
+                )
+              ) {
                 return
               }
               const gateway = await getProviderGatewayEndpoint(profile.id, "responses")

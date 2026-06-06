@@ -129,16 +129,23 @@ describe("desktop runtime preflight", () => {
       "mcpSnapshot = await resolveCodexMcpSnapshot({",
       attachmentIndex,
     )
+    const localOnlyIndex = codex.indexOf(
+      '"use Codex provider endpoint"',
+      attachmentIndex,
+    )
     const jobIndex = codex.indexOf("createAndStartDesktopAgentJob(db, {")
     const providerIndex = codex.indexOf("const provider = getOrCreateProvider({")
 
     expect(blockerIndex).toBeGreaterThan(0)
     expect(runtimeStatusIndex).toBeGreaterThan(blockerIndex)
     expect(attachmentIndex).toBeGreaterThan(runtimeStatusIndex)
+    expect(localOnlyIndex).toBeGreaterThan(attachmentIndex)
     expect(mcpIndex).toBeGreaterThan(attachmentIndex)
+    expect(jobIndex).toBeGreaterThan(localOnlyIndex)
     expect(jobIndex).toBeGreaterThan(mcpIndex)
     expect(providerIndex).toBeGreaterThan(jobIndex)
     expect(codex).toContain("cwd: runtimeCwd")
+    expect(codex).toContain('id: "local-only"')
     expect(codex).not.toContain("cwd: input.cwd,\n              mcpServers")
   })
 })

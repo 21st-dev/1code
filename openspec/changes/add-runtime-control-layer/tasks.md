@@ -8,7 +8,7 @@
 - [x] 2.1 Update `docs/OWNERSHIP_MAP.md` with canonical owners for runtime preflight, permission policy, desktop run request, runtime events, and trace redaction.
 - [x] 2.2 Extract reusable desktop run preflight from `desktop-agent-jobs.ts` context validation.
 - [x] 2.3 Make Claude and Codex routes use verified preflight context before provider, MCP, attachment, or runtime startup.
-- [ ] 2.4 Add blockers for unregistered cwd/project/subChat mismatch, provider profile readiness, MCP needs-auth, unsupported attachments, and local-only mode before provider work starts.
+- [x] 2.4 Add blockers for unregistered cwd/project/subChat mismatch, provider profile readiness, MCP needs-auth, unsupported attachments, and local-only mode before provider work starts.
 - [x] 2.5 Add focused preflight tests.
 
 ## 3. Permission Policy
