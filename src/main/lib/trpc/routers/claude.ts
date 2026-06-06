@@ -46,6 +46,13 @@ import {
   getClaudePolicyRetryDelayMs,
 } from "../../claude/agent-sdk-errors"
 import {
+  deleteActiveClaudeSession,
+  deleteActiveClaudeSessionIfController,
+  getActiveClaudeSession,
+  hasActiveClaudeSession,
+  setActiveClaudeSession,
+} from "../../claude/active-sessions"
+import {
   createClaudeAgentSdkToolPermissionHandler,
   type ClaudeAskUserQuestionPending,
 } from "../../claude/agent-sdk-tool-permission"
@@ -315,27 +322,6 @@ const getClaudeQuery = async () => {
   const sdk = await import("@anthropic-ai/claude-agent-sdk")
   cachedClaudeQuery = sdk.query
   return cachedClaudeQuery
-}
-
-// Active sessions for cancellation. The runId guard prevents stale cleanup from
-// a superseded stream from clearing a newer stream in the same sub-chat.
-const activeSessions = new Map<
-  string,
-  { controller: AbortController; runId: string }
->()
-
-/** Check if there are any active Claude streaming sessions */
-export function hasActiveClaudeSessions(): boolean {
-  return activeSessions.size > 0
-}
-
-/** Abort all active Claude sessions so their cleanup saves partial state */
-export function abortAllClaudeSessions(): void {
-  for (const [subChatId, session] of activeSessions) {
-    console.log(`[claude] Aborting session ${subChatId} before reload`)
-    session.controller.abort()
-  }
-  activeSessions.clear()
 }
 
 // In-memory cache of working MCP server names (resets on app restart)
@@ -1021,7 +1007,7 @@ export const claudeRouter = router({
       return observable<UIMessageChunk>((emit) => {
         // Abort any existing session for this subChatId before starting a new one
         // This prevents race conditions if two messages are sent in quick succession
-        const existingSession = activeSessions.get(input.subChatId)
+        const existingSession = getActiveClaudeSession(input.subChatId)
         if (existingSession) {
           existingSession.controller.abort()
         }
@@ -1029,7 +1015,7 @@ export const claudeRouter = router({
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
         const activeRunId = input.runId ?? streamId
-        activeSessions.set(input.subChatId, {
+        setActiveClaudeSession(input.subChatId, {
           controller: abortController,
           runId: activeRunId,
         })
@@ -2996,9 +2982,10 @@ ${prompt}
               })
               unregisterActiveDesktopAgentJob(desktopJobId)
             }
-            if (activeSessions.get(input.subChatId)?.controller === abortController) {
-              activeSessions.delete(input.subChatId)
-            }
+            deleteActiveClaudeSessionIfController(
+              input.subChatId,
+              abortController,
+            )
             if (guardedContract) {
               activeGuardedContracts.delete(guardedContract.id)
             }
@@ -3012,11 +2999,10 @@ ${prompt}
           )
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()
-          const ownsActiveSession =
-            activeSessions.get(input.subChatId)?.controller === abortController
-          if (ownsActiveSession) {
-            activeSessions.delete(input.subChatId)
-          }
+          const ownsActiveSession = deleteActiveClaudeSessionIfController(
+            input.subChatId,
+            abortController,
+          )
           if (guardedContract) {
             activeGuardedContracts.delete(guardedContract.id)
           }
@@ -3153,13 +3139,13 @@ ${prompt}
   cancel: publicProcedure
     .input(z.object({ subChatId: z.string(), runId: z.string().optional() }))
     .mutation(({ input }) => {
-      const session = activeSessions.get(input.subChatId)
+      const session = getActiveClaudeSession(input.subChatId)
       if (session && input.runId && session.runId !== input.runId) {
         return { cancelled: false, ignoredStale: true }
       }
       if (session) {
         session.controller.abort()
-        activeSessions.delete(input.subChatId)
+        deleteActiveClaudeSession(input.subChatId)
         clearPendingApprovals("Session cancelled.", input.subChatId)
       }
 
@@ -3171,7 +3157,7 @@ ${prompt}
    */
   isActive: publicProcedure
     .input(z.object({ subChatId: z.string() }))
-    .query(({ input }) => activeSessions.has(input.subChatId)),
+    .query(({ input }) => hasActiveClaudeSession(input.subChatId)),
   respondToolApproval: publicProcedure
     .input(
       z.object({

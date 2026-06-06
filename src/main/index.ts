@@ -19,7 +19,11 @@ import {
 } from "./lib/cli"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
-import { getAllMcpConfigHandler, hasActiveClaudeSessions, abortAllClaudeSessions } from "./lib/trpc/routers/claude"
+import {
+  abortAllClaudeSessions,
+  hasActiveClaudeSessions,
+} from "./lib/claude/active-sessions"
+import { getAllMcpConfigHandler } from "./lib/trpc/routers/claude"
 import { getAllCodexMcpConfigHandler, hasActiveCodexStreams, abortAllCodexStreams } from "./lib/trpc/routers/codex"
 import { resolveUserDataPath } from "./lib/user-data-path"
 import {

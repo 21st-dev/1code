@@ -14,7 +14,10 @@ import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
-import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/routers/claude"
+import {
+  abortAllClaudeSessions,
+  hasActiveClaudeSessions,
+} from "../lib/claude/active-sessions"
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
