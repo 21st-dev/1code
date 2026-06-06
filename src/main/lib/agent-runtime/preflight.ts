@@ -59,6 +59,15 @@ function failPreflight(blocker: DesktopRunPreflightBlocker): never {
   throw new DesktopRunPreflightError(blocker)
 }
 
+export function assertDesktopRunPreflightBlockers(
+  blockers: DesktopRunPreflightBlocker[] | undefined,
+): void {
+  const blocker = blockers?.[0]
+  if (blocker) {
+    failPreflight(blocker)
+  }
+}
+
 export function verifyDesktopRunPreflight(
   db: AgentJobDatabase,
   input: DesktopRunPreflightInput,
@@ -99,10 +108,7 @@ export function verifyDesktopRunPreflight(
     })
   }
 
-  const blocker = input.blockers?.[0]
-  if (blocker) {
-    failPreflight(blocker)
-  }
+  assertDesktopRunPreflightBlockers(input.blockers)
 
   return { chat, subChat, project, cwd: expectedCwd }
 }
