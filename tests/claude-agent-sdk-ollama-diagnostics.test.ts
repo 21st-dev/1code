@@ -7,6 +7,7 @@ import {
   logClaudeOllamaStreamComplete,
   logClaudeOllamaStreamError,
   logClaudeOllamaStreamStart,
+  probeClaudeOllamaConnectivity,
 } from "../src/main/lib/claude/agent-sdk-ollama-diagnostics"
 
 const originalConsoleLog = console.log
@@ -17,6 +18,21 @@ function flattenedCalls(fn: unknown): string[] {
   return ((fn as { mock: { calls: unknown[][] } }).mock.calls ?? [])
     .flat()
     .map((item) => String(item))
+}
+
+function captureLogger() {
+  const calls: any[][] = []
+  return {
+    calls,
+    logger: {
+      log: (...args: any[]) => calls.push(["log", ...args]),
+      error: (...args: any[]) => calls.push(["error", ...args]),
+    },
+  }
+}
+
+function flattenedCapturedCalls(calls: any[][]): string[] {
+  return calls.flat().map((item) => String(item))
 }
 
 describe("Claude Agent SDK Ollama diagnostics", () => {
@@ -84,5 +100,63 @@ describe("Claude Agent SDK Ollama diagnostics", () => {
     expect(warnCalls).toContain(
       "[Ollama] Only received 1 message (likely just init). No actual content generated.",
     )
+  })
+
+  test("probes Ollama connectivity and reports model availability", async () => {
+    const { calls, logger } = captureLogger()
+    const fetched: Array<{ url: string; hasSignal: boolean }> = []
+
+    await probeClaudeOllamaConnectivity({
+      baseUrl: "http://127.0.0.1:11434",
+      model: "qwen",
+      timeoutMs: 10,
+      fetchImpl: (async (url, init) => {
+        fetched.push({ url, hasSignal: Boolean(init?.signal) })
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ models: [{ name: "qwen" }] }),
+        }
+      }) as any,
+      logger,
+    })
+
+    expect(fetched).toEqual([
+      { url: "http://127.0.0.1:11434/api/tags", hasSignal: true },
+    ])
+    const flatCalls = flattenedCapturedCalls(calls)
+    expect(flatCalls).toContain("[Ollama Debug] Testing Ollama connectivity...")
+    expect(flatCalls).toContain('[Ollama Debug] ✓ Model "qwen" is available')
+  })
+
+  test("probes Ollama connectivity and reports missing models or failures", async () => {
+    const missing = captureLogger()
+    await probeClaudeOllamaConnectivity({
+      baseUrl: "http://127.0.0.1:11434",
+      model: "missing-model",
+      fetchImpl: (async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ models: [{ name: "qwen" }] }),
+      })) as any,
+      logger: missing.logger,
+    })
+    expect(flattenedCapturedCalls(missing.calls)).toContain(
+      '[Ollama Debug] WARNING: Model "missing-model" not found in Ollama!',
+    )
+
+    const failed = captureLogger()
+    await probeClaudeOllamaConnectivity({
+      baseUrl: "http://127.0.0.1:11434",
+      model: "qwen",
+      fetchImpl: (async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      })) as any,
+      logger: failed.logger,
+    })
+    expect(JSON.stringify(failed.calls)).toContain("Ollama returned error")
+    expect(JSON.stringify(failed.calls)).toContain("503")
   })
 })

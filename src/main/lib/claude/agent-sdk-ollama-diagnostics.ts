@@ -1,3 +1,59 @@
+type OllamaConnectivityLogger = {
+  log: (...args: any[]) => void
+  error: (...args: any[]) => void
+}
+
+type OllamaConnectivityFetch = (
+  url: string,
+  init?: { signal?: AbortSignal },
+) => Promise<{
+  ok: boolean
+  status: number
+  json: () => Promise<any>
+}>
+
+export async function probeClaudeOllamaConnectivity(input: {
+  baseUrl: string
+  model: string
+  timeoutMs?: number
+  fetchImpl?: OllamaConnectivityFetch
+  logger?: OllamaConnectivityLogger
+}): Promise<void> {
+  const fetchImpl = input.fetchImpl ?? fetch
+  const logger = input.logger ?? console
+
+  logger.log("[Ollama Debug] Testing Ollama connectivity...")
+  try {
+    const testResponse = await fetchImpl(`${input.baseUrl}/api/tags`, {
+      signal: AbortSignal.timeout(input.timeoutMs ?? 2000),
+    })
+    if (testResponse.ok) {
+      const data = await testResponse.json()
+      const models = data.models?.map((model: any) => model.name) || []
+      logger.log(
+        "[Ollama Debug] Ollama is responding. Available models:",
+        models,
+      )
+
+      if (!models.includes(input.model)) {
+        logger.error(
+          `[Ollama Debug] WARNING: Model "${input.model}" not found in Ollama!`,
+        )
+        logger.error("[Ollama Debug] Available models:", models)
+        logger.error(
+          "[Ollama Debug] This will likely cause the stream to hang or fail silently.",
+        )
+      } else {
+        logger.log(`[Ollama Debug] ✓ Model "${input.model}" is available`)
+      }
+    } else {
+      logger.error("[Ollama Debug] Ollama returned error:", testResponse.status)
+    }
+  } catch (err) {
+    logger.error("[Ollama Debug] Failed to connect to Ollama:", err)
+  }
+}
+
 export function logClaudeOllamaStreamStart(input: {
   model?: string | null
   baseUrl?: string | null

@@ -80,6 +80,7 @@ import {
   logClaudeOllamaStreamComplete,
   logClaudeOllamaStreamError,
   logClaudeOllamaStreamStart,
+  probeClaudeOllamaConnectivity,
 } from "../../claude/agent-sdk-ollama-diagnostics"
 import { createClaudeOllamaPrompt } from "../../claude/agent-sdk-ollama-prompt"
 import {
@@ -1705,47 +1706,10 @@ export const claudeRouter = router({
 
             // DEBUG: If using Ollama, test if it's actually responding
             if (isUsingOllama && finalCustomConfig) {
-              console.log("[Ollama Debug] Testing Ollama connectivity...")
-              try {
-                const testResponse = await fetch(
-                  `${finalCustomConfig.baseUrl}/api/tags`,
-                  {
-                    signal: AbortSignal.timeout(2000),
-                  },
-                )
-                if (testResponse.ok) {
-                  const data = await testResponse.json()
-                  const models = data.models?.map((m: any) => m.name) || []
-                  console.log(
-                    "[Ollama Debug] Ollama is responding. Available models:",
-                    models,
-                  )
-
-                  if (!models.includes(finalCustomConfig.model)) {
-                    console.error(
-                      `[Ollama Debug] WARNING: Model "${finalCustomConfig.model}" not found in Ollama!`,
-                    )
-                    console.error(`[Ollama Debug] Available models:`, models)
-                    console.error(
-                      `[Ollama Debug] This will likely cause the stream to hang or fail silently.`,
-                    )
-                  } else {
-                    console.log(
-                      `[Ollama Debug] ✓ Model "${finalCustomConfig.model}" is available`,
-                    )
-                  }
-                } else {
-                  console.error(
-                    "[Ollama Debug] Ollama returned error:",
-                    testResponse.status,
-                  )
-                }
-              } catch (err) {
-                console.error(
-                  "[Ollama Debug] Failed to connect to Ollama:",
-                  err,
-                )
-              }
+              await probeClaudeOllamaConnectivity({
+                baseUrl: finalCustomConfig.baseUrl,
+                model: finalCustomConfig.model,
+              })
             }
 
             // Skip MCP servers entirely in offline mode (Ollama) - they slow down initialization by 60+ seconds
