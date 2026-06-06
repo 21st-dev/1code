@@ -23,11 +23,10 @@ import {
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
 import { prepareClaudeAgentSdkDesktopRuntimeQuery } from "../../claude/agent-sdk-runtime-query"
 import {
-  completeClaudeAgentSdkRunAfterAdapterWithStreamState,
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
 import { logClaudeAgentSdkStartupDiagnostics } from "../../claude/agent-sdk-runtime-diagnostics"
-import { runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery } from "../../claude/agent-sdk-adapter-runner"
+import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../../claude/agent-sdk-runtime-lifecycle"
 import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
@@ -1232,8 +1231,8 @@ export const claudeRouter = router({
               ensureTokensFresh: ensureMcpTokensFresh,
             })
 
-            const adapterResult =
-              await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
+            const runtimeResult =
+              await runClaudeAgentSdkDesktopRuntimeLifecycle({
                 request: desktopRunRequest,
                 runtimeQuery,
                 streamState,
@@ -1267,40 +1266,14 @@ export const claudeRouter = router({
                 emitError,
                 emit: safeEmit,
                 complete: safeComplete,
-              })
-            if (adapterResult.status === "failed") {
-              return
-            }
-
-            const finalization =
-              await completeClaudeAgentSdkRunAfterAdapterWithStreamState({
-                db,
-                chatId: input.chatId,
-                subChatId: input.subChatId,
-                messagesToSave,
-                parts,
-                state: streamState,
-                historyEnabled,
-                cwd: runtimeCwd,
-                aborted: abortController.signal.aborted,
                 desktopJobSawError,
-                guardedContract,
-                guardedPreRunStatus,
-                guardEvents,
-                guardedRunStartedAt,
-                subId,
                 streamStart,
-                emitError,
-                emit: safeEmit,
-                complete: safeComplete,
-                getContract: getActiveGuardedContract,
-                deleteContract: deleteActiveGuardedContract,
               })
-            if (finalization.status === "failed") {
+            if (runtimeResult.status === "failed") {
               return
             }
             desktopJobReachedNaturalFinish =
-              finalization.reachedNaturalFinish
+              runtimeResult.reachedNaturalFinish
           } catch (error) {
             finalizeClaudeAgentSdkUnexpectedErrorWithStreamState({
               error,
