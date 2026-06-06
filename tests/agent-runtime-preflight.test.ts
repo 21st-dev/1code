@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { verifyDesktopRunPreflight } from "../src/main/lib/agent-runtime/preflight"
+import {
+  DesktopRunPreflightError,
+  verifyDesktopRunPreflight,
+} from "../src/main/lib/agent-runtime/preflight"
 import { chats, projects, subChats } from "../src/main/lib/db/schema"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
@@ -69,5 +72,34 @@ describe("desktop runtime preflight", () => {
         cwd: "/tmp/project-worktree",
       }),
     ).toThrow("does not belong to chat")
+  })
+
+  test("rejects provider, MCP, attachment, and local-only blockers", () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+
+    const blockerIds = [
+      "provider-profile",
+      "mcp",
+      "attachment",
+      "local-only",
+    ] as const
+
+    for (const id of blockerIds) {
+      expect(() =>
+        verifyDesktopRunPreflight(db, {
+          chatId: "chat-1",
+          subChatId: "sub-chat-1",
+          cwd: "/tmp/project-worktree",
+          blockers: [
+            {
+              id,
+              status: id === "mcp" ? "needs-auth" : "blocked",
+              message: `${id} blocked before provider work`,
+            },
+          ],
+        }),
+      ).toThrow(DesktopRunPreflightError)
+    }
   })
 })
