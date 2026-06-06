@@ -62,6 +62,7 @@ import {
 } from "../../codex/usage-metadata"
 import { prepareCodexAcpPrompt } from "../../codex/prompt"
 import { createCodexAcpRuntimeModel } from "../../codex/acp-runtime"
+import { emitCodexAcpUiStream } from "../../codex/acp-ui-stream"
 import {
   type CodexAskUserQuestionApproval,
   type CodexAskUserQuestionPending,
@@ -2592,43 +2593,13 @@ export const codexRouter = router({
               },
             })
 
-            const reader = uiStream.getReader()
-            let pendingFinishChunk: any | null = null
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-
-              if (value?.type === "error") {
-                const normalized = extractCodexError(value)
-
-                if (isCodexAuthError(normalized)) {
-                  safeEmit({ ...value, type: "auth-error", errorText: normalized.message })
-                } else {
-                  safeEmit({ ...value, errorText: normalized.message })
-                }
-                continue
-              }
-
-              if (value?.type === "finish") {
-                pendingFinishChunk = value
-                continue
-              }
-
-              safeEmit(value)
-            }
-
-            if (pendingFinishChunk) {
-              const usageMetadata = await resolveUsageOnce()
-              if (usageMetadata) {
-                safeEmit({
-                  type: "message-metadata",
-                  messageMetadata: usageMetadata,
-                })
-              }
-              safeEmit(pendingFinishChunk)
-            } else {
-              safeEmit({ type: "finish" })
-            }
+            await emitCodexAcpUiStream({
+              uiStream,
+              emit: safeEmit,
+              normalizeError: extractCodexError,
+              isAuthError: isCodexAuthError,
+              resolveUsageOnce,
+            })
 
             desktopJobReachedNaturalFinish =
               !abortController.signal.aborted && !desktopJobSawError
