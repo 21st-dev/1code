@@ -4,6 +4,8 @@ import { createRunEvent } from "../src/main/lib/agent-runtime/runtime-events"
 import {
   createClaudeDesktopProviderBinding,
   createClaudeDesktopRunRequest,
+  createClaudeDesktopRunRequestFromRuntimeStartup,
+  resolveClaudeDesktopRunResumeSessionId,
 } from "../src/main/lib/claude/desktop-run-request"
 
 describe("Claude desktop run request", () => {
@@ -174,5 +176,69 @@ describe("Claude desktop run request", () => {
     })
     request.trace.emit(event)
     expect(emitted).toEqual([event])
+  })
+
+  test("resolves resume session metadata from requested and existing sessions", () => {
+    expect(
+      resolveClaudeDesktopRunResumeSessionId({
+        requestedSessionId: "requested-session",
+        existingSessionId: "existing-session",
+      }),
+    ).toBe("requested-session")
+
+    expect(
+      resolveClaudeDesktopRunResumeSessionId({
+        requestedSessionId: "",
+        existingSessionId: "existing-session",
+      }),
+    ).toBe("existing-session")
+
+    expect(resolveClaudeDesktopRunResumeSessionId({})).toBeUndefined()
+  })
+
+  test("creates DesktopRunRequest from runtime startup metadata", () => {
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "plan",
+    })
+    const abortController = new AbortController()
+
+    const request = createClaudeDesktopRunRequestFromRuntimeStartup({
+      runId: "run-1",
+      streamId: "stream-1",
+      jobId: "job-1",
+      mode: "plan",
+      preflight: {
+        cwd: "/repo",
+        chat: { id: "chat-1", projectId: "project-1" },
+        subChat: { id: "sub-1", chatId: "chat-1" },
+        project: { id: "project-1", path: "/repo" },
+      } as any,
+      prompt: "hello",
+      permissionPolicy,
+      customConfig: {
+        model: "profile-model",
+        baseUrl: "http://127.0.0.1:1234/v1",
+      },
+      requestedModel: "request-model",
+      modelSource: "provider-profile:profile-1",
+      selectedProviderProfileId: "profile-1",
+      signal: abortController.signal,
+      requestedSessionId: "",
+      existingSessionId: "existing-session",
+      emitTrace: () => {},
+    })
+
+    expect(request.providerBinding).toMatchObject({
+      model: "profile-model",
+      modelSource: "provider-profile:profile-1",
+      providerProfileId: "profile-1",
+      gatewayEndpoint: "http://127.0.0.1:1234/v1",
+      authMode: "provider-profile",
+    })
+    expect(request.session).toEqual({
+      resumeSessionId: "existing-session",
+      parentSessionId: "",
+    })
   })
 })

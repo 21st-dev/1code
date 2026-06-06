@@ -88,8 +88,7 @@ import {
   longTextAttachmentSchema,
 } from "../../claude/chat-input-schema"
 import {
-  createClaudeDesktopProviderBinding,
-  createClaudeDesktopRunRequest,
+  createClaudeDesktopRunRequestFromRuntimeStartup,
 } from "../../claude/desktop-run-request"
 import type { ResolvedChatImageAttachment } from "../../../../shared/chat-attachments"
 import { resolveChatImageAttachments } from "../../chat-attachments"
@@ -993,31 +992,29 @@ export const claudeRouter = router({
               jobId: desktopJobId,
             })
 
-            const resumeSessionId =
-              input.sessionId || existingSessionId || undefined
-            const desktopRunRequest = createClaudeDesktopRunRequest({
-              runId: activeRunId,
-              streamId,
-              jobId: desktopJobId,
-              mode: input.mode,
-              preflight: verifiedRunContext,
-              prompt: input.prompt,
-              permissionPolicy,
-              providerBinding: createClaudeDesktopProviderBinding({
+            const desktopRunRequest =
+              createClaudeDesktopRunRequestFromRuntimeStartup({
+                runId: activeRunId,
+                streamId,
+                jobId: desktopJobId,
+                mode: input.mode,
+                preflight: verifiedRunContext,
+                prompt: input.prompt,
+                permissionPolicy,
                 customConfig: finalCustomConfig,
                 requestedModel: input.model,
                 modelSource: input.modelSource,
                 selectedProviderProfileId,
-              }),
-              images: input.images,
-              longTextAttachments: input.longTextAttachments,
-              signal: abortController.signal,
-              resumeSessionId,
-              parentSessionId: input.sessionId ?? null,
-              emitTrace: (event) => {
-                appendRunEventsToAgentJob(db, [event])
-              },
-            })
+                images: input.images,
+                longTextAttachments: input.longTextAttachments,
+                signal: abortController.signal,
+                requestedSessionId: input.sessionId,
+                existingSessionId,
+                emitTrace: (event) => {
+                  appendRunEventsToAgentJob(db, [event])
+                },
+              })
+            const { resumeSessionId } = desktopRunRequest.session
 
             setConnectionMethod(
               getClaudeAgentSdkConnectionMethod({

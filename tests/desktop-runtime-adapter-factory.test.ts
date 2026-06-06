@@ -291,9 +291,10 @@ describe("desktop runtime adapter factory", () => {
 
     expect(claudeRouter).toContain("../../claude/desktop-run-request")
     expect(claudeRouter).toContain(
-      "const desktopRunRequest = createClaudeDesktopRunRequest({",
+      "createClaudeDesktopRunRequestFromRuntimeStartup({",
     )
-    expect(claudeRouter).toContain("createClaudeDesktopProviderBinding")
+    expect(claudeRouter).not.toContain("createClaudeDesktopProviderBinding")
+    expect(claudeRouter).not.toContain("const resumeSessionId =")
     expect(claudeRouter).not.toContain("authMode: selectedProviderProfileId")
     expect(claudeRouter).not.toContain("createDesktopRunContextFromPreflight")
     expect(claudeRouter).not.toContain(
@@ -303,7 +304,13 @@ describe("desktop runtime adapter factory", () => {
       "createClaudeDesktopRunRequest",
     )
     expect(claudeDesktopRunRequest).toContain(
+      "createClaudeDesktopRunRequestFromRuntimeStartup",
+    )
+    expect(claudeDesktopRunRequest).toContain(
       "createClaudeDesktopProviderBinding",
+    )
+    expect(claudeDesktopRunRequest).toContain(
+      "resolveClaudeDesktopRunResumeSessionId",
     )
     expect(claudeDesktopRunRequest).toContain(
       "authMode: input.selectedProviderProfileId",

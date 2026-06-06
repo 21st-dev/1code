@@ -40,6 +40,18 @@ export type CreateClaudeDesktopRunRequestInput = {
   emitTrace: (event: RunEvent) => void
 }
 
+export type CreateClaudeDesktopRunRequestFromRuntimeStartupInput = Omit<
+  CreateClaudeDesktopRunRequestInput,
+  "providerBinding" | "resumeSessionId" | "parentSessionId"
+> & {
+  customConfig?: { model?: string | null; baseUrl?: string | null } | null
+  requestedModel?: string | null
+  modelSource?: string | null
+  selectedProviderProfileId?: string | null
+  requestedSessionId?: string | null
+  existingSessionId?: string | null
+}
+
 export function createClaudeDesktopProviderBinding(input: {
   customConfig?: { model?: string | null; baseUrl?: string | null } | null
   requestedModel?: string | null
@@ -57,6 +69,13 @@ export function createClaudeDesktopProviderBinding(input: {
         ? "app-managed"
         : "runtime-managed",
   }
+}
+
+export function resolveClaudeDesktopRunResumeSessionId(input: {
+  requestedSessionId?: string | null
+  existingSessionId?: string | null
+}): string | undefined {
+  return input.requestedSessionId || input.existingSessionId || undefined
 }
 
 export function createClaudeDesktopRunRequest({
@@ -127,4 +146,23 @@ export function createClaudeDesktopRunRequest({
       parentSessionId,
     },
   }
+}
+
+export function createClaudeDesktopRunRequestFromRuntimeStartup(
+  input: CreateClaudeDesktopRunRequestFromRuntimeStartupInput,
+): DesktopRunRequest {
+  return createClaudeDesktopRunRequest({
+    ...input,
+    providerBinding: createClaudeDesktopProviderBinding({
+      customConfig: input.customConfig,
+      requestedModel: input.requestedModel,
+      modelSource: input.modelSource,
+      selectedProviderProfileId: input.selectedProviderProfileId,
+    }),
+    resumeSessionId: resolveClaudeDesktopRunResumeSessionId({
+      requestedSessionId: input.requestedSessionId,
+      existingSessionId: input.existingSessionId,
+    }),
+    parentSessionId: input.requestedSessionId ?? null,
+  })
 }
