@@ -445,6 +445,25 @@ describe("desktop runtime adapter factory", () => {
     )
   })
 
+  test("keeps Claude Ollama prompt ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const ollamaPrompt = readFileSync(
+      "src/main/lib/claude/agent-sdk-ollama-prompt.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-ollama-prompt")
+    expect(claudeRouter).toContain("createClaudeOllamaPrompt({")
+    expect(claudeRouter).not.toContain("[CONVERSATION HISTORY]")
+    expect(claudeRouter).not.toContain("toolSummaries")
+    expect(ollamaPrompt).toContain("createClaudeOllamaPrompt")
+    expect(ollamaPrompt).toContain("[CONVERSATION HISTORY]")
+    expect(ollamaPrompt).toContain("createClaudeOllamaToolSummary")
+  })
+
   test("keeps Claude chat history attachment ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

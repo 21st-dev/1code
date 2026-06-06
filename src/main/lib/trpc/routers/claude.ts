@@ -73,6 +73,7 @@ import {
   logClaudeOllamaStreamError,
   logClaudeOllamaStreamStart,
 } from "../../claude/agent-sdk-ollama-diagnostics"
+import { createClaudeOllamaPrompt } from "../../claude/agent-sdk-ollama-prompt"
 import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
@@ -1867,129 +1868,20 @@ export const claudeRouter = router({
             // Ollama doesn't have server-side sessions, so we must include full history
             let finalQueryPrompt: string | AsyncIterable<any> = prompt
             if (isUsingOllama && typeof prompt === "string") {
-              // Format conversation history from existingMessages (excluding current message)
-              // IMPORTANT: Include tool calls info so model knows what files were read/edited
-              let historyText = ""
-              if (existingMessages.length > 0) {
-                const historyParts: string[] = []
-                for (const msg of existingMessages) {
-                  if (msg.role === "user") {
-                    // Extract text from user message parts
-                    const textParts =
-                      msg.parts
-                        ?.filter((p: any) => p.type === "text")
-                        .map((p: any) => p.text) || []
-                    if (textParts.length > 0) {
-                      historyParts.push(`User: ${textParts.join("\n")}`)
-                    }
-                  } else if (msg.role === "assistant") {
-                    // Extract text AND tool calls from assistant message parts
-                    const parts = msg.parts || []
-                    const textParts: string[] = []
-                    const toolSummaries: string[] = []
-
-                    for (const p of parts) {
-                      if (p.type === "text" && p.text) {
-                        textParts.push(p.text)
-                      } else if (
-                        p.type === "tool_use" ||
-                        p.type === "tool-use"
-                      ) {
-                        // Include brief tool call info - this is critical for context!
-                        const toolName = p.name || p.tool || "unknown"
-                        const toolInput = p.input || {}
-                        // Extract key info based on tool type
-                        let toolInfo = `[Used ${toolName}`
-                        if (
-                          toolName === "Read" &&
-                          (toolInput.file_path || toolInput.file)
-                        ) {
-                          toolInfo += `: ${toolInput.file_path || toolInput.file}`
-                        } else if (toolName === "Edit" && toolInput.file_path) {
-                          toolInfo += `: ${toolInput.file_path}`
-                        } else if (
-                          toolName === "Write" &&
-                          toolInput.file_path
-                        ) {
-                          toolInfo += `: ${toolInput.file_path}`
-                        } else if (toolName === "Glob" && toolInput.pattern) {
-                          toolInfo += `: ${toolInput.pattern}`
-                        } else if (toolName === "Grep" && toolInput.pattern) {
-                          toolInfo += `: "${toolInput.pattern}"`
-                        } else if (toolName === "Bash" && toolInput.command) {
-                          const cmd = String(toolInput.command).slice(0, 50)
-                          toolInfo += `: ${cmd}${toolInput.command.length > 50 ? "..." : ""}`
-                        }
-                        toolInfo += "]"
-                        toolSummaries.push(toolInfo)
-                      }
-                    }
-
-                    // Combine text and tool summaries
-                    let assistantContent = ""
-                    if (textParts.length > 0) {
-                      assistantContent = textParts.join("\n")
-                    }
-                    if (toolSummaries.length > 0) {
-                      if (assistantContent) {
-                        assistantContent += "\n" + toolSummaries.join(" ")
-                      } else {
-                        assistantContent = toolSummaries.join(" ")
-                      }
-                    }
-                    if (assistantContent) {
-                      historyParts.push(`Assistant: ${assistantContent}`)
-                    }
-                  }
-                }
-                if (historyParts.length > 0) {
-                  // Limit history to last ~10000 chars to avoid context overflow
-                  let history = historyParts.join("\n\n")
-                  if (history.length > 10000) {
-                    history =
-                      "...(earlier messages truncated)...\n\n" +
-                      history.slice(-10000)
-                  }
-                  historyText = `[CONVERSATION HISTORY]
-${history}
-[/CONVERSATION HISTORY]
-
-`
-                  console.log(
-                    `[Ollama] Added ${historyParts.length} messages to history (${history.length} chars)`,
-                  )
-                }
+              const ollamaPrompt = createClaudeOllamaPrompt({
+                prompt,
+                existingMessages,
+                resolvedModel,
+                projectPath: input.projectPath,
+                cwd: runtimeCwd,
+                agentsMdContent,
+              })
+              finalQueryPrompt = ollamaPrompt.prompt
+              if (ollamaPrompt.historyMessageCount > 0) {
+                console.log(
+                  `[Ollama] Added ${ollamaPrompt.historyMessageCount} messages to history (${ollamaPrompt.historyLength} chars)`,
+                )
               }
-
-              const ollamaContext = `[CONTEXT]
-You are a coding assistant in OFFLINE mode (Ollama model: ${resolvedModel || "unknown"}).
-Project: ${input.projectPath || runtimeCwd}
-Working directory: ${runtimeCwd}
-
-IMPORTANT: When using tools, use these EXACT parameter names:
-- Read: use "file_path" (not "file")
-- Write: use "file_path" and "content"
-- Edit: use "file_path", "old_string", "new_string"
-- Glob: use "pattern" (e.g. "**/*.ts") and optionally "path"
-- Grep: use "pattern" and optionally "path"
-- Bash: use "command"
-
-When asked about the project, use Glob to find files and Read to examine them.
-Be concise and helpful.
-[/CONTEXT]${
-                agentsMdContent
-                  ? `
-
-[AGENTS.MD]
-${agentsMdContent}
-[/AGENTS.MD]`
-                  : ""
-              }
-
-${historyText}[CURRENT REQUEST]
-${prompt}
-[/CURRENT REQUEST]`
-              finalQueryPrompt = ollamaContext
               console.log("[Ollama] Context prefix added to prompt")
             }
 
