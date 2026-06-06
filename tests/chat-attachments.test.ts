@@ -28,9 +28,13 @@ const tinyPngBase64 =
 describe("chat image attachments", () => {
   beforeEach(async () => {
     userDataDir = await mkdtemp(join(tmpdir(), "locus-chat-images-"))
+    attachments.setChatImageAttachmentsRootForTest(
+      join(userDataDir, "chat-image-attachments"),
+    )
   })
 
   afterEach(async () => {
+    attachments.setChatImageAttachmentsRootForTest(null)
     await rm(userDataDir, { force: true, recursive: true })
     userDataDir = ""
   })
@@ -116,6 +120,57 @@ describe("chat image attachments", () => {
         },
       ]),
     ).rejects.toThrow()
+  })
+
+  test("prepares desktop run image attachments", async () => {
+    const attachment = await attachments.stageChatImageAttachment({
+      subChatId: "sub_chat_1",
+      base64Data: tinyPngBase64,
+      filename: "ready.png",
+      mediaType: "image/png",
+    })
+
+    const result = await attachments.prepareChatImageAttachmentsForDesktopRun({
+      images: [
+        {
+          attachmentId: attachment.id,
+          localRef: attachment.localRef,
+          filename: attachment.filename,
+          mediaType: attachment.mediaType,
+          sizeBytes: attachment.sizeBytes,
+        },
+      ],
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected prepared image attachments")
+    expect(result.attachments[0]?.base64Data).toBe(tinyPngBase64)
+    expect(result.attachments[0]?.mediaType).toBe("image/png")
+  })
+
+  test("emits desktop preflight blockers for invalid image attachments", async () => {
+    const blockers: unknown[] = []
+
+    const result = await attachments.prepareChatImageAttachmentsForDesktopRun({
+      images: [
+        {
+          base64Data: tinyPngBase64,
+          mediaType: "image/svg+xml",
+        },
+      ],
+      emitPreflightBlocker: (blocker) => {
+        blockers.push(blocker)
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("expected attachment preflight blocker")
+    expect(result.blocker).toMatchObject({
+      id: "attachment",
+      status: "blocked",
+      message: "Image attachment unavailable: Invalid image attachment",
+    })
+    expect(blockers).toEqual([result.blocker])
   })
 
   test("rejects malformed local refs that escape the storage root", async () => {

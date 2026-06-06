@@ -115,11 +115,13 @@ describe("rich chat attachment send pipeline", () => {
       "utf8",
     )
 
-    expect(claude).toContain("resolveChatImageAttachments(input.images)")
-    expect(claude).toContain("buildClaudeUserParts(")
+    expect(claude).toContain("prepareChatImageAttachmentsForDesktopRun")
+    expect(claude).not.toContain("resolveChatImageAttachments(input.images)")
+    expect(claude).not.toContain("buildClaudeUserParts(")
     expect(claudeChatHistory).toContain("buildClaudeUserParts(")
     expect(claudeChatHistory).toContain("buildClaudeChatImageAttachmentParts(")
-    expect(codex).toContain("resolveChatImageAttachments(input.images)")
+    expect(codex).toContain("prepareChatImageAttachmentsForDesktopRun")
+    expect(codex).not.toContain("resolveChatImageAttachments(input.images)")
     expect(codex).toContain("buildCodexUserParts(")
     expect(codexChatHistory).toContain("buildCodexUserParts(")
     expect(ipc).toContain("normalizeChatImageAttachmentPart(part)")

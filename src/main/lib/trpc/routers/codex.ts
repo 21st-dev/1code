@@ -82,7 +82,7 @@ import {
 } from "../../codex/ask-user-question"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
-import { resolveChatImageAttachments } from "../../chat-attachments"
+import { prepareChatImageAttachmentsForDesktopRun } from "../../chat-attachments"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import { assertOfficialCloudAllowed } from "../../local-only"
@@ -1121,24 +1121,15 @@ export const codexRouter = router({
             const existingMessages = parseCodexStoredMessages(
               existingSubChat.messages,
             )
-            let resolvedImages: Array<{
-              base64Data: string
-              mediaType: string
-              filename?: string
-            }> = []
-            try {
-              resolvedImages = await resolveChatImageAttachments(input.images)
-            } catch (attachmentError) {
-              emitPreflightBlocker({
-                id: "attachment",
-                status: "blocked",
-                message:
-                  attachmentError instanceof Error
-                    ? `Image attachment unavailable: ${attachmentError.message}`
-                    : `Image attachment unavailable: ${String(attachmentError)}`,
+            const imageAttachments =
+              await prepareChatImageAttachmentsForDesktopRun({
+                images: input.images,
+                emitPreflightBlocker,
               })
+            if (!imageAttachments.ok) {
               return
             }
+            const resolvedImages = imageAttachments.attachments
             let codexProviderProfile:
               | {
                   id: string

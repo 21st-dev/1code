@@ -66,8 +66,7 @@ import {
   imageAttachmentSchema,
   longTextAttachmentSchema,
 } from "../../claude/chat-input-schema"
-import type { ResolvedChatImageAttachment } from "../../../../shared/chat-attachments"
-import { resolveChatImageAttachments } from "../../chat-attachments"
+import { prepareChatImageAttachmentsForDesktopRun } from "../../chat-attachments"
 import {
   ensureMcpTokensFresh,
   fetchMcpTools,
@@ -830,20 +829,15 @@ export const claudeRouter = router({
             const claudePermission = getClaudePermissionMapping(permissionPolicy)
 
             const historyEnabled = input.historyEnabled === true
-            let resolvedImages: ResolvedChatImageAttachment[] = []
-            try {
-              resolvedImages = await resolveChatImageAttachments(input.images)
-            } catch (attachmentError) {
-              emitPreflightBlocker({
-                id: "attachment",
-                status: "blocked",
-                message:
-                  attachmentError instanceof Error
-                    ? `Image attachment unavailable: ${attachmentError.message}`
-                    : `Image attachment unavailable: ${String(attachmentError)}`,
+            const imageAttachments =
+              await prepareChatImageAttachmentsForDesktopRun({
+                images: input.images,
+                emitPreflightBlocker,
               })
+            if (!imageAttachments.ok) {
               return
             }
+            const resolvedImages = imageAttachments.attachments
 
             const chatHistory = prepareClaudeChatHistoryForDesktopRun({
               db,

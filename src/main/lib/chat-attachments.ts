@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 import type { Dirent } from "node:fs"
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { basename, extname, join, relative, resolve } from "node:path"
-import { app } from "electron"
+import * as electron from "electron"
 import {
   CHAT_IMAGE_AGGREGATE_LIMIT_BYTES,
   CHAT_IMAGE_ATTACHMENT_CLEANUP_AGE_MS,
@@ -18,14 +18,26 @@ import {
   type ChatImageMediaType,
   type ResolvedChatImageAttachment,
 } from "../../shared/chat-attachments"
+import type { DesktopRunPreflightBlocker } from "./agent-runtime/preflight"
 
 const CLEANUP_THROTTLE_MS = 60 * 60 * 1000
 let lastCleanupAt = 0
+let chatImageAttachmentsRootOverride: string | null = null
 
 type ParsedLocalRef = {
   scopeId: string
   fileName: string
 }
+
+export type DesktopChatImageAttachmentsResult =
+  | {
+      ok: true
+      attachments: ResolvedChatImageAttachment[]
+    }
+  | {
+      ok: false
+      blocker: DesktopRunPreflightBlocker
+    }
 
 export type StageChatImageAttachmentInput = {
   chatId?: string
@@ -39,7 +51,22 @@ export type StageChatImageAttachmentInput = {
 }
 
 function getChatImageAttachmentsRoot(): string {
+  if (chatImageAttachmentsRootOverride) {
+    return chatImageAttachmentsRootOverride
+  }
+
+  const app = electron.app ?? (electron as any).default?.app
+  if (!app?.getPath) {
+    throw new Error("Electron app is unavailable for chat image attachments")
+  }
+
   return join(app.getPath("userData"), "chat-image-attachments")
+}
+
+export function setChatImageAttachmentsRootForTest(
+  root: string | null
+): void {
+  chatImageAttachmentsRootOverride = root
 }
 
 function safePathSegment(value: string, fallback: string): string {
@@ -295,6 +322,35 @@ export async function resolveChatImageAttachments(
   return resolved
 }
 
+export function createChatImageAttachmentPreflightBlocker(
+  error: unknown
+): DesktopRunPreflightBlocker {
+  return {
+    id: "attachment",
+    status: "blocked",
+    message:
+      error instanceof Error
+        ? `Image attachment unavailable: ${error.message}`
+        : `Image attachment unavailable: ${String(error)}`,
+  }
+}
+
+export async function prepareChatImageAttachmentsForDesktopRun(input: {
+  images?: ChatImageAttachmentSendInput[]
+  emitPreflightBlocker?: (blocker: DesktopRunPreflightBlocker) => void
+}): Promise<DesktopChatImageAttachmentsResult> {
+  try {
+    return {
+      ok: true,
+      attachments: await resolveChatImageAttachments(input.images),
+    }
+  } catch (error) {
+    const blocker = createChatImageAttachmentPreflightBlocker(error)
+    input.emitPreflightBlocker?.(blocker)
+    return { ok: false, blocker }
+  }
+}
+
 export async function getChatImageAttachmentDataUrl(
   localRef: string,
   mediaType?: string
@@ -359,4 +415,3 @@ export async function cleanupStaleChatImageAttachments(
   }
   return deleted
 }
-

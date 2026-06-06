@@ -106,25 +106,24 @@ describe("desktop runtime preflight", () => {
 
   test("Claude route blocks desktop preflight before creating a job", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
-    const blockerIndex = claude.indexOf("new DesktopRunPreflightError(blocker)")
-    const attachmentIndex = claude.indexOf("resolveChatImageAttachments(input.images)")
-    const jobIndex = claude.indexOf("createClaudeAgentSdkDesktopJob({")
+    const preflightIndex = claude.indexOf("verifyDesktopRunPreflight(db,")
+    const attachmentIndex = claude.indexOf(
+      "prepareChatImageAttachmentsForDesktopRun({",
+      preflightIndex,
+    )
+    const jobIndex = claude.indexOf("createClaudeAgentSdkDesktopRunStartup({")
     const runRequestIndex = claude.indexOf(
-      "createClaudeDesktopRunRequestFromRuntimeStartup({",
+      "const desktopRunRequest = desktopRunStartup.desktopRunRequest",
     )
-    const queryOptionsIndex = claude.indexOf(
-      "const queryOptions = createClaudeAgentSdkRuntimeQueryOptions({",
-    )
-    const adapterRunIndex = claude.indexOf(
-      "await runClaudeAgentSdkDesktopAdapterWithStreamConsumer({",
+    const lifecycleIndex = claude.indexOf(
+      "await runClaudeAgentSdkDesktopRuntimeLifecycle({",
     )
 
-    expect(blockerIndex).toBeGreaterThan(0)
-    expect(attachmentIndex).toBeGreaterThan(blockerIndex)
+    expect(preflightIndex).toBeGreaterThan(0)
+    expect(attachmentIndex).toBeGreaterThan(preflightIndex)
     expect(jobIndex).toBeGreaterThan(attachmentIndex)
     expect(runRequestIndex).toBeGreaterThan(jobIndex)
-    expect(queryOptionsIndex).toBeGreaterThan(runRequestIndex)
-    expect(adapterRunIndex).toBeGreaterThan(queryOptionsIndex)
+    expect(lifecycleIndex).toBeGreaterThan(runRequestIndex)
     expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")
   })
 
@@ -132,7 +131,10 @@ describe("desktop runtime preflight", () => {
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const blockerIndex = codex.indexOf("new DesktopRunPreflightError(blocker)")
     const runtimeStatusIndex = codex.indexOf("const runtimeStatus = await getCodexRuntimeStatus()")
-    const attachmentIndex = codex.indexOf("resolveChatImageAttachments(input.images)")
+    const attachmentIndex = codex.indexOf(
+      "prepareChatImageAttachmentsForDesktopRun({",
+      runtimeStatusIndex,
+    )
     const mcpIndex = codex.indexOf(
       "mcpSnapshot = await resolveCodexMcpSnapshot({",
       attachmentIndex,
