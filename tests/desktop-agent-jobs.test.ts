@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test"
 import { chats, projects, subChats } from "../src/main/lib/db/schema"
 import {
   completeDesktopAgentJobSafely,
+  completeDesktopChatAgentJobSafely,
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
   requestCancelDesktopAgentJob,
+  requestCancelDesktopChatAgentJobSafely,
   resolveDesktopChatJobCompletion,
   unregisterActiveDesktopAgentJob,
 } from "../src/main/lib/desktop-agent-jobs"
@@ -215,6 +217,89 @@ describe("desktop agent jobs", () => {
       exitCode: 1,
     })
     expect(ignored?.status).toBe("succeeded")
+  })
+
+  test("completes desktop chat jobs with shared runtime completion semantics", () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+    const { job } = createAndStartDesktopAgentJob(db, {
+      runtime: "claude-code",
+      mode: "agent",
+      chatId: "chat-1",
+      subChatId: "sub-chat-1",
+      cwd: "/tmp/project-worktree",
+      prompt: "Implement",
+      runId: "run-complete",
+    })
+
+    const completed = completeDesktopChatAgentJobSafely(db, {
+      jobId: job.id,
+      runtime: "claude-code",
+      aborted: false,
+      reachedNaturalFinish: true,
+      sawError: false,
+      result: {
+        runtime: "claude-code",
+        chatId: "chat-1",
+        subChatId: "sub-chat-1",
+      },
+    })
+
+    expect(completed).toMatchObject({
+      status: "succeeded",
+      exitCode: 0,
+      errorCode: null,
+    })
+    expect(JSON.parse(completed?.resultJson ?? "{}")).toEqual({
+      runtime: "claude-code",
+      chatId: "chat-1",
+      subChatId: "sub-chat-1",
+    })
+  })
+
+  test("safely requests cancel only for unfinished desktop chat jobs", () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+    const { job } = createAndStartDesktopAgentJob(db, {
+      runtime: "codex",
+      mode: "plan",
+      chatId: "chat-1",
+      subChatId: "sub-chat-1",
+      cwd: "/tmp/project-worktree",
+      prompt: "Inspect",
+      runId: "run-cancel",
+    })
+    let cancelCount = 0
+    registerActiveDesktopAgentJob({
+      jobId: job.id,
+      runtime: "codex",
+      subChatId: "sub-chat-1",
+      runId: "run-cancel",
+      db,
+      workerId: "desktop:codex:run-cancel",
+      cancel: () => {
+        cancelCount += 1
+      },
+    })
+
+    const canceled = requestCancelDesktopChatAgentJobSafely(db, {
+      jobId: job.id,
+      sawError: false,
+      reachedNaturalFinish: false,
+      requestedBy: "desktop-chat",
+    })
+
+    expect(canceled?.activeCancelDelivered).toBe(true)
+    expect(cancelCount).toBe(1)
+    expect(
+      requestCancelDesktopChatAgentJobSafely(db, {
+        jobId: job.id,
+        sawError: true,
+        reachedNaturalFinish: false,
+        requestedBy: "desktop-chat",
+      }),
+    ).toBeNull()
+    unregisterActiveDesktopAgentJob(job.id)
   })
 
   test("resolves desktop chat completion status consistently across runtimes", () => {

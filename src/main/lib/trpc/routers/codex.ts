@@ -106,12 +106,10 @@ import {
 } from "../../mcp-auth"
 import { publicProcedure, router } from "../index"
 import {
-  completeDesktopAgentJobSafely,
+  completeDesktopChatAgentJobSafely,
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
-  requestCancelDesktopAgentJob,
-  resolveDesktopChatJobCompletion,
-  unregisterActiveDesktopAgentJob,
+  requestCancelDesktopChatAgentJobSafely,
 } from "../../desktop-agent-jobs"
 
 type CodexMcpServerForSession =
@@ -1494,15 +1492,12 @@ export const codexRouter = router({
           } finally {
             if (desktopJobId) {
               const jobDb = desktopJobDb ?? getDatabase()
-              const completion = resolveDesktopChatJobCompletion({
+              completeDesktopChatAgentJobSafely(jobDb, {
+                jobId: desktopJobId,
                 runtime: "codex",
                 aborted: abortController.signal.aborted,
                 reachedNaturalFinish: desktopJobReachedNaturalFinish,
                 sawError: desktopJobSawError,
-              })
-              completeDesktopAgentJobSafely(jobDb, {
-                jobId: desktopJobId,
-                ...completion,
                 result: {
                   runtime: "codex",
                   subChatId: input.subChatId,
@@ -1510,7 +1505,6 @@ export const codexRouter = router({
                   runId: input.runId,
                 },
               })
-              unregisterActiveDesktopAgentJob(desktopJobId)
             }
             const activeStream = activeStreams.get(input.subChatId)
             if (activeStream?.runId === input.runId) {
@@ -1527,17 +1521,12 @@ export const codexRouter = router({
 
         return () => {
           isActive = false
-          if (desktopJobId && !desktopJobSawError && !desktopJobReachedNaturalFinish) {
-            try {
-              requestCancelDesktopAgentJob(
-                desktopJobDb ?? getDatabase(),
-                desktopJobId,
-                "desktop-chat",
-              )
-            } catch {
-              // Job may already be terminal if cleanup raced with stream finish.
-            }
-          }
+          requestCancelDesktopChatAgentJobSafely(desktopJobDb ?? getDatabase(), {
+            jobId: desktopJobId,
+            sawError: desktopJobSawError,
+            reachedNaturalFinish: desktopJobReachedNaturalFinish,
+            requestedBy: "desktop-chat",
+          })
           abortController.abort()
 
           const activeStream = activeStreams.get(input.subChatId)

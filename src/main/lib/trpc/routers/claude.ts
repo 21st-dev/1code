@@ -163,12 +163,10 @@ import {
   createRuntimeRendererChunkEmitter,
 } from "../../agent-runtime/stream-event-mapper"
 import {
-  completeDesktopAgentJobSafely,
+  completeDesktopChatAgentJobSafely,
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
-  requestCancelDesktopAgentJob,
-  resolveDesktopChatJobCompletion,
-  unregisterActiveDesktopAgentJob,
+  requestCancelDesktopChatAgentJobSafely,
 } from "../../desktop-agent-jobs"
 import {
   DesktopRunPreflightError,
@@ -1989,22 +1987,18 @@ export const claudeRouter = router({
           } finally {
             if (desktopJobId) {
               const jobDb = desktopJobDb ?? getDatabase()
-              const completion = resolveDesktopChatJobCompletion({
+              completeDesktopChatAgentJobSafely(jobDb, {
+                jobId: desktopJobId,
                 runtime: "claude-code",
                 aborted: abortController.signal.aborted,
                 reachedNaturalFinish: desktopJobReachedNaturalFinish,
                 sawError: desktopJobSawError,
-              })
-              completeDesktopAgentJobSafely(jobDb, {
-                jobId: desktopJobId,
-                ...completion,
                 result: {
                   runtime: "claude-code",
                   subChatId: input.subChatId,
                   chatId: input.chatId,
                 },
               })
-              unregisterActiveDesktopAgentJob(desktopJobId)
             }
             deleteActiveClaudeSessionIfController(
               input.subChatId,
@@ -2039,13 +2033,12 @@ export const claudeRouter = router({
           // handles it (saves on normal completion, clears on abort). This avoids
           // a redundant DB write that the cancel mutation would then overwrite.
           const db = getDatabase()
-          if (desktopJobId && !desktopJobSawError && !desktopJobReachedNaturalFinish) {
-            try {
-              requestCancelDesktopAgentJob(db, desktopJobId, "desktop-chat")
-            } catch {
-              // Job may already be terminal if cleanup raced with stream finish.
-            }
-          }
+          requestCancelDesktopChatAgentJobSafely(db, {
+            jobId: desktopJobId,
+            sawError: desktopJobSawError,
+            reachedNaturalFinish: desktopJobReachedNaturalFinish,
+            requestedBy: "desktop-chat",
+          })
           if (ownsActiveSession) {
             db.update(subChats)
               .set({ streamId: null })

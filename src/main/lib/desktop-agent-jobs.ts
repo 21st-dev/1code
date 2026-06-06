@@ -46,6 +46,19 @@ export type DesktopChatJobCompletion = {
   errorMessage: string | null
 }
 
+export type CompleteDesktopChatAgentJobSafelyInput =
+  ResolveDesktopChatJobCompletionInput & {
+    jobId: string | null | undefined
+    result?: unknown
+  }
+
+export type RequestCancelDesktopChatAgentJobSafelyInput = {
+  jobId: string | null | undefined
+  sawError: boolean
+  reachedNaturalFinish: boolean
+  requestedBy: string
+}
+
 type CancelRegistration = {
   jobId: string
   runtime: DesktopAgentRuntime
@@ -221,4 +234,39 @@ export function completeDesktopAgentJobSafely(
     errorMessage: input.errorMessage,
     result: input.result,
   })
+}
+
+export function completeDesktopChatAgentJobSafely(
+  db: AgentJobDatabase,
+  input: CompleteDesktopChatAgentJobSafelyInput,
+): AgentJob | null {
+  if (!input.jobId) return null
+  const completion = resolveDesktopChatJobCompletion({
+    runtime: input.runtime,
+    aborted: input.aborted,
+    reachedNaturalFinish: input.reachedNaturalFinish,
+    sawError: input.sawError,
+  })
+  const completed = completeDesktopAgentJobSafely(db, {
+    jobId: input.jobId,
+    ...completion,
+    result: input.result,
+  })
+  unregisterActiveDesktopAgentJob(input.jobId)
+  return completed
+}
+
+export function requestCancelDesktopChatAgentJobSafely(
+  db: AgentJobDatabase,
+  input: RequestCancelDesktopChatAgentJobSafelyInput,
+): ReturnType<typeof requestCancelDesktopAgentJob> | null {
+  if (!input.jobId || input.sawError || input.reachedNaturalFinish) {
+    return null
+  }
+  try {
+    return requestCancelDesktopAgentJob(db, input.jobId, input.requestedBy)
+  } catch {
+    // Job may already be terminal if cleanup raced with stream finish.
+    return null
+  }
 }

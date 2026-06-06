@@ -745,12 +745,21 @@ describe("desktop runtime adapter factory", () => {
     )
 
     for (const route of [claudeRouter, codexRouter]) {
-      expect(route).toContain("resolveDesktopChatJobCompletion({")
+      expect(route).toContain("completeDesktopChatAgentJobSafely")
+      expect(route).toContain("requestCancelDesktopChatAgentJobSafely")
+      expect(route).not.toContain("resolveDesktopChatJobCompletion({")
+      expect(route).not.toContain("completeDesktopAgentJobSafely")
+      expect(route).not.toContain("requestCancelDesktopAgentJob(")
+      expect(route).not.toContain("unregisterActiveDesktopAgentJob")
       expect(route).not.toContain("desktop_chat_failed")
       expect(route).not.toContain("desktop_chat_canceled")
       expect(route).not.toContain('status === "succeeded" ? 0')
     }
     expect(desktopAgentJobs).toContain("resolveDesktopChatJobCompletion")
+    expect(desktopAgentJobs).toContain("completeDesktopChatAgentJobSafely")
+    expect(desktopAgentJobs).toContain(
+      "requestCancelDesktopChatAgentJobSafely",
+    )
     expect(desktopAgentJobs).toContain("desktop_chat_failed")
     expect(desktopAgentJobs).toContain("desktop_chat_canceled")
   })
