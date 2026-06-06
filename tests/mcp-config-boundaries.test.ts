@@ -44,3 +44,25 @@ describe("Claude MCP config mutation boundaries", () => {
     }
   })
 })
+
+describe("Codex MCP config mutation boundaries", () => {
+  test("OAuth and logout cwd are limited to registered projects", () => {
+    const source = readFileSync(
+      "src/main/lib/trpc/routers/codex.ts",
+      "utf8",
+    )
+
+    expect(source).toContain("function resolveCodexMcpProjectPathForCli")
+    expect(source).toContain("Codex MCP project path must match a registered project")
+    expect(source).toContain(".from(projectsTable)")
+    expect(source).toContain(".where(eq(projectsTable.path, requestedPath))")
+
+    const oauthBlock = getProcedureBlock(source, "startMcpOAuth")
+    const logoutBlock = getProcedureBlock(source, "logoutMcpServer")
+
+    expect(oauthBlock).toContain("resolveCodexMcpProjectPathForCli(input.projectPath)")
+    expect(logoutBlock).toContain("resolveCodexMcpProjectPathForCli(input.projectPath)")
+    expect(oauthBlock).not.toContain("cwd: projectPath && projectPath.length > 0 ? projectPath : undefined")
+    expect(logoutBlock).not.toContain("cwd: projectPath && projectPath.length > 0 ? projectPath : undefined")
+  })
+})

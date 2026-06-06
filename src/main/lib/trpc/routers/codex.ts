@@ -1845,6 +1845,26 @@ function cleanupAllProviders(): void {
   providerSessions.clear()
 }
 
+function resolveCodexMcpProjectPathForCli(
+  projectPath: string | undefined,
+): string | undefined {
+  const requestedPath = projectPath?.trim()
+  if (!requestedPath) return undefined
+
+  const db = getDatabase()
+  const registeredProject = db
+    .select({ path: projectsTable.path })
+    .from(projectsTable)
+    .where(eq(projectsTable.path, requestedPath))
+    .get()
+
+  if (!registeredProject) {
+    throw new Error("Codex MCP project path must match a registered project.")
+  }
+
+  return registeredProject.path
+}
+
 export const codexRouter = router({
   getRuntimeStatus: publicProcedure.query(() => getCodexRuntimeStatus()),
 
@@ -2082,9 +2102,9 @@ export const codexRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const projectPath = input.projectPath?.trim()
+        const projectPath = resolveCodexMcpProjectPathForCli(input.projectPath)
         await runCodexCliChecked(["mcp", "login", input.serverName.trim()], {
-          cwd: projectPath && projectPath.length > 0 ? projectPath : undefined,
+          cwd: projectPath,
         })
         clearCodexMcpCache()
         return { success: true as const }
@@ -2105,9 +2125,9 @@ export const codexRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const projectPath = input.projectPath?.trim()
+        const projectPath = resolveCodexMcpProjectPathForCli(input.projectPath)
         await runCodexCliChecked(["mcp", "logout", input.serverName.trim()], {
-          cwd: projectPath && projectPath.length > 0 ? projectPath : undefined,
+          cwd: projectPath,
         })
         clearCodexMcpCache()
         return { success: true as const }
