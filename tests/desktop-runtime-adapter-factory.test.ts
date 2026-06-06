@@ -351,4 +351,30 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeToolPermission).toContain("toClaudePermissionResult(decision)")
     expect(claudeToolPermission).toContain('type: "ask-user-question"')
   })
+
+  test("keeps Claude Agent SDK error classification ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeErrors = readFileSync(
+      "src/main/lib/claude/agent-sdk-errors.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-errors")
+    expect(claudeRouter).toContain("classifyClaudeAgentSdkEmbeddedError")
+    expect(claudeRouter).toContain("classifyClaudeAgentSdkStreamError")
+    expect(claudeRouter).not.toContain(
+      'rawErrorCode === "authentication_failed"',
+    )
+    expect(claudeRouter).not.toContain('err.message?.includes("ENOENT")')
+    expect(claudeRouter).not.toContain(
+      "No conversation found with session ID",
+    )
+    expect(claudeErrors).toContain("classifyClaudeAgentSdkEmbeddedError")
+    expect(claudeErrors).toContain("classifyClaudeAgentSdkStreamError")
+    expect(claudeErrors).toContain("USAGE_POLICY_VIOLATION")
+    expect(claudeErrors).toContain("No conversation found with session ID")
+  })
 })

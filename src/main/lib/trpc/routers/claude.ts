@@ -40,6 +40,12 @@ import {
 } from "./claude-provider-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
 import {
+  CLAUDE_MAX_POLICY_RETRIES,
+  classifyClaudeAgentSdkEmbeddedError,
+  classifyClaudeAgentSdkStreamError,
+  getClaudePolicyRetryDelayMs,
+} from "../../claude/agent-sdk-errors"
+import {
   createClaudeAgentSdkToolPermissionHandler,
   type ClaudeAskUserQuestionPending,
 } from "../../claude/agent-sdk-tool-permission"
@@ -2320,7 +2326,6 @@ ${prompt}
             })
 
             // Auto-retry for transient API errors (e.g., false-positive USAGE_POLICY_VIOLATION)
-            const MAX_POLICY_RETRIES = 2
             let policyRetryCount = 0
             let policyRetryNeeded = false
             let messageCount = 0
@@ -2485,79 +2490,33 @@ ${prompt}
                       `[CLAUDE SDK ERROR] ========================================`,
                     )
 
-                    // Categorize SDK-level errors
-                    // Use the raw error code (e.g., "invalid_request") for category matching
-                    const rawErrorCode = msgAny.error || ""
-                    let errorCategory = "SDK_ERROR"
-                    // Default errorContext to the full error text (which may include detailed message)
-                    let errorContext = sdkError
-
-                    if (
-                      rawErrorCode === "authentication_failed" ||
-                      sdkError.includes("authentication")
-                    ) {
-                      // Show OAuth reconnect only when OAuth auth is actually in use.
-                      // If API-key auth is active, treat as API auth failure instead.
-                      const isApiKeyAuthMode = Boolean(
-                        finalCustomConfig || hasExistingApiConfig,
-                      )
-                      if (isApiKeyAuthMode) {
-                        errorCategory = "AUTH_FAILURE"
-                        errorContext =
-                          "Authentication failed - check your API key"
-                      } else {
-                        errorCategory = "AUTH_FAILED_SDK"
-                        errorContext =
-                          "Authentication failed - reconnect or import local Claude Code credentials"
-                      }
-                    } else if (
-                      String(sdkError).includes("invalid_token") ||
-                      String(sdkError).includes("Invalid access token")
-                    ) {
-                      errorCategory = "MCP_INVALID_TOKEN"
-                      errorContext = "Invalid access token. Update MCP settings"
-                    } else if (
-                      rawErrorCode === "invalid_api_key" ||
-                      sdkError.includes("api_key")
-                    ) {
-                      errorCategory = "INVALID_API_KEY_SDK"
-                      errorContext = sdkError
-                    } else if (
-                      rawErrorCode === "rate_limit_exceeded" ||
-                      sdkError.includes("rate")
-                    ) {
-                      errorCategory = "RATE_LIMIT_SDK"
-                      errorContext = "Session limit reached"
-                    } else if (
-                      rawErrorCode === "overloaded" ||
-                      sdkError.includes("overload")
-                    ) {
-                      errorCategory = "OVERLOADED_SDK"
-                      errorContext = "Claude is overloaded, try again later"
-                    } else if (
-                      rawErrorCode === "invalid_request" ||
-                      sdkError.includes("Usage Policy") ||
-                      sdkError.includes("violate")
-                    ) {
-                      errorCategory = "USAGE_POLICY_VIOLATION"
-                    }
+                    const errorDiagnostic =
+                      classifyClaudeAgentSdkEmbeddedError({
+                        rawErrorCode: msgAny.error,
+                        sdkError,
+                        usesApiKeyAuth: Boolean(
+                          finalCustomConfig || hasExistingApiConfig,
+                        ),
+                        policyRetryCount,
+                        maxPolicyRetries: CLAUDE_MAX_POLICY_RETRIES,
+                        aborted: abortController.signal.aborted,
+                      })
+                    const rawErrorCode = errorDiagnostic.rawErrorCode
+                    const errorCategory = errorDiagnostic.category
+                    const errorContext = errorDiagnostic.context
 
                     // Auto-retry on false-positive policy violations (gateway-level rejections)
-                    if (
-                      errorCategory === "USAGE_POLICY_VIOLATION" &&
-                      policyRetryCount < MAX_POLICY_RETRIES &&
-                      !abortController.signal.aborted
-                    ) {
+                    if (errorDiagnostic.shouldRetryPolicy) {
                       policyRetryCount++
                       policyRetryNeeded = true
                       console.log(
-                        `[claude] USAGE_POLICY_VIOLATION - silent retry (attempt ${policyRetryCount}/${MAX_POLICY_RETRIES})`,
+                        `[claude] USAGE_POLICY_VIOLATION - silent retry (attempt ${policyRetryCount}/${CLAUDE_MAX_POLICY_RETRIES})`,
                       )
                       break // break for-await loop to retry
                     }
 
                     // Emit auth-error for authentication failures, regular error otherwise
-                    if (errorCategory === "AUTH_FAILED_SDK") {
+                    if (errorDiagnostic.shouldEmitAuthError) {
                       safeEmit({
                         type: "auth-error",
                         errorText: errorContext,
@@ -2809,16 +2768,14 @@ ${prompt}
                   }
                 }
 
-                // Build detailed error message with category
-                let errorContext = "Claude streaming error"
-                let errorCategory = "UNKNOWN"
+                const streamDiagnostic = classifyClaudeAgentSdkStreamError({
+                  error: err,
+                  stderrOutput,
+                })
+                const errorContext = streamDiagnostic.context
+                const errorCategory = streamDiagnostic.category
 
-                // Check for session-not-found error in stderr
-                const isSessionNotFound = stderrOutput?.includes(
-                  "No conversation found with session ID",
-                )
-
-                if (isSessionNotFound) {
+                if (streamDiagnostic.isSessionNotFound) {
                   // Clear the invalid session ID from database so next attempt starts fresh
                   console.log(
                     `[claude] Session not found - clearing invalid sessionId from database`,
@@ -2827,41 +2784,6 @@ ${prompt}
                     .set({ sessionId: null })
                     .where(eq(subChats.id, input.subChatId))
                     .run()
-
-                  errorContext = "Previous session expired. Please try again."
-                  errorCategory = "SESSION_EXPIRED"
-                } else if (err.message?.includes("exited with code")) {
-                  errorContext = "Claude Code process crashed"
-                  errorCategory = "PROCESS_CRASH"
-                } else if (err.message?.includes("ENOENT")) {
-                  errorContext = "Required executable not found in PATH"
-                  errorCategory = "EXECUTABLE_NOT_FOUND"
-                } else if (
-                  err.message?.includes("authentication") ||
-                  err.message?.includes("401")
-                ) {
-                  errorContext = "Authentication failed - check your API key"
-                  errorCategory = "AUTH_FAILURE"
-                } else if (
-                  err.message?.includes("invalid_api_key") ||
-                  err.message?.includes("Invalid API Key") ||
-                  stderrOutput?.includes("invalid_api_key")
-                ) {
-                  errorContext = "Invalid API key"
-                  errorCategory = "INVALID_API_KEY"
-                } else if (
-                  err.message?.includes("rate_limit") ||
-                  err.message?.includes("429")
-                ) {
-                  errorContext = "Session limit reached"
-                  errorCategory = "RATE_LIMIT"
-                } else if (
-                  err.message?.includes("network") ||
-                  err.message?.includes("ECONNREFUSED") ||
-                  err.message?.includes("fetch failed")
-                ) {
-                  errorContext = "Network error - check your connection"
-                  errorCategory = "NETWORK_ERROR"
                 }
 
                 // Send error with stderr output to frontend (only if not aborted by user)
@@ -2935,9 +2857,9 @@ ${prompt}
               // Retry if policy violation detected (transient false positive)
               // Escalating delay: 3s first retry, 6s second retry
               if (policyRetryNeeded) {
-                const delayMs = policyRetryCount <= 1 ? 3000 : 6000
+                const delayMs = getClaudePolicyRetryDelayMs(policyRetryCount)
                 console.log(
-                  `[claude] Policy retry ${policyRetryCount}/${MAX_POLICY_RETRIES} - waiting ${delayMs / 1000}s`,
+                  `[claude] Policy retry ${policyRetryCount}/${CLAUDE_MAX_POLICY_RETRIES} - waiting ${delayMs / 1000}s`,
                 )
                 await new Promise((resolve) => setTimeout(resolve, delayMs))
                 continue

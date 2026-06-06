@@ -1,15 +1,32 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 import { join } from "node:path"
 import type { AgentScopeContract } from "../src/shared/agent-scope-contracts"
 import {
   getClaudePermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
-import {
-  createClaudeAgentSdkToolPermissionHandler,
-  type ClaudeAskUserQuestionPending,
+import type {
+  ClaudeAskUserQuestionPending,
 } from "../src/main/lib/claude/agent-sdk-tool-permission"
-import { validateAgentScopeContract } from "../src/main/lib/agent-guard"
+
+mock.module("electron", () => ({
+  app: {
+    getPath(name: string) {
+      if (name !== "userData") {
+        throw new Error(`unexpected app path request: ${name}`)
+      }
+      return join(process.cwd(), ".tmp-test-user-data")
+    },
+    isPackaged: false,
+  },
+}))
+
+const { createClaudeAgentSdkToolPermissionHandler } = await import(
+  "../src/main/lib/claude/agent-sdk-tool-permission"
+)
+const { validateAgentScopeContract } = await import(
+  "../src/main/lib/agent-guard"
+)
 
 const cwd = join(process.cwd(), "example-project")
 
