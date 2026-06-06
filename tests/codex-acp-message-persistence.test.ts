@@ -7,12 +7,19 @@ describe("Codex ACP message persistence owner", () => {
       "src/main/lib/trpc/routers/codex.ts",
       "utf8",
     )
+    const codexAcpTemporaryCompatAdapter = readFileSync(
+      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
+      "utf8",
+    )
     const persistence = readFileSync(
       "src/main/lib/codex/acp-message-persistence.ts",
       "utf8",
     )
 
-    expect(codexRouter).toContain("persistCodexAcpResponseMessage")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "persistCodexAcpResponseMessage",
+    )
+    expect(codexRouter).not.toContain("persistCodexAcpResponseMessage")
     expect(codexRouter).not.toContain("cleanAssistantMessageForPersistence")
     expect(persistence).toContain("cleanCodexAssistantMessageForPersistence")
     expect(persistence).toContain("normalizeCodexAssistantMessage")

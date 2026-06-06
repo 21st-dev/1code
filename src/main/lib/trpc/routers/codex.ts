@@ -7,17 +7,12 @@ import { z } from "zod"
 import {
   normalizeCodexStreamChunk,
 } from "../../../../shared/codex-tool-normalizer"
-import type { AgentGuardEvent } from "../../../../shared/agent-scope-contracts"
 import {
   buildCodexCapabilityErrorChunk,
   buildCodexRuntimeStatusChunk,
   createCodexRuntimeBlocker,
 } from "../../../../shared/codex-runtime-status"
 import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
-import {
-  buildCodexRuntimeCapabilityErrorChunk,
-  getCodexRunRequiredCapability,
-} from "../../../../shared/codex-runtime-capabilities"
 import {
   captureGuardedGitStatus,
   formatScopeValidationError,
@@ -44,7 +39,6 @@ import {
   isCodexAuthError,
 } from "../../codex/errors"
 import { resolveCodexSelectedModelId } from "../../codex/model-selection"
-import { resolveCodexAcpBinaryPath } from "../../codex/acp-path"
 import {
   appendCodexLoginOutput,
   redactCodexLoginOutput,
@@ -79,23 +73,13 @@ import type { CodexProviderProfileBinding } from "../../codex/provider-runtime-b
 import {
   cleanupAllCodexAcpProviders,
   cleanupCodexAcpProvider,
-  getOrCreateCodexAcpProvider,
 } from "../../codex/acp-adapter"
-import {
-  createCodexUsageMetadataResolver,
-} from "../../codex/usage-metadata"
-import { prepareCodexAcpPrompt } from "../../codex/prompt"
 import { createCodexDesktopRunRequest } from "../../codex/desktop-run-request"
-import { createCodexAcpRuntimeModel } from "../../codex/acp-runtime"
-import { createCodexAcpUiMessageStream } from "../../codex/acp-text-stream"
-import { emitCodexAcpUiStream } from "../../codex/acp-ui-stream"
-import { persistCodexAcpResponseMessage } from "../../codex/acp-message-persistence"
+import { createCodexAcpTemporaryCompatAdapter } from "../../codex/acp-temporary-compat-adapter"
 import {
   type CodexAskUserQuestionApproval,
   type CodexAskUserQuestionPending,
 } from "../../codex/ask-user-question"
-import type { UIMessageChunk } from "../../claude/types"
-import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
 import { resolveChatImageAttachments } from "../../chat-attachments"
@@ -108,7 +92,6 @@ import {
   type DesktopRunPreflightBlocker,
 } from "../../agent-runtime/preflight"
 import {
-  getCodexPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../../agent-runtime/permission-policy"
 import {
@@ -1010,7 +993,6 @@ export const codexRouter = router({
         let guardedContract: ValidatedAgentScopeContract | null = null
         let guardedPreRunStatus: GuardedGitStatusSnapshot | null = null
         const guardedRunStartedAt = new Date().toISOString()
-        const guardedRunEvents: AgentGuardEvent[] = []
 
         ;(async () => {
           try {
@@ -1052,27 +1034,6 @@ export const codexRouter = router({
               mode: input.mode,
               hasScopeContract: Boolean(guardedContract),
             })
-            const codexPermission = getCodexPermissionMapping(permissionPolicy)
-
-            const requiredSafetyCapability = getCodexRunRequiredCapability({
-              mode: input.mode,
-              hasScopeContract: Boolean(guardedContract),
-            })
-            const emitUnsupportedSafetyCapability = (error: string) => {
-              if (!requiredSafetyCapability) return
-              const chunk = buildCodexRuntimeCapabilityErrorChunk({
-                capability: requiredSafetyCapability,
-                message: `Codex ${requiredSafetyCapability.label} could not start because ACP permission enforcement is unavailable.`,
-                hint: error,
-              })
-              safeEmit(chunk)
-              safeEmit({
-                type: "error",
-                errorText: chunk.errorText,
-              })
-              safeEmit({ type: "finish" })
-              safeComplete()
-            }
 
             const emitPreflightBlocker = (
               blocker: DesktopRunPreflightBlocker,
@@ -1478,138 +1439,41 @@ export const codexRouter = router({
               },
             })
 
-            const provider = getOrCreateCodexAcpProvider({
-              runRequest: desktopRunRequest,
-              command: resolveCodexAcpBinaryPath(),
-              shellEnv: getClaudeShellEnvironment(),
-              processEnv: process.env,
+            const codexAdapter = createCodexAcpTemporaryCompatAdapter({
               mcpServers: mcpSnapshot.mcpServersForSession,
               mcpFingerprint: mcpSnapshot.fingerprint,
               appManagedApiKey: codexProviderProfile
                 ? null
                 : appManagedCodexApiKey,
               providerProfile: codexProviderProfile,
-            })
-
-            const startedAt = Date.now()
-            const usageMetadataResolver = createCodexUsageMetadataResolver({
-              provider,
-              initialSessionId:
-                provider.getSessionId() ||
-                input.sessionId ||
-                getLastCodexSessionId(existingMessages),
-              startedAt,
-              shellEnv: getClaudeShellEnvironment(),
-              processEnv: process.env,
-            })
-
-            let finalPrompt: string
-            try {
-              finalPrompt = await prepareCodexAcpPrompt({
-                prompt: input.prompt,
-                longTextAttachments: input.longTextAttachments,
-                guardedContract,
-              })
-            } catch (attachmentError) {
-              safeEmit({
-                type: "error",
-                errorText:
-                  attachmentError instanceof Error
-                    ? attachmentError.message
-                    : String(attachmentError),
-              })
-              safeEmit({ type: "finish" })
-              safeComplete()
-              return
-            }
-
-            const runtimeModel = await createCodexAcpRuntimeModel({
-              provider,
               modelId: selectedModelId,
-              permission: codexPermission,
-              mode: input.mode,
-              guardedContract,
-              subChatId: input.subChatId,
-              emit: (chunk) => safeEmit(chunk as UIMessageChunk),
+              images: resolvedImages,
+              longTextAttachments: input.longTextAttachments,
+              messagesForStream,
+              guardedRun:
+                guardedContract && guardedPreRunStatus
+                  ? {
+                      contract: guardedContract,
+                      preRunStatus: guardedPreRunStatus,
+                      startedAt: guardedRunStartedAt,
+                      events: [],
+                    }
+                  : null,
+              emit: safeEmit,
+              persistMessages: persistSubChatMessages,
               registerPendingQuestion: (toolUseId, pending) => {
                 pendingCodexToolApprovals.set(toolUseId, pending)
               },
               unregisterPendingQuestion: (toolUseId) => {
                 pendingCodexToolApprovals.delete(toolUseId)
               },
-              onGuardEvent: (event) => {
-                guardedRunEvents.push(event)
-                safeEmit({ type: "guard-event", event })
-              },
-            })
-            if (!runtimeModel.ok) {
-              emitUnsupportedSafetyCapability(runtimeModel.error)
-              return
-            }
-            const { model, tools: codexRuntimeTools } = runtimeModel
-
-            const uiStream = createCodexAcpUiMessageStream({
-              model,
-              tools: codexRuntimeTools,
-              prompt: finalPrompt,
-              images: resolvedImages,
-              abortSignal: abortController.signal,
-              originalMessages: messagesForStream,
-              provider,
-              metadataModel,
-              runId: input.runId,
-              startedAt,
-              guardedContract,
-              onSessionId: (sessionId) => {
-                usageMetadataResolver.setSessionId(sessionId)
-              },
               generateMessageId: () => crypto.randomUUID(),
-              onFinish: async ({ responseMessage, isContinuation }) => {
-                try {
-                  await persistCodexAcpResponseMessage({
-                    responseMessage,
-                    isContinuation,
-                    messagesForStream,
-                    usageMetadata: await usageMetadataResolver.resolveOnce(),
-                    guardedRun:
-                      guardedContract && guardedPreRunStatus
-                        ? {
-                            contract: guardedContract,
-                            preRunStatus: guardedPreRunStatus,
-                            cwd: runtimeCwd,
-                            guardEvents: guardedRunEvents,
-                            startedAt: guardedRunStartedAt,
-                            stopped: abortController.signal.aborted,
-                          }
-                        : null,
-                    emit: safeEmit,
-                    persistMessages: persistSubChatMessages,
-                  })
-                } catch (error) {
-                  console.error("[codex] Failed to persist messages:", error)
-                }
-              },
-              onError: (error) => {
-                const normalized = extractCodexError(error)
-                console.error("[codex-acp] stream error", {
-                  subChatId: input.subChatId.slice(-8),
-                  ...getCodexErrorDiagnostics(error),
-                  message: normalized.message,
-                })
-                return normalized.message
-              },
             })
 
-            await emitCodexAcpUiStream({
-              uiStream,
-              emit: safeEmit,
-              normalizeError: extractCodexError,
-              isAuthError: isCodexAuthError,
-              resolveUsageOnce: usageMetadataResolver.resolveOnce,
-            })
+            const adapterResult = await codexAdapter.run(desktopRunRequest)
 
             desktopJobReachedNaturalFinish =
-              !abortController.signal.aborted && !desktopJobSawError
+              adapterResult.status === "succeeded" && !desktopJobSawError
             safeComplete()
           } catch (error) {
             const normalized = extractCodexError(error)

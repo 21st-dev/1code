@@ -35,12 +35,19 @@ describe("Codex ACP text stream owner", () => {
       "src/main/lib/trpc/routers/codex.ts",
       "utf8",
     )
+    const codexAcpTemporaryCompatAdapter = readFileSync(
+      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
+      "utf8",
+    )
     const codexAcpTextStream = readFileSync(
       "src/main/lib/codex/acp-text-stream.ts",
       "utf8",
     )
 
-    expect(codexRouter).toContain("createCodexAcpUiMessageStream")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "createCodexAcpUiMessageStream",
+    )
+    expect(codexRouter).not.toContain("createCodexAcpUiMessageStream")
     expect(codexRouter).not.toContain("streamText")
     expect(codexRouter).not.toContain("buildCodexAcpModelMessageContent")
     expect(codexRouter).not.toContain("toUIMessageStream")

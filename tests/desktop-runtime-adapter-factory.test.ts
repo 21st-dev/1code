@@ -83,6 +83,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/acp-adapter.ts",
       "utf8",
     )
+    const codexAcpTemporaryCompatAdapter = readFileSync(
+      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
+      "utf8",
+    )
     const codexAcpPath = readFileSync(
       "src/main/lib/codex/acp-path.ts",
       "utf8",
@@ -154,12 +158,8 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
-    expect(codexRouter).toContain("../../codex/acp-path")
+    expect(codexRouter).toContain("../../codex/acp-temporary-compat-adapter")
     expect(codexRouter).toContain("../../codex/desktop-run-request")
-    expect(codexRouter).toContain("../../codex/acp-runtime")
-    expect(codexRouter).toContain("../../codex/acp-text-stream")
-    expect(codexRouter).toContain("../../codex/acp-ui-stream")
-    expect(codexRouter).toContain("../../codex/acp-message-persistence")
     expect(codexRouter).toContain("../../codex/chat-history")
     expect(codexRouter).toContain("../../codex/cli-runner")
     expect(codexRouter).toContain("../../codex/errors")
@@ -168,11 +168,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/login-session")
     expect(codexRouter).toContain("../../codex/model-selection")
     expect(codexRouter).toContain("../../codex/runtime-status")
-    expect(codexRouter).toContain("../../codex/usage-metadata")
-    expect(codexRouter).toContain("../../codex/prompt")
     expect(codexRouter).toContain("const desktopRunRequest = createCodexDesktopRunRequest")
-    expect(codexRouter).toContain("getOrCreateCodexAcpProvider")
-    expect(codexRouter).toContain("runRequest: desktopRunRequest")
+    expect(codexRouter).toContain("createCodexAcpTemporaryCompatAdapter")
+    expect(codexRouter).toContain("await codexAdapter.run(desktopRunRequest)")
     expect(codexRouter).not.toContain("readLatestTokenCountInfo")
     expect(codexRouter).not.toContain("findSessionFileById")
     expect(codexRouter).not.toContain("createACPProvider")
@@ -189,6 +187,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("const loginSessions = new Map")
     expect(codexRouter).not.toContain("function toLoginSessionResponse")
     expect(codexRouter).not.toContain("function getActiveLoginSession")
+    expect(codexRouter).not.toContain("getOrCreateCodexAcpProvider")
+    expect(codexRouter).not.toContain("resolveCodexAcpBinaryPath")
+    expect(codexRouter).not.toContain("getClaudeShellEnvironment")
     expect(codexRouter).not.toContain("async function runCodexCli")
     expect(codexRouter).not.toContain("async function runCodexCliChecked")
     expect(codexRouter).not.toContain("function normalizeCodexIntegrationState")
@@ -196,14 +197,18 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("async function getCodexRuntimeStatus")
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
+    expect(codexRouter).not.toContain("prepareCodexAcpPrompt")
     expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
+    expect(codexRouter).not.toContain("createCodexAcpRuntimeModel")
     expect(codexRouter).not.toContain("streamText")
     expect(codexRouter).not.toContain("buildCodexAcpModelMessageContent")
     expect(codexRouter).not.toContain("toUIMessageStream")
+    expect(codexRouter).not.toContain("emitCodexAcpUiStream")
     expect(codexRouter).not.toContain("createDesktopRunContextFromPreflight")
     expect(codexRouter).not.toContain("const desktopRunRequest: DesktopRunRequest")
     expect(codexRouter).not.toContain("pollCodexUsageMetadata")
     expect(codexRouter).not.toContain("usagePromise")
+    expect(codexRouter).not.toContain("createCodexUsageMetadataResolver")
     expect(codexRouter).not.toContain("function parseStoredMessages")
     expect(codexRouter).not.toContain("function buildUserParts")
     expect(codexRouter).not.toContain("function extractCodexModelId")
@@ -216,6 +221,19 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpAdapter).toContain("createACPProvider")
     expect(codexAcpAdapter).toContain("providerSessions")
     expect(codexAcpAdapter).toContain("runRequest: DesktopRunRequest")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "metadata: CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA",
+    )
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "async run(request: DesktopRunRequest)",
+    )
+    expect(codexAcpTemporaryCompatAdapter).toContain("getOrCreateCodexAcpProvider")
+    expect(codexAcpTemporaryCompatAdapter).toContain("createCodexAcpRuntimeModel")
+    expect(codexAcpTemporaryCompatAdapter).toContain("createCodexAcpUiMessageStream")
+    expect(codexAcpTemporaryCompatAdapter).toContain("emitCodexAcpUiStream")
+    expect(codexAcpTemporaryCompatAdapter).toContain("persistCodexAcpResponseMessage")
+    expect(codexAcpTemporaryCompatAdapter).toContain("prepareCodexAcpPrompt")
+    expect(codexAcpTemporaryCompatAdapter).toContain("getCodexPermissionMapping")
     expect(codexAcpPath).toContain("resolveCodexAcpBinaryPath")
     expect(codexAcpPath).toContain("getCodexAcpPackageName")
     expect(codexAcpSpawnProbe).toContain("probeCodexAcpSpawn")

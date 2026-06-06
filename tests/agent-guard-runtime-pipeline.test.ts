@@ -58,6 +58,10 @@ describe("agent guard runtime pipeline", () => {
 
   test("Codex guarded and plan-mode runs install ACP permission enforcement", () => {
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const codexAcpTemporaryCompatAdapter = readFileSync(
+      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
+      "utf8",
+    )
     const codexChatInputSchema = readFileSync(
       "src/main/lib/codex/chat-input-schema.ts",
       "utf8",
@@ -97,8 +101,8 @@ describe("agent guard runtime pipeline", () => {
     expect(codexChatInputSchema).toContain(
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
-    expect(codex).toContain("getCodexRunRequiredCapability")
-    expect(codex).toContain("createCodexAcpRuntimeModel")
+    expect(codexAcpTemporaryCompatAdapter).toContain("getCodexRunRequiredCapability")
+    expect(codexAcpTemporaryCompatAdapter).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexAcpRuntime).toContain("createCodexAcpPermissionHandler")
     expect(codexAcpRuntime).toContain("createCodexAskUserQuestionTools")
@@ -106,12 +110,16 @@ describe("agent guard runtime pipeline", () => {
       "installCodexAskUserQuestionAcpResultNormalizer",
     )
     expect(codex).toContain("respondToolApproval")
-    expect(codex).toContain("buildCodexRuntimeCapabilityErrorChunk")
-    expect(codex).toContain("prepareCodexAcpPrompt")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "buildCodexRuntimeCapabilityErrorChunk",
+    )
+    expect(codexAcpTemporaryCompatAdapter).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("buildGuardedRunPromptBlock(guardedContract)")
     expect(codexAcpTextStream).toContain('enforcementMode: "hard"')
     expect(codex).not.toContain('enforcementMode: "contract-and-audit"')
-    expect(codex).toContain("persistCodexAcpResponseMessage")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "persistCodexAcpResponseMessage",
+    )
     expect(codexPersistence).toContain("buildGuardedRunAudit")
     expect(runtimeEventState).toContain('chunk.type === "ask-user-question"')
     expect(runtimeEventState).toContain('chunk.type === "ask-user-question-timeout"')

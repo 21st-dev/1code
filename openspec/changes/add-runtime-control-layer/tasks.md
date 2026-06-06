@@ -23,7 +23,7 @@
 - [x] 4.2 Define ordered, renderer-safe `RunEvent` categories and redaction context.
 - [x] 4.3 Add desktop runtime adapter interface/factory.
 - [ ] 4.4 Wrap the current Claude desktop path behind the adapter interface without regressing current renderer behavior.
-- [ ] 4.5 Wrap the current Codex ACP desktop path as a `temporary-compat` adapter without claiming app-server support.
+- [x] 4.5 Wrap the current Codex ACP desktop path as a `temporary-compat` adapter without claiming app-server support.
 - [ ] 4.6 Delete replaced route-local helpers or guard temporary dual paths with migration gates, deletion conditions, and tests.
 
 ## 5. Trace and Workbench

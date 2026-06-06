@@ -150,6 +150,10 @@ describe("long text send pipeline", () => {
   test("Claude, Codex, and auth retry paths are wired to resolved long text metadata", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const codexAcpTemporaryCompatAdapter = readFileSync(
+      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
+      "utf8",
+    )
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
     const codexAcpTextStream = readFileSync(
       "src/main/lib/codex/acp-text-stream.ts",
@@ -171,10 +175,12 @@ describe("long text send pipeline", () => {
     expect(claude).toContain("prependLongTextAttachmentPromptBlocks")
     expect(claude).toContain("input.longTextAttachments")
     expect(claude).toContain("Long text attachment unavailable")
-    expect(codex).toContain("prepareCodexAcpPrompt")
+    expect(codexAcpTemporaryCompatAdapter).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(codex).toContain("input.longTextAttachments")
-    expect(codex).toContain("createCodexAcpUiMessageStream")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "createCodexAcpUiMessageStream",
+    )
     expect(codexAcpTextStream).toContain("streamText({")
     expect(ipc).toContain("extractLongTextAttachments(lastUser)")
     expect(ipc).toContain("{ longTextAttachments }")
