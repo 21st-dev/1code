@@ -62,6 +62,7 @@ import {
   clearClaudeAgentSdkQueryCache,
   getClaudeAgentSdkQuery,
 } from "../../claude/agent-sdk-query-loader"
+import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
   logClaudeOllamaEmptyStreamDiagnosis,
   logClaudeOllamaFirstMessageLatency,
@@ -97,7 +98,6 @@ import {
 import {
   imageAttachmentSchema,
   longTextAttachmentSchema,
-  type ImageAttachment,
 } from "../../claude/chat-input-schema"
 import { createClaudeDesktopRunRequest } from "../../claude/desktop-run-request"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
@@ -106,6 +106,7 @@ import {
   getProviderProfileRuntimeConfig,
 } from "../../provider-profiles/storage"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
+import type { ResolvedChatImageAttachment } from "../../../../shared/chat-attachments"
 import { createRollbackStash } from "../../git/stash"
 import { resolveChatImageAttachments } from "../../chat-attachments"
 import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
@@ -959,7 +960,7 @@ export const claudeRouter = router({
               ? lastAssistantMsg?.metadata?.sdkMessageUuid || null
               : null
             const historyEnabled = input.historyEnabled === true
-            let resolvedImages: ImageAttachment[] = []
+            let resolvedImages: ResolvedChatImageAttachment[] = []
             try {
               resolvedImages = await resolveChatImageAttachments(input.images)
             } catch (attachmentError) {
@@ -1356,45 +1357,10 @@ export const claudeRouter = router({
               return
             }
 
-            // Build prompt: if there are images, create an AsyncIterable<SDKUserMessage>
-            // Otherwise use simple string prompt
-            let prompt: string | AsyncIterable<any> = finalPrompt
-
-            if (resolvedImages.length > 0) {
-              // Create message content array with images first, then text
-              const messageContent: any[] = [
-                ...resolvedImages.map((img) => ({
-                  type: "image" as const,
-                  source: {
-                    type: "base64" as const,
-                    media_type: img.mediaType,
-                    data: img.base64Data,
-                  },
-                })),
-              ]
-
-              // Add text if present
-              if (finalPrompt.trim()) {
-                messageContent.push({
-                  type: "text" as const,
-                  text: finalPrompt,
-                })
-              }
-
-              // Create an async generator that yields a single SDKUserMessage
-              async function* createPromptWithImages() {
-                yield {
-                  type: "user" as const,
-                  message: {
-                    role: "user" as const,
-                    content: messageContent,
-                  },
-                  parent_tool_use_id: null,
-                }
-              }
-
-              prompt = createPromptWithImages()
-            }
+            const prompt = createClaudeAgentSdkPrompt({
+              prompt: finalPrompt,
+              images: resolvedImages,
+            })
 
             // Build full environment for the Claude runtime (includes HOME, PATH, etc.)
             const claudeEnv = buildClaudeEnv({

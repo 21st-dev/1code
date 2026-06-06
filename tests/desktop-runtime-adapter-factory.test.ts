@@ -399,6 +399,25 @@ describe("desktop runtime adapter factory", () => {
     )
   })
 
+  test("keeps Claude Agent SDK prompt ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudePrompt = readFileSync(
+      "src/main/lib/claude/agent-sdk-prompt.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-prompt")
+    expect(claudeRouter).toContain("createClaudeAgentSdkPrompt({")
+    expect(claudeRouter).not.toContain("async function* createPromptWithImages")
+    expect(claudeRouter).not.toContain("media_type: img.mediaType")
+    expect(claudePrompt).toContain("createClaudeAgentSdkPrompt")
+    expect(claudePrompt).toContain("createClaudeAgentSdkImagePrompt")
+    expect(claudePrompt).toContain("media_type: image.mediaType")
+  })
+
   test("keeps Claude Ollama stream diagnostics ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
