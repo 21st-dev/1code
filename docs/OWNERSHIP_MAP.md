@@ -104,10 +104,16 @@ or UI helper.
 
 - Canonical owner: `src/main/lib/trpc/routers/codex.ts` until service
   extraction is completed by an approved OpenSpec change
-- Current adapter surface: Codex ACP provider integration
+- Current ACP provider/session owner: `src/main/lib/codex/acp-adapter.ts`
+- Current adapter surface: Codex ACP temporary compatibility provider
+  integration
 - Planned official-interface work: `openspec/changes/refactor-codex-official-runtime-adapter/`
-- Rule: `codex exec` remains headless/batch fallback and must not become a
-  second desktop chat implementation.
+- Rule: `codex.ts` may keep the tRPC stream envelope during migration, but ACP
+  provider lifecycle, auth env assembly, and session reuse belong to
+  `src/main/lib/codex/acp-adapter.ts` once extracted. The temporary ACP path
+  should be deleted when the Codex app-server adapter replaces it under the
+  official-interface OpenSpec. `codex exec` remains headless/batch fallback and
+  must not become a second desktop chat implementation.
 
 ## Headless Agent Runtime
 
