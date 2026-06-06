@@ -1,6 +1,6 @@
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
-import { spawn, type ChildProcess } from "node:child_process"
+import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { basename, isAbsolute, join, resolve } from "node:path"
 import { z } from "zod"
@@ -49,6 +49,13 @@ import {
   appendCodexLoginOutput,
   redactCodexLoginOutput,
 } from "../../codex/login-output"
+import {
+  cancelCodexLoginSession,
+  createCodexLoginSession,
+  getActiveCodexLoginSession,
+  getCodexLoginSession,
+  toCodexLoginSessionResponse,
+} from "../../codex/login-session"
 import {
   getCodexApiKeyStatus,
   readCodexApiKey,
@@ -122,23 +129,6 @@ import {
   requestCancelDesktopAgentJob,
   unregisterActiveDesktopAgentJob,
 } from "../../desktop-agent-jobs"
-
-type CodexLoginSessionState =
-  | "running"
-  | "success"
-  | "error"
-  | "cancelled"
-
-type CodexLoginSession = {
-  id: string
-  process: ChildProcess | null
-  state: CodexLoginSessionState
-  output: string
-  rawOutput: string
-  url: string | null
-  error: string | null
-  exitCode: number | null
-}
 
 type CodexMcpServerForSession =
   | {
@@ -220,7 +210,6 @@ export function abortAllCodexStreams(): void {
   }
   activeStreams.clear()
 }
-const loginSessions = new Map<string, CodexLoginSession>()
 const codexMcpCache = new Map<string, CodexMcpSnapshot>()
 
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
@@ -249,27 +238,6 @@ const codexMcpListEntrySchema = z
   .passthrough()
 
 type CodexMcpListEntry = z.infer<typeof codexMcpListEntrySchema>
-
-function toLoginSessionResponse(session: CodexLoginSession) {
-  return {
-    sessionId: session.id,
-    state: session.state,
-    url: session.url,
-    output: session.output,
-    error: session.error,
-    exitCode: session.exitCode,
-  }
-}
-
-function getActiveLoginSession(): CodexLoginSession | null {
-  for (const session of loginSessions.values()) {
-    if (session.state === "running" && session.process && !session.process.killed) {
-      return session
-    }
-  }
-
-  return null
-}
 
 function extractCodexError(error: unknown): { message: string; code?: string } {
   return extractCodexErrorWithProviderRedaction(error, {
@@ -770,9 +738,9 @@ export const codexRouter = router({
   }),
 
   startLogin: publicProcedure.mutation(() => {
-    const existingSession = getActiveLoginSession()
+    const existingSession = getActiveCodexLoginSession()
     if (existingSession) {
-      return toLoginSessionResponse(existingSession)
+      return toCodexLoginSessionResponse(existingSession)
     }
 
     const codexCliPath = resolveBundledCodexCliPath()
@@ -784,16 +752,10 @@ export const codexRouter = router({
       windowsHide: true,
     })
 
-    const session: CodexLoginSession = {
+    const session = createCodexLoginSession({
       id: sessionId,
       process: child,
-      state: "running",
-      output: "",
-      rawOutput: "",
-      url: null,
-      error: null,
-      exitCode: null,
-    }
+    })
 
     const handleChunk = (chunk: Buffer | string) => {
       appendCodexLoginOutput(session, chunk.toString("utf8"))
@@ -825,9 +787,7 @@ export const codexRouter = router({
       }
     })
 
-    loginSessions.set(sessionId, session)
-
-    return toLoginSessionResponse(session)
+    return toCodexLoginSessionResponse(session)
   }),
 
   getLoginSession: publicProcedure
@@ -837,12 +797,12 @@ export const codexRouter = router({
       }),
     )
     .query(({ input }) => {
-      const session = loginSessions.get(input.sessionId)
+      const session = getCodexLoginSession(input.sessionId)
       if (!session) {
         throw new Error("Codex login session not found")
       }
 
-      return toLoginSessionResponse(session)
+      return toCodexLoginSessionResponse(session)
     }),
 
   cancelLogin: publicProcedure
@@ -852,19 +812,7 @@ export const codexRouter = router({
       }),
     )
     .mutation(({ input }) => {
-      const session = loginSessions.get(input.sessionId)
-      if (!session) {
-        return { success: true, found: false }
-      }
-
-      session.state = "cancelled"
-      session.error = null
-
-      if (session.process && !session.process.killed) {
-        session.process.kill("SIGTERM")
-      }
-
-      return { success: true, found: true, session: toLoginSessionResponse(session) }
+      return cancelCodexLoginSession(input.sessionId)
     }),
 
   getAllMcpConfig: publicProcedure.query(async () => {

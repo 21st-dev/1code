@@ -95,6 +95,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/login-output.ts",
       "utf8",
     )
+    const codexLoginSession = readFileSync(
+      "src/main/lib/codex/login-session.ts",
+      "utf8",
+    )
     const codexCliRunner = readFileSync(
       "src/main/lib/codex/cli-runner.ts",
       "utf8",
@@ -161,6 +165,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/errors")
     expect(codexRouter).toContain("../../codex/integration-status")
     expect(codexRouter).toContain("../../codex/login-output")
+    expect(codexRouter).toContain("../../codex/login-session")
     expect(codexRouter).toContain("../../codex/model-selection")
     expect(codexRouter).toContain("../../codex/runtime-status")
     expect(codexRouter).toContain("../../codex/usage-metadata")
@@ -180,6 +185,10 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("function extractFirstNonLocalhostUrl")
     expect(codexRouter).not.toContain("function redactUrlForDisplay")
     expect(codexRouter).not.toContain("function appendLoginOutput")
+    expect(codexRouter).not.toContain("type CodexLoginSessionState")
+    expect(codexRouter).not.toContain("const loginSessions = new Map")
+    expect(codexRouter).not.toContain("function toLoginSessionResponse")
+    expect(codexRouter).not.toContain("function getActiveLoginSession")
     expect(codexRouter).not.toContain("async function runCodexCli")
     expect(codexRouter).not.toContain("async function runCodexCliChecked")
     expect(codexRouter).not.toContain("function normalizeCodexIntegrationState")
@@ -213,6 +222,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpSpawnProbe).toContain("stripCodexAnsi")
     expect(codexLoginOutput).toContain("redactCodexLoginOutput")
     expect(codexLoginOutput).toContain("appendCodexLoginOutput")
+    expect(codexLoginSession).toContain("createCodexLoginSession")
+    expect(codexLoginSession).toContain("cancelCodexLoginSession")
+    expect(codexLoginSession).toContain("getActiveCodexLoginSession")
     expect(codexCliRunner).toContain("runCodexCli")
     expect(codexCliRunner).toContain("runCodexCliChecked")
     expect(codexIntegrationState).toContain("normalizeCodexIntegrationState")
