@@ -22,7 +22,7 @@ import {
   type ProviderProfileTarget,
   type ProviderProfileTestStatus,
 } from "../../../shared/provider-profile-types"
-import { getActiveClaudeProviderConfig } from "../trpc/routers/claude-provider-config"
+import { getActiveClaudeProviderConfig } from "../claude/provider-config-store"
 import { getActiveLocalApiProviderConfig } from "../trpc/routers/local-api-provider-config"
 import {
   decryptStringFromStorage,

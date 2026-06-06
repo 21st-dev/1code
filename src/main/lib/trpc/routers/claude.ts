@@ -30,7 +30,7 @@ import {
 } from "../../claude-config"
 import { getValidClaudeCodeCredential } from "../../claude-credentials"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
-import { getActiveClaudeProviderConfig } from "./claude-provider-config"
+import { getActiveClaudeProviderConfig } from "../../claude/provider-config-store"
 import {
   normalizeClaudeProviderRuntimeConfig,
   type ClaudeProviderRuntimeConfig,
