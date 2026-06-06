@@ -327,10 +327,16 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-adapter-runner.ts",
       "utf8",
     )
+    const streamConsumer = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-consumer.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-adapter")
     expect(claudeRouter).toContain("../../claude/agent-sdk-adapter-runner")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-consumer")
     expect(claudeRouter).toContain("createClaudeAgentSdkAdapter({")
+    expect(claudeRouter).toContain("createClaudeAgentSdkStreamConsumer({")
     expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
     expect(claudeRouter).not.toContain("await claudeAdapter.run(desktopRunRequest)")
     expect(claudeRouter).not.toContain("ClaudeAgentSdkLoadError")
@@ -347,6 +353,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeAgentSdkAdapter).toContain("getClaudeAgentSdkQuery")
     expect(claudeAgentSdkAdapter).toContain("sdkQuery(queryOptions)")
     expect(claudeAgentSdkAdapter).toContain("consumeStream({ request, stream })")
+    expect(streamConsumer).toContain("createClaudeAgentSdkStreamConsumer")
     expect(claudeAgentSdkAdapterRunner).toContain(
       "runClaudeAgentSdkAdapterWithPolicyRetry",
     )
@@ -520,17 +527,21 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-message.ts",
       "utf8",
     )
+    const streamConsumer = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-consumer.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-lifecycle")
-    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-message")
-    expect(claudeRouter).toContain("startClaudeAgentSdkStreamIteration")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-stream-lifecycle")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-stream-message")
+    expect(claudeRouter).not.toContain("startClaudeAgentSdkStreamIteration")
     expect(claudeRouter).not.toContain(
       "createClaudeAgentSdkStreamIterationState()",
     )
-    expect(claudeRouter).toContain("recordClaudeAgentSdkIncomingMessage")
+    expect(claudeRouter).not.toContain("recordClaudeAgentSdkIncomingMessage")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkStreamMessage")
     expect(claudeRouter).not.toContain("logRawClaudeMessage")
-    expect(claudeRouter).toContain("completeClaudeAgentSdkStreamIteration")
+    expect(claudeRouter).not.toContain("completeClaudeAgentSdkStreamIteration")
     expect(claudeRouter).not.toContain("let firstMessageReceived")
     expect(claudeRouter).not.toContain("streamIterationStart")
     expect(claudeRouter).not.toContain("messageCount++")
@@ -551,6 +562,9 @@ describe("desktop runtime adapter factory", () => {
     expect(streamMessage).toContain("recordClaudeAgentSdkIncomingMessage")
     expect(streamMessage).toContain("recordClaudeAgentSdkStreamMessage")
     expect(streamMessage).toContain("logRawClaudeMessage")
+    expect(streamConsumer).toContain("startClaudeAgentSdkStreamIteration")
+    expect(streamConsumer).toContain("recordClaudeAgentSdkIncomingMessage")
+    expect(streamConsumer).toContain("completeClaudeAgentSdkStreamIteration")
   })
 
   test("keeps Claude Agent SDK stream stop control out of the router", () => {
@@ -562,16 +576,24 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-control.ts",
       "utf8",
     )
+    const streamConsumer = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-consumer.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-control")
-    expect(claudeRouter).toContain("shouldStopClaudeAgentSdkStreamForAbort")
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-stream-control")
+    expect(claudeRouter).not.toContain("shouldStopClaudeAgentSdkStreamForAbort")
+    expect(claudeRouter).not.toContain(
       "shouldStopClaudeAgentSdkStreamForClosedObserver",
     )
     expect(claudeRouter).not.toContain("logClaudeOllamaStreamAborted")
     expect(claudeRouter).not.toContain("M:OBSERVER_CLOSED_STREAM")
     expect(streamControl).toContain("logClaudeOllamaStreamAborted")
     expect(streamControl).toContain("M:OBSERVER_CLOSED_STREAM")
+    expect(streamConsumer).toContain("shouldStopClaudeAgentSdkStreamForAbort")
+    expect(streamConsumer).toContain(
+      "shouldStopClaudeAgentSdkStreamForClosedObserver",
+    )
   })
 
   test("keeps Claude guarded audit metadata ownership out of the router", () => {
@@ -692,11 +714,15 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
       "utf8",
     )
+    const streamConsumer = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-consumer.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-stream-error-finalization",
     )
-    expect(claudeRouter).toContain("finalizeClaudeAgentSdkStreamError")
+    expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkStreamError")
     expect(claudeRouter).not.toContain("classifyClaudeAgentSdkStreamError")
     expect(claudeRouter).not.toContain("reason=stream_error")
     expect(claudeRouter).not.toContain("M:CATCH_SAVE")
@@ -704,6 +730,7 @@ describe("desktop runtime adapter factory", () => {
     expect(streamErrorFinalization).toContain(
       "finalizeClaudeAgentSdkStreamError",
     )
+    expect(streamConsumer).toContain("finalizeClaudeAgentSdkStreamError")
     expect(streamErrorFinalization).toContain(
       "classifyClaudeAgentSdkStreamError",
     )
@@ -729,13 +756,17 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-embedded-error-finalization.ts",
       "utf8",
     )
+    const streamConsumer = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-consumer.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-policy-retry")
     expect(claudeRouter).toContain("createClaudeAgentSdkPolicyRetryState()")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
-    expect(claudeRouter).toContain("handleClaudeAgentSdkEmbeddedErrorMessage")
-    expect(claudeRouter).toContain("createClaudeAgentSdkEmbeddedErrorContext")
+    expect(claudeRouter).not.toContain("handleClaudeAgentSdkEmbeddedErrorMessage")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkEmbeddedErrorContext")
     expect(claudeRouter).not.toContain("usesApiKeyAuth: Boolean(")
     expect(claudeRouter).not.toContain("mcpServerNames: mcpServersFiltered")
     expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkEmbeddedError")
@@ -757,9 +788,11 @@ describe("desktop runtime adapter factory", () => {
     expect(embeddedErrorFinalization).toContain(
       "handleClaudeAgentSdkEmbeddedErrorMessage",
     )
+    expect(streamConsumer).toContain("handleClaudeAgentSdkEmbeddedErrorMessage")
     expect(embeddedErrorFinalization).toContain(
       "createClaudeAgentSdkEmbeddedErrorContext",
     )
+    expect(streamConsumer).toContain("createClaudeAgentSdkEmbeddedErrorContext")
     expect(embeddedErrorFinalization).toContain("usesApiKeyAuth: Boolean(")
   })
 
@@ -1007,6 +1040,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-processor.ts",
       "utf8",
     )
+    const streamConsumer = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-consumer.ts",
+      "utf8",
+    )
     const runFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-run-finalization.ts",
       "utf8",
@@ -1022,9 +1059,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-file-change-notification",
     )
-    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-processor")
-    expect(claudeRouter).toContain("processClaudeAgentSdkStreamMessage")
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-stream-processor")
+    expect(claudeRouter).not.toContain("processClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).not.toContain(
       "syncClaudeAgentSdkStreamProcessingState",
     )
     expect(claudeRouter).not.toContain("metadata = streamProcessing.metadata")
@@ -1074,6 +1111,8 @@ describe("desktop runtime adapter factory", () => {
       "syncClaudeAgentSdkStreamProcessingState",
     )
     expect(streamProcessor).toContain("processClaudeAgentSdkTransformedChunks")
+    expect(streamConsumer).toContain("processClaudeAgentSdkStreamMessage")
+    expect(streamConsumer).toContain("syncClaudeAgentSdkStreamProcessingState")
     expect(fileChangeNotification).toContain(
       "notifyClaudeAgentSdkFileChanged",
     )
@@ -1094,11 +1133,15 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-processor.ts",
       "utf8",
     )
+    const streamConsumer = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-consumer.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-stream-processor",
     )
-    expect(claudeRouter).toContain("processClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).not.toContain("processClaudeAgentSdkStreamMessage")
     expect(claudeRouter).not.toContain("trackClaudeAgentSdkMessageMetadata")
     expect(claudeRouter).not.toContain("metadata.sessionId = msgAny.session_id")
     expect(claudeRouter).not.toContain('msgAny.type === "system"')
@@ -1111,6 +1154,7 @@ describe("desktop runtime adapter factory", () => {
     expect(messageMetadata).toContain("sdkMessageUuid: lastAssistantUuid")
     expect(streamProcessor).toContain("trackClaudeAgentSdkMessageMetadata")
     expect(streamProcessor).toContain("lastAssistantUuid")
+    expect(streamConsumer).toContain("processClaudeAgentSdkStreamMessage")
   })
 
   test("keeps Claude Agent SDK tool permission ownership out of the router", () => {

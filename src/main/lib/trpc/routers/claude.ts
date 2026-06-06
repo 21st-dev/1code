@@ -46,14 +46,9 @@ import {
   resolveClaudeAgentSdkResumeOptions,
 } from "../../claude/agent-sdk-query-options"
 import {
-  createClaudeAgentSdkEmbeddedErrorContext,
-  handleClaudeAgentSdkEmbeddedErrorMessage,
-} from "../../claude/agent-sdk-embedded-error-finalization"
-import {
   completeClaudeAgentSdkRunAfterAdapter,
   finalizeClaudeAgentSdkUnexpectedError,
 } from "../../claude/agent-sdk-run-finalization"
-import { finalizeClaudeAgentSdkStreamError } from "../../claude/agent-sdk-stream-error-finalization"
 import {
   createClaudeAgentSdkPolicyRetryState,
 } from "../../claude/agent-sdk-policy-retry"
@@ -66,11 +61,7 @@ import {
   createClaudeAgentSdkAdapter,
 } from "../../claude/agent-sdk-adapter"
 import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-adapter-runner"
-import {
-  createClaudeAgentSdkStreamProcessingState,
-  processClaudeAgentSdkStreamMessage,
-  syncClaudeAgentSdkStreamProcessingState,
-} from "../../claude/agent-sdk-stream-processor"
+import { createClaudeAgentSdkStreamConsumer } from "../../claude/agent-sdk-stream-consumer"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -82,16 +73,7 @@ import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
   prepareClaudeAgentSdkOllamaStartupDiagnostics,
 } from "../../claude/agent-sdk-ollama-diagnostics"
-import {
-  completeClaudeAgentSdkStreamIteration,
-  startClaudeAgentSdkStreamIteration,
-} from "../../claude/agent-sdk-stream-lifecycle"
-import { recordClaudeAgentSdkIncomingMessage } from "../../claude/agent-sdk-stream-message"
 import { createClaudeAgentSdkInitialGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
-import {
-  shouldStopClaudeAgentSdkStreamForAbort,
-  shouldStopClaudeAgentSdkStreamForClosedObserver,
-} from "../../claude/agent-sdk-stream-control"
 import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
@@ -1650,169 +1632,69 @@ export const claudeRouter = router({
 
             const claudeAdapter = createClaudeAgentSdkAdapter({
               queryOptions,
-              consumeStream: async ({ stream }) => {
-                const streamIteration =
-                  startClaudeAgentSdkStreamIteration({
-                    isUsingOllama,
-                    model: finalCustomConfig?.model,
-                    baseUrl: finalCustomConfig?.baseUrl,
-                    prompt: input.prompt,
-                    cwd: runtimeCwd,
-                  })
-                let streamProcessing =
-                  createClaudeAgentSdkStreamProcessingState({
-                    metadata,
-                    currentSessionId,
-                    currentText,
-                    pendingFinishChunk,
-                    chunkCount,
-                    lastChunkType,
-                  })
-
-                try {
-                  for await (const msg of stream) {
-                    if (
-                      shouldStopClaudeAgentSdkStreamForAbort({
-                        signal: abortController.signal,
-                        isUsingOllama,
-                      })
-                    ) {
-                      break
-                    }
-
-                    messageCount = recordClaudeAgentSdkIncomingMessage({
-                      chatId: input.chatId,
-                      state: streamIteration,
-                      message: msg,
-                      isUsingOllama,
-                    }).messageCount
-
-                    const embeddedError =
-                      handleClaudeAgentSdkEmbeddedErrorMessage({
-                        message: msg,
-                        policyRetry,
-                        ...createClaudeAgentSdkEmbeddedErrorContext({
-                          customConfig: finalCustomConfig,
-                          hasExistingApiConfig,
-                          aborted: abortController.signal.aborted,
-                          subChatId: input.subChatId,
-                          chatId: input.chatId,
-                          cwd: runtimeCwd,
-                          mode: input.mode,
-                          isUsingOllama,
-                          model: resolvedModel,
-                          oauthToken: claudeCodeToken,
-                          mcpServers: mcpServersFiltered,
-                        }),
-                        subId,
-                        chunkCount,
-                        emit: safeEmit,
-                        complete: safeComplete,
-                      })
-                    if (embeddedError.status === "retry") {
-                      break
-                    }
-                    if (embeddedError.status === "failed") {
-                      return {
-                        status: "failed" as const,
-                        error: embeddedError.error,
-                      }
-                    }
-
-                    streamProcessing = processClaudeAgentSdkStreamMessage({
-                      message: msg,
-                      transform,
-                      state: streamProcessing,
-                      parts,
-                      historyEnabled,
-                      aborted: abortController.signal.aborted,
-                      mode: input.mode,
-                      subId,
-                      subChatId: input.subChatId,
-                      emit: safeEmit,
-                    })
-                    syncClaudeAgentSdkStreamProcessingState(
-                      streamProcessing,
-                      {
-                        setMetadata: (value) => {
-                          metadata = value
-                        },
-                        setCurrentSessionId: (value) => {
-                          currentSessionId = value
-                        },
-                        setCurrentText: (value) => {
-                          currentText = value
-                        },
-                        setPendingFinishChunk: (value) => {
-                          pendingFinishChunk = value
-                        },
-                        setChunkCount: (value) => {
-                          chunkCount = value
-                        },
-                        setLastChunkType: (value) => {
-                          lastChunkType = value
-                        },
-                      },
-                    )
-                    if (
-                      streamProcessing.emitClosed ||
-                      shouldStopClaudeAgentSdkStreamForClosedObserver({
-                        isActive: isObservableActive,
-                        subId,
-                      })
-                    ) {
-                      break
-                    }
-                }
-
-                messageCount = completeClaudeAgentSdkStreamIteration({
-                  state: streamIteration,
-                  isUsingOllama,
-                  chunkCount,
-                  model: finalCustomConfig?.model,
-                }).messageCount
-              } catch (streamError) {
-                const streamFailure = await finalizeClaudeAgentSdkStreamError({
-                  streamError,
-                  stderrLines,
-                  isUsingOllama,
-                  messageCount,
-                  db,
-                  chatId: input.chatId,
-                  subChatId: input.subChatId,
-                  messagesToSave,
-                  parts,
-                  metadata,
-                  currentText,
-                  historyEnabled,
-                  cwd: runtimeCwd,
-                  mode: input.mode,
-                  aborted: abortController.signal.aborted,
-                  guardedContract,
-                  guardedPreRunStatus,
-                  guardEvents,
-                  guardedRunStartedAt,
-                  subId,
-                  chunkCount,
-                  lastChunkType,
-                  emit: safeEmit,
-                  complete: safeComplete,
-                  getContract: getActiveGuardedContract,
-                  deleteContract: deleteActiveGuardedContract,
-                })
-                currentText = streamFailure.currentText
-                metadata = streamFailure.metadata
-                return {
-                  status: "failed" as const,
-                  error: streamFailure.error,
-                }
-              }
-
-              return {
-                status: "succeeded" as const,
-                sessionId: metadata.sessionId,
-              }
-              },
+              consumeStream: createClaudeAgentSdkStreamConsumer({
+                isUsingOllama,
+                model: finalCustomConfig?.model,
+                baseUrl: finalCustomConfig?.baseUrl,
+                prompt: input.prompt,
+                cwd: runtimeCwd,
+                abortSignal: abortController.signal,
+                isObservableActive: () => isObservableActive,
+                chatId: input.chatId,
+                subChatId: input.subChatId,
+                policyRetry,
+                customConfig: finalCustomConfig,
+                hasExistingApiConfig,
+                mode: input.mode,
+                resolvedModel,
+                oauthToken: claudeCodeToken,
+                mcpServers: mcpServersFiltered as Record<string, unknown> | undefined,
+                transform,
+                parts,
+                historyEnabled,
+                subId,
+                stderrLines,
+                db,
+                messagesToSave,
+                guardedContract,
+                guardedPreRunStatus,
+                guardEvents,
+                guardedRunStartedAt,
+                emit: safeEmit,
+                complete: safeComplete,
+                getContract: getActiveGuardedContract,
+                deleteContract: deleteActiveGuardedContract,
+                state: {
+                  getMetadata: () => metadata,
+                  setMetadata: (value) => {
+                    metadata = value
+                  },
+                  getCurrentSessionId: () => currentSessionId,
+                  setCurrentSessionId: (value) => {
+                    currentSessionId = value
+                  },
+                  getCurrentText: () => currentText,
+                  setCurrentText: (value) => {
+                    currentText = value
+                  },
+                  getPendingFinishChunk: () => pendingFinishChunk,
+                  setPendingFinishChunk: (value) => {
+                    pendingFinishChunk = value
+                  },
+                  getChunkCount: () => chunkCount,
+                  setChunkCount: (value) => {
+                    chunkCount = value
+                  },
+                  getLastChunkType: () => lastChunkType,
+                  setLastChunkType: (value) => {
+                    lastChunkType = value
+                  },
+                  getMessageCount: () => messageCount,
+                  setMessageCount: (value) => {
+                    messageCount = value
+                  },
+                },
+              }),
             })
 
             const adapterResult =
