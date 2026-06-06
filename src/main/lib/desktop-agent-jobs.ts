@@ -1,10 +1,8 @@
 import { createHash, randomUUID } from "node:crypto"
-import path from "node:path"
-import { eq } from "drizzle-orm"
 import type { AgentRuntimeId } from "../../shared/agent-runtime-capabilities"
 import type { AgentJobMode } from "../../shared/agent-jobs"
 import type { AgentJob } from "./db/schema"
-import { chats, projects, subChats } from "./db/schema"
+import { verifyDesktopRunPreflight } from "./agent-runtime/preflight"
 import type { AgentJobDatabase } from "./headless/job-store"
 import {
   appendAgentJobEvent,
@@ -61,57 +59,12 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex")
 }
 
-function normalizePath(value: string): string {
-  return path.resolve(value)
-}
-
-function getChatJobContext(
-  db: AgentJobDatabase,
-  input: Pick<CreateDesktopAgentJobInput, "chatId" | "subChatId" | "cwd">,
-) {
-  const chat = db
-    .select()
-    .from(chats)
-    .where(eq(chats.id, input.chatId))
-    .get()
-  if (!chat) throw new Error(`Unknown chat: ${input.chatId}`)
-
-  const subChat = db
-    .select()
-    .from(subChats)
-    .where(eq(subChats.id, input.subChatId))
-    .get()
-  if (!subChat) throw new Error(`Unknown sub-chat: ${input.subChatId}`)
-  if (subChat.chatId !== chat.id) {
-    throw new Error(
-      `Sub-chat ${subChat.id} does not belong to chat ${chat.id}`,
-    )
-  }
-
-  const project = db
-    .select()
-    .from(projects)
-    .where(eq(projects.id, chat.projectId))
-    .get()
-  if (!project) throw new Error(`Unknown project: ${chat.projectId}`)
-
-  const expectedCwd = normalizePath(chat.worktreePath || project.path)
-  const requestedCwd = normalizePath(input.cwd)
-  if (requestedCwd !== expectedCwd) {
-    throw new Error(
-      `Desktop job cwd mismatch: expected ${expectedCwd}, received ${requestedCwd}`,
-    )
-  }
-
-  return { chat, subChat, project, cwd: expectedCwd }
-}
-
 export function createAndStartDesktopAgentJob(
   db: AgentJobDatabase,
   input: CreateDesktopAgentJobInput,
 ): DesktopAgentJobHandle {
   assertDesktopRuntime(input.runtime)
-  const context = getChatJobContext(db, input)
+  const context = verifyDesktopRunPreflight(db, input)
   const workerId = `desktop:${input.runtime}:${input.runId || randomUUID()}`
   const prompt = input.prompt
   const job = createAgentJob(db, {
