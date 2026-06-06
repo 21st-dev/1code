@@ -4,9 +4,17 @@ import {
   type RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput,
 } from "./agent-sdk-adapter-runner"
 import { completeClaudeAgentSdkRunAfterAdapterWithStreamState } from "./agent-sdk-run-finalization"
+import {
+  prepareClaudeAgentSdkDesktopRuntimeQuery,
+  type PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
+} from "./agent-sdk-runtime-query"
 
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
-  RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput & {
+  Omit<
+    RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput,
+    "runtimeQuery"
+  > & {
+    runtimeQuery: PrepareClaudeAgentSdkDesktopRuntimeQueryInput
     desktopJobSawError: boolean
     streamStart: number
     nowMs?: () => number
@@ -26,8 +34,20 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleResult =
 export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   input: RunClaudeAgentSdkDesktopRuntimeLifecycleInput,
 ): Promise<RunClaudeAgentSdkDesktopRuntimeLifecycleResult> {
+  const {
+    runtimeQuery: runtimeQueryInput,
+    desktopJobSawError,
+    streamStart,
+    nowMs,
+    ...adapterInput
+  } = input
+  const runtimeQuery =
+    await prepareClaudeAgentSdkDesktopRuntimeQuery(runtimeQueryInput)
   const adapterResult =
-    await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery(input)
+    await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
+      ...adapterInput,
+      runtimeQuery,
+    })
   if (adapterResult.status === "failed") {
     return {
       status: "failed",
@@ -47,20 +67,20 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       historyEnabled: input.historyEnabled,
       cwd: input.cwd,
       aborted: input.abortSignal.aborted,
-      desktopJobSawError: input.desktopJobSawError,
+      desktopJobSawError,
       guardedContract: input.guardedContract,
       guardedPreRunStatus: input.guardedPreRunStatus,
       guardEvents: input.guardEvents,
       guardedRunStartedAt: input.guardedRunStartedAt,
       subId: input.subId,
-      streamStart: input.streamStart,
+      streamStart,
       emitError: input.emitError,
       emit: input.emit,
       complete: input.complete,
       getContract: input.getContract,
       deleteContract: input.deleteContract,
       log: input.log,
-      nowMs: input.nowMs,
+      nowMs,
     })
   if (finalization.status === "failed") {
     return {

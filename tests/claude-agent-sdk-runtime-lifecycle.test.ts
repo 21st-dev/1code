@@ -1,7 +1,10 @@
 import { describe, expect, mock, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
-import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
+import {
+  getClaudePermissionMapping,
+  resolveDesktopPermissionPolicy,
+} from "../src/main/lib/agent-runtime/permission-policy"
 import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../src/main/lib/claude/agent-sdk-runtime-lifecycle"
 import { createClaudeAgentSdkStreamConsumerMutableState } from "../src/main/lib/claude/agent-sdk-stream-consumer"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
@@ -80,14 +83,41 @@ function createLifecycleInput(
   } = {},
 ) {
   const signal = input.signal ?? new AbortController().signal
+  const request = createRequest()
   const emit = mock((chunk: UIMessageChunk) => true)
+  const parts: Array<Record<string, any>> = []
+  const stderrLines: string[] = []
 
   return {
     query: (input.query ?? (() => createClaudeAssistantStream())) as any,
-    request: createRequest(),
+    request,
     runtimeQuery: {
-      queryOptions: { prompt: "hello", options: {} } as any,
-      mcpServers: undefined,
+      request,
+      prompt: "hello",
+      existingMessages: [],
+      rawMcpServers: undefined,
+      env: {},
+      permission: getClaudePermissionMapping(request.permissionPolicy),
+      isUsingOllama: false,
+      permissionPolicy: request.permissionPolicy,
+      guardedContract: null,
+      getGuardedContract: () => undefined,
+      guardEvents: [],
+      emit,
+      subChatId: "sub-1",
+      pendingToolApprovals: new Map(),
+      parts,
+      stderrLines,
+      shouldForkResume: false,
+      forkResumeAtUuid: null,
+      resumeAtUuid: null,
+      resolvedModel: "claude-sonnet",
+      maxThinkingTokens: null,
+      projectPath: "/repo",
+      cwd: "/repo",
+      ensureTokensFresh: async (servers) => servers,
+      readAgentsMd: async () => null,
+      getClaudeBinaryPath: () => "/owned/claude",
     },
     streamState:
       input.streamState ?? createClaudeAgentSdkStreamConsumerMutableState(),
@@ -109,9 +139,9 @@ function createLifecycleInput(
       { type: "text-delta", id: "text-1", delta: "hello" },
       { type: "text-end", id: "text-1" },
     ],
-    parts: [] as Array<Record<string, any>>,
+    parts,
     historyEnabled: true,
-    stderrLines: [],
+    stderrLines,
     db,
     messagesToSave: [{ id: "user-1", role: "user" }],
     guardedContract: null,

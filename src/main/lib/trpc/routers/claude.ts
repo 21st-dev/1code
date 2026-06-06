@@ -21,7 +21,6 @@ import {
   type McpServerConfig,
 } from "../../claude-config"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
-import { prepareClaudeAgentSdkDesktopRuntimeQuery } from "../../claude/agent-sdk-runtime-query"
 import {
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
@@ -1204,37 +1203,35 @@ export const claudeRouter = router({
               resumeSessionId,
             })
 
-            const runtimeQuery = await prepareClaudeAgentSdkDesktopRuntimeQuery({
-              request: desktopRunRequest,
-              prompt,
-              existingMessages,
-              rawMcpServers: mcpServersForSdk,
-              env: finalEnv,
-              permission: claudePermission,
-              isUsingOllama,
-              permissionPolicy,
-              guardedContract,
-              getGuardedContract: getActiveGuardedContract,
-              guardEvents,
-              emit: safeEmit,
-              subChatId: input.subChatId,
-              pendingToolApprovals: getClaudePendingToolApprovalStore(),
-              parts,
-              stderrLines,
-              shouldForkResume,
-              forkResumeAtUuid,
-              resumeAtUuid,
-              resolvedModel,
-              maxThinkingTokens: input.maxThinkingTokens,
-              projectPath: input.projectPath,
-              cwd: runtimeCwd,
-              ensureTokensFresh: ensureMcpTokensFresh,
-            })
-
             const runtimeResult =
               await runClaudeAgentSdkDesktopRuntimeLifecycle({
                 request: desktopRunRequest,
-                runtimeQuery,
+                runtimeQuery: {
+                  request: desktopRunRequest,
+                  prompt,
+                  existingMessages,
+                  rawMcpServers: mcpServersForSdk,
+                  env: finalEnv,
+                  permission: claudePermission,
+                  isUsingOllama,
+                  permissionPolicy,
+                  guardedContract,
+                  getGuardedContract: getActiveGuardedContract,
+                  guardEvents,
+                  emit: safeEmit,
+                  subChatId: input.subChatId,
+                  pendingToolApprovals: getClaudePendingToolApprovalStore(),
+                  parts,
+                  stderrLines,
+                  shouldForkResume,
+                  forkResumeAtUuid,
+                  resumeAtUuid,
+                  resolvedModel,
+                  maxThinkingTokens: input.maxThinkingTokens,
+                  projectPath: input.projectPath,
+                  cwd: runtimeCwd,
+                  ensureTokensFresh: ensureMcpTokensFresh,
+                },
                 streamState,
                 isUsingOllama,
                 model: finalCustomConfig?.model,
