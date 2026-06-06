@@ -8,6 +8,8 @@ import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
 import type { RunEvent } from "../agent-runtime/runtime-events"
 import {
   createAndRegisterDesktopChatAgentJob,
+  completeDesktopChatAgentJobSafely,
+  requestCancelDesktopChatAgentJobSafely,
   type DesktopAgentJobHandle,
 } from "../desktop-agent-jobs"
 import type { AgentJobDatabase } from "../headless/job-store"
@@ -19,6 +21,9 @@ import {
 export type CreateClaudeAgentSdkDesktopJobDependencies = {
   createAndRegisterDesktopChatAgentJob:
     typeof createAndRegisterDesktopChatAgentJob
+  completeDesktopChatAgentJobSafely: typeof completeDesktopChatAgentJobSafely
+  requestCancelDesktopChatAgentJobSafely:
+    typeof requestCancelDesktopChatAgentJobSafely
   createDesktopStreamEventMapper: typeof createDesktopStreamEventMapper
   appendRunEventsToAgentJob: typeof appendRunEventsToAgentJob
 }
@@ -57,10 +62,31 @@ export type ClaudeAgentSdkDesktopRunStartup = {
   resumeSessionId?: string | null
 }
 
+export type CompleteClaudeAgentSdkDesktopJobAfterRunInput = {
+  db: AgentJobDatabase
+  jobId: string | null
+  chatId: string
+  subChatId: string
+  abortSignal: AbortSignal
+  reachedNaturalFinish: boolean
+  sawError: boolean
+  dependencies?: Partial<CreateClaudeAgentSdkDesktopJobDependencies>
+}
+
+export type RequestCancelClaudeAgentSdkDesktopJobInput = {
+  db: AgentJobDatabase
+  jobId: string | null
+  reachedNaturalFinish: boolean
+  sawError: boolean
+  dependencies?: Partial<CreateClaudeAgentSdkDesktopJobDependencies>
+}
+
 const defaultDependencies: CreateClaudeAgentSdkDesktopJobDependencies = {
   appendRunEventsToAgentJob,
+  completeDesktopChatAgentJobSafely,
   createAndRegisterDesktopChatAgentJob,
   createDesktopStreamEventMapper,
+  requestCancelDesktopChatAgentJobSafely,
 }
 
 function withDefaultDependencies(
@@ -106,6 +132,38 @@ export function createClaudeAgentSdkDesktopRunTraceEmitter(input: {
   return (event) => {
     dependencies.appendRunEventsToAgentJob(input.db, [event])
   }
+}
+
+export function completeClaudeAgentSdkDesktopJobAfterRun(
+  input: CompleteClaudeAgentSdkDesktopJobAfterRunInput,
+): void {
+  if (!input.jobId) return
+
+  const dependencies = withDefaultDependencies(input.dependencies)
+  dependencies.completeDesktopChatAgentJobSafely(input.db, {
+    jobId: input.jobId,
+    runtime: "claude-code",
+    aborted: input.abortSignal.aborted,
+    reachedNaturalFinish: input.reachedNaturalFinish,
+    sawError: input.sawError,
+    result: {
+      runtime: "claude-code",
+      subChatId: input.subChatId,
+      chatId: input.chatId,
+    },
+  })
+}
+
+export function requestCancelClaudeAgentSdkDesktopJob(
+  input: RequestCancelClaudeAgentSdkDesktopJobInput,
+): void {
+  const dependencies = withDefaultDependencies(input.dependencies)
+  dependencies.requestCancelDesktopChatAgentJobSafely(input.db, {
+    jobId: input.jobId,
+    sawError: input.sawError,
+    reachedNaturalFinish: input.reachedNaturalFinish,
+    requestedBy: "desktop-chat",
+  })
 }
 
 export function createClaudeAgentSdkDesktopRunStartup({

@@ -42,7 +42,11 @@ import {
   prepareClaudeAgentSdkRuntimeStartupContext,
   prepareClaudeAgentSdkRuntimeStartupDiagnostics,
 } from "../../claude/agent-sdk-runtime-startup"
-import { createClaudeAgentSdkDesktopRunStartup } from "../../claude/agent-sdk-desktop-job"
+import {
+  completeClaudeAgentSdkDesktopJobAfterRun,
+  createClaudeAgentSdkDesktopRunStartup,
+  requestCancelClaudeAgentSdkDesktopJob,
+} from "../../claude/agent-sdk-desktop-job"
 import {
   createClaudeAgentSdkRuntimeStreamSetup,
   createClaudeAgentSdkRuntimeStreamState,
@@ -103,10 +107,6 @@ import {
   type DesktopStreamEventMapper,
   createRuntimeRendererChunkEmitter,
 } from "../../agent-runtime/stream-event-mapper"
-import {
-  completeDesktopChatAgentJobSafely,
-  requestCancelDesktopChatAgentJobSafely,
-} from "../../desktop-agent-jobs"
 import {
   verifyDesktopRunPreflight,
 } from "../../agent-runtime/preflight"
@@ -1199,17 +1199,14 @@ export const claudeRouter = router({
           } finally {
             if (desktopJobId) {
               const jobDb = desktopJobDb ?? getDatabase()
-              completeDesktopChatAgentJobSafely(jobDb, {
+              completeClaudeAgentSdkDesktopJobAfterRun({
+                db: jobDb,
                 jobId: desktopJobId,
-                runtime: "claude-code",
-                aborted: abortController.signal.aborted,
+                chatId: input.chatId,
+                subChatId: input.subChatId,
+                abortSignal: abortController.signal,
                 reachedNaturalFinish: desktopJobReachedNaturalFinish,
                 sawError: desktopJobSawError,
-                result: {
-                  runtime: "claude-code",
-                  subChatId: input.subChatId,
-                  chatId: input.chatId,
-                },
               })
             }
             deleteActiveClaudeSessionIfController(
@@ -1245,11 +1242,11 @@ export const claudeRouter = router({
           // handles it (saves on normal completion, clears on abort). This avoids
           // a redundant DB write that the cancel mutation would then overwrite.
           const db = getDatabase()
-          requestCancelDesktopChatAgentJobSafely(db, {
+          requestCancelClaudeAgentSdkDesktopJob({
+            db,
             jobId: desktopJobId,
             sawError: desktopJobSawError,
             reachedNaturalFinish: desktopJobReachedNaturalFinish,
-            requestedBy: "desktop-chat",
           })
           if (ownsActiveSession) {
             db.update(subChats)

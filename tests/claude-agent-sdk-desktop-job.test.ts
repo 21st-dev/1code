@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import {
+  completeClaudeAgentSdkDesktopJobAfterRun,
   createClaudeAgentSdkDesktopJob,
   createClaudeAgentSdkDesktopRunStartup,
+  requestCancelClaudeAgentSdkDesktopJob,
 } from "../src/main/lib/claude/agent-sdk-desktop-job"
 
 describe("Claude Agent SDK desktop job setup", () => {
@@ -145,6 +147,74 @@ describe("Claude Agent SDK desktop job setup", () => {
       {
         db,
         events: [{ category: "status" }],
+      },
+    ])
+  })
+
+  test("completes Claude desktop jobs with runtime result metadata", () => {
+    const db = {} as any
+    const completed: any[] = []
+    const abortController = new AbortController()
+
+    completeClaudeAgentSdkDesktopJobAfterRun({
+      db,
+      jobId: "job-1",
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      abortSignal: abortController.signal,
+      reachedNaturalFinish: true,
+      sawError: false,
+      dependencies: {
+        completeDesktopChatAgentJobSafely: (dbArg, input) => {
+          completed.push({ db: dbArg, input })
+        },
+      },
+    })
+
+    expect(completed).toEqual([
+      {
+        db,
+        input: {
+          jobId: "job-1",
+          runtime: "claude-code",
+          aborted: false,
+          reachedNaturalFinish: true,
+          sawError: false,
+          result: {
+            runtime: "claude-code",
+            subChatId: "sub-1",
+            chatId: "chat-1",
+          },
+        },
+      },
+    ])
+  })
+
+  test("requests Claude desktop job cancellation as desktop chat", () => {
+    const db = {} as any
+    const canceled: any[] = []
+
+    requestCancelClaudeAgentSdkDesktopJob({
+      db,
+      jobId: "job-1",
+      reachedNaturalFinish: false,
+      sawError: true,
+      dependencies: {
+        requestCancelDesktopChatAgentJobSafely: (dbArg, input) => {
+          canceled.push({ db: dbArg, input })
+        },
+      },
+    })
+
+    expect(canceled).toEqual([
+      {
+        db,
+        input: {
+          jobId: "job-1",
+          sawError: true,
+          reachedNaturalFinish: false,
+          requestedBy: "desktop-chat",
+        },
       },
     ])
   })
