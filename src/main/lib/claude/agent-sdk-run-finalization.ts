@@ -69,6 +69,13 @@ export type FinalizeClaudeAgentSdkUnexpectedErrorInput = {
   nowMs?: () => number
 }
 
+export type FinalizeClaudeAgentSdkUnexpectedErrorWithStreamStateInput = Omit<
+  FinalizeClaudeAgentSdkUnexpectedErrorInput,
+  "chunkCount"
+> & {
+  state: Pick<ClaudeAgentSdkStreamConsumerMutableState, "chunkCount">
+}
+
 export function finalizeClaudeAgentSdkUnexpectedError({
   error,
   subId,
@@ -87,6 +94,16 @@ export function finalizeClaudeAgentSdkUnexpectedError({
   emitError(error, "Unexpected error")
   emit({ type: "finish" })
   complete()
+}
+
+export function finalizeClaudeAgentSdkUnexpectedErrorWithStreamState({
+  state,
+  ...input
+}: FinalizeClaudeAgentSdkUnexpectedErrorWithStreamStateInput): void {
+  finalizeClaudeAgentSdkUnexpectedError({
+    ...input,
+    chunkCount: state.chunkCount,
+  })
 }
 
 export async function completeClaudeAgentSdkRunAfterAdapter({

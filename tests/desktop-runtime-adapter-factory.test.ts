@@ -717,10 +717,16 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "completeClaudeAgentSdkRunAfterAdapterWithStreamState",
     )
-    expect(claudeRouter).toContain("finalizeClaudeAgentSdkUnexpectedError")
+    expect(claudeRouter).toContain(
+      "finalizeClaudeAgentSdkUnexpectedErrorWithStreamState",
+    )
+    expect(claudeRouter).not.toContain(
+      "finalizeClaudeAgentSdkUnexpectedError({",
+    )
     expect(claudeRouter).not.toContain("metadata: streamState.metadata")
     expect(claudeRouter).not.toContain("currentText: streamState.currentText")
     expect(claudeRouter).not.toContain("messageCount: streamState.messageCount")
+    expect(claudeRouter).not.toContain("chunkCount: streamState.chunkCount")
     expect(claudeRouter).not.toContain(
       "pendingFinishChunk: streamState.pendingFinishChunk",
     )
@@ -739,6 +745,9 @@ describe("desktop runtime adapter factory", () => {
     expect(runFinalization).toContain("state.metadata")
     expect(runFinalization).toContain(
       "finalizeClaudeAgentSdkUnexpectedError",
+    )
+    expect(runFinalization).toContain(
+      "finalizeClaudeAgentSdkUnexpectedErrorWithStreamState",
     )
     expect(runFinalization).toContain("reason=no_response")
     expect(runFinalization).toContain("reason=unexpected_error")

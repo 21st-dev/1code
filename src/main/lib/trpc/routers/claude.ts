@@ -47,7 +47,7 @@ import {
 } from "../../claude/agent-sdk-query-options"
 import {
   completeClaudeAgentSdkRunAfterAdapterWithStreamState,
-  finalizeClaudeAgentSdkUnexpectedError,
+  finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
 import {
   createClaudeAgentSdkPolicyRetryState,
@@ -1707,10 +1707,10 @@ export const claudeRouter = router({
             desktopJobReachedNaturalFinish =
               finalization.reachedNaturalFinish
           } catch (error) {
-            finalizeClaudeAgentSdkUnexpectedError({
+            finalizeClaudeAgentSdkUnexpectedErrorWithStreamState({
               error,
+              state: streamState,
               subId,
-              chunkCount: streamState.chunkCount,
               streamStart,
               emitError,
               emit: safeEmit,

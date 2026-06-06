@@ -5,6 +5,7 @@ import {
   completeClaudeAgentSdkRunAfterAdapter,
   completeClaudeAgentSdkRunAfterAdapterWithStreamState,
   finalizeClaudeAgentSdkUnexpectedError,
+  finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../src/main/lib/claude/agent-sdk-run-finalization"
 import { createClaudeAgentSdkStreamConsumerMutableState } from "../src/main/lib/claude/agent-sdk-stream-consumer"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
@@ -93,6 +94,33 @@ describe("Claude Agent SDK run finalization", () => {
 
     expect(log).toHaveBeenCalledWith(
       "[SD] M:END sub=sub-1 reason=unexpected_error n=5 t=2.6s",
+    )
+    expect(emitError).toHaveBeenCalledWith(error, "Unexpected error")
+    expect(emit).toHaveBeenCalledWith({ type: "finish" })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  test("finalizes unexpected route errors from stream consumer state", () => {
+    const error = new Error("boom")
+    const emitError = mock(() => {})
+    const emit = mock(() => {})
+    const complete = mock(() => {})
+    const log = mock(() => {})
+
+    finalizeClaudeAgentSdkUnexpectedErrorWithStreamState({
+      error,
+      state: createClaudeAgentSdkStreamConsumerMutableState({ chunkCount: 6 }),
+      subId: "sub-1",
+      streamStart: 1000,
+      emitError,
+      emit,
+      complete,
+      log,
+      nowMs: () => 3650,
+    })
+
+    expect(log).toHaveBeenCalledWith(
+      "[SD] M:END sub=sub-1 reason=unexpected_error n=6 t=2.6s",
     )
     expect(emitError).toHaveBeenCalledWith(error, "Unexpected error")
     expect(emit).toHaveBeenCalledWith({ type: "finish" })
