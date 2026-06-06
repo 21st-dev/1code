@@ -3,6 +3,10 @@ import {
   DesktopRuntimeAdapterFactory,
   type DesktopRuntimeAdapter,
 } from "../src/main/lib/agent-runtime/desktop-runner"
+import {
+  CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA,
+  CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA,
+} from "../src/main/lib/agent-runtime/desktop-adapter-metadata"
 
 function fakeAdapter(
   runtimeId: "claude-code" | "codex",
@@ -22,6 +26,22 @@ function fakeAdapter(
 }
 
 describe("desktop runtime adapter factory", () => {
+  test("declares current desktop adapter sources honestly", () => {
+    expect(CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA).toMatchObject({
+      runtimeId: "claude-code",
+      source: "claude-agent-sdk",
+      temporaryFallback: false,
+    })
+    expect(CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA).toMatchObject({
+      runtimeId: "codex",
+      source: "codex-acp-temporary-compat",
+      temporaryFallback: true,
+    })
+    expect(
+      CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.fallbackReason,
+    ).toContain("app-server")
+  })
+
   test("registers and resolves adapters by runtime and source", () => {
     const claude = fakeAdapter("claude-code", "claude-agent-sdk")
     const codex = fakeAdapter("codex", "codex-acp-temporary-compat")

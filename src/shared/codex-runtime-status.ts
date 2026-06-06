@@ -2,6 +2,7 @@ export type CodexRuntimeComponentId =
   | "login-cli"
   | "acp-runtime"
   | "acp-spawn"
+  | "adapter-source"
   | "login"
   | "provider-profile"
   | "mcp"

@@ -82,6 +82,7 @@ import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
+import { CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA } from "../../agent-runtime/desktop-adapter-metadata"
 import {
   DesktopRunPreflightError,
   verifyDesktopRunPreflight,
@@ -583,7 +584,17 @@ async function getCodexRuntimeStatus() {
     loginCli,
     acp: resolvedAcp,
   })
+  const adapterMetadata = CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA
   const extraComponents = [
+    createCodexRuntimeComponent({
+      id: "adapter-source",
+      label: "Codex desktop adapter",
+      status: "ready",
+      ok: true,
+      blocking: false,
+      error: null,
+      hint: `${adapterMetadata.source}: ${adapterMetadata.fallbackReason}`,
+    }),
     createCodexRuntimeComponent({
       id: "provider-profile",
       label: "Codex provider profile",
@@ -671,6 +682,7 @@ async function getCodexRuntimeStatus() {
     ok: availability.ok,
     loginCli,
     acp: resolvedAcp,
+    adapter: adapterMetadata,
     components: availability.components,
     blockers: availability.blockers,
     capabilities: getRegisteredAgentRuntimeManifest("codex").capabilities,

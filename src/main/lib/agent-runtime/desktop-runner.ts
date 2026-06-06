@@ -15,6 +15,7 @@ export type DesktopRuntimeAdapterMetadata = {
   source: DesktopRuntimeAdapterSource
   label: string
   temporaryFallback: boolean
+  fallbackReason?: string | null
 }
 
 export type DesktopRuntimeAdapter = {
