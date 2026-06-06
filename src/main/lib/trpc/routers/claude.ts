@@ -50,6 +50,16 @@ import {
   getClaudeAgentSdkQuery,
 } from "../../claude/agent-sdk-query-loader"
 import {
+  logClaudeOllamaEmptyStreamDiagnosis,
+  logClaudeOllamaFirstMessageLatency,
+  logClaudeOllamaMessage,
+  logClaudeOllamaSingleMessageWarning,
+  logClaudeOllamaStreamAborted,
+  logClaudeOllamaStreamComplete,
+  logClaudeOllamaStreamError,
+  logClaudeOllamaStreamStart,
+} from "../../claude/agent-sdk-ollama-diagnostics"
+import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
   getActiveClaudeSession,
@@ -2338,20 +2348,19 @@ ${prompt}
               let exitPlanModeToolCallId: string | null = null
 
               if (isUsingOllama) {
-                console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
-                console.log(`[Ollama] Model: ${finalCustomConfig?.model}`)
-                console.log(`[Ollama] Base URL: ${finalCustomConfig?.baseUrl}`)
-                console.log(
-                  `[Ollama] Prompt: "${typeof input.prompt === "string" ? input.prompt.slice(0, 100) : "N/A"}..."`,
-                )
-                console.log(`[Ollama] CWD: ${runtimeCwd}`)
+                logClaudeOllamaStreamStart({
+                  model: finalCustomConfig?.model,
+                  baseUrl: finalCustomConfig?.baseUrl,
+                  prompt: input.prompt,
+                  cwd: runtimeCwd,
+                })
               }
 
               try {
                 for await (const msg of stream) {
                   if (abortController.signal.aborted) {
                     if (isUsingOllama)
-                      console.log(`[Ollama] Stream aborted by user`)
+                      logClaudeOllamaStreamAborted()
                     break
                   }
 
@@ -2359,35 +2368,10 @@ ${prompt}
 
                   // Extra logging for Ollama to diagnose issues
                   if (isUsingOllama) {
-                    const msgAnyPreview = msg as any
-                    console.log(`[Ollama] ===== MESSAGE #${messageCount} =====`)
-                    console.log(`[Ollama] Type: ${msgAnyPreview.type}`)
-                    console.log(
-                      `[Ollama] Subtype: ${msgAnyPreview.subtype || "none"}`,
-                    )
-                    if (msgAnyPreview.event) {
-                      console.log(
-                        `[Ollama] Event: ${msgAnyPreview.event.type}`,
-                        {
-                          delta_type: msgAnyPreview.event.delta?.type,
-                          content_block_type:
-                            msgAnyPreview.event.content_block?.type,
-                        },
-                      )
-                    }
-                    if (msgAnyPreview.message?.content) {
-                      console.log(
-                        `[Ollama] Message content blocks:`,
-                        msgAnyPreview.message.content.length,
-                      )
-                      msgAnyPreview.message.content.forEach(
-                        (block: any, idx: number) => {
-                          console.log(
-                            `[Ollama]   Block ${idx}: type=${block.type}, text_length=${block.text?.length || 0}`,
-                          )
-                        },
-                      )
-                    }
+                    logClaudeOllamaMessage({
+                      messageCount,
+                      message: msg,
+                    })
                   }
 
                   // Warn if SDK initialization is slow (MCP delay)
@@ -2395,9 +2379,7 @@ ${prompt}
                     firstMessageReceived = true
                     const timeToFirstMessage = Date.now() - streamIterationStart
                     if (isUsingOllama) {
-                      console.log(
-                        `[Ollama] Time to first message: ${timeToFirstMessage}ms`,
-                      )
+                      logClaudeOllamaFirstMessageLatency(timeToFirstMessage)
                     }
                     if (timeToFirstMessage > 5000) {
                       console.warn(
@@ -2679,10 +2661,11 @@ ${prompt}
                 // Warn if stream yielded no messages (offline mode issue)
                 const streamDuration = Date.now() - streamIterationStart
                 if (isUsingOllama) {
-                  console.log(`[Ollama] ===== STREAM COMPLETED =====`)
-                  console.log(`[Ollama] Total messages: ${messageCount}`)
-                  console.log(`[Ollama] Duration: ${streamDuration}ms`)
-                  console.log(`[Ollama] Chunks emitted: ${chunkCount}`)
+                  logClaudeOllamaStreamComplete({
+                    messageCount,
+                    durationMs: streamDuration,
+                    chunkCount,
+                  })
                 }
 
                 if (messageCount === 0) {
@@ -2690,35 +2673,10 @@ ${prompt}
                     `[claude] Stream yielded no messages - model not responding`,
                   )
                   if (isUsingOllama) {
-                    console.error(`[Ollama] ===== DIAGNOSIS =====`)
-                    console.error(
-                      `[Ollama] Problem: Stream completed but NO messages received from SDK`,
-                    )
-                    console.error(`[Ollama] This usually means:`)
-                    console.error(
-                      `[Ollama]   1. Ollama doesn't support Anthropic Messages API format (/v1/messages)`,
-                    )
-                    console.error(
-                      `[Ollama]   2. Model failed to start generating (check Ollama logs: ollama logs)`,
-                    )
-                    console.error(
-                      `[Ollama]   3. Network issue between Claude Agent SDK and Ollama`,
-                    )
-                    console.error(`[Ollama] ===== NEXT STEPS =====`)
-                    console.error(
-                      `[Ollama]   1. Check if model works: curl http://localhost:11434/api/generate -d '{"model":"${finalCustomConfig?.model}","prompt":"test"}'`,
-                    )
-                    console.error(
-                      `[Ollama]   2. Check Ollama version supports Messages API`,
-                    )
-                    console.error(
-                      `[Ollama]   3. Try using a proxy that converts Anthropic API → Ollama format`,
-                    )
+                    logClaudeOllamaEmptyStreamDiagnosis(finalCustomConfig?.model)
                   }
                 } else if (messageCount === 1 && isUsingOllama) {
-                  console.warn(
-                    `[Ollama] Only received 1 message (likely just init). No actual content generated.`,
-                  )
+                  logClaudeOllamaSingleMessageWarning()
                 }
               } catch (streamError) {
                 // This catches errors during streaming (like process exit)
@@ -2726,18 +2684,11 @@ ${prompt}
                 const stderrOutput = stderrLines.join("\n")
 
                 if (isUsingOllama) {
-                  console.error(`[Ollama] ===== STREAM ERROR =====`)
-                  console.error(`[Ollama] Error message: ${err.message}`)
-                  console.error(`[Ollama] Error stack:`, err.stack)
-                  console.error(
-                    `[Ollama] Messages received before error: ${messageCount}`,
-                  )
-                  if (stderrOutput) {
-                    console.error(
-                      `[Ollama] Claude binary stderr:`,
-                      stderrOutput,
-                    )
-                  }
+                  logClaudeOllamaStreamError({
+                    error: err,
+                    messageCount,
+                    stderrOutput,
+                  })
                 }
 
                 const streamDiagnostic = classifyClaudeAgentSdkStreamError({

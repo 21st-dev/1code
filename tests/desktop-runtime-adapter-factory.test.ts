@@ -353,6 +353,33 @@ describe("desktop runtime adapter factory", () => {
     )
   })
 
+  test("keeps Claude Ollama stream diagnostics ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const ollamaDiagnostics = readFileSync(
+      "src/main/lib/claude/agent-sdk-ollama-diagnostics.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-ollama-diagnostics",
+    )
+    expect(claudeRouter).toContain("logClaudeOllamaStreamStart")
+    expect(claudeRouter).toContain("logClaudeOllamaStreamError")
+    expect(claudeRouter).not.toContain(
+      "[Ollama] ===== STARTING STREAM ITERATION =====",
+    )
+    expect(claudeRouter).not.toContain("[Ollama] ===== DIAGNOSIS =====")
+    expect(ollamaDiagnostics).toContain(
+      "logClaudeOllamaEmptyStreamDiagnosis",
+    )
+    expect(ollamaDiagnostics).toContain(
+      "[Ollama] ===== STARTING STREAM ITERATION =====",
+    )
+  })
+
   test("keeps Claude Agent SDK tool permission ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
