@@ -38,6 +38,16 @@ export function getClaudePolicyRetryDelayMs(policyRetryCount: number): number {
   return policyRetryCount <= 1 ? 3000 : 6000
 }
 
+export function extractClaudeAgentSdkEmbeddedErrorText(message: any): string {
+  const messageText = message?.message?.content?.[0]?.text
+  return String(
+    messageText ||
+      message?.error ||
+      message?.message ||
+      "Unknown SDK error",
+  )
+}
+
 export function classifyClaudeAgentSdkEmbeddedError(input: {
   rawErrorCode?: unknown
   sdkError: unknown

@@ -43,6 +43,7 @@ import {
   CLAUDE_MAX_POLICY_RETRIES,
   classifyClaudeAgentSdkEmbeddedError,
   classifyClaudeAgentSdkStreamError,
+  extractClaudeAgentSdkEmbeddedErrorText,
   getClaudePolicyRetryDelayMs,
 } from "../../claude/agent-sdk-errors"
 import {
@@ -2249,7 +2250,6 @@ ${prompt}
                 return
               }
 
-              let lastError: Error | null = null
               let firstMessageReceived = false
               // Track last assistant message UUID for rollback support
               // Only assigned to metadata AFTER the stream completes (not during generation)
@@ -2306,15 +2306,8 @@ ${prompt}
                   // Check for error messages from SDK (error can be embedded in message payload!)
                   const msgAny = msg as any
                   if (msgAny.type === "error" || msgAny.error) {
-                    // Extract detailed error text from message content if available
-                    // This is where the actual error description lives (e.g., "API Error: Claude Code is unable to respond...")
-                    const messageText = msgAny.message?.content?.[0]?.text
                     const sdkError =
-                      messageText ||
-                      msgAny.error ||
-                      msgAny.message ||
-                      "Unknown SDK error"
-                    lastError = new Error(sdkError)
+                      extractClaudeAgentSdkEmbeddedErrorText(msgAny)
 
                     logClaudeAgentSdkEmbeddedError({
                       sdkError,

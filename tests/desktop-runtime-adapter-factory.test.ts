@@ -504,8 +504,14 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-errors")
+    expect(claudeRouter).toContain(
+      "extractClaudeAgentSdkEmbeddedErrorText",
+    )
     expect(claudeRouter).toContain("classifyClaudeAgentSdkEmbeddedError")
     expect(claudeRouter).toContain("classifyClaudeAgentSdkStreamError")
+    expect(claudeRouter).not.toContain(
+      "const messageText = msgAny.message?.content?.[0]?.text",
+    )
     expect(claudeRouter).not.toContain(
       'rawErrorCode === "authentication_failed"',
     )
@@ -513,6 +519,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain(
       "No conversation found with session ID",
     )
+    expect(claudeErrors).toContain("extractClaudeAgentSdkEmbeddedErrorText")
     expect(claudeErrors).toContain("classifyClaudeAgentSdkEmbeddedError")
     expect(claudeErrors).toContain("classifyClaudeAgentSdkStreamError")
     expect(claudeErrors).toContain("USAGE_POLICY_VIOLATION")

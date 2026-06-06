@@ -3,10 +3,30 @@ import {
   CLAUDE_MAX_POLICY_RETRIES,
   classifyClaudeAgentSdkEmbeddedError,
   classifyClaudeAgentSdkStreamError,
+  extractClaudeAgentSdkEmbeddedErrorText,
   getClaudePolicyRetryDelayMs,
 } from "../src/main/lib/claude/agent-sdk-errors"
 
 describe("Claude Agent SDK error diagnostics", () => {
+  test("extracts embedded SDK error text from the most descriptive payload", () => {
+    expect(
+      extractClaudeAgentSdkEmbeddedErrorText({
+        error: "invalid_request",
+        message: { content: [{ text: "Detailed policy failure" }] },
+      }),
+    ).toBe("Detailed policy failure")
+
+    expect(
+      extractClaudeAgentSdkEmbeddedErrorText({
+        error: "rate_limit_exceeded",
+      }),
+    ).toBe("rate_limit_exceeded")
+
+    expect(extractClaudeAgentSdkEmbeddedErrorText({})).toBe(
+      "Unknown SDK error",
+    )
+  })
+
   test("distinguishes OAuth auth reconnect from API key auth failure", () => {
     expect(
       classifyClaudeAgentSdkEmbeddedError({
