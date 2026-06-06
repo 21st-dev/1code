@@ -293,12 +293,20 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "const desktopRunRequest = createClaudeDesktopRunRequest({",
     )
+    expect(claudeRouter).toContain("createClaudeDesktopProviderBinding")
+    expect(claudeRouter).not.toContain("authMode: selectedProviderProfileId")
     expect(claudeRouter).not.toContain("createDesktopRunContextFromPreflight")
     expect(claudeRouter).not.toContain(
       "const desktopRunRequest: DesktopRunRequest",
     )
     expect(claudeDesktopRunRequest).toContain(
       "createClaudeDesktopRunRequest",
+    )
+    expect(claudeDesktopRunRequest).toContain(
+      "createClaudeDesktopProviderBinding",
+    )
+    expect(claudeDesktopRunRequest).toContain(
+      "authMode: input.selectedProviderProfileId",
     )
     expect(claudeDesktopRunRequest).toContain(
       "createDesktopRunContextFromPreflight",

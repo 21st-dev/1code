@@ -111,7 +111,10 @@ import {
   imageAttachmentSchema,
   longTextAttachmentSchema,
 } from "../../claude/chat-input-schema"
-import { createClaudeDesktopRunRequest } from "../../claude/desktop-run-request"
+import {
+  createClaudeDesktopProviderBinding,
+  createClaudeDesktopRunRequest,
+} from "../../claude/desktop-run-request"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import {
   getLegacyClaudeProviderProfileId,
@@ -1148,17 +1151,12 @@ export const claudeRouter = router({
               preflight: verifiedRunContext,
               prompt: input.prompt,
               permissionPolicy,
-              providerBinding: {
-                model: finalCustomConfig?.model ?? input.model ?? null,
-                modelSource: input.modelSource ?? null,
-                providerProfileId: selectedProviderProfileId ?? null,
-                gatewayEndpoint: finalCustomConfig?.baseUrl ?? null,
-                authMode: selectedProviderProfileId
-                  ? "provider-profile"
-                  : finalCustomConfig
-                    ? "app-managed"
-                    : "runtime-managed",
-              },
+              providerBinding: createClaudeDesktopProviderBinding({
+                customConfig: finalCustomConfig,
+                requestedModel: input.model,
+                modelSource: input.modelSource,
+                selectedProviderProfileId,
+              }),
               images: input.images,
               longTextAttachments: input.longTextAttachments,
               signal: abortController.signal,

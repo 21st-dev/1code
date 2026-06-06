@@ -40,6 +40,25 @@ export type CreateClaudeDesktopRunRequestInput = {
   emitTrace: (event: RunEvent) => void
 }
 
+export function createClaudeDesktopProviderBinding(input: {
+  customConfig?: { model?: string | null; baseUrl?: string | null } | null
+  requestedModel?: string | null
+  modelSource?: string | null
+  selectedProviderProfileId?: string | null
+}): Omit<DesktopRunProviderBinding, "diagnostics"> {
+  return {
+    model: input.customConfig?.model ?? input.requestedModel ?? null,
+    modelSource: input.modelSource ?? null,
+    providerProfileId: input.selectedProviderProfileId ?? null,
+    gatewayEndpoint: input.customConfig?.baseUrl ?? null,
+    authMode: input.selectedProviderProfileId
+      ? "provider-profile"
+      : input.customConfig
+        ? "app-managed"
+        : "runtime-managed",
+  }
+}
+
 export function createClaudeDesktopRunRequest({
   runId,
   streamId,

@@ -1,9 +1,61 @@
 import { describe, expect, test } from "bun:test"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import { createRunEvent } from "../src/main/lib/agent-runtime/runtime-events"
-import { createClaudeDesktopRunRequest } from "../src/main/lib/claude/desktop-run-request"
+import {
+  createClaudeDesktopProviderBinding,
+  createClaudeDesktopRunRequest,
+} from "../src/main/lib/claude/desktop-run-request"
 
 describe("Claude desktop run request", () => {
+  test("creates provider binding metadata for profile, app-managed, and runtime-managed auth", () => {
+    expect(
+      createClaudeDesktopProviderBinding({
+        customConfig: {
+          model: "profile-model",
+          baseUrl: "https://gateway.example/v1",
+        },
+        requestedModel: "request-model",
+        modelSource: "provider:profile-1",
+        selectedProviderProfileId: "profile-1",
+      }),
+    ).toEqual({
+      model: "profile-model",
+      modelSource: "provider:profile-1",
+      providerProfileId: "profile-1",
+      gatewayEndpoint: "https://gateway.example/v1",
+      authMode: "provider-profile",
+    })
+
+    expect(
+      createClaudeDesktopProviderBinding({
+        customConfig: {
+          model: "custom-model",
+          baseUrl: "http://127.0.0.1:11434/v1",
+        },
+        requestedModel: "request-model",
+        modelSource: "custom-provider",
+      }),
+    ).toMatchObject({
+      model: "custom-model",
+      providerProfileId: null,
+      authMode: "app-managed",
+    })
+
+    expect(
+      createClaudeDesktopProviderBinding({
+        customConfig: null,
+        requestedModel: "request-model",
+        modelSource: "request",
+      }),
+    ).toEqual({
+      model: "request-model",
+      modelSource: "request",
+      providerProfileId: null,
+      gatewayEndpoint: null,
+      authMode: "runtime-managed",
+    })
+  })
+
   test("maps verified route inputs into the shared DesktopRunRequest contract", () => {
     const emitted: any[] = []
     const permissionPolicy = resolveDesktopPermissionPolicy({
