@@ -541,10 +541,16 @@ describe("desktop runtime adapter factory", () => {
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-query-options")
     expect(claudeRouter).toContain(
-      "const queryOptions = createClaudeAgentSdkRuntimeQueryOptions({",
+      "const queryOptions = createClaudeAgentSdkDesktopRuntimeQueryOptions({",
     )
-    expect(claudeRouter).toContain("permissionHandler: {")
+    expect(claudeRouter).not.toContain("permissionHandler: {")
+    expect(claudeRouter).not.toContain("guardEvents.push(event)")
     expect(claudeRouter).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(claudeQueryOptions).toContain(
+      "createClaudeAgentSdkDesktopRuntimeQueryOptions",
+    )
+    expect(claudeQueryOptions).toContain("permissionHandler: {")
+    expect(claudeQueryOptions).toContain("guardEvents.push(event)")
     expect(claudeRouter).not.toContain(
       "const queryOptions = createClaudeAgentSdkQueryOptions({",
     )

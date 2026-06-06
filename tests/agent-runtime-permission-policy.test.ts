@@ -87,8 +87,12 @@ describe("desktop runtime permission policy", () => {
 
     expect(claude).toContain("resolveDesktopPermissionPolicy")
     expect(claude).toContain("getClaudePermissionMapping")
-    expect(claude).toContain("permissionHandler: {")
+    expect(claude).not.toContain("permissionHandler: {")
     expect(claude).not.toContain("createClaudeAgentSdkToolPermissionHandler")
+    expect(claudeQueryOptions).toContain(
+      "createClaudeAgentSdkDesktopRuntimeQueryOptions",
+    )
+    expect(claudeQueryOptions).toContain("permissionHandler: {")
     expect(claudeQueryOptions).toContain(
       "createClaudeAgentSdkToolPermissionHandler",
     )

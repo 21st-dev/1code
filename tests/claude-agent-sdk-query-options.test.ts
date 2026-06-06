@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test"
+import { join } from "node:path"
+import type { AgentScopeContract } from "../src/shared/agent-scope-contracts"
 import {
   getClaudePermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
+import { validateAgentScopeContract } from "../src/main/lib/agent-guard"
 import {
+  createClaudeAgentSdkDesktopRuntimeQueryOptions,
   createClaudeAgentSdkQueryOptions,
   createClaudeAgentSdkRuntimeQueryOptions,
   createClaudeAgentSdkStderrHandler,
@@ -46,6 +50,29 @@ function createRequest(options: {
     parentSessionId: null,
     emitTrace: () => {},
   })
+}
+
+const cwd = join(process.cwd(), "example-project")
+
+function baseScopeContract(): AgentScopeContract {
+  return {
+    id: "contract-1",
+    version: 1,
+    status: "approved",
+    createdAt: "2026-06-07T00:00:00.000Z",
+    approvedAt: "2026-06-07T00:00:01.000Z",
+    source: "manual",
+    chatId: "chat-1",
+    subChatId: "sub-1",
+    runId: "run-1",
+    cwd,
+    projectPath: cwd,
+    editableScope: [{ path: "src/app.ts", kind: "file" }],
+    readOnlyEvidence: [{ path: "tests/app.test.ts", kind: "file" }],
+    successChecks: [{ command: "bun test tests/app.test.ts" }],
+    blockedPaths: [],
+    expansions: [],
+  }
 }
 
 describe("Claude Agent SDK query options", () => {
@@ -220,6 +247,81 @@ describe("Claude Agent SDK query options", () => {
     })
     expect(emitted).toEqual([])
     expect(guardEvents).toEqual([])
+  })
+
+  test("builds desktop runtime query options with owned guard event recording", async () => {
+    const sourceController = new AbortController()
+    const request = createRequest({
+      signal: sourceController.signal,
+      resumeSessionId: "session-1",
+    })
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "agent",
+      hasScopeContract: true,
+    })
+    const guardedContract = await validateAgentScopeContract(
+      baseScopeContract(),
+      {
+        cwd,
+        projectPath: cwd,
+        chatId: "chat-1",
+        subChatId: "sub-1",
+        runId: "run-1",
+        requireRegisteredWorktree: false,
+      },
+    )
+    const guardEvents: any[] = []
+    const emitted: any[] = []
+
+    const queryParams = createClaudeAgentSdkDesktopRuntimeQueryOptions({
+      request,
+      prompt: "hello",
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+      },
+      env: { PATH: "/bin" },
+      permission: getClaudePermissionMapping(permissionPolicy),
+      mcpServers: {},
+      isUsingOllama: false,
+      permissionPolicy,
+      guardedContract,
+      getGuardedContract: () => guardedContract,
+      guardEvents,
+      emit: (chunk) => {
+        emitted.push(chunk)
+      },
+      subChatId: "sub-1",
+      pendingToolApprovals: new Map(),
+      parts: [],
+      stderrLines: [],
+      shouldForkResume: false,
+      forkResumeAtUuid: null,
+      resumeAtUuid: null,
+      model: "claude-sonnet-4",
+      maxThinkingTokens: null,
+      getClaudeBinaryPath: () => "/owned/claude",
+    })
+
+    expect(queryParams.options.pathToClaudeCodeExecutable).toBe(
+      "/owned/claude",
+    )
+    await expect(
+      queryParams.options.canUseTool?.(
+        "Edit",
+        { file_path: "src/app.ts" },
+        { toolUseID: "tool-1" } as any,
+      ),
+    ).resolves.toMatchObject({ behavior: "allow" })
+    expect(guardEvents).toHaveLength(1)
+    expect(guardEvents[0]).toMatchObject({ type: "allowed" })
+    expect(emitted).toEqual([
+      {
+        type: "guard-event",
+        event: guardEvents[0],
+      },
+    ])
   })
 
   test("maps run request and runtime controls into SDK query params", () => {

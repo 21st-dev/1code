@@ -27,7 +27,7 @@ import {
 } from "../../claude-config"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
 import {
-  createClaudeAgentSdkRuntimeQueryOptions,
+  createClaudeAgentSdkDesktopRuntimeQueryOptions,
   prepareClaudeAgentSdkMcpServers,
 } from "../../claude/agent-sdk-query-options"
 import {
@@ -1265,7 +1265,7 @@ export const claudeRouter = router({
               cwd: runtimeCwd,
             })
 
-            const queryOptions = createClaudeAgentSdkRuntimeQueryOptions({
+            const queryOptions = createClaudeAgentSdkDesktopRuntimeQueryOptions({
               request: desktopRunRequest,
               prompt: promptContext.prompt,
               systemPrompt: promptContext.systemPrompt,
@@ -1273,19 +1273,14 @@ export const claudeRouter = router({
               permission: claudePermission,
               mcpServers: mcpServersFiltered,
               isUsingOllama,
-              permissionHandler: {
-                permissionPolicy,
-                guardedContract,
-                getGuardedContract: (contractId) =>
-                  getActiveGuardedContract(contractId),
-                recordGuardEvent: (event) => {
-                  guardEvents.push(event)
-                },
-                emit: safeEmit,
-                subChatId: input.subChatId,
-                pendingToolApprovals: getClaudePendingToolApprovalStore(),
-                parts,
-              },
+              permissionPolicy,
+              guardedContract,
+              getGuardedContract: getActiveGuardedContract,
+              guardEvents,
+              emit: safeEmit,
+              subChatId: input.subChatId,
+              pendingToolApprovals: getClaudePendingToolApprovalStore(),
+              parts,
               stderrLines,
               shouldForkResume,
               forkResumeAtUuid,

@@ -2,6 +2,7 @@ import type {
   Options as ClaudeAgentSdkOptions,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
+import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
 import type { ClaudePermissionMapping } from "../agent-runtime/permission-policy"
 import { getBundledClaudeBinaryPath } from "./env"
@@ -58,6 +59,17 @@ export type CreateClaudeAgentSdkRuntimeQueryOptionsInput = Omit<
   resumeAtUuid?: string | null
   getClaudeBinaryPath?: () => string
 }
+
+export type CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput = Omit<
+  CreateClaudeAgentSdkRuntimeQueryOptionsInput,
+  "permissionHandler"
+> &
+  Omit<
+    CreateClaudeAgentSdkToolPermissionHandlerInput,
+    "isUsingOllama" | "recordGuardEvent"
+  > & {
+    guardEvents: AgentGuardEvent[]
+  }
 
 export type PrepareClaudeAgentSdkMcpServersInput = {
   mcpServers?: ClaudeAgentSdkOptions["mcpServers"]
@@ -159,6 +171,34 @@ export function createClaudeAgentSdkRuntimeQueryOptions({
       forkResumeAtUuid,
       resumeAtUuid,
     }),
+  })
+}
+
+export function createClaudeAgentSdkDesktopRuntimeQueryOptions({
+  permissionPolicy,
+  guardedContract,
+  getGuardedContract,
+  guardEvents,
+  emit,
+  subChatId,
+  pendingToolApprovals,
+  parts,
+  ...input
+}: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput): ClaudeAgentSdkQueryParams {
+  return createClaudeAgentSdkRuntimeQueryOptions({
+    ...input,
+    permissionHandler: {
+      permissionPolicy,
+      guardedContract,
+      getGuardedContract,
+      recordGuardEvent: (event) => {
+        guardEvents.push(event)
+      },
+      emit,
+      subChatId,
+      pendingToolApprovals,
+      parts,
+    },
   })
 }
 
