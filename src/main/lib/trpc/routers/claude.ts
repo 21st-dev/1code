@@ -94,7 +94,11 @@ import {
   requestCancelDesktopAgentJob,
   unregisterActiveDesktopAgentJob,
 } from "../../desktop-agent-jobs"
-import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
+import {
+  DesktopRunPreflightError,
+  verifyDesktopRunPreflight,
+  type DesktopRunPreflightBlocker,
+} from "../../agent-runtime/preflight"
 
 function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "safe-mode") return "blocked-safe-mode"
@@ -1146,28 +1150,16 @@ export const claudeRouter = router({
             })
             const claudePermission = getClaudePermissionMapping(permissionPolicy)
 
-            const desktopJob = createAndStartDesktopAgentJob(db, {
-              runtime: "claude-code",
-              mode: input.mode,
-              chatId: input.chatId,
-              subChatId: input.subChatId,
-              cwd: runtimeCwd,
-              prompt: input.prompt,
-              runId: activeRunId,
-            })
-            desktopJobId = desktopJob.job.id
-            registerActiveDesktopAgentJob({
-              jobId: desktopJobId,
-              runtime: "claude-code",
-              subChatId: input.subChatId,
-              runId: activeRunId,
-              db,
-              workerId: desktopJob.workerId,
-              cancel: () => {
-                abortController.abort()
-                clearPendingApprovals("Session cancelled.", input.subChatId)
-              },
-            })
+            const emitPreflightBlocker = (
+              blocker: DesktopRunPreflightBlocker,
+            ) => {
+              emitError(
+                new DesktopRunPreflightError(blocker),
+                "Desktop run preflight blocked",
+              )
+              safeEmit({ type: "finish" } as UIMessageChunk)
+              safeComplete()
+            }
 
             // 1. Get existing messages from DB
             const existing = db
@@ -1196,9 +1188,14 @@ export const claudeRouter = router({
             try {
               resolvedImages = await resolveChatImageAttachments(input.images)
             } catch (attachmentError) {
-              emitError(attachmentError, "Image attachment unavailable")
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
+              emitPreflightBlocker({
+                id: "attachment",
+                status: "blocked",
+                message:
+                  attachmentError instanceof Error
+                    ? `Image attachment unavailable: ${attachmentError.message}`
+                    : `Image attachment unavailable: ${String(attachmentError)}`,
+              })
               return
             }
 
@@ -1266,12 +1263,12 @@ export const claudeRouter = router({
             if (selectedProviderProfileId) {
               const profile = getProviderProfileRuntimeConfig(selectedProviderProfileId)
               if (!profile || !profile.targetRuntimes.includes("claude")) {
-                emitError(
-                  new Error("Provider profile is not available for Claude"),
-                  "Provider profile unavailable",
-                )
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
+                emitPreflightBlocker({
+                  id: "provider-profile",
+                  status: "blocked",
+                  message: "Provider profile is not available for Claude.",
+                  hint: "Choose a provider profile that targets Claude.",
+                })
                 return
               }
 
@@ -1305,12 +1302,12 @@ export const claudeRouter = router({
                 getActiveClaudeProviderConfig()
 
               if (!providerConfig) {
-                emitError(
-                  new Error("Custom provider is not configured"),
-                  "Custom provider unavailable",
-                )
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
+                emitPreflightBlocker({
+                  id: "provider-profile",
+                  status: "needs-auth",
+                  message: "Custom provider is not configured.",
+                  hint: "Configure a Claude provider profile or use Claude Code auth.",
+                })
                 return
               }
             }
@@ -1329,9 +1326,15 @@ export const claudeRouter = router({
                 claudeCodeToken = credentialResult.accessToken
                 claudeCredentialMetadata = credentialResult.metadata
               } catch (credentialError) {
-                emitError(credentialError, "Claude Code credential unavailable")
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
+                emitPreflightBlocker({
+                  id: "provider-profile",
+                  status: "needs-auth",
+                  message:
+                    credentialError instanceof Error
+                      ? `Claude Code credential unavailable: ${credentialError.message}`
+                      : `Claude Code credential unavailable: ${String(credentialError)}`,
+                  hint: "Reconnect Claude Code auth or choose a provider profile.",
+                })
                 return
               }
             }
@@ -1344,12 +1347,11 @@ export const claudeRouter = router({
             )
 
             if (offlineResult.error) {
-              emitError(
-                new Error(offlineResult.error),
-                "Offline mode unavailable",
-              )
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
+              emitPreflightBlocker({
+                id: "provider-profile",
+                status: "blocked",
+                message: `Offline mode unavailable: ${offlineResult.error}`,
+              })
               return
             }
 
@@ -1366,12 +1368,40 @@ export const claudeRouter = router({
                   finalCustomConfig.baseUrl,
                 )
               } catch (providerError) {
-                emitError(providerError, "Provider endpoint blocked")
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
+                emitPreflightBlocker({
+                  id: "local-only",
+                  status: "blocked",
+                  message:
+                    providerError instanceof Error
+                      ? providerError.message
+                      : String(providerError),
+                })
                 return
               }
             }
+
+            const desktopJob = createAndStartDesktopAgentJob(db, {
+              runtime: "claude-code",
+              mode: input.mode,
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              cwd: runtimeCwd,
+              prompt: input.prompt,
+              runId: activeRunId,
+            })
+            desktopJobId = desktopJob.job.id
+            registerActiveDesktopAgentJob({
+              jobId: desktopJobId,
+              runtime: "claude-code",
+              subChatId: input.subChatId,
+              runId: activeRunId,
+              db,
+              workerId: desktopJob.workerId,
+              cancel: () => {
+                abortController.abort()
+                clearPendingApprovals("Session cancelled.", input.subChatId)
+              },
+            })
 
             // Track connection method for analytics
             let connectionMethod = "claude-subscription" // default (Claude Code OAuth)
@@ -1434,7 +1464,7 @@ export const claudeRouter = router({
 
               const finalContract =
                 activeGuardedContracts.get(guardedContract.id) ?? guardedContract
-              const postRunStatus = await captureGuardedGitStatus(input.cwd)
+              const postRunStatus = await captureGuardedGitStatus(runtimeCwd)
               const audit = buildGuardedRunAudit({
                 contract: finalContract,
                 runtime: "claude",
@@ -1710,7 +1740,7 @@ export const claudeRouter = router({
                 const stats = await fs.stat(claudeJsonSource).catch(() => null)
                 const currentMtime = stats?.mtimeMs ?? 0
                 const cached = mcpConfigCache.get(claudeJsonSource)
-                const lookupPath = input.projectPath || input.cwd
+                const lookupPath = input.projectPath || runtimeCwd
 
                 // Get or refresh cached config
                 let claudeConfig: any
@@ -1899,7 +1929,7 @@ export const claudeRouter = router({
               input.sessionId || existingSessionId || undefined
 
             // DEBUG: Session resume path tracing
-            const expectedSanitizedCwd = input.cwd.replace(/[/.]/g, "-")
+            const expectedSanitizedCwd = runtimeCwd.replace(/[/.]/g, "-")
             const expectedSessionPath = path.join(
               isolatedConfigDir,
               "projects",
@@ -1908,7 +1938,7 @@ export const claudeRouter = router({
             )
             console.log(`[claude] ========== SESSION DEBUG ==========`)
             console.log(`[claude] subChatId: ${input.subChatId}`)
-            console.log(`[claude] cwd: ${input.cwd}`)
+            console.log(`[claude] cwd: ${runtimeCwd}`)
             console.log(
               `[claude] sanitized cwd (expected): ${expectedSanitizedCwd}`,
             )
@@ -1927,7 +1957,7 @@ export const claudeRouter = router({
             console.log(`[claude] ========== END SESSION DEBUG ==========`)
 
             console.log(
-              `[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`,
+              `[SD] Query options - cwd: ${runtimeCwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`,
             )
             if (finalCustomConfig) {
               if (isUsingOllama) {
@@ -2009,7 +2039,7 @@ export const claudeRouter = router({
                 mcpServersForSdk &&
                 Object.keys(mcpServersForSdk).length > 0
               ) {
-                const lookupPath = input.projectPath || input.cwd
+                const lookupPath = input.projectPath || runtimeCwd
                 mcpServersFiltered = await ensureMcpTokensFresh(
                   mcpServersForSdk,
                   lookupPath,
@@ -2024,7 +2054,7 @@ export const claudeRouter = router({
               console.log("[Ollama Debug] SDK Configuration:", {
                 model: resolvedModel,
                 baseUrl: finalEnv.ANTHROPIC_BASE_URL,
-                cwd: input.cwd,
+                cwd: runtimeCwd,
                 configDir: isolatedConfigDir,
                 hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
               })
@@ -2040,7 +2070,7 @@ export const claudeRouter = router({
             // Read AGENTS.md from project root if it exists
             let agentsMdContent: string | undefined
             try {
-              const agentsMdPath = path.join(input.cwd, "AGENTS.md")
+              const agentsMdPath = path.join(runtimeCwd, "AGENTS.md")
               agentsMdContent = await fs.readFile(agentsMdPath, "utf-8")
               if (agentsMdContent.trim()) {
                 console.log(
@@ -2153,8 +2183,8 @@ ${history}
 
               const ollamaContext = `[CONTEXT]
 You are a coding assistant in OFFLINE mode (Ollama model: ${resolvedModel || "unknown"}).
-Project: ${input.projectPath || input.cwd}
-Working directory: ${input.cwd}
+Project: ${input.projectPath || runtimeCwd}
+Working directory: ${runtimeCwd}
 
 IMPORTANT: When using tools, use these EXACT parameter names:
 - Read: use "file_path" (not "file")
@@ -2200,7 +2230,7 @@ ${prompt}
               prompt: finalQueryPrompt,
               options: {
                 abortController, // Must be inside options!
-                cwd: input.cwd,
+                cwd: runtimeCwd,
                 systemPrompt: systemPromptConfig,
                 // Pass filtered MCP servers (only working/unknown ones, skip failed/needs-auth)
                 ...(mcpServersFiltered &&
@@ -2509,7 +2539,7 @@ ${prompt}
                 console.log(
                   `[Ollama] Prompt: "${typeof input.prompt === "string" ? input.prompt.slice(0, 100) : "N/A"}..."`,
                 )
-                console.log(`[Ollama] CWD: ${input.cwd}`)
+                console.log(`[Ollama] CWD: ${runtimeCwd}`)
               }
 
               try {
@@ -2599,7 +2629,7 @@ ${prompt}
                       `[CLAUDE SDK ERROR] SubChat ID: ${input.subChatId}`,
                     )
                     console.error(`[CLAUDE SDK ERROR] Chat ID: ${input.chatId}`)
-                    console.error(`[CLAUDE SDK ERROR] CWD: ${input.cwd}`)
+                    console.error(`[CLAUDE SDK ERROR] CWD: ${runtimeCwd}`)
                     console.error(`[CLAUDE SDK ERROR] Mode: ${input.mode}`)
                     console.error(
                       `[CLAUDE SDK ERROR] Session ID: ${msgAny.session_id || "none"}`,
@@ -3016,7 +3046,7 @@ ${prompt}
                     debugInfo: {
                       context: errorContext,
                       category: errorCategory,
-                      cwd: input.cwd,
+                      cwd: runtimeCwd,
                       mode: input.mode,
                       stderr: stderrOutput || "(no stderr captured)",
                     },
@@ -3058,9 +3088,9 @@ ${prompt}
                     .run()
 
                   // Create snapshot stash for rollback support (on error)
-                  if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
+                  if (historyEnabled && metadata.sdkMessageUuid && runtimeCwd) {
                     await createRollbackStash(
-                      input.cwd,
+                      runtimeCwd,
                       metadata.sdkMessageUuid,
                     )
                   }
@@ -3157,8 +3187,8 @@ ${prompt}
               .run()
 
             // Create snapshot stash for rollback support
-            if (historyEnabled && metadata.sdkMessageUuid && input.cwd) {
-              await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+            if (historyEnabled && metadata.sdkMessageUuid && runtimeCwd) {
+              await createRollbackStash(runtimeCwd, metadata.sdkMessageUuid)
             }
 
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)

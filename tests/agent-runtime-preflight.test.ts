@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import {
   DesktopRunPreflightError,
   verifyDesktopRunPreflight,
@@ -101,5 +102,21 @@ describe("desktop runtime preflight", () => {
         }),
       ).toThrow(DesktopRunPreflightError)
     }
+  })
+
+  test("Claude route blocks desktop preflight before creating a job", () => {
+    const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const blockerIndex = claude.indexOf("new DesktopRunPreflightError(blocker)")
+    const attachmentIndex = claude.indexOf("resolveChatImageAttachments(input.images)")
+    const jobIndex = claude.indexOf("createAndStartDesktopAgentJob(db, {")
+    const queryCwdIndex = claude.indexOf(
+      "cwd: runtimeCwd,\n                systemPrompt",
+    )
+
+    expect(blockerIndex).toBeGreaterThan(0)
+    expect(attachmentIndex).toBeGreaterThan(blockerIndex)
+    expect(jobIndex).toBeGreaterThan(attachmentIndex)
+    expect(queryCwdIndex).toBeGreaterThan(jobIndex)
+    expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")
   })
 })
