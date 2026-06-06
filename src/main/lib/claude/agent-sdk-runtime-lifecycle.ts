@@ -29,6 +29,14 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     | "transform"
     | "parts"
     | "stderrLines"
+    | "model"
+    | "baseUrl"
+    | "prompt"
+    | "cwd"
+    | "abortSignal"
+    | "chatId"
+    | "subChatId"
+    | "mode"
   > & {
     runtimeQuery: PrepareClaudeAgentSdkDesktopRuntimeQueryInput
     getContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
@@ -71,6 +79,8 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     runtimeStreamSetup,
     ...adapterInput
   } = input
+  const { request } = input
+  const requestContext = request.context
   const streamSetup =
     runtimeStreamSetup ??
     createClaudeAgentSdkRuntimeStreamSetup({
@@ -92,11 +102,20 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   const adapterResult =
     await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
       ...adapterInput,
+      request,
       getContract,
       deleteContract,
       runtimeQuery,
       guardEvents: runtimeQuery.guardEvents,
       guardedRunStartedAt,
+      model: input.customConfig?.model,
+      baseUrl: input.customConfig?.baseUrl,
+      prompt: request.prompt,
+      cwd: requestContext.cwd,
+      abortSignal: request.signal,
+      chatId: requestContext.chatId,
+      subChatId: requestContext.subChatId,
+      mode: requestContext.mode,
       transform: streamSetup.transform,
       parts,
       stderrLines,
@@ -112,14 +131,14 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   const finalization =
     await completeClaudeAgentSdkRunAfterAdapterWithStreamState({
       db: input.db,
-      chatId: input.chatId,
-      subChatId: input.subChatId,
+      chatId: requestContext.chatId,
+      subChatId: requestContext.subChatId,
       messagesToSave: input.messagesToSave,
       parts,
       state: input.streamState,
       historyEnabled: input.historyEnabled,
-      cwd: input.cwd,
-      aborted: input.abortSignal.aborted,
+      cwd: requestContext.cwd,
+      aborted: request.signal.aborted,
       desktopJobSawError,
       guardedContract: input.guardedContract,
       guardedPreRunStatus: input.guardedPreRunStatus,

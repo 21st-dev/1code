@@ -8,7 +8,7 @@ import type { UIMessageChunk } from "../src/main/lib/claude/types"
 import { chats, projects, subChats } from "../src/main/lib/db/schema"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
-function createRequest(): DesktopRunRequest {
+function createRequest(signal = new AbortController().signal): DesktopRunRequest {
   return {
     identity: { runId: "run-1", jobId: "job-1" },
     context: {
@@ -28,7 +28,7 @@ function createRequest(): DesktopRunRequest {
     mcp: { status: "skipped", serverNames: [], blockers: [] },
     attachments: [],
     trace: { emit: () => {} },
-    signal: new AbortController().signal,
+    signal,
     session: {},
   }
 }
@@ -83,7 +83,7 @@ function createLifecycleInput(
   } = {},
 ) {
   const signal = input.signal ?? new AbortController().signal
-  const request = createRequest()
+  const request = createRequest(signal)
   const emit = mock((chunk: UIMessageChunk) => true)
 
   return {
@@ -115,17 +115,9 @@ function createLifecycleInput(
     streamState:
       input.streamState ?? createClaudeAgentSdkStreamConsumerMutableState(),
     isUsingOllama: false,
-    model: "claude-sonnet",
-    baseUrl: undefined,
-    prompt: "hello",
-    cwd: "/repo",
-    abortSignal: signal,
     isObservableActive: () => true,
-    chatId: "chat-1",
-    subChatId: "sub-1",
     customConfig: null,
     hasExistingApiConfig: false,
-    mode: "agent",
     resolvedModel: "claude-sonnet",
     oauthToken: null,
     historyEnabled: true,

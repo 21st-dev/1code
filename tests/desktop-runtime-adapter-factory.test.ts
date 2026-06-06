@@ -631,6 +631,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("permissionHandler: {")
     expect(claudeRouter).not.toContain("const guardEvents")
     expect(claudeRouter).not.toContain("guardedRunStartedAt")
+    expect(claudeRouter).not.toContain("model: finalCustomConfig?.model")
+    expect(claudeRouter).not.toContain("baseUrl: finalCustomConfig?.baseUrl")
+    expect(claudeRouter).not.toContain("abortSignal: abortController.signal")
     expect(claudeRouter).not.toContain("guardEvents.push(event)")
     expect(claudeRouter).not.toContain("getGuardedContract:")
     expect(claudeRouter).not.toContain("getActiveGuardedContract")
@@ -651,6 +654,10 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeLifecycle).toContain(
       "guardedRunStartedAt = new Date().toISOString()",
     )
+    expect(runtimeLifecycle).toContain("const requestContext = request.context")
+    expect(runtimeLifecycle).toContain("prompt: request.prompt")
+    expect(runtimeLifecycle).toContain("abortSignal: request.signal")
+    expect(runtimeLifecycle).toContain("model: input.customConfig?.model")
     expect(runtimeLifecycle).toContain("getActiveGuardedContract")
     expect(runtimeLifecycle).toContain("deleteActiveGuardedContract")
     expect(claudeQueryOptions).toContain(
