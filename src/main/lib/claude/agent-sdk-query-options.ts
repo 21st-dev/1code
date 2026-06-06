@@ -4,6 +4,11 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk"
 import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
 import type { ClaudePermissionMapping } from "../agent-runtime/permission-policy"
+import { getBundledClaudeBinaryPath } from "./env"
+import {
+  createClaudeAgentSdkToolPermissionHandler,
+  type CreateClaudeAgentSdkToolPermissionHandlerInput,
+} from "./agent-sdk-tool-permission"
 
 export type ClaudeAgentSdkPrompt = string | AsyncIterable<SDKUserMessage>
 
@@ -33,6 +38,25 @@ export type CreateClaudeAgentSdkStderrHandlerInput = {
   stderrLines: string[]
   isUsingOllama: boolean
   error?: (...args: any[]) => void
+}
+
+export type CreateClaudeAgentSdkRuntimeQueryOptionsInput = Omit<
+  CreateClaudeAgentSdkQueryOptionsInput,
+  | "canUseTool"
+  | "stderr"
+  | "pathToClaudeCodeExecutable"
+  | "resumeSessionAt"
+  | "forkSession"
+> & {
+  permissionHandler: Omit<
+    CreateClaudeAgentSdkToolPermissionHandlerInput,
+    "isUsingOllama"
+  >
+  stderrLines: string[]
+  shouldForkResume: boolean
+  forkResumeAtUuid?: string | null
+  resumeAtUuid?: string | null
+  getClaudeBinaryPath?: () => string
 }
 
 export type PrepareClaudeAgentSdkMcpServersInput = {
@@ -107,6 +131,35 @@ export function createClaudeAgentSdkStderrHandler({
       error("[claude stderr]", data)
     }
   }
+}
+
+export function createClaudeAgentSdkRuntimeQueryOptions({
+  permissionHandler,
+  stderrLines,
+  shouldForkResume,
+  forkResumeAtUuid,
+  resumeAtUuid,
+  getClaudeBinaryPath = getBundledClaudeBinaryPath,
+  ...input
+}: CreateClaudeAgentSdkRuntimeQueryOptionsInput): ClaudeAgentSdkQueryParams {
+  return createClaudeAgentSdkQueryOptions({
+    ...input,
+    canUseTool: createClaudeAgentSdkToolPermissionHandler({
+      isUsingOllama: input.isUsingOllama,
+      ...permissionHandler,
+    }),
+    stderr: createClaudeAgentSdkStderrHandler({
+      stderrLines,
+      isUsingOllama: input.isUsingOllama,
+    }),
+    pathToClaudeCodeExecutable: getClaudeBinaryPath(),
+    ...resolveClaudeAgentSdkResumeOptions({
+      isUsingOllama: input.isUsingOllama,
+      shouldForkResume,
+      forkResumeAtUuid,
+      resumeAtUuid,
+    }),
+  })
 }
 
 export async function prepareClaudeAgentSdkMcpServers({

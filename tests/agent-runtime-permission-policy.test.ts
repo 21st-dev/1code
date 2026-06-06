@@ -72,6 +72,10 @@ describe("desktop runtime permission policy", () => {
       "src/main/lib/claude/agent-sdk-tool-permission.ts",
       "utf8",
     )
+    const claudeQueryOptions = readFileSync(
+      "src/main/lib/claude/agent-sdk-query-options.ts",
+      "utf8",
+    )
     const codexAcpTemporaryCompatAdapter = readFileSync(
       "src/main/lib/codex/acp-temporary-compat-adapter.ts",
       "utf8",
@@ -83,7 +87,11 @@ describe("desktop runtime permission policy", () => {
 
     expect(claude).toContain("resolveDesktopPermissionPolicy")
     expect(claude).toContain("getClaudePermissionMapping")
-    expect(claude).toContain("createClaudeAgentSdkToolPermissionHandler")
+    expect(claude).toContain("permissionHandler: {")
+    expect(claude).not.toContain("createClaudeAgentSdkToolPermissionHandler")
+    expect(claudeQueryOptions).toContain(
+      "createClaudeAgentSdkToolPermissionHandler",
+    )
     expect(claudeToolPermission).toContain(
       "permissionPolicy.planWorkspaceSideEffects",
     )

@@ -461,11 +461,20 @@ describe("desktop runtime adapter factory", () => {
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-query-options")
     expect(claudeRouter).toContain(
+      "const queryOptions = createClaudeAgentSdkRuntimeQueryOptions({",
+    )
+    expect(claudeRouter).toContain("permissionHandler: {")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(claudeRouter).not.toContain(
       "const queryOptions = createClaudeAgentSdkQueryOptions({",
     )
-    expect(claudeRouter).toContain("createClaudeAgentSdkStderrHandler")
-    expect(claudeRouter).toContain("prepareClaudeAgentSdkMcpServers")
-    expect(claudeRouter).toContain("resolveClaudeAgentSdkResumeOptions")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkStderrHandler")
+    expect(claudeRouter).not.toContain("resolveClaudeAgentSdkResumeOptions")
+    expect(claudeRouter).not.toContain("getBundledClaudeBinaryPath")
+    expect(claudeRouter).not.toContain("pathToClaudeCodeExecutable")
+    expect(claudeRouter).not.toContain(
+      "canUseTool: createClaudeAgentSdkToolPermissionHandler({",
+    )
     expect(claudeRouter).not.toContain(
       "shouldForkResume && forkResumeAtUuid && !isUsingOllama",
     )
@@ -486,7 +495,15 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeQueryOptions).toContain("includePartialMessages: true")
     expect(claudeQueryOptions).toContain("createAbortControllerFromSignal")
+    expect(claudeQueryOptions).toContain(
+      "createClaudeAgentSdkRuntimeQueryOptions",
+    )
+    expect(claudeQueryOptions).toContain(
+      "createClaudeAgentSdkToolPermissionHandler",
+    )
     expect(claudeQueryOptions).toContain("createClaudeAgentSdkStderrHandler")
+    expect(claudeQueryOptions).toContain("getBundledClaudeBinaryPath")
+    expect(claudeQueryOptions).toContain("pathToClaudeCodeExecutable")
     expect(claudeQueryOptions).toContain("stderrLines.push(data)")
     expect(claudeQueryOptions).toContain("[Ollama stderr]")
     expect(claudeQueryOptions).toContain("[claude stderr]")
@@ -1218,13 +1235,20 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-tool-permission.ts",
       "utf8",
     )
+    const claudeQueryOptions = readFileSync(
+      "src/main/lib/claude/agent-sdk-query-options.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-tool-permission")
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-tool-permission")
+    expect(claudeRouter).not.toContain(
       "canUseTool: createClaudeAgentSdkToolPermissionHandler({",
     )
     expect(claudeRouter).not.toContain("PLAN_MODE_BLOCKED_TOOLS")
     expect(claudeRouter).not.toContain("toClaudePermissionResult(decision)")
+    expect(claudeQueryOptions).toContain(
+      "canUseTool: createClaudeAgentSdkToolPermissionHandler({",
+    )
     expect(claudeToolPermission).toContain("PLAN_MODE_BLOCKED_TOOLS")
     expect(claudeToolPermission).toContain("fixOllamaToolInputAliases")
     expect(claudeToolPermission).toContain("toClaudePermissionResult(decision)")

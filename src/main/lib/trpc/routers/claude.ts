@@ -12,7 +12,6 @@ import {
   checkOfflineFallback,
   createClaudeAgentSdkRuntimeEnv,
   createTransformer,
-  getBundledClaudeBinaryPath,
   logClaudeEnv,
   type UIMessageChunk,
 } from "../../claude"
@@ -40,10 +39,8 @@ import {
   type ClaudeProviderRuntimeConfig,
 } from "../../claude/provider-runtime-config"
 import {
-  createClaudeAgentSdkQueryOptions,
-  createClaudeAgentSdkStderrHandler,
+  createClaudeAgentSdkRuntimeQueryOptions,
   prepareClaudeAgentSdkMcpServers,
-  resolveClaudeAgentSdkResumeOptions,
 } from "../../claude/agent-sdk-query-options"
 import {
   completeClaudeAgentSdkRunAfterAdapterWithStreamState,
@@ -83,9 +80,6 @@ import {
   hasActiveClaudeSession,
   setActiveClaudeSession,
 } from "../../claude/active-sessions"
-import {
-  createClaudeAgentSdkToolPermissionHandler,
-} from "../../claude/agent-sdk-tool-permission"
 import {
   clearClaudePendingToolApprovals,
   getClaudePendingToolApprovalStore,
@@ -1534,9 +1528,6 @@ export const claudeRouter = router({
               finalEnv,
             })
 
-            // Get bundled Claude binary path
-            const claudeBinaryPath = getBundledClaudeBinaryPath()
-
             logClaudeAgentSdkSessionDiagnostics({
               subChatId: input.subChatId,
               cwd: runtimeCwd,
@@ -1586,7 +1577,7 @@ export const claudeRouter = router({
               cwd: runtimeCwd,
             })
 
-            const queryOptions = createClaudeAgentSdkQueryOptions({
+            const queryOptions = createClaudeAgentSdkRuntimeQueryOptions({
               request: desktopRunRequest,
               prompt: promptContext.prompt,
               systemPrompt: promptContext.systemPrompt,
@@ -1594,8 +1585,7 @@ export const claudeRouter = router({
               permission: claudePermission,
               mcpServers: mcpServersFiltered,
               isUsingOllama,
-              canUseTool: createClaudeAgentSdkToolPermissionHandler({
-                isUsingOllama,
+              permissionHandler: {
                 permissionPolicy,
                 guardedContract,
                 getGuardedContract: (contractId) =>
@@ -1607,18 +1597,11 @@ export const claudeRouter = router({
                 subChatId: input.subChatId,
                 pendingToolApprovals: getClaudePendingToolApprovalStore(),
                 parts,
-              }),
-              stderr: createClaudeAgentSdkStderrHandler({
-                stderrLines,
-                isUsingOllama,
-              }),
-              pathToClaudeCodeExecutable: claudeBinaryPath,
-              ...resolveClaudeAgentSdkResumeOptions({
-                isUsingOllama,
-                shouldForkResume,
-                forkResumeAtUuid,
-                resumeAtUuid,
-              }),
+              },
+              stderrLines,
+              shouldForkResume,
+              forkResumeAtUuid,
+              resumeAtUuid,
               model: resolvedModel,
               maxThinkingTokens: input.maxThinkingTokens,
             })

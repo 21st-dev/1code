@@ -5,6 +5,7 @@ import {
 } from "../src/main/lib/agent-runtime/permission-policy"
 import {
   createClaudeAgentSdkQueryOptions,
+  createClaudeAgentSdkRuntimeQueryOptions,
   createClaudeAgentSdkStderrHandler,
   prepareClaudeAgentSdkMcpServers,
   resolveClaudeAgentSdkResumeOptions,
@@ -152,6 +153,73 @@ describe("Claude Agent SDK query options", () => {
       resumeSessionAt: null,
       forkSession: false,
     })
+  })
+
+  test("builds runtime query options with owned tool, stderr, binary, and resume wiring", async () => {
+    const sourceController = new AbortController()
+    const request = createRequest({
+      signal: sourceController.signal,
+      resumeSessionId: "session-1",
+    })
+    const stderrLines: string[] = []
+    const emitted: unknown[] = []
+    const guardEvents: unknown[] = []
+
+    const queryParams = createClaudeAgentSdkRuntimeQueryOptions({
+      request,
+      prompt: "hello",
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+      },
+      env: { PATH: "/bin" },
+      permission: getClaudePermissionMapping(request.permissionPolicy),
+      mcpServers: {},
+      isUsingOllama: false,
+      permissionHandler: {
+        permissionPolicy: request.permissionPolicy,
+        guardedContract: null,
+        getGuardedContract: () => undefined,
+        recordGuardEvent: (event) => {
+          guardEvents.push(event)
+        },
+        emit: (chunk) => {
+          emitted.push(chunk)
+        },
+        subChatId: "sub-1",
+        pendingToolApprovals: new Map(),
+        parts: [],
+      },
+      stderrLines,
+      shouldForkResume: true,
+      forkResumeAtUuid: "fork-uuid",
+      resumeAtUuid: "resume-uuid",
+      model: "claude-sonnet-4",
+      maxThinkingTokens: 2048,
+      getClaudeBinaryPath: () => "/owned/claude",
+    })
+
+    expect(queryParams.options.pathToClaudeCodeExecutable).toBe("/owned/claude")
+    expect(queryParams.options.resume).toBe("session-1")
+    expect(queryParams.options.resumeSessionAt).toBe("fork-uuid")
+    expect(queryParams.options.forkSession).toBe(true)
+    expect(queryParams.options.model).toBe("claude-sonnet-4")
+    expect(queryParams.options.maxThinkingTokens).toBe(2048)
+
+    expect(typeof queryParams.options.stderr).toBe("function")
+    expect(stderrLines).toEqual([])
+    await expect(
+      queryParams.options.canUseTool?.(
+        "Read",
+        { file_path: "/repo/README.md" },
+        { toolUseID: "tool-1" } as any,
+      ),
+    ).resolves.toEqual({
+      behavior: "allow",
+      updatedInput: { file_path: "/repo/README.md" },
+    })
+    expect(emitted).toEqual([])
+    expect(guardEvents).toEqual([])
   })
 
   test("maps run request and runtime controls into SDK query params", () => {
