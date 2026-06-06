@@ -94,6 +94,10 @@ describe("rich chat attachment send pipeline", () => {
   test("Claude, Codex, and auth retry paths preserve refs and resolve in main", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const codexChatHistory = readFileSync(
+      "src/main/lib/codex/chat-history.ts",
+      "utf8",
+    )
     const ipc = readFileSync(
       "src/renderer/features/agents/lib/ipc-chat-transport.ts",
       "utf8",
@@ -110,7 +114,8 @@ describe("rich chat attachment send pipeline", () => {
     expect(claude).toContain("resolveChatImageAttachments(input.images)")
     expect(claude).toContain("buildChatImageAttachmentParts(input.images)")
     expect(codex).toContain("resolveChatImageAttachments(input.images)")
-    expect(codex).toContain("buildUserParts(")
+    expect(codex).toContain("buildCodexUserParts(")
+    expect(codexChatHistory).toContain("buildCodexUserParts(")
     expect(ipc).toContain("normalizeChatImageAttachmentPart(part)")
     expect(acp).toContain("normalizeChatImageAttachmentPart(part)")
     expect(authRetry).toContain('type: "attachment-image"')

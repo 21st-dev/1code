@@ -104,6 +104,10 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
     const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
+    const codexChatHistory = readFileSync(
+      "src/main/lib/codex/chat-history.ts",
+      "utf8",
+    )
     const codexDesktopRunRequest = readFileSync(
       "src/main/lib/codex/desktop-run-request.ts",
       "utf8",
@@ -115,6 +119,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/acp-text-stream")
     expect(codexRouter).toContain("../../codex/acp-ui-stream")
     expect(codexRouter).toContain("../../codex/acp-message-persistence")
+    expect(codexRouter).toContain("../../codex/chat-history")
     expect(codexRouter).toContain("../../codex/usage-metadata")
     expect(codexRouter).toContain("../../codex/prompt")
     expect(codexRouter).toContain("const desktopRunRequest = createCodexDesktopRunRequest")
@@ -134,6 +139,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("const desktopRunRequest: DesktopRunRequest")
     expect(codexRouter).not.toContain("pollCodexUsageMetadata")
     expect(codexRouter).not.toContain("usagePromise")
+    expect(codexRouter).not.toContain("function parseStoredMessages")
+    expect(codexRouter).not.toContain("function buildUserParts")
     expect(codexRouter).not.toContain("pendingFinishChunk")
     expect(codexRouter).not.toContain("cleanCodexAssistantMessageForPersistence")
     expect(codexAcpAdapter).toContain("createACPProvider")
@@ -152,6 +159,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexUsageMetadata).toContain("readLatestTokenCountInfo")
     expect(codexPrompt).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("preparePromptWithAppAgents")
+    expect(codexChatHistory).toContain("parseCodexStoredMessages")
+    expect(codexChatHistory).toContain("buildCodexUserParts")
     expect(codexDesktopRunRequest).toContain("createCodexDesktopRunRequest")
     expect(codexDesktopRunRequest).toContain("createDesktopRunContextFromPreflight")
   })
