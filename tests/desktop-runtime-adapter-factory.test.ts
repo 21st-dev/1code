@@ -590,14 +590,26 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-query-options.ts",
       "utf8",
     )
+    const runtimeQuery = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-query.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-query-options")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-query")
     expect(claudeRouter).toContain(
-      "const queryOptions = createClaudeAgentSdkDesktopRuntimeQueryOptions({",
+      "prepareClaudeAgentSdkDesktopRuntimeQuery({",
+    )
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-query-options")
+    expect(claudeRouter).not.toContain(
+      "createClaudeAgentSdkDesktopRuntimeQueryOptions({",
     )
     expect(claudeRouter).not.toContain("permissionHandler: {")
     expect(claudeRouter).not.toContain("guardEvents.push(event)")
-    expect(claudeRouter).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(claudeRouter).not.toContain("prepareClaudeAgentSdkMcpServers")
+    expect(runtimeQuery).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(runtimeQuery).toContain(
+      "createClaudeAgentSdkDesktopRuntimeQueryOptions",
+    )
     expect(claudeQueryOptions).toContain(
       "createClaudeAgentSdkDesktopRuntimeQueryOptions",
     )
@@ -1138,9 +1150,14 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-project-context.ts",
       "utf8",
     )
+    const runtimeQuery = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-query.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-project-context")
-    expect(claudeRouter).toContain("prepareClaudeAgentSdkPromptContext")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-project-context")
+    expect(claudeRouter).not.toContain("prepareClaudeAgentSdkPromptContext")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-query")
     expect(claudeRouter).not.toContain("readClaudeAgentSdkProjectAgentsMd")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkSystemPromptConfig")
     expect(claudeRouter).not.toContain('path.join(runtimeCwd, "AGENTS.md")')
@@ -1150,6 +1167,7 @@ describe("desktop runtime adapter factory", () => {
     expect(projectContext).toContain("createClaudeAgentSdkSystemPromptConfig")
     expect(projectContext).toContain("createClaudeOllamaPrompt")
     expect(projectContext).toContain('path.join(cwd, "AGENTS.md")')
+    expect(runtimeQuery).toContain("prepareClaudeAgentSdkPromptContext")
   })
 
   test("keeps Claude Ollama stream diagnostics ownership out of the router", () => {

@@ -21,10 +21,7 @@ import {
   type McpServerConfig,
 } from "../../claude-config"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
-import {
-  createClaudeAgentSdkDesktopRuntimeQueryOptions,
-  prepareClaudeAgentSdkMcpServers,
-} from "../../claude/agent-sdk-query-options"
+import { prepareClaudeAgentSdkDesktopRuntimeQuery } from "../../claude/agent-sdk-runtime-query"
 import {
   completeClaudeAgentSdkRunAfterAdapterWithStreamState,
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
@@ -34,9 +31,6 @@ import { runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer } from "../../claude
 import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
-import {
-  prepareClaudeAgentSdkPromptContext,
-} from "../../claude/agent-sdk-project-context"
 import { prepareClaudeAgentSdkRuntimePromptForDesktopRun } from "../../claude/agent-sdk-prompt"
 import {
   recordClaudeAgentSdkConnectionMethod,
@@ -1203,14 +1197,6 @@ export const claudeRouter = router({
               },
             })
 
-            const mcpServersFiltered = await prepareClaudeAgentSdkMcpServers({
-              mcpServers: mcpServersForSdk,
-              isUsingOllama,
-              projectPath: input.projectPath,
-              cwd: runtimeCwd,
-              ensureTokensFresh: ensureMcpTokensFresh,
-            })
-
             await prepareClaudeAgentSdkRuntimeStartupDiagnostics({
               isUsingOllama,
               customConfig: finalCustomConfig,
@@ -1219,22 +1205,13 @@ export const claudeRouter = router({
               resumeSessionId,
             })
 
-            const promptContext = await prepareClaudeAgentSdkPromptContext({
+            const runtimeQuery = await prepareClaudeAgentSdkDesktopRuntimeQuery({
+              request: desktopRunRequest,
               prompt,
               existingMessages,
-              isUsingOllama,
-              resolvedModel,
-              projectPath: input.projectPath,
-              cwd: runtimeCwd,
-            })
-
-            const queryOptions = createClaudeAgentSdkDesktopRuntimeQueryOptions({
-              request: desktopRunRequest,
-              prompt: promptContext.prompt,
-              systemPrompt: promptContext.systemPrompt,
+              rawMcpServers: mcpServersForSdk,
               env: finalEnv,
               permission: claudePermission,
-              mcpServers: mcpServersFiltered,
               isUsingOllama,
               permissionPolicy,
               guardedContract,
@@ -1248,9 +1225,14 @@ export const claudeRouter = router({
               shouldForkResume,
               forkResumeAtUuid,
               resumeAtUuid,
-              model: resolvedModel,
+              resolvedModel,
               maxThinkingTokens: input.maxThinkingTokens,
+              projectPath: input.projectPath,
+              cwd: runtimeCwd,
+              ensureTokensFresh: ensureMcpTokensFresh,
             })
+            const { queryOptions } = runtimeQuery
+            const mcpServersFiltered = runtimeQuery.mcpServers
 
             const adapterResult =
               await runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
