@@ -33,11 +33,13 @@ import {
 } from "../../claude-config"
 import { getValidClaudeCodeCredential } from "../../claude-credentials"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
+import { getActiveClaudeProviderConfig } from "./claude-provider-config"
 import {
   buildClaudeProviderEnv,
-  getActiveClaudeProviderConfig,
+  normalizeClaudeProviderRuntimeConfig,
+  redactClaudeProviderEnvValueForLog,
   type ClaudeProviderRuntimeConfig,
-} from "./claude-provider-config"
+} from "../../claude/provider-runtime-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
 import {
   CLAUDE_MAX_POLICY_RETRIES,
@@ -104,7 +106,6 @@ import {
   getProviderProfileRuntimeConfig,
 } from "../../provider-profiles/storage"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
-import { redactProviderSecrets } from "../../../../shared/provider-profile-security"
 import { createRollbackStash } from "../../git/stash"
 import { resolveChatImageAttachments } from "../../chat-attachments"
 import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
@@ -169,10 +170,6 @@ function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "review-required") return "pending-review"
   if (gate.status === "read-only") return "read-only"
   return "pending-approval"
-}
-
-function redactClaudeEnvValueForLog(value: string | undefined): string {
-  return value ? redactProviderSecrets(value) : "(default)"
 }
 
 const MCP_SERVER_NAME_REGEX = /^[a-zA-Z0-9_-]+$/
@@ -240,20 +237,6 @@ function getEffectivePluginMcpServerConfig(input: {
   return promotedConfig
     ? { ...input.serverConfig, ...promotedConfig }
     : input.serverConfig
-}
-
-function normalizeRuntimeProviderConfig(config: {
-  model: string
-  token: string
-  baseUrl: string
-  authMode?: "api_key" | "auth_token"
-}): ClaudeProviderRuntimeConfig {
-  return {
-    model: config.model,
-    token: config.token,
-    baseUrl: config.baseUrl,
-    authMode: config.authMode ?? "auth_token",
-  }
 }
 
 // In-memory cache of working MCP server names (resets on app restart)
@@ -1153,7 +1136,7 @@ export const claudeRouter = router({
             // Use offline config if available. Non-secure legacy input defaults
             // to ANTHROPIC_AUTH_TOKEN to preserve previous behavior.
             const finalCustomConfig = offlineResult.config
-              ? normalizeRuntimeProviderConfig(offlineResult.config)
+              ? normalizeClaudeProviderRuntimeConfig(offlineResult.config)
               : providerConfig
             const isUsingOllama = offlineResult.isUsingOllama
             if (finalCustomConfig?.baseUrl) {
@@ -1704,7 +1687,7 @@ export const claudeRouter = router({
 
             if (hasExistingApiConfig) {
               console.log(
-                `[claude] Using explicit Claude provider config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${redactClaudeEnvValueForLog(claudeEnv.ANTHROPIC_BASE_URL)}`,
+                `[claude] Using explicit Claude provider config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${redactClaudeProviderEnvValueForLog(claudeEnv.ANTHROPIC_BASE_URL)}`,
               )
             }
 
@@ -1746,7 +1729,7 @@ export const claudeRouter = router({
             )
             console.log(
               "[claude-auth] Using ANTHROPIC_BASE_URL:",
-              redactClaudeEnvValueForLog(finalEnv.ANTHROPIC_BASE_URL),
+              redactClaudeProviderEnvValueForLog(finalEnv.ANTHROPIC_BASE_URL),
             )
             console.log(
               "[claude-auth] Using ANTHROPIC_AUTH_TOKEN:",

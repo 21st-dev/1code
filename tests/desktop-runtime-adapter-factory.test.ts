@@ -306,6 +306,30 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeDesktopRunRequest).toContain('status: "skipped"')
   })
 
+  test("keeps Claude provider runtime helpers out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeProviderRuntimeConfig = readFileSync(
+      "src/main/lib/claude/provider-runtime-config.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("normalizeClaudeProviderRuntimeConfig")
+    expect(claudeRouter).toContain("redactClaudeProviderEnvValueForLog")
+    expect(claudeRouter).not.toContain(
+      "function normalizeRuntimeProviderConfig",
+    )
+    expect(claudeRouter).not.toContain("function redactClaudeEnvValueForLog")
+    expect(claudeProviderRuntimeConfig).toContain(
+      "normalizeClaudeProviderRuntimeConfig",
+    )
+    expect(claudeProviderRuntimeConfig).toContain(
+      "redactClaudeProviderEnvValueForLog",
+    )
+  })
+
   test("keeps Claude Agent SDK query option ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

@@ -6,6 +6,10 @@ import {
   encryptStringForStorage,
   isSecureStorageAvailable,
 } from "../../secure-storage"
+import type {
+  ClaudeProviderAuthMode,
+  ClaudeProviderRuntimeConfig,
+} from "../../claude/provider-runtime-config"
 import { publicProcedure, router } from "../index"
 
 const CONFIG_ID = "default"
@@ -13,14 +17,7 @@ const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
 const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
 
 export const claudeProviderAuthModeSchema = z.enum(["api_key", "auth_token"])
-export type ClaudeProviderAuthMode = z.infer<typeof claudeProviderAuthModeSchema>
-
-export type ClaudeProviderRuntimeConfig = {
-  model: string
-  baseUrl: string
-  token: string
-  authMode: ClaudeProviderAuthMode
-}
+export type { ClaudeProviderAuthMode, ClaudeProviderRuntimeConfig }
 
 type ClaudeProviderMetadata = {
   id: string
@@ -100,24 +97,6 @@ export function getActiveClaudeProviderConfig():
     authMode: claudeProviderAuthModeSchema.catch("auth_token").parse(row.authMode),
     token: normalizeProviderToken(token),
   }
-}
-
-export function buildClaudeProviderEnv(
-  config: ClaudeProviderRuntimeConfig,
-): Record<string, string> {
-  const env: Record<string, string> = {
-    ANTHROPIC_BASE_URL: config.baseUrl,
-  }
-
-  if (config.authMode === "api_key") {
-    env.ANTHROPIC_API_KEY = config.token
-    env.ANTHROPIC_AUTH_TOKEN = ""
-  } else {
-    env.ANTHROPIC_AUTH_TOKEN = config.token
-    env.ANTHROPIC_API_KEY = ""
-  }
-
-  return env
 }
 
 const saveInputSchema = z.object({
