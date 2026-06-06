@@ -56,6 +56,7 @@ import {
   logClaudeAgentSdkProviderDiagnostics,
   logClaudeAgentSdkSessionDiagnostics,
 } from "../../claude/agent-sdk-runtime-diagnostics"
+import { createClaudeAgentSdkAdapter } from "../../claude/agent-sdk-adapter"
 import {
   flushClaudeAgentSdkTextAccumulator,
   processClaudeAgentSdkUiChunk,
@@ -1833,30 +1834,10 @@ export const claudeRouter = router({
             let messageCount = 0
             let pendingFinishChunk: UIMessageChunk | null = null
 
-            // eslint-disable-next-line no-constant-condition
-            while (true) {
-              policyRetryNeeded = false
-              messageCount = 0
-              pendingFinishChunk = null
-
-              // 5. Run Claude Agent SDK
-              let stream
-              try {
-                stream = claudeQuery(queryOptions)
-              } catch (queryError) {
-                console.error(
-                  "[CLAUDE] ✗ Failed to create SDK query:",
-                  queryError,
-                )
-                emitError(queryError, "Failed to start Claude query")
-                console.log(
-                  `[SD] M:END sub=${subId} reason=query_error n=${chunkCount}`,
-                )
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
-                return
-              }
-
+            const claudeAdapter = createClaudeAgentSdkAdapter({
+              query: claudeQuery,
+              queryOptions,
+              consumeStream: async ({ stream }) => {
               let firstMessageReceived = false
               // Track last assistant message UUID for rollback support
               // Only assigned to metadata AFTER the stream completes (not during generation)
@@ -1987,7 +1968,13 @@ export const claudeRouter = router({
                     })
                     safeEmit({ type: "finish" } as UIMessageChunk)
                     safeComplete()
-                    return
+                    return {
+                      status: "failed" as const,
+                      error: {
+                        message: errorContext,
+                        code: errorCategory,
+                      },
+                    }
                   }
 
                   const trackedMessageMetadata =
@@ -2167,6 +2154,46 @@ export const claudeRouter = router({
 
                 console.log(
                   `[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`,
+                )
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                return {
+                  status: "failed" as const,
+                  error: {
+                    message: errorContext,
+                    code: errorCategory,
+                  },
+                }
+              }
+
+              return {
+                status: "succeeded" as const,
+                sessionId: metadata.sessionId,
+              }
+              },
+            })
+
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              policyRetryNeeded = false
+              messageCount = 0
+              pendingFinishChunk = null
+
+              // 5. Run Claude Agent SDK through the desktop adapter boundary
+              try {
+                const adapterResult =
+                  await claudeAdapter.run(desktopRunRequest)
+                if (adapterResult.status === "failed") {
+                  return
+                }
+              } catch (queryError) {
+                console.error(
+                  "[CLAUDE] ✗ Failed to create SDK query:",
+                  queryError,
+                )
+                emitError(queryError, "Failed to start Claude query")
+                console.log(
+                  `[SD] M:END sub=${subId} reason=query_error n=${chunkCount}`,
                 )
                 safeEmit({ type: "finish" } as UIMessageChunk)
                 safeComplete()
