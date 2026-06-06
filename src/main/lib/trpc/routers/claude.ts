@@ -57,8 +57,10 @@ import {
   createClaudeAgentSdkAdapter,
 } from "../../claude/agent-sdk-adapter"
 import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-adapter-runner"
-import { processClaudeAgentSdkTransformedChunks } from "../../claude/agent-sdk-transformed-chunks"
-import { trackClaudeAgentSdkMessageMetadata } from "../../claude/agent-sdk-message-metadata"
+import {
+  createClaudeAgentSdkStreamProcessingState,
+  processClaudeAgentSdkStreamMessage,
+} from "../../claude/agent-sdk-stream-processor"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -1778,12 +1780,15 @@ export const claudeRouter = router({
                     prompt: input.prompt,
                     cwd: runtimeCwd,
                   })
-                // Track last assistant message UUID for rollback support.
-                // Only assigned to metadata after the stream completes.
-                let lastAssistantUuid: string | null = null
-
-                // Plan mode: track ExitPlanMode to stop after plan is complete.
-                let exitPlanModeToolCallId: string | null = null
+                let streamProcessing =
+                  createClaudeAgentSdkStreamProcessingState({
+                    metadata,
+                    currentSessionId,
+                    currentText,
+                    pendingFinishChunk,
+                    chunkCount,
+                    lastChunkType,
+                  })
 
                 try {
                   for await (const msg of stream) {
@@ -1839,48 +1844,26 @@ export const claudeRouter = router({
                       }
                     }
 
-                    const trackedMessageMetadata =
-                      trackClaudeAgentSdkMessageMetadata({
-                        message: msgAny,
-                        state: {
-                          metadata,
-                          currentSessionId,
-                          lastAssistantUuid,
-                        },
-                        historyEnabled,
-                        aborted: abortController.signal.aborted,
-                      })
-                    metadata = trackedMessageMetadata.metadata
-                    currentSessionId = trackedMessageMetadata.currentSessionId
-                    lastAssistantUuid =
-                      trackedMessageMetadata.lastAssistantUuid
-
-                    const processedChunks =
-                      processClaudeAgentSdkTransformedChunks({
-                        message: msg,
-                        transform,
-                        state: {
-                          metadata,
-                          currentText,
-                          pendingFinishChunk,
-                          exitPlanModeToolCallId,
-                          chunkCount,
-                          lastChunkType,
-                        },
-                        parts,
-                        mode: input.mode,
-                        subId,
-                        subChatId: input.subChatId,
-                        emit: safeEmit,
-                      })
-                    metadata = processedChunks.metadata
-                    currentText = processedChunks.currentText
-                    pendingFinishChunk = processedChunks.pendingFinishChunk
-                    exitPlanModeToolCallId =
-                      processedChunks.exitPlanModeToolCallId
-                    chunkCount = processedChunks.chunkCount
-                    lastChunkType = processedChunks.lastChunkType
+                    streamProcessing = processClaudeAgentSdkStreamMessage({
+                      message: msg,
+                      transform,
+                      state: streamProcessing,
+                      parts,
+                      historyEnabled,
+                      aborted: abortController.signal.aborted,
+                      mode: input.mode,
+                      subId,
+                      subChatId: input.subChatId,
+                      emit: safeEmit,
+                    })
+                    metadata = streamProcessing.metadata
+                    currentSessionId = streamProcessing.currentSessionId
+                    currentText = streamProcessing.currentText
+                    pendingFinishChunk = streamProcessing.pendingFinishChunk
+                    chunkCount = streamProcessing.chunkCount
+                    lastChunkType = streamProcessing.lastChunkType
                     if (
+                      streamProcessing.emitClosed ||
                       shouldStopClaudeAgentSdkStreamForClosedObserver({
                         isActive: isObservableActive,
                         subId,

@@ -901,6 +901,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-transformed-chunks.ts",
       "utf8",
     )
+    const streamProcessor = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-processor.ts",
+      "utf8",
+    )
     const runFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-run-finalization.ts",
       "utf8",
@@ -916,8 +920,11 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-file-change-notification",
     )
-    expect(claudeRouter).toContain("../../claude/agent-sdk-transformed-chunks")
-    expect(claudeRouter).toContain("processClaudeAgentSdkTransformedChunks")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-processor")
+    expect(claudeRouter).toContain("processClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).not.toContain(
+      "processClaudeAgentSdkTransformedChunks",
+    )
     expect(claudeRouter).not.toContain("processClaudeAgentSdkUiChunk")
     expect(claudeRouter).not.toContain("notifyClaudeAgentSdkFileChanged")
     expect(claudeRouter).not.toContain("chunkCount++")
@@ -941,6 +948,8 @@ describe("desktop runtime adapter factory", () => {
     expect(transformedChunks).toContain("notifyClaudeAgentSdkFileChanged")
     expect(transformedChunks).toContain("chunkCount++")
     expect(transformedChunks).toContain("lastChunkType = chunk.type")
+    expect(streamProcessor).toContain("processClaudeAgentSdkStreamMessage")
+    expect(streamProcessor).toContain("processClaudeAgentSdkTransformedChunks")
     expect(fileChangeNotification).toContain(
       "notifyClaudeAgentSdkFileChanged",
     )
@@ -957,19 +966,27 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-message-metadata.ts",
       "utf8",
     )
+    const streamProcessor = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-processor.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain(
-      "../../claude/agent-sdk-message-metadata",
+      "../../claude/agent-sdk-stream-processor",
     )
-    expect(claudeRouter).toContain("trackClaudeAgentSdkMessageMetadata")
+    expect(claudeRouter).toContain("processClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).not.toContain("trackClaudeAgentSdkMessageMetadata")
     expect(claudeRouter).not.toContain("metadata.sessionId = msgAny.session_id")
     expect(claudeRouter).not.toContain('msgAny.type === "system"')
     expect(claudeRouter).not.toContain(
       "metadata.sdkMessageUuid = lastAssistantUuid",
     )
+    expect(claudeRouter).not.toContain("let lastAssistantUuid")
     expect(messageMetadata).toContain("trackClaudeAgentSdkMessageMetadata")
     expect(messageMetadata).toContain('msgAny.type === "system"')
     expect(messageMetadata).toContain("sdkMessageUuid: lastAssistantUuid")
+    expect(streamProcessor).toContain("trackClaudeAgentSdkMessageMetadata")
+    expect(streamProcessor).toContain("lastAssistantUuid")
   })
 
   test("keeps Claude Agent SDK tool permission ownership out of the router", () => {
