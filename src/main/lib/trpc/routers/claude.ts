@@ -85,6 +85,18 @@ import {
   getClaudePendingToolApprovalStore,
   resolveClaudePendingToolApproval,
 } from "../../claude/tool-approvals"
+import {
+  buildClaudeUserParts,
+  claudeImageAttachmentSignatureFromInput,
+  claudeImageAttachmentSignatureFromParts,
+  claudeLongTextAttachmentSignatureFromInput,
+  claudeLongTextAttachmentSignatureFromParts,
+} from "../../claude/chat-history"
+import {
+  imageAttachmentSchema,
+  longTextAttachmentSchema,
+  type ImageAttachment,
+} from "../../claude/chat-input-schema"
 import { createClaudeDesktopRunRequest } from "../../claude/desktop-run-request"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import {
@@ -301,140 +313,6 @@ async function readProjectMcpJsonCached(
   } catch {
     return {}
   }
-}
-
-const imageAttachmentSchema = z.object({
-  base64Data: z.string().optional(),
-  localRef: z.string().optional(),
-  attachmentId: z.string().optional(),
-  mediaType: z.string(), // e.g. "image/png", "image/jpeg"
-  filename: z.string().optional(),
-  sizeBytes: z.number().int().nonnegative().optional(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  sha256: z.string().optional(),
-})
-
-export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
-
-const longTextAttachmentSchema = z.object({
-  type: z.literal("long-text-attachment").optional(),
-  attachmentId: z.string(),
-  localRef: z.string(),
-  filename: z.string(),
-  byteLength: z.number().int().nonnegative(),
-  preview: z.string().optional(),
-  kind: z.enum(["pasted", "chatHistory"]),
-})
-
-function buildLongTextAttachmentParts(
-  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
-): any[] {
-  return (attachments ?? []).map((attachment) => ({
-    type: "long-text-attachment",
-    attachmentId: attachment.attachmentId,
-    localRef: attachment.localRef,
-    filename: attachment.filename,
-    byteLength: attachment.byteLength,
-    preview: attachment.preview ?? "",
-    kind: attachment.kind,
-  }))
-}
-
-function longTextAttachmentSignatureFromParts(parts: any[] | undefined): string {
-  return JSON.stringify(
-    (parts ?? [])
-      .filter((part: any) => part?.type === "long-text-attachment")
-      .map((part: any) => ({
-        localRef: part.localRef,
-        byteLength: part.byteLength,
-        kind: part.kind,
-      }))
-  )
-}
-
-function longTextAttachmentSignatureFromInput(
-  attachments: z.infer<typeof longTextAttachmentSchema>[] | undefined
-): string {
-  return JSON.stringify(
-    (attachments ?? []).map((attachment) => ({
-      localRef: attachment.localRef,
-      byteLength: attachment.byteLength,
-      kind: attachment.kind,
-    }))
-  )
-}
-
-function chatImageAttachmentSignatureFromParts(parts: any[] | undefined): string {
-  return JSON.stringify(
-    (parts ?? [])
-      .filter(
-        (part: any) =>
-          part?.type === "attachment-image" || part?.type === "data-image",
-      )
-      .map((part: any) => {
-        if (part.type === "attachment-image") {
-          return {
-            localRef: part.localRef,
-            sizeBytes: part.sizeBytes,
-            mediaType: part.mediaType,
-          }
-        }
-        return {
-          legacy: true,
-          filename: part.data?.filename,
-          mediaType: part.data?.mediaType,
-          base64Length:
-            typeof part.data?.base64Data === "string"
-              ? part.data.base64Data.length
-              : 0,
-        }
-      })
-  )
-}
-
-function chatImageAttachmentSignatureFromInput(
-  images: z.infer<typeof imageAttachmentSchema>[] | undefined
-): string {
-  return JSON.stringify(
-    (images ?? []).map((image) => ({
-      localRef: image.localRef,
-      sizeBytes: image.sizeBytes,
-      mediaType: image.mediaType,
-      legacy: image.localRef ? undefined : Boolean(image.base64Data),
-      base64Length:
-        !image.localRef && image.base64Data ? image.base64Data.length : 0,
-    }))
-  )
-}
-
-function buildChatImageAttachmentParts(
-  images: z.infer<typeof imageAttachmentSchema>[] | undefined
-): any[] {
-  return (images ?? []).map((image) => {
-    if (image.localRef) {
-      return {
-        type: "attachment-image",
-        attachmentId: image.attachmentId || image.localRef,
-        localRef: image.localRef,
-        filename: image.filename || "image",
-        mediaType: image.mediaType,
-        sizeBytes: image.sizeBytes || 0,
-        width: image.width,
-        height: image.height,
-        sha256: image.sha256,
-      }
-    }
-
-    return {
-      type: "data-image",
-      data: {
-        base64Data: image.base64Data,
-        mediaType: image.mediaType,
-        filename: image.filename,
-      },
-    }
-  })
 }
 
 /**
@@ -1134,10 +1012,12 @@ export const claudeRouter = router({
             const isDuplicate =
               lastMsg?.role === "user" &&
               lastMsgText === input.prompt &&
-              longTextAttachmentSignatureFromParts(lastMsg?.parts) ===
-                longTextAttachmentSignatureFromInput(input.longTextAttachments) &&
-              chatImageAttachmentSignatureFromParts(lastMsg?.parts) ===
-                chatImageAttachmentSignatureFromInput(input.images)
+              claudeLongTextAttachmentSignatureFromParts(lastMsg?.parts) ===
+                claudeLongTextAttachmentSignatureFromInput(
+                  input.longTextAttachments,
+                ) &&
+              claudeImageAttachmentSignatureFromParts(lastMsg?.parts) ===
+                claudeImageAttachmentSignatureFromInput(input.images)
 
             // 2. Create user message and save BEFORE streaming (skip if duplicate)
             let userMessage: any
@@ -1147,14 +1027,15 @@ export const claudeRouter = router({
               userMessage = lastMsg
               messagesToSave = existingMessages
             } else {
-              const parts: any[] = [{ type: "text", text: input.prompt }]
-              parts.push(...buildChatImageAttachmentParts(input.images))
-              parts.push(...buildLongTextAttachmentParts(input.longTextAttachments))
               userMessage = {
                 id: crypto.randomUUID(),
                 role: "user",
                 createdAt: new Date().toISOString(),
-                parts,
+                parts: buildClaudeUserParts(
+                  input.prompt,
+                  input.images,
+                  input.longTextAttachments,
+                ),
               }
               messagesToSave = [...existingMessages, userMessage]
 

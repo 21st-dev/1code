@@ -402,6 +402,39 @@ describe("desktop runtime adapter factory", () => {
     )
   })
 
+  test("keeps Claude chat history attachment ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const claudeChatHistory = readFileSync(
+      "src/main/lib/claude/chat-history.ts",
+      "utf8",
+    )
+    const claudeChatInputSchema = readFileSync(
+      "src/main/lib/claude/chat-input-schema.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/chat-history")
+    expect(claudeRouter).toContain("../../claude/chat-input-schema")
+    expect(claudeRouter).toContain("buildClaudeUserParts(")
+    expect(claudeRouter).not.toContain(
+      "function buildLongTextAttachmentParts",
+    )
+    expect(claudeRouter).not.toContain(
+      "function chatImageAttachmentSignatureFromParts",
+    )
+    expect(claudeRouter).not.toContain("const imageAttachmentSchema = z.object")
+    expect(claudeChatHistory).toContain("buildClaudeUserParts")
+    expect(claudeChatHistory).toContain("buildClaudeChatImageAttachmentParts")
+    expect(claudeChatHistory).toContain(
+      "claudeLongTextAttachmentSignatureFromParts",
+    )
+    expect(claudeChatInputSchema).toContain("imageAttachmentSchema")
+    expect(claudeChatInputSchema).toContain("longTextAttachmentSchema")
+  })
+
   test("keeps Claude Agent SDK chunk processing ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",
