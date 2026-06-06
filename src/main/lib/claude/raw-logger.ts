@@ -1,4 +1,4 @@
-import { app } from "electron"
+import * as electron from "electron"
 import { join } from "path"
 import { appendFile, mkdir, stat, readdir, unlink } from "fs/promises"
 
@@ -14,7 +14,7 @@ let currentLogFile: string | null = null
 let currentSessionId: string | null = null
 
 async function ensureLogsDir(): Promise<string> {
-  const desiredDir = join(app.getPath("userData"), "logs", "claude")
+  const desiredDir = join(electron.app.getPath("userData"), "logs", "claude")
   if (logsDir !== desiredDir) {
     logsDir = desiredDir
     currentLogFile = null
@@ -136,5 +136,5 @@ export async function logRawClaudeMessage(
  * Useful for UI to show "Open Logs" button
  */
 export function getLogsDirectory(): string {
-  return join(app.getPath("userData"), "logs", "claude")
+  return join(electron.app.getPath("userData"), "logs", "claude")
 }

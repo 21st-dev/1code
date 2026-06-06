@@ -13,7 +13,6 @@ import {
   createTransformer,
   getBundledClaudeBinaryPath,
   logClaudeEnv,
-  logRawClaudeMessage,
   type UIMessageChunk,
 } from "../../claude"
 import {
@@ -78,8 +77,8 @@ import { createClaudeOllamaPrompt } from "../../claude/agent-sdk-ollama-prompt"
 import {
   completeClaudeAgentSdkStreamIteration,
   createClaudeAgentSdkStreamIterationState,
-  recordClaudeAgentSdkStreamMessage,
 } from "../../claude/agent-sdk-stream-lifecycle"
+import { recordClaudeAgentSdkIncomingMessage } from "../../claude/agent-sdk-stream-message"
 import {
   shouldStopClaudeAgentSdkStreamForAbort,
   shouldStopClaudeAgentSdkStreamForClosedObserver,
@@ -1801,14 +1800,12 @@ export const claudeRouter = router({
                       break
                     }
 
-                    messageCount = recordClaudeAgentSdkStreamMessage({
+                    messageCount = recordClaudeAgentSdkIncomingMessage({
+                      chatId: input.chatId,
                       state: streamIteration,
                       message: msg,
                       isUsingOllama,
                     }).messageCount
-
-                    // Log raw message for debugging
-                    logRawClaudeMessage(input.chatId, msg)
 
                     // Check for error messages from SDK (error can be embedded in message payload!)
                     const msgAny = msg as any

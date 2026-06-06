@@ -473,10 +473,17 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-lifecycle.ts",
       "utf8",
     )
+    const streamMessage = readFileSync(
+      "src/main/lib/claude/agent-sdk-stream-message.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-stream-lifecycle")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-stream-message")
     expect(claudeRouter).toContain("createClaudeAgentSdkStreamIterationState()")
-    expect(claudeRouter).toContain("recordClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).toContain("recordClaudeAgentSdkIncomingMessage")
+    expect(claudeRouter).not.toContain("recordClaudeAgentSdkStreamMessage")
+    expect(claudeRouter).not.toContain("logRawClaudeMessage")
     expect(claudeRouter).toContain("completeClaudeAgentSdkStreamIteration")
     expect(claudeRouter).not.toContain("let firstMessageReceived")
     expect(claudeRouter).not.toContain("streamIterationStart")
@@ -491,6 +498,9 @@ describe("desktop runtime adapter factory", () => {
     expect(streamLifecycle).toContain("logClaudeOllamaFirstMessageLatency")
     expect(streamLifecycle).toContain("logClaudeOllamaStreamComplete")
     expect(streamLifecycle).toContain("logClaudeOllamaEmptyStreamDiagnosis")
+    expect(streamMessage).toContain("recordClaudeAgentSdkIncomingMessage")
+    expect(streamMessage).toContain("recordClaudeAgentSdkStreamMessage")
+    expect(streamMessage).toContain("logRawClaudeMessage")
   })
 
   test("keeps Claude Agent SDK stream stop control out of the router", () => {
