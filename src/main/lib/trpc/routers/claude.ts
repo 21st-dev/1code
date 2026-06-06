@@ -45,7 +45,10 @@ import {
   prepareClaudeAgentSdkMcpServers,
   resolveClaudeAgentSdkResumeOptions,
 } from "../../claude/agent-sdk-query-options"
-import { handleClaudeAgentSdkEmbeddedErrorMessage } from "../../claude/agent-sdk-embedded-error-finalization"
+import {
+  createClaudeAgentSdkEmbeddedErrorContext,
+  handleClaudeAgentSdkEmbeddedErrorMessage,
+} from "../../claude/agent-sdk-embedded-error-finalization"
 import {
   completeClaudeAgentSdkRunAfterAdapter,
   finalizeClaudeAgentSdkUnexpectedError,
@@ -1687,21 +1690,19 @@ export const claudeRouter = router({
                       handleClaudeAgentSdkEmbeddedErrorMessage({
                         message: msg,
                         policyRetry,
-                        usesApiKeyAuth: Boolean(
-                          finalCustomConfig || hasExistingApiConfig,
-                        ),
-                        aborted: abortController.signal.aborted,
-                        subChatId: input.subChatId,
-                        chatId: input.chatId,
-                        cwd: runtimeCwd,
-                        mode: input.mode,
-                        hasCustomConfig: !!finalCustomConfig,
-                        isUsingOllama,
-                        model: resolvedModel,
-                        hasOAuthToken: !!claudeCodeToken,
-                        mcpServerNames: mcpServersFiltered
-                          ? Object.keys(mcpServersFiltered)
-                          : [],
+                        ...createClaudeAgentSdkEmbeddedErrorContext({
+                          customConfig: finalCustomConfig,
+                          hasExistingApiConfig,
+                          aborted: abortController.signal.aborted,
+                          subChatId: input.subChatId,
+                          chatId: input.chatId,
+                          cwd: runtimeCwd,
+                          mode: input.mode,
+                          isUsingOllama,
+                          model: resolvedModel,
+                          oauthToken: claudeCodeToken,
+                          mcpServers: mcpServersFiltered,
+                        }),
                         subId,
                         chunkCount,
                         emit: safeEmit,

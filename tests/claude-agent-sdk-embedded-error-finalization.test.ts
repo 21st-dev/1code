@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import {
+  createClaudeAgentSdkEmbeddedErrorContext,
   finalizeClaudeAgentSdkEmbeddedError,
   handleClaudeAgentSdkEmbeddedErrorMessage,
 } from "../src/main/lib/claude/agent-sdk-embedded-error-finalization"
@@ -48,6 +49,60 @@ function baseInput() {
 }
 
 describe("Claude Agent SDK embedded error finalization", () => {
+  test("creates embedded error diagnostic context from runtime state", () => {
+    expect(
+      createClaudeAgentSdkEmbeddedErrorContext({
+        customConfig: { model: "qwen" },
+        hasExistingApiConfig: true,
+        aborted: true,
+        subChatId: "sub-1",
+        chatId: "chat-1",
+        cwd: "/repo",
+        mode: "agent",
+        isUsingOllama: true,
+        model: "qwen",
+        oauthToken: "token",
+        mcpServers: {
+          filesystem: {},
+          github: {},
+        },
+      }),
+    ).toEqual({
+      usesApiKeyAuth: true,
+      aborted: true,
+      subChatId: "sub-1",
+      chatId: "chat-1",
+      cwd: "/repo",
+      mode: "agent",
+      hasCustomConfig: true,
+      isUsingOllama: true,
+      model: "qwen",
+      hasOAuthToken: true,
+      mcpServerNames: ["filesystem", "github"],
+    })
+
+    expect(
+      createClaudeAgentSdkEmbeddedErrorContext({
+        customConfig: null,
+        hasExistingApiConfig: false,
+        aborted: false,
+        subChatId: "sub-1",
+        chatId: "chat-1",
+        cwd: "/repo",
+        mode: "plan",
+        isUsingOllama: false,
+        model: "claude-sonnet",
+        oauthToken: null,
+        mcpServers: undefined,
+      }),
+    ).toMatchObject({
+      usesApiKeyAuth: false,
+      hasCustomConfig: false,
+      hasOAuthToken: false,
+      mcpServerNames: [],
+    })
+  })
+
   test("ignores non-error SDK messages before finalization", () => {
     const input = {
       ...baseInput(),

@@ -34,6 +34,47 @@ export type FinalizeClaudeAgentSdkEmbeddedErrorInput = {
   log?: (...args: any[]) => void
 }
 
+export function createClaudeAgentSdkEmbeddedErrorContext(input: {
+  customConfig?: { model?: string | null } | null
+  hasExistingApiConfig: boolean
+  aborted: boolean
+  subChatId: string
+  chatId: string
+  cwd: string
+  mode: string
+  isUsingOllama: boolean
+  model?: string | null
+  oauthToken?: string | null
+  mcpServers?: Record<string, unknown> | null
+}): Pick<
+  FinalizeClaudeAgentSdkEmbeddedErrorInput,
+  | "usesApiKeyAuth"
+  | "aborted"
+  | "subChatId"
+  | "chatId"
+  | "cwd"
+  | "mode"
+  | "hasCustomConfig"
+  | "isUsingOllama"
+  | "model"
+  | "hasOAuthToken"
+  | "mcpServerNames"
+> {
+  return {
+    usesApiKeyAuth: Boolean(input.customConfig || input.hasExistingApiConfig),
+    aborted: input.aborted,
+    subChatId: input.subChatId,
+    chatId: input.chatId,
+    cwd: input.cwd,
+    mode: input.mode,
+    hasCustomConfig: Boolean(input.customConfig),
+    isUsingOllama: input.isUsingOllama,
+    model: input.model,
+    hasOAuthToken: Boolean(input.oauthToken),
+    mcpServerNames: input.mcpServers ? Object.keys(input.mcpServers) : [],
+  }
+}
+
 export type FinalizeClaudeAgentSdkEmbeddedErrorResult =
   | { status: "retry" }
   | {

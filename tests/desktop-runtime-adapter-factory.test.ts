@@ -735,6 +735,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
     expect(claudeRouter).toContain("handleClaudeAgentSdkEmbeddedErrorMessage")
+    expect(claudeRouter).toContain("createClaudeAgentSdkEmbeddedErrorContext")
+    expect(claudeRouter).not.toContain("usesApiKeyAuth: Boolean(")
+    expect(claudeRouter).not.toContain("mcpServerNames: mcpServersFiltered")
     expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkEmbeddedError")
     expect(claudeRouter).not.toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).not.toContain("let policyRetryNeeded")
@@ -754,6 +757,10 @@ describe("desktop runtime adapter factory", () => {
     expect(embeddedErrorFinalization).toContain(
       "handleClaudeAgentSdkEmbeddedErrorMessage",
     )
+    expect(embeddedErrorFinalization).toContain(
+      "createClaudeAgentSdkEmbeddedErrorContext",
+    )
+    expect(embeddedErrorFinalization).toContain("usesApiKeyAuth: Boolean(")
   })
 
   test("keeps Claude renderer stream emission redaction in runtime owner", () => {
