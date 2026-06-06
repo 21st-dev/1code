@@ -1,4 +1,3 @@
-import { createACPProvider, type ACPProvider } from "@mcpc-tech/acp-ai-provider"
 import { observable } from "@trpc/server/observable"
 import { streamText } from "ai"
 import { eq } from "drizzle-orm"
@@ -58,13 +57,12 @@ import {
   getBundledCodexCliPath,
   resolveBundledCodexCliPath,
 } from "../../codex/cli-path"
+import type { CodexProviderProfileBinding } from "../../codex/provider-runtime-binding"
 import {
-  buildCodexProviderEnv,
-  buildCodexProviderProfileArgs,
-  getCodexAuthMethodId,
-  redactCodexProviderProfileArgs,
-  type CodexProviderProfileBinding,
-} from "../../codex/provider-runtime-binding"
+  cleanupAllCodexAcpProviders,
+  cleanupCodexAcpProvider,
+  getOrCreateCodexAcpProvider,
+} from "../../codex/acp-adapter"
 import {
   createCodexAskUserQuestionTools,
   installCodexAskUserQuestionAcpResultNormalizer,
@@ -192,14 +190,6 @@ function chatImageAttachmentSignatureFromInput(
   )
 }
 
-type CodexProviderSession = {
-  provider: ACPProvider
-  cwd: string
-  authFingerprint: string | null
-  mcpFingerprint: string
-  providerProfileId: string | null
-}
-
 type CodexLoginSessionState =
   | "running"
   | "success"
@@ -264,7 +254,6 @@ type CodexMcpSnapshot = {
   toolsResolved: boolean
 }
 
-const providerSessions = new Map<string, CodexProviderSession>()
 type ActiveCodexStream = {
   runId: string
   controller: AbortController
@@ -1655,11 +1644,6 @@ function preprocessCodexModelName(params: {
   return params.modelId
 }
 
-function getAuthFingerprint(appManagedApiKey?: string | null): string | null {
-  if (!appManagedApiKey) return null
-  return createHash("sha256").update(appManagedApiKey).digest("hex")
-}
-
 function buildUserParts(
   prompt: string,
   images:
@@ -1739,117 +1723,6 @@ function buildModelMessageContent(
   return content
 }
 
-function getOrCreateProvider(params: {
-  subChatId: string
-  cwd: string
-  mcpServers: CodexMcpServerForSession[]
-  mcpFingerprint: string
-  existingSessionId?: string
-  appManagedApiKey?: string | null
-  providerProfile?: CodexProviderProfileBinding
-}): ACPProvider {
-  const authFingerprint = getAuthFingerprint(params.appManagedApiKey)
-  const existing = providerSessions.get(params.subChatId)
-
-  if (
-    existing &&
-    existing.cwd === params.cwd &&
-    existing.authFingerprint === authFingerprint &&
-    existing.mcpFingerprint === params.mcpFingerprint &&
-    existing.providerProfileId === (params.providerProfile?.id ?? null)
-  ) {
-    return existing.provider
-  }
-
-  if (existing) {
-    existing.provider.cleanup()
-    providerSessions.delete(params.subChatId)
-  }
-
-  const hasAppManagedApiKey = Boolean(params.appManagedApiKey?.trim())
-  // When app-managed key auth is used, avoid resuming older persisted session IDs.
-  // Those can be tied to unauthenticated/CLI-auth state and trigger auth loops.
-  const existingSessionIdForProvider = hasAppManagedApiKey
-    ? undefined
-    : params.existingSessionId
-  const command = resolveCodexAcpBinaryPath()
-  const providerProfileArgs = params.providerProfile
-    ? buildCodexProviderProfileArgs(params.providerProfile)
-    : undefined
-  const authMethodId = getCodexAuthMethodId({
-    appManagedApiKey: params.appManagedApiKey,
-    providerProfile: params.providerProfile,
-  })
-  const providerSource = params.providerProfile
-    ? "provider-profile"
-    : hasAppManagedApiKey
-      ? "codex-api-key"
-      : "chatgpt"
-  const commandStatus = getRuntimeExecutableStatus(
-    command,
-    "Codex ACP runtime must be executable before provider start.",
-  )
-
-  console.info("[codex-acp] starting provider", {
-    subChatId: params.subChatId.slice(-8),
-    command,
-    commandOk: commandStatus.ok,
-    commandError: commandStatus.error,
-    cwd: params.cwd,
-    cwdExists: existsSync(params.cwd),
-    args: providerProfileArgs ? redactCodexProviderProfileArgs(providerProfileArgs) : [],
-    authMethodId: authMethodId ?? null,
-    providerSource,
-    hasExistingSessionId: Boolean(existingSessionIdForProvider),
-    mcpServerCount: params.mcpServers.length,
-  })
-
-  const provider = createACPProvider({
-    command,
-    env: buildCodexProviderEnv({
-      processEnv: process.env,
-      shellEnv: getClaudeShellEnvironment(),
-      appManagedApiKey: params.appManagedApiKey,
-      providerGatewayToken: params.providerProfile?.token,
-    }),
-    ...(providerProfileArgs ? { args: providerProfileArgs } : {}),
-    authMethodId,
-    session: {
-      cwd: params.cwd,
-      mcpServers: params.mcpServers,
-    },
-    ...(existingSessionIdForProvider
-      ? { existingSessionId: existingSessionIdForProvider }
-      : {}),
-    persistSession: true,
-  })
-
-  providerSessions.set(params.subChatId, {
-    provider,
-    cwd: params.cwd,
-    authFingerprint,
-    mcpFingerprint: params.mcpFingerprint,
-    providerProfileId: params.providerProfile?.id ?? null,
-  })
-
-  return provider
-}
-
-function cleanupProvider(subChatId: string): void {
-  const existing = providerSessions.get(subChatId)
-  if (!existing) return
-
-  existing.provider.cleanup()
-  providerSessions.delete(subChatId)
-}
-
-function cleanupAllProviders(): void {
-  for (const existing of providerSessions.values()) {
-    existing.provider.cleanup()
-  }
-  providerSessions.clear()
-}
-
 function resolveCodexMcpProjectPathForCli(
   projectPath: string | undefined,
 ): string | undefined {
@@ -1881,13 +1754,13 @@ export const codexRouter = router({
     .input(z.object({ apiKey: z.string().min(1) }))
     .mutation(({ input }) => {
       const status = saveStoredCodexApiKey(input.apiKey)
-      cleanupAllProviders()
+      cleanupAllCodexAcpProviders()
       return status
     }),
 
   removeCodexApiKey: publicProcedure.mutation(() => {
     const status = removeStoredCodexApiKey()
-    cleanupAllProviders()
+    cleanupAllCodexAcpProviders()
     return status
   }),
 
@@ -2153,7 +2026,7 @@ export const codexRouter = router({
           existingStream.cancelRequested = true
           existingStream.controller.abort()
           // Ensure old run cannot continue emitting after supersede.
-          cleanupProvider(input.subChatId)
+          cleanupCodexAcpProvider(input.subChatId)
         }
 
         const abortController = new AbortController()
@@ -2573,7 +2446,7 @@ export const codexRouter = router({
             }
 
             if (input.forceNewSession) {
-              cleanupProvider(input.subChatId)
+              cleanupCodexAcpProvider(input.subChatId)
             }
 
             let mcpSnapshot: CodexMcpSnapshot = {
@@ -2676,9 +2549,12 @@ export const codexRouter = router({
               },
             })
 
-            const provider = getOrCreateProvider({
+            const provider = getOrCreateCodexAcpProvider({
               subChatId: input.subChatId,
               cwd: runtimeCwd,
+              command: resolveCodexAcpBinaryPath(),
+              shellEnv: getClaudeShellEnvironment(),
+              processEnv: process.env,
               mcpServers: mcpSnapshot.mcpServersForSession,
               mcpFingerprint: mcpSnapshot.fingerprint,
               existingSessionId:
@@ -3014,7 +2890,7 @@ export const codexRouter = router({
               const shouldCleanupProvider =
                 abortController.signal.aborted || activeStream.cancelRequested
               if (shouldCleanupProvider) {
-                cleanupProvider(input.subChatId)
+                cleanupCodexAcpProvider(input.subChatId)
               }
               clearPendingCodexApprovals("Session cancelled.", input.subChatId)
               activeStreams.delete(input.subChatId)
@@ -3096,7 +2972,7 @@ export const codexRouter = router({
   cleanup: publicProcedure
     .input(z.object({ subChatId: z.string() }))
     .mutation(({ input }) => {
-      cleanupProvider(input.subChatId)
+      cleanupCodexAcpProvider(input.subChatId)
 
       const activeStream = activeStreams.get(input.subChatId)
       if (activeStream) {

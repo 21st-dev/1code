@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import {
   DesktopRuntimeAdapterFactory,
   type DesktopRuntimeAdapter,
@@ -71,5 +72,23 @@ describe("desktop runtime adapter factory", () => {
     expect(() => factory.get({ runtimeId: "unknown" as any })).toThrow(
       "Unsupported desktop runtime adapter",
     )
+  })
+
+  test("keeps temporary Codex ACP provider ownership out of the router", () => {
+    const codexRouter = readFileSync(
+      "src/main/lib/trpc/routers/codex.ts",
+      "utf8",
+    )
+    const codexAcpAdapter = readFileSync(
+      "src/main/lib/codex/acp-adapter.ts",
+      "utf8",
+    )
+
+    expect(codexRouter).toContain("../../codex/acp-adapter")
+    expect(codexRouter).toContain("getOrCreateCodexAcpProvider")
+    expect(codexRouter).not.toContain("createACPProvider")
+    expect(codexRouter).not.toContain("providerSessions")
+    expect(codexAcpAdapter).toContain("createACPProvider")
+    expect(codexAcpAdapter).toContain("providerSessions")
   })
 })

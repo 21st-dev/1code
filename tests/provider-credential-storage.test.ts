@@ -117,6 +117,10 @@ describe("provider credential storage hardening", () => {
       join(process.cwd(), "src/main/lib/codex/provider-runtime-binding.ts"),
       "utf-8",
     )
+    const codexAcpAdapterSource = readFileSync(
+      join(process.cwd(), "src/main/lib/codex/acp-adapter.ts"),
+      "utf-8",
+    )
 
     expect(atomsSource).not.toContain("codexApiKeyAtom")
     expect(atomsSource).not.toContain("onboarding:codex-api-key")
@@ -124,7 +128,8 @@ describe("provider credential storage hardening", () => {
     expect(transportSource).not.toContain("apiKey:")
     expect(codexRouterSource).not.toContain("authConfig")
     expect(codexRouterSource).toContain("codexAuthMethod")
-    expect(codexRouterSource).toContain("buildCodexProviderEnv")
+    expect(codexRouterSource).toContain("getOrCreateCodexAcpProvider")
+    expect(codexAcpAdapterSource).toContain("buildCodexProviderEnv")
     expect(codexProviderBindingSource).toContain("\"CODEX_API_KEY\"")
     expect(codexProviderBindingSource).toContain("\"OPENAI_API_KEY\"")
     expect(codexProviderBindingSource).toContain("LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN")

@@ -134,7 +134,9 @@ describe("desktop runtime preflight", () => {
       attachmentIndex,
     )
     const jobIndex = codex.indexOf("createAndStartDesktopAgentJob(db, {")
-    const providerIndex = codex.indexOf("const provider = getOrCreateProvider({")
+    const providerIndex = codex.indexOf(
+      "const provider = getOrCreateCodexAcpProvider({",
+    )
 
     expect(blockerIndex).toBeGreaterThan(0)
     expect(runtimeStatusIndex).toBeGreaterThan(blockerIndex)
@@ -145,6 +147,7 @@ describe("desktop runtime preflight", () => {
     expect(jobIndex).toBeGreaterThan(mcpIndex)
     expect(providerIndex).toBeGreaterThan(jobIndex)
     expect(codex).toContain("cwd: runtimeCwd")
+    expect(codex).toContain("command: resolveCodexAcpBinaryPath()")
     expect(codex).toContain('id: "local-only"')
     expect(codex).not.toContain("cwd: input.cwd,\n              mcpServers")
   })
