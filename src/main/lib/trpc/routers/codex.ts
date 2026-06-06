@@ -27,10 +27,8 @@ import {
   buildCodexRuntimeCapabilityErrorChunk,
   getCodexRunRequiredCapability,
 } from "../../../../shared/codex-runtime-capabilities"
-import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import {
   buildGuardedRunAudit,
-  buildGuardedRunPromptBlock,
   captureGuardedGitStatus,
   formatScopeValidationError,
   validateAgentScopeContract,
@@ -66,6 +64,7 @@ import {
   pollCodexUsageMetadata,
   type CodexUsageMetadata,
 } from "../../codex/usage-metadata"
+import { prepareCodexAcpPrompt } from "../../codex/prompt"
 import {
   createCodexAskUserQuestionTools,
   installCodexAskUserQuestionAcpResultNormalizer,
@@ -77,7 +76,6 @@ import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
 import { resolveChatImageAttachments } from "../../chat-attachments"
-import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
@@ -2422,26 +2420,13 @@ export const codexRouter = router({
               return usagePromise
             }
 
-            const appAgentPrompt = await preparePromptWithAppAgents(input.prompt)
-            let finalPrompt = appAgentPrompt.prompt
-            if (appAgentPrompt.appAgentMentions.length > 0) {
-              console.log(
-                `[codex] App Agents mentioned:`,
-                appAgentPrompt.appAgentMentions,
-              )
-            }
-            if (appAgentPrompt.missingAppAgents.length > 0) {
-              console.warn(
-                `[codex] Missing App Agents:`,
-                appAgentPrompt.missingAppAgents,
-              )
-            }
-
+            let finalPrompt: string
             try {
-              finalPrompt = await prependLongTextAttachmentPromptBlocks(
-                finalPrompt,
-                input.longTextAttachments,
-              )
+              finalPrompt = await prepareCodexAcpPrompt({
+                prompt: input.prompt,
+                longTextAttachments: input.longTextAttachments,
+                guardedContract,
+              })
             } catch (attachmentError) {
               safeEmit({
                 type: "error",
@@ -2453,10 +2438,6 @@ export const codexRouter = router({
               safeEmit({ type: "finish" })
               safeComplete()
               return
-            }
-
-            if (guardedContract) {
-              finalPrompt = `${buildGuardedRunPromptBlock(guardedContract)}\n\n${finalPrompt}`
             }
 
             const model = provider.languageModel(

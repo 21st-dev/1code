@@ -87,9 +87,11 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/usage-metadata.ts",
       "utf8",
     )
+    const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
     expect(codexRouter).toContain("../../codex/usage-metadata")
+    expect(codexRouter).toContain("../../codex/prompt")
     expect(codexRouter).toContain("createDesktopRunContextFromPreflight")
     expect(codexRouter).toContain("const desktopRunRequest: DesktopRunRequest")
     expect(codexRouter).toContain("getOrCreateCodexAcpProvider")
@@ -99,10 +101,13 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("createACPProvider")
     expect(codexRouter).not.toContain("providerSessions")
     expect(codexRouter).not.toContain("existingSessionId:")
+    expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexAcpAdapter).toContain("createACPProvider")
     expect(codexAcpAdapter).toContain("providerSessions")
     expect(codexAcpAdapter).toContain("runRequest: DesktopRunRequest")
     expect(codexUsageMetadata).toContain("pollCodexUsageMetadata")
     expect(codexUsageMetadata).toContain("readLatestTokenCountInfo")
+    expect(codexPrompt).toContain("prepareCodexAcpPrompt")
+    expect(codexPrompt).toContain("preparePromptWithAppAgents")
   })
 })

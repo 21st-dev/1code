@@ -62,6 +62,7 @@ describe("agent guard runtime pipeline", () => {
       "src/main/lib/codex/chat-input-schema.ts",
       "utf8",
     )
+    const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
     const acp = readFileSync(
       "src/renderer/features/agents/lib/acp-chat-transport.ts",
       "utf8",
@@ -89,7 +90,8 @@ describe("agent guard runtime pipeline", () => {
     )
     expect(codex).toContain("respondToolApproval")
     expect(codex).toContain("buildCodexRuntimeCapabilityErrorChunk")
-    expect(codex).toContain("buildGuardedRunPromptBlock(guardedContract)")
+    expect(codex).toContain("prepareCodexAcpPrompt")
+    expect(codexPrompt).toContain("buildGuardedRunPromptBlock(guardedContract)")
     expect(codex).toContain('enforcementMode: "hard"')
     expect(codex).not.toContain('enforcementMode: "contract-and-audit"')
     expect(codex).toContain("buildGuardedRunAudit")
