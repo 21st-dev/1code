@@ -116,7 +116,7 @@ describe("desktop runtime preflight", () => {
       "const queryOptions = createClaudeAgentSdkRuntimeQueryOptions({",
     )
     const adapterRunIndex = claude.indexOf(
-      "const adapterResult = await runClaudeAgentSdkDesktopAdapter({",
+      "await runClaudeAgentSdkDesktopAdapterWithStreamConsumer({",
     )
 
     expect(blockerIndex).toBeGreaterThan(0)

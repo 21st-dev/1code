@@ -47,19 +47,13 @@ import {
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
 import {
-  createClaudeAgentSdkPolicyRetryState,
-} from "../../claude/agent-sdk-policy-retry"
-import {
   logClaudeAgentSdkAuthDiagnostics,
   logClaudeAgentSdkProviderDiagnostics,
   logClaudeAgentSdkSessionDiagnostics,
 } from "../../claude/agent-sdk-runtime-diagnostics"
-import { runClaudeAgentSdkDesktopAdapter } from "../../claude/agent-sdk-adapter-runner"
+import { runClaudeAgentSdkDesktopAdapterWithStreamConsumer } from "../../claude/agent-sdk-adapter-runner"
 import {
-  createClaudeAgentSdkStreamConsumer,
   createClaudeAgentSdkStreamConsumerMutableState,
-  createClaudeAgentSdkStreamConsumerStateAccess,
-  resetClaudeAgentSdkStreamConsumerAttemptState,
 } from "../../claude/agent-sdk-stream-consumer"
 import { parseClaudePromptMentions } from "../../claude/mentions"
 import {
@@ -1606,56 +1600,48 @@ export const claudeRouter = router({
               maxThinkingTokens: input.maxThinkingTokens,
             })
 
-            // Auto-retry for transient API errors (e.g., false-positive USAGE_POLICY_VIOLATION)
-            const policyRetry = createClaudeAgentSdkPolicyRetryState()
-            const adapterResult = await runClaudeAgentSdkDesktopAdapter({
-              request: desktopRunRequest,
-              queryOptions,
-              consumeStream: createClaudeAgentSdkStreamConsumer({
-                isUsingOllama,
-                model: finalCustomConfig?.model,
-                baseUrl: finalCustomConfig?.baseUrl,
-                prompt: input.prompt,
-                cwd: runtimeCwd,
-                abortSignal: abortController.signal,
-                isObservableActive: () => isObservableActive,
-                chatId: input.chatId,
-                subChatId: input.subChatId,
-                policyRetry,
-                customConfig: finalCustomConfig,
-                hasExistingApiConfig,
-                mode: input.mode,
-                resolvedModel,
-                oauthToken: claudeCodeToken,
-                mcpServers: mcpServersFiltered as Record<string, unknown> | undefined,
-                transform,
-                parts,
-                historyEnabled,
+            const adapterResult =
+              await runClaudeAgentSdkDesktopAdapterWithStreamConsumer({
+                request: desktopRunRequest,
+                queryOptions,
+                streamState,
+                streamConsumer: {
+                  isUsingOllama,
+                  model: finalCustomConfig?.model,
+                  baseUrl: finalCustomConfig?.baseUrl,
+                  prompt: input.prompt,
+                  cwd: runtimeCwd,
+                  abortSignal: abortController.signal,
+                  isObservableActive: () => isObservableActive,
+                  chatId: input.chatId,
+                  subChatId: input.subChatId,
+                  customConfig: finalCustomConfig,
+                  hasExistingApiConfig,
+                  mode: input.mode,
+                  resolvedModel,
+                  oauthToken: claudeCodeToken,
+                  mcpServers: mcpServersFiltered as Record<string, unknown> | undefined,
+                  transform,
+                  parts,
+                  historyEnabled,
+                  subId,
+                  stderrLines,
+                  db,
+                  messagesToSave,
+                  guardedContract,
+                  guardedPreRunStatus,
+                  guardEvents,
+                  guardedRunStartedAt,
+                  emit: safeEmit,
+                  complete: safeComplete,
+                  getContract: getActiveGuardedContract,
+                  deleteContract: deleteActiveGuardedContract,
+                },
                 subId,
-                stderrLines,
-                db,
-                messagesToSave,
-                guardedContract,
-                guardedPreRunStatus,
-                guardEvents,
-                guardedRunStartedAt,
+                emitError,
                 emit: safeEmit,
                 complete: safeComplete,
-                getContract: getActiveGuardedContract,
-                deleteContract: deleteActiveGuardedContract,
-                state:
-                  createClaudeAgentSdkStreamConsumerStateAccess(streamState),
-              }),
-              policyRetry,
-              beforeAttempt: () => {
-                resetClaudeAgentSdkStreamConsumerAttemptState(streamState)
-              },
-              getChunkCount: () => streamState.chunkCount,
-              subId,
-              emitError,
-              emit: safeEmit,
-              complete: safeComplete,
-            })
+              })
             if (adapterResult.status === "failed") {
               return
             }

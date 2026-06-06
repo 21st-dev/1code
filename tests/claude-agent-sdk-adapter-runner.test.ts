@@ -9,11 +9,16 @@ import {
 import {
   runClaudeAgentSdkAdapterWithPolicyRetry,
   runClaudeAgentSdkDesktopAdapter,
+  runClaudeAgentSdkDesktopAdapterWithStreamConsumer,
 } from "../src/main/lib/claude/agent-sdk-adapter-runner"
 import {
   createClaudeAgentSdkPolicyRetryState,
   recordClaudeAgentSdkPolicyRetry,
 } from "../src/main/lib/claude/agent-sdk-policy-retry"
+import {
+  createClaudeAgentSdkStreamConsumerMutableState,
+} from "../src/main/lib/claude/agent-sdk-stream-consumer"
+import type { UIMessageChunk } from "../src/main/lib/claude/types"
 
 function createRequest(): DesktopRunRequest {
   return {
@@ -62,6 +67,14 @@ async function* createStream() {
   yield { type: "assistant", text: "hello" }
 }
 
+async function* createClaudeAssistantStream() {
+  yield {
+    type: "assistant",
+    uuid: "assistant-1",
+    session_id: "session-1",
+  }
+}
+
 describe("Claude Agent SDK adapter runner", () => {
   test("creates the current Claude Agent SDK adapter before the policy retry loop", async () => {
     const request = createRequest()
@@ -101,6 +114,88 @@ describe("Claude Agent SDK adapter runner", () => {
     expect(queryCalls).toEqual([queryOptions])
     expect(consumedMessages).toEqual([{ type: "assistant", text: "hello" }])
     expect(beforeAttempts).toEqual(["attempt"])
+  })
+
+  test("runs the current adapter with owned stream consumer retry state wiring", async () => {
+    const request = createRequest()
+    const queryOptions = { prompt: "hello", options: {} } as any
+    const streamState = createClaudeAgentSdkStreamConsumerMutableState({
+      messageCount: 5,
+      pendingFinishChunk: { type: "finish" },
+    })
+    const queryCalls: unknown[] = []
+    const emitted: UIMessageChunk[] = []
+
+    await expect(
+      runClaudeAgentSdkDesktopAdapterWithStreamConsumer({
+        query: ((params: any) => {
+          queryCalls.push(params)
+          return createClaudeAssistantStream()
+        }) as any,
+        request,
+        queryOptions,
+        streamState,
+        streamConsumer: {
+          isUsingOllama: false,
+          model: "claude-sonnet",
+          baseUrl: undefined,
+          prompt: "hello",
+          cwd: "/repo",
+          abortSignal: new AbortController().signal,
+          isObservableActive: () => true,
+          chatId: "chat-1",
+          subChatId: "sub-1",
+          customConfig: null,
+          hasExistingApiConfig: false,
+          mode: "agent",
+          resolvedModel: "claude-sonnet",
+          oauthToken: null,
+          mcpServers: undefined,
+          transform: () => [
+            { type: "text-delta", id: "text-1", delta: "hello" },
+            { type: "text-end", id: "text-1" },
+          ],
+          parts: [],
+          historyEnabled: true,
+          subId: "sub-1",
+          stderrLines: [],
+          db: null,
+          messagesToSave: [],
+          guardedContract: null,
+          guardedPreRunStatus: null,
+          guardEvents: [],
+          guardedRunStartedAt: "2026-06-01T00:00:00.000Z",
+          emit: (chunk) => {
+            emitted.push(chunk)
+            return true
+          },
+          complete: () => {},
+          getContract: () => null,
+          deleteContract: () => undefined,
+        },
+        subId: "sub-1",
+        emitError: () => {
+          throw new Error("emitError should not run")
+        },
+        emit: () => {},
+        complete: () => {},
+      }),
+    ).resolves.toEqual({ status: "succeeded" })
+
+    expect(queryCalls).toEqual([queryOptions])
+    expect(emitted).toEqual([
+      { type: "text-delta", id: "text-1", delta: "hello" },
+      { type: "text-end", id: "text-1" },
+    ])
+    expect(streamState).toMatchObject({
+      metadata: { sessionId: "session-1" },
+      currentSessionId: "session-1",
+      currentText: "",
+      chunkCount: 2,
+      lastChunkType: "text-end",
+      messageCount: 1,
+      pendingFinishChunk: null,
+    })
   })
 
   test("retries adapter runs when the stream records a policy retry", async () => {

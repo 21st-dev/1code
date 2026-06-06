@@ -9,10 +9,18 @@ import {
 import type { ClaudeAgentSdkQuery } from "./agent-sdk-query-loader"
 import type { ClaudeAgentSdkQueryParams } from "./agent-sdk-query-options"
 import {
+  createClaudeAgentSdkPolicyRetryState,
   resetClaudeAgentSdkPolicyRetryAttempt,
   waitForClaudeAgentSdkPolicyRetry,
   type ClaudeAgentSdkPolicyRetryState,
 } from "./agent-sdk-policy-retry"
+import {
+  createClaudeAgentSdkStreamConsumer,
+  createClaudeAgentSdkStreamConsumerStateAccess,
+  resetClaudeAgentSdkStreamConsumerAttemptState,
+  type ClaudeAgentSdkStreamConsumerMutableState,
+  type CreateClaudeAgentSdkStreamConsumerInput,
+} from "./agent-sdk-stream-consumer"
 import type { UIMessageChunk } from "./types"
 
 export type RunClaudeAgentSdkAdapterWithPolicyRetryInput = {
@@ -40,6 +48,17 @@ export type RunClaudeAgentSdkDesktopAdapterInput = Omit<
   consumeStream: ClaudeAgentSdkStreamConsumer
 }
 
+export type RunClaudeAgentSdkDesktopAdapterWithStreamConsumerInput = Omit<
+  RunClaudeAgentSdkDesktopAdapterInput,
+  "consumeStream" | "policyRetry" | "beforeAttempt" | "getChunkCount"
+> & {
+  streamConsumer: Omit<
+    CreateClaudeAgentSdkStreamConsumerInput,
+    "policyRetry" | "state"
+  >
+  streamState: ClaudeAgentSdkStreamConsumerMutableState
+}
+
 export async function runClaudeAgentSdkDesktopAdapter({
   query,
   loadQuery,
@@ -56,6 +75,27 @@ export async function runClaudeAgentSdkDesktopAdapter({
   return runClaudeAgentSdkAdapterWithPolicyRetry({
     adapter,
     ...runnerInput,
+  })
+}
+
+export async function runClaudeAgentSdkDesktopAdapterWithStreamConsumer({
+  streamConsumer,
+  streamState,
+  ...input
+}: RunClaudeAgentSdkDesktopAdapterWithStreamConsumerInput): Promise<DesktopRunResult> {
+  const policyRetry = createClaudeAgentSdkPolicyRetryState()
+  return runClaudeAgentSdkDesktopAdapter({
+    ...input,
+    policyRetry,
+    consumeStream: createClaudeAgentSdkStreamConsumer({
+      ...streamConsumer,
+      policyRetry,
+      state: createClaudeAgentSdkStreamConsumerStateAccess(streamState),
+    }),
+    beforeAttempt: () => {
+      resetClaudeAgentSdkStreamConsumerAttemptState(streamState)
+    },
+    getChunkCount: () => streamState.chunkCount,
   })
 }
 
