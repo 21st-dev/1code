@@ -35,6 +35,18 @@ export type CreateClaudeAgentSdkStderrHandlerInput = {
   error?: (...args: any[]) => void
 }
 
+export type PrepareClaudeAgentSdkMcpServersInput = {
+  mcpServers?: ClaudeAgentSdkOptions["mcpServers"]
+  isUsingOllama: boolean
+  projectPath?: string
+  cwd: string
+  ensureTokensFresh: (
+    servers: NonNullable<ClaudeAgentSdkOptions["mcpServers"]>,
+    projectPath: string,
+  ) => Promise<ClaudeAgentSdkOptions["mcpServers"]>
+  log?: (...args: any[]) => void
+}
+
 function createAbortControllerFromSignal(signal: AbortSignal): AbortController {
   const controller = new AbortController()
   if (signal.aborted) {
@@ -67,6 +79,26 @@ export function createClaudeAgentSdkStderrHandler({
       error("[claude stderr]", data)
     }
   }
+}
+
+export async function prepareClaudeAgentSdkMcpServers({
+  mcpServers,
+  isUsingOllama,
+  projectPath,
+  cwd,
+  ensureTokensFresh,
+  log = console.log,
+}: PrepareClaudeAgentSdkMcpServersInput): Promise<
+  ClaudeAgentSdkOptions["mcpServers"] | undefined
+> {
+  if (isUsingOllama) {
+    log("[Ollama] Skipping MCP servers to speed up initialization")
+    return undefined
+  }
+  if (!mcpServers || Object.keys(mcpServers).length === 0) {
+    return mcpServers
+  }
+  return ensureTokensFresh(mcpServers, projectPath || cwd)
 }
 
 export function createClaudeAgentSdkQueryOptions({

@@ -6,6 +6,7 @@ import {
 import {
   createClaudeAgentSdkQueryOptions,
   createClaudeAgentSdkStderrHandler,
+  prepareClaudeAgentSdkMcpServers,
 } from "../src/main/lib/claude/agent-sdk-query-options"
 import { createClaudeDesktopRunRequest } from "../src/main/lib/claude/desktop-run-request"
 
@@ -73,6 +74,45 @@ describe("Claude Agent SDK query options", () => {
       ["[Ollama stderr]", "ollama warning"],
       ["[claude stderr]", "claude warning"],
     ])
+  })
+
+  test("prepares SDK MCP servers for Ollama and token refresh", async () => {
+    const logs: unknown[][] = []
+    const servers = {
+      github: { type: "http", url: "https://mcp.example.com" },
+    } as any
+    const refreshCalls: unknown[][] = []
+
+    await expect(
+      prepareClaudeAgentSdkMcpServers({
+        mcpServers: servers,
+        isUsingOllama: true,
+        cwd: "/repo",
+        ensureTokensFresh: async (...args) => {
+          refreshCalls.push(args)
+          return servers
+        },
+        log: (...args) => logs.push(args),
+      }),
+    ).resolves.toBeUndefined()
+    expect(refreshCalls).toEqual([])
+    expect(logs).toEqual([
+      ["[Ollama] Skipping MCP servers to speed up initialization"],
+    ])
+
+    await expect(
+      prepareClaudeAgentSdkMcpServers({
+        mcpServers: servers,
+        isUsingOllama: false,
+        projectPath: "/project",
+        cwd: "/repo",
+        ensureTokensFresh: async (...args) => {
+          refreshCalls.push(args)
+          return { refreshed: servers } as any
+        },
+      }),
+    ).resolves.toEqual({ refreshed: servers })
+    expect(refreshCalls).toEqual([[servers, "/project"]])
   })
 
   test("maps run request and runtime controls into SDK query params", () => {

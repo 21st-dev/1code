@@ -419,11 +419,18 @@ describe("desktop runtime adapter factory", () => {
       "const queryOptions = createClaudeAgentSdkQueryOptions({",
     )
     expect(claudeRouter).toContain("createClaudeAgentSdkStderrHandler")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkMcpServers")
     expect(claudeRouter).not.toContain("cwd: desktopRunRequest.context.cwd")
     expect(claudeRouter).not.toContain("includePartialMessages: true")
     expect(claudeRouter).not.toContain("stderrLines.push(data)")
     expect(claudeRouter).not.toContain("[Ollama stderr]")
     expect(claudeRouter).not.toContain("[claude stderr]")
+    expect(claudeRouter).not.toContain(
+      "[Ollama] Skipping MCP servers to speed up initialization",
+    )
+    expect(claudeRouter).not.toContain(
+      "let mcpServersFiltered: Record<string, any> | undefined",
+    )
     expect(claudeQueryOptions).toContain("cwd: request.context.cwd")
     expect(claudeQueryOptions).toContain(
       "permissionMode: permission.sdkPermissionMode",
@@ -434,6 +441,10 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeQueryOptions).toContain("stderrLines.push(data)")
     expect(claudeQueryOptions).toContain("[Ollama stderr]")
     expect(claudeQueryOptions).toContain("[claude stderr]")
+    expect(claudeQueryOptions).toContain("prepareClaudeAgentSdkMcpServers")
+    expect(claudeQueryOptions).toContain(
+      "[Ollama] Skipping MCP servers to speed up initialization",
+    )
   })
 
   test("keeps Claude prompt mention parsing ownership out of the router", () => {

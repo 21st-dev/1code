@@ -42,6 +42,7 @@ import {
 import {
   createClaudeAgentSdkQueryOptions,
   createClaudeAgentSdkStderrHandler,
+  prepareClaudeAgentSdkMcpServers,
 } from "../../claude/agent-sdk-query-options"
 import { handleClaudeAgentSdkEmbeddedErrorMessage } from "../../claude/agent-sdk-embedded-error-finalization"
 import {
@@ -1629,30 +1630,13 @@ export const claudeRouter = router({
               })
             }
 
-            // Skip MCP servers entirely in offline mode (Ollama) - they slow down initialization by 60+ seconds
-            // Otherwise pass all MCP servers - the SDK will handle connection
-            let mcpServersFiltered: Record<string, any> | undefined
-
-            if (isUsingOllama) {
-              console.log(
-                "[Ollama] Skipping MCP servers to speed up initialization",
-              )
-              mcpServersFiltered = undefined
-            } else {
-              // Ensure MCP tokens are fresh (refresh if within 5 min of expiry)
-              if (
-                mcpServersForSdk &&
-                Object.keys(mcpServersForSdk).length > 0
-              ) {
-                const lookupPath = input.projectPath || runtimeCwd
-                mcpServersFiltered = await ensureMcpTokensFresh(
-                  mcpServersForSdk,
-                  lookupPath,
-                )
-              } else {
-                mcpServersFiltered = mcpServersForSdk
-              }
-            }
+            const mcpServersFiltered = await prepareClaudeAgentSdkMcpServers({
+              mcpServers: mcpServersForSdk,
+              isUsingOllama,
+              projectPath: input.projectPath,
+              cwd: runtimeCwd,
+              ensureTokensFresh: ensureMcpTokensFresh,
+            })
 
             // Log SDK configuration for debugging
             if (isUsingOllama) {
