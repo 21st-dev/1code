@@ -51,8 +51,6 @@ import {
   CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
   createClaudeAgentSdkPolicyRetryState,
   recordClaudeAgentSdkPolicyRetry,
-  resetClaudeAgentSdkPolicyRetryAttempt,
-  waitForClaudeAgentSdkPolicyRetry,
 } from "../../claude/agent-sdk-policy-retry"
 import {
   logClaudeAgentSdkEmbeddedError,
@@ -64,10 +62,9 @@ import {
   logClaudeAgentSdkSessionDiagnostics,
 } from "../../claude/agent-sdk-runtime-diagnostics"
 import {
-  ClaudeAgentSdkLoadError,
-  ClaudeAgentSdkQueryStartError,
   createClaudeAgentSdkAdapter,
 } from "../../claude/agent-sdk-adapter"
+import { runClaudeAgentSdkAdapterWithPolicyRetry } from "../../claude/agent-sdk-adapter-runner"
 import {
   flushClaudeAgentSdkTextAccumulator,
   processClaudeAgentSdkUiChunk,
@@ -2080,61 +2077,24 @@ export const claudeRouter = router({
               },
             })
 
-            // eslint-disable-next-line no-constant-condition
-            while (true) {
-              resetClaudeAgentSdkPolicyRetryAttempt(policyRetry)
-              messageCount = 0
-              pendingFinishChunk = null
-
-              // 5. Run Claude Agent SDK through the desktop adapter boundary
-              try {
-                const adapterResult =
-                  await claudeAdapter.run(desktopRunRequest)
-                if (adapterResult.status === "failed") {
-                  return
-                }
-              } catch (adapterError) {
-                if (adapterError instanceof ClaudeAgentSdkLoadError) {
-                  emitError(
-                    adapterError.originalError,
-                    "Failed to load Claude Agent SDK",
-                  )
-                  console.log(
-                    `[SD] M:END sub=${subId} reason=sdk_load_error n=${chunkCount}`,
-                  )
-                  safeEmit({ type: "finish" } as UIMessageChunk)
-                  safeComplete()
-                  return
-                }
-
-                const queryError =
-                  adapterError instanceof ClaudeAgentSdkQueryStartError
-                    ? adapterError.originalError
-                    : adapterError
-                console.error(
-                  "[CLAUDE] ✗ Failed to create SDK query:",
-                  queryError,
-                )
-                emitError(queryError, "Failed to start Claude query")
-                console.log(
-                  `[SD] M:END sub=${subId} reason=query_error n=${chunkCount}`,
-                )
-                safeEmit({ type: "finish" } as UIMessageChunk)
-                safeComplete()
-                return
-              }
-
-              // Retry if policy violation detected (transient false positive)
-              // Escalating delay: 3s first retry, 6s second retry
-              if (
-                await waitForClaudeAgentSdkPolicyRetry({
-                  state: policyRetry,
-                })
-              ) {
-                continue
-              }
-              break
-            } // end policyRetryLoop
+            const adapterResult =
+              await runClaudeAgentSdkAdapterWithPolicyRetry({
+                adapter: claudeAdapter,
+                request: desktopRunRequest,
+                policyRetry,
+                beforeAttempt: () => {
+                  messageCount = 0
+                  pendingFinishChunk = null
+                },
+                getChunkCount: () => chunkCount,
+                subId,
+                emitError,
+                emit: safeEmit,
+                complete: safeComplete,
+              })
+            if (adapterResult.status === "failed") {
+              return
+            }
 
             // 6. Check if we got any response
             if (messageCount === 0 && !abortController.signal.aborted) {

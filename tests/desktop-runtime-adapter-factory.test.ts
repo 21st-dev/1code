@@ -315,10 +315,20 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-adapter.ts",
       "utf8",
     )
+    const claudeAgentSdkAdapterRunner = readFileSync(
+      "src/main/lib/claude/agent-sdk-adapter-runner.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-adapter")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-adapter-runner")
     expect(claudeRouter).toContain("createClaudeAgentSdkAdapter({")
-    expect(claudeRouter).toContain("await claudeAdapter.run(desktopRunRequest)")
+    expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
+    expect(claudeRouter).not.toContain("await claudeAdapter.run(desktopRunRequest)")
+    expect(claudeRouter).not.toContain("ClaudeAgentSdkLoadError")
+    expect(claudeRouter).not.toContain("ClaudeAgentSdkQueryStartError")
+    expect(claudeRouter).not.toContain("reason=sdk_load_error")
+    expect(claudeRouter).not.toContain("reason=query_error")
     expect(claudeRouter).not.toContain("stream = claudeQuery(queryOptions)")
     expect(claudeAgentSdkAdapter).toContain(
       "metadata: CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA",
@@ -329,6 +339,12 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeAgentSdkAdapter).toContain("getClaudeAgentSdkQuery")
     expect(claudeAgentSdkAdapter).toContain("sdkQuery(queryOptions)")
     expect(claudeAgentSdkAdapter).toContain("consumeStream({ request, stream })")
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      "runClaudeAgentSdkAdapterWithPolicyRetry",
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain("ClaudeAgentSdkLoadError")
+    expect(claudeAgentSdkAdapterRunner).toContain("ClaudeAgentSdkQueryStartError")
+    expect(claudeAgentSdkAdapterRunner).toContain("adapter.run(request)")
   })
 
   test("keeps Claude provider runtime helpers out of the router", () => {
@@ -536,11 +552,16 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-policy-retry.ts",
       "utf8",
     )
+    const adapterRunner = readFileSync(
+      "src/main/lib/claude/agent-sdk-adapter-runner.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-policy-retry")
     expect(claudeRouter).toContain("createClaudeAgentSdkPolicyRetryState()")
     expect(claudeRouter).toContain("recordClaudeAgentSdkPolicyRetry")
-    expect(claudeRouter).toContain("waitForClaudeAgentSdkPolicyRetry")
+    expect(claudeRouter).toContain("runClaudeAgentSdkAdapterWithPolicyRetry")
+    expect(claudeRouter).not.toContain("waitForClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).not.toContain("let policyRetryNeeded")
     expect(claudeRouter).not.toContain("let policyRetryCount")
     expect(claudeRouter).not.toContain("policyRetryCount++")
@@ -550,6 +571,8 @@ describe("desktop runtime adapter factory", () => {
     expect(policyRetry).toContain("getClaudePolicyRetryDelayMs")
     expect(policyRetry).toContain("recordClaudeAgentSdkPolicyRetry")
     expect(policyRetry).toContain("waitForClaudeAgentSdkPolicyRetry")
+    expect(adapterRunner).toContain("waitForClaudeAgentSdkPolicyRetry")
+    expect(adapterRunner).toContain("resetClaudeAgentSdkPolicyRetryAttempt")
   })
 
   test("keeps Claude renderer stream emission redaction in runtime owner", () => {
