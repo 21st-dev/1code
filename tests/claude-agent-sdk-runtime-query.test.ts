@@ -55,7 +55,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       isUsingOllama: false,
       permissionPolicy,
       guardedContract: null,
-      guardEvents: [],
       emit: () => {},
       subChatId: "sub-1",
       pendingToolApprovals: new Map(),
@@ -82,6 +81,7 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
 
     expect(refreshCalls).toEqual([[rawServers, "/project"]])
     expect(result.mcpServers).toBe(refreshedServers)
+    expect(result.guardEvents).toEqual([])
     expect(result.promptContext.prompt).toBe("inspect")
     expect(result.promptContext.systemPrompt).toMatchObject({
       type: "preset",
@@ -121,7 +121,6 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       isUsingOllama: false,
       permissionPolicy,
       guardedContract: null,
-      guardEvents: [],
       emit: (chunk) => {
         emitted.push(chunk)
       },

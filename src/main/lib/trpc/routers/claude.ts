@@ -88,9 +88,6 @@ import {
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
-import type {
-  AgentGuardEvent,
-} from "../../../../shared/agent-scope-contracts"
 import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
 import {
   getApprovedPluginMcpServers,
@@ -775,8 +772,6 @@ export const claudeRouter = router({
 
         let guardedContract: ValidatedAgentScopeContract | null = null
         let guardedPreRunStatus: GuardedGitStatusSnapshot | null = null
-        const guardEvents: AgentGuardEvent[] = []
-        const guardedRunStartedAt = new Date().toISOString()
 
         ;(async () => {
           try {
@@ -1124,7 +1119,6 @@ export const claudeRouter = router({
                   isUsingOllama,
                   permissionPolicy,
                   guardedContract,
-                  guardEvents,
                   emit: safeEmit,
                   subChatId: input.subChatId,
                   parts,
@@ -1161,8 +1155,6 @@ export const claudeRouter = router({
                 messagesToSave,
                 guardedContract,
                 guardedPreRunStatus,
-                guardEvents,
-                guardedRunStartedAt,
                 subId,
                 emitError,
                 emit: safeEmit,

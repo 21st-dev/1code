@@ -629,6 +629,8 @@ describe("desktop runtime adapter factory", () => {
       "createClaudeAgentSdkDesktopRuntimeQueryOptions({",
     )
     expect(claudeRouter).not.toContain("permissionHandler: {")
+    expect(claudeRouter).not.toContain("const guardEvents")
+    expect(claudeRouter).not.toContain("guardedRunStartedAt")
     expect(claudeRouter).not.toContain("guardEvents.push(event)")
     expect(claudeRouter).not.toContain("getGuardedContract:")
     expect(claudeRouter).not.toContain("getActiveGuardedContract")
@@ -637,11 +639,17 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeQuery).toContain("prepareClaudeAgentSdkMcpServers")
     expect(runtimeQuery).toContain("getActiveGuardedContract")
     expect(runtimeQuery).toContain("getClaudePendingToolApprovalStore")
+    expect(runtimeQuery).toContain("const runtimeGuardEvents = guardEvents ?? []")
+    expect(runtimeQuery).toContain("guardEvents: runtimeGuardEvents")
     expect(runtimeQuery).toContain(
       "createClaudeAgentSdkDesktopRuntimeQueryOptions",
     )
     expect(runtimeLifecycle).toContain(
       "prepareClaudeAgentSdkDesktopRuntimeQuery",
+    )
+    expect(runtimeLifecycle).toContain("guardEvents: runtimeQuery.guardEvents")
+    expect(runtimeLifecycle).toContain(
+      "guardedRunStartedAt = new Date().toISOString()",
     )
     expect(runtimeLifecycle).toContain("getActiveGuardedContract")
     expect(runtimeLifecycle).toContain("deleteActiveGuardedContract")

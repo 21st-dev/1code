@@ -2,6 +2,7 @@ import {
   getActiveGuardedContract,
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
+import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
   getClaudePermissionMapping,
   type ClaudePermissionMapping,
@@ -29,6 +30,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   | "pendingToolApprovals"
   | "getGuardedContract"
   | "permission"
+  | "guardEvents"
 > & {
   prompt: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["prompt"]
   existingMessages: any[]
@@ -45,6 +47,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
     contractId: string,
   ) => ValidatedAgentScopeContract | undefined
   permission?: ClaudePermissionMapping
+  guardEvents?: AgentGuardEvent[]
   readAgentsMd?: typeof readClaudeAgentSdkProjectAgentsMd
   log?: (...args: any[]) => void
 }
@@ -53,6 +56,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryResult = {
   queryOptions: ClaudeAgentSdkQueryParams
   mcpServers: PrepareClaudeAgentSdkMcpServersInput["mcpServers"] | undefined
   promptContext: PrepareClaudeAgentSdkPromptContextResult
+  guardEvents: AgentGuardEvent[]
 }
 
 export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
@@ -67,12 +71,14 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   getPendingToolApprovals = getClaudePendingToolApprovalStore,
   getGuardedContract = getActiveGuardedContract,
   permission,
+  guardEvents,
   readAgentsMd,
   log,
   ...queryInput
 }: PrepareClaudeAgentSdkDesktopRuntimeQueryInput): Promise<
   PrepareClaudeAgentSdkDesktopRuntimeQueryResult
 > {
+  const runtimeGuardEvents = guardEvents ?? []
   const mcpServers = await prepareClaudeAgentSdkMcpServers({
     mcpServers: rawMcpServers,
     isUsingOllama: queryInput.isUsingOllama,
@@ -95,6 +101,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   return {
     mcpServers,
     promptContext,
+    guardEvents: runtimeGuardEvents,
     queryOptions: createClaudeAgentSdkDesktopRuntimeQueryOptions({
       ...queryInput,
       prompt: promptContext.prompt,
@@ -106,6 +113,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
       pendingToolApprovals:
         pendingToolApprovals ?? getPendingToolApprovals(),
       getGuardedContract,
+      guardEvents: runtimeGuardEvents,
     }),
   }
 }

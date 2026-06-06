@@ -1,4 +1,5 @@
 import type { DesktopRunResult } from "../agent-runtime/desktop-run-request"
+import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
   deleteActiveGuardedContract,
   getActiveGuardedContract,
@@ -16,7 +17,11 @@ import {
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
   Omit<
     RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput,
-    "runtimeQuery" | "getContract" | "deleteContract"
+    | "runtimeQuery"
+    | "getContract"
+    | "deleteContract"
+    | "guardEvents"
+    | "guardedRunStartedAt"
   > & {
     runtimeQuery: PrepareClaudeAgentSdkDesktopRuntimeQueryInput
     getContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
@@ -25,6 +30,8 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     deleteContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
       "deleteContract"
     ]
+    guardEvents?: AgentGuardEvent[]
+    guardedRunStartedAt?: string
     desktopJobSawError: boolean
     streamStart: number
     nowMs?: () => number
@@ -51,16 +58,23 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     nowMs,
     getContract = getActiveGuardedContract,
     deleteContract = deleteActiveGuardedContract,
+    guardEvents,
+    guardedRunStartedAt = new Date().toISOString(),
     ...adapterInput
   } = input
   const runtimeQuery =
-    await prepareClaudeAgentSdkDesktopRuntimeQuery(runtimeQueryInput)
+    await prepareClaudeAgentSdkDesktopRuntimeQuery({
+      ...runtimeQueryInput,
+      guardEvents: runtimeQueryInput.guardEvents ?? guardEvents,
+    })
   const adapterResult =
     await runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
       ...adapterInput,
       getContract,
       deleteContract,
       runtimeQuery,
+      guardEvents: runtimeQuery.guardEvents,
+      guardedRunStartedAt,
     })
   if (adapterResult.status === "failed") {
     return {
@@ -84,8 +98,8 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       desktopJobSawError,
       guardedContract: input.guardedContract,
       guardedPreRunStatus: input.guardedPreRunStatus,
-      guardEvents: input.guardEvents,
-      guardedRunStartedAt: input.guardedRunStartedAt,
+      guardEvents: runtimeQuery.guardEvents,
+      guardedRunStartedAt,
       subId: input.subId,
       streamStart,
       emitError: input.emitError,
