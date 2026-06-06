@@ -39,6 +39,51 @@ or UI helper.
 - Rule: the contract/audit schema and validation belong to the guard package;
   runtime-specific code may only attach runtime context.
 
+## Desktop Runtime Preflight
+
+- Canonical owner: `src/main/lib/agent-runtime/preflight.ts`
+- Consumers: Claude desktop adapter, Codex desktop adapter, desktop job shell,
+  runtime diagnostics
+- Rule: desktop runtime work must consume verified project, chat, sub-chat, cwd,
+  provider, MCP, attachment, and local-only context from preflight before
+  provider or adapter startup. Routes must not pass raw renderer `cwd`,
+  provider config, MCP config, or attachment references directly to runtime
+  startup.
+
+## Runtime Permission Policy
+
+- Canonical owner: `src/main/lib/agent-runtime/permission-policy.ts`
+- Consumers: Claude desktop adapter, Codex desktop adapter, guard decision
+  service, runtime diagnostics
+- Rule: plan, agent, and guarded desktop semantics must be resolved through the
+  shared policy owner before runtime startup. Runtime-specific code may map the
+  policy to native SDK, ACP, app-server, or CLI controls, but must not derive a
+  second durable interpretation of plan mode, guarded scope, or side-effect
+  approval.
+
+## Desktop Runtime Request And Adapter Boundary
+
+- Canonical owners: `src/main/lib/agent-runtime/desktop-run-request.ts`,
+  `src/main/lib/agent-runtime/desktop-runner.ts`
+- Consumers: Claude desktop runtime, Codex desktop runtime, desktop job shell,
+  Workbench trace surfaces
+- Rule: desktop runtime adapters receive verified context, permission policy,
+  provider binding metadata, MCP readiness, attachment references, trace
+  observer, cancellation signal, and session metadata through the desktop run
+  request. Routes remain envelope/input surfaces and must delete or gate
+  route-local helpers once equivalent adapter-owned behavior exists.
+
+## Runtime Events, Trace, And Redaction
+
+- Canonical owners: `src/main/lib/agent-runtime/runtime-events.ts`,
+  `src/main/lib/agent-runtime/redaction.ts`
+- Consumers: desktop runtime adapters, `src/main/lib/job-store.ts`, Workbench,
+  chat transports
+- Rule: runtime streams may emit provider-specific chunks, but persisted job
+  events and renderer-visible diagnostics must pass through normalized event
+  mapping and redaction first. Raw provider, gateway, MCP, OAuth, header, and
+  environment secrets must not be persisted or emitted to renderer state.
+
 ## Provider Credentials
 
 - Canonical owners: `src/main/lib/provider-profiles.ts`,
