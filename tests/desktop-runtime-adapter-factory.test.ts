@@ -477,6 +477,26 @@ describe("desktop runtime adapter factory", () => {
     expect(streamLifecycle).toContain("logClaudeOllamaEmptyStreamDiagnosis")
   })
 
+  test("keeps Claude guarded audit metadata ownership out of the router", () => {
+    const claudeRouter = readFileSync(
+      "src/main/lib/trpc/routers/claude.ts",
+      "utf8",
+    )
+    const guardMetadata = readFileSync(
+      "src/main/lib/claude/agent-sdk-guard-metadata.ts",
+      "utf8",
+    )
+
+    expect(claudeRouter).toContain("../../claude/agent-sdk-guard-metadata")
+    expect(claudeRouter).toContain("finalizeClaudeAgentSdkGuardMetadata({")
+    expect(claudeRouter).not.toContain("const finalizeGuardMetadata")
+    expect(claudeRouter).not.toContain("buildGuardedRunAudit")
+    expect(guardMetadata).toContain("finalizeClaudeAgentSdkGuardMetadata")
+    expect(guardMetadata).toContain("buildGuardedRunAudit")
+    expect(guardMetadata).toContain("captureGuardedGitStatus")
+    expect(guardMetadata).toContain('emit({ type: "guard-audit", audit })')
+  })
+
   test("keeps Claude Agent SDK prompt ownership out of the router", () => {
     const claudeRouter = readFileSync(
       "src/main/lib/trpc/routers/claude.ts",

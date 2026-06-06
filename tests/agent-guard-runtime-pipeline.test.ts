@@ -21,6 +21,10 @@ describe("agent guard runtime pipeline", () => {
       "src/main/lib/claude/agent-sdk-tool-permission.ts",
       "utf8",
     )
+    const claudeGuardMetadata = readFileSync(
+      "src/main/lib/claude/agent-sdk-guard-metadata.ts",
+      "utf8",
+    )
     const input = readFileSync(
       "src/renderer/features/agents/main/chat-input-area.tsx",
       "utf8",
@@ -43,7 +47,9 @@ describe("agent guard runtime pipeline", () => {
     expect(claude).toContain("respondScopeExpansion")
     expect(claude).toContain("applyActiveGuardedScopeExpansion")
     expect(claude).not.toContain("const activeGuardedContracts")
-    expect(claude).toContain("buildGuardedRunAudit")
+    expect(claude).toContain("finalizeClaudeAgentSdkGuardMetadata")
+    expect(claude).not.toContain("buildGuardedRunAudit")
+    expect(claudeGuardMetadata).toContain("buildGuardedRunAudit")
     expect(input).toContain("AgentGuardedRunCard")
     expect(input).toContain("approveGuardedRunDraft")
     expect(input).toContain("ensureGuardedRunReady")

@@ -47,6 +47,7 @@ import {
   extractClaudeAgentSdkEmbeddedErrorText,
   getClaudePolicyRetryDelayMs,
 } from "../../claude/agent-sdk-errors"
+import { finalizeClaudeAgentSdkGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import {
   logClaudeAgentSdkEmbeddedError,
   logClaudeAgentSdkErrorDetails,
@@ -140,7 +141,6 @@ import { publicProcedure, router } from "../index"
 import { preparePromptWithAppAgents } from "../../app-agents/prompt"
 import {
   agentScopeContractInputSchema,
-  buildGuardedRunAudit,
   captureGuardedGitStatus,
   applyActiveGuardedScopeExpansion,
   deleteActiveGuardedContract,
@@ -1273,39 +1273,6 @@ export const claudeRouter = router({
                 }
               : {}
 
-            const finalizeGuardMetadata = async (
-              currentMetadata: any,
-              options: { failed?: boolean; stopped?: boolean } = {},
-            ) => {
-              if (!guardedContract || !guardedPreRunStatus) {
-                return currentMetadata
-              }
-
-              const finalContract =
-                getActiveGuardedContract(guardedContract.id) ?? guardedContract
-              const postRunStatus = await captureGuardedGitStatus(runtimeCwd)
-              const audit = buildGuardedRunAudit({
-                contract: finalContract,
-                runtime: "claude",
-                enforcementMode: "hard",
-                preRunStatus: guardedPreRunStatus,
-                postRunStatus,
-                guardEvents,
-                startedAt: guardedRunStartedAt,
-                failed: options.failed,
-                stopped: options.stopped,
-              })
-              deleteActiveGuardedContract(guardedContract.id)
-              safeEmit({ type: "guard-audit", audit })
-              return {
-                ...currentMetadata,
-                guardedRun: {
-                  ...(currentMetadata?.guardedRun ?? {}),
-                  audit,
-                },
-              }
-            }
-
             // Capture stderr from Claude process for debugging
             const stderrLines: string[] = []
 
@@ -2075,9 +2042,20 @@ export const claudeRouter = router({
                   currentText,
                   parts,
                 })
-                metadata = await finalizeGuardMetadata(metadata, {
-                  failed: !abortController.signal.aborted,
-                  stopped: abortController.signal.aborted,
+                metadata = await finalizeClaudeAgentSdkGuardMetadata({
+                  currentMetadata: metadata,
+                  guardedContract,
+                  guardedPreRunStatus,
+                  runtimeCwd,
+                  guardEvents,
+                  startedAt: guardedRunStartedAt,
+                  options: {
+                    failed: !abortController.signal.aborted,
+                    stopped: abortController.signal.aborted,
+                  },
+                  emit: safeEmit,
+                  getContract: getActiveGuardedContract,
+                  deleteContract: deleteActiveGuardedContract,
                 })
                 if (parts.length > 0) {
                   const assistantMessage = {
@@ -2215,8 +2193,19 @@ export const claudeRouter = router({
               parts,
             })
 
-            metadata = await finalizeGuardMetadata(metadata, {
-              stopped: abortController.signal.aborted,
+            metadata = await finalizeClaudeAgentSdkGuardMetadata({
+              currentMetadata: metadata,
+              guardedContract,
+              guardedPreRunStatus,
+              runtimeCwd,
+              guardEvents,
+              startedAt: guardedRunStartedAt,
+              options: {
+                stopped: abortController.signal.aborted,
+              },
+              emit: safeEmit,
+              getContract: getActiveGuardedContract,
+              deleteContract: deleteActiveGuardedContract,
             })
 
             const savedSessionId = metadata.sessionId
