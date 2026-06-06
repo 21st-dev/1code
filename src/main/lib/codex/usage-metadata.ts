@@ -36,6 +36,24 @@ export type PollCodexUsageMetadataOptions = {
   pollIntervalMs?: number
 }
 
+export type CodexUsageSessionProvider = {
+  getSessionId(): string | null | undefined
+}
+
+export type CodexUsageMetadataResolver = {
+  getSessionId(): string | null
+  setSessionId(sessionId: string): void
+  resolveOnce(): Promise<CodexUsageMetadata | null>
+}
+
+export type CreateCodexUsageMetadataResolverInput = {
+  provider: CodexUsageSessionProvider
+  initialSessionId?: string | null
+  startedAt: number
+  shellEnv?: EnvSource
+  processEnv?: EnvSource
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
 }
@@ -262,4 +280,39 @@ export async function pollCodexUsageMetadata(
   }
 
   return null
+}
+
+export function createCodexUsageMetadataResolver({
+  provider,
+  initialSessionId,
+  startedAt,
+  shellEnv,
+  processEnv,
+}: CreateCodexUsageMetadataResolverInput): CodexUsageMetadataResolver {
+  let latestSessionId = initialSessionId ?? null
+  let usagePromise: Promise<CodexUsageMetadata | null> | null = null
+
+  const getSessionId = () => latestSessionId || provider.getSessionId() || null
+
+  return {
+    getSessionId,
+    setSessionId(sessionId) {
+      latestSessionId = sessionId
+    },
+    resolveOnce() {
+      if (usagePromise) return usagePromise
+
+      const sessionId = getSessionId()
+      if (!sessionId) {
+        return Promise.resolve(null)
+      }
+
+      usagePromise = pollCodexUsageMetadata(sessionId, {
+        notBeforeTimestampMs: startedAt,
+        shellEnv,
+        processEnv,
+      }).catch(() => null)
+      return usagePromise
+    },
+  }
 }

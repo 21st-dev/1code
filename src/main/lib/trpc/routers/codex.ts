@@ -54,8 +54,7 @@ import {
   getOrCreateCodexAcpProvider,
 } from "../../codex/acp-adapter"
 import {
-  pollCodexUsageMetadata,
-  type CodexUsageMetadata,
+  createCodexUsageMetadataResolver,
 } from "../../codex/usage-metadata"
 import { prepareCodexAcpPrompt } from "../../codex/prompt"
 import { createCodexAcpRuntimeModel } from "../../codex/acp-runtime"
@@ -2344,27 +2343,16 @@ export const codexRouter = router({
             })
 
             const startedAt = Date.now()
-            let latestSessionId =
-              provider.getSessionId() ||
-              input.sessionId ||
-              getLastSessionId(existingMessages)
-            let usagePromise: Promise<CodexUsageMetadata | null> | null = null
-
-            const resolveUsageOnce = (): Promise<CodexUsageMetadata | null> => {
-              if (usagePromise) return usagePromise
-
-              const sessionId = latestSessionId || provider.getSessionId()
-              if (!sessionId) {
-                return Promise.resolve(null)
-              }
-
-              usagePromise = pollCodexUsageMetadata(sessionId, {
-                notBeforeTimestampMs: startedAt,
-                shellEnv: getClaudeShellEnvironment(),
-                processEnv: process.env,
-              }).catch(() => null)
-              return usagePromise
-            }
+            const usageMetadataResolver = createCodexUsageMetadataResolver({
+              provider,
+              initialSessionId:
+                provider.getSessionId() ||
+                input.sessionId ||
+                getLastSessionId(existingMessages),
+              startedAt,
+              shellEnv: getClaudeShellEnvironment(),
+              processEnv: process.env,
+            })
 
             let finalPrompt: string
             try {
@@ -2424,7 +2412,7 @@ export const codexRouter = router({
               startedAt,
               guardedContract,
               onSessionId: (sessionId) => {
-                latestSessionId = sessionId
+                usageMetadataResolver.setSessionId(sessionId)
               },
               generateMessageId: () => crypto.randomUUID(),
               onFinish: async ({ responseMessage, isContinuation }) => {
@@ -2433,7 +2421,7 @@ export const codexRouter = router({
                     responseMessage,
                     isContinuation,
                     messagesForStream,
-                    usageMetadata: await resolveUsageOnce(),
+                    usageMetadata: await usageMetadataResolver.resolveOnce(),
                     guardedRun:
                       guardedContract && guardedPreRunStatus
                         ? {
@@ -2468,7 +2456,7 @@ export const codexRouter = router({
               emit: safeEmit,
               normalizeError: extractCodexError,
               isAuthError: isCodexAuthError,
-              resolveUsageOnce,
+              resolveUsageOnce: usageMetadataResolver.resolveOnce,
             })
 
             desktopJobReachedNaturalFinish =

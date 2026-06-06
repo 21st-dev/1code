@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { pollCodexUsageMetadata } from "../src/main/lib/codex/usage-metadata"
+import {
+  createCodexUsageMetadataResolver,
+  pollCodexUsageMetadata,
+} from "../src/main/lib/codex/usage-metadata"
 
 async function withSessionFile(
   sessionId: string,
@@ -107,5 +110,49 @@ describe("Codex usage metadata", () => {
         })
       },
     )
+  })
+
+  test("resolver tracks session id updates and resolves metadata once", async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), "codex-home-"))
+    try {
+      const sessionId = "session-3"
+      const dayDir = join(codexHome, "sessions", "2026", "06", "07")
+      await mkdir(dayDir, { recursive: true })
+      await writeFile(
+        join(dayDir, `rollout-${sessionId}.jsonl`),
+        `${JSON.stringify({
+          type: "event_msg",
+          timestamp: "2026-06-07T02:00:00.000Z",
+          payload: {
+            type: "token_count",
+            info: {
+              last_token_usage: {
+                input_tokens: 12,
+                cached_input_tokens: 2,
+                output_tokens: 5,
+              },
+            },
+          },
+        })}\n`,
+      )
+
+      const resolver = createCodexUsageMetadataResolver({
+        provider: { getSessionId: () => null },
+        startedAt: Date.parse("2026-06-07T01:00:00.000Z"),
+        shellEnv: { CODEX_HOME: codexHome },
+        processEnv: {},
+      })
+
+      expect(resolver.getSessionId()).toBeNull()
+      resolver.setSessionId(sessionId)
+      expect(resolver.getSessionId()).toBe(sessionId)
+      await expect(resolver.resolveOnce()).resolves.toEqual({
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 17,
+      })
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
   })
 })
