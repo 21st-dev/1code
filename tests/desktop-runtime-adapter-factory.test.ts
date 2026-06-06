@@ -817,12 +817,15 @@ describe("desktop runtime adapter factory", () => {
     )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-project-context")
-    expect(claudeRouter).toContain("readClaudeAgentSdkProjectAgentsMd")
-    expect(claudeRouter).toContain("createClaudeAgentSdkSystemPromptConfig")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkPromptContext")
+    expect(claudeRouter).not.toContain("readClaudeAgentSdkProjectAgentsMd")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkSystemPromptConfig")
     expect(claudeRouter).not.toContain('path.join(runtimeCwd, "AGENTS.md")')
     expect(claudeRouter).not.toContain("The following are the project's")
+    expect(projectContext).toContain("prepareClaudeAgentSdkPromptContext")
     expect(projectContext).toContain("readClaudeAgentSdkProjectAgentsMd")
     expect(projectContext).toContain("createClaudeAgentSdkSystemPromptConfig")
+    expect(projectContext).toContain("createClaudeOllamaPrompt")
     expect(projectContext).toContain('path.join(cwd, "AGENTS.md")')
   })
 
@@ -877,11 +880,16 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-ollama-prompt.ts",
       "utf8",
     )
+    const projectContext = readFileSync(
+      "src/main/lib/claude/agent-sdk-project-context.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-ollama-prompt")
-    expect(claudeRouter).toContain("createClaudeOllamaPrompt({")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-ollama-prompt")
+    expect(claudeRouter).not.toContain("createClaudeOllamaPrompt({")
     expect(claudeRouter).not.toContain("[CONVERSATION HISTORY]")
     expect(claudeRouter).not.toContain("toolSummaries")
+    expect(projectContext).toContain("createClaudeOllamaPrompt")
     expect(ollamaPrompt).toContain("createClaudeOllamaPrompt")
     expect(ollamaPrompt).toContain("[CONVERSATION HISTORY]")
     expect(ollamaPrompt).toContain("createClaudeOllamaToolSummary")

@@ -70,15 +70,13 @@ import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
 import {
-  createClaudeAgentSdkSystemPromptConfig,
-  readClaudeAgentSdkProjectAgentsMd,
+  prepareClaudeAgentSdkPromptContext,
 } from "../../claude/agent-sdk-project-context"
 import { createClaudeAgentSdkPrompt } from "../../claude/agent-sdk-prompt"
 import {
   logClaudeOllamaSdkConfiguration,
   probeClaudeOllamaConnectivity,
 } from "../../claude/agent-sdk-ollama-diagnostics"
-import { createClaudeOllamaPrompt } from "../../claude/agent-sdk-ollama-prompt"
 import {
   completeClaudeAgentSdkStreamIteration,
   startClaudeAgentSdkStreamIteration,
@@ -1668,43 +1666,19 @@ export const claudeRouter = router({
               })
             }
 
-            // Read AGENTS.md from project root if it exists
-            const agentsMd = await readClaudeAgentSdkProjectAgentsMd(runtimeCwd)
-            const agentsMdContent = agentsMd?.content
-            if (agentsMdContent) {
-              console.log(
-                `[claude] Found AGENTS.md at ${agentsMd.path} (${agentsMdContent.length} chars)`,
-              )
-            }
-
-            // For Ollama: embed context AND history directly in prompt
-            // Ollama doesn't have server-side sessions, so we must include full history
-            let finalQueryPrompt: string | AsyncIterable<any> = prompt
-            if (isUsingOllama && typeof prompt === "string") {
-              const ollamaPrompt = createClaudeOllamaPrompt({
-                prompt,
-                existingMessages,
-                resolvedModel,
-                projectPath: input.projectPath,
-                cwd: runtimeCwd,
-                agentsMdContent,
-              })
-              finalQueryPrompt = ollamaPrompt.prompt
-              if (ollamaPrompt.historyMessageCount > 0) {
-                console.log(
-                  `[Ollama] Added ${ollamaPrompt.historyMessageCount} messages to history (${ollamaPrompt.historyLength} chars)`,
-                )
-              }
-              console.log("[Ollama] Context prefix added to prompt")
-            }
-
-            const systemPromptConfig =
-              createClaudeAgentSdkSystemPromptConfig(agentsMdContent)
+            const promptContext = await prepareClaudeAgentSdkPromptContext({
+              prompt,
+              existingMessages,
+              isUsingOllama,
+              resolvedModel,
+              projectPath: input.projectPath,
+              cwd: runtimeCwd,
+            })
 
             const queryOptions = createClaudeAgentSdkQueryOptions({
               request: desktopRunRequest,
-              prompt: finalQueryPrompt,
-              systemPrompt: systemPromptConfig,
+              prompt: promptContext.prompt,
+              systemPrompt: promptContext.systemPrompt,
               env: finalEnv,
               permission: claudePermission,
               mcpServers: mcpServersFiltered,
