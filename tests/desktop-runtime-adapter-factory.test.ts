@@ -91,6 +91,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/acp-spawn-probe.ts",
       "utf8",
     )
+    const codexLoginOutput = readFileSync(
+      "src/main/lib/codex/login-output.ts",
+      "utf8",
+    )
     const codexAcpRuntime = readFileSync(
       "src/main/lib/codex/acp-runtime.ts",
       "utf8",
@@ -139,6 +143,7 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/acp-message-persistence")
     expect(codexRouter).toContain("../../codex/chat-history")
     expect(codexRouter).toContain("../../codex/errors")
+    expect(codexRouter).toContain("../../codex/login-output")
     expect(codexRouter).toContain("../../codex/model-selection")
     expect(codexRouter).toContain("../../codex/usage-metadata")
     expect(codexRouter).toContain("../../codex/prompt")
@@ -154,6 +159,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).not.toContain("function previewProcessOutput")
     expect(codexRouter).not.toContain("function stripAnsi")
     expect(codexRouter).not.toContain("async function probeCodexAcpSpawn")
+    expect(codexRouter).not.toContain("function extractFirstNonLocalhostUrl")
+    expect(codexRouter).not.toContain("function redactUrlForDisplay")
+    expect(codexRouter).not.toContain("function appendLoginOutput")
     expect(codexRouter).not.toContain("existingSessionId:")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexRouter).not.toContain("createCodexAcpPermissionHandler")
@@ -180,6 +188,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpPath).toContain("getCodexAcpPackageName")
     expect(codexAcpSpawnProbe).toContain("probeCodexAcpSpawn")
     expect(codexAcpSpawnProbe).toContain("stripCodexAnsi")
+    expect(codexLoginOutput).toContain("redactCodexLoginOutput")
+    expect(codexLoginOutput).toContain("appendCodexLoginOutput")
     expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexAcpTextStream).toContain("createCodexAcpUiMessageStream")

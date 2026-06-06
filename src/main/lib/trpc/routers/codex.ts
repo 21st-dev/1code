@@ -54,6 +54,10 @@ import {
   stripCodexAnsi,
 } from "../../codex/acp-spawn-probe"
 import {
+  appendCodexLoginOutput,
+  redactCodexLoginOutput,
+} from "../../codex/login-output"
+import {
   getCodexApiKeyStatus,
   readCodexApiKey,
   removeCodexApiKey as removeStoredCodexApiKey,
@@ -227,7 +231,6 @@ export function abortAllCodexStreams(): void {
 const loginSessions = new Map<string, CodexLoginSession>()
 const codexMcpCache = new Map<string, CodexMcpSnapshot>()
 
-const URL_CANDIDATE_REGEX = /https?:\/\/[^\s]+/g
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 
 const codexMcpListEntrySchema = z
@@ -400,88 +403,6 @@ async function getCodexRuntimeStatus() {
     components: availability.components,
     blockers: availability.blockers,
     capabilities: getRegisteredAgentRuntimeManifest("codex").capabilities,
-  }
-}
-
-function isLocalhostHostname(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase()
-  return (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "::1" ||
-    normalized === "[::1]" ||
-    normalized.endsWith(".localhost")
-  )
-}
-
-function extractFirstNonLocalhostUrl(output: string): string | null {
-  const matches = stripCodexAnsi(output).match(URL_CANDIDATE_REGEX)
-  if (!matches) return null
-
-  for (const match of matches) {
-    try {
-      const parsedUrl = new URL(match.trim().replace(/[),.;!?]+$/, ""))
-      if (!isLocalhostHostname(parsedUrl.hostname)) {
-        return parsedUrl.toString()
-      }
-    } catch {
-      // Ignore invalid URL candidates.
-    }
-  }
-
-  return null
-}
-
-function redactUrlForDisplay(match: string): string {
-  const trailingMatch = match.match(/[),.;!?]+$/)
-  const trailing = trailingMatch?.[0] ?? ""
-  const rawUrl = trailing ? match.slice(0, -trailing.length) : match
-
-  try {
-    const parsedUrl = new URL(rawUrl)
-    if (isLocalhostHostname(parsedUrl.hostname)) {
-      return match
-    }
-
-    const hadSearch = parsedUrl.search.length > 0
-    const hadHash = parsedUrl.hash.length > 0
-    parsedUrl.search = ""
-    parsedUrl.hash = ""
-
-    return [
-      parsedUrl.toString(),
-      hadSearch ? "?[redacted]" : "",
-      hadHash ? "#[redacted]" : "",
-      trailing,
-    ].join("")
-  } catch {
-    return match
-  }
-}
-
-function redactCodexLoginOutput(output: string): string {
-  return output
-    .replace(URL_CANDIDATE_REGEX, redactUrlForDisplay)
-    .replace(/sk-[A-Za-z0-9_-]{16,}/g, "sk-[redacted]")
-    .replace(
-      /("(?:access|refresh|id)_?token"\s*:\s*")[^"]+(")/gi,
-      "$1[redacted]$2",
-    )
-    .replace(
-      /\b((?:access|refresh|id)_?token|code|state|nonce|verifier)\s*=\s*[^\s]+/gi,
-      "$1=[redacted]",
-    )
-}
-
-function appendLoginOutput(session: CodexLoginSession, chunk: string): void {
-  const cleanChunk = stripCodexAnsi(chunk)
-  if (!cleanChunk) return
-
-  session.rawOutput += cleanChunk
-  session.output += redactCodexLoginOutput(cleanChunk)
-
-  if (!session.url) {
-    session.url = extractFirstNonLocalhostUrl(session.rawOutput)
   }
 }
 
@@ -1144,7 +1065,7 @@ export const codexRouter = router({
     }
 
     const handleChunk = (chunk: Buffer | string) => {
-      appendLoginOutput(session, chunk.toString("utf8"))
+      appendCodexLoginOutput(session, chunk.toString("utf8"))
     }
 
     child.stdout.on("data", handleChunk)
