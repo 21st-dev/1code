@@ -46,7 +46,7 @@ import {
   resolveClaudeAgentSdkResumeOptions,
 } from "../../claude/agent-sdk-query-options"
 import {
-  completeClaudeAgentSdkRunAfterAdapter,
+  completeClaudeAgentSdkRunAfterAdapterWithStreamState,
   finalizeClaudeAgentSdkUnexpectedError,
 } from "../../claude/agent-sdk-run-finalization"
 import {
@@ -1678,17 +1678,15 @@ export const claudeRouter = router({
             }
 
             const finalization =
-              await completeClaudeAgentSdkRunAfterAdapter({
+              await completeClaudeAgentSdkRunAfterAdapterWithStreamState({
                 db,
                 chatId: input.chatId,
                 subChatId: input.subChatId,
                 messagesToSave,
                 parts,
-                metadata: streamState.metadata,
-                currentText: streamState.currentText,
+                state: streamState,
                 historyEnabled,
                 cwd: runtimeCwd,
-                messageCount: streamState.messageCount,
                 aborted: abortController.signal.aborted,
                 desktopJobSawError,
                 guardedContract,
@@ -1696,9 +1694,6 @@ export const claudeRouter = router({
                 guardEvents,
                 guardedRunStartedAt,
                 subId,
-                chunkCount: streamState.chunkCount,
-                lastChunkType: streamState.lastChunkType,
-                pendingFinishChunk: streamState.pendingFinishChunk,
                 streamStart,
                 emitError,
                 emit: safeEmit,
@@ -1706,8 +1701,6 @@ export const claudeRouter = router({
                 getContract: getActiveGuardedContract,
                 deleteContract: deleteActiveGuardedContract,
               })
-            streamState.currentText = finalization.currentText
-            streamState.metadata = finalization.metadata
             if (finalization.status === "failed") {
               return
             }

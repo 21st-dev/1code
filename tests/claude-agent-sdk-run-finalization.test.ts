@@ -3,8 +3,10 @@ import { eq } from "drizzle-orm"
 import { chats, projects, subChats } from "../src/main/lib/db/schema"
 import {
   completeClaudeAgentSdkRunAfterAdapter,
+  completeClaudeAgentSdkRunAfterAdapterWithStreamState,
   finalizeClaudeAgentSdkUnexpectedError,
 } from "../src/main/lib/claude/agent-sdk-run-finalization"
+import { createClaudeAgentSdkStreamConsumerMutableState } from "../src/main/lib/claude/agent-sdk-stream-consumer"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
@@ -168,6 +170,52 @@ describe("Claude Agent SDK run finalization", () => {
     expect(input.complete).toHaveBeenCalledTimes(1)
     expect(input.log).toHaveBeenCalledWith(
       "[SD] M:END sub=sub-1 reason=ok n=2 last=text-end t=2.5s",
+    )
+  })
+
+  test("finalizes using stream consumer state and writes finalized values back", async () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+    const {
+      metadata,
+      currentText,
+      messageCount,
+      chunkCount,
+      lastChunkType,
+      pendingFinishChunk,
+      ...input
+    } = {
+      ...baseInput(db),
+      currentText: "state text",
+      metadata: { sessionId: "state-session" },
+      chunkCount: 4,
+      lastChunkType: "result",
+    }
+    const state = createClaudeAgentSdkStreamConsumerMutableState({
+      metadata,
+      currentText,
+      messageCount,
+      chunkCount,
+      lastChunkType,
+      pendingFinishChunk,
+    })
+
+    await expect(
+      completeClaudeAgentSdkRunAfterAdapterWithStreamState({
+        ...input,
+        state,
+      }),
+    ).resolves.toMatchObject({
+      status: "completed",
+      currentText: "",
+      metadata: { sessionId: "state-session" },
+      reachedNaturalFinish: true,
+    })
+
+    expect(state.currentText).toBe("")
+    expect(state.metadata).toEqual({ sessionId: "state-session" })
+    expect(input.log).toHaveBeenCalledWith(
+      "[SD] M:END sub=sub-1 reason=ok n=4 last=result t=2.5s",
     )
   })
 })

@@ -4,6 +4,7 @@ import {
   type FinalizeClaudeAgentSdkGuardMetadataInput,
 } from "./agent-sdk-guard-metadata"
 import { persistClaudeAgentSdkAssistantResponse } from "./agent-sdk-message-persistence"
+import type { ClaudeAgentSdkStreamConsumerMutableState } from "./agent-sdk-stream-consumer"
 import type { UIMessageChunk } from "./types"
 
 export type CompleteClaudeAgentSdkRunAfterAdapterInput = {
@@ -42,6 +43,18 @@ export type CompleteClaudeAgentSdkRunAfterAdapterResult = {
   currentText: string
   metadata: any
   reachedNaturalFinish: boolean
+}
+
+export type CompleteClaudeAgentSdkRunAfterAdapterWithStreamStateInput = Omit<
+  CompleteClaudeAgentSdkRunAfterAdapterInput,
+  | "metadata"
+  | "currentText"
+  | "messageCount"
+  | "chunkCount"
+  | "lastChunkType"
+  | "pendingFinishChunk"
+> & {
+  state: ClaudeAgentSdkStreamConsumerMutableState
 }
 
 export type FinalizeClaudeAgentSdkUnexpectedErrorInput = {
@@ -169,4 +182,22 @@ export async function completeClaudeAgentSdkRunAfterAdapter({
     metadata: finalizedMetadata,
     reachedNaturalFinish,
   }
+}
+
+export async function completeClaudeAgentSdkRunAfterAdapterWithStreamState({
+  state,
+  ...input
+}: CompleteClaudeAgentSdkRunAfterAdapterWithStreamStateInput): Promise<CompleteClaudeAgentSdkRunAfterAdapterResult> {
+  const finalization = await completeClaudeAgentSdkRunAfterAdapter({
+    ...input,
+    metadata: state.metadata,
+    currentText: state.currentText,
+    messageCount: state.messageCount,
+    chunkCount: state.chunkCount,
+    lastChunkType: state.lastChunkType,
+    pendingFinishChunk: state.pendingFinishChunk,
+  })
+  state.currentText = finalization.currentText
+  state.metadata = finalization.metadata
+  return finalization
 }
