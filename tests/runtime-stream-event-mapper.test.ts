@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
@@ -142,5 +143,27 @@ describe("desktop stream event mapper", () => {
       payload: { id: "text-1", delta: "done" },
     })
   })
-})
 
+  test("Claude and Codex routes persist non-terminal stream chunks through the mapper", () => {
+    for (const [runtimeName, routePath, runtimeId] of [
+      ["Claude", "src/main/lib/trpc/routers/claude.ts", "claude-code"],
+      ["Codex", "src/main/lib/trpc/routers/codex.ts", "codex"],
+    ] as const) {
+      const source = readFileSync(routePath, "utf8")
+      const safeEmitIndex = source.indexOf("const safeEmit")
+      const jobIndex = source.indexOf("createAndStartDesktopAgentJob(db, {")
+      const mapperCreateIndex = source.indexOf(
+        "desktopStreamEventMapper = createDesktopStreamEventMapper",
+        jobIndex,
+      )
+      const appendIndex = source.indexOf("appendRunEventsToAgentJob", safeEmitIndex)
+
+      expect(safeEmitIndex, `${runtimeName} safeEmit`).toBeGreaterThan(0)
+      expect(jobIndex, `${runtimeName} desktop job`).toBeGreaterThan(safeEmitIndex)
+      expect(mapperCreateIndex, `${runtimeName} mapper creation`).toBeGreaterThan(jobIndex)
+      expect(appendIndex, `${runtimeName} mapper append`).toBeGreaterThan(safeEmitIndex)
+      expect(source).toContain(`runtimeId: "${runtimeId}"`)
+      expect(source).toContain('type !== "finish"')
+    }
+  })
+})

@@ -88,6 +88,10 @@ import {
   resolveDesktopPermissionPolicy,
 } from "../../agent-runtime/permission-policy"
 import {
+  appendRunEventsToAgentJob,
+  createDesktopStreamEventMapper,
+} from "../../agent-runtime/stream-event-mapper"
+import {
   completeDesktopAgentJobSafely,
   createAndStartDesktopAgentJob,
   registerActiveDesktopAgentJob,
@@ -1040,6 +1044,9 @@ export const claudeRouter = router({
         let desktopJobSawError = false
         let desktopJobReachedNaturalFinish = false
         let desktopJobDb: ReturnType<typeof getDatabase> | null = null
+        let desktopStreamEventMapper: ReturnType<
+          typeof createDesktopStreamEventMapper
+        > | null = null
         console.log(
           `[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`,
         )
@@ -1057,6 +1064,14 @@ export const claudeRouter = router({
             (observedChunk?.type === "runtime-status" && observedChunk?.ok === false)
           ) {
             desktopJobSawError = true
+          }
+          if (desktopJobDb && desktopStreamEventMapper && observedChunk?.type !== "finish") {
+            try {
+              const events = desktopStreamEventMapper.map(observedChunk)
+              appendRunEventsToAgentJob(desktopJobDb, events)
+            } catch (eventError) {
+              console.warn("[claude] Failed to persist desktop run events:", eventError)
+            }
           }
           if (!isObservableActive) return false
           try {
@@ -1390,6 +1405,11 @@ export const claudeRouter = router({
               runId: activeRunId,
             })
             desktopJobId = desktopJob.job.id
+            desktopStreamEventMapper = createDesktopStreamEventMapper({
+              runtimeId: "claude-code",
+              runId: activeRunId,
+              jobId: desktopJobId,
+            })
             registerActiveDesktopAgentJob({
               jobId: desktopJobId,
               runtime: "claude-code",

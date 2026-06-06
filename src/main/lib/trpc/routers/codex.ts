@@ -93,6 +93,10 @@ import {
   resolveDesktopPermissionPolicy,
 } from "../../agent-runtime/permission-policy"
 import {
+  appendRunEventsToAgentJob,
+  createDesktopStreamEventMapper,
+} from "../../agent-runtime/stream-event-mapper"
+import {
   fetchMcpTools,
   fetchMcpToolsStdio,
   type McpToolInfo,
@@ -2163,6 +2167,9 @@ export const codexRouter = router({
         let desktopJobSawError = false
         let desktopJobReachedNaturalFinish = false
         let desktopJobDb: ReturnType<typeof getDatabase> | null = null
+        let desktopStreamEventMapper: ReturnType<
+          typeof createDesktopStreamEventMapper
+        > | null = null
 
         const safeEmit = (chunk: any) => {
           if (
@@ -2172,6 +2179,14 @@ export const codexRouter = router({
             (chunk?.type === "runtime-status" && chunk?.ok === false)
           ) {
             desktopJobSawError = true
+          }
+          if (desktopJobDb && desktopStreamEventMapper && chunk?.type !== "finish") {
+            try {
+              const events = desktopStreamEventMapper.map(chunk)
+              appendRunEventsToAgentJob(desktopJobDb, events)
+            } catch (eventError) {
+              console.warn("[codex] Failed to persist desktop run events:", eventError)
+            }
           }
           if (!isActive) return
           try {
@@ -2633,6 +2648,11 @@ export const codexRouter = router({
               runId: input.runId,
             })
             desktopJobId = desktopJob.job.id
+            desktopStreamEventMapper = createDesktopStreamEventMapper({
+              runtimeId: "codex",
+              runId: input.runId,
+              jobId: desktopJobId,
+            })
             registerActiveDesktopAgentJob({
               jobId: desktopJobId,
               runtime: "codex",
