@@ -2,7 +2,7 @@
 - [x] 1.1 Review current runtime core, desktop job, workbench, scope contract, and provider diagnostic specs.
 - [x] 1.2 Create this OpenSpec proposal, design, and spec deltas.
 - [x] 1.3 Validate this OpenSpec change strictly.
-- [ ] 1.4 Get approval before implementing product code.
+- [x] 1.4 Get approval before implementing product code.
 
 ## 2. Ownership and Preflight
 - [ ] 2.1 Update `docs/OWNERSHIP_MAP.md` with canonical owners for runtime preflight, permission policy, desktop run request, runtime events, and trace redaction.

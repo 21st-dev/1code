@@ -3,8 +3,8 @@
 - [x] 1.2 Review current OpenAI Codex SDK, app-server, and non-interactive guidance.
 - [x] 1.3 Create this OpenSpec proposal, design, and spec deltas.
 - [x] 1.4 Validate the OpenSpec change strictly.
-- [ ] 1.5 Get approval before implementing product code.
-- [ ] 1.6 Approve or pair with an approved runtime control layer OpenSpec before large Codex route/product migration begins.
+- [x] 1.5 Get approval before implementing product code.
+- [x] 1.6 Approve or pair with an approved runtime control layer OpenSpec before large Codex route/product migration begins.
 
 ## 2. Official Adapter Matrix
 - [ ] 2.1 Inspect `@openai/codex-sdk` TypeScript types and runtime dependency version for internal automation/tooling only.
