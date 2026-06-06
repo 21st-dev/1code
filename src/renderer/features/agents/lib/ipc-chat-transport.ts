@@ -111,15 +111,13 @@ const ERROR_TOAST_CONFIG: Record<
       "Your previous chat session expired. Send your message again to start fresh.",
   },
   EXECUTABLE_NOT_FOUND: {
-    title: "Claude CLI not found",
+    title: "Claude runtime missing",
     description:
-      "Install Claude Code CLI: npm install -g @anthropic-ai/claude-code",
+      "The bundled Claude Code runtime is missing. Reinstall the app, or in development run bun run claude:download and restart.",
     action: {
-      label: "Copy command",
+      label: "Copy dev command",
       onClick: () =>
-        navigator.clipboard.writeText(
-          "npm install -g @anthropic-ai/claude-code",
-        ),
+        navigator.clipboard.writeText("bun run claude:download"),
     },
   },
   NETWORK_ERROR: {

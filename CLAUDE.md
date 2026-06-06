@@ -120,7 +120,8 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 - **React Query**: Server state via tRPC (auto-caching, refetch)
 
 ### Claude Integration
-- Dynamic import of `@anthropic-ai/claude-code` SDK
+- Dynamic import of `@anthropic-ai/claude-agent-sdk` for desktop chat
+- Bundled Claude Code executable for local runtime/auth surfaces
 - Two modes: "plan" (read-only) and "agent" (full permissions)
 - Session resume via `sessionId` stored in SubChat
 - Message streaming via tRPC subscription (`claude.onMessage`)
@@ -134,7 +135,7 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC, Drizzle ORM, better-sqlite3 |
-| AI | @anthropic-ai/claude-code |
+| AI | @anthropic-ai/claude-agent-sdk, bundled Claude Code runtime |
 | Package Manager | bun |
 
 ## File Naming
@@ -151,7 +152,7 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 - `src/main/lib/db/index.ts` - DB initialization + auto-migrate
 - `src/renderer/features/agents/atoms/index.ts` - Agent UI state atoms
 - `src/renderer/features/agents/main/active-chat.tsx` - Main chat component
-- `src/main/lib/trpc/routers/claude.ts` - Claude SDK integration
+- `src/main/lib/trpc/routers/claude.ts` - Claude Agent SDK integration
 
 ## Debugging First Install Issues
 

@@ -70,7 +70,7 @@ still need capability-specific audits before public parity claims.
 
 | Capability | Locus status | Native support to verify | Current gap | Value | Risk | Needs OpenSpec | Next |
 |---|---|---|---|---|---|---|---|
-| Runtime startup | supported | Claude CLI/SDK startup | Existing runtime path is mature; may still need shared manifest extraction | high | medium | yes | proposal |
+| Runtime startup | supported | Desktop chat: Claude Agent SDK; headless: bundled Claude Code CLI print mode | Existing runtime paths are mature; desktop and headless should stay capability-specific instead of being treated as one SDK surface | high | medium | yes | proposal |
 | Local credential import/login/refresh | supported | Claude Code OAuth/local credential behavior | Current spec exists; keep under local-first credential boundary | high | high | no | audit |
 | Plan mode | supported | Claude permission/read-only behavior | Needs mapping into shared capability manifest | high | medium | yes | proposal |
 | Agent mode | supported | Claude tool execution behavior | Needs mapping into shared capability manifest | high | medium | yes | proposal |

@@ -30,7 +30,7 @@
   - Zustand: Sub-chat tabs and pinned state (persisted to localStorage)
   - React Query: Server state via tRPC (auto-caching, refetch)
 - **Database**: Drizzle ORM with SQLite, auto-migration on app startup
-- **Claude Integration**: Dynamic import of `@anthropic-ai/claude-code` SDK with two modes: "plan" (read-only) and "agent" (full permissions)
+- **Claude Integration**: Dynamic import of `@anthropic-ai/claude-agent-sdk` with two modes: "plan" (read-only) and "agent" (full permissions). The `@anthropic-ai/claude-code` package name refers to the Claude Code CLI install surface, not the SDK dependency used by desktop chat.
 
 ### Testing Strategy
 - Minimal Bun test suite under `tests/`
@@ -56,6 +56,7 @@
 - Dev vs Production use separate userData paths and protocols
 
 ## External Dependencies
-- **Claude Code SDK**: `@anthropic-ai/claude-code` for AI interactions
+- **Claude Agent SDK**: `@anthropic-ai/claude-agent-sdk` for desktop chat AI interactions
+- **Claude Code CLI**: `@anthropic-ai/claude-code` for the local CLI install surface
 - **Manual Release Check**: Optional fork-owned GitHub Releases latest endpoint configured with `LOCUS_RELEASES_REPO` or `MAIN_VITE_RELEASES_REPO`
 - **OAuth Provider**: Optional hosted authentication flow configured with `MAIN_VITE_API_URL`

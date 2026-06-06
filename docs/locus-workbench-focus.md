@@ -26,9 +26,10 @@ The current codebase already has enough foundation to stop expanding sideways:
   schedules, API runs, status, events, cancel, retry, and heartbeat
 - provider profiles and the provider gateway already model third-party or local
   model backends without sending provider secrets to the renderer
-- the Codex desktop path is stronger than headless Codex because it already
-  has provider profile binding, ACP/provider setup, MCP integration, streaming,
-  usage, and session metadata
+- the current Codex desktop path is stronger than headless Codex because it
+  already has provider profile binding, MCP integration, streaming, usage, and
+  session metadata, but its ACP transport is a compatibility path, not the
+  long-term desktop/chat target
 - the headless Codex path is still thin because `codex exec` output is mostly
   normalized from stdout and stderr rather than rich runtime events
 
@@ -55,9 +56,11 @@ Keep the slice to four issues:
    responses gateway", not only "Codex".
 
 3. Codex Workbench Run Trace
-   Prefer the existing desktop ACP path for the first workbench trace. Show
-   provider selection, MCP state, tool and command activity, file changes,
-   usage, session ID, duration, and final state as structured timeline data.
+   Build the trace contract for the app-server desktop/chat target. The current
+   ACP path may only feed temporary migration comparison data while app-server is
+   proven. Show provider selection, MCP state, tool and command activity, file
+   changes, usage, session ID, duration, and final state as structured timeline
+   data.
 
 4. Headless Parity Later
    Keep `codex exec` and process-runner output as fallback or batch mode for
@@ -88,7 +91,7 @@ Park work when it does not fit that slice, even if it is useful later:
 - plugin marketplace work
 - all-model benchmarking
 - full hosted or headless SaaS
-- full ACP parity
+- ACP as a final product target
 - durable workflow management
 
 ## Active Proposal Triage
@@ -112,7 +115,9 @@ runtime capability truth
 provider compatibility and diagnostics
 MCP state, tool activity, file changes, usage, and run history
 Local Job API as supporting automation infrastructure
-minimal ACP stdio job surface
+codex app-server for desktop/chat
+codex exec for headless/batch
+temporary ACP compatibility fallback only during migration
 ```
 
 Avoid as headline positioning:
@@ -123,6 +128,7 @@ local job platform
 runtime hub
 workflow orchestrator
 complete ACP server
+ACP as the long-term Codex adapter
 universal automation platform
 computer-control platform
 Claude and Codex parity

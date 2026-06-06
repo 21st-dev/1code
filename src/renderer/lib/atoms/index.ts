@@ -450,8 +450,8 @@ export const betaKanbanEnabledAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
-// Beta: Enable Tasks functionality in Claude Code SDK
-// When enabled (default), the SDK exposes task-related tools (TodoWrite, Task agents)
+// Beta: Enable task-related Claude runtime tools.
+// When enabled (default), the runtime exposes TodoWrite and Task agents.
 export const enableTasksAtom = atomWithStorage<boolean>(
   "preferences:enable-tasks",
   true, // Default ON

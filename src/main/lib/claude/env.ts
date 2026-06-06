@@ -257,7 +257,7 @@ export function getClaudeShellEnvironment(): Record<string, string> {
 }
 
 /**
- * Build the complete environment for Claude SDK.
+ * Build the complete environment for the Claude runtime.
  * Merges shell environment, process.env, and custom overrides.
  */
 export function buildClaudeEnv(options?: {

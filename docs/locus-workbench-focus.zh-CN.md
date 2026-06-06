@@ -25,8 +25,9 @@ runtime hub。
   status、events、cancel、retry 和 heartbeat
 - provider profile 和 provider gateway 已经能表达第三方或本地模型后端，并避免把
   provider secret 传给 renderer
-- Codex desktop 路线比 headless Codex 更接近工作台目标，因为它已经有 provider profile
-  binding、ACP/provider setup、MCP integration、streaming、usage 和 session metadata
+- 当前 Codex desktop 路线比 headless Codex 更接近工作台目标，因为它已经有 provider
+  profile binding、MCP integration、streaming、usage 和 session metadata；但 ACP transport
+  只是兼容路径，不是长期 desktop/chat 目标
 - headless Codex 现在仍然较薄，因为 `codex exec` 主要还是把 stdout/stderr 粗粒度转成
   events，而不是完整 runtime event stream
 
@@ -53,9 +54,9 @@ Codex CLI workflow + provider profile backend + capability display + run trace
    而不是只写 `Codex`。
 
 3. Codex Workbench Run Trace
-   第一阶段优先走现有 desktop ACP 路线，把 provider selection、MCP state、tool/command
-   activity、file changes、usage、session ID、duration 和 final state 展示成结构化
-   timeline。
+   trace contract 对准 app-server desktop/chat 目标来设计。当前 ACP 路径只能在迁移期提供
+   对比数据，不能作为最终完成口径。把 provider selection、MCP state、tool/command
+   activity、file changes、usage、session ID、duration 和 final state 展示成结构化 timeline。
 
 4. Headless Parity Later
    `codex exec` 和 process-runner 先作为 fallback 或 batch mode。等 workbench trace
@@ -85,7 +86,7 @@ provider profile 组合能不能运行、能不能 streaming、能不能 tool us
 - plugin marketplace
 - 全模型 benchmark
 - 完整 hosted/headless SaaS
-- full ACP parity
+- ACP 作为最终产品目标
 - durable workflow management
 
 ## 活跃 Proposal 切割
@@ -107,7 +108,9 @@ runtime capability truth
 provider compatibility and diagnostics
 MCP state, tool activity, file changes, usage, and run history
 Local Job API 作为支撑自动化基础设施
-minimal ACP stdio job surface
+codex app-server 用于 desktop/chat
+codex exec 用于 headless/batch
+ACP 只作为迁移期 temporary compatibility fallback
 ```
 
 不要作为主定位使用：
@@ -118,6 +121,7 @@ local job platform
 runtime hub
 workflow orchestrator
 complete ACP server
+ACP 作为长期 Codex adapter
 universal automation platform
 computer-control platform
 Claude and Codex parity

@@ -1373,12 +1373,12 @@ export const claudeRouter = router({
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
 
-            // 3. Get Claude SDK
+            // 3. Get Claude Agent SDK query entrypoint.
             let claudeQuery
             try {
               claudeQuery = await getClaudeQuery()
             } catch (sdkError) {
-              emitError(sdkError, "Failed to load Claude SDK")
+              emitError(sdkError, "Failed to load Claude Agent SDK")
               console.log(
                 `[SD] M:END sub=${subId} reason=sdk_load_error n=${chunkCount}`,
               )
@@ -1531,7 +1531,7 @@ export const claudeRouter = router({
               prompt = createPromptWithImages()
             }
 
-            // Build full environment for Claude SDK (includes HOME, PATH, etc.)
+            // Build full environment for the Claude runtime (includes HOME, PATH, etc.)
             const claudeEnv = buildClaudeEnv({
               ...(finalCustomConfig && {
                 customEnv: buildClaudeProviderEnv(finalCustomConfig),
@@ -2464,7 +2464,7 @@ ${prompt}
               messageCount = 0
               pendingFinishChunk = null
 
-              // 5. Run Claude SDK
+              // 5. Run Claude Agent SDK
               let stream
               try {
                 stream = claudeQuery(queryOptions)
@@ -2903,7 +2903,7 @@ ${prompt}
                       `[Ollama]   2. Model failed to start generating (check Ollama logs: ollama logs)`,
                     )
                     console.error(
-                      `[Ollama]   3. Network issue between Claude SDK and Ollama`,
+                      `[Ollama]   3. Network issue between Claude Agent SDK and Ollama`,
                     )
                     console.error(`[Ollama] ===== NEXT STEPS =====`)
                     console.error(

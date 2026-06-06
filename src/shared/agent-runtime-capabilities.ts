@@ -279,7 +279,7 @@ const CLAUDE_RUNTIME_MANIFEST = manifest({
   runtimeId: "claude-code",
   label: "Claude Code",
   description:
-    "Claude Code runtime support through Locus's Claude SDK adapter and shared local safety layers.",
+    "Claude Code runtime support through Locus's Claude Agent SDK adapter and shared local safety layers.",
   capabilities: [
     capability({
       id: "hardToolGuard",
