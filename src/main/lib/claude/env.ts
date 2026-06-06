@@ -1,4 +1,4 @@
-import { app } from "electron"
+import * as electron from "electron"
 import { execFile } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
@@ -30,11 +30,11 @@ const STRIPPED_ENV_KEYS_BASE = [
 ]
 
 function isClaudeEnvPackaged(): boolean {
-  return app?.isPackaged ?? process.env.NODE_ENV === "production"
+  return electron.app?.isPackaged ?? process.env.NODE_ENV === "production"
 }
 
 function getAppPath(): string {
-  return app?.getAppPath?.() ?? process.cwd()
+  return electron.app?.getAppPath?.() ?? process.cwd()
 }
 
 function getStrippedEnvKeys(): string[] {

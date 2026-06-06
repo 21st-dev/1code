@@ -44,6 +44,38 @@ export type CompleteClaudeAgentSdkRunAfterAdapterResult = {
   reachedNaturalFinish: boolean
 }
 
+export type FinalizeClaudeAgentSdkUnexpectedErrorInput = {
+  error: unknown
+  subId: string
+  chunkCount: number
+  streamStart: number
+  emitError: (error: unknown, context: string) => void
+  emit: (chunk: UIMessageChunk) => unknown
+  complete: () => void
+  log?: (...args: any[]) => void
+  nowMs?: () => number
+}
+
+export function finalizeClaudeAgentSdkUnexpectedError({
+  error,
+  subId,
+  chunkCount,
+  streamStart,
+  emitError,
+  emit,
+  complete,
+  log = console.log,
+  nowMs = Date.now,
+}: FinalizeClaudeAgentSdkUnexpectedErrorInput): void {
+  const duration = ((nowMs() - streamStart) / 1000).toFixed(1)
+  log(
+    `[SD] M:END sub=${subId} reason=unexpected_error n=${chunkCount} t=${duration}s`,
+  )
+  emitError(error, "Unexpected error")
+  emit({ type: "finish" })
+  complete()
+}
+
 export async function completeClaudeAgentSdkRunAfterAdapter({
   db,
   chatId,

@@ -1,7 +1,7 @@
 import Database from "better-sqlite3"
 import { drizzle } from "drizzle-orm/better-sqlite3"
 import { migrate } from "drizzle-orm/better-sqlite3/migrator"
-import { app } from "electron"
+import * as electron from "electron"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
 import * as schema from "./schema"
@@ -13,7 +13,7 @@ let sqlite: Database.Database | null = null
  * Get the database path in the app's user data directory
  */
 function getDatabasePath(): string {
-  const userDataPath = app.getPath("userData")
+  const userDataPath = electron.app.getPath("userData")
   const dataDir = join(userDataPath, "data")
 
   // Ensure data directory exists
@@ -29,7 +29,7 @@ function getDatabasePath(): string {
  * Handles both development and production (packaged) environments
  */
 function getMigrationsPath(): string {
-  if (app.isPackaged) {
+  if (electron.app.isPackaged) {
     // Production: migrations bundled in resources
     return join(process.resourcesPath, "migrations")
   }

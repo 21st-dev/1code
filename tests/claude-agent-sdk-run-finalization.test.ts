@@ -1,7 +1,10 @@
 import { describe, expect, mock, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { chats, projects, subChats } from "../src/main/lib/db/schema"
-import { completeClaudeAgentSdkRunAfterAdapter } from "../src/main/lib/claude/agent-sdk-run-finalization"
+import {
+  completeClaudeAgentSdkRunAfterAdapter,
+  finalizeClaudeAgentSdkUnexpectedError,
+} from "../src/main/lib/claude/agent-sdk-run-finalization"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
@@ -67,6 +70,33 @@ function baseInput(db: ReturnType<typeof createAgentJobTestDb>) {
 }
 
 describe("Claude Agent SDK run finalization", () => {
+  test("finalizes unexpected route errors with finish and completion", () => {
+    const error = new Error("boom")
+    const emitError = mock(() => {})
+    const emit = mock(() => {})
+    const complete = mock(() => {})
+    const log = mock(() => {})
+
+    finalizeClaudeAgentSdkUnexpectedError({
+      error,
+      subId: "sub-1",
+      chunkCount: 5,
+      streamStart: 1000,
+      emitError,
+      emit,
+      complete,
+      log,
+      nowMs: () => 3650,
+    })
+
+    expect(log).toHaveBeenCalledWith(
+      "[SD] M:END sub=sub-1 reason=unexpected_error n=5 t=2.6s",
+    )
+    expect(emitError).toHaveBeenCalledWith(error, "Unexpected error")
+    expect(emit).toHaveBeenCalledWith({ type: "finish" })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
   test("handles empty responses before persistence", async () => {
     const db = createAgentJobTestDb()
     seedChat(db)

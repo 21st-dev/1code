@@ -40,7 +40,10 @@ import {
 } from "../../claude/provider-runtime-config"
 import { createClaudeAgentSdkQueryOptions } from "../../claude/agent-sdk-query-options"
 import { finalizeClaudeAgentSdkEmbeddedError } from "../../claude/agent-sdk-embedded-error-finalization"
-import { completeClaudeAgentSdkRunAfterAdapter } from "../../claude/agent-sdk-run-finalization"
+import {
+  completeClaudeAgentSdkRunAfterAdapter,
+  finalizeClaudeAgentSdkUnexpectedError,
+} from "../../claude/agent-sdk-run-finalization"
 import { finalizeClaudeAgentSdkStreamError } from "../../claude/agent-sdk-stream-error-finalization"
 import {
   createClaudeAgentSdkPolicyRetryState,
@@ -1993,13 +1996,15 @@ export const claudeRouter = router({
             desktopJobReachedNaturalFinish =
               finalization.reachedNaturalFinish
           } catch (error) {
-            const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
-            console.log(
-              `[SD] M:END sub=${subId} reason=unexpected_error n=${chunkCount} t=${duration}s`,
-            )
-            emitError(error, "Unexpected error")
-            safeEmit({ type: "finish" } as UIMessageChunk)
-            safeComplete()
+            finalizeClaudeAgentSdkUnexpectedError({
+              error,
+              subId,
+              chunkCount,
+              streamStart,
+              emitError,
+              emit: safeEmit,
+              complete: safeComplete,
+            })
           } finally {
             if (desktopJobId) {
               const jobDb = desktopJobDb ?? getDatabase()
