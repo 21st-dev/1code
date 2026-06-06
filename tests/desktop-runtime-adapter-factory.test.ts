@@ -725,6 +725,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-guard-metadata.ts",
       "utf8",
     )
+    const runtimeState = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-state.ts",
+      "utf8",
+    )
     const runFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-run-finalization.ts",
       "utf8",
@@ -734,8 +738,13 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-guard-metadata")
-    expect(claudeRouter).toContain("createClaudeAgentSdkInitialGuardMetadata")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-state")
+    expect(claudeRouter).toContain("createClaudeAgentSdkRuntimeStreamSetup")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-guard-metadata")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkInitialGuardMetadata")
+    expect(claudeRouter).not.toContain("createTransformer")
+    expect(claudeRouter).not.toContain("const parts: any[]")
+    expect(claudeRouter).not.toContain("const stderrLines: string[]")
     expect(claudeRouter).not.toContain("finalizeClaudeAgentSdkGuardMetadata({")
     expect(claudeRouter).not.toContain("const finalizeGuardMetadata")
     expect(claudeRouter).not.toContain("buildGuardedRunAudit")
@@ -749,6 +758,9 @@ describe("desktop runtime adapter factory", () => {
     expect(guardMetadata).toContain("buildGuardedRunAudit")
     expect(guardMetadata).toContain("captureGuardedGitStatus")
     expect(guardMetadata).toContain('emit({ type: "guard-audit", audit })')
+    expect(runtimeState).toContain("createClaudeAgentSdkRuntimeStreamSetup")
+    expect(runtimeState).toContain("createTransformer")
+    expect(runtimeState).toContain("createClaudeAgentSdkInitialGuardMetadata")
   })
 
   test("keeps Claude Agent SDK message persistence ownership out of the router", () => {

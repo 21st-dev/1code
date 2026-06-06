@@ -7,7 +7,6 @@ import path from "path"
 import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
 import {
-  createTransformer,
   prepareClaudeAgentSdkRuntimeEnvironment,
   type UIMessageChunk,
 } from "../../claude"
@@ -66,7 +65,7 @@ import {
   ensureClaudeAgentSdkIsolatedConfigDir,
   resolveClaudeAgentSdkIsolatedConfig,
 } from "../../claude/agent-sdk-config-dir"
-import { createClaudeAgentSdkInitialGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
+import { createClaudeAgentSdkRuntimeStreamSetup } from "../../claude/agent-sdk-runtime-state"
 import {
   deleteActiveClaudeSession,
   deleteActiveClaudeSessionIfController,
@@ -1030,18 +1029,14 @@ export const claudeRouter = router({
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
 
-            const transform = createTransformer({
-              emitSdkMessageUuid: historyEnabled,
-              isUsingOllama,
-            })
-
-            // 4. Setup accumulation state
-            const parts: any[] = []
-            streamState.metadata =
-              createClaudeAgentSdkInitialGuardMetadata(guardedContract)
-
-            // Capture stderr from Claude process for debugging
-            const stderrLines: string[] = []
+            const runtimeStreamSetup =
+              createClaudeAgentSdkRuntimeStreamSetup({
+                historyEnabled,
+                isUsingOllama,
+                guardedContract,
+              })
+            const { transform, parts, stderrLines } = runtimeStreamSetup
+            streamState.metadata = runtimeStreamSetup.metadata
 
             let prompt
             try {
