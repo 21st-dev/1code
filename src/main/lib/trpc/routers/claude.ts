@@ -6,9 +6,7 @@ import * as os from "os"
 import path from "path"
 import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
-import { assertOfficialCloudAllowed, isLocalOnlyMode } from "../../local-only"
 import {
-  checkOfflineFallback,
   createTransformer,
   prepareClaudeAgentSdkRuntimeEnvironment,
   type UIMessageChunk,
@@ -28,13 +26,7 @@ import {
   type ClaudeConfig,
   type McpServerConfig,
 } from "../../claude-config"
-import { getValidClaudeCodeCredential } from "../../claude-credentials"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
-import { getActiveClaudeProviderConfig } from "../../claude/provider-config-store"
-import {
-  normalizeClaudeProviderRuntimeConfig,
-  type ClaudeProviderRuntimeConfig,
-} from "../../claude/provider-runtime-config"
 import {
   createClaudeAgentSdkRuntimeQueryOptions,
   prepareClaudeAgentSdkMcpServers,
@@ -65,6 +57,7 @@ import {
 import {
   prepareClaudeAgentSdkOllamaStartupDiagnostics,
 } from "../../claude/agent-sdk-ollama-diagnostics"
+import { resolveClaudeAgentSdkProviderStartup } from "../../claude/agent-sdk-provider-startup"
 import { createClaudeAgentSdkInitialGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
 import {
   deleteActiveClaudeSession,
@@ -91,12 +84,6 @@ import {
   createClaudeDesktopProviderBinding,
   createClaudeDesktopRunRequest,
 } from "../../claude/desktop-run-request"
-import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
-import {
-  getLegacyClaudeProviderProfileId,
-  getProviderProfileRuntimeConfig,
-} from "../../provider-profiles/storage"
-import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import type { ResolvedChatImageAttachment } from "../../../../shared/chat-attachments"
 import { resolveChatImageAttachments } from "../../chat-attachments"
 import {
@@ -963,131 +950,22 @@ export const claudeRouter = router({
                 .run()
             }
 
-            let providerConfig: ClaudeProviderRuntimeConfig | undefined
-
-            const selectedProviderProfileId = parseProviderProfileSource(
-              input.modelSource,
-            )
-
-            if (selectedProviderProfileId) {
-              const profile = getProviderProfileRuntimeConfig(selectedProviderProfileId)
-              if (!profile || !profile.targetRuntimes.includes("claude")) {
-                emitPreflightBlocker({
-                  id: "provider-profile",
-                  status: "blocked",
-                  message: "Provider profile is not available for Claude.",
-                  hint: "Choose a provider profile that targets Claude.",
-                })
-                return
-              }
-
-              const gateway = await getProviderGatewayEndpoint(profile.id, "anthropic")
-              providerConfig = {
-                model: profile.defaultModel,
-                baseUrl: gateway.baseUrl,
-                token: gateway.token,
-                authMode: "auth_token",
-              }
-            } else if (input.modelSource === "custom-provider") {
-              const legacyProfileId = getLegacyClaudeProviderProfileId()
-              if (legacyProfileId) {
-                const profile = getProviderProfileRuntimeConfig(legacyProfileId)
-                if (profile) {
-                  const gateway = await getProviderGatewayEndpoint(
-                    profile.id,
-                    "anthropic",
-                  )
-                  providerConfig = {
-                    model: profile.defaultModel,
-                    baseUrl: gateway.baseUrl,
-                    token: gateway.token,
-                    authMode: "auth_token",
-                  }
-                }
-              }
-
-              providerConfig =
-                providerConfig ||
-                getActiveClaudeProviderConfig()
-
-              if (!providerConfig) {
-                emitPreflightBlocker({
-                  id: "provider-profile",
-                  status: "needs-auth",
-                  message: "Custom provider is not configured.",
-                  hint: "Configure a Claude provider profile or use Claude Code auth.",
-                })
-                return
-              }
-            }
-
-            // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
-            // Only check if offline mode is enabled in settings. When a custom
-            // provider is active, it takes precedence over Claude OAuth.
-            let claudeCodeToken: string | null = null
-            let claudeCredentialMetadata:
-              | Awaited<ReturnType<typeof getValidClaudeCodeCredential>>["metadata"]
-              | null = null
-
-            if (!providerConfig) {
-              try {
-                const credentialResult = await getValidClaudeCodeCredential()
-                claudeCodeToken = credentialResult.accessToken
-                claudeCredentialMetadata = credentialResult.metadata
-              } catch (credentialError) {
-                emitPreflightBlocker({
-                  id: "provider-profile",
-                  status: "needs-auth",
-                  message:
-                    credentialError instanceof Error
-                      ? `Claude Code credential unavailable: ${credentialError.message}`
-                      : `Claude Code credential unavailable: ${String(credentialError)}`,
-                  hint: "Reconnect Claude Code auth or choose a provider profile.",
-                })
-                return
-              }
-            }
-
-            const offlineResult = await checkOfflineFallback(
-              providerConfig,
-              claudeCodeToken,
-              undefined, // selectedOllamaModel - will be read from customConfig if present
-              input.offlineModeEnabled ?? false, // Pass offline mode setting
-            )
-
-            if (offlineResult.error) {
-              emitPreflightBlocker({
-                id: "provider-profile",
-                status: "blocked",
-                message: `Offline mode unavailable: ${offlineResult.error}`,
+            const providerStartup =
+              await resolveClaudeAgentSdkProviderStartup({
+                modelSource: input.modelSource,
+                offlineModeEnabled: input.offlineModeEnabled ?? false,
               })
+            if (!providerStartup.ok) {
+              emitPreflightBlocker(providerStartup.blocker)
               return
             }
-
-            // Use offline config if available. Non-secure legacy input defaults
-            // to ANTHROPIC_AUTH_TOKEN to preserve previous behavior.
-            const finalCustomConfig = offlineResult.config
-              ? normalizeClaudeProviderRuntimeConfig(offlineResult.config)
-              : providerConfig
-            const isUsingOllama = offlineResult.isUsingOllama
-            if (finalCustomConfig?.baseUrl) {
-              try {
-                assertOfficialCloudAllowed(
-                  "use Claude provider endpoint",
-                  finalCustomConfig.baseUrl,
-                )
-              } catch (providerError) {
-                emitPreflightBlocker({
-                  id: "local-only",
-                  status: "blocked",
-                  message:
-                    providerError instanceof Error
-                      ? providerError.message
-                      : String(providerError),
-                })
-                return
-              }
-            }
+            const {
+              selectedProviderProfileId,
+              claudeCodeToken,
+              claudeCredentialMetadata,
+              finalCustomConfig,
+              isUsingOllama,
+            } = providerStartup.startup
 
             const desktopJob = createAndRegisterDesktopChatAgentJob(db, {
               runtime: "claude-code",

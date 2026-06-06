@@ -417,9 +417,25 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
     const claudeEnv = readFileSync("src/main/lib/claude/env.ts", "utf8")
+    const claudeProviderStartup = readFileSync(
+      "src/main/lib/claude/agent-sdk-provider-startup.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("normalizeClaudeProviderRuntimeConfig")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-provider-startup")
+    expect(claudeRouter).toContain(
+      "const providerStartup =\n              await resolveClaudeAgentSdkProviderStartup",
+    )
     expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimeEnvironment")
+    expect(claudeRouter).not.toContain("normalizeClaudeProviderRuntimeConfig")
+    expect(claudeRouter).not.toContain("checkOfflineFallback")
+    expect(claudeRouter).not.toContain("getValidClaudeCodeCredential")
+    expect(claudeRouter).not.toContain("getActiveClaudeProviderConfig")
+    expect(claudeRouter).not.toContain("parseProviderProfileSource")
+    expect(claudeRouter).not.toContain("getProviderProfileRuntimeConfig")
+    expect(claudeRouter).not.toContain("getProviderGatewayEndpoint")
+    expect(claudeRouter).not.toContain("getLegacyClaudeProviderProfileId")
+    expect(claudeRouter).not.toContain("assertOfficialCloudAllowed")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkRuntimeEnv")
     expect(claudeRouter).not.toContain("buildClaudeEnv")
     expect(claudeRouter).not.toContain("buildClaudeProviderEnv")
@@ -444,6 +460,15 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeEnv).toContain("createClaudeAgentSdkRuntimeEnv")
     expect(claudeEnv).toContain("CLAUDE_CODE_OAUTH_TOKEN")
     expect(claudeEnv).toContain("CLAUDE_CONFIG_DIR")
+    expect(claudeProviderStartup).toContain(
+      "resolveClaudeAgentSdkProviderStartup",
+    )
+    expect(claudeProviderStartup).toContain("parseProviderProfileSource")
+    expect(claudeProviderStartup).toContain("getProviderProfileRuntimeConfig")
+    expect(claudeProviderStartup).toContain("getProviderGatewayEndpoint")
+    expect(claudeProviderStartup).toContain("getValidClaudeCodeCredential")
+    expect(claudeProviderStartup).toContain("checkOfflineFallback")
+    expect(claudeProviderStartup).toContain("assertOfficialCloudAllowed")
   })
 
   test("keeps Claude Agent SDK runtime diagnostics ownership out of the router", () => {
