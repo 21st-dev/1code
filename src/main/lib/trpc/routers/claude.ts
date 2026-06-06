@@ -1,15 +1,11 @@
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
-import { app } from "electron"
 import * as fs from "fs/promises"
 import * as os from "os"
 import path from "path"
 import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
-import {
-  prepareClaudeAgentSdkRuntimeStartupEnvironment,
-  type UIMessageChunk,
-} from "../../claude"
+import type { UIMessageChunk } from "../../claude"
 import {
   getMergedGlobalMcpServers,
   getMergedLocalProjectMcpServers,
@@ -56,8 +52,8 @@ import {
 import {
   clearClaudeAgentSdkIsolatedConfigDirCache,
   ensureClaudeAgentSdkIsolatedConfigDir,
-  resolveClaudeAgentSdkIsolatedConfig,
 } from "../../claude/agent-sdk-config-dir"
+import { prepareClaudeAgentSdkRuntimeStartupContext } from "../../claude/agent-sdk-runtime-startup"
 import { createClaudeAgentSdkDesktopJob } from "../../claude/agent-sdk-desktop-job"
 import {
   createClaudeAgentSdkRuntimeStreamSetup,
@@ -1051,27 +1047,20 @@ export const claudeRouter = router({
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
             // For Ollama: use chatId instead of subChatId so all messages in the same chat share history
-            const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
-              userDataDir: app.getPath("userData"),
+            const runtimeStartup = prepareClaudeAgentSdkRuntimeStartupContext({
               chatId: input.chatId,
               subChatId: input.subChatId,
               isUsingOllama,
+              customConfig: finalCustomConfig,
+              requestedModel: input.model,
+              enableTasks: input.enableTasks ?? true,
+              claudeCodeToken,
+              logPrefix: `[${input.subChatId}] `,
             })
-            const isolatedConfigDir = isolatedConfig.isolatedConfigDir
-
-            const runtimeEnvironment =
-              prepareClaudeAgentSdkRuntimeStartupEnvironment({
-                customConfig: finalCustomConfig,
-                requestedModel: input.model,
-                enableTasks: input.enableTasks ?? true,
-                claudeCodeToken,
-                isolatedConfigDir,
-                logPrefix: `[${input.subChatId}] `,
-              })
-            const hasExistingApiConfig =
-              runtimeEnvironment.hasExistingApiConfig
-            const finalEnv = runtimeEnvironment.finalEnv
-            const resolvedModel = runtimeEnvironment.resolvedModel
+            const { isolatedConfig, isolatedConfigDir } = runtimeStartup
+            const hasExistingApiConfig = runtimeStartup.hasExistingApiConfig
+            const finalEnv = runtimeStartup.finalEnv
+            const resolvedModel = runtimeStartup.resolvedModel
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined

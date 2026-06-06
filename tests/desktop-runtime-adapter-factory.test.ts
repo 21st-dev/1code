@@ -443,18 +443,27 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-provider-startup.ts",
       "utf8",
     )
+    const claudeRuntimeStartup = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-startup.ts",
+      "utf8",
+    )
     const claudeConfigDir = readFileSync(
       "src/main/lib/claude/agent-sdk-config-dir.ts",
       "utf8",
     )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-provider-startup")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-startup")
     expect(claudeRouter).toContain("../../claude/agent-sdk-config-dir")
     expect(claudeRouter).toContain(
       "const providerStartup =\n              await resolveClaudeAgentSdkProviderStartup",
     )
     expect(claudeRouter).toContain("getClaudeAgentSdkConnectionMethod")
-    expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimeStartupEnvironment")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimeStartupContext")
+    expect(claudeRouter).not.toContain("prepareClaudeAgentSdkRuntimeStartupEnvironment")
+    expect(claudeRouter).not.toContain("resolveClaudeAgentSdkIsolatedConfig({")
+    expect(claudeRouter).not.toContain('app.getPath("userData")')
+    expect(claudeRouter).not.toContain('from "electron"')
     expect(claudeRouter).not.toContain("prepareClaudeAgentSdkRuntimeEnvironment")
     expect(claudeRouter).not.toContain("finalCustomConfig?.model || input.model")
     expect(claudeRouter).not.toContain("let connectionMethod")
@@ -510,6 +519,14 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeProviderStartup).toContain("getValidClaudeCodeCredential")
     expect(claudeProviderStartup).toContain("checkOfflineFallback")
     expect(claudeProviderStartup).toContain("assertOfficialCloudAllowed")
+    expect(claudeRuntimeStartup).toContain(
+      "prepareClaudeAgentSdkRuntimeStartupContext",
+    )
+    expect(claudeRuntimeStartup).toContain(
+      "prepareClaudeAgentSdkRuntimeStartupEnvironment",
+    )
+    expect(claudeRuntimeStartup).toContain("resolveClaudeAgentSdkIsolatedConfig")
+    expect(claudeRuntimeStartup).toContain('electron.app.getPath("userData")')
     expect(claudeConfigDir).toContain("resolveClaudeAgentSdkIsolatedConfig")
     expect(claudeConfigDir).toContain("ensureClaudeAgentSdkIsolatedConfigDir")
     expect(claudeConfigDir).toContain("clearClaudeAgentSdkIsolatedConfigDirCache")
