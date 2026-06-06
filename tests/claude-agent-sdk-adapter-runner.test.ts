@@ -9,7 +9,7 @@ import {
 import {
   runClaudeAgentSdkAdapterWithPolicyRetry,
   runClaudeAgentSdkDesktopAdapter,
-  runClaudeAgentSdkDesktopAdapterWithStreamConsumer,
+  runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer,
 } from "../src/main/lib/claude/agent-sdk-adapter-runner"
 import {
   createClaudeAgentSdkPolicyRetryState,
@@ -116,7 +116,7 @@ describe("Claude Agent SDK adapter runner", () => {
     expect(beforeAttempts).toEqual(["attempt"])
   })
 
-  test("runs the current adapter with owned stream consumer retry state wiring", async () => {
+  test("runs the current adapter with owned runtime stream consumer wiring", async () => {
     const request = createRequest()
     const queryOptions = { prompt: "hello", options: {} } as any
     const streamState = createClaudeAgentSdkStreamConsumerMutableState({
@@ -127,7 +127,7 @@ describe("Claude Agent SDK adapter runner", () => {
     const emitted: UIMessageChunk[] = []
 
     await expect(
-      runClaudeAgentSdkDesktopAdapterWithStreamConsumer({
+      runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
         query: ((params: any) => {
           queryCalls.push(params)
           return createClaudeAssistantStream()
@@ -135,49 +135,44 @@ describe("Claude Agent SDK adapter runner", () => {
         request,
         queryOptions,
         streamState,
-        streamConsumer: {
-          isUsingOllama: false,
-          model: "claude-sonnet",
-          baseUrl: undefined,
-          prompt: "hello",
-          cwd: "/repo",
-          abortSignal: new AbortController().signal,
-          isObservableActive: () => true,
-          chatId: "chat-1",
-          subChatId: "sub-1",
-          customConfig: null,
-          hasExistingApiConfig: false,
-          mode: "agent",
-          resolvedModel: "claude-sonnet",
-          oauthToken: null,
-          mcpServers: undefined,
-          transform: () => [
-            { type: "text-delta", id: "text-1", delta: "hello" },
-            { type: "text-end", id: "text-1" },
-          ],
-          parts: [],
-          historyEnabled: true,
-          subId: "sub-1",
-          stderrLines: [],
-          db: null,
-          messagesToSave: [],
-          guardedContract: null,
-          guardedPreRunStatus: null,
-          guardEvents: [],
-          guardedRunStartedAt: "2026-06-01T00:00:00.000Z",
-          emit: (chunk) => {
-            emitted.push(chunk)
-            return true
-          },
-          complete: () => {},
-          getContract: () => null,
-          deleteContract: () => undefined,
-        },
+        isUsingOllama: false,
+        model: "claude-sonnet",
+        baseUrl: undefined,
+        prompt: "hello",
+        cwd: "/repo",
+        abortSignal: new AbortController().signal,
+        isObservableActive: () => true,
+        chatId: "chat-1",
+        subChatId: "sub-1",
+        customConfig: null,
+        hasExistingApiConfig: false,
+        mode: "agent",
+        resolvedModel: "claude-sonnet",
+        oauthToken: null,
+        mcpServers: undefined,
+        transform: () => [
+          { type: "text-delta", id: "text-1", delta: "hello" },
+          { type: "text-end", id: "text-1" },
+        ],
+        parts: [],
+        historyEnabled: true,
+        stderrLines: [],
+        db: null,
+        messagesToSave: [],
+        guardedContract: null,
+        guardedPreRunStatus: null,
+        guardEvents: [],
+        guardedRunStartedAt: "2026-06-01T00:00:00.000Z",
+        getContract: () => null,
+        deleteContract: () => undefined,
         subId: "sub-1",
         emitError: () => {
           throw new Error("emitError should not run")
         },
-        emit: () => {},
+        emit: (chunk) => {
+          emitted.push(chunk)
+          return true
+        },
         complete: () => {},
       }),
     ).resolves.toEqual({ status: "succeeded" })

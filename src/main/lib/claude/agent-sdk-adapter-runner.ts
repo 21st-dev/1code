@@ -59,6 +59,17 @@ export type RunClaudeAgentSdkDesktopAdapterWithStreamConsumerInput = Omit<
   streamState: ClaudeAgentSdkStreamConsumerMutableState
 }
 
+export type RunClaudeAgentSdkDesktopAdapterWithRuntimeConsumerInput = Omit<
+  RunClaudeAgentSdkDesktopAdapterWithStreamConsumerInput,
+  "streamConsumer" | "emit"
+> &
+  Omit<
+    CreateClaudeAgentSdkStreamConsumerInput,
+    "policyRetry" | "state" | "emit" | "complete" | "subId"
+  > & {
+    emit: CreateClaudeAgentSdkStreamConsumerInput["emit"]
+  }
+
 export async function runClaudeAgentSdkDesktopAdapter({
   query,
   loadQuery,
@@ -75,6 +86,43 @@ export async function runClaudeAgentSdkDesktopAdapter({
   return runClaudeAgentSdkAdapterWithPolicyRetry({
     adapter,
     ...runnerInput,
+  })
+}
+
+export async function runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
+  request,
+  query,
+  loadQuery,
+  queryOptions,
+  streamState,
+  subId,
+  emitError,
+  emit,
+  complete,
+  sleep,
+  log,
+  error,
+  ...streamConsumer
+}: RunClaudeAgentSdkDesktopAdapterWithRuntimeConsumerInput): Promise<DesktopRunResult> {
+  return runClaudeAgentSdkDesktopAdapterWithStreamConsumer({
+    request,
+    query,
+    loadQuery,
+    queryOptions,
+    streamState,
+    streamConsumer: {
+      ...streamConsumer,
+      subId,
+      emit,
+      complete,
+    },
+    subId,
+    emitError,
+    emit,
+    complete,
+    sleep,
+    log,
+    error,
   })
 }
 
