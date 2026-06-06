@@ -46,10 +46,7 @@ import {
   extractClaudeAgentSdkEmbeddedErrorText,
 } from "../../claude/agent-sdk-errors"
 import { finalizeClaudeAgentSdkGuardMetadata } from "../../claude/agent-sdk-guard-metadata"
-import {
-  prepareClaudeAgentSdkAssistantPersistence,
-  shouldCreateClaudeAgentSdkRollbackStash,
-} from "../../claude/agent-sdk-message-persistence"
+import { persistClaudeAgentSdkAssistantResponse } from "../../claude/agent-sdk-message-persistence"
 import {
   CLAUDE_AGENT_SDK_POLICY_RETRY_LIMIT,
   createClaudeAgentSdkPolicyRetryState,
@@ -132,7 +129,6 @@ import {
 } from "../../provider-profiles/storage"
 import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
 import type { ResolvedChatImageAttachment } from "../../../../shared/chat-attachments"
-import { createRollbackStash } from "../../git/stash"
 import { resolveChatImageAttachments } from "../../chat-attachments"
 import { prependLongTextAttachmentPromptBlocks } from "../../long-text-attachments"
 import {
@@ -2050,41 +2046,18 @@ export const claudeRouter = router({
                   getContract: getActiveGuardedContract,
                   deleteContract: deleteActiveGuardedContract,
                 })
-                const persistence =
-                  prepareClaudeAgentSdkAssistantPersistence({
-                    messagesToSave,
-                    parts,
-                    metadata,
-                  })
-                if (persistence.assistantMessage) {
-                  db.update(subChats)
-                    .set({
-                      messages: JSON.stringify(persistence.messages),
-                      sessionId: persistence.sessionId,
-                      streamId: null,
-                      updatedAt: new Date(),
-                    })
-                    .where(eq(subChats.id, input.subChatId))
-                    .run()
-                  db.update(chats)
-                    .set({ updatedAt: new Date() })
-                    .where(eq(chats.id, input.chatId))
-                    .run()
-
-                  // Create snapshot stash for rollback support (on error)
-                  if (
-                    shouldCreateClaudeAgentSdkRollbackStash({
-                      historyEnabled,
-                      metadata,
-                      cwd: runtimeCwd,
-                    })
-                  ) {
-                    await createRollbackStash(
-                      runtimeCwd,
-                      metadata.sdkMessageUuid,
-                    )
-                  }
-                }
+                await persistClaudeAgentSdkAssistantResponse({
+                  db,
+                  chatId: input.chatId,
+                  subChatId: input.subChatId,
+                  messagesToSave,
+                  parts,
+                  metadata,
+                  historyEnabled,
+                  cwd: runtimeCwd,
+                  clearStreamWhenEmpty: false,
+                  touchChatWhenEmpty: false,
+                })
 
                 console.log(
                   `[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`,
@@ -2204,50 +2177,16 @@ export const claudeRouter = router({
               deleteContract: deleteActiveGuardedContract,
             })
 
-            const persistence = prepareClaudeAgentSdkAssistantPersistence({
+            await persistClaudeAgentSdkAssistantResponse({
+              db,
+              chatId: input.chatId,
+              subChatId: input.subChatId,
               messagesToSave,
               parts,
               metadata,
+              historyEnabled,
+              cwd: runtimeCwd,
             })
-
-            if (persistence.assistantMessage) {
-              db.update(subChats)
-                .set({
-                  messages: JSON.stringify(persistence.messages),
-                  sessionId: persistence.sessionId,
-                  streamId: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            } else {
-              // No assistant response - just clear streamId
-              db.update(subChats)
-                .set({
-                  sessionId: persistence.sessionId,
-                  streamId: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            }
-
-            // Update parent chat timestamp
-            db.update(chats)
-              .set({ updatedAt: new Date() })
-              .where(eq(chats.id, input.chatId))
-              .run()
-
-            // Create snapshot stash for rollback support
-            if (
-              shouldCreateClaudeAgentSdkRollbackStash({
-                historyEnabled,
-                metadata,
-                cwd: runtimeCwd,
-              })
-            ) {
-              await createRollbackStash(runtimeCwd, metadata.sdkMessageUuid)
-            }
 
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
             console.log(

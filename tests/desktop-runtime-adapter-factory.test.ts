@@ -510,13 +510,15 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "../../claude/agent-sdk-message-persistence",
     )
-    expect(claudeRouter).toContain("prepareClaudeAgentSdkAssistantPersistence")
-    expect(claudeRouter).toContain("shouldCreateClaudeAgentSdkRollbackStash")
+    expect(claudeRouter).toContain("persistClaudeAgentSdkAssistantResponse")
     expect(claudeRouter).not.toContain("const assistantMessage =")
     expect(claudeRouter).not.toContain("const finalMessages =")
+    expect(claudeRouter).not.toContain("messages: JSON.stringify(persistence.messages)")
+    expect(claudeRouter).not.toContain("createRollbackStash")
     expect(claudeRouter).not.toContain(
       "historyEnabled && metadata.sdkMessageUuid && runtimeCwd",
     )
+    expect(messagePersistence).toContain("persistClaudeAgentSdkAssistantResponse")
     expect(messagePersistence).toContain(
       "prepareClaudeAgentSdkAssistantPersistence",
     )
