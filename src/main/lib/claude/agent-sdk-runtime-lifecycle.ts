@@ -55,6 +55,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput = Omit<
   | "isUsingOllama"
   | "guardedContract"
   | "emit"
+  | "request"
   | "env"
   | "resolvedModel"
 > &
@@ -65,6 +66,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput = Omit<
       | "isUsingOllama"
       | "guardedContract"
       | "emit"
+      | "request"
       | "env"
       | "resolvedModel"
     >
@@ -231,6 +233,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   const runtimeQuery =
     await prepareClaudeAgentSdkDesktopRuntimeQuery({
       ...runtimeQueryInput,
+      request,
       prompt,
       env: runtimeQueryEnv,
       isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama,

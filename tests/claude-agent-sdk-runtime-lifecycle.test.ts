@@ -109,7 +109,6 @@ function createLifecycleInput(
     query: (input.query ?? (() => createClaudeAssistantStream())) as any,
     request,
     runtimeQuery: {
-      request,
       existingMessages: [],
       rawMcpServers: undefined,
       env: {},

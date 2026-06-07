@@ -656,6 +656,9 @@ describe("desktop runtime adapter factory", () => {
       "prepareClaudeAgentSdkDesktopRuntimeQuery({",
     )
     expect(claudeRouter).toContain("runtimeQuery: {")
+    expect(claudeRouter).not.toContain(
+      "runtimeQuery: {\n                  request:",
+    )
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-query-options")
     expect(claudeRouter).not.toContain(
       "createClaudeAgentSdkDesktopRuntimeQueryOptions({",
@@ -685,6 +688,9 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(runtimeLifecycle).toContain(
       "prepareClaudeAgentSdkDesktopRuntimeQuery",
+    )
+    expect(runtimeLifecycle).toContain(
+      "await prepareClaudeAgentSdkDesktopRuntimeQuery({\n      ...runtimeQueryInput,\n      request,",
     )
     expect(runtimeLifecycle).toContain("guardEvents: runtimeQuery.guardEvents")
     expect(runtimeLifecycle).toContain(

@@ -1032,7 +1032,6 @@ export const claudeRouter = router({
               await runClaudeAgentSdkDesktopRuntimeLifecycle({
                 request: desktopRunRequest,
                 runtimeQuery: {
-                  request: desktopRunRequest,
                   existingMessages,
                   rawMcpServers: mcpServersForSdk,
                   shouldForkResume,
