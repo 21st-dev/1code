@@ -1,6 +1,7 @@
 import { CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
-import type {
-  DesktopRuntimeAdapter,
+import {
+  emitDesktopRuntimeAdapterStarted,
+  type DesktopRuntimeAdapter,
 } from "../agent-runtime/desktop-runner"
 import type {
   DesktopRunRequest,
@@ -56,6 +57,8 @@ export function createClaudeAgentSdkAdapter({
     metadata: CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA,
 
     async run(request: DesktopRunRequest): Promise<DesktopRunResult> {
+      emitDesktopRuntimeAdapterStarted(request, CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA)
+
       let sdkQuery = query
       if (!sdkQuery) {
         try {

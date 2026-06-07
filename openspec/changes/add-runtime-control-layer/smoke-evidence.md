@@ -34,10 +34,9 @@ bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --sc
 
 This DB inspector proves the `agent_jobs` row, runtime/mode/source, ordered
 semantic events, terminal event, guard event presence for guarded scenarios, and
-event redaction metadata. Adapter source is not yet persisted in `agent_jobs`,
-so `adapterSource=claude-agent-sdk` or
-`adapterSource=codex-acp-temporary-compat` still needs app log or UI/debug
-evidence.
+event redaction metadata. Adapter source is verified from the normalized
+`desktop_runtime_adapter_started` semantic trace event; app logs and UI/debug
+screenshots remain supporting evidence rather than the source-of-truth check.
 
 ## Required Scenarios
 

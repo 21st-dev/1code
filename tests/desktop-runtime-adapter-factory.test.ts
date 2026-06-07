@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import {
   DesktopRuntimeAdapterFactory,
   type DesktopRuntimeAdapter,
+  emitDesktopRuntimeAdapterStarted,
 } from "../src/main/lib/agent-runtime/desktop-runner"
 import {
   CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA,
@@ -41,6 +42,44 @@ describe("desktop runtime adapter factory", () => {
     expect(
       CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.fallbackReason,
     ).toContain("app-server")
+  })
+
+  test("emits desktop adapter source as a normalized runtime trace event", () => {
+    const emittedEvents: any[] = []
+    emitDesktopRuntimeAdapterStarted(
+      {
+        identity: { runId: "run-1", jobId: "job-1" },
+        context: {
+          runtimeId: "codex",
+          mode: "plan",
+          projectId: "project-1",
+          chatId: "chat-1",
+          subChatId: "sub-1",
+          cwd: "/repo",
+        },
+        trace: { emit: (event: any) => emittedEvents.push(event) },
+      } as any,
+      CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA,
+    )
+
+    expect(emittedEvents).toHaveLength(1)
+    expect(emittedEvents[0]).toMatchObject({
+      runId: "run-1",
+      jobId: "job-1",
+      runtimeId: "codex",
+      sequence: 0,
+      type: "status",
+      payload: {
+        status: "desktop_runtime_adapter_started",
+        adapterSource: "codex-acp-temporary-compat",
+        adapterLabel: "Codex ACP temporary compatibility adapter",
+        temporaryFallback: true,
+      },
+      redaction: {
+        status: "not-required",
+        appliedRules: [],
+      },
+    })
   })
 
   test("registers and resolves adapters by runtime and source", () => {
@@ -228,6 +267,14 @@ describe("desktop runtime adapter factory", () => {
       "async run(request: DesktopRunRequest)",
     )
     expect(codexAcpTemporaryCompatAdapter).toContain("getOrCreateCodexAcpProvider")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "emitDesktopRuntimeAdapterStarted(",
+    )
+    expect(
+      codexAcpTemporaryCompatAdapter.indexOf("emitDesktopRuntimeAdapterStarted("),
+    ).toBeLessThan(
+      codexAcpTemporaryCompatAdapter.indexOf("getOrCreateCodexAcpProvider({"),
+    )
     expect(codexAcpTemporaryCompatAdapter).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpTemporaryCompatAdapter).toContain("createCodexAcpUiMessageStream")
     expect(codexAcpTemporaryCompatAdapter).toContain("emitCodexAcpUiStream")

@@ -7,21 +7,25 @@ const SCENARIOS = {
   "claude-plan": {
     runtime: "claude-code",
     mode: "plan",
+    adapterSource: "claude-agent-sdk",
     requiresGuardEvent: false,
   },
   "claude-guard": {
     runtime: "claude-code",
     mode: "agent",
+    adapterSource: "claude-agent-sdk",
     requiresGuardEvent: true,
   },
   "codex-temporary-compat-plan": {
     runtime: "codex",
     mode: "plan",
+    adapterSource: "codex-acp-temporary-compat",
     requiresGuardEvent: false,
   },
   "codex-temporary-compat-guard": {
     runtime: "codex",
     mode: "agent",
+    adapterSource: "codex-acp-temporary-compat",
     requiresGuardEvent: true,
   },
 }
@@ -206,6 +210,24 @@ export function inspectRuntimeControlSmokeJob({
     fail(failures, "agent_job_events has no RunEvent-shaped semantic events")
   }
 
+  const adapterStartedEvent = semanticEvents.find((event) => {
+    const payload = event.payloadJson.payload
+    return (
+      payload &&
+      typeof payload === "object" &&
+      payload.status === "desktop_runtime_adapter_started"
+    )
+  })
+  const adapterStartedPayload = adapterStartedEvent?.payloadJson.payload ?? null
+  if (!adapterStartedEvent) {
+    fail(failures, "semantic trace is missing desktop runtime adapter source event")
+  } else if (adapterStartedPayload.adapterSource !== scenario.adapterSource) {
+    fail(
+      failures,
+      `expected adapter source ${scenario.adapterSource}, got ${adapterStartedPayload.adapterSource}`,
+    )
+  }
+
   semanticEvents.forEach((event) => {
     if (event.payloadJson.runtimeId !== scenario.runtime) {
       fail(
@@ -257,6 +279,7 @@ export function inspectRuntimeControlSmokeJob({
         projectId: job.project_id,
         chatId: job.chat_id,
         subChatId: job.sub_chat_id,
+        adapterSource: adapterStartedPayload?.adapterSource ?? null,
         hasInputJson: Object.keys(inputJson).length > 0,
         hasResultJson: Object.keys(resultJson).length > 0,
         errorMessage: job.error_message ?? null,

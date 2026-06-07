@@ -4,6 +4,7 @@ import type {
   DesktopRunResult,
 } from "./desktop-run-request"
 import type { DesktopPermissionRuntime } from "./permission-policy"
+import { createRunEvent } from "./runtime-events"
 
 export type DesktopRuntimeAdapterSource =
   | "claude-agent-sdk"
@@ -26,6 +27,28 @@ export type DesktopRuntimeAdapter = {
 export type DesktopRuntimeAdapterLookup = {
   runtimeId: AgentRuntimeId
   source?: DesktopRuntimeAdapterSource
+}
+
+export function emitDesktopRuntimeAdapterStarted(
+  request: DesktopRunRequest,
+  metadata: DesktopRuntimeAdapterMetadata,
+): void {
+  request.trace.emit(
+    createRunEvent({
+      runId: request.identity.runId,
+      jobId: request.identity.jobId,
+      runtimeId: request.context.runtimeId,
+      sequence: 0,
+      type: "status",
+      payload: {
+        status: "desktop_runtime_adapter_started",
+        adapterSource: metadata.source,
+        adapterLabel: metadata.label,
+        temporaryFallback: metadata.temporaryFallback,
+        fallbackReason: metadata.fallbackReason ?? null,
+      },
+    }),
+  )
 }
 
 function adapterKey(

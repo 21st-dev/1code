@@ -73,6 +73,25 @@ function createEvent(input: {
   }
 }
 
+function createAdapterStartedEvent(input: {
+  sequence: number
+  runtimeId?: string
+  adapterSource?: string
+}) {
+  return createEvent({
+    sequence: input.sequence,
+    type: "status",
+    runtimeId: input.runtimeId,
+    payload: {
+      status: "desktop_runtime_adapter_started",
+      adapterSource: input.adapterSource ?? "claude-agent-sdk",
+      adapterLabel: "Test adapter",
+      temporaryFallback: input.adapterSource === "codex-acp-temporary-compat",
+      fallbackReason: null,
+    },
+  })
+}
+
 function createBootstrapStatusEvent() {
   return {
     id: "event-1",
@@ -95,7 +114,7 @@ describe("runtime control smoke job inspector", () => {
       job: createJob(),
       events: [
         createBootstrapStatusEvent(),
-        createEvent({ sequence: 2, type: "status" }),
+        createAdapterStartedEvent({ sequence: 2 }),
         createEvent({ sequence: 3, type: "completed" }),
       ],
     })
@@ -114,6 +133,7 @@ describe("runtime control smoke job inspector", () => {
       runtime: "claude-code",
       mode: "plan",
       status: "succeeded",
+      adapterSource: "claude-agent-sdk",
     })
     expect(result.summary?.events).toHaveLength(3)
   })
@@ -125,7 +145,11 @@ describe("runtime control smoke job inspector", () => {
         mode: "agent",
       }),
       events: [
-        createEvent({ sequence: 1, type: "status", runtimeId: "codex" }),
+        createAdapterStartedEvent({
+          sequence: 1,
+          runtimeId: "codex",
+          adapterSource: "codex-acp-temporary-compat",
+        }),
         createEvent({ sequence: 2, type: "completed", runtimeId: "codex" }),
       ],
     })
@@ -144,7 +168,7 @@ describe("runtime control smoke job inspector", () => {
     const db = createFakeDb({
       job: createJob(),
       events: [
-        createEvent({ sequence: 1, type: "status" }),
+        createAdapterStartedEvent({ sequence: 1 }),
         createEvent({
           sequence: 2,
           type: "completed",
@@ -162,6 +186,51 @@ describe("runtime control smoke job inspector", () => {
     expect(result.ok).toBe(false)
     expect(result.failures.join("\n")).toContain(
       "unredacted secret-like payload",
+    )
+  })
+
+  test("requires the scenario adapter source in semantic trace", () => {
+    const db = createFakeDb({
+      job: createJob(),
+      events: [
+        createEvent({ sequence: 1, type: "status" }),
+        createEvent({ sequence: 2, type: "completed" }),
+      ],
+    })
+
+    const result = inspectRuntimeControlSmokeJob({
+      db,
+      jobId: "job-1",
+      scenarioId: "claude-plan",
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.failures.join("\n")).toContain(
+      "semantic trace is missing desktop runtime adapter source event",
+    )
+  })
+
+  test("rejects a semantic trace with the wrong adapter source", () => {
+    const db = createFakeDb({
+      job: createJob(),
+      events: [
+        createAdapterStartedEvent({
+          sequence: 1,
+          adapterSource: "codex-acp-temporary-compat",
+        }),
+        createEvent({ sequence: 2, type: "completed" }),
+      ],
+    })
+
+    const result = inspectRuntimeControlSmokeJob({
+      db,
+      jobId: "job-1",
+      scenarioId: "claude-plan",
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.failures.join("\n")).toContain(
+      "expected adapter source claude-agent-sdk, got codex-acp-temporary-compat",
     )
   })
 })

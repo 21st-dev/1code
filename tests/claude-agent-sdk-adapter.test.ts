@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
+import type { RunEvent } from "../src/main/lib/agent-runtime/runtime-events"
 import {
   ClaudeAgentSdkLoadError,
   ClaudeAgentSdkQueryStartError,
   createClaudeAgentSdkAdapter,
 } from "../src/main/lib/claude/agent-sdk-adapter"
 
-function createRequest(): DesktopRunRequest {
+function createRequest(emittedEvents: RunEvent[] = []): DesktopRunRequest {
   return {
     identity: { runId: "run-1", jobId: "job-1" },
     context: {
@@ -26,7 +27,7 @@ function createRequest(): DesktopRunRequest {
     providerBinding: {},
     mcp: { status: "skipped", serverNames: [], blockers: [] },
     attachments: [],
-    trace: { emit: () => {} },
+    trace: { emit: (event) => emittedEvents.push(event) },
     signal: new AbortController().signal,
     session: {},
   }
@@ -38,7 +39,8 @@ async function* createStream() {
 
 describe("Claude Agent SDK adapter", () => {
   test("starts the SDK query inside DesktopRuntimeAdapter.run and hands off the stream", async () => {
-    const request = createRequest()
+    const emittedEvents: RunEvent[] = []
+    const request = createRequest(emittedEvents)
     const queryOptions = { prompt: "hello", options: {} } as any
     const queryCalls: any[] = []
     const consumedMessages: any[] = []
@@ -68,6 +70,25 @@ describe("Claude Agent SDK adapter", () => {
     })
     expect(queryCalls).toEqual([queryOptions])
     expect(consumedMessages).toEqual([{ type: "message", text: "hello" }])
+    expect(emittedEvents).toHaveLength(1)
+    expect(emittedEvents[0]).toMatchObject({
+      runId: "run-1",
+      jobId: "job-1",
+      runtimeId: "claude-code",
+      sequence: 0,
+      type: "status",
+      payload: {
+        status: "desktop_runtime_adapter_started",
+        adapterSource: "claude-agent-sdk",
+        adapterLabel: "Claude Agent SDK",
+        temporaryFallback: false,
+        fallbackReason: null,
+      },
+      redaction: {
+        status: "not-required",
+        appliedRules: [],
+      },
+    })
   })
 
   test("loads the SDK query inside the adapter when a query is not injected", async () => {
