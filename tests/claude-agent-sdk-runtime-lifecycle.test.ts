@@ -313,6 +313,33 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     })
   })
 
+  test("defaults runtime query env and model from startup context", async () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+    const query = mock(() => createClaudeAssistantStream())
+    const input = createLifecycleInput(db, {
+      query,
+      logStartupDiagnostics: mock(() => {}),
+    })
+    delete (input.runtimeQuery as any).env
+    delete (input.runtimeQuery as any).resolvedModel
+
+    await expect(
+      runClaudeAgentSdkDesktopRuntimeLifecycle(input),
+    ).resolves.toMatchObject({
+      status: "completed",
+      reachedNaturalFinish: true,
+    })
+
+    expect(query).toHaveBeenCalledTimes(1)
+    expect(query.mock.calls[0][0].options.env).toMatchObject({
+      ANTHROPIC_AUTH_TOKEN: "auth-token",
+      ANTHROPIC_BASE_URL: "https://api.anthropic.test",
+      CLAUDE_CODE_OAUTH_TOKEN: "oauth-token",
+    })
+    expect(query.mock.calls[0][0].options.model).toBe("claude-sonnet")
+  })
+
   test("runs the adapter and finalizes a successful desktop runtime turn", async () => {
     const db = createAgentJobTestDb()
     seedChat(db)

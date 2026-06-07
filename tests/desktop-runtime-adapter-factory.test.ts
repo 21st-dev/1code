@@ -672,8 +672,12 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeLifecycle).toContain("abortSignal: request.signal")
     expect(runtimeLifecycle).toContain("model: input.customConfig?.model")
     expect(runtimeLifecycle).toContain(
-      "resolvedModel: runtimeQueryInput.resolvedModel",
+      "resolvedModel: runtimeResolvedModel",
     )
+    expect(runtimeLifecycle).toContain("env: runtimeQueryEnv")
+    expect(claudeRouter).not.toContain("env: finalEnv")
+    expect(claudeRouter).not.toContain("const finalEnv =")
+    expect(claudeRouter).not.toContain("const resolvedModel =")
     expect(runtimeLifecycle).toContain(
       "isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama",
     )

@@ -51,12 +51,22 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleStartupDiagnosticsInput =
 
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput = Omit<
   PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
-  "prompt" | "isUsingOllama" | "guardedContract" | "emit"
+  | "prompt"
+  | "isUsingOllama"
+  | "guardedContract"
+  | "emit"
+  | "env"
+  | "resolvedModel"
 > &
   Partial<
     Pick<
       PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
-      "prompt" | "isUsingOllama" | "guardedContract" | "emit"
+      | "prompt"
+      | "isUsingOllama"
+      | "guardedContract"
+      | "emit"
+      | "env"
+      | "resolvedModel"
     >
   >
 
@@ -136,6 +146,11 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   input.streamState.metadata = streamSetup.metadata
   const parts = runtimeQueryInput.parts ?? streamSetup.parts
   const stderrLines = runtimeQueryInput.stderrLines ?? streamSetup.stderrLines
+  const runtimeStartupContext = input.runtimeStartupDiagnostics?.runtimeStartup
+  const runtimeQueryEnv =
+    runtimeQueryInput.env ?? runtimeStartupContext?.finalEnv ?? {}
+  const runtimeResolvedModel =
+    runtimeQueryInput.resolvedModel ?? runtimeStartupContext?.resolvedModel
 
   if (input.runtimeStartupDiagnostics) {
     const {
@@ -209,10 +224,12 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     await prepareClaudeAgentSdkDesktopRuntimeQuery({
       ...runtimeQueryInput,
       prompt,
+      env: runtimeQueryEnv,
       isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama,
       guardedContract:
         runtimeQueryInput.guardedContract ?? input.guardedContract,
       emit: runtimeQueryInput.emit ?? input.emit,
+      resolvedModel: runtimeResolvedModel,
       guardEvents: runtimeQueryInput.guardEvents ?? guardEvents,
       parts,
       stderrLines,
@@ -234,7 +251,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       chatId: requestContext.chatId,
       subChatId: requestContext.subChatId,
       mode: requestContext.mode,
-      resolvedModel: runtimeQueryInput.resolvedModel,
+      resolvedModel: runtimeResolvedModel,
       transform: streamSetup.transform,
       parts,
       stderrLines,

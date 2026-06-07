@@ -905,8 +905,6 @@ export const claudeRouter = router({
             })
             const { isolatedConfig } = runtimeStartup
             const hasExistingApiConfig = runtimeStartup.hasExistingApiConfig
-            const finalEnv = runtimeStartup.finalEnv
-            const resolvedModel = runtimeStartup.resolvedModel
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
@@ -1053,11 +1051,9 @@ export const claudeRouter = router({
                   request: desktopRunRequest,
                   existingMessages,
                   rawMcpServers: mcpServersForSdk,
-                  env: finalEnv,
                   shouldForkResume,
                   forkResumeAtUuid,
                   resumeAtUuid,
-                  resolvedModel,
                   maxThinkingTokens: input.maxThinkingTokens,
                   projectPath: input.projectPath,
                 },
