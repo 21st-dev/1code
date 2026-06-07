@@ -42,6 +42,9 @@ import {
   createClaudeAgentSdkDesktopRunStartup,
 } from "../../claude/agent-sdk-desktop-job"
 import {
+  createClaudeAgentSdkDesktopRunState,
+} from "../../claude/agent-sdk-desktop-run-state"
+import {
   abortClaudeAgentSdkDesktopRunRequest,
   cancelClaudeAgentSdkActiveDesktopRun,
   cleanupClaudeAgentSdkDesktopRunSubscription,
@@ -92,7 +95,6 @@ import {
   resolveDesktopPermissionPolicy,
 } from "../../agent-runtime/permission-policy"
 import {
-  type DesktopStreamEventMapper,
   createRuntimeRendererChunkEmitter,
 } from "../../agent-runtime/stream-event-mapper"
 import {
@@ -716,32 +718,21 @@ export const claudeRouter = router({
         const subId = input.subChatId.slice(-8) // Short ID for logs
         const streamStart = Date.now()
         const streamState = createClaudeAgentSdkRuntimeStreamState()
-        let desktopJobId: string | null = null
-        let desktopJobSawError = false
-        let desktopJobReachedNaturalFinish = false
-        let desktopJobDb: ReturnType<typeof getDatabase> | null = null
-        let desktopStreamEventMapper: DesktopStreamEventMapper | null = null
+        const desktopRunState = createClaudeAgentSdkDesktopRunState()
         console.log(
           `[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`,
         )
-
-        // Track if observable is still active (not unsubscribed)
-        let isObservableActive = true
 
         // Helper to safely emit (no-op if already unsubscribed)
         const safeEmit = createRuntimeRendererChunkEmitter({
           runtimeId: "claude-code",
           runId: activeRunId,
-          getJobId: () => desktopJobId,
-          getDb: () => desktopJobDb,
-          getMapper: () => desktopStreamEventMapper,
-          isActive: () => isObservableActive,
-          markInactive: () => {
-            isObservableActive = false
-          },
-          markFailed: () => {
-            desktopJobSawError = true
-          },
+          getJobId: desktopRunState.getJobId,
+          getDb: desktopRunState.getDb,
+          getMapper: desktopRunState.getStreamEventMapper,
+          isActive: desktopRunState.isObservableActive,
+          markInactive: desktopRunState.markInactive,
+          markFailed: desktopRunState.markFailed,
           emitNext: (chunk) => {
             emit.next(chunk as UIMessageChunk)
           },
@@ -771,7 +762,7 @@ export const claudeRouter = router({
         ;(async () => {
           try {
             const db = getDatabase()
-            desktopJobDb = db
+            desktopRunState.setDb(db)
             const verifiedRunContext = verifyDesktopRunPreflight(db, {
               chatId: input.chatId,
               subChatId: input.subChatId,
@@ -879,9 +870,10 @@ export const claudeRouter = router({
               requestedSessionId: input.sessionId,
               existingSessionId,
             })
-            desktopJobId = desktopRunStartup.desktopJob.jobId
-            desktopStreamEventMapper =
-              desktopRunStartup.desktopJob.streamEventMapper
+            desktopRunState.setDesktopJob({
+              jobId: desktopRunStartup.desktopJob.jobId,
+              streamEventMapper: desktopRunStartup.desktopJob.streamEventMapper,
+            })
             const desktopRunRequest = desktopRunStartup.desktopRunRequest
             const resumeSessionId = desktopRunStartup.resumeSessionId
 
@@ -1052,7 +1044,7 @@ export const claudeRouter = router({
                 },
                 streamState,
                 isUsingOllama,
-                isObservableActive: () => isObservableActive,
+                isObservableActive: desktopRunState.isObservableActive,
                 customConfig: finalCustomConfig,
                 oauthToken: claudeCodeToken,
                 historyEnabled,
@@ -1064,11 +1056,12 @@ export const claudeRouter = router({
                 emitError,
                 emit: safeEmit,
                 complete: safeComplete,
-                desktopJobSawError,
+                desktopJobSawError: desktopRunState.sawError(),
                 streamStart,
               })
-            desktopJobReachedNaturalFinish =
-              runtimeResult.reachedNaturalFinish
+            desktopRunState.setReachedNaturalFinish(
+              runtimeResult.reachedNaturalFinish,
+            )
             if (runtimeResult.status === "failed") {
               return
             }
@@ -1089,10 +1082,11 @@ export const claudeRouter = router({
               abortController,
               guardedContract,
               getDb: getDatabase,
-              desktopJobDb,
-              desktopJobId,
-              desktopJobSawError,
-              desktopJobReachedNaturalFinish,
+              desktopJobDb: desktopRunState.getDb(),
+              desktopJobId: desktopRunState.getJobId(),
+              desktopJobSawError: desktopRunState.sawError(),
+              desktopJobReachedNaturalFinish:
+                desktopRunState.reachedNaturalFinish(),
             })
           }
         })()
@@ -1106,12 +1100,11 @@ export const claudeRouter = router({
             abortController,
             guardedContract,
             getDb: getDatabase,
-            markInactive: () => {
-              isObservableActive = false
-            },
-            desktopJobId,
-            desktopJobSawError,
-            desktopJobReachedNaturalFinish,
+            markInactive: desktopRunState.markInactive,
+            desktopJobId: desktopRunState.getJobId(),
+            desktopJobSawError: desktopRunState.sawError(),
+            desktopJobReachedNaturalFinish:
+              desktopRunState.reachedNaturalFinish(),
           })
         }
       })

@@ -297,7 +297,7 @@ describe("desktop stream event mapper", () => {
       const mapperCreateIndex =
         runtimeName === "Claude"
           ? source.indexOf(
-              "desktopStreamEventMapper =\n              desktopRunStartup.desktopJob.streamEventMapper",
+              "streamEventMapper: desktopRunStartup.desktopJob.streamEventMapper",
               jobIndex,
             )
           : source.indexOf(

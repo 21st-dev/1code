@@ -1016,6 +1016,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
       "utf8",
     )
+    const desktopRunState = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-state.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain("../../claude/agent-sdk-run-finalization")
     expect(claudeRouter).not.toContain(
@@ -1025,8 +1029,22 @@ describe("desktop runtime adapter factory", () => {
       "finalizeClaudeAgentSdkUnexpectedErrorWithStreamState",
     )
     expect(claudeRouter).toContain(
-      "desktopJobReachedNaturalFinish =\n              runtimeResult.reachedNaturalFinish\n            if (runtimeResult.status === \"failed\") {",
+      "desktopRunState.setReachedNaturalFinish(\n              runtimeResult.reachedNaturalFinish,",
     )
+    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunState")
+    expect(claudeRouter).not.toContain("let desktopJobId")
+    expect(claudeRouter).not.toContain("let desktopJobSawError")
+    expect(claudeRouter).not.toContain("let desktopJobReachedNaturalFinish")
+    expect(claudeRouter).not.toContain("let desktopJobDb")
+    expect(claudeRouter).not.toContain("let desktopStreamEventMapper")
+    expect(claudeRouter).not.toContain("let isObservableActive")
+    expect(desktopRunState).toContain(
+      "createClaudeAgentSdkDesktopRunState",
+    )
+    expect(desktopRunState).toContain("setDesktopJob")
+    expect(desktopRunState).toContain("setReachedNaturalFinish")
+    expect(desktopRunState).toContain("markFailed")
+    expect(desktopRunState).toContain("markInactive")
     expect(claudeRouter).not.toContain(
       "finalizeClaudeAgentSdkUnexpectedError({",
     )
