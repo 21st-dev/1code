@@ -21,7 +21,6 @@ import {
   type McpServerConfig,
 } from "../../claude-config"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
-import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../../claude/agent-sdk-runtime-lifecycle"
 import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
@@ -43,6 +42,9 @@ import {
 import {
   prepareClaudeAgentSdkDesktopRunControls,
 } from "../../claude/agent-sdk-desktop-run-controls"
+import {
+  runClaudeAgentSdkDesktopRuntimeWithRunState,
+} from "../../claude/agent-sdk-desktop-run-runtime"
 import {
   superviseClaudeAgentSdkDesktopRun,
 } from "../../claude/agent-sdk-desktop-run-supervision"
@@ -984,7 +986,7 @@ export const claudeRouter = router({
             }
 
             const runtimeResult =
-              await runClaudeAgentSdkDesktopRuntimeLifecycle({
+              await runClaudeAgentSdkDesktopRuntimeWithRunState({
                 request: desktopRunRequest,
                 runtimeQuery: {
                   existingMessages,
@@ -1006,8 +1008,8 @@ export const claudeRouter = router({
                   existingSessionId,
                 },
                 streamState,
+                desktopRunState,
                 isUsingOllama,
-                isObservableActive: desktopRunState.isObservableActive,
                 customConfig: finalCustomConfig,
                 oauthToken: claudeCodeToken,
                 historyEnabled,
@@ -1019,12 +1021,8 @@ export const claudeRouter = router({
                 emitError,
                 emit: safeEmit,
                 complete: safeComplete,
-                desktopJobSawError: desktopRunState.sawError(),
                 streamStart,
               })
-            desktopRunState.setReachedNaturalFinish(
-              runtimeResult.reachedNaturalFinish,
-            )
             if (runtimeResult.status === "failed") {
               return
             }

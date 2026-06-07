@@ -123,7 +123,7 @@ describe("desktop runtime preflight", () => {
       "const desktopRunRequest = desktopRunStartup.desktopRunRequest",
     )
     const lifecycleIndex = claude.indexOf(
-      "await runClaudeAgentSdkDesktopRuntimeLifecycle({",
+      "await runClaudeAgentSdkDesktopRuntimeWithRunState({",
     )
 
     expect(preflightIndex).toBeGreaterThan(0)

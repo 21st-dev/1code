@@ -359,8 +359,15 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-consumer.ts",
       "utf8",
     )
+    const desktopRunRuntime = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-runtime.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-lifecycle")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-lifecycle")
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-desktop-run-runtime",
+    )
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-adapter-runner")
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-stream-consumer")
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-state")
@@ -369,7 +376,15 @@ describe("desktop runtime adapter factory", () => {
       'from "../../claude/agent-sdk-adapter"',
     )
     expect(claudeRouter).not.toContain("createClaudeAgentSdkAdapter({")
-    expect(claudeRouter).toContain("runClaudeAgentSdkDesktopRuntimeLifecycle({")
+    expect(claudeRouter).toContain(
+      "runClaudeAgentSdkDesktopRuntimeWithRunState({",
+    )
+    expect(desktopRunRuntime).toContain(
+      "runLifecycle({",
+    )
+    expect(desktopRunRuntime).toContain(
+      "runClaudeAgentSdkDesktopRuntimeLifecycle",
+    )
     expect(claudeRouter).not.toContain(
       "runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({",
     )
@@ -1030,6 +1045,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-desktop-run-state.ts",
       "utf8",
     )
+    const desktopRunRuntime = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-runtime.ts",
+      "utf8",
+    )
     const desktopRunSupervision = readFileSync(
       "src/main/lib/claude/agent-sdk-desktop-run-supervision.ts",
       "utf8",
@@ -1046,8 +1065,14 @@ describe("desktop runtime adapter factory", () => {
       "finalizeClaudeAgentSdkUnexpectedErrorWithStreamState",
     )
     expect(claudeRouter).toContain("superviseClaudeAgentSdkDesktopRun({")
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "desktopRunState.setReachedNaturalFinish(\n              runtimeResult.reachedNaturalFinish,",
+    )
+    expect(desktopRunRuntime).toContain(
+      "desktopRunState.setReachedNaturalFinish(",
+    )
+    expect(desktopRunRuntime).toContain(
+      "runtimeResult.reachedNaturalFinish",
     )
     expect(claudeRouter).not.toContain(
       "finalizeClaudeAgentSdkDesktopRunAfterLifecycle({",
@@ -1071,6 +1096,8 @@ describe("desktop runtime adapter factory", () => {
       "desktopJobReachedNaturalFinish:\n                desktopRunState",
     )
     expect(runtimeLifecycle).toContain("desktopJobSawError")
+    expect(desktopRunRuntime).toContain("desktopJobSawError")
+    expect(desktopRunRuntime).toContain("desktopRunState.sawError()")
     expect(desktopRunState).toContain(
       "createClaudeAgentSdkDesktopRunState",
     )
@@ -1182,11 +1209,21 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-stream-consumer.ts",
       "utf8",
     )
+    const desktopRunRuntime = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-runtime.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-policy-retry")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkPolicyRetryState()")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkPolicyRetry")
     expect(claudeRouter).toContain(
+      "runClaudeAgentSdkDesktopRuntimeWithRunState",
+    )
+    expect(claudeRouter).not.toContain(
+      "runClaudeAgentSdkDesktopRuntimeLifecycle",
+    )
+    expect(desktopRunRuntime).toContain(
       "runClaudeAgentSdkDesktopRuntimeLifecycle",
     )
     expect(claudeRouter).not.toContain(
