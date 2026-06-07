@@ -29,10 +29,23 @@ export type DesktopRuntimeAdapterLookup = {
   source?: DesktopRuntimeAdapterSource
 }
 
+export function assertDesktopRuntimeAdapterMatchesRequest(
+  request: DesktopRunRequest,
+  metadata: DesktopRuntimeAdapterMetadata,
+): void {
+  if (metadata.runtimeId !== request.context.runtimeId) {
+    throw new Error(
+      `Desktop runtime adapter metadata mismatch: ${metadata.source} cannot run ${request.context.runtimeId}`,
+    )
+  }
+}
+
 export function emitDesktopRuntimeAdapterStarted(
   request: DesktopRunRequest,
   metadata: DesktopRuntimeAdapterMetadata,
 ): void {
+  assertDesktopRuntimeAdapterMatchesRequest(request, metadata)
+
   request.trace.emit(
     createRunEvent({
       runId: request.identity.runId,
@@ -89,9 +102,15 @@ export class DesktopRuntimeAdapterFactory {
       return adapter
     }
 
-    const adapter = [...this.adapters.values()].find(
+    const matchingAdapters = [...this.adapters.values()].filter(
       (candidate) => candidate.metadata.runtimeId === runtimeId,
     )
+    if (matchingAdapters.length > 1) {
+      throw new Error(
+        `Desktop runtime adapter source required for runtime with multiple adapters: ${runtimeId}`,
+      )
+    }
+    const adapter = matchingAdapters[0]
     if (!adapter) {
       throw new Error(`Desktop runtime adapter not registered: ${runtimeId}`)
     }

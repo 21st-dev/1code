@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import {
   DesktopRuntimeAdapterFactory,
   type DesktopRuntimeAdapter,
+  type DesktopRuntimeAdapterSource,
   emitDesktopRuntimeAdapterStarted,
 } from "../src/main/lib/agent-runtime/desktop-runner"
 import {
@@ -12,7 +13,7 @@ import {
 
 function fakeAdapter(
   runtimeId: "claude-code" | "codex",
-  source: "claude-agent-sdk" | "codex-acp-temporary-compat",
+  source: DesktopRuntimeAdapterSource,
 ): DesktopRuntimeAdapter {
   return {
     metadata: {
@@ -82,6 +83,28 @@ describe("desktop runtime adapter factory", () => {
     })
   })
 
+  test("rejects adapter source trace when metadata does not match the request runtime", () => {
+    expect(() =>
+      emitDesktopRuntimeAdapterStarted(
+        {
+          identity: { runId: "run-1", jobId: "job-1" },
+          context: {
+            runtimeId: "codex",
+            mode: "plan",
+            projectId: "project-1",
+            chatId: "chat-1",
+            subChatId: "sub-1",
+            cwd: "/repo",
+          },
+          trace: { emit: () => {} },
+        } as any,
+        CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA,
+      ),
+    ).toThrow(
+      "Desktop runtime adapter metadata mismatch: claude-agent-sdk cannot run codex",
+    )
+  })
+
   test("registers and resolves adapters by runtime and source", () => {
     const claude = fakeAdapter("claude-code", "claude-agent-sdk")
     const codex = fakeAdapter("codex", "codex-acp-temporary-compat")
@@ -111,6 +134,22 @@ describe("desktop runtime adapter factory", () => {
     expect(() => factory.get({ runtimeId: "unknown" as any })).toThrow(
       "Unsupported desktop runtime adapter",
     )
+  })
+
+  test("requires explicit source when multiple adapters are registered for a runtime", () => {
+    const acp = fakeAdapter("codex", "codex-acp-temporary-compat")
+    const appServer = fakeAdapter("codex", "codex-app-server")
+    const factory = new DesktopRuntimeAdapterFactory([acp, appServer])
+
+    expect(() => factory.get({ runtimeId: "codex" })).toThrow(
+      "Desktop runtime adapter source required for runtime with multiple adapters: codex",
+    )
+    expect(
+      factory.get({ runtimeId: "codex", source: "codex-acp-temporary-compat" }),
+    ).toBe(acp)
+    expect(
+      factory.get({ runtimeId: "codex", source: "codex-app-server" }),
+    ).toBe(appServer)
   })
 
   test("keeps temporary Codex ACP provider ownership out of the router", () => {
