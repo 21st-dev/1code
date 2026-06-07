@@ -25,6 +25,10 @@ import {
   prepareClaudeAgentSdkRuntimeStartupDiagnostics,
   type PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput,
 } from "./agent-sdk-runtime-startup"
+import {
+  logClaudeAgentSdkStartupDiagnostics,
+  type ClaudeAgentSdkCredentialMetadataForLog,
+} from "./agent-sdk-runtime-diagnostics"
 
 export type RunClaudeAgentSdkDesktopRuntimeLifecyclePromptInput = Omit<
   PrepareClaudeAgentSdkRuntimePromptForDesktopRunInput,
@@ -39,6 +43,9 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleStartupDiagnosticsInput =
     PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput,
     "isUsingOllama" | "customConfig" | "cwd"
   > & {
+    credentialMetadata?: ClaudeAgentSdkCredentialMetadataForLog | null
+    existingSessionId?: string | null
+    logStartupDiagnostics?: typeof logClaudeAgentSdkStartupDiagnostics
     prepareRuntimeStartupDiagnostics?: typeof prepareClaudeAgentSdkRuntimeStartupDiagnostics
   }
 
@@ -132,10 +139,39 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
 
   if (input.runtimeStartupDiagnostics) {
     const {
+      credentialMetadata,
+      existingSessionId,
+      logStartupDiagnostics = logClaudeAgentSdkStartupDiagnostics,
       prepareRuntimeStartupDiagnostics =
         prepareClaudeAgentSdkRuntimeStartupDiagnostics,
       ...diagnosticsInput
     } = input.runtimeStartupDiagnostics
+    const { runtimeStartup, resumeSessionId } = diagnosticsInput
+    logStartupDiagnostics({
+      auth: {
+        hasExistingApiConfig: input.hasExistingApiConfig,
+        claudeCodeToken: input.oauthToken,
+        credentialMetadata,
+        finalEnv: runtimeStartup.finalEnv,
+      },
+      session: {
+        subChatId: requestContext.subChatId,
+        cwd: requestContext.cwd,
+        isolatedConfigDir: runtimeStartup.isolatedConfigDir,
+        resumeSessionId,
+        existingSessionId,
+        resumeAtUuid: runtimeQueryInput.resumeAtUuid,
+        shouldForkResume: runtimeQueryInput.shouldForkResume,
+        forkResumeAtUuid: runtimeQueryInput.forkResumeAtUuid,
+      },
+      provider: {
+        cwd: requestContext.cwd,
+        projectPath: runtimeQueryInput.projectPath,
+        mcpServers: runtimeQueryInput.rawMcpServers,
+        finalCustomConfig: input.customConfig ?? undefined,
+        isUsingOllama: input.isUsingOllama,
+      },
+    })
     await prepareRuntimeStartupDiagnostics({
       ...diagnosticsInput,
       isUsingOllama: input.isUsingOllama,

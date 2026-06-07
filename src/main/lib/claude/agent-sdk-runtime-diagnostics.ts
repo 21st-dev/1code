@@ -1,8 +1,5 @@
 import path from "path"
-import {
-  redactClaudeProviderEnvValueForLog,
-  type ClaudeProviderRuntimeConfig,
-} from "./provider-runtime-config"
+import { redactClaudeProviderEnvValueForLog } from "./provider-runtime-config"
 
 type Logger = {
   log: (...args: any[]) => void
@@ -13,6 +10,12 @@ export type ClaudeAgentSdkCredentialMetadataForLog = {
   storageFormat?: string | null
   refreshable?: boolean | null
   expiresAt?: string | null
+}
+
+export type ClaudeAgentSdkProviderRuntimeConfigForLog = {
+  model?: string | null
+  baseUrl?: string | null
+  authMode?: string | null
 }
 
 export function logClaudeAgentSdkAuthDiagnostics(input: {
@@ -102,7 +105,7 @@ export function logClaudeAgentSdkProviderDiagnostics(input: {
   cwd: string
   projectPath?: string
   mcpServers?: Record<string, any>
-  finalCustomConfig?: ClaudeProviderRuntimeConfig
+  finalCustomConfig?: ClaudeAgentSdkProviderRuntimeConfigForLog
   isUsingOllama: boolean
   logger?: Logger
 }): void {
@@ -150,7 +153,7 @@ export function logClaudeAgentSdkStartupDiagnostics(input: {
     cwd: string
     projectPath?: string
     mcpServers?: Record<string, any>
-    finalCustomConfig?: ClaudeProviderRuntimeConfig
+    finalCustomConfig?: ClaudeAgentSdkProviderRuntimeConfigForLog
     isUsingOllama: boolean
   }
   logger?: Logger

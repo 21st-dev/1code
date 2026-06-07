@@ -584,9 +584,15 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-diagnostics.ts",
       "utf8",
     )
+    const runtimeLifecycle = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-diagnostics")
-    expect(claudeRouter).toContain("logClaudeAgentSdkStartupDiagnostics")
+    expect(claudeRouter).not.toContain(
+      "../../claude/agent-sdk-runtime-diagnostics",
+    )
+    expect(claudeRouter).not.toContain("logClaudeAgentSdkStartupDiagnostics")
     expect(claudeRouter).not.toContain("logClaudeAgentSdkAuthDiagnostics")
     expect(claudeRouter).not.toContain("logClaudeAgentSdkSessionDiagnostics")
     expect(claudeRouter).not.toContain("logClaudeAgentSdkProviderDiagnostics")
@@ -599,6 +605,9 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeDiagnostics).toContain("logClaudeAgentSdkProviderDiagnostics")
     expect(runtimeDiagnostics).toContain("AUTH METHOD USED")
     expect(runtimeDiagnostics).toContain("Expected session path")
+    expect(runtimeLifecycle).toContain("logClaudeAgentSdkStartupDiagnostics")
+    expect(runtimeLifecycle).toContain("credentialMetadata")
+    expect(runtimeLifecycle).toContain("existingSessionId")
   })
 
   test("keeps Claude Agent SDK query option ownership out of the router", () => {

@@ -25,7 +25,6 @@ import {
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
 import { createClaudeAgentSdkRuntimeErrorHandlers } from "../../claude/agent-sdk-runtime-errors"
-import { logClaudeAgentSdkStartupDiagnostics } from "../../claude/agent-sdk-runtime-diagnostics"
 import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../../claude/agent-sdk-runtime-lifecycle"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -904,7 +903,7 @@ export const claudeRouter = router({
               claudeCodeToken,
               logPrefix: `[${input.subChatId}] `,
             })
-            const { isolatedConfig, isolatedConfigDir } = runtimeStartup
+            const { isolatedConfig } = runtimeStartup
             const hasExistingApiConfig = runtimeStartup.hasExistingApiConfig
             const finalEnv = runtimeStartup.finalEnv
             const resolvedModel = runtimeStartup.resolvedModel
@@ -1047,32 +1046,6 @@ export const claudeRouter = router({
               )
             }
 
-            logClaudeAgentSdkStartupDiagnostics({
-              auth: {
-                hasExistingApiConfig,
-                claudeCodeToken,
-                credentialMetadata: claudeCredentialMetadata,
-                finalEnv,
-              },
-              session: {
-                subChatId: input.subChatId,
-                cwd: runtimeCwd,
-                isolatedConfigDir,
-                resumeSessionId,
-                existingSessionId,
-                resumeAtUuid,
-                shouldForkResume,
-                forkResumeAtUuid,
-              },
-              provider: {
-                cwd: runtimeCwd,
-                projectPath: input.projectPath,
-                mcpServers: mcpServersForSdk,
-                finalCustomConfig,
-                isUsingOllama,
-              },
-            })
-
             const runtimeResult =
               await runClaudeAgentSdkDesktopRuntimeLifecycle({
                 request: desktopRunRequest,
@@ -1095,6 +1068,8 @@ export const claudeRouter = router({
                 runtimeStartupDiagnostics: {
                   runtimeStartup,
                   resumeSessionId,
+                  credentialMetadata: claudeCredentialMetadata,
+                  existingSessionId,
                 },
                 streamState,
                 isUsingOllama,

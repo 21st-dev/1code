@@ -80,6 +80,7 @@ function createLifecycleInput(
     query?: (params: any) => AsyncIterable<unknown>
     prepareRuntimePrompt?: any
     prepareRuntimeStartupDiagnostics?: any
+    logStartupDiagnostics?: any
     signal?: AbortSignal
     streamState?: ReturnType<typeof createClaudeAgentSdkStreamConsumerMutableState>
   } = {},
@@ -93,6 +94,15 @@ function createLifecycleInput(
       ok: true,
       prompt,
     }))
+  const runtimeStartup = {
+    finalEnv: {
+      ANTHROPIC_AUTH_TOKEN: "auth-token",
+      ANTHROPIC_BASE_URL: "https://api.anthropic.test",
+      CLAUDE_CODE_OAUTH_TOKEN: "oauth-token",
+    },
+    isolatedConfigDir: "/tmp/claude-config",
+    resolvedModel: "claude-sonnet",
+  }
 
   return {
     query: (input.query ?? (() => createClaudeAssistantStream())) as any,
@@ -116,12 +126,22 @@ function createLifecycleInput(
       images: [],
       prepareRuntimePrompt,
     },
-    ...(input.prepareRuntimeStartupDiagnostics && {
+    ...((input.prepareRuntimeStartupDiagnostics ||
+      input.logStartupDiagnostics) && {
       runtimeStartupDiagnostics: {
-        runtimeStartup: {} as any,
+        runtimeStartup: runtimeStartup as any,
         resumeSessionId: "session-1",
+        credentialMetadata: {
+          source: "claude-code",
+          storageFormat: "safeStorage",
+          refreshable: true,
+          expiresAt: "2026-06-08T00:00:00.000Z",
+        },
+        existingSessionId: "session-0",
+        logStartupDiagnostics:
+          input.logStartupDiagnostics ?? mock(() => {}),
         prepareRuntimeStartupDiagnostics:
-          input.prepareRuntimeStartupDiagnostics,
+          input.prepareRuntimeStartupDiagnostics ?? mock(async () => {}),
       },
     }),
     streamState:
@@ -236,6 +256,60 @@ describe("Claude Agent SDK runtime lifecycle", () => {
       customConfig: null,
       cwd: "/repo",
       resumeSessionId: "session-1",
+    })
+  })
+
+  test("logs startup diagnostics with lifecycle-owned runtime context", async () => {
+    const db = createAgentJobTestDb()
+    const logStartupDiagnostics = mock(() => {})
+    const input = createLifecycleInput(db, {
+      query: () => {
+        throw new Error("query failed")
+      },
+      logStartupDiagnostics,
+    })
+
+    await expect(
+      runClaudeAgentSdkDesktopRuntimeLifecycle(input),
+    ).resolves.toMatchObject({
+      status: "failed",
+      phase: "adapter",
+    })
+
+    expect(logStartupDiagnostics).toHaveBeenCalledTimes(1)
+    expect(logStartupDiagnostics.mock.calls[0][0]).toMatchObject({
+      auth: {
+        hasExistingApiConfig: false,
+        claudeCodeToken: null,
+        credentialMetadata: {
+          source: "claude-code",
+          storageFormat: "safeStorage",
+          refreshable: true,
+          expiresAt: "2026-06-08T00:00:00.000Z",
+        },
+        finalEnv: {
+          ANTHROPIC_AUTH_TOKEN: "auth-token",
+          ANTHROPIC_BASE_URL: "https://api.anthropic.test",
+          CLAUDE_CODE_OAUTH_TOKEN: "oauth-token",
+        },
+      },
+      session: {
+        subChatId: "sub-1",
+        cwd: "/repo",
+        isolatedConfigDir: "/tmp/claude-config",
+        resumeSessionId: "session-1",
+        existingSessionId: "session-0",
+        resumeAtUuid: null,
+        shouldForkResume: false,
+        forkResumeAtUuid: null,
+      },
+      provider: {
+        cwd: "/repo",
+        projectPath: "/repo",
+        mcpServers: undefined,
+        finalCustomConfig: undefined,
+        isUsingOllama: false,
+      },
     })
   })
 
