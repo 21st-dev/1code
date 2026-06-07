@@ -130,7 +130,6 @@ function createLifecycleInput(
     isObservableActive: () => true,
     customConfig: null,
     hasExistingApiConfig: false,
-    resolvedModel: "claude-sonnet",
     oauthToken: null,
     historyEnabled: true,
     db,

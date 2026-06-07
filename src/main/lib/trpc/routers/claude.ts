@@ -1101,7 +1101,6 @@ export const claudeRouter = router({
                 isObservableActive: () => isObservableActive,
                 customConfig: finalCustomConfig,
                 hasExistingApiConfig,
-                resolvedModel,
                 oauthToken: claudeCodeToken,
                 historyEnabled,
                 db,

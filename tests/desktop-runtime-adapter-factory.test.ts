@@ -663,6 +663,9 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeLifecycle).toContain("abortSignal: request.signal")
     expect(runtimeLifecycle).toContain("model: input.customConfig?.model")
     expect(runtimeLifecycle).toContain(
+      "resolvedModel: runtimeQueryInput.resolvedModel",
+    )
+    expect(runtimeLifecycle).toContain(
       "isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama",
     )
     expect(runtimeLifecycle).toContain("runtimeQueryInput.emit ?? input.emit")

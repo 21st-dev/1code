@@ -72,6 +72,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     | "chatId"
     | "subChatId"
     | "mode"
+    | "resolvedModel"
   > & {
     runtimeQuery: RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput
     getContract?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
@@ -197,6 +198,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       chatId: requestContext.chatId,
       subChatId: requestContext.subChatId,
       mode: requestContext.mode,
+      resolvedModel: runtimeQueryInput.resolvedModel,
       transform: streamSetup.transform,
       parts,
       stderrLines,
