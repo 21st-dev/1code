@@ -288,6 +288,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/desktop-run-request.ts",
       "utf8",
     )
+    const desktopRunRequest = readFileSync(
+      "src/main/lib/agent-runtime/desktop-run-request.ts",
+      "utf8",
+    )
     const claudeDesktopJob = readFileSync(
       "src/main/lib/claude/agent-sdk-desktop-job.ts",
       "utf8",
@@ -307,6 +311,7 @@ describe("desktop runtime adapter factory", () => {
       "createClaudeAgentSdkDesktopRunStartup",
     )
     expect(claudeRouter).not.toContain("../../claude/desktop-run-request")
+    expect(claudeRouter).toContain("../../agent-runtime/desktop-run-request")
     expect(claudeRouter).not.toContain(
       "createClaudeDesktopRunRequestFromRuntimeStartup({",
     )
@@ -315,9 +320,17 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("desktopRunRequest.session")
     expect(claudeRouter).not.toContain("authMode: selectedProviderProfileId")
     expect(claudeRouter).not.toContain("createDesktopRunContextFromPreflight")
+    expect(claudeRouter).toContain("withDesktopRunMcpReadiness(")
+    expect(claudeRouter).toContain("createDesktopRunMcpReadiness({")
+    expect(claudeRouter).toContain(
+      "const runtimeDesktopRunRequest = withDesktopRunMcpReadiness",
+    )
+    expect(claudeRouter).toContain("request: runtimeDesktopRunRequest")
     expect(claudeRouter).not.toContain(
       "const desktopRunRequest: DesktopRunRequest",
     )
+    expect(desktopRunRequest).toContain("createDesktopRunMcpReadiness")
+    expect(desktopRunRequest).toContain("withDesktopRunMcpReadiness")
     expect(claudeDesktopRunRequest).toContain(
       "createClaudeDesktopRunRequest",
     )

@@ -77,6 +77,11 @@ import {
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
+import {
+  createDesktopRunMcpReadiness,
+  withDesktopRunMcpReadiness,
+  type DesktopRunMcpReadiness,
+} from "../../agent-runtime/desktop-run-request"
 import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
 import {
   getApprovedPluginMcpServers,
@@ -830,6 +835,8 @@ export const claudeRouter = router({
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
+            let mcpReadinessStatus: DesktopRunMcpReadiness["status"] =
+              isolatedConfigReady ? "ready" : "skipped"
 
             if (isolatedConfigReady) {
               // Read MCP servers from all sources for the original project path
@@ -953,12 +960,20 @@ export const claudeRouter = router({
                 }
               } catch (configErr) {
                 console.error(`[claude] Failed to read MCP config:`, configErr)
+                mcpReadinessStatus = "skipped"
               }
             }
+            const runtimeDesktopRunRequest = withDesktopRunMcpReadiness(
+              desktopRunRequest,
+              createDesktopRunMcpReadiness({
+                status: mcpReadinessStatus,
+                serverNames: Object.keys(mcpServersForSdk ?? {}),
+              }),
+            )
 
             const runtimeResult =
               await runClaudeAgentSdkDesktopRuntimeWithRunState({
-                request: desktopRunRequest,
+                request: runtimeDesktopRunRequest,
                 runtimeQuery: {
                   existingMessages,
                   rawMcpServers: mcpServersForSdk,

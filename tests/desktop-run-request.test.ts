@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
+  createDesktopRunMcpReadiness,
   createDesktopRunContextFromPreflight,
+  withDesktopRunMcpReadiness,
   type DesktopRunRequest,
 } from "../src/main/lib/agent-runtime/desktop-run-request"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
@@ -70,5 +72,49 @@ describe("desktop run request contract", () => {
     expect(request.providerBinding).not.toHaveProperty("apiKey")
     expect(request.providerBinding).not.toHaveProperty("headers")
     expect(emitted).toEqual([event])
+  })
+
+  test("adds sorted MCP readiness to a desktop request without mutating it", () => {
+    const request = {
+      identity: { runId: "run-1", jobId: "job-1" },
+      context: {
+        runtimeId: "claude-code",
+        mode: "agent",
+        projectId: "project-1",
+        chatId: "chat-1",
+        subChatId: "sub-chat-1",
+        cwd: "/tmp/project",
+      },
+      prompt: "Inspect MCP",
+      permissionPolicy: resolveDesktopPermissionPolicy({
+        runtimeId: "claude-code",
+        mode: "agent",
+      }),
+      providerBinding: {},
+      mcp: { status: "skipped", serverNames: [], blockers: [] },
+      attachments: [],
+      trace: { emit: () => {} },
+      signal: new AbortController().signal,
+      session: {},
+    } satisfies DesktopRunRequest
+
+    const readiness = createDesktopRunMcpReadiness({
+      status: "ready",
+      serverNames: ["zeta", "github"],
+    })
+    const updated = withDesktopRunMcpReadiness(request, readiness)
+
+    expect(readiness).toEqual({
+      status: "ready",
+      serverNames: ["github", "zeta"],
+      blockers: [],
+    })
+    expect(updated).not.toBe(request)
+    expect(updated.mcp).toEqual(readiness)
+    expect(request.mcp).toEqual({
+      status: "skipped",
+      serverNames: [],
+      blockers: [],
+    })
   })
 })

@@ -84,6 +84,28 @@ export type DesktopRunResult = {
   }
 }
 
+export function createDesktopRunMcpReadiness(input: {
+  status: DesktopRunMcpReadiness["status"]
+  serverNames?: string[]
+  blockers?: DesktopRunMcpReadiness["blockers"]
+}): DesktopRunMcpReadiness {
+  return {
+    status: input.status,
+    serverNames: [...(input.serverNames ?? [])].sort(),
+    blockers: input.blockers ?? [],
+  }
+}
+
+export function withDesktopRunMcpReadiness(
+  request: DesktopRunRequest,
+  mcp: DesktopRunMcpReadiness,
+): DesktopRunRequest {
+  return {
+    ...request,
+    mcp,
+  }
+}
+
 export function createDesktopRunContextFromPreflight(
   runtimeId: AgentRuntimeId,
   mode: AgentJobMode,
