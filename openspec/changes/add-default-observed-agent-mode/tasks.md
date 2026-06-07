@@ -30,15 +30,15 @@
 - [x] 5.4 Add tests for event ordering, payload bounds, and secret redaction.
 
 ## 6. Workbench and Chat Visibility
-- [ ] 6.1 Show the run control level for active and completed desktop Agent runs.
-- [ ] 6.2 Show observed tool/action timeline entries in the Workbench or existing chat tool surfaces.
-- [ ] 6.3 Highlight high-risk observed actions without claiming they were blocked.
-- [ ] 6.4 Keep stop/cancel visible for active observed runs and show canceled terminal status when used.
+- [x] 6.1 Show the run control level for active and completed desktop Agent runs.
+- [x] 6.2 Show observed tool/action timeline entries in the Workbench or existing chat tool surfaces.
+- [x] 6.3 Highlight high-risk observed actions without claiming they were blocked.
+- [x] 6.4 Keep stop/cancel visible for active observed runs and show canceled terminal status when used.
 
 ## 7. Verification
 - [x] 7.1 Run `openspec validate add-default-observed-agent-mode --strict --no-interactive`.
 - [x] 7.2 Run `bun run architecture:check`.
-- [ ] 7.3 Run focused policy, guard-risk, Claude permission, Codex ACP permission, event mapper, and Workbench UI tests.
+- [x] 7.3 Run focused policy, guard-risk, Claude permission, Codex ACP permission, event mapper, and Workbench UI tests.
 - [x] 7.4 Run `bun run ts:check`.
 - [ ] 7.5 Run `bun run build`.
 - [ ] 7.6 Record desktop smoke evidence for Claude and Codex observed Agent runs, including one normal action, one high-risk highlighted action, and cancel/stop.

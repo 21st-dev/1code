@@ -58,6 +58,10 @@ import { cn } from "../../../lib/utils"
 import type { GitHubDraftPullRequestUnavailableReason } from "../../../../shared/github-workflow-context"
 import { getGitHubDraftPrUnavailableMessageKey } from "../../../../shared/github-workflow-ui-state"
 import {
+  DESKTOP_RUNTIME_CONTROL_LEVELS,
+  type DesktopRuntimeControlLevel,
+} from "../../../../shared/agent-runtime-control"
+import {
   desktopViewAtom,
   diffSidebarOpenAtomFamily,
   filteredDiffFilesAtom,
@@ -159,6 +163,21 @@ type HeadlessJobEvent = {
   type: string
   payload: unknown
   createdAt: Date | string | null
+}
+
+type ObservedRiskPayload = {
+  toolName?: unknown
+  riskLevel?: unknown
+  riskCategories?: unknown
+  catastrophic?: unknown
+  reason?: unknown
+}
+
+type ObservedPermissionPayload = {
+  controlLevel: DesktopRuntimeControlLevel
+  decision: "allow" | "deny"
+  message?: string
+  risk: ObservedRiskPayload
 }
 
 type AgentSchedule = {
@@ -445,11 +464,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
+function isDesktopRuntimeControlLevel(
+  value: unknown,
+): value is DesktopRuntimeControlLevel {
+  return (
+    typeof value === "string" &&
+    DESKTOP_RUNTIME_CONTROL_LEVELS.includes(value as DesktopRuntimeControlLevel)
+  )
+}
+
 function getSemanticPayload(event: HeadlessJobEvent): unknown {
   if (isRecord(event.payload) && "runEventSequence" in event.payload) {
     return event.payload.payload
   }
   return event.payload
+}
+
+function getObservedPermissionPayload(
+  event: HeadlessJobEvent,
+): ObservedPermissionPayload | null {
+  if (event.type !== "permission_requested") return null
+  const payload = getSemanticPayload(event)
+  if (!isRecord(payload)) return null
+  if (!isDesktopRuntimeControlLevel(payload.controlLevel)) return null
+  if (payload.controlLevel !== "observe") return null
+  const risk = isRecord(payload.risk) ? payload.risk : {}
+  const decision = payload.decision === "deny" ? "deny" : "allow"
+  return {
+    controlLevel: payload.controlLevel,
+    decision,
+    ...(typeof payload.message === "string" ? { message: payload.message } : {}),
+    risk,
+  }
+}
+
+function getObservedRiskCategories(risk: ObservedRiskPayload): string[] {
+  return Array.isArray(risk.riskCategories)
+    ? risk.riskCategories.filter(
+        (category): category is string => typeof category === "string",
+      )
+    : []
 }
 
 function getReviewDisabledReason(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"]) {
@@ -996,41 +1050,116 @@ function HeadlessJobLogsDialog({
           ) : (
             <div className="space-y-2">
               {events.map((event) => (
-                <div
-                  key={event.id}
-                  className="grid grid-cols-[3.5rem_11rem_minmax(0,1fr)] gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs"
-                >
-                  <span className="font-mono text-muted-foreground">
-                    #{event.sequence}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate font-medium text-foreground">
-                      {t(JOB_EVENT_LABEL_KEYS[event.type] ?? "workbench.event.unknown")}
-                    </div>
-                    <div className="truncate font-mono text-[11px] text-muted-foreground">
-                      {event.type}
-                    </div>
-                  </div>
-                  <div className="min-w-0 space-y-1">
-                    <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-muted-foreground">
-                      {formatPayload(getSemanticPayload(event))}
-                    </pre>
-                    <details className="text-muted-foreground">
-                      <summary className="cursor-pointer text-[11px] font-medium">
-                        {t("workbench.rawPayload")}
-                      </summary>
-                      <pre className="mt-1 min-w-0 whitespace-pre-wrap break-words font-mono">
-                        {formatPayload(event.payload)}
-                      </pre>
-                    </details>
-                  </div>
-                </div>
+                <JobEventRow key={event.id} event={event} />
               ))}
             </div>
           )}
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function JobEventRow({ event }: { event: HeadlessJobEvent }) {
+  const { t } = useI18n()
+  const observed = getObservedPermissionPayload(event)
+
+  return (
+    <div className="grid grid-cols-[3.5rem_11rem_minmax(0,1fr)] gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
+      <span className="font-mono text-muted-foreground">#{event.sequence}</span>
+      <div className="min-w-0">
+        <div className="truncate font-medium text-foreground">
+          {t(JOB_EVENT_LABEL_KEYS[event.type] ?? "workbench.event.unknown")}
+        </div>
+        <div className="truncate font-mono text-[11px] text-muted-foreground">
+          {event.type}
+        </div>
+      </div>
+      <div className="min-w-0 space-y-1">
+        {observed && <ObservedPermissionSummary observed={observed} />}
+        <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-muted-foreground">
+          {formatPayload(getSemanticPayload(event))}
+        </pre>
+        <details className="text-muted-foreground">
+          <summary className="cursor-pointer text-[11px] font-medium">
+            {t("workbench.rawPayload")}
+          </summary>
+          <pre className="mt-1 min-w-0 whitespace-pre-wrap break-words font-mono">
+            {formatPayload(event.payload)}
+          </pre>
+        </details>
+      </div>
+    </div>
+  )
+}
+
+function ObservedPermissionSummary({
+  observed,
+}: {
+  observed: ObservedPermissionPayload
+}) {
+  const { t } = useI18n()
+  const riskLevel =
+    typeof observed.risk.riskLevel === "string"
+      ? observed.risk.riskLevel
+      : "unknown"
+  const toolName =
+    typeof observed.risk.toolName === "string" ? observed.risk.toolName : null
+  const reason =
+    typeof observed.risk.reason === "string" ? observed.risk.reason : null
+  const categories = getObservedRiskCategories(observed.risk)
+  const denied = observed.decision === "deny"
+
+  return (
+    <div
+      className={cn(
+        "rounded-md border px-2.5 py-2",
+        denied
+          ? "border-destructive/30 bg-destructive/5 text-destructive"
+          : "border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-300",
+      )}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="rounded bg-background/70 px-1.5 py-0.5 font-medium">
+          {t("workbench.observedControl")}
+        </span>
+        <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono">
+          {observed.controlLevel}
+        </span>
+        <span className="rounded bg-background/70 px-1.5 py-0.5 font-medium">
+          {denied
+            ? t("workbench.observedDenied")
+            : t("workbench.observedAllowed")}
+        </span>
+        <span className="rounded bg-background/70 px-1.5 py-0.5">
+          {t("workbench.observedRisk", { risk: riskLevel })}
+        </span>
+        {toolName && (
+          <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono">
+            {toolName}
+          </span>
+        )}
+      </div>
+      {(reason || observed.message || categories.length > 0) && (
+        <div className="mt-1.5 space-y-1 text-[11px]">
+          {(observed.message || reason) && (
+            <p className="break-words">{observed.message || reason}</p>
+          )}
+          {categories.length > 0 && (
+            <p className="break-words">
+              {t("workbench.observedCategories", {
+                categories: categories.join(", "),
+              })}
+            </p>
+          )}
+        </div>
+      )}
+      {denied && (
+        <div className="mt-1.5 text-[11px] font-medium">
+          {t("workbench.observedSafety")}
+        </div>
+      )}
+    </div>
   )
 }
 

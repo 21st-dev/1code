@@ -58,6 +58,10 @@ describe("headless desktop jobs UI", () => {
       expect(source).toContain("trpc.agentSchedules.resume.useMutation")
       expect(source).toContain("trpc.agentSchedules.delete.useMutation")
       expect(source).toContain("HeadlessJobLogsDialog")
+      expect(source).toContain("JobEventRow")
+      expect(source).toContain("ObservedPermissionSummary")
+      expect(source).toContain("DESKTOP_RUNTIME_CONTROL_LEVELS")
+      expect(source).toContain("getObservedPermissionPayload(event)")
       expect(source).toContain("JOB_EVENT_LABEL_KEYS")
       expect(source).toContain("getSemanticPayload(event)")
       expect(source).toContain('t("workbench.rawPayload")')
@@ -100,8 +104,14 @@ describe("headless desktop jobs UI", () => {
       "workbench.event.assistantDelta",
       "workbench.event.guardDecision",
       "workbench.event.mcpNeedsAuth",
-      "workbench.event.completed",
-      "workbench.jobSource.cli",
+        "workbench.event.completed",
+        "workbench.observedControl",
+        "workbench.observedAllowed",
+        "workbench.observedDenied",
+        "workbench.observedRisk",
+        "workbench.observedCategories",
+        "workbench.observedSafety",
+        "workbench.jobSource.cli",
         "workbench.jobSource.daemon",
         "workbench.jobSource.schedule",
         "workbench.jobSource.protocol",
