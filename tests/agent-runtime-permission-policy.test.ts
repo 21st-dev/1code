@@ -67,6 +67,10 @@ describe("desktop runtime permission policy", () => {
 
   test("desktop routes consume the shared permission policy owner", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const claudeControls = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-controls.ts",
+      "utf8",
+    )
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const claudeToolPermission = readFileSync(
       "src/main/lib/claude/agent-sdk-tool-permission.ts",
@@ -89,7 +93,9 @@ describe("desktop runtime permission policy", () => {
       "utf8",
     )
 
-    expect(claude).toContain("resolveDesktopPermissionPolicy")
+    expect(claude).toContain("prepareClaudeAgentSdkDesktopRunControls")
+    expect(claude).not.toContain("resolveDesktopPermissionPolicy")
+    expect(claudeControls).toContain("resolveDesktopPermissionPolicy")
     expect(claude).not.toContain("getClaudePermissionMapping")
     expect(claude).not.toContain("permissionHandler: {")
     expect(claude).not.toContain("createClaudeAgentSdkToolPermissionHandler")

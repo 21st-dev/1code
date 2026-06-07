@@ -41,6 +41,9 @@ import {
   createClaudeAgentSdkDesktopRunEnvelope,
 } from "../../claude/agent-sdk-desktop-run-envelope"
 import {
+  prepareClaudeAgentSdkDesktopRunControls,
+} from "../../claude/agent-sdk-desktop-run-controls"
+import {
   superviseClaudeAgentSdkDesktopRun,
 } from "../../claude/agent-sdk-desktop-run-supervision"
 import {
@@ -76,7 +79,6 @@ import { publicProcedure, router } from "../index"
 import {
   agentScopeContractInputSchema,
   applyActiveGuardedScopeExpansion,
-  prepareActiveGuardedRunContract,
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
@@ -85,12 +87,6 @@ import {
   getApprovedPluginMcpServers,
   getEnabledPlugins,
 } from "./claude-settings"
-import {
-  resolveDesktopPermissionPolicy,
-} from "../../agent-runtime/permission-policy"
-import {
-  verifyDesktopRunPreflight,
-} from "../../agent-runtime/preflight"
 
 function getPluginGateMcpStatus(gate: { status: string }): string {
   if (gate.status === "safe-mode") return "blocked-safe-mode"
@@ -741,39 +737,28 @@ export const claudeRouter = router({
           run: async () => {
             const db = getDatabase()
             desktopRunState.setDb(db)
-            const verifiedRunContext = verifyDesktopRunPreflight(db, {
+            const runControls = await prepareClaudeAgentSdkDesktopRunControls({
+              db,
               chatId: input.chatId,
               subChatId: input.subChatId,
               cwd: input.cwd,
+              projectPath: input.projectPath,
+              mode: input.mode,
+              scopeContract: input.scopeContract,
+              runId: input.runId,
+              fallbackRunId: streamId,
+              emitError,
+              emit: safeEmit,
+              complete: safeComplete,
             })
-            const runtimeCwd = verifiedRunContext.cwd
-
-            const activeGuardedRun =
-              await prepareActiveGuardedRunContract({
-                scopeContract: input.scopeContract,
-                cwd: runtimeCwd,
-                projectPath: input.projectPath,
-                chatId: input.chatId,
-                subChatId: input.subChatId,
-                runId: input.runId,
-                fallbackRunId: streamId,
-              })
-            if (!activeGuardedRun.ok) {
-              emitError(
-                new Error(activeGuardedRun.error),
-                "Guarded run contract rejected",
-              )
-              safeEmit({ type: "finish" } as UIMessageChunk)
-              safeComplete()
+            if (!runControls.ok) {
               return
             }
-            guardedContract = activeGuardedRun.contract
-            guardedPreRunStatus = activeGuardedRun.preRunStatus
-            const permissionPolicy = resolveDesktopPermissionPolicy({
-              runtimeId: "claude-code",
-              mode: input.mode,
-              hasScopeContract: Boolean(guardedContract),
-            })
+            const verifiedRunContext = runControls.preflight
+            const runtimeCwd = runControls.runtimeCwd
+            guardedContract = runControls.guardedContract
+            guardedPreRunStatus = runControls.guardedPreRunStatus
+            const permissionPolicy = runControls.permissionPolicy
 
             const historyEnabled = input.historyEnabled === true
             const imageAttachments =

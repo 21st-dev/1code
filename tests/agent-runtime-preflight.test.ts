@@ -106,10 +106,17 @@ describe("desktop runtime preflight", () => {
 
   test("Claude route blocks desktop preflight before creating a job", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
-    const preflightIndex = claude.indexOf("verifyDesktopRunPreflight(db,")
+    const claudeControls = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-controls.ts",
+      "utf8",
+    )
+    const preflightIndex = claudeControls.indexOf("verifyDesktopRunPreflight")
+    const controlsIndex = claude.indexOf(
+      "prepareClaudeAgentSdkDesktopRunControls({",
+    )
     const attachmentIndex = claude.indexOf(
       "prepareChatImageAttachmentsForDesktopRun({",
-      preflightIndex,
+      controlsIndex,
     )
     const jobIndex = claude.indexOf("createClaudeAgentSdkDesktopRunStartup({")
     const runRequestIndex = claude.indexOf(
@@ -120,7 +127,8 @@ describe("desktop runtime preflight", () => {
     )
 
     expect(preflightIndex).toBeGreaterThan(0)
-    expect(attachmentIndex).toBeGreaterThan(preflightIndex)
+    expect(controlsIndex).toBeGreaterThan(0)
+    expect(attachmentIndex).toBeGreaterThan(controlsIndex)
     expect(jobIndex).toBeGreaterThan(attachmentIndex)
     expect(runRequestIndex).toBeGreaterThan(jobIndex)
     expect(lifecycleIndex).toBeGreaterThan(runRequestIndex)

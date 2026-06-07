@@ -4,6 +4,10 @@ import { readFileSync } from "node:fs"
 describe("agent guard runtime pipeline", () => {
   test("Claude transport, router, and stream chunks are wired for hard enforcement", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const claudeControls = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-controls.ts",
+      "utf8",
+    )
     const ipc = readFileSync(
       "src/renderer/features/agents/lib/ipc-chat-transport.ts",
       "utf8",
@@ -52,7 +56,9 @@ describe("agent guard runtime pipeline", () => {
     expect(claude).toContain(
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
-    expect(claude).toContain("prepareActiveGuardedRunContract")
+    expect(claude).toContain("prepareClaudeAgentSdkDesktopRunControls")
+    expect(claude).not.toContain("prepareActiveGuardedRunContract")
+    expect(claudeControls).toContain("prepareActiveGuardedRunContract")
     expect(claude).not.toContain("validateAgentScopeContract(input.scopeContract")
     expect(claude).not.toContain("setActiveGuardedContract(guardedContract)")
     expect(claude).not.toContain("captureGuardedGitStatus(runtimeCwd)")

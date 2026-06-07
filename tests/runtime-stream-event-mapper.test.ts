@@ -303,6 +303,13 @@ describe("desktop stream event mapper", () => {
               "utf8",
             )
           : null
+      const claudeControls =
+        runtimeName === "Claude"
+          ? readFileSync(
+              "src/main/lib/claude/agent-sdk-desktop-run-controls.ts",
+              "utf8",
+            )
+          : null
       const safeEmitIndex = source.indexOf("const safeEmit")
       const jobIndex =
         runtimeName === "Claude"
@@ -332,14 +339,15 @@ describe("desktop stream event mapper", () => {
       }
       expect(mapperCreateIndex, `${runtimeName} mapper creation`).toBeGreaterThan(jobIndex)
       expect(appendIndex, `${runtimeName} mapper append`).toBeGreaterThan(0)
-      expect(source).toContain(`runtimeId: "${runtimeId}"`)
       if (runtimeName === "Claude") {
+        expect(claudeControls).toContain(`runtimeId: "${runtimeId}"`)
         const emitter = readFileSync(
           "src/main/lib/agent-runtime/stream-event-mapper.ts",
           "utf8",
         )
         expect(emitter).toContain('chunkType !== "finish"')
       } else {
+        expect(source).toContain(`runtimeId: "${runtimeId}"`)
         expect(source).toContain('type !== "finish"')
       }
     }
