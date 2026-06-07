@@ -74,7 +74,17 @@ export type RunClaudeAgentSdkDesktopAdapterWithRuntimeConsumerInput = Omit<
 > &
   Omit<
     CreateClaudeAgentSdkStreamConsumerInput,
-    "policyRetry" | "state" | "emit" | "complete" | "subId"
+    | "policyRetry"
+    | "state"
+    | "emit"
+    | "complete"
+    | "subId"
+    | "prompt"
+    | "cwd"
+    | "abortSignal"
+    | "chatId"
+    | "subChatId"
+    | "mode"
   > & {
     emit: CreateClaudeAgentSdkStreamConsumerInput["emit"]
   }
@@ -141,6 +151,7 @@ export async function runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
   error,
   ...streamConsumer
 }: RunClaudeAgentSdkDesktopAdapterWithRuntimeConsumerInput): Promise<DesktopRunResult> {
+  const { context } = request
   return runClaudeAgentSdkDesktopAdapterWithStreamConsumer({
     request,
     query,
@@ -149,6 +160,12 @@ export async function runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
     streamState,
     streamConsumer: {
       ...streamConsumer,
+      prompt: request.prompt,
+      cwd: context.cwd,
+      abortSignal: request.signal,
+      chatId: context.chatId,
+      subChatId: context.subChatId,
+      mode: context.mode,
       subId,
       emit,
       complete,

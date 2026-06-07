@@ -811,6 +811,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
       "utf8",
     )
+    const claudeAgentSdkAdapterRunner = readFileSync(
+      "src/main/lib/claude/agent-sdk-adapter-runner.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-query")
     expect(claudeRouter).not.toContain(
@@ -858,8 +862,14 @@ describe("desktop runtime adapter factory", () => {
       "guardedRunStartedAt = new Date().toISOString()",
     )
     expect(runtimeLifecycle).toContain("const requestContext = request.context")
-    expect(runtimeLifecycle).toContain("prompt: request.prompt")
-    expect(runtimeLifecycle).toContain("abortSignal: request.signal")
+    expect(runtimeLifecycle).not.toContain("prompt: request.prompt")
+    expect(runtimeLifecycle).not.toContain("abortSignal: request.signal")
+    expect(claudeAgentSdkAdapterRunner).toContain("prompt: request.prompt")
+    expect(claudeAgentSdkAdapterRunner).toContain("cwd: context.cwd")
+    expect(claudeAgentSdkAdapterRunner).toContain("abortSignal: request.signal")
+    expect(claudeAgentSdkAdapterRunner).toContain("chatId: context.chatId")
+    expect(claudeAgentSdkAdapterRunner).toContain("subChatId: context.subChatId")
+    expect(claudeAgentSdkAdapterRunner).toContain("mode: context.mode")
     expect(runtimeLifecycle).toContain("model: input.customConfig?.model")
     expect(runtimeLifecycle).toContain(
       "resolvedModel: runtimeResolvedModel",
