@@ -78,6 +78,7 @@ function createLifecycleInput(
   db: ReturnType<typeof createAgentJobTestDb>,
   input: {
     query?: (params: any) => AsyncIterable<unknown>
+    prepareRuntimePrompt?: any
     signal?: AbortSignal
     streamState?: ReturnType<typeof createClaudeAgentSdkStreamConsumerMutableState>
   } = {},
@@ -85,13 +86,18 @@ function createLifecycleInput(
   const signal = input.signal ?? new AbortController().signal
   const request = createRequest(signal)
   const emit = mock((chunk: UIMessageChunk) => true)
+  const prepareRuntimePrompt =
+    input.prepareRuntimePrompt ??
+    mock(async ({ prompt }: { prompt: string }) => ({
+      ok: true,
+      prompt,
+    }))
 
   return {
     query: (input.query ?? (() => createClaudeAssistantStream())) as any,
     request,
     runtimeQuery: {
       request,
-      prompt: "hello",
       existingMessages: [],
       rawMcpServers: undefined,
       env: {},
@@ -104,6 +110,10 @@ function createLifecycleInput(
       projectPath: "/repo",
       readAgentsMd: async () => null,
       getClaudeBinaryPath: () => "/owned/claude",
+    },
+    runtimePrompt: {
+      images: [],
+      prepareRuntimePrompt,
     },
     streamState:
       input.streamState ?? createClaudeAgentSdkStreamConsumerMutableState(),
@@ -127,6 +137,7 @@ function createLifecycleInput(
     desktopJobSawError: false,
     streamStart: 1000,
     nowMs: () => 3500,
+    prepareRuntimePrompt,
   }
 }
 
@@ -171,6 +182,29 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     expect(input.complete).toHaveBeenCalledTimes(1)
   })
 
+  test("reports prompt preparation failures before adapter startup", async () => {
+    const db = createAgentJobTestDb()
+    const query = mock(() => createClaudeAssistantStream())
+    const input = createLifecycleInput(db, {
+      query,
+      prepareRuntimePrompt: mock(async () => ({
+        ok: false,
+        reason: "long-text-attachment-unavailable",
+      })),
+    })
+
+    await expect(
+      runClaudeAgentSdkDesktopRuntimeLifecycle(input),
+    ).resolves.toMatchObject({
+      status: "failed",
+      phase: "prompt",
+      error: { message: "long-text-attachment-unavailable" },
+    })
+
+    expect(input.prepareRuntimePrompt).toHaveBeenCalledTimes(1)
+    expect(query).not.toHaveBeenCalled()
+  })
+
   test("runs the adapter and finalizes a successful desktop runtime turn", async () => {
     const db = createAgentJobTestDb()
     seedChat(db)
@@ -191,6 +225,7 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     expect(subChat?.streamId).toBeNull()
     expect(subChat?.sessionId).toBe("session-1")
     expect(JSON.parse(subChat?.messages ?? "[]")).toHaveLength(2)
+    expect(input.prepareRuntimePrompt).toHaveBeenCalledTimes(1)
     expect(input.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "text-delta",

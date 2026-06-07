@@ -1228,9 +1228,13 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-prompt.ts",
       "utf8",
     )
+    const runtimeLifecycle = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-prompt")
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-prompt")
+    expect(claudeRouter).not.toContain(
       "prepareClaudeAgentSdkRuntimePromptForDesktopRun",
     )
     expect(claudeRouter).not.toContain("prepareClaudeAgentSdkRuntimePrompt({")
@@ -1247,6 +1251,10 @@ describe("desktop runtime adapter factory", () => {
     expect(claudePrompt).toContain(
       "prepareClaudeAgentSdkRuntimePromptForDesktopRun",
     )
+    expect(runtimeLifecycle).toContain(
+      "prepareClaudeAgentSdkRuntimePromptForDesktopRun",
+    )
+    expect(runtimeLifecycle).toContain('phase: "prompt"')
     expect(claudePrompt).toContain(
       "ClaudeAgentSdkLongTextAttachmentPromptError",
     )

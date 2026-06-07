@@ -30,7 +30,6 @@ import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../../claude/agent-sdk
 import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
-import { prepareClaudeAgentSdkRuntimePromptForDesktopRun } from "../../claude/agent-sdk-prompt"
 import {
   prepareClaudeAgentSdkProviderStartupForDesktopRun,
 } from "../../claude/agent-sdk-provider-startup"
@@ -892,20 +891,6 @@ export const claudeRouter = router({
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
 
-            const promptResult =
-              await prepareClaudeAgentSdkRuntimePromptForDesktopRun({
-                prompt: input.prompt,
-                images: resolvedImages,
-                longTextAttachments: input.longTextAttachments,
-                emitError,
-                emit: safeEmit,
-                complete: safeComplete,
-              })
-            if (!promptResult.ok) {
-              return
-            }
-            const prompt = promptResult.prompt
-
             // Create isolated config directory per subChat to prevent session contamination
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
@@ -1102,7 +1087,6 @@ export const claudeRouter = router({
                 request: desktopRunRequest,
                 runtimeQuery: {
                   request: desktopRunRequest,
-                  prompt,
                   existingMessages,
                   rawMcpServers: mcpServersForSdk,
                   env: finalEnv,
@@ -1112,6 +1096,10 @@ export const claudeRouter = router({
                   resolvedModel,
                   maxThinkingTokens: input.maxThinkingTokens,
                   projectPath: input.projectPath,
+                },
+                runtimePrompt: {
+                  images: resolvedImages,
+                  longTextAttachments: input.longTextAttachments,
                 },
                 streamState,
                 isUsingOllama,

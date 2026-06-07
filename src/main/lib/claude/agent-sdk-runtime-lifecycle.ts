@@ -17,15 +17,27 @@ import {
   createClaudeAgentSdkRuntimeStreamSetup,
   type ClaudeAgentSdkRuntimeStreamSetup,
 } from "./agent-sdk-runtime-state"
+import {
+  prepareClaudeAgentSdkRuntimePromptForDesktopRun,
+  type PrepareClaudeAgentSdkRuntimePromptForDesktopRunInput,
+} from "./agent-sdk-prompt"
+
+export type RunClaudeAgentSdkDesktopRuntimeLifecyclePromptInput = Omit<
+  PrepareClaudeAgentSdkRuntimePromptForDesktopRunInput,
+  "prompt" | "emitError" | "emit" | "complete"
+> & {
+  prompt?: string
+  prepareRuntimePrompt?: typeof prepareClaudeAgentSdkRuntimePromptForDesktopRun
+}
 
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput = Omit<
   PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
-  "isUsingOllama" | "guardedContract" | "emit"
+  "prompt" | "isUsingOllama" | "guardedContract" | "emit"
 > &
   Partial<
     Pick<
       PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
-      "isUsingOllama" | "guardedContract" | "emit"
+      "prompt" | "isUsingOllama" | "guardedContract" | "emit"
     >
   >
 
@@ -59,6 +71,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     guardEvents?: AgentGuardEvent[]
     guardedRunStartedAt?: string
     runtimeStreamSetup?: ClaudeAgentSdkRuntimeStreamSetup
+    runtimePrompt?: RunClaudeAgentSdkDesktopRuntimeLifecyclePromptInput
     desktopJobSawError: boolean
     streamStart: number
     nowMs?: () => number
@@ -67,7 +80,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleResult =
   | {
       status: "failed"
-      phase: "adapter" | "finalization"
+      phase: "prompt" | "adapter" | "finalization"
       error?: DesktopRunResult["error"]
     }
   | {
@@ -102,10 +115,35 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   input.streamState.metadata = streamSetup.metadata
   const parts = runtimeQueryInput.parts ?? streamSetup.parts
   const stderrLines = runtimeQueryInput.stderrLines ?? streamSetup.stderrLines
+  const {
+    prepareRuntimePrompt = prepareClaudeAgentSdkRuntimePromptForDesktopRun,
+    prompt: runtimePromptText = request.prompt,
+    ...runtimePromptInput
+  } = input.runtimePrompt ?? { images: [] }
+
+  let prompt = runtimeQueryInput.prompt
+  if (!prompt) {
+    const promptResult = await prepareRuntimePrompt({
+      ...runtimePromptInput,
+      prompt: runtimePromptText,
+      emitError: input.emitError,
+      emit: input.emit,
+      complete: input.complete,
+    })
+    if (!promptResult.ok) {
+      return {
+        status: "failed",
+        phase: "prompt",
+        error: { message: promptResult.reason },
+      }
+    }
+    prompt = promptResult.prompt
+  }
 
   const runtimeQuery =
     await prepareClaudeAgentSdkDesktopRuntimeQuery({
       ...runtimeQueryInput,
+      prompt,
       isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama,
       guardedContract:
         runtimeQueryInput.guardedContract ?? input.guardedContract,
