@@ -102,6 +102,7 @@ function summarizeEvent(event) {
     type: event.type,
     runId: event.payloadJson.runId ?? null,
     runtimeId: event.payloadJson.runtimeId ?? null,
+    adapterAttempt: event.payloadJson.payload?.attempt ?? null,
     redaction: event.payloadJson.redaction?.status ?? null,
   }
 }
@@ -225,6 +226,14 @@ export function inspectRuntimeControlSmokeJob({
     fail(
       failures,
       `expected adapter source ${scenario.adapterSource}, got ${adapterStartedPayload.adapterSource}`,
+    )
+  } else if (
+    !Number.isInteger(adapterStartedPayload.attempt) ||
+    adapterStartedPayload.attempt < 1
+  ) {
+    fail(
+      failures,
+      `expected adapter attempt to be a positive integer, got ${adapterStartedPayload.attempt}`,
     )
   }
 

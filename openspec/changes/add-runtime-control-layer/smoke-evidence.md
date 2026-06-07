@@ -19,7 +19,7 @@ Task 6.6 requires all of the following for each scenario:
   MCP, attachment, or adapter startup.
 - The selected `PermissionPolicy` visible in logs or DB/debug evidence.
 - The adapter source visible as `claude-agent-sdk` or
-  `codex-acp-temporary-compat`.
+  `codex-acp-temporary-compat`, with adapter attempt identity.
 - Semantic `agent_job_events` persisted for the run, with ordered redacted
   runtime events including status and terminal completion or denial.
 - Workbench timeline evidence showing the semantic trace.
@@ -34,7 +34,7 @@ bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --sc
 
 This DB inspector proves the `agent_jobs` row, runtime/mode/source, ordered
 semantic events, terminal event, guard event presence for guarded scenarios, and
-event redaction metadata. Adapter source is verified from the normalized
+event redaction metadata. Adapter source and attempt are verified from the normalized
 `desktop_runtime_adapter_started` semantic trace event; app logs and UI/debug
 screenshots remain supporting evidence rather than the source-of-truth check.
 
@@ -62,7 +62,7 @@ Required evidence:
 - Permission policy resolved to Claude plan-mode read-only semantics before
   SDK query startup.
 - Desktop run request reached the Claude Agent SDK adapter with
-  `adapterSource=claude-agent-sdk`.
+  `adapterSource=claude-agent-sdk` and `attempt>=1`.
 - Semantic `agent_job_events` query output for the job.
 - `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=claude-plan`
   passes for the job.
@@ -86,7 +86,7 @@ Required evidence:
 - A deliberate out-of-scope operation was denied or produced a scope expansion
   request before execution.
 - Desktop run request reached the Claude Agent SDK adapter with
-  `adapterSource=claude-agent-sdk`.
+  `adapterSource=claude-agent-sdk` and `attempt>=1`.
 - Semantic `agent_job_events` query output showing guard decision or scope
   expansion events.
 - `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=claude-guard`
@@ -109,7 +109,7 @@ Required evidence:
 - Permission policy resolved to Codex plan-mode read-only semantics before ACP
   provider/session startup.
 - Desktop run request reached the Codex ACP temporary-compat adapter with
-  `adapterSource=codex-acp-temporary-compat`.
+  `adapterSource=codex-acp-temporary-compat` and `attempt>=1`.
 - Semantic `agent_job_events` query output for the job.
 - `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=codex-temporary-compat-plan`
   passes for the job.
@@ -133,7 +133,7 @@ Required evidence:
 - A deliberate out-of-scope operation was denied or produced a scope expansion
   request before execution.
 - Desktop run request reached the Codex ACP temporary-compat adapter with
-  `adapterSource=codex-acp-temporary-compat`.
+  `adapterSource=codex-acp-temporary-compat` and `attempt>=1`.
 - Semantic `agent_job_events` query output showing guard decision or scope
   expansion events.
 - `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=codex-temporary-compat-guard`

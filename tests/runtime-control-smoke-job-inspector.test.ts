@@ -77,6 +77,7 @@ function createAdapterStartedEvent(input: {
   sequence: number
   runtimeId?: string
   adapterSource?: string
+  attempt?: number | null
 }) {
   return createEvent({
     sequence: input.sequence,
@@ -86,6 +87,9 @@ function createAdapterStartedEvent(input: {
       status: "desktop_runtime_adapter_started",
       adapterSource: input.adapterSource ?? "claude-agent-sdk",
       adapterLabel: "Test adapter",
+      attempt: Object.prototype.hasOwnProperty.call(input, "attempt")
+        ? input.attempt
+        : 1,
       temporaryFallback: input.adapterSource === "codex-acp-temporary-compat",
       fallbackReason: null,
     },
@@ -231,6 +235,30 @@ describe("runtime control smoke job inspector", () => {
     expect(result.ok).toBe(false)
     expect(result.failures.join("\n")).toContain(
       "expected adapter source claude-agent-sdk, got codex-acp-temporary-compat",
+    )
+  })
+
+  test("requires adapter attempt evidence in semantic trace", () => {
+    const db = createFakeDb({
+      job: createJob(),
+      events: [
+        createAdapterStartedEvent({
+          sequence: 1,
+          attempt: null,
+        }),
+        createEvent({ sequence: 2, type: "completed" }),
+      ],
+    })
+
+    const result = inspectRuntimeControlSmokeJob({
+      db,
+      jobId: "job-1",
+      scenarioId: "claude-plan",
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.failures.join("\n")).toContain(
+      "expected adapter attempt to be a positive integer",
     )
   })
 })
