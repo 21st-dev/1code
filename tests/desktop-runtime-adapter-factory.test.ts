@@ -292,9 +292,19 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-desktop-job.ts",
       "utf8",
     )
+    const claudeDesktopRunStartup = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-startup.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).toContain(
+      "prepareClaudeAgentSdkDesktopRunStartup({",
+    )
+    expect(claudeRouter).not.toContain(
       "createClaudeAgentSdkDesktopRunStartup({",
+    )
+    expect(claudeDesktopRunStartup).toContain(
+      "createClaudeAgentSdkDesktopRunStartup",
     )
     expect(claudeRouter).not.toContain("../../claude/desktop-run-request")
     expect(claudeRouter).not.toContain(
@@ -504,16 +514,29 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-startup.ts",
       "utf8",
     )
+    const claudeDesktopRunStartup = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-startup.ts",
+      "utf8",
+    )
     const claudeConfigDir = readFileSync(
       "src/main/lib/claude/agent-sdk-config-dir.ts",
       "utf8",
     )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-provider-startup")
-    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-startup")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-provider-startup")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-startup")
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-desktop-run-startup",
+    )
     expect(claudeRouter).toContain("../../claude/agent-sdk-config-dir")
     expect(claudeRouter).toContain(
-      "const providerStartup =\n              await prepareClaudeAgentSdkProviderStartupForDesktopRun",
+      "prepareClaudeAgentSdkDesktopRunStartup({",
+    )
+    expect(claudeDesktopRunStartup).toContain(
+      "prepareClaudeAgentSdkProviderStartupForDesktopRun",
+    )
+    expect(claudeRouter).toContain(
+      "const runStartup = await prepareClaudeAgentSdkDesktopRunStartup",
     )
     expect(claudeRouter).not.toContain("resolveClaudeAgentSdkProviderStartup({")
     expect(claudeRouter).not.toContain("recordClaudeAgentSdkConnectionMethod")
@@ -521,7 +544,10 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("getClaudeAgentSdkConnectionMethod")
     expect(claudeRouter).not.toContain("../../analytics")
     expect(claudeRouter).not.toContain("setConnectionMethod(")
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
+      "prepareClaudeAgentSdkRuntimeStartupForDesktopRun",
+    )
+    expect(claudeDesktopRunStartup).toContain(
       "prepareClaudeAgentSdkRuntimeStartupForDesktopRun",
     )
     expect(claudeRouter).not.toContain(
@@ -1324,7 +1350,8 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunStartup")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkDesktopRunStartup")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopRunStartup")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopJob({")
     expect(claudeRouter).not.toContain("createAndRegisterDesktopChatAgentJob")
     expect(claudeRouter).not.toContain("createDesktopStreamEventMapper")

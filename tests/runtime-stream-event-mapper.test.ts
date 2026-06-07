@@ -310,14 +310,21 @@ describe("desktop stream event mapper", () => {
               "utf8",
             )
           : null
+      const claudeStartup =
+        runtimeName === "Claude"
+          ? readFileSync(
+              "src/main/lib/claude/agent-sdk-desktop-run-startup.ts",
+              "utf8",
+            )
+          : null
       const safeEmitIndex = source.indexOf("const safeEmit")
       const jobIndex =
         runtimeName === "Claude"
-          ? source.indexOf("createClaudeAgentSdkDesktopRunStartup({")
+          ? claudeStartup!.indexOf("createDesktopRunStartup({")
           : source.indexOf("createAndRegisterDesktopChatAgentJob(db, {")
       const mapperCreateIndex =
         runtimeName === "Claude"
-          ? source.indexOf(
+          ? claudeStartup!.indexOf(
               "streamEventMapper: desktopRunStartup.desktopJob.streamEventMapper",
               jobIndex,
             )

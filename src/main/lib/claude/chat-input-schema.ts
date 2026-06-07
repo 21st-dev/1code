@@ -23,3 +23,5 @@ export const longTextAttachmentSchema = z.object({
   preview: z.string().optional(),
   kind: z.enum(["pasted", "chatHistory"]),
 })
+
+export type LongTextAttachment = z.infer<typeof longTextAttachmentSchema>

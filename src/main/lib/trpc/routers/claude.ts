@@ -25,17 +25,8 @@ import {
   clearClaudeAgentSdkQueryCache,
 } from "../../claude/agent-sdk-query-loader"
 import {
-  prepareClaudeAgentSdkProviderStartupForDesktopRun,
-} from "../../claude/agent-sdk-provider-startup"
-import {
   clearClaudeAgentSdkIsolatedConfigDirCache,
 } from "../../claude/agent-sdk-config-dir"
-import {
-  prepareClaudeAgentSdkRuntimeStartupForDesktopRun,
-} from "../../claude/agent-sdk-runtime-startup"
-import {
-  createClaudeAgentSdkDesktopRunStartup,
-} from "../../claude/agent-sdk-desktop-job"
 import {
   createClaudeAgentSdkDesktopRunEnvelope,
 } from "../../claude/agent-sdk-desktop-run-envelope"
@@ -45,6 +36,9 @@ import {
 import {
   runClaudeAgentSdkDesktopRuntimeWithRunState,
 } from "../../claude/agent-sdk-desktop-run-runtime"
+import {
+  prepareClaudeAgentSdkDesktopRunStartup,
+} from "../../claude/agent-sdk-desktop-run-startup"
 import {
   superviseClaudeAgentSdkDesktopRun,
 } from "../../claude/agent-sdk-desktop-run-supervision"
@@ -791,24 +785,7 @@ export const claudeRouter = router({
               messagesToSave,
             } = chatHistory
 
-            const providerStartup =
-              await prepareClaudeAgentSdkProviderStartupForDesktopRun({
-                modelSource: input.modelSource,
-                offlineModeEnabled: input.offlineModeEnabled ?? false,
-                emitPreflightBlocker,
-              })
-            if (!providerStartup.ok) {
-              return
-            }
-            const {
-              selectedProviderProfileId,
-              claudeCodeToken,
-              claudeCredentialMetadata,
-              finalCustomConfig,
-              isUsingOllama,
-            } = providerStartup.startup
-
-            const desktopRunStartup = createClaudeAgentSdkDesktopRunStartup({
+            const runStartup = await prepareClaudeAgentSdkDesktopRunStartup({
               db,
               mode: input.mode,
               chatId: input.chatId,
@@ -825,37 +802,33 @@ export const claudeRouter = router({
               streamId,
               preflight: verifiedRunContext,
               permissionPolicy,
-              customConfig: finalCustomConfig,
               requestedModel: input.model,
               modelSource: input.modelSource,
-              selectedProviderProfileId,
+              offlineModeEnabled: input.offlineModeEnabled ?? false,
+              enableTasks: input.enableTasks ?? true,
               images: input.images,
               longTextAttachments: input.longTextAttachments,
               signal: abortController.signal,
               requestedSessionId: input.sessionId,
               existingSessionId,
+              emitPreflightBlocker,
+              desktopRunState,
             })
-            desktopRunState.setDesktopJob({
-              jobId: desktopRunStartup.desktopJob.jobId,
-              streamEventMapper: desktopRunStartup.desktopJob.streamEventMapper,
-            })
-            const desktopRunRequest = desktopRunStartup.desktopRunRequest
-            const resumeSessionId = desktopRunStartup.resumeSessionId
-
-            // Offline status is shown in sidebar, no need to emit message here
-            // (emitting text-delta without text-start breaks UI text rendering)
-
-            const { runtimeStartup, isolatedConfigReady } =
-              await prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
-                chatId: input.chatId,
-                subChatId: input.subChatId,
-                isUsingOllama,
-                customConfig: finalCustomConfig,
-                requestedModel: input.model,
-                enableTasks: input.enableTasks ?? true,
+            if (!runStartup.ok) {
+              return
+            }
+            const {
+              desktopRunRequest,
+              resumeSessionId,
+              runtimeStartup,
+              isolatedConfigReady,
+              providerStartup: {
                 claudeCodeToken,
-                logPrefix: `[${input.subChatId}] `,
-              })
+                claudeCredentialMetadata,
+                finalCustomConfig,
+                isUsingOllama,
+              },
+            } = runStartup
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
