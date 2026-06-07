@@ -1,4 +1,10 @@
 import {
+  createDesktopRunMcpReadiness,
+  withDesktopRunMcpReadiness,
+  type DesktopRunMcpReadiness,
+  type DesktopRunRequest,
+} from "../agent-runtime/desktop-run-request"
+import {
   runClaudeAgentSdkDesktopRuntimeLifecycle,
   type RunClaudeAgentSdkDesktopRuntimeLifecycleInput,
   type RunClaudeAgentSdkDesktopRuntimeLifecycleResult,
@@ -16,6 +22,17 @@ export type RunClaudeAgentSdkDesktopRuntimeWithRunStateInput = Omit<
   runLifecycle?: typeof runClaudeAgentSdkDesktopRuntimeLifecycle
 }
 
+export type ClaudeAgentSdkDesktopRunMcpReadinessStatus =
+  DesktopRunMcpReadiness["status"]
+
+export type RunClaudeAgentSdkDesktopRuntimeWithMcpReadinessInput = Omit<
+  RunClaudeAgentSdkDesktopRuntimeWithRunStateInput,
+  "request"
+> & {
+  desktopRunRequest: DesktopRunRequest
+  mcpReadinessStatus: ClaudeAgentSdkDesktopRunMcpReadinessStatus
+}
+
 export async function runClaudeAgentSdkDesktopRuntimeWithRunState({
   desktopRunState,
   runLifecycle = runClaudeAgentSdkDesktopRuntimeLifecycle,
@@ -30,4 +47,25 @@ export async function runClaudeAgentSdkDesktopRuntimeWithRunState({
     runtimeResult.reachedNaturalFinish,
   )
   return runtimeResult
+}
+
+export async function runClaudeAgentSdkDesktopRuntimeWithMcpReadiness({
+  desktopRunRequest,
+  mcpReadinessStatus,
+  runtimeQuery,
+  ...input
+}: RunClaudeAgentSdkDesktopRuntimeWithMcpReadinessInput): Promise<RunClaudeAgentSdkDesktopRuntimeLifecycleResult> {
+  const request = withDesktopRunMcpReadiness(
+    desktopRunRequest,
+    createDesktopRunMcpReadiness({
+      status: mcpReadinessStatus,
+      serverNames: Object.keys(runtimeQuery.rawMcpServers ?? {}),
+    }),
+  )
+
+  return runClaudeAgentSdkDesktopRuntimeWithRunState({
+    ...input,
+    request,
+    runtimeQuery,
+  })
 }

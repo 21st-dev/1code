@@ -124,7 +124,7 @@ describe("desktop runtime preflight", () => {
     )
     const runRequestIndex = claude.indexOf("desktopRunRequest,", startupIndex)
     const lifecycleIndex = claude.indexOf(
-      "await runClaudeAgentSdkDesktopRuntimeWithRunState({",
+      "await runClaudeAgentSdkDesktopRuntimeWithMcpReadiness({",
     )
 
     expect(preflightIndex).toBeGreaterThan(0)

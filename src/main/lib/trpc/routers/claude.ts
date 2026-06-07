@@ -37,7 +37,8 @@ import {
   prepareClaudeAgentSdkDesktopRunInputs,
 } from "../../claude/agent-sdk-desktop-run-inputs"
 import {
-  runClaudeAgentSdkDesktopRuntimeWithRunState,
+  runClaudeAgentSdkDesktopRuntimeWithMcpReadiness,
+  type ClaudeAgentSdkDesktopRunMcpReadinessStatus,
 } from "../../claude/agent-sdk-desktop-run-runtime"
 import {
   prepareClaudeAgentSdkDesktopRunStartup,
@@ -77,11 +78,6 @@ import {
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
-import {
-  createDesktopRunMcpReadiness,
-  withDesktopRunMcpReadiness,
-  type DesktopRunMcpReadiness,
-} from "../../agent-runtime/desktop-run-request"
 import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
 import {
   getApprovedPluginMcpServers,
@@ -835,7 +831,7 @@ export const claudeRouter = router({
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
-            let mcpReadinessStatus: DesktopRunMcpReadiness["status"] =
+            let mcpReadinessStatus: ClaudeAgentSdkDesktopRunMcpReadinessStatus =
               isolatedConfigReady ? "ready" : "skipped"
 
             if (isolatedConfigReady) {
@@ -963,17 +959,11 @@ export const claudeRouter = router({
                 mcpReadinessStatus = "skipped"
               }
             }
-            const runtimeDesktopRunRequest = withDesktopRunMcpReadiness(
-              desktopRunRequest,
-              createDesktopRunMcpReadiness({
-                status: mcpReadinessStatus,
-                serverNames: Object.keys(mcpServersForSdk ?? {}),
-              }),
-            )
 
             const runtimeResult =
-              await runClaudeAgentSdkDesktopRuntimeWithRunState({
-                request: runtimeDesktopRunRequest,
+              await runClaudeAgentSdkDesktopRuntimeWithMcpReadiness({
+                desktopRunRequest,
+                mcpReadinessStatus,
                 runtimeQuery: {
                   existingMessages,
                   rawMcpServers: mcpServersForSdk,
