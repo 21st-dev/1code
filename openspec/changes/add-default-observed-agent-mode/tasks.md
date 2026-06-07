@@ -2,7 +2,7 @@
 - [x] 1.1 Review active OpenSpec changes and existing runtime/control specs.
 - [x] 1.2 Create this OpenSpec proposal, design, and spec deltas.
 - [x] 1.3 Validate this OpenSpec change strictly.
-- [ ] 1.4 Get approval before implementing product code.
+- [x] 1.4 Get approval before implementing product code.
 
 ## 2. Permission Policy
 - [x] 2.1 Add a shared desktop runtime control level model with `observe` and `guarded`; keep `strict` design-only for this change and make renderer consume the same enum.
@@ -40,5 +40,5 @@
 - [x] 7.2 Run `bun run architecture:check`.
 - [x] 7.3 Run focused policy, guard-risk, Claude permission, Codex ACP permission, event mapper, and Workbench UI tests.
 - [x] 7.4 Run `bun run ts:check`.
-- [ ] 7.5 Run `bun run build`.
+- [x] 7.5 Run `bun run build`.
 - [ ] 7.6 Record desktop smoke evidence for Claude and Codex observed Agent runs, including one normal action, one high-risk highlighted action, and cancel/stop.

@@ -133,7 +133,7 @@ describe("Claude desktop run request", () => {
           id: "permission-policy-1",
           status: "ready",
           message:
-            "Agent mode permits runtime side effects according to the selected runtime capability state.",
+            "Observed agent mode permits ordinary runtime actions, records tool decisions, and blocks catastrophic actions when runtime hooks are available.",
         },
       ],
     })

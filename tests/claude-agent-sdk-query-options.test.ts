@@ -245,7 +245,22 @@ describe("Claude Agent SDK query options", () => {
       behavior: "allow",
       updatedInput: { file_path: "/repo/README.md" },
     })
-    expect(emitted).toEqual([])
+    expect(emitted).toEqual([
+      expect.objectContaining({
+        type: "observed-tool-decision",
+        controlLevel: "observe",
+        decision: "allow",
+        risk: expect.objectContaining({
+          toolName: "Read",
+          toolUseId: "tool-1",
+          category: "read",
+          riskLevel: "low",
+          riskCategories: ["read"],
+          catastrophic: false,
+          recommendedDecision: "allow",
+        }),
+      }),
+    ])
     expect(guardEvents).toEqual([])
   })
 
