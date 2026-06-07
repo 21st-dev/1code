@@ -32,11 +32,12 @@ After each real desktop run, validate the persisted job trace with:
 bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=<scenario-id>
 ```
 
-This DB inspector proves the `agent_jobs` row, runtime/mode/source, ordered
-semantic events, terminal event, guard event presence for guarded scenarios, and
-event redaction metadata. Adapter source and attempt are verified from the normalized
-`desktop_runtime_adapter_started` semantic trace event; app logs and UI/debug
-screenshots remain supporting evidence rather than the source-of-truth check.
+This DB inspector proves the `agent_jobs` row, runtime/mode/source, persisted
+permission policy evidence, ordered semantic events, terminal event, guard event
+presence for guarded scenarios, and event redaction metadata. Adapter source and
+attempt are verified from the normalized `desktop_runtime_adapter_started`
+semantic trace event; app logs and UI/debug screenshots remain supporting
+evidence rather than the source-of-truth check.
 
 ## Required Scenarios
 
@@ -60,7 +61,7 @@ Required evidence:
 - Provider/model selected, with renderer-safe metadata only.
 - Preflight accepted the registered project/cwd before provider startup.
 - Permission policy resolved to Claude plan-mode read-only semantics before
-  SDK query startup.
+  SDK query startup: `enforcement=native-plan-read-only`.
 - Desktop run request reached the Claude Agent SDK adapter with
   `adapterSource=claude-agent-sdk` and `attempt>=1`.
 - Semantic `agent_job_events` query output for the job.
@@ -82,7 +83,8 @@ Required evidence:
 - Approved guarded scope contract summary without sensitive payloads.
 - Preflight accepted the registered project/cwd before provider startup.
 - Permission policy included guarded editable paths, denied paths, and
-  expansion policy before SDK query startup.
+  expansion policy before SDK query startup:
+  `enforcement=locus-guarded-tool-policy`.
 - A deliberate out-of-scope operation was denied or produced a scope expansion
   request before execution.
 - Desktop run request reached the Claude Agent SDK adapter with
@@ -107,7 +109,7 @@ Required evidence:
 - Provider/model selected, with renderer-safe metadata only.
 - Preflight accepted the registered project/cwd before provider startup.
 - Permission policy resolved to Codex plan-mode read-only semantics before ACP
-  provider/session startup.
+  provider/session startup: `enforcement=codex-acp-plan-handler`.
 - Desktop run request reached the Codex ACP temporary-compat adapter with
   `adapterSource=codex-acp-temporary-compat` and `attempt>=1`.
 - Semantic `agent_job_events` query output for the job.
@@ -129,7 +131,8 @@ Required evidence:
 - Approved guarded scope contract summary without sensitive payloads.
 - Preflight accepted the registered project/cwd before provider startup.
 - Permission policy included guarded editable paths, denied paths, and
-  expansion policy before ACP provider/session startup.
+  expansion policy before ACP provider/session startup:
+  `enforcement=codex-acp-guarded-handler`.
 - A deliberate out-of-scope operation was denied or produced a scope expansion
   request before execution.
 - Desktop run request reached the Codex ACP temporary-compat adapter with

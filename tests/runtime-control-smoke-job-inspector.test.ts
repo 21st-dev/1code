@@ -33,18 +33,86 @@ function createFakeDb(input: {
   }
 }
 
+function createPermissionPolicySnapshot(input: {
+  runtimeId?: "claude-code" | "codex"
+  mode?: "plan" | "agent"
+  guarded?: boolean
+} = {}) {
+  const runtimeId = input.runtimeId ?? "claude-code"
+  const mode = input.mode ?? "plan"
+  const guarded = input.guarded ?? false
+  const isCodex = runtimeId === "codex"
+  const enforcement =
+    mode === "plan"
+      ? isCodex
+        ? "codex-acp-plan-handler"
+        : "native-plan-read-only"
+      : guarded
+        ? isCodex
+          ? "codex-acp-guarded-handler"
+          : "locus-guarded-tool-policy"
+        : isCodex
+          ? "codex-acp-agent-auto"
+          : "locus-agent-full-access"
+
+  return {
+    runtimeId,
+    mode,
+    guarded,
+    enforcement,
+    planWorkspaceSideEffects: mode === "plan" ? "deny" : "not-applicable",
+    allowedLocusPersistence: true,
+    blockedSideEffects:
+      mode === "plan"
+        ? [
+            "workspace-file-write",
+            "side-effecting-shell",
+            "mcp-configuration",
+            "runtime-configuration",
+            "provider-configuration",
+          ]
+        : [],
+    requiresPreExecutionEnforcement: mode === "plan" || guarded,
+    runtimeMapping: isCodex
+      ? {
+          runtime: "codex",
+          adapterSource: "acp-temporary-compat",
+          acpMode: mode === "plan" ? "read-only" : "auto",
+          requiresPermissionHandler: mode === "plan" || guarded,
+        }
+      : {
+          runtime: "claude-code",
+          sdkPermissionMode: mode === "plan" ? "plan" : "bypassPermissions",
+          allowDangerouslySkipPermissions: mode !== "plan",
+          requiresToolPolicy: mode === "plan" || guarded,
+          bypassReason: null,
+        },
+    diagnostics: ["Permission policy evidence"],
+  }
+}
+
 function createJob(overrides: Record<string, any> = {}) {
+  const runtime = overrides.runtime ?? "claude-code"
+  const mode = overrides.mode ?? "plan"
+  const guarded = overrides.guarded ?? false
   return {
     id: "job-1",
     source: "desktop",
-    runtime: "claude-code",
+    runtime,
     status: "succeeded",
-    mode: "plan",
+    mode,
     cwd: "/repo",
     project_id: "project-1",
     chat_id: "chat-1",
     sub_chat_id: "sub-chat-1",
-    input_json: JSON.stringify({ runId: "run-1" }),
+    input_json: JSON.stringify({
+      runId: "run-1",
+      permissionPolicy: createPermissionPolicySnapshot({
+        runtimeId: runtime,
+        mode,
+        guarded,
+      }),
+    }),
     result_json: JSON.stringify({ ok: true }),
     error_message: null,
     ...overrides,
@@ -147,6 +215,7 @@ describe("runtime control smoke job inspector", () => {
       job: createJob({
         runtime: "codex",
         mode: "agent",
+        guarded: true,
       }),
       events: [
         createAdapterStartedEvent({
@@ -259,6 +328,29 @@ describe("runtime control smoke job inspector", () => {
     expect(result.ok).toBe(false)
     expect(result.failures.join("\n")).toContain(
       "expected adapter attempt to be a positive integer",
+    )
+  })
+
+  test("requires persisted permission policy evidence", () => {
+    const db = createFakeDb({
+      job: createJob({
+        input_json: JSON.stringify({ runId: "run-1" }),
+      }),
+      events: [
+        createAdapterStartedEvent({ sequence: 1 }),
+        createEvent({ sequence: 2, type: "completed" }),
+      ],
+    })
+
+    const result = inspectRuntimeControlSmokeJob({
+      db,
+      jobId: "job-1",
+      scenarioId: "claude-plan",
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.failures.join("\n")).toContain(
+      "job input_json is missing permissionPolicy evidence",
     )
   })
 })

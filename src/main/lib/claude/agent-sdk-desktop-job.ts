@@ -1,4 +1,5 @@
 import type { AgentJobMode } from "../../../shared/agent-jobs"
+import type { DesktopPermissionPolicy } from "../agent-runtime/permission-policy"
 import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
@@ -37,6 +38,7 @@ export type CreateClaudeAgentSdkDesktopJobInput = {
   prompt: string
   runId: string
   cancel: () => void
+  permissionPolicy?: DesktopPermissionPolicy | null
   dependencies?: Partial<CreateClaudeAgentSdkDesktopJobDependencies>
 }
 
@@ -101,7 +103,7 @@ export function createClaudeAgentSdkDesktopJob(
   input: CreateClaudeAgentSdkDesktopJobInput,
 ): ClaudeAgentSdkDesktopJobSetup {
   const dependencies = withDefaultDependencies(input.dependencies)
-  const handle = dependencies.createAndRegisterDesktopChatAgentJob(input.db, {
+  const jobInput: Parameters<typeof createAndRegisterDesktopChatAgentJob>[1] = {
     runtime: "claude-code",
     mode: input.mode,
     chatId: input.chatId,
@@ -110,7 +112,14 @@ export function createClaudeAgentSdkDesktopJob(
     prompt: input.prompt,
     runId: input.runId,
     cancel: input.cancel,
-  })
+  }
+  if (input.permissionPolicy) {
+    jobInput.permissionPolicy = input.permissionPolicy
+  }
+  const handle = dependencies.createAndRegisterDesktopChatAgentJob(
+    input.db,
+    jobInput,
+  )
   const jobId = handle.job.id
 
   return {

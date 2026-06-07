@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 import type { AgentRuntimeId } from "../../shared/agent-runtime-capabilities"
 import type { AgentJobMode } from "../../shared/agent-jobs"
 import type { AgentJob } from "./db/schema"
+import type { DesktopPermissionPolicy } from "./agent-runtime/permission-policy"
 import { verifyDesktopRunPreflight } from "./agent-runtime/preflight"
 import type { AgentJobDatabase } from "./headless/job-store"
 import {
@@ -24,6 +25,7 @@ export type CreateDesktopAgentJobInput = {
   cwd: string
   prompt: string
   runId?: string | null
+  permissionPolicy?: DesktopPermissionPolicy | null
 }
 
 export type DesktopAgentJobHandle = {
@@ -92,6 +94,25 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex")
 }
 
+function createDesktopPermissionPolicySnapshot(
+  policy: DesktopPermissionPolicy | null | undefined,
+) {
+  if (!policy) return null
+
+  return {
+    runtimeId: policy.runtimeId,
+    mode: policy.mode,
+    guarded: policy.guarded,
+    enforcement: policy.enforcement,
+    planWorkspaceSideEffects: policy.planWorkspaceSideEffects,
+    allowedLocusPersistence: policy.allowedLocusPersistence,
+    blockedSideEffects: policy.blockedSideEffects,
+    requiresPreExecutionEnforcement: policy.requiresPreExecutionEnforcement,
+    runtimeMapping: policy.runtimeMapping,
+    diagnostics: policy.diagnostics,
+  }
+}
+
 export function createAndStartDesktopAgentJob(
   db: AgentJobDatabase,
   input: CreateDesktopAgentJobInput,
@@ -114,6 +135,9 @@ export function createAndStartDesktopAgentJob(
       runId: input.runId ?? null,
       promptSha256: sha256(prompt),
       promptLength: prompt.length,
+      permissionPolicy: createDesktopPermissionPolicySnapshot(
+        input.permissionPolicy,
+      ),
     },
     projectId: context.project.id,
     chatId: context.chat.id,

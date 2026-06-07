@@ -1374,6 +1374,7 @@ export const codexRouter = router({
               cwd: runtimeCwd,
               prompt: input.prompt,
               runId: input.runId,
+              permissionPolicy,
               cancel: () => {
                 const activeStream = activeStreams.get(input.subChatId)
                 if (activeStream?.runId !== input.runId) return

@@ -8,24 +8,32 @@ const SCENARIOS = {
     runtime: "claude-code",
     mode: "plan",
     adapterSource: "claude-agent-sdk",
+    permissionEnforcement: "native-plan-read-only",
+    guarded: false,
     requiresGuardEvent: false,
   },
   "claude-guard": {
     runtime: "claude-code",
     mode: "agent",
     adapterSource: "claude-agent-sdk",
+    permissionEnforcement: "locus-guarded-tool-policy",
+    guarded: true,
     requiresGuardEvent: true,
   },
   "codex-temporary-compat-plan": {
     runtime: "codex",
     mode: "plan",
     adapterSource: "codex-acp-temporary-compat",
+    permissionEnforcement: "codex-acp-plan-handler",
+    guarded: false,
     requiresGuardEvent: false,
   },
   "codex-temporary-compat-guard": {
     runtime: "codex",
     mode: "agent",
     adapterSource: "codex-acp-temporary-compat",
+    permissionEnforcement: "codex-acp-guarded-handler",
+    guarded: true,
     requiresGuardEvent: true,
   },
 }
@@ -271,6 +279,35 @@ export function inspectRuntimeControlSmokeJob({
 
   const inputJson = readJson(job.input_json)
   const resultJson = readJson(job.result_json)
+  const permissionPolicy = inputJson.permissionPolicy
+  if (!permissionPolicy || typeof permissionPolicy !== "object") {
+    fail(failures, "job input_json is missing permissionPolicy evidence")
+  } else {
+    if (permissionPolicy.runtimeId !== scenario.runtime) {
+      fail(
+        failures,
+        `expected permission policy runtimeId ${scenario.runtime}, got ${permissionPolicy.runtimeId}`,
+      )
+    }
+    if (permissionPolicy.mode !== scenario.mode) {
+      fail(
+        failures,
+        `expected permission policy mode ${scenario.mode}, got ${permissionPolicy.mode}`,
+      )
+    }
+    if (permissionPolicy.guarded !== scenario.guarded) {
+      fail(
+        failures,
+        `expected permission policy guarded=${scenario.guarded}, got ${permissionPolicy.guarded}`,
+      )
+    }
+    if (permissionPolicy.enforcement !== scenario.permissionEnforcement) {
+      fail(
+        failures,
+        `expected permission policy enforcement ${scenario.permissionEnforcement}, got ${permissionPolicy.enforcement}`,
+      )
+    }
+  }
   const eventSummary = events.map(summarizeEvent)
 
   return {
@@ -289,6 +326,7 @@ export function inspectRuntimeControlSmokeJob({
         chatId: job.chat_id,
         subChatId: job.sub_chat_id,
         adapterSource: adapterStartedPayload?.adapterSource ?? null,
+        permissionEnforcement: permissionPolicy?.enforcement ?? null,
         hasInputJson: Object.keys(inputJson).length > 0,
         hasResultJson: Object.keys(resultJson).length > 0,
         errorMessage: job.error_message ?? null,

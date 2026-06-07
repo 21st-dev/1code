@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { chats, projects, subChats } from "../src/main/lib/db/schema"
+import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import {
   completeDesktopAgentJobSafely,
   completeDesktopChatAgentJobSafely,
@@ -43,6 +44,10 @@ describe("desktop agent jobs", () => {
     seedChat(db)
 
     const prompt = "Please inspect the repo and do not edit files."
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "plan",
+    })
     const { job, workerId, cwd } = createAndStartDesktopAgentJob(db, {
       runtime: "codex",
       mode: "plan",
@@ -51,6 +56,7 @@ describe("desktop agent jobs", () => {
       cwd: "/tmp/project-worktree",
       prompt,
       runId: "run-1",
+      permissionPolicy,
     })
 
     const persisted = getAgentJob(db, job.id)
@@ -71,6 +77,30 @@ describe("desktop agent jobs", () => {
       projectId: "project-1",
       runId: "run-1",
       promptLength: prompt.length,
+      permissionPolicy: {
+        runtimeId: "codex",
+        mode: "plan",
+        guarded: false,
+        enforcement: "codex-acp-plan-handler",
+        planWorkspaceSideEffects: "deny",
+        blockedSideEffects: [
+          "workspace-file-write",
+          "side-effecting-shell",
+          "mcp-configuration",
+          "runtime-configuration",
+          "provider-configuration",
+        ],
+        requiresPreExecutionEnforcement: true,
+        runtimeMapping: {
+          runtime: "codex",
+          adapterSource: "acp-temporary-compat",
+          acpMode: "read-only",
+          requiresPermissionHandler: true,
+        },
+        diagnostics: [
+          "Plan mode denies project/workspace side effects; Locus may still persist local app state.",
+        ],
+      },
     })
 
     const events = listAgentJobEvents(db, job.id)
