@@ -118,6 +118,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleResult =
   | {
       status: "failed"
       phase: "prompt" | "adapter" | "finalization"
+      reachedNaturalFinish: false
       error?: DesktopRunResult["error"]
     }
   | {
@@ -224,6 +225,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       return {
         status: "failed",
         phase: "prompt",
+        reachedNaturalFinish: false,
         error: { message: promptResult.reason },
       }
     }
@@ -272,6 +274,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     return {
       status: "failed",
       phase: "adapter",
+      reachedNaturalFinish: false,
       error: adapterResult.error,
     }
   }
@@ -306,6 +309,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     return {
       status: "failed",
       phase: "finalization",
+      reachedNaturalFinish: false,
     }
   }
 

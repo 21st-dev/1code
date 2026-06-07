@@ -183,6 +183,7 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     ).resolves.toMatchObject({
       status: "failed",
       phase: "adapter",
+      reachedNaturalFinish: false,
       error: { message: "SDK query error" },
     })
 
@@ -203,6 +204,7 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     ).resolves.toMatchObject({
       status: "failed",
       phase: "finalization",
+      reachedNaturalFinish: false,
     })
 
     expect(input.emitError).toHaveBeenCalledTimes(1)
@@ -226,6 +228,7 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     ).resolves.toMatchObject({
       status: "failed",
       phase: "prompt",
+      reachedNaturalFinish: false,
       error: { message: "long-text-attachment-unavailable" },
     })
 

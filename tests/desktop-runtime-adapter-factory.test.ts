@@ -1024,6 +1024,9 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "finalizeClaudeAgentSdkUnexpectedErrorWithStreamState",
     )
+    expect(claudeRouter).toContain(
+      "desktopJobReachedNaturalFinish =\n              runtimeResult.reachedNaturalFinish\n            if (runtimeResult.status === \"failed\") {",
+    )
     expect(claudeRouter).not.toContain(
       "finalizeClaudeAgentSdkUnexpectedError({",
     )

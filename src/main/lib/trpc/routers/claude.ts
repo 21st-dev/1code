@@ -1067,11 +1067,11 @@ export const claudeRouter = router({
                 desktopJobSawError,
                 streamStart,
               })
+            desktopJobReachedNaturalFinish =
+              runtimeResult.reachedNaturalFinish
             if (runtimeResult.status === "failed") {
               return
             }
-            desktopJobReachedNaturalFinish =
-              runtimeResult.reachedNaturalFinish
           } catch (error) {
             finalizeClaudeAgentSdkUnexpectedErrorWithStreamState({
               error,
