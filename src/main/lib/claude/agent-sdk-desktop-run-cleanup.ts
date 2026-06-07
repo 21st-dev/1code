@@ -13,6 +13,7 @@ import {
   completeClaudeAgentSdkDesktopJobAfterRun,
   requestCancelClaudeAgentSdkDesktopJob,
 } from "./agent-sdk-desktop-job"
+import type { ClaudeAgentSdkDesktopRunState } from "./agent-sdk-desktop-run-state"
 import { subChats } from "../db"
 import type { AgentJobDatabase } from "../headless/job-store"
 
@@ -37,10 +38,10 @@ export type CleanupClaudeAgentSdkDesktopRunSubscriptionInput = {
   abortController: AbortController
   guardedContract: ValidatedAgentScopeContract | null
   getDb: () => AgentJobDatabase
-  markInactive: () => void
-  desktopJobId: string | null
-  desktopJobSawError: boolean
-  desktopJobReachedNaturalFinish: boolean
+  desktopRunState: Pick<
+    ClaudeAgentSdkDesktopRunState,
+    "getJobId" | "markInactive" | "reachedNaturalFinish" | "sawError"
+  >
   dependencies?: Partial<CleanupClaudeAgentSdkDesktopRunSubscriptionDependencies>
 }
 
@@ -54,10 +55,10 @@ export type FinalizeClaudeAgentSdkDesktopRunAfterLifecycleInput = {
   abortController: AbortController
   guardedContract: ValidatedAgentScopeContract | null
   getDb: () => AgentJobDatabase
-  desktopJobDb: AgentJobDatabase | null
-  desktopJobId: string | null
-  desktopJobSawError: boolean
-  desktopJobReachedNaturalFinish: boolean
+  desktopRunState: Pick<
+    ClaudeAgentSdkDesktopRunState,
+    "getDb" | "getJobId" | "reachedNaturalFinish" | "sawError"
+  >
   dependencies?: Partial<CleanupClaudeAgentSdkDesktopRunSubscriptionDependencies>
 }
 
@@ -107,7 +108,7 @@ export function cleanupClaudeAgentSdkDesktopRunSubscription(
   dependencies.log(
     `[SD] M:CLEANUP sub=${input.subId} sessionId=${input.sessionId || "none"}`,
   )
-  input.markInactive()
+  input.desktopRunState.markInactive()
   input.abortController.abort()
 
   const ownsActiveSession = dependencies.deleteActiveClaudeSessionIfController(
@@ -129,9 +130,9 @@ export function cleanupClaudeAgentSdkDesktopRunSubscription(
   const db = input.getDb()
   dependencies.requestCancelClaudeAgentSdkDesktopJob({
     db,
-    jobId: input.desktopJobId,
-    sawError: input.desktopJobSawError,
-    reachedNaturalFinish: input.desktopJobReachedNaturalFinish,
+    jobId: input.desktopRunState.getJobId(),
+    sawError: input.desktopRunState.sawError(),
+    reachedNaturalFinish: input.desktopRunState.reachedNaturalFinish(),
   })
 
   if (ownsActiveSession) {
@@ -148,16 +149,17 @@ export function finalizeClaudeAgentSdkDesktopRunAfterLifecycle(
   input: FinalizeClaudeAgentSdkDesktopRunAfterLifecycleInput,
 ): void {
   const dependencies = withDefaultDependencies(input.dependencies)
+  const desktopJobId = input.desktopRunState.getJobId()
 
-  if (input.desktopJobId) {
+  if (desktopJobId) {
     dependencies.completeClaudeAgentSdkDesktopJobAfterRun({
-      db: input.desktopJobDb ?? input.getDb(),
-      jobId: input.desktopJobId,
+      db: input.desktopRunState.getDb() ?? input.getDb(),
+      jobId: desktopJobId,
       chatId: input.chatId,
       subChatId: input.subChatId,
       abortSignal: input.abortController.signal,
-      reachedNaturalFinish: input.desktopJobReachedNaturalFinish,
-      sawError: input.desktopJobSawError,
+      reachedNaturalFinish: input.desktopRunState.reachedNaturalFinish(),
+      sawError: input.desktopRunState.sawError(),
     })
   }
 

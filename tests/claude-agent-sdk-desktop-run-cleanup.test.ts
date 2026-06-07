@@ -5,6 +5,7 @@ import {
   cleanupClaudeAgentSdkDesktopRunSubscription,
   finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../src/main/lib/claude/agent-sdk-desktop-run-cleanup"
+import { createClaudeAgentSdkDesktopRunState } from "../src/main/lib/claude/agent-sdk-desktop-run-state"
 
 function createDbRecorder() {
   const updates: any[] = []
@@ -37,7 +38,12 @@ describe("Claude Agent SDK desktop run cleanup", () => {
   test("cleans owned active sessions, guard contracts, pending approvals, jobs, and stream id", () => {
     const { db, updates } = createDbRecorder()
     const controller = new AbortController()
-    let inactive = false
+    const desktopRunState = createClaudeAgentSdkDesktopRunState()
+    desktopRunState.setDesktopJob({
+      jobId: "job-1",
+      streamEventMapper: { map: () => [] },
+    })
+    desktopRunState.markFailed()
     const deletedSessions: any[] = []
     const deletedContracts: string[] = []
     const clearedApprovals: any[] = []
@@ -51,12 +57,7 @@ describe("Claude Agent SDK desktop run cleanup", () => {
       abortController: controller,
       guardedContract: { id: "contract-1" } as any,
       getDb: () => db,
-      markInactive: () => {
-        inactive = true
-      },
-      desktopJobId: "job-1",
-      desktopJobSawError: true,
-      desktopJobReachedNaturalFinish: false,
+      desktopRunState,
       dependencies: {
         deleteActiveClaudeSessionIfController: (subChatId, abortController) => {
           deletedSessions.push({ subChatId, abortController })
@@ -78,7 +79,7 @@ describe("Claude Agent SDK desktop run cleanup", () => {
     })
 
     expect(result).toEqual({ ownsActiveSession: true })
-    expect(inactive).toBe(true)
+    expect(desktopRunState.isObservableActive()).toBe(false)
     expect(controller.signal.aborted).toBe(true)
     expect(logs).toEqual([
       ["[SD] M:CLEANUP sub=sub-tail sessionId=session-1"],
@@ -109,6 +110,8 @@ describe("Claude Agent SDK desktop run cleanup", () => {
   test("keeps pending approvals and stream id when cleanup does not own the active session", () => {
     const { db, updates } = createDbRecorder()
     const controller = new AbortController()
+    const desktopRunState = createClaudeAgentSdkDesktopRunState()
+    desktopRunState.setReachedNaturalFinish(true)
     const clearedApprovals: any[] = []
     const canceledJobs: any[] = []
 
@@ -118,10 +121,7 @@ describe("Claude Agent SDK desktop run cleanup", () => {
       abortController: controller,
       guardedContract: null,
       getDb: () => db,
-      markInactive: () => {},
-      desktopJobId: null,
-      desktopJobSawError: false,
-      desktopJobReachedNaturalFinish: true,
+      desktopRunState,
       dependencies: {
         deleteActiveClaudeSessionIfController: () => false,
         clearClaudePendingToolApprovals: (message, subChatId) => {
@@ -151,6 +151,13 @@ describe("Claude Agent SDK desktop run cleanup", () => {
   test("finalizes lifecycle cleanup with the existing job db and guard teardown", () => {
     const { db } = createDbRecorder()
     const controller = new AbortController()
+    const desktopRunState = createClaudeAgentSdkDesktopRunState()
+    desktopRunState.setDb(db)
+    desktopRunState.setDesktopJob({
+      jobId: "job-1",
+      streamEventMapper: { map: () => [] },
+    })
+    desktopRunState.markFailed()
     const completedJobs: any[] = []
     const deletedSessions: any[] = []
     const deletedContracts: string[] = []
@@ -163,10 +170,7 @@ describe("Claude Agent SDK desktop run cleanup", () => {
       getDb: () => {
         throw new Error("fallback db should not be used")
       },
-      desktopJobDb: db,
-      desktopJobId: "job-1",
-      desktopJobSawError: true,
-      desktopJobReachedNaturalFinish: false,
+      desktopRunState,
       dependencies: {
         completeClaudeAgentSdkDesktopJobAfterRun: (input) => {
           completedJobs.push(input)
@@ -200,6 +204,8 @@ describe("Claude Agent SDK desktop run cleanup", () => {
 
   test("finalizes lifecycle cleanup without loading a db when no job exists", () => {
     const controller = new AbortController()
+    const desktopRunState = createClaudeAgentSdkDesktopRunState()
+    desktopRunState.setReachedNaturalFinish(true)
     const completedJobs: any[] = []
     const deletedSessions: any[] = []
     let loadedFallbackDb = false
@@ -213,10 +219,7 @@ describe("Claude Agent SDK desktop run cleanup", () => {
         loadedFallbackDb = true
         return createDbRecorder().db
       },
-      desktopJobDb: null,
-      desktopJobId: null,
-      desktopJobSawError: false,
-      desktopJobReachedNaturalFinish: true,
+      desktopRunState,
       dependencies: {
         completeClaudeAgentSdkDesktopJobAfterRun: (input) => {
           completedJobs.push(input)

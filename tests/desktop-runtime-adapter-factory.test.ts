@@ -1031,6 +1031,13 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain(
       "desktopRunState.setReachedNaturalFinish(\n              runtimeResult.reachedNaturalFinish,",
     )
+    expect(claudeRouter).toContain(
+      "finalizeClaudeAgentSdkDesktopRunAfterLifecycle({",
+    )
+    expect(claudeRouter).toContain(
+      "cleanupClaudeAgentSdkDesktopRunSubscription({",
+    )
+    expect(claudeRouter).toContain("desktopRunState,\n            })")
     expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunState")
     expect(claudeRouter).not.toContain("let desktopJobId")
     expect(claudeRouter).not.toContain("let desktopJobSawError")
@@ -1038,6 +1045,11 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("let desktopJobDb")
     expect(claudeRouter).not.toContain("let desktopStreamEventMapper")
     expect(claudeRouter).not.toContain("let isObservableActive")
+    expect(claudeRouter).not.toContain("desktopJobId: desktopRunState")
+    expect(claudeRouter).not.toContain(
+      "desktopJobReachedNaturalFinish:\n                desktopRunState",
+    )
+    expect(runtimeLifecycle).toContain("desktopJobSawError")
     expect(desktopRunState).toContain(
       "createClaudeAgentSdkDesktopRunState",
     )

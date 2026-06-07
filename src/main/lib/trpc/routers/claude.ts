@@ -1082,11 +1082,7 @@ export const claudeRouter = router({
               abortController,
               guardedContract,
               getDb: getDatabase,
-              desktopJobDb: desktopRunState.getDb(),
-              desktopJobId: desktopRunState.getJobId(),
-              desktopJobSawError: desktopRunState.sawError(),
-              desktopJobReachedNaturalFinish:
-                desktopRunState.reachedNaturalFinish(),
+              desktopRunState,
             })
           }
         })()
@@ -1100,11 +1096,7 @@ export const claudeRouter = router({
             abortController,
             guardedContract,
             getDb: getDatabase,
-            markInactive: desktopRunState.markInactive,
-            desktopJobId: desktopRunState.getJobId(),
-            desktopJobSawError: desktopRunState.sawError(),
-            desktopJobReachedNaturalFinish:
-              desktopRunState.reachedNaturalFinish(),
+            desktopRunState,
           })
         }
       })
