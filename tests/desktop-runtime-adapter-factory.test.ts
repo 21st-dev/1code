@@ -492,8 +492,16 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("getClaudeAgentSdkConnectionMethod")
     expect(claudeRouter).not.toContain("../../analytics")
     expect(claudeRouter).not.toContain("setConnectionMethod(")
-    expect(claudeRouter).toContain("prepareClaudeAgentSdkRuntimeStartupContext")
-    expect(claudeRouter).not.toContain("prepareClaudeAgentSdkRuntimeStartupEnvironment")
+    expect(claudeRouter).toContain(
+      "prepareClaudeAgentSdkRuntimeStartupForDesktopRun",
+    )
+    expect(claudeRouter).not.toContain(
+      "prepareClaudeAgentSdkRuntimeStartupContext",
+    )
+    expect(claudeRouter).not.toContain("ensureClaudeAgentSdkIsolatedConfigDir")
+    expect(claudeRouter).not.toContain(
+      "prepareClaudeAgentSdkRuntimeStartupEnvironment",
+    )
     expect(claudeRouter).not.toContain("resolveClaudeAgentSdkIsolatedConfig({")
     expect(claudeRouter).not.toContain('app.getPath("userData")')
     expect(claudeRouter).not.toContain('from "electron"')
@@ -561,6 +569,12 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeProviderStartup).toContain("assertOfficialCloudAllowed")
     expect(claudeRuntimeStartup).toContain(
       "prepareClaudeAgentSdkRuntimeStartupContext",
+    )
+    expect(claudeRuntimeStartup).toContain(
+      "prepareClaudeAgentSdkRuntimeStartupForDesktopRun",
+    )
+    expect(claudeRuntimeStartup).toContain(
+      "ensureClaudeAgentSdkIsolatedConfigDir",
     )
     expect(claudeRuntimeStartup).toContain(
       "prepareClaudeAgentSdkRuntimeStartupEnvironment",

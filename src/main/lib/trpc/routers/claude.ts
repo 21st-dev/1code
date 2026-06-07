@@ -34,10 +34,9 @@ import {
 } from "../../claude/agent-sdk-provider-startup"
 import {
   clearClaudeAgentSdkIsolatedConfigDirCache,
-  ensureClaudeAgentSdkIsolatedConfigDir,
 } from "../../claude/agent-sdk-config-dir"
 import {
-  prepareClaudeAgentSdkRuntimeStartupContext,
+  prepareClaudeAgentSdkRuntimeStartupForDesktopRun,
 } from "../../claude/agent-sdk-runtime-startup"
 import {
   createClaudeAgentSdkDesktopRunStartup,
@@ -889,31 +888,22 @@ export const claudeRouter = router({
             // Offline status is shown in sidebar, no need to emit message here
             // (emitting text-delta without text-start breaks UI text rendering)
 
-            // Create isolated config directory per subChat to prevent session contamination
-            // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
-            // cross-chat contamination when multiple chats use the same project folder
-            // For Ollama: use chatId instead of subChatId so all messages in the same chat share history
-            const runtimeStartup = prepareClaudeAgentSdkRuntimeStartupContext({
-              chatId: input.chatId,
-              subChatId: input.subChatId,
-              isUsingOllama,
-              customConfig: finalCustomConfig,
-              requestedModel: input.model,
-              enableTasks: input.enableTasks ?? true,
-              claudeCodeToken,
-              logPrefix: `[${input.subChatId}] `,
-            })
-            const { isolatedConfig } = runtimeStartup
+            const { runtimeStartup, isolatedConfigReady } =
+              await prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
+                chatId: input.chatId,
+                subChatId: input.subChatId,
+                isUsingOllama,
+                customConfig: finalCustomConfig,
+                requestedModel: input.model,
+                enableTasks: input.enableTasks ?? true,
+                claudeCodeToken,
+                logPrefix: `[${input.subChatId}] `,
+              })
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
 
-            // Ensure isolated config dir exists and symlink selected ~/.claude/ assets
-            // This is needed because SDK looks for these under $CLAUDE_CONFIG_DIR/
-            // OPTIMIZATION: Only create symlinks once per subChatId (cached)
-            try {
-              await ensureClaudeAgentSdkIsolatedConfigDir(isolatedConfig)
-
+            if (isolatedConfigReady) {
               // Read MCP servers from all sources for the original project path
               // These will be passed directly to the SDK via options.mcpServers
               // Sources: ~/.claude.json, ~/.claude/.claude.json, ~/.claude/mcp.json, .mcp.json
@@ -1036,11 +1026,6 @@ export const claudeRouter = router({
               } catch (configErr) {
                 console.error(`[claude] Failed to read MCP config:`, configErr)
               }
-            } catch (mkdirErr) {
-              console.error(
-                `[claude] Failed to setup isolated config dir:`,
-                mkdirErr,
-              )
             }
 
             const runtimeResult =

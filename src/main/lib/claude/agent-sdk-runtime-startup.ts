@@ -1,6 +1,7 @@
 import * as electron from "electron"
 import {
   type ClaudeAgentSdkIsolatedConfig,
+  ensureClaudeAgentSdkIsolatedConfigDir,
   resolveClaudeAgentSdkIsolatedConfig,
 } from "./agent-sdk-config-dir"
 import {
@@ -13,6 +14,8 @@ import {
 
 type PrepareClaudeAgentSdkOllamaStartupDiagnostics =
   typeof prepareClaudeAgentSdkOllamaStartupDiagnostics
+type EnsureClaudeAgentSdkIsolatedConfigDir =
+  typeof ensureClaudeAgentSdkIsolatedConfigDir
 
 export type PrepareClaudeAgentSdkRuntimeStartupContextInput = Omit<
   PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
@@ -29,6 +32,17 @@ export type PreparedClaudeAgentSdkRuntimeStartupContext = ReturnType<
 > & {
   isolatedConfig: ClaudeAgentSdkIsolatedConfig
   isolatedConfigDir: string
+}
+
+export type PrepareClaudeAgentSdkRuntimeStartupForDesktopRunInput =
+  PrepareClaudeAgentSdkRuntimeStartupContextInput & {
+    ensureIsolatedConfigDir?: EnsureClaudeAgentSdkIsolatedConfigDir
+    error?: (...args: any[]) => void
+  }
+
+export type PreparedClaudeAgentSdkRuntimeStartupForDesktopRun = {
+  runtimeStartup: PreparedClaudeAgentSdkRuntimeStartupContext
+  isolatedConfigReady: boolean
 }
 
 export type PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput = {
@@ -62,6 +76,27 @@ export function prepareClaudeAgentSdkRuntimeStartupContext({
     ...environment,
     isolatedConfig,
     isolatedConfigDir: isolatedConfig.isolatedConfigDir,
+  }
+}
+
+export async function prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
+  ensureIsolatedConfigDir = ensureClaudeAgentSdkIsolatedConfigDir,
+  error = console.error,
+  ...input
+}: PrepareClaudeAgentSdkRuntimeStartupForDesktopRunInput): Promise<PreparedClaudeAgentSdkRuntimeStartupForDesktopRun> {
+  const runtimeStartup = prepareClaudeAgentSdkRuntimeStartupContext(input)
+  try {
+    await ensureIsolatedConfigDir(runtimeStartup.isolatedConfig)
+    return {
+      runtimeStartup,
+      isolatedConfigReady: true,
+    }
+  } catch (startupErr) {
+    error(`[claude] Failed to setup isolated config dir:`, startupErr)
+    return {
+      runtimeStartup,
+      isolatedConfigReady: false,
+    }
   }
 }
 

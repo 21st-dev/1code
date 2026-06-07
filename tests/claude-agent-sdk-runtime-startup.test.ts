@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 import { join } from "node:path"
 import {
+  prepareClaudeAgentSdkRuntimeStartupForDesktopRun,
   prepareClaudeAgentSdkRuntimeStartupContext,
   prepareClaudeAgentSdkRuntimeStartupDiagnostics,
 } from "../src/main/lib/claude/agent-sdk-runtime-startup"
@@ -55,6 +56,61 @@ describe("Claude Agent SDK runtime startup", () => {
       cacheKey: "chat-1",
     })
     expect(startup.resolvedModel).toBe("requested-model")
+  })
+
+  test("ensures isolated config during desktop runtime startup", async () => {
+    const ensureIsolatedConfigDir = mock(async () => {})
+
+    const result = await prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+      getUserDataDir: () => "/tmp/locus-user-data",
+      requestedModel: "requested-model",
+      nodeEnv: "production",
+      buildEnv: () => ({}),
+      ensureIsolatedConfigDir,
+    })
+
+    expect(result.isolatedConfigReady).toBe(true)
+    expect(result.runtimeStartup.isolatedConfig).toEqual({
+      isolatedConfigDir: join(
+        "/tmp/locus-user-data",
+        "claude-sessions",
+        "sub-1",
+      ),
+      cacheKey: "sub-1",
+    })
+    expect(ensureIsolatedConfigDir).toHaveBeenCalledWith(
+      result.runtimeStartup.isolatedConfig,
+    )
+  })
+
+  test("keeps startup context when isolated config setup fails", async () => {
+    const setupError = new Error("mkdir failed")
+    const ensureIsolatedConfigDir = mock(async () => {
+      throw setupError
+    })
+    const error = mock(() => {})
+
+    const result = await prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+      getUserDataDir: () => "/tmp/locus-user-data",
+      requestedModel: "requested-model",
+      nodeEnv: "production",
+      buildEnv: () => ({}),
+      ensureIsolatedConfigDir,
+      error,
+    })
+
+    expect(result.isolatedConfigReady).toBe(false)
+    expect(result.runtimeStartup.isolatedConfig.cacheKey).toBe("sub-1")
+    expect(error).toHaveBeenCalledWith(
+      "[claude] Failed to setup isolated config dir:",
+      setupError,
+    )
   })
 
   test("maps runtime startup context into Ollama diagnostics", async () => {
