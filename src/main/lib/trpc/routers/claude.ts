@@ -24,7 +24,6 @@ import { chats, getDatabase, projects as projectsTable, subChats } from "../../d
 import {
   finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
 } from "../../claude/agent-sdk-run-finalization"
-import { createClaudeAgentSdkRuntimeErrorHandlers } from "../../claude/agent-sdk-runtime-errors"
 import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../../claude/agent-sdk-runtime-lifecycle"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -42,8 +41,8 @@ import {
   createClaudeAgentSdkDesktopRunStartup,
 } from "../../claude/agent-sdk-desktop-job"
 import {
-  createClaudeAgentSdkDesktopRunState,
-} from "../../claude/agent-sdk-desktop-run-state"
+  createClaudeAgentSdkDesktopRunEnvelope,
+} from "../../claude/agent-sdk-desktop-run-envelope"
 import {
   abortClaudeAgentSdkDesktopRunRequest,
   cancelClaudeAgentSdkActiveDesktopRun,
@@ -51,11 +50,7 @@ import {
   finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../../claude/agent-sdk-desktop-run-cleanup"
 import {
-  createClaudeAgentSdkRuntimeStreamState,
-} from "../../claude/agent-sdk-runtime-state"
-import {
   hasActiveClaudeSession,
-  startActiveClaudeSessionForDesktopRun,
 } from "../../claude/active-sessions"
 import {
   resolveClaudePendingToolApproval,
@@ -94,9 +89,6 @@ import {
 import {
   resolveDesktopPermissionPolicy,
 } from "../../agent-runtime/permission-policy"
-import {
-  createRuntimeRendererChunkEmitter,
-} from "../../agent-runtime/stream-event-mapper"
 import {
   verifyDesktopRunPreflight,
 } from "../../agent-runtime/preflight"
@@ -705,56 +697,31 @@ export const claudeRouter = router({
     )
     .subscription(({ input }) => {
       return observable<UIMessageChunk>((emit) => {
-        const activeSessionStartup = startActiveClaudeSessionForDesktopRun({
+        const {
+          abortController,
+          streamId,
+          activeRunId,
+          subId,
+          streamStart,
+          streamState,
+          desktopRunState,
+          emit: safeEmit,
+          complete: safeComplete,
+          emitError,
+          emitPreflightBlocker,
+        } = createClaudeAgentSdkDesktopRunEnvelope({
           subChatId: input.subChatId,
           requestedRunId: input.runId,
           createId: () => crypto.randomUUID(),
-        })
-        const abortController = activeSessionStartup.controller
-        const streamId = activeSessionStartup.streamId
-        const activeRunId = activeSessionStartup.runId
-
-        // Stream debug logging
-        const subId = input.subChatId.slice(-8) // Short ID for logs
-        const streamStart = Date.now()
-        const streamState = createClaudeAgentSdkRuntimeStreamState()
-        const desktopRunState = createClaudeAgentSdkDesktopRunState()
-        console.log(
-          `[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`,
-        )
-
-        // Helper to safely emit (no-op if already unsubscribed)
-        const safeEmit = createRuntimeRendererChunkEmitter({
-          runtimeId: "claude-code",
-          runId: activeRunId,
-          getJobId: desktopRunState.getJobId,
-          getDb: desktopRunState.getDb,
-          getMapper: desktopRunState.getStreamEventMapper,
-          isActive: desktopRunState.isObservableActive,
-          markInactive: desktopRunState.markInactive,
-          markFailed: desktopRunState.markFailed,
+          cwd: input.cwd,
+          mode: input.mode,
           emitNext: (chunk) => {
-            emit.next(chunk as UIMessageChunk)
+            emit.next(chunk)
           },
-          warningLabel: "[claude]",
-        }) as (chunk: UIMessageChunk) => boolean
-
-        // Helper to safely complete (no-op if already closed)
-        const safeComplete = () => {
-          try {
+          emitComplete: () => {
             emit.complete()
-          } catch {
-            // Already completed or closed
-          }
-        }
-
-        const { emitError, emitPreflightBlocker } =
-          createClaudeAgentSdkRuntimeErrorHandlers({
-            cwd: input.cwd,
-            mode: input.mode,
-            emit: safeEmit,
-            complete: safeComplete,
-          })
+          },
+        })
 
         let guardedContract: ValidatedAgentScopeContract | null = null
         let guardedPreRunStatus: GuardedGitStatusSnapshot | null = null

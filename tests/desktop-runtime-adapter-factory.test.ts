@@ -351,6 +351,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
       "utf8",
     )
+    const claudeAgentSdkDesktopRunEnvelope = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-envelope.ts",
+      "utf8",
+    )
     const streamConsumer = readFileSync(
       "src/main/lib/claude/agent-sdk-stream-consumer.ts",
       "utf8",
@@ -359,7 +363,8 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-lifecycle")
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-adapter-runner")
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-stream-consumer")
-    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-state")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-state")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-desktop-run-envelope")
     expect(claudeRouter).not.toContain(
       'from "../../claude/agent-sdk-adapter"',
     )
@@ -377,7 +382,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("runClaudeAgentSdkDesktopAdapter({")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkStreamConsumer({")
     expect(claudeRouter).not.toContain("streamConsumer: {")
-    expect(claudeRouter).toContain(
+    expect(claudeAgentSdkDesktopRunEnvelope).toContain(
       "createClaudeAgentSdkRuntimeStreamState",
     )
     expect(claudeRouter).not.toContain(
@@ -920,6 +925,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-state.ts",
       "utf8",
     )
+    const desktopRunEnvelope = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-envelope.ts",
+      "utf8",
+    )
     const runtimeLifecycle = readFileSync(
       "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
       "utf8",
@@ -933,7 +942,8 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-state")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-state")
+    expect(desktopRunEnvelope).toContain("./agent-sdk-runtime-state")
     expect(claudeRouter).not.toContain("createClaudeAgentSdkRuntimeStreamSetup")
     expect(claudeRouter).not.toContain("streamState.metadata =")
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-guard-metadata")
@@ -1038,7 +1048,8 @@ describe("desktop runtime adapter factory", () => {
       "cleanupClaudeAgentSdkDesktopRunSubscription({",
     )
     expect(claudeRouter).toContain("desktopRunState,\n            })")
-    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunState")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopRunState")
+    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunEnvelope")
     expect(claudeRouter).not.toContain("let desktopJobId")
     expect(claudeRouter).not.toContain("let desktopJobSawError")
     expect(claudeRouter).not.toContain("let desktopJobReachedNaturalFinish")
@@ -1216,12 +1227,18 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/trpc/routers/claude.ts",
       "utf8",
     )
+    const claudeEnvelope = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-envelope.ts",
+      "utf8",
+    )
     const streamEventMapper = readFileSync(
       "src/main/lib/agent-runtime/stream-event-mapper.ts",
       "utf8",
     )
 
-    expect(claudeRouter).toContain("createRuntimeRendererChunkEmitter({")
+    expect(claudeRouter).not.toContain("createRuntimeRendererChunkEmitter({")
+    expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunEnvelope")
+    expect(claudeEnvelope).toContain("createRuntimeRendererChunkEmitter({")
     expect(claudeRouter).not.toContain("redactRendererDiagnosticChunk")
     expect(claudeRouter).not.toContain("observedChunk?.type === \"error\"")
     expect(claudeRouter).not.toContain("type !== \"finish\"")
@@ -1830,13 +1847,18 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/trpc/routers/claude.ts",
       "utf8",
     )
+    const claudeEnvelope = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-envelope.ts",
+      "utf8",
+    )
     const runtimeErrors = readFileSync(
       "src/main/lib/claude/agent-sdk-runtime-errors.ts",
       "utf8",
     )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-runtime-errors")
-    expect(claudeRouter).toContain("createClaudeAgentSdkRuntimeErrorHandlers")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-errors")
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkRuntimeErrorHandlers")
+    expect(claudeEnvelope).toContain("createClaudeAgentSdkRuntimeErrorHandlers")
     expect(claudeRouter).not.toContain("const errorMessage =")
     expect(claudeRouter).not.toContain("const errorStack =")
     expect(claudeRouter).not.toContain("PATH: process.env.PATH")

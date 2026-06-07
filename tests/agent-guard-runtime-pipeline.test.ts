@@ -88,6 +88,10 @@ describe("agent guard runtime pipeline", () => {
       "src/main/lib/claude/active-sessions.ts",
       "utf8",
     )
+    const runEnvelope = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-envelope.ts",
+      "utf8",
+    )
     const subscriptionCleanup = readFileSync(
       "src/main/lib/claude/agent-sdk-desktop-run-cleanup.ts",
       "utf8",
@@ -101,7 +105,9 @@ describe("agent guard runtime pipeline", () => {
     expect(activeSessions).toContain(
       "const runId = input.requestedRunId ?? streamId",
     )
-    expect(claude).toContain("startActiveClaudeSessionForDesktopRun")
+    expect(claude).not.toContain("startActiveClaudeSessionForDesktopRun")
+    expect(claude).toContain("createClaudeAgentSdkDesktopRunEnvelope")
+    expect(runEnvelope).toContain("startActiveClaudeSessionForDesktopRun")
     expect(claude).toContain("cancelClaudeAgentSdkActiveDesktopRun")
     expect(claude).toContain("cleanupClaudeAgentSdkDesktopRunSubscription")
     expect(claude).toContain("finalizeClaudeAgentSdkDesktopRunAfterLifecycle")

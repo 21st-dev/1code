@@ -225,17 +225,24 @@ describe("desktop stream event mapper", () => {
   })
 
   test("Claude route delegates renderer diagnostics to the runtime emitter", () => {
-    const source = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
-    const safeEmitIndex = source.indexOf("const safeEmit")
-    const emitterIndex = source.indexOf(
+    const route = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const envelope = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-envelope.ts",
+      "utf8",
+    )
+    const safeEmitIndex = envelope.indexOf("const emitRuntimeChunk")
+    const emitterIndex = envelope.indexOf(
       "createRuntimeRendererChunkEmitter",
       safeEmitIndex,
     )
-    const emitIndex = source.indexOf("emit.next(chunk as UIMessageChunk)", safeEmitIndex)
+    const emitIndex = envelope.indexOf("input.emitNext(", safeEmitIndex)
 
     expect(emitterIndex, "Claude runtime emitter").toBeGreaterThan(safeEmitIndex)
     expect(emitIndex, "Claude renderer emission").toBeGreaterThan(emitterIndex)
-    expect(source).not.toContain("redactRendererDiagnosticChunk")
+    expect(route).toContain("createClaudeAgentSdkDesktopRunEnvelope")
+    expect(route).not.toContain("createRuntimeRendererChunkEmitter")
+    expect(route).not.toContain("redactRendererDiagnosticChunk")
+    expect(envelope).not.toContain("redactRendererDiagnosticChunk")
   })
 
   test("Codex route redacts renderer diagnostics through the mapper", () => {
@@ -289,6 +296,13 @@ describe("desktop stream event mapper", () => {
       ["Codex", "src/main/lib/trpc/routers/codex.ts", "codex"],
     ] as const) {
       const source = readFileSync(routePath, "utf8")
+      const claudeEnvelope =
+        runtimeName === "Claude"
+          ? readFileSync(
+              "src/main/lib/claude/agent-sdk-desktop-run-envelope.ts",
+              "utf8",
+            )
+          : null
       const safeEmitIndex = source.indexOf("const safeEmit")
       const jobIndex =
         runtimeName === "Claude"
@@ -306,13 +320,18 @@ describe("desktop stream event mapper", () => {
             )
       const appendIndex =
         runtimeName === "Claude"
-          ? source.indexOf("createRuntimeRendererChunkEmitter", safeEmitIndex)
+          ? claudeEnvelope!.indexOf("createRuntimeRendererChunkEmitter")
           : source.indexOf("appendRunEventsToAgentJob", safeEmitIndex)
 
-      expect(safeEmitIndex, `${runtimeName} safeEmit`).toBeGreaterThan(0)
-      expect(jobIndex, `${runtimeName} desktop job`).toBeGreaterThan(safeEmitIndex)
+      if (runtimeName === "Claude") {
+        expect(source).toContain("createClaudeAgentSdkDesktopRunEnvelope")
+        expect(claudeEnvelope).toContain("const emitRuntimeChunk")
+      } else {
+        expect(safeEmitIndex, `${runtimeName} safeEmit`).toBeGreaterThan(0)
+        expect(jobIndex, `${runtimeName} desktop job`).toBeGreaterThan(safeEmitIndex)
+      }
       expect(mapperCreateIndex, `${runtimeName} mapper creation`).toBeGreaterThan(jobIndex)
-      expect(appendIndex, `${runtimeName} mapper append`).toBeGreaterThan(safeEmitIndex)
+      expect(appendIndex, `${runtimeName} mapper append`).toBeGreaterThan(0)
       expect(source).toContain(`runtimeId: "${runtimeId}"`)
       if (runtimeName === "Claude") {
         const emitter = readFileSync(
