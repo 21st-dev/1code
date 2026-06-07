@@ -1314,6 +1314,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-runtime-startup.ts",
       "utf8",
     )
+    const runtimeLifecycle = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
+      "utf8",
+    )
     const streamErrorFinalization = readFileSync(
       "src/main/lib/claude/agent-sdk-stream-error-finalization.ts",
       "utf8",
@@ -1322,7 +1326,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain(
       "../../claude/agent-sdk-ollama-diagnostics",
     )
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "prepareClaudeAgentSdkRuntimeStartupDiagnostics",
     )
     expect(claudeRouter).not.toContain(
@@ -1354,6 +1358,10 @@ describe("desktop runtime adapter factory", () => {
     expect(runtimeStartup).toContain(
       "prepareClaudeAgentSdkRuntimeStartupDiagnostics",
     )
+    expect(runtimeLifecycle).toContain(
+      "prepareClaudeAgentSdkRuntimeStartupDiagnostics",
+    )
+    expect(runtimeLifecycle).toContain("runtimeStartupDiagnostics")
     expect(runtimeStartup).toContain(
       "prepareClaudeAgentSdkOllamaStartupDiagnostics",
     )

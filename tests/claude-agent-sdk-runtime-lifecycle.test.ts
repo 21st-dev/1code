@@ -79,6 +79,7 @@ function createLifecycleInput(
   input: {
     query?: (params: any) => AsyncIterable<unknown>
     prepareRuntimePrompt?: any
+    prepareRuntimeStartupDiagnostics?: any
     signal?: AbortSignal
     streamState?: ReturnType<typeof createClaudeAgentSdkStreamConsumerMutableState>
   } = {},
@@ -115,6 +116,14 @@ function createLifecycleInput(
       images: [],
       prepareRuntimePrompt,
     },
+    ...(input.prepareRuntimeStartupDiagnostics && {
+      runtimeStartupDiagnostics: {
+        runtimeStartup: {} as any,
+        resumeSessionId: "session-1",
+        prepareRuntimeStartupDiagnostics:
+          input.prepareRuntimeStartupDiagnostics,
+      },
+    }),
     streamState:
       input.streamState ?? createClaudeAgentSdkStreamConsumerMutableState(),
     isUsingOllama: false,
@@ -203,6 +212,32 @@ describe("Claude Agent SDK runtime lifecycle", () => {
 
     expect(input.prepareRuntimePrompt).toHaveBeenCalledTimes(1)
     expect(query).not.toHaveBeenCalled()
+  })
+
+  test("runs startup diagnostics with lifecycle request context", async () => {
+    const db = createAgentJobTestDb()
+    const prepareRuntimeStartupDiagnostics = mock(async () => {})
+    const input = createLifecycleInput(db, {
+      query: () => {
+        throw new Error("query failed")
+      },
+      prepareRuntimeStartupDiagnostics,
+    })
+
+    await expect(
+      runClaudeAgentSdkDesktopRuntimeLifecycle(input),
+    ).resolves.toMatchObject({
+      status: "failed",
+      phase: "adapter",
+    })
+
+    expect(prepareRuntimeStartupDiagnostics).toHaveBeenCalledTimes(1)
+    expect(prepareRuntimeStartupDiagnostics.mock.calls[0][0]).toMatchObject({
+      isUsingOllama: false,
+      customConfig: null,
+      cwd: "/repo",
+      resumeSessionId: "session-1",
+    })
   })
 
   test("runs the adapter and finalizes a successful desktop runtime turn", async () => {

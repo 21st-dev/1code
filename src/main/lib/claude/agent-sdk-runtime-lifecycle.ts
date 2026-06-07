@@ -21,6 +21,10 @@ import {
   prepareClaudeAgentSdkRuntimePromptForDesktopRun,
   type PrepareClaudeAgentSdkRuntimePromptForDesktopRunInput,
 } from "./agent-sdk-prompt"
+import {
+  prepareClaudeAgentSdkRuntimeStartupDiagnostics,
+  type PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput,
+} from "./agent-sdk-runtime-startup"
 
 export type RunClaudeAgentSdkDesktopRuntimeLifecyclePromptInput = Omit<
   PrepareClaudeAgentSdkRuntimePromptForDesktopRunInput,
@@ -29,6 +33,14 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecyclePromptInput = Omit<
   prompt?: string
   prepareRuntimePrompt?: typeof prepareClaudeAgentSdkRuntimePromptForDesktopRun
 }
+
+export type RunClaudeAgentSdkDesktopRuntimeLifecycleStartupDiagnosticsInput =
+  Omit<
+    PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput,
+    "isUsingOllama" | "customConfig" | "cwd"
+  > & {
+    prepareRuntimeStartupDiagnostics?: typeof prepareClaudeAgentSdkRuntimeStartupDiagnostics
+  }
 
 export type RunClaudeAgentSdkDesktopRuntimeLifecycleQueryInput = Omit<
   PrepareClaudeAgentSdkDesktopRuntimeQueryInput,
@@ -72,6 +84,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     guardedRunStartedAt?: string
     runtimeStreamSetup?: ClaudeAgentSdkRuntimeStreamSetup
     runtimePrompt?: RunClaudeAgentSdkDesktopRuntimeLifecyclePromptInput
+    runtimeStartupDiagnostics?: RunClaudeAgentSdkDesktopRuntimeLifecycleStartupDiagnosticsInput
     desktopJobSawError: boolean
     streamStart: number
     nowMs?: () => number
@@ -115,6 +128,21 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
   input.streamState.metadata = streamSetup.metadata
   const parts = runtimeQueryInput.parts ?? streamSetup.parts
   const stderrLines = runtimeQueryInput.stderrLines ?? streamSetup.stderrLines
+
+  if (input.runtimeStartupDiagnostics) {
+    const {
+      prepareRuntimeStartupDiagnostics =
+        prepareClaudeAgentSdkRuntimeStartupDiagnostics,
+      ...diagnosticsInput
+    } = input.runtimeStartupDiagnostics
+    await prepareRuntimeStartupDiagnostics({
+      ...diagnosticsInput,
+      isUsingOllama: input.isUsingOllama,
+      customConfig: input.customConfig,
+      cwd: requestContext.cwd,
+    })
+  }
+
   const {
     prepareRuntimePrompt = prepareClaudeAgentSdkRuntimePromptForDesktopRun,
     prompt: runtimePromptText = request.prompt,

@@ -39,7 +39,6 @@ import {
 } from "../../claude/agent-sdk-config-dir"
 import {
   prepareClaudeAgentSdkRuntimeStartupContext,
-  prepareClaudeAgentSdkRuntimeStartupDiagnostics,
 } from "../../claude/agent-sdk-runtime-startup"
 import {
   createClaudeAgentSdkDesktopRunStartup,
@@ -1074,14 +1073,6 @@ export const claudeRouter = router({
               },
             })
 
-            await prepareClaudeAgentSdkRuntimeStartupDiagnostics({
-              isUsingOllama,
-              customConfig: finalCustomConfig,
-              runtimeStartup,
-              cwd: runtimeCwd,
-              resumeSessionId,
-            })
-
             const runtimeResult =
               await runClaudeAgentSdkDesktopRuntimeLifecycle({
                 request: desktopRunRequest,
@@ -1100,6 +1091,10 @@ export const claudeRouter = router({
                 runtimePrompt: {
                   images: resolvedImages,
                   longTextAttachments: input.longTextAttachments,
+                },
+                runtimeStartupDiagnostics: {
+                  runtimeStartup,
+                  resumeSessionId,
                 },
                 streamState,
                 isUsingOllama,
