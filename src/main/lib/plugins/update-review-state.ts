@@ -1,5 +1,4 @@
 import { createHash } from "crypto"
-import { app } from "electron"
 import * as fs from "fs/promises"
 import * as path from "path"
 import {
@@ -32,6 +31,7 @@ import type {
   PluginStoreValidationIssue,
 } from "../../../shared/plugin-store-pins"
 import type { McpServerConfig } from "../claude-config"
+import { getElectronUserDataPath } from "../electron-app"
 
 const PLUGIN_REVIEW_STATE_VERSION = 1
 const PLUGIN_REVIEW_STATE_FILE = "plugin-review-state.json"
@@ -113,7 +113,9 @@ export interface PluginMcpApprovalDocument {
   oauthFields: string[]
 }
 
-export function getPluginReviewStatePath(userDataPath = app.getPath("userData")): string {
+export function getPluginReviewStatePath(
+  userDataPath = getElectronUserDataPath(),
+): string {
   return path.join(userDataPath, PLUGIN_REVIEW_STATE_FILE)
 }
 

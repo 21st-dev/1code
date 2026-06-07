@@ -1,4 +1,3 @@
-import { app } from "electron"
 import {
   buildCodexRuntimeAvailability,
   buildCodexRuntimeAvailabilityFromComponents,
@@ -14,12 +13,18 @@ import { getBundledCodexCliPath } from "./cli-path"
 import { extractCodexError } from "./errors"
 import { getCodexIntegrationStatus } from "./integration-status"
 import { redactCodexLoginOutput } from "./login-output"
+import { getElectronApp, type ElectronAppLike } from "../electron-app"
 
-export async function getCodexRuntimeStatus() {
-  const cliHint = app.isPackaged
+export async function getCodexRuntimeStatus(
+  input: {
+    appContext?: Pick<ElectronAppLike, "isPackaged" | "getAppPath">
+  } = {},
+) {
+  const appContext = input.appContext ?? getElectronApp()
+  const cliHint = appContext.isPackaged
     ? "Reinstall the app so the bundled Codex command is restored."
     : "Run `bun run codex:download` from the repo, then restart the dev app."
-  const acpHint = app.isPackaged
+  const acpHint = appContext.isPackaged
     ? "Reinstall the app so the bundled Codex ACP runtime is restored."
     : "Run `bun install` from the repo, then restart the dev app."
 
@@ -35,7 +40,7 @@ export async function getCodexRuntimeStatus() {
   }
 
   const loginCli = getRuntimeExecutableStatus(
-    getBundledCodexCliPath(),
+    getBundledCodexCliPath(appContext),
     cliHint,
   )
   const acp = getRuntimeExecutableStatus(acpPath, acpHint)

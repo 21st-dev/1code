@@ -46,6 +46,7 @@ describe("Claude raw logger", () => {
   beforeEach(async () => {
     delete process.env.CLAUDE_RAW_LOG
     userDataDir = await mkdtemp(join(tmpdir(), "locus-raw-logger-"))
+    rawLogger.setClaudeRawLoggerUserDataDirProviderForTest(() => userDataDir)
   })
 
   afterEach(async () => {
@@ -54,6 +55,7 @@ describe("Claude raw logger", () => {
     } else {
       process.env.CLAUDE_RAW_LOG = previousRawLog
     }
+    rawLogger.setClaudeRawLoggerUserDataDirProviderForTest(null)
     await rm(userDataDir, { force: true, recursive: true })
     userDataDir = ""
   })

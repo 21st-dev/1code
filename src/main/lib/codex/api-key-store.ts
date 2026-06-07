@@ -1,4 +1,3 @@
-import { app } from "electron"
 import {
   chmodSync,
   existsSync,
@@ -14,6 +13,7 @@ import {
   encryptStringForStorage,
   isSecureStorageAvailable,
 } from "../secure-storage"
+import { getElectronUserDataPath } from "../electron-app"
 
 type StoredCodexApiKeyPayload = {
   version: 1
@@ -29,12 +29,23 @@ export type CodexApiKeyStatus = {
 
 const CODEX_API_KEY_STORE_FILENAME = "codex-api-key.json"
 
-function getStorePath(): string {
-  return join(app.getPath("userData"), CODEX_API_KEY_STORE_FILENAME)
+type CodexApiKeyStoreOptions = {
+  userDataPath?: string
+  getUserDataPath?: () => string
 }
 
-function readPayload(): StoredCodexApiKeyPayload | null {
-  const path = getStorePath()
+function getStorePath(options: CodexApiKeyStoreOptions = {}): string {
+  const userDataPath =
+    options.userDataPath ??
+    options.getUserDataPath?.() ??
+    getElectronUserDataPath()
+  return join(userDataPath, CODEX_API_KEY_STORE_FILENAME)
+}
+
+function readPayload(
+  options: CodexApiKeyStoreOptions = {},
+): StoredCodexApiKeyPayload | null {
+  const path = getStorePath(options)
   if (!existsSync(path)) return null
 
   try {
@@ -52,8 +63,10 @@ function readPayload(): StoredCodexApiKeyPayload | null {
   }
 }
 
-export function getCodexApiKeyStatus(): CodexApiKeyStatus {
-  const payload = readPayload()
+export function getCodexApiKeyStatus(
+  options: CodexApiKeyStoreOptions = {},
+): CodexApiKeyStatus {
+  const payload = readPayload(options)
   return {
     hasApiKey: Boolean(payload?.encryptedApiKey),
     encryptionAvailable: isSecureStorageAvailable(),
@@ -61,7 +74,10 @@ export function getCodexApiKeyStatus(): CodexApiKeyStatus {
   }
 }
 
-export function saveCodexApiKey(apiKey: string): CodexApiKeyStatus {
+export function saveCodexApiKey(
+  apiKey: string,
+  options: CodexApiKeyStoreOptions = {},
+): CodexApiKeyStatus {
   const normalized = normalizeCodexApiKey(apiKey)
   if (!normalized) {
     throw new Error("Invalid Codex API key")
@@ -73,16 +89,18 @@ export function saveCodexApiKey(apiKey: string): CodexApiKeyStatus {
     encryptedApiKey,
     updatedAt: new Date().toISOString(),
   }
-  const path = getStorePath()
+  const path = getStorePath(options)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, JSON.stringify(payload), { encoding: "utf-8", mode: 0o600 })
   chmodSync(path, 0o600)
 
-  return getCodexApiKeyStatus()
+  return getCodexApiKeyStatus(options)
 }
 
-export function readCodexApiKey(): string | null {
-  const payload = readPayload()
+export function readCodexApiKey(
+  options: CodexApiKeyStoreOptions = {},
+): string | null {
+  const payload = readPayload(options)
   if (!payload?.encryptedApiKey) return null
 
   const decrypted = decryptStringFromStorage(payload.encryptedApiKey)
@@ -91,10 +109,12 @@ export function readCodexApiKey(): string | null {
   return normalizeCodexApiKey(decrypted)
 }
 
-export function removeCodexApiKey(): CodexApiKeyStatus {
-  const path = getStorePath()
+export function removeCodexApiKey(
+  options: CodexApiKeyStoreOptions = {},
+): CodexApiKeyStatus {
+  const path = getStorePath(options)
   if (existsSync(path)) {
     unlinkSync(path)
   }
-  return getCodexApiKeyStatus()
+  return getCodexApiKeyStatus(options)
 }

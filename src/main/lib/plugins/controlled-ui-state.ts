@@ -1,4 +1,3 @@
-import { app } from "electron"
 import * as fs from "fs/promises"
 import * as path from "path"
 import {
@@ -7,6 +6,7 @@ import {
   type PluginControlledUiGrantStatus,
   type PluginControlledUiPermissionGrant,
 } from "../../../shared/plugin-controlled-ui"
+import { getElectronUserDataPath } from "../electron-app"
 
 const CONTROLLED_UI_STATE_VERSION = 1
 const CONTROLLED_UI_STATE_FILE = "plugin-controlled-ui-state.json"
@@ -30,7 +30,7 @@ interface PluginControlledUiState {
 }
 
 export function getPluginControlledUiStatePath(
-  userDataPath = app.getPath("userData"),
+  userDataPath = getElectronUserDataPath(),
 ): string {
   return path.join(userDataPath, CONTROLLED_UI_STATE_FILE)
 }

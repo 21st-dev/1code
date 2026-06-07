@@ -20,6 +20,9 @@ mock.module("electron", () => ({
 
 const storePins = await import("../src/main/lib/plugins/store-pins")
 const reviewState = await import("../src/main/lib/plugins/update-review-state")
+const { setElectronUserDataPathProviderForTest } = await import(
+  "../src/main/lib/electron-app"
+)
 
 const COMMIT_A = "0123456789abcdef0123456789abcdef01234567"
 const COMMIT_B = "abcdef0123456789abcdef0123456789abcdef01"
@@ -27,9 +30,11 @@ const COMMIT_B = "abcdef0123456789abcdef0123456789abcdef01"
 describe("main plugin store commit pin workflow", () => {
   beforeEach(async () => {
     userDataDir = await mkdtemp(join(tmpdir(), "locus-store-main-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
   })
 
   afterEach(async () => {
+    setElectronUserDataPathProviderForTest(null)
     await rm(userDataDir, { recursive: true, force: true })
     userDataDir = ""
   })

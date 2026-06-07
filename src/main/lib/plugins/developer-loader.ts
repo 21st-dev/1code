@@ -1,4 +1,3 @@
-import { app } from "electron"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { pathToFileURL } from "url"
@@ -18,6 +17,7 @@ import {
   getPluginDeveloperModeState,
   recordPluginReviewScans,
 } from "./update-review-state"
+import { getElectronUserDataPath } from "../electron-app"
 
 export interface LocusDeveloperPluginApi {
   version: 1
@@ -221,7 +221,7 @@ function blockedContext(
 
 function getDeveloperPluginDataPath(
   pluginReviewKey: string,
-  userDataPath = app.getPath("userData"),
+  userDataPath = getElectronUserDataPath(),
 ): string {
   return path.join(userDataPath, "plugin-data", sanitizePathSegment(pluginReviewKey))
 }

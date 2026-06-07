@@ -11,6 +11,10 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/claude/agent-sdk-config-dir.ts"),
     "utf8",
   )
+  const claudeRuntimeStartupSource = readFileSync(
+    join(process.cwd(), "src/main/lib/claude/agent-sdk-runtime-startup.ts"),
+    "utf8",
+  )
   const claudeSettingsSource = readFileSync(
     join(process.cwd(), "src/main/lib/trpc/routers/claude-settings.ts"),
     "utf8",
@@ -90,7 +94,11 @@ describe("plugin safe mode runtime source guards", () => {
   })
 
   test("removes the plugin directory symlink while plugin safe mode is enabled", () => {
-    expect(claudeRouterSource).toContain("ensureClaudeAgentSdkIsolatedConfigDir")
+    expect(claudeRouterSource).not.toContain("ensureClaudeAgentSdkIsolatedConfigDir")
+    expect(claudeRuntimeStartupSource).toContain(
+      "ensureClaudeAgentSdkIsolatedConfigDir",
+    )
+    expect(claudeConfigDirSource).toContain("ensureClaudeAgentSdkIsolatedConfigDir")
     expect(claudeConfigDirSource).toContain("getPluginSafeModeState")
     expect(claudeConfigDirSource).toContain("removeManagedSymlink({")
     expect(claudeConfigDirSource).toContain("pluginSafeMode.enabled")

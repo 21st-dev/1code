@@ -18,13 +18,18 @@ mock.module("electron", () => ({
 }))
 
 const attachments = await import("../src/main/lib/long-text-attachments")
+const { setElectronUserDataPathProviderForTest } = await import(
+  "../src/main/lib/electron-app"
+)
 
 describe("long text attachments", () => {
   beforeEach(async () => {
     userDataDir = await mkdtemp(join(tmpdir(), "locus-long-text-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
   })
 
   afterEach(async () => {
+    setElectronUserDataPathProviderForTest(null)
     await rm(userDataDir, { force: true, recursive: true })
     userDataDir = ""
   })

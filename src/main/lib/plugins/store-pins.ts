@@ -1,5 +1,4 @@
 import { createHash } from "crypto"
-import { app } from "electron"
 import * as fs from "fs/promises"
 import * as path from "path"
 import {
@@ -24,6 +23,7 @@ import {
   recordInstalledPluginStorePackage,
   recordPluginStoreCandidatePreview,
 } from "./update-review-state"
+import { getElectronUserDataPath } from "../electron-app"
 
 const PLUGIN_STORE_CATALOG_FILE = "plugin-store-catalog.json"
 const PLUGIN_STORE_PACKAGES_DIR = "plugin-store-packages"
@@ -64,15 +64,33 @@ interface PluginStorePreviewOptions {
   userDataPath?: string
 }
 
-export function getPluginStoreCatalogPath(userDataPath = app.getPath("userData")): string {
+function resolvePluginStoreCatalogPath(
+  options: Pick<PluginStorePreviewOptions, "catalogPath" | "userDataPath">,
+): string {
+  return options.catalogPath ?? getPluginStoreCatalogPath(options.userDataPath)
+}
+
+function resolvePluginStoreStatePath(
+  options: Pick<PluginStorePreviewOptions, "statePath" | "userDataPath">,
+): string {
+  return options.statePath ?? getPluginReviewStatePath(options.userDataPath)
+}
+
+export function getPluginStoreCatalogPath(
+  userDataPath = getElectronUserDataPath(),
+): string {
   return path.join(userDataPath, PLUGIN_STORE_CATALOG_FILE)
 }
 
-export function getPluginStorePackagesRoot(userDataPath = app.getPath("userData")): string {
+export function getPluginStorePackagesRoot(
+  userDataPath = getElectronUserDataPath(),
+): string {
   return path.join(userDataPath, PLUGIN_STORE_PACKAGES_DIR)
 }
 
-export function getPluginStoreBackupsRoot(userDataPath = app.getPath("userData")): string {
+export function getPluginStoreBackupsRoot(
+  userDataPath = getElectronUserDataPath(),
+): string {
   return path.join(userDataPath, PLUGIN_STORE_BACKUPS_DIR)
 }
 
@@ -119,10 +137,14 @@ export async function previewPluginStoreCandidate(
   storeEntryId: string,
   options: PluginStorePreviewOptions = {},
 ): Promise<PluginStoreCandidatePreview> {
-  const entry = await getPluginStoreEntry(storeEntryId, options.catalogPath)
+  const statePath = resolvePluginStoreStatePath(options)
+  const entry = await getPluginStoreEntry(
+    storeEntryId,
+    resolvePluginStoreCatalogPath(options),
+  )
   const document = buildPluginStoreCandidateReviewDocument(entry)
   const candidateFingerprint = hashPluginStoreCandidateReviewDocument(document)
-  const state = await getPluginStoreStateSnapshot(options.statePath ?? getPluginReviewStatePath())
+  const state = await getPluginStoreStateSnapshot(statePath)
   const packageIssues = await getPackageVerificationIssues(entry, {
     requirePackageForWrite: options.requirePackageHashForWrite === true,
   })
@@ -143,7 +165,7 @@ export async function previewPluginStoreCandidate(
       document: review.document,
       status: review.status,
       issues: review.issues,
-    }, options.statePath ?? getPluginReviewStatePath(), options.now ?? new Date())
+    }, statePath, options.now ?? new Date())
   }
 
   return {
@@ -176,7 +198,7 @@ export async function approveCurrentPluginStoreCandidate(
   })
   await approvePluginStoreCandidateFingerprint(
     approval,
-    options.statePath ?? getPluginReviewStatePath(),
+    resolvePluginStoreStatePath(options),
   )
   return { preview, approval }
 }
@@ -185,7 +207,11 @@ export async function installOrUpdateApprovedPluginStoreCandidate(
   storeEntryId: string,
   options: PluginStorePreviewOptions = {},
 ): Promise<PluginStoreInstallResult> {
-  const entry = await getPluginStoreEntry(storeEntryId, options.catalogPath)
+  const statePath = resolvePluginStoreStatePath(options)
+  const entry = await getPluginStoreEntry(
+    storeEntryId,
+    resolvePluginStoreCatalogPath(options),
+  )
   const preview = await previewPluginStoreCandidate(storeEntryId, {
     ...options,
     requirePackageHashForWrite: true,
@@ -206,14 +232,14 @@ export async function installOrUpdateApprovedPluginStoreCandidate(
   }
 
   const now = options.now ?? new Date()
-  const userDataPath = options.userDataPath ?? app.getPath("userData")
+  const userDataPath = options.userDataPath ?? getElectronUserDataPath()
   const targetRoot = getPluginStorePackagesRoot(userDataPath)
   const backupRoot = getPluginStoreBackupsRoot(userDataPath)
   const targetPath = path.join(targetRoot, entry.id)
   assertPathInside(targetRoot, targetPath)
   await fs.mkdir(targetRoot, { recursive: true })
 
-  const state = await getPluginStoreStateSnapshot(options.statePath ?? getPluginReviewStatePath())
+  const state = await getPluginStoreStateSnapshot(statePath)
   const previousInstall = state.installedPackages[entry.id]
   const backup = await backupExistingStorePackage({
     targetPath,
@@ -255,7 +281,7 @@ export async function installOrUpdateApprovedPluginStoreCandidate(
   }
   await recordInstalledPluginStorePackage(
     { installed, backup },
-    options.statePath ?? getPluginReviewStatePath(),
+    statePath,
   )
   return {
     preview,

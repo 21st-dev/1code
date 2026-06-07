@@ -1,13 +1,16 @@
-import { app } from "electron"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
+import { getElectronApp, type ElectronAppLike } from "../electron-app"
 
-export function getBundledCodexCliPath(): string {
+export function getBundledCodexCliPath(
+  appContext: Pick<ElectronAppLike, "isPackaged" | "getAppPath"> =
+    getElectronApp(),
+): string {
   const binaryName = process.platform === "win32" ? "codex.exe" : "codex"
-  const resourcesDir = app.isPackaged
+  const resourcesDir = appContext.isPackaged
     ? join(process.resourcesPath, "bin")
     : join(
-        app.getAppPath(),
+        appContext.getAppPath?.() ?? process.cwd(),
         "resources",
         "bin",
         `${process.platform}-${process.arch}`,
@@ -16,13 +19,16 @@ export function getBundledCodexCliPath(): string {
   return join(resourcesDir, binaryName)
 }
 
-export function resolveBundledCodexCliPath(): string {
-  const binaryPath = getBundledCodexCliPath()
+export function resolveBundledCodexCliPath(
+  appContext: Pick<ElectronAppLike, "isPackaged" | "getAppPath"> =
+    getElectronApp(),
+): string {
+  const binaryPath = getBundledCodexCliPath(appContext)
   if (existsSync(binaryPath)) {
     return binaryPath
   }
 
-  const hint = app.isPackaged
+  const hint = appContext.isPackaged
     ? "Binary is missing from bundled resources."
     : "Run `bun run codex:download` to download it for local dev."
 

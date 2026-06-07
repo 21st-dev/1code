@@ -42,6 +42,9 @@ const {
   clearPluginCache,
   discoverAllRuntimePlugins,
 } = await import("../src/main/lib/plugins")
+const { setElectronUserDataPathProviderForTest } = await import(
+  "../src/main/lib/electron-app"
+)
 
 async function expectMissingFile(filePath: string) {
   try {
@@ -271,6 +274,7 @@ describe("developer trusted main-process review scan", () => {
   test("includes canonical entry content hashes in plugin review documents", async () => {
     const root = await mkdtemp(join(tmpdir(), "locus-developer-plugin-"))
     userDataDir = await mkdtemp(join(tmpdir(), "locus-developer-userdata-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
     try {
       await mkdir(join(root, ".locus-plugin"))
       await mkdir(join(root, "dist"))
@@ -304,6 +308,7 @@ describe("developer trusted main-process review scan", () => {
     } finally {
       await rm(root, { recursive: true, force: true })
       await rm(userDataDir, { recursive: true, force: true })
+      setElectronUserDataPathProviderForTest(null)
       userDataDir = ""
     }
   })
@@ -415,6 +420,7 @@ describe("developer trusted plugin loader", () => {
     const previousMarker = process.env.LOCUS_DEV_PLUGIN_MARKER
     const root = await createDeveloperPluginFixture()
     userDataDir = await mkdtemp(join(tmpdir(), "locus-developer-userdata-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
     const markerPath = join(userDataDir, "marker.txt")
     process.env.LOCUS_DEV_PLUGIN_MARKER = markerPath
     try {
@@ -433,6 +439,7 @@ describe("developer trusted plugin loader", () => {
       restoreEnv("LOCUS_DEV_PLUGIN_MARKER", previousMarker)
       await rm(root, { recursive: true, force: true })
       await rm(userDataDir, { recursive: true, force: true })
+      setElectronUserDataPathProviderForTest(null)
       userDataDir = ""
       clearPluginCache()
       clearDeveloperPluginLoadStates()
@@ -443,6 +450,7 @@ describe("developer trusted plugin loader", () => {
     const previousMarker = process.env.LOCUS_DEV_PLUGIN_MARKER
     const root = await createDeveloperPluginFixture()
     userDataDir = await mkdtemp(join(tmpdir(), "locus-developer-userdata-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
     const markerPath = join(userDataDir, "marker.txt")
     process.env.LOCUS_DEV_PLUGIN_MARKER = markerPath
     try {
@@ -459,6 +467,7 @@ describe("developer trusted plugin loader", () => {
       restoreEnv("LOCUS_DEV_PLUGIN_MARKER", previousMarker)
       await rm(root, { recursive: true, force: true })
       await rm(userDataDir, { recursive: true, force: true })
+      setElectronUserDataPathProviderForTest(null)
       userDataDir = ""
       clearPluginCache()
       clearDeveloperPluginLoadStates()
@@ -470,6 +479,7 @@ describe("developer trusted plugin loader", () => {
     const previousForced = process.env.LOCUS_FORCE_PLUGIN_SAFE_MODE
     const root = await createDeveloperPluginFixture()
     userDataDir = await mkdtemp(join(tmpdir(), "locus-developer-userdata-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
     const markerPath = join(userDataDir, "marker.txt")
     process.env.LOCUS_DEV_PLUGIN_MARKER = markerPath
     process.env.LOCUS_FORCE_PLUGIN_SAFE_MODE = "1"
@@ -488,6 +498,7 @@ describe("developer trusted plugin loader", () => {
       restoreEnv("LOCUS_FORCE_PLUGIN_SAFE_MODE", previousForced)
       await rm(root, { recursive: true, force: true })
       await rm(userDataDir, { recursive: true, force: true })
+      setElectronUserDataPathProviderForTest(null)
       userDataDir = ""
       clearPluginCache()
       clearDeveloperPluginLoadStates()
@@ -498,6 +509,7 @@ describe("developer trusted plugin loader", () => {
     const previousMarker = process.env.LOCUS_DEV_PLUGIN_MARKER
     const root = await createDeveloperPluginFixture()
     userDataDir = await mkdtemp(join(tmpdir(), "locus-developer-userdata-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
     const markerPath = join(userDataDir, "marker.txt")
     process.env.LOCUS_DEV_PLUGIN_MARKER = markerPath
     try {
@@ -515,6 +527,7 @@ describe("developer trusted plugin loader", () => {
       restoreEnv("LOCUS_DEV_PLUGIN_MARKER", previousMarker)
       await rm(root, { recursive: true, force: true })
       await rm(userDataDir, { recursive: true, force: true })
+      setElectronUserDataPathProviderForTest(null)
       userDataDir = ""
       clearPluginCache()
       clearDeveloperPluginLoadStates()
@@ -524,6 +537,7 @@ describe("developer trusted plugin loader", () => {
   test("does not read overlarge developer manifests during source discovery", async () => {
     const root = await mkdtemp(join(tmpdir(), "locus-developer-plugin-"))
     userDataDir = await mkdtemp(join(tmpdir(), "locus-developer-userdata-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
     try {
       await mkdir(join(root, ".locus-plugin"))
       await writeFile(join(root, ".locus-plugin", "developer.json"), " ".repeat(70 * 1024))
@@ -539,6 +553,7 @@ describe("developer trusted plugin loader", () => {
     } finally {
       await rm(root, { recursive: true, force: true })
       await rm(userDataDir, { recursive: true, force: true })
+      setElectronUserDataPathProviderForTest(null)
       userDataDir = ""
       clearPluginCache()
     }

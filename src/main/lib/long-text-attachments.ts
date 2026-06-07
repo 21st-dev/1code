@@ -9,12 +9,12 @@ import {
   extname,
   isAbsolute,
 } from "node:path"
-import { app } from "electron"
 import {
   LONG_TEXT_ATTACHMENT_REF_PREFIX,
   type LongTextAttachment,
   type LongTextAttachmentKind,
 } from "../../shared/long-text-attachments"
+import { getElectronUserDataPath } from "./electron-app"
 
 export const LONG_TEXT_ATTACHMENT_SINGLE_LIMIT_BYTES = 1 * 1024 * 1024
 export const LONG_TEXT_ATTACHMENT_AGGREGATE_LIMIT_BYTES = 3 * 1024 * 1024
@@ -47,11 +47,11 @@ type ParsedLocalRef = {
 }
 
 function getLongTextAttachmentsRoot(): string {
-  return join(app.getPath("userData"), "long-text-attachments")
+  return join(getElectronUserDataPath(), "long-text-attachments")
 }
 
 function getLegacyPastedTextRoot(): string {
-  return join(app.getPath("userData"), "claude-sessions")
+  return join(getElectronUserDataPath(), "claude-sessions")
 }
 
 function safePathSegment(value: string, fallback: string): string {

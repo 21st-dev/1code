@@ -12,9 +12,19 @@ const LOG_RETENTION_DAYS = 7 // Keep logs for 7 days
 let logsDir: string | null = null
 let currentLogFile: string | null = null
 let currentSessionId: string | null = null
+let getUserDataDir = () => electron.app.getPath("userData")
+
+export function setClaudeRawLoggerUserDataDirProviderForTest(
+  provider: (() => string) | null,
+): void {
+  getUserDataDir = provider ?? (() => electron.app.getPath("userData"))
+  logsDir = null
+  currentLogFile = null
+  currentSessionId = null
+}
 
 async function ensureLogsDir(): Promise<string> {
-  const desiredDir = join(electron.app.getPath("userData"), "logs", "claude")
+  const desiredDir = join(getUserDataDir(), "logs", "claude")
   if (logsDir !== desiredDir) {
     logsDir = desiredDir
     currentLogFile = null
@@ -136,5 +146,5 @@ export async function logRawClaudeMessage(
  * Useful for UI to show "Open Logs" button
  */
 export function getLogsDirectory(): string {
-  return join(electron.app.getPath("userData"), "logs", "claude")
+  return join(getUserDataDir(), "logs", "claude")
 }
