@@ -675,7 +675,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("baseUrl: finalCustomConfig?.baseUrl")
     expect(claudeRouter).not.toContain("abortSignal: abortController.signal")
     expect(claudeRouter).not.toContain("guardEvents.push(event)")
-    expect(claudeRouter).not.toContain("getGuardedContract:")
+    expect(claudeRouter).toContain("getGuardedContract: () => guardedContract")
     expect(claudeRouter).not.toContain("getActiveGuardedContract")
     expect(claudeRouter).not.toContain("getClaudePendingToolApprovalStore()")
     expect(claudeRouter).not.toContain("prepareClaudeAgentSdkMcpServers")
@@ -1030,24 +1030,34 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-desktop-run-state.ts",
       "utf8",
     )
+    const desktopRunSupervision = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-supervision.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-run-finalization")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-run-finalization")
+    expect(claudeRouter).toContain(
+      "../../claude/agent-sdk-desktop-run-supervision",
+    )
     expect(claudeRouter).not.toContain(
       "completeClaudeAgentSdkRunAfterAdapterWithStreamState",
     )
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "finalizeClaudeAgentSdkUnexpectedErrorWithStreamState",
     )
+    expect(claudeRouter).toContain("superviseClaudeAgentSdkDesktopRun({")
     expect(claudeRouter).toContain(
       "desktopRunState.setReachedNaturalFinish(\n              runtimeResult.reachedNaturalFinish,",
     )
-    expect(claudeRouter).toContain(
+    expect(claudeRouter).not.toContain(
       "finalizeClaudeAgentSdkDesktopRunAfterLifecycle({",
     )
     expect(claudeRouter).toContain(
       "cleanupClaudeAgentSdkDesktopRunSubscription({",
     )
-    expect(claudeRouter).toContain("desktopRunState,\n            })")
+    expect(claudeRouter).toContain(
+      "getDb: getDatabase,\n            desktopRunState,",
+    )
     expect(claudeRouter).not.toContain("createClaudeAgentSdkDesktopRunState")
     expect(claudeRouter).toContain("createClaudeAgentSdkDesktopRunEnvelope")
     expect(claudeRouter).not.toContain("let desktopJobId")
@@ -1068,6 +1078,13 @@ describe("desktop runtime adapter factory", () => {
     expect(desktopRunState).toContain("setReachedNaturalFinish")
     expect(desktopRunState).toContain("markFailed")
     expect(desktopRunState).toContain("markInactive")
+    expect(desktopRunSupervision).toContain(
+      "finalizeClaudeAgentSdkUnexpectedErrorWithStreamState",
+    )
+    expect(desktopRunSupervision).toContain(
+      "finalizeClaudeAgentSdkDesktopRunAfterLifecycle",
+    )
+    expect(desktopRunSupervision).toContain("input.getGuardedContract()")
     expect(claudeRouter).not.toContain(
       "finalizeClaudeAgentSdkUnexpectedError({",
     )

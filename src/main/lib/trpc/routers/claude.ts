@@ -21,9 +21,6 @@ import {
   type McpServerConfig,
 } from "../../claude-config"
 import { chats, getDatabase, projects as projectsTable, subChats } from "../../db"
-import {
-  finalizeClaudeAgentSdkUnexpectedErrorWithStreamState,
-} from "../../claude/agent-sdk-run-finalization"
 import { runClaudeAgentSdkDesktopRuntimeLifecycle } from "../../claude/agent-sdk-runtime-lifecycle"
 import {
   clearClaudeAgentSdkQueryCache,
@@ -44,10 +41,12 @@ import {
   createClaudeAgentSdkDesktopRunEnvelope,
 } from "../../claude/agent-sdk-desktop-run-envelope"
 import {
+  superviseClaudeAgentSdkDesktopRun,
+} from "../../claude/agent-sdk-desktop-run-supervision"
+import {
   abortClaudeAgentSdkDesktopRunRequest,
   cancelClaudeAgentSdkActiveDesktopRun,
   cleanupClaudeAgentSdkDesktopRunSubscription,
-  finalizeClaudeAgentSdkDesktopRunAfterLifecycle,
 } from "../../claude/agent-sdk-desktop-run-cleanup"
 import {
   hasActiveClaudeSession,
@@ -726,8 +725,20 @@ export const claudeRouter = router({
         let guardedContract: ValidatedAgentScopeContract | null = null
         let guardedPreRunStatus: GuardedGitStatusSnapshot | null = null
 
-        ;(async () => {
-          try {
+        void superviseClaudeAgentSdkDesktopRun({
+          chatId: input.chatId,
+          subChatId: input.subChatId,
+          abortController,
+          getGuardedContract: () => guardedContract,
+          getDb: getDatabase,
+          desktopRunState,
+          streamState,
+          subId,
+          streamStart,
+          emitError,
+          emit: safeEmit,
+          complete: safeComplete,
+          run: async () => {
             const db = getDatabase()
             desktopRunState.setDb(db)
             const verifiedRunContext = verifyDesktopRunPreflight(db, {
@@ -1032,27 +1043,8 @@ export const claudeRouter = router({
             if (runtimeResult.status === "failed") {
               return
             }
-          } catch (error) {
-            finalizeClaudeAgentSdkUnexpectedErrorWithStreamState({
-              error,
-              state: streamState,
-              subId,
-              streamStart,
-              emitError,
-              emit: safeEmit,
-              complete: safeComplete,
-            })
-          } finally {
-            finalizeClaudeAgentSdkDesktopRunAfterLifecycle({
-              chatId: input.chatId,
-              subChatId: input.subChatId,
-              abortController,
-              guardedContract,
-              getDb: getDatabase,
-              desktopRunState,
-            })
-          }
-        })()
+          },
+        })
 
         // Cleanup on unsubscribe
         return () => {
