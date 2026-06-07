@@ -870,7 +870,14 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeAgentSdkAdapterRunner).toContain("chatId: context.chatId")
     expect(claudeAgentSdkAdapterRunner).toContain("subChatId: context.subChatId")
     expect(claudeAgentSdkAdapterRunner).toContain("mode: context.mode")
-    expect(runtimeLifecycle).toContain("model: input.customConfig?.model")
+    expect(runtimeLifecycle).not.toContain("model: input.customConfig?.model")
+    expect(runtimeLifecycle).not.toContain("baseUrl: input.customConfig?.baseUrl")
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      "model: request.providerBinding.model",
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      "baseUrl: request.providerBinding.gatewayEndpoint",
+    )
     expect(runtimeLifecycle).toContain(
       "resolvedModel: runtimeResolvedModel",
     )

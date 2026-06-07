@@ -85,6 +85,8 @@ export type RunClaudeAgentSdkDesktopAdapterWithRuntimeConsumerInput = Omit<
     | "chatId"
     | "subChatId"
     | "mode"
+    | "model"
+    | "baseUrl"
   > & {
     emit: CreateClaudeAgentSdkStreamConsumerInput["emit"]
   }
@@ -166,6 +168,8 @@ export async function runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer({
       chatId: context.chatId,
       subChatId: context.subChatId,
       mode: context.mode,
+      model: request.providerBinding.model,
+      baseUrl: request.providerBinding.gatewayEndpoint,
       subId,
       emit,
       complete,

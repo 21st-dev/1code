@@ -256,8 +256,6 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       runtimeQuery,
       guardEvents: runtimeQuery.guardEvents,
       guardedRunStartedAt,
-      model: input.customConfig?.model,
-      baseUrl: input.customConfig?.baseUrl,
       resolvedModel: runtimeResolvedModel,
       hasExistingApiConfig: runtimeHasExistingApiConfig,
       transform: streamSetup.transform,
