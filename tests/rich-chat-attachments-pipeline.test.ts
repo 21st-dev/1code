@@ -97,6 +97,10 @@ describe("rich chat attachment send pipeline", () => {
       "src/main/lib/claude/chat-history.ts",
       "utf8",
     )
+    const claudeDesktopRunInputs = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-inputs.ts",
+      "utf8",
+    )
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const codexChatHistory = readFileSync(
       "src/main/lib/codex/chat-history.ts",
@@ -115,7 +119,11 @@ describe("rich chat attachment send pipeline", () => {
       "utf8",
     )
 
-    expect(claude).toContain("prepareChatImageAttachmentsForDesktopRun")
+    expect(claude).toContain("prepareClaudeAgentSdkDesktopRunInputs")
+    expect(claude).not.toContain("prepareChatImageAttachmentsForDesktopRun")
+    expect(claudeDesktopRunInputs).toContain(
+      "prepareChatImageAttachmentsForDesktopRun",
+    )
     expect(claude).not.toContain("resolveChatImageAttachments(input.images)")
     expect(claude).not.toContain("buildClaudeUserParts(")
     expect(claudeChatHistory).toContain("buildClaudeUserParts(")

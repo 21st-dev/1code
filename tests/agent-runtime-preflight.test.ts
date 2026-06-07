@@ -114,13 +114,13 @@ describe("desktop runtime preflight", () => {
     const controlsIndex = claude.indexOf(
       "prepareClaudeAgentSdkDesktopRunControls({",
     )
-    const attachmentIndex = claude.indexOf(
-      "prepareChatImageAttachmentsForDesktopRun({",
+    const inputsIndex = claude.indexOf(
+      "prepareClaudeAgentSdkDesktopRunInputs({",
       controlsIndex,
     )
     const startupIndex = claude.indexOf(
       "prepareClaudeAgentSdkDesktopRunStartup({",
-      attachmentIndex,
+      inputsIndex,
     )
     const runRequestIndex = claude.indexOf("desktopRunRequest,", startupIndex)
     const lifecycleIndex = claude.indexOf(
@@ -129,8 +129,8 @@ describe("desktop runtime preflight", () => {
 
     expect(preflightIndex).toBeGreaterThan(0)
     expect(controlsIndex).toBeGreaterThan(0)
-    expect(attachmentIndex).toBeGreaterThan(controlsIndex)
-    expect(startupIndex).toBeGreaterThan(attachmentIndex)
+    expect(inputsIndex).toBeGreaterThan(controlsIndex)
+    expect(startupIndex).toBeGreaterThan(inputsIndex)
     expect(runRequestIndex).toBeGreaterThan(startupIndex)
     expect(lifecycleIndex).toBeGreaterThan(runRequestIndex)
     expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")

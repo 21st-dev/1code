@@ -1587,14 +1587,27 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/chat-history.ts",
       "utf8",
     )
+    const claudeDesktopRunInputs = readFileSync(
+      "src/main/lib/claude/agent-sdk-desktop-run-inputs.ts",
+      "utf8",
+    )
     const claudeChatInputSchema = readFileSync(
       "src/main/lib/claude/chat-input-schema.ts",
       "utf8",
     )
 
-    expect(claudeRouter).toContain("../../claude/chat-history")
+    expect(claudeRouter).not.toContain("../../claude/chat-history")
+    expect(claudeRouter).toContain("../../claude/agent-sdk-desktop-run-inputs")
     expect(claudeRouter).toContain("../../claude/chat-input-schema")
-    expect(claudeRouter).toContain("prepareClaudeChatHistoryForDesktopRun")
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkDesktopRunInputs")
+    expect(claudeRouter).not.toContain("prepareClaudeChatHistoryForDesktopRun")
+    expect(claudeRouter).not.toContain("prepareChatImageAttachmentsForDesktopRun")
+    expect(claudeDesktopRunInputs).toContain(
+      "prepareClaudeChatHistoryForDesktopRun",
+    )
+    expect(claudeDesktopRunInputs).toContain(
+      "prepareChatImageAttachmentsForDesktopRun",
+    )
     expect(claudeRouter).not.toContain("prepareClaudeUserMessageForHistory")
     expect(claudeRouter).not.toContain("resolveClaudeChatResumeMetadata")
     expect(claudeRouter).not.toContain("consumeClaudeChatForkResumeFlags")

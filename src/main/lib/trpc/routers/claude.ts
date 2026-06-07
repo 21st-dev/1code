@@ -34,6 +34,9 @@ import {
   prepareClaudeAgentSdkDesktopRunControls,
 } from "../../claude/agent-sdk-desktop-run-controls"
 import {
+  prepareClaudeAgentSdkDesktopRunInputs,
+} from "../../claude/agent-sdk-desktop-run-inputs"
+import {
   runClaudeAgentSdkDesktopRuntimeWithRunState,
 } from "../../claude/agent-sdk-desktop-run-runtime"
 import {
@@ -54,13 +57,9 @@ import {
   resolveClaudePendingToolApproval,
 } from "../../claude/tool-approvals"
 import {
-  prepareClaudeChatHistoryForDesktopRun,
-} from "../../claude/chat-history"
-import {
   imageAttachmentSchema,
   longTextAttachmentSchema,
 } from "../../claude/chat-input-schema"
-import { prepareChatImageAttachmentsForDesktopRun } from "../../chat-attachments"
 import {
   ensureMcpTokensFresh,
   fetchMcpTools,
@@ -756,26 +755,25 @@ export const claudeRouter = router({
             guardedPreRunStatus = runControls.guardedPreRunStatus
             const permissionPolicy = runControls.permissionPolicy
 
-            const historyEnabled = input.historyEnabled === true
-            const imageAttachments =
-              await prepareChatImageAttachmentsForDesktopRun({
-                images: input.images,
-                emitPreflightBlocker,
-              })
-            if (!imageAttachments.ok) {
-              return
-            }
-            const resolvedImages = imageAttachments.attachments
-
-            const chatHistory = prepareClaudeChatHistoryForDesktopRun({
+            const runInputs = await prepareClaudeAgentSdkDesktopRunInputs({
               db,
               subChatId: input.subChatId,
               streamId,
               prompt: input.prompt,
               images: input.images,
               longTextAttachments: input.longTextAttachments,
+              historyEnabled: input.historyEnabled,
+              emitPreflightBlocker,
               createId: () => crypto.randomUUID(),
             })
+            if (!runInputs.ok) {
+              return
+            }
+            const {
+              historyEnabled,
+              resolvedImages,
+              chatHistory,
+            } = runInputs
             const {
               existingMessages,
               existingSessionId,

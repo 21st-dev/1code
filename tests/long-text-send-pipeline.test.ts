@@ -178,8 +178,8 @@ describe("long text send pipeline", () => {
 
     expect(claude).not.toContain("prependLongTextAttachmentPromptBlocks")
     expect(claude).toContain("input.longTextAttachments")
-    expect(claude).toContain("Long text attachment unavailable")
     expect(claudePrompt).toContain("prependLongTextAttachmentPromptBlocks")
+    expect(claudePrompt).toContain("Long text attachment unavailable")
     expect(codexAcpTemporaryCompatAdapter).toContain("prepareCodexAcpPrompt")
     expect(codexPrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(codex).toContain("input.longTextAttachments")
