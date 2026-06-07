@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
-import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
+import {
+  resolveDesktopPermissionPolicy,
+} from "../src/main/lib/agent-runtime/permission-policy"
+import {
+  DESKTOP_RUNTIME_CONTROL_LEVELS,
+} from "../src/shared/agent-runtime-control"
 
 describe("desktop runtime permission policy", () => {
   test("maps Claude plan mode to native read-only without bypass", () => {
@@ -10,8 +15,10 @@ describe("desktop runtime permission policy", () => {
     })
 
     expect(policy.enforcement).toBe("native-plan-read-only")
+    expect(policy.controlLevel).toBe("plan")
     expect(policy.planWorkspaceSideEffects).toBe("deny")
     expect(policy.blockedSideEffects).toContain("workspace-file-write")
+    expect(policy.observedToolPolicy.enabled).toBe(false)
     expect(policy.runtimeMapping).toMatchObject({
       runtime: "claude-code",
       sdkPermissionMode: "plan",
@@ -28,7 +35,9 @@ describe("desktop runtime permission policy", () => {
     })
 
     expect(policy.enforcement).toBe("locus-guarded-tool-policy")
+    expect(policy.controlLevel).toBe("guarded")
     expect(policy.requiresPreExecutionEnforcement).toBe(true)
+    expect(policy.observedToolPolicy.enabled).toBe(false)
     expect(policy.runtimeMapping).toMatchObject({
       runtime: "claude-code",
       sdkPermissionMode: "bypassPermissions",
@@ -50,18 +59,69 @@ describe("desktop runtime permission policy", () => {
     })
 
     expect(planPolicy.enforcement).toBe("codex-acp-plan-handler")
+    expect(planPolicy.controlLevel).toBe("plan")
     expect(planPolicy.runtimeMapping).toMatchObject({
       runtime: "codex",
       adapterSource: "acp-temporary-compat",
       acpMode: "read-only",
       requiresPermissionHandler: true,
+      permissionHandlerFailure: "fail-closed",
     })
     expect(guardedPolicy.enforcement).toBe("codex-acp-guarded-handler")
+    expect(guardedPolicy.controlLevel).toBe("guarded")
     expect(guardedPolicy.runtimeMapping).toMatchObject({
       runtime: "codex",
       adapterSource: "acp-temporary-compat",
       acpMode: "auto",
       requiresPermissionHandler: true,
+      permissionHandlerFailure: "fail-closed",
+    })
+  })
+
+  test("maps normal Agent mode to observed control by default", () => {
+    const claudePolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "agent",
+    })
+    const codexPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "agent",
+    })
+
+    expect(DESKTOP_RUNTIME_CONTROL_LEVELS).toContain("observe")
+    expect(DESKTOP_RUNTIME_CONTROL_LEVELS).toContain("guarded")
+    expect(DESKTOP_RUNTIME_CONTROL_LEVELS).toContain("strict")
+
+    expect(claudePolicy.controlLevel).toBe("observe")
+    expect(claudePolicy.enforcement).toBe("locus-agent-observed")
+    expect(claudePolicy.requiresPreExecutionEnforcement).toBe(false)
+    expect(claudePolicy.observedToolPolicy).toMatchObject({
+      enabled: true,
+      blocksCatastrophicActions: true,
+      degradation: "not-applicable",
+    })
+    expect(claudePolicy.observedToolPolicy.catastrophicActions).toEqual([
+      "high-risk-shell",
+      "sensitive-path-write",
+      "network-egress",
+    ])
+    expect(claudePolicy.runtimeMapping).toMatchObject({
+      runtime: "claude-code",
+      requiresToolPolicy: true,
+      allowDangerouslySkipPermissions: true,
+    })
+
+    expect(codexPolicy.controlLevel).toBe("observe")
+    expect(codexPolicy.enforcement).toBe("codex-acp-agent-observed")
+    expect(codexPolicy.observedToolPolicy).toMatchObject({
+      enabled: true,
+      blocksCatastrophicActions: true,
+      degradation: "stream-only-when-hook-unavailable",
+    })
+    expect(codexPolicy.runtimeMapping).toMatchObject({
+      runtime: "codex",
+      requiresPermissionHandler: true,
+      permissionHandlerFailure: "degrade-to-stream-only",
     })
   })
 
@@ -119,6 +179,7 @@ describe("desktop runtime permission policy", () => {
     )
     expect(codexAcpRuntime).toContain("permission.acpMode")
     expect(codexAcpRuntime).toContain("permission.requiresPermissionHandler")
+    expect(codexAcpRuntime).toContain("permission.permissionHandlerFailure")
     expect(codex).not.toContain("function getCodexAcpModeId")
   })
 })

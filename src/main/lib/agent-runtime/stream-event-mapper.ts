@@ -54,6 +54,7 @@ const RENDERER_DIAGNOSTIC_CHUNK_TYPES = new Set([
   "capability-error",
   "error",
   "guard-audit",
+  "observed-tool-decision",
   "retry-notification",
   "runtime-status",
 ])
@@ -180,6 +181,16 @@ function eventPayloadForChunk(chunk: Record<string, unknown>): {
       return {
         type: "guard_decision",
         payload: { event: toJsonValue(chunk.event) },
+      }
+    case "observed-tool-decision":
+      return {
+        type: "permission_requested",
+        payload: {
+          controlLevel: getString(chunk, "controlLevel") ?? "observe",
+          decision: getString(chunk, "decision") ?? null,
+          message: getString(chunk, "message") ?? null,
+          risk: toJsonValue(chunk.risk),
+        },
       }
     case "ask-user-question":
       return {

@@ -6,6 +6,10 @@ import type {
 } from "@agentclientprotocol/sdk"
 import { join } from "node:path"
 import type { AgentGuardEvent } from "../src/shared/agent-scope-contracts"
+import {
+  getCodexPermissionMapping,
+  resolveDesktopPermissionPolicy,
+} from "../src/main/lib/agent-runtime/permission-policy"
 
 mock.module("electron", () => ({
   app: {
@@ -156,6 +160,64 @@ describe("Codex ACP permission enforcement", () => {
       toolName: "Edit",
       path: "src/main/lib/trpc/routers/claude.ts",
     })
+  })
+
+  test("observes Agent-mode permission requests and blocks catastrophic actions", async () => {
+    const policy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "agent",
+    })
+    const permission = getCodexPermissionMapping(policy)
+    const observed: any[] = []
+    const handler = createCodexAcpPermissionHandler({
+      mode: "agent",
+      controlLevel: permission.controlLevel,
+      observedToolPolicy: permission.observedToolPolicy,
+      onObservedToolDecision: (event) => observed.push(event),
+    })
+
+    const webFetchResponse = await handler(
+      permissionRequest({
+        title: "Fetch https://example.com",
+        kind: "fetch",
+        rawInput: { url: "https://example.com" },
+      }),
+    )
+    const sensitiveWriteResponse = await handler(
+      permissionRequest({
+        title: "Write .env",
+        kind: "edit",
+        rawInput: { path: ".env" },
+      }),
+    )
+
+    expect(webFetchResponse).toEqual({
+      outcome: { outcome: "selected", optionId: "approved" },
+    })
+    expect(sensitiveWriteResponse).toEqual({
+      outcome: { outcome: "selected", optionId: "abort" },
+    })
+    expect(observed).toHaveLength(2)
+    expect(observed[0]).toMatchObject({
+      controlLevel: "observe",
+      decision: "allow",
+      risk: {
+        toolName: "WebFetch",
+        riskLevel: "high",
+        catastrophic: false,
+      },
+    })
+    expect(observed[0].risk.riskCategories).toContain("network-egress")
+    expect(observed[1]).toMatchObject({
+      controlLevel: "observe",
+      decision: "deny",
+      risk: {
+        toolName: "Write",
+        riskLevel: "catastrophic",
+        catastrophic: true,
+      },
+    })
+    expect(observed[1].risk.riskCategories).toContain("sensitive-path")
   })
 
   test("installs the handler through the current ACP model client seam", async () => {

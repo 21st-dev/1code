@@ -215,4 +215,56 @@ describe("Claude Agent SDK tool permission handler", () => {
       },
     ])
   })
+
+  test("observes normal Agent-mode tools and loudly blocks catastrophic actions", async () => {
+    const emitted: any[] = []
+    const handler = createClaudeAgentSdkToolPermissionHandler(
+      baseHandlerInput({
+        emit: (chunk) => {
+          emitted.push(chunk)
+        },
+      }),
+    )
+
+    const normalResult = await handler(
+      "Edit",
+      { file_path: "src/app.ts" },
+      toolOptions("observe-1"),
+    )
+    const catastrophicResult = await handler(
+      "Bash",
+      { command: "git reset --hard HEAD" },
+      toolOptions("observe-2"),
+    )
+
+    expect(normalResult).toEqual({
+      behavior: "allow",
+      updatedInput: { file_path: "src/app.ts" },
+    })
+    expect(catastrophicResult.behavior).toBe("deny")
+    expect(catastrophicResult.message).toContain("Observed mode blocked Bash")
+    expect(emitted).toHaveLength(2)
+    expect(emitted[0]).toMatchObject({
+      type: "observed-tool-decision",
+      controlLevel: "observe",
+      decision: "allow",
+      risk: {
+        toolName: "Edit",
+        toolUseId: "observe-1",
+        riskLevel: "medium",
+        catastrophic: false,
+      },
+    })
+    expect(emitted[1]).toMatchObject({
+      type: "observed-tool-decision",
+      controlLevel: "observe",
+      decision: "deny",
+      risk: {
+        toolName: "Bash",
+        toolUseId: "observe-2",
+        riskLevel: "catastrophic",
+        catastrophic: true,
+      },
+    })
+  })
 })

@@ -1,5 +1,8 @@
 import type { AgentRuntimeId } from "../../../shared/agent-runtime-capabilities"
 import type { AgentJobMode } from "../../../shared/agent-jobs"
+import type {
+  ResolvedDesktopRuntimeControlLevel,
+} from "../../../shared/agent-runtime-control"
 
 export type DesktopPermissionRuntime = Extract<
   AgentRuntimeId,
@@ -13,6 +16,21 @@ export type PermissionPolicySideEffect =
   | "runtime-configuration"
   | "provider-configuration"
 
+export type ObservedCatastrophicAction =
+  | "high-risk-shell"
+  | "sensitive-path-write"
+  | "network-egress"
+
+export type ObservedToolPolicy = {
+  enabled: boolean
+  blocksCatastrophicActions: boolean
+  catastrophicActions: ObservedCatastrophicAction[]
+  degradation:
+    | "not-applicable"
+    | "stream-only-when-hook-unavailable"
+    | "fail-closed-when-hook-unavailable"
+}
+
 export type ClaudePermissionMapping = {
   runtime: "claude-code"
   sdkPermissionMode: "plan" | "bypassPermissions"
@@ -25,24 +43,29 @@ export type CodexPermissionMapping = {
   runtime: "codex"
   adapterSource: "acp-temporary-compat"
   acpMode: "read-only" | "auto"
+  controlLevel: ResolvedDesktopRuntimeControlLevel
+  observedToolPolicy: ObservedToolPolicy
   requiresPermissionHandler: boolean
+  permissionHandlerFailure: "fail-closed" | "degrade-to-stream-only"
 }
 
 export type DesktopPermissionPolicy = {
   runtimeId: DesktopPermissionRuntime
   mode: AgentJobMode
+  controlLevel: ResolvedDesktopRuntimeControlLevel
   guarded: boolean
   planWorkspaceSideEffects: "deny" | "not-applicable"
   allowedLocusPersistence: true
   blockedSideEffects: PermissionPolicySideEffect[]
   requiresPreExecutionEnforcement: boolean
+  observedToolPolicy: ObservedToolPolicy
   enforcement:
     | "native-plan-read-only"
-    | "locus-agent-full-access"
+    | "locus-agent-observed"
     | "locus-guarded-tool-policy"
     | "codex-acp-plan-handler"
     | "codex-acp-guarded-handler"
-    | "codex-acp-agent-auto"
+    | "codex-acp-agent-observed"
   runtimeMapping: ClaudePermissionMapping | CodexPermissionMapping
   diagnostics: string[]
 }
@@ -61,6 +84,19 @@ const PLAN_BLOCKED_SIDE_EFFECTS: PermissionPolicySideEffect[] = [
   "provider-configuration",
 ]
 
+const OBSERVED_CATASTROPHIC_ACTIONS: ObservedCatastrophicAction[] = [
+  "high-risk-shell",
+  "sensitive-path-write",
+  "network-egress",
+]
+
+const DISABLED_OBSERVATION: ObservedToolPolicy = {
+  enabled: false,
+  blocksCatastrophicActions: false,
+  catastrophicActions: [],
+  degradation: "not-applicable",
+}
+
 export function resolveDesktopPermissionPolicy({
   runtimeId,
   mode,
@@ -70,11 +106,13 @@ export function resolveDesktopPermissionPolicy({
     return {
       runtimeId,
       mode,
+      controlLevel: "plan",
       guarded: hasScopeContract,
       planWorkspaceSideEffects: "deny",
       allowedLocusPersistence: true,
       blockedSideEffects: PLAN_BLOCKED_SIDE_EFFECTS,
       requiresPreExecutionEnforcement: true,
+      observedToolPolicy: DISABLED_OBSERVATION,
       enforcement:
         runtimeId === "claude-code"
           ? "native-plan-read-only"
@@ -92,7 +130,10 @@ export function resolveDesktopPermissionPolicy({
               runtime: "codex",
               adapterSource: "acp-temporary-compat",
               acpMode: "read-only",
+              controlLevel: "plan",
+              observedToolPolicy: DISABLED_OBSERVATION,
               requiresPermissionHandler: true,
+              permissionHandlerFailure: "fail-closed",
             },
       diagnostics: [
         "Plan mode denies project/workspace side effects; Locus may still persist local app state.",
@@ -104,11 +145,13 @@ export function resolveDesktopPermissionPolicy({
     return {
       runtimeId,
       mode,
+      controlLevel: "guarded",
       guarded: true,
       planWorkspaceSideEffects: "not-applicable",
       allowedLocusPersistence: true,
       blockedSideEffects: [],
       requiresPreExecutionEnforcement: true,
+      observedToolPolicy: DISABLED_OBSERVATION,
       enforcement:
         runtimeId === "claude-code"
           ? "locus-guarded-tool-policy"
@@ -127,7 +170,10 @@ export function resolveDesktopPermissionPolicy({
               runtime: "codex",
               adapterSource: "acp-temporary-compat",
               acpMode: "auto",
+              controlLevel: "guarded",
+              observedToolPolicy: DISABLED_OBSERVATION,
               requiresPermissionHandler: true,
+              permissionHandlerFailure: "fail-closed",
             },
       diagnostics: [
         "Guarded agent mode requires pre-execution tool policy enforcement before side effects.",
@@ -138,31 +184,51 @@ export function resolveDesktopPermissionPolicy({
   return {
     runtimeId,
     mode,
+    controlLevel: "observe",
     guarded: false,
     planWorkspaceSideEffects: "not-applicable",
     allowedLocusPersistence: true,
     blockedSideEffects: [],
     requiresPreExecutionEnforcement: false,
+    observedToolPolicy: {
+      enabled: true,
+      blocksCatastrophicActions: true,
+      catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
+      degradation:
+        runtimeId === "codex"
+          ? "stream-only-when-hook-unavailable"
+          : "not-applicable",
+    },
     enforcement:
-      runtimeId === "claude-code" ? "locus-agent-full-access" : "codex-acp-agent-auto",
+      runtimeId === "claude-code"
+        ? "locus-agent-observed"
+        : "codex-acp-agent-observed",
     runtimeMapping:
       runtimeId === "claude-code"
         ? {
             runtime: "claude-code",
             sdkPermissionMode: "bypassPermissions",
             allowDangerouslySkipPermissions: true,
-            requiresToolPolicy: false,
+            requiresToolPolicy: true,
             bypassReason:
-              "Claude agent mode is the explicit full-access desktop policy until route extraction maps native controls through this owner.",
+              "Claude observed agent mode uses SDK permission bypass with Locus observation and catastrophic-action policy installed before runtime startup.",
           }
         : {
             runtime: "codex",
             adapterSource: "acp-temporary-compat",
             acpMode: "auto",
-            requiresPermissionHandler: false,
+            controlLevel: "observe",
+            observedToolPolicy: {
+              enabled: true,
+              blocksCatastrophicActions: true,
+              catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
+              degradation: "stream-only-when-hook-unavailable",
+            },
+            requiresPermissionHandler: true,
+            permissionHandlerFailure: "degrade-to-stream-only",
           },
     diagnostics: [
-      "Agent mode permits runtime side effects according to the selected runtime capability state.",
+      "Observed agent mode permits ordinary runtime actions, records tool decisions, and blocks catastrophic actions when runtime hooks are available.",
     ],
   }
 }

@@ -6,10 +6,14 @@ import type {
   ToolKind,
 } from "@agentclientprotocol/sdk"
 import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
+import type { ResolvedDesktopRuntimeControlLevel } from "../../../shared/agent-runtime-control"
 import {
+  classifyObservedToolRisk,
   decideClaudeToolUse,
+  type ObservedToolRisk,
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
+import type { ObservedToolPolicy } from "../agent-runtime/permission-policy"
 
 type AcpPermissionHandler = (
   params: RequestPermissionRequest,
@@ -38,8 +42,18 @@ export type CodexAcpPermissionTool = {
 
 export type CodexAcpPermissionPolicyInput = {
   mode: "plan" | "agent"
+  controlLevel?: ResolvedDesktopRuntimeControlLevel
+  observedToolPolicy?: ObservedToolPolicy
   contract?: ValidatedAgentScopeContract | null
   onGuardEvent?: (event: AgentGuardEvent) => void
+  onObservedToolDecision?: (event: CodexObservedToolDecision) => void
+}
+
+export type CodexObservedToolDecision = {
+  controlLevel: "observe"
+  decision: "allow" | "deny"
+  risk: ObservedToolRisk
+  message?: string
 }
 
 const CODEX_TITLE_VERB_TO_TOOL_NAME: Record<string, string> = {
@@ -225,8 +239,11 @@ export function isCodexPlanModeBlockedTool(
 
 export function createCodexAcpPermissionHandler({
   mode,
+  controlLevel,
+  observedToolPolicy,
   contract,
   onGuardEvent,
+  onObservedToolDecision,
 }: CodexAcpPermissionPolicyInput): AcpPermissionHandler {
   return async (params) => {
     const tool = normalizeCodexPermissionTool(params.toolCall)
@@ -236,6 +253,27 @@ export function createCodexAcpPermissionHandler({
     }
 
     if (!contract) {
+      if (controlLevel === "observe" && observedToolPolicy?.enabled) {
+        const risk = classifyObservedToolRisk({
+          toolName: tool.toolName,
+          toolInput: tool.toolInput,
+          toolUseId: tool.toolUseId,
+        })
+        const shouldDeny =
+          risk.catastrophic && observedToolPolicy.blocksCatastrophicActions
+        const message = shouldDeny
+          ? `Observed mode blocked ${tool.toolName}: ${risk.reason}`
+          : undefined
+        onObservedToolDecision?.({
+          controlLevel: "observe",
+          decision: shouldDeny ? "deny" : "allow",
+          risk,
+          ...(message ? { message } : {}),
+        })
+        if (shouldDeny) {
+          return buildCodexAcpPermissionResponse(params.options, "deny")
+        }
+      }
       return buildCodexAcpPermissionResponse(params.options, "allow")
     }
 

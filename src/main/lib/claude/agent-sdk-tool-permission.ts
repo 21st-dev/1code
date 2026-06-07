@@ -1,6 +1,7 @@
 import type { Options as ClaudeAgentSdkOptions } from "@anthropic-ai/claude-agent-sdk"
 import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
+  classifyObservedToolRisk,
   decideClaudeToolUse,
   toClaudePermissionResult,
   type ValidatedAgentScopeContract,
@@ -213,6 +214,34 @@ export function createClaudeAgentSdkToolPermissionHandler({
       return {
         behavior: "allow",
         updatedInput: response.updatedInput as Record<string, unknown>,
+      }
+    }
+
+    if (
+      permissionPolicy.controlLevel === "observe" &&
+      permissionPolicy.observedToolPolicy.enabled
+    ) {
+      const risk = classifyObservedToolRisk({
+        toolName,
+        toolInput,
+        toolUseId: options.toolUseID,
+      })
+      const shouldDeny =
+        risk.catastrophic &&
+        permissionPolicy.observedToolPolicy.blocksCatastrophicActions
+      const message = `Observed mode blocked ${toolName}: ${risk.reason}`
+      emit({
+        type: "observed-tool-decision",
+        controlLevel: "observe",
+        decision: shouldDeny ? "deny" : "allow",
+        risk,
+        ...(shouldDeny ? { message } : {}),
+      })
+      if (shouldDeny) {
+        return {
+          behavior: "deny",
+          message,
+        }
       }
     }
 

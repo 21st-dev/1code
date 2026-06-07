@@ -71,11 +71,34 @@ export async function createCodexAcpRuntimeModel({
     model,
     handler: createCodexAcpPermissionHandler({
       mode,
+      controlLevel: permission.controlLevel,
+      observedToolPolicy: permission.observedToolPolicy,
       contract: guardedContract,
       onGuardEvent,
+      onObservedToolDecision: (event) => {
+        emit({
+          type: "observed-tool-decision",
+          ...event,
+        })
+      },
     }),
   })
   if (!installResult.ok) {
+    if (permission.permissionHandlerFailure === "degrade-to-stream-only") {
+      emit({
+        type: "runtime-status",
+        ok: false,
+        blocker: {
+          component: "permission-observation",
+          reason: "codex-acp-permission-handler-unavailable",
+          message:
+            "Codex observed mode could not install the ACP permission handler; continuing with stream-only visibility.",
+          controlLevel: "observe",
+          enforcement: "degraded",
+        },
+      })
+      return { ok: true, model, tools }
+    }
     return installResult
   }
 

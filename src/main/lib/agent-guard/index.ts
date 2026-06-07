@@ -23,6 +23,7 @@ export {
 } from "./audit"
 export {
   classifyClaudeTool,
+  classifyObservedToolRisk,
   decideClaudeToolUse,
   extractClaudeToolPaths,
   isPathBlockedByContract,
@@ -31,7 +32,12 @@ export {
   relativeChangedFilePath,
   toClaudePermissionResult,
   type ClaudeToolCategory,
+  type ClassifyObservedToolRiskInput,
   type DecideClaudeToolUseInput,
+  type ObservedToolDecision,
+  type ObservedToolRisk,
+  type ObservedToolRiskCategory,
+  type ObservedToolRiskLevel,
 } from "./decision"
 export {
   getGuardedRunCheckpointAvailability,

@@ -2,6 +2,7 @@ import type {
   AgentGuardEvent,
   GuardedRunAudit,
 } from "../../../shared/agent-scope-contracts"
+import type { ObservedToolRisk } from "../agent-guard"
 
 // AI SDK UIMessageChunk format
 export type UIMessageChunk =
@@ -49,6 +50,13 @@ export type UIMessageChunk =
   | { type: "ask-user-question-result"; toolUseId: string; result: unknown }
   | { type: "guard-event"; event: AgentGuardEvent }
   | { type: "guard-audit"; audit: GuardedRunAudit }
+  | {
+      type: "observed-tool-decision"
+      controlLevel: "observe"
+      decision: "allow" | "deny"
+      risk: ObservedToolRisk
+      message?: string
+    }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
   // Session initialization (MCP servers, plugins, tools)
   | {
