@@ -106,6 +106,7 @@ describe("Claude Agent SDK adapter runner", () => {
     const queryCalls: unknown[] = []
     const consumedMessages: unknown[] = []
     const beforeAttempts: string[] = []
+    const consumedRequests: DesktopRunRequest[] = []
     const resolveAdapter = mock(({ adapter }) => adapter)
 
     await expect(
@@ -117,7 +118,7 @@ describe("Claude Agent SDK adapter runner", () => {
         request,
         queryOptions,
         consumeStream: async ({ request: consumedRequest, stream }) => {
-          expect(consumedRequest).toBe(request)
+          consumedRequests.push(consumedRequest)
           for await (const message of stream) {
             consumedMessages.push(message)
           }
@@ -148,6 +149,13 @@ describe("Claude Agent SDK adapter runner", () => {
       },
     })
     expect(queryCalls).toEqual([queryOptions])
+    expect(consumedRequests).toHaveLength(1)
+    expect(consumedRequests[0]).not.toBe(request)
+    expect(consumedRequests[0]).toMatchObject({
+      identity: { runId: "run-1", jobId: "job-1", attempt: 1 },
+      context: request.context,
+    })
+    expect(request.identity).toEqual({ runId: "run-1", jobId: "job-1" })
     expect(consumedMessages).toEqual([{ type: "assistant", text: "hello" }])
     expect(beforeAttempts).toEqual(["attempt"])
   })
@@ -305,7 +313,9 @@ describe("Claude Agent SDK adapter runner", () => {
     const slept: number[] = []
     const log = mock(() => {})
     let runs = 0
-    const adapter = createAdapter(async () => {
+    const attempts: Array<number | null | undefined> = []
+    const adapter = createAdapter(async (request) => {
+      attempts.push(request.identity.attempt)
       runs++
       if (runs === 1) {
         recordClaudeAgentSdkPolicyRetry({ state: policyRetry, log })
@@ -334,6 +344,7 @@ describe("Claude Agent SDK adapter runner", () => {
     ).resolves.toEqual({ status: "succeeded" })
 
     expect(runs).toBe(2)
+    expect(attempts).toEqual([1, 2])
     expect(beforeAttempts).toEqual(["attempt", "attempt"])
     expect(slept).toEqual([3000])
     expect(flattenedCalls(log)).toContain(

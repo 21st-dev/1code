@@ -81,6 +81,7 @@ describe("Claude Agent SDK adapter", () => {
         status: "desktop_runtime_adapter_started",
         adapterSource: "claude-agent-sdk",
         adapterLabel: "Claude Agent SDK",
+        attempt: 1,
         temporaryFallback: false,
         fallbackReason: null,
       },

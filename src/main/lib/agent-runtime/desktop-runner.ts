@@ -57,6 +57,7 @@ export function emitDesktopRuntimeAdapterStarted(
         status: "desktop_runtime_adapter_started",
         adapterSource: metadata.source,
         adapterLabel: metadata.label,
+        attempt: request.identity.attempt ?? 1,
         temporaryFallback: metadata.temporaryFallback,
         fallbackReason: metadata.fallbackReason ?? null,
       },

@@ -74,6 +74,7 @@ describe("desktop runtime adapter factory", () => {
         status: "desktop_runtime_adapter_started",
         adapterSource: "codex-acp-temporary-compat",
         adapterLabel: "Codex ACP temporary compatibility adapter",
+        attempt: 1,
         temporaryFallback: true,
       },
       redaction: {
@@ -606,7 +607,8 @@ describe("desktop runtime adapter factory", () => {
     )
     expect(claudeAgentSdkAdapterRunner).toContain("ClaudeAgentSdkLoadError")
     expect(claudeAgentSdkAdapterRunner).toContain("ClaudeAgentSdkQueryStartError")
-    expect(claudeAgentSdkAdapterRunner).toContain("adapter.run(request)")
+    expect(claudeAgentSdkAdapterRunner).toContain("withDesktopRunAttempt")
+    expect(claudeAgentSdkAdapterRunner).toContain("adapter.run(attemptRequest)")
   })
 
   test("keeps Claude provider runtime helpers out of the router", () => {

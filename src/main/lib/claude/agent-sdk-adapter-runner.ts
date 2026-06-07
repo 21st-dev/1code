@@ -1,4 +1,8 @@
-import type { DesktopRunRequest, DesktopRunResult } from "../agent-runtime/desktop-run-request"
+import {
+  withDesktopRunAttempt,
+  type DesktopRunRequest,
+  type DesktopRunResult,
+} from "../agent-runtime/desktop-run-request"
 import {
   DesktopRuntimeAdapterFactory,
   type DesktopRuntimeAdapter,
@@ -205,13 +209,17 @@ export async function runClaudeAgentSdkAdapterWithPolicyRetry({
   log = console.log,
   error = console.error,
 }: RunClaudeAgentSdkAdapterWithPolicyRetryInput): Promise<DesktopRunResult> {
+  let attempt = 0
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    attempt += 1
     resetClaudeAgentSdkPolicyRetryAttempt(policyRetry)
     beforeAttempt()
+    const attemptRequest = withDesktopRunAttempt(request, attempt)
 
     try {
-      const adapterResult = await adapter.run(request)
+      const adapterResult = await adapter.run(attemptRequest)
       if (adapterResult.status === "failed") {
         return adapterResult
       }

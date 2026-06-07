@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   createDesktopRunMcpReadiness,
   createDesktopRunContextFromPreflight,
+  withDesktopRunAttempt,
   withDesktopRunMcpReadiness,
   type DesktopRunRequest,
 } from "../src/main/lib/agent-runtime/desktop-run-request"
@@ -116,5 +117,40 @@ describe("desktop run request contract", () => {
       serverNames: [],
       blockers: [],
     })
+  })
+
+  test("adds adapter attempt identity without mutating the base request", () => {
+    const request = {
+      identity: { runId: "run-1", jobId: "job-1" },
+      context: {
+        runtimeId: "claude-code",
+        mode: "agent",
+        projectId: "project-1",
+        chatId: "chat-1",
+        subChatId: "sub-chat-1",
+        cwd: "/tmp/project",
+      },
+      prompt: "Retry safely",
+      permissionPolicy: resolveDesktopPermissionPolicy({
+        runtimeId: "claude-code",
+        mode: "agent",
+      }),
+      providerBinding: {},
+      mcp: { status: "skipped", serverNames: [], blockers: [] },
+      attachments: [],
+      trace: { emit: () => {} },
+      signal: new AbortController().signal,
+      session: {},
+    } satisfies DesktopRunRequest
+
+    const attemptRequest = withDesktopRunAttempt(request, 2)
+
+    expect(attemptRequest).not.toBe(request)
+    expect(attemptRequest.identity).toEqual({
+      runId: "run-1",
+      jobId: "job-1",
+      attempt: 2,
+    })
+    expect(request.identity).toEqual({ runId: "run-1", jobId: "job-1" })
   })
 })

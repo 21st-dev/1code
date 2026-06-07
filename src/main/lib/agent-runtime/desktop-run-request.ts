@@ -8,6 +8,7 @@ export type DesktopRunIdentity = {
   runId: string
   streamId?: string | null
   jobId?: string | null
+  attempt?: number | null
 }
 
 export type DesktopRunContext = {
@@ -103,6 +104,19 @@ export function withDesktopRunMcpReadiness(
   return {
     ...request,
     mcp,
+  }
+}
+
+export function withDesktopRunAttempt(
+  request: DesktopRunRequest,
+  attempt: number,
+): DesktopRunRequest {
+  return {
+    ...request,
+    identity: {
+      ...request.identity,
+      attempt,
+    },
   }
 }
 
