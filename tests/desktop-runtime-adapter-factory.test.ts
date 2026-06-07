@@ -428,6 +428,15 @@ describe("desktop runtime adapter factory", () => {
       "runClaudeAgentSdkDesktopAdapter",
     )
     expect(claudeAgentSdkAdapterRunner).toContain(
+      "DesktopRuntimeAdapterFactory",
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      "resolveClaudeAgentSdkDesktopAdapter",
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain(
+      'source: "claude-agent-sdk"',
+    )
+    expect(claudeAgentSdkAdapterRunner).toContain(
       "runClaudeAgentSdkDesktopAdapterWithRuntimeConsumer",
     )
     expect(claudeAgentSdkAdapterRunner).toContain(

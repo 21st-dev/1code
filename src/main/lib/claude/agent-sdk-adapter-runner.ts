@@ -1,5 +1,8 @@
 import type { DesktopRunRequest, DesktopRunResult } from "../agent-runtime/desktop-run-request"
-import type { DesktopRuntimeAdapter } from "../agent-runtime/desktop-runner"
+import {
+  DesktopRuntimeAdapterFactory,
+  type DesktopRuntimeAdapter,
+} from "../agent-runtime/desktop-runner"
 import {
   ClaudeAgentSdkLoadError,
   ClaudeAgentSdkQueryStartError,
@@ -47,6 +50,7 @@ export type RunClaudeAgentSdkDesktopAdapterInput = Omit<
   loadQuery?: () => Promise<ClaudeAgentSdkQuery>
   queryOptions: ClaudeAgentSdkQueryParams
   consumeStream: ClaudeAgentSdkStreamConsumer
+  resolveAdapter?: typeof resolveClaudeAgentSdkDesktopAdapter
 }
 
 export type RunClaudeAgentSdkDesktopAdapterWithStreamConsumerInput = Omit<
@@ -86,6 +90,7 @@ export async function runClaudeAgentSdkDesktopAdapter({
   loadQuery,
   queryOptions,
   consumeStream,
+  resolveAdapter = resolveClaudeAgentSdkDesktopAdapter,
   ...runnerInput
 }: RunClaudeAgentSdkDesktopAdapterInput): Promise<DesktopRunResult> {
   const adapter = createClaudeAgentSdkAdapter({
@@ -94,9 +99,26 @@ export async function runClaudeAgentSdkDesktopAdapter({
     queryOptions,
     consumeStream,
   })
-  return runClaudeAgentSdkAdapterWithPolicyRetry({
+  const desktopAdapter = resolveAdapter({
     adapter,
+    request: runnerInput.request,
+  })
+  return runClaudeAgentSdkAdapterWithPolicyRetry({
+    adapter: desktopAdapter,
     ...runnerInput,
+  })
+}
+
+export function resolveClaudeAgentSdkDesktopAdapter({
+  adapter,
+  request,
+}: {
+  adapter: DesktopRuntimeAdapter
+  request: DesktopRunRequest
+}): DesktopRuntimeAdapter {
+  return new DesktopRuntimeAdapterFactory([adapter]).get({
+    runtimeId: request.context.runtimeId,
+    source: "claude-agent-sdk",
   })
 }
 

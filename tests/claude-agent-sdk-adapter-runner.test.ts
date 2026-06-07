@@ -7,6 +7,7 @@ import {
   ClaudeAgentSdkQueryStartError,
 } from "../src/main/lib/claude/agent-sdk-adapter"
 import {
+  resolveClaudeAgentSdkDesktopAdapter,
   runClaudeAgentSdkAdapterWithPolicyRetry,
   runClaudeAgentSdkDesktopAdapter,
   runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery,
@@ -77,6 +78,27 @@ async function* createClaudeAssistantStream() {
 }
 
 describe("Claude Agent SDK adapter runner", () => {
+  test("resolves the Claude Agent SDK adapter through the desktop factory", () => {
+    const request = createRequest()
+    const adapter = createAdapter(async () => ({ status: "succeeded" }))
+
+    expect(
+      resolveClaudeAgentSdkDesktopAdapter({ adapter, request }),
+    ).toBe(adapter)
+
+    expect(() =>
+      resolveClaudeAgentSdkDesktopAdapter({
+        adapter,
+        request: {
+          ...request,
+          context: { ...request.context, runtimeId: "codex" },
+        },
+      }),
+    ).toThrow(
+      "Desktop runtime adapter not registered: codex:claude-agent-sdk",
+    )
+  })
+
   test("creates the current Claude Agent SDK adapter before the policy retry loop", async () => {
     const request = createRequest()
     const policyRetry = createClaudeAgentSdkPolicyRetryState()
@@ -84,6 +106,7 @@ describe("Claude Agent SDK adapter runner", () => {
     const queryCalls: unknown[] = []
     const consumedMessages: unknown[] = []
     const beforeAttempts: string[] = []
+    const resolveAdapter = mock(({ adapter }) => adapter)
 
     await expect(
       runClaudeAgentSdkDesktopAdapter({
@@ -100,6 +123,7 @@ describe("Claude Agent SDK adapter runner", () => {
           }
           return { status: "succeeded" }
         },
+        resolveAdapter,
         policyRetry,
         beforeAttempt: () => beforeAttempts.push("attempt"),
         getChunkCount: () => consumedMessages.length,
@@ -112,6 +136,17 @@ describe("Claude Agent SDK adapter runner", () => {
       }),
     ).resolves.toEqual({ status: "succeeded" })
 
+    expect(resolveAdapter).toHaveBeenCalledTimes(1)
+    expect(resolveAdapter.mock.calls[0][0]).toMatchObject({
+      request,
+      adapter: {
+        metadata: {
+          runtimeId: "claude-code",
+          source: "claude-agent-sdk",
+          temporaryFallback: false,
+        },
+      },
+    })
     expect(queryCalls).toEqual([queryOptions])
     expect(consumedMessages).toEqual([{ type: "assistant", text: "hello" }])
     expect(beforeAttempts).toEqual(["attempt"])
