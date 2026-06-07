@@ -1,0 +1,167 @@
+import { describe, expect, test } from "bun:test"
+import {
+  inspectRuntimeControlSmokeJob,
+} from "../scripts/inspect-runtime-control-smoke-job.mjs"
+
+function createFakeDb(input: {
+  job?: Record<string, any> | null
+  events?: Array<Record<string, any>>
+}) {
+  return {
+    prepare(sql: string) {
+      if (sql.includes("from agent_jobs")) {
+        return {
+          get(jobId: string) {
+            if (!input.job || input.job.id !== jobId) return undefined
+            return input.job
+          },
+        }
+      }
+
+      if (sql.includes("from agent_job_events")) {
+        return {
+          all(jobId: string) {
+            return (input.events ?? [])
+              .filter((event) => event.job_id === jobId)
+              .sort((a, b) => a.sequence - b.sequence)
+          },
+        }
+      }
+
+      throw new Error(`Unexpected SQL: ${sql}`)
+    },
+  }
+}
+
+function createJob(overrides: Record<string, any> = {}) {
+  return {
+    id: "job-1",
+    source: "desktop",
+    runtime: "claude-code",
+    status: "succeeded",
+    mode: "plan",
+    cwd: "/repo",
+    project_id: "project-1",
+    chat_id: "chat-1",
+    sub_chat_id: "sub-chat-1",
+    input_json: JSON.stringify({ runId: "run-1" }),
+    result_json: JSON.stringify({ ok: true }),
+    error_message: null,
+    ...overrides,
+  }
+}
+
+function createEvent(input: {
+  sequence: number
+  type: string
+  runtimeId?: string
+  payload?: Record<string, any>
+}) {
+  return {
+    id: `event-${input.sequence}`,
+    job_id: "job-1",
+    sequence: input.sequence,
+    type: input.type,
+    payload_json: JSON.stringify({
+      runId: "run-1",
+      runtimeId: input.runtimeId ?? "claude-code",
+      runEventSequence: input.sequence,
+      redaction: { status: "redacted" },
+      payload: input.payload ?? { status: input.type },
+    }),
+    created_at: Date.now(),
+  }
+}
+
+function createBootstrapStatusEvent() {
+  return {
+    id: "event-1",
+    job_id: "job-1",
+    sequence: 1,
+    type: "status",
+    payload_json: JSON.stringify({
+      status: "desktop_chat_stream_started",
+      runtime: "claude-code",
+      mode: "plan",
+      runId: "run-1",
+    }),
+    created_at: Date.now(),
+  }
+}
+
+describe("runtime control smoke job inspector", () => {
+  test("accepts a desktop job with ordered redacted semantic events", () => {
+    const db = createFakeDb({
+      job: createJob(),
+      events: [
+        createBootstrapStatusEvent(),
+        createEvent({ sequence: 2, type: "status" }),
+        createEvent({ sequence: 3, type: "completed" }),
+      ],
+    })
+
+    const result = inspectRuntimeControlSmokeJob({
+      db,
+      jobId: "job-1",
+      scenarioId: "claude-plan",
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.failures).toEqual([])
+    expect(result.summary?.job).toMatchObject({
+      id: "job-1",
+      source: "desktop",
+      runtime: "claude-code",
+      mode: "plan",
+      status: "succeeded",
+    })
+    expect(result.summary?.events).toHaveLength(3)
+  })
+
+  test("requires guard evidence for guarded scenarios", () => {
+    const db = createFakeDb({
+      job: createJob({
+        runtime: "codex",
+        mode: "agent",
+      }),
+      events: [
+        createEvent({ sequence: 1, type: "status", runtimeId: "codex" }),
+        createEvent({ sequence: 2, type: "completed", runtimeId: "codex" }),
+      ],
+    })
+
+    const result = inspectRuntimeControlSmokeJob({
+      db,
+      jobId: "job-1",
+      scenarioId: "codex-temporary-compat-guard",
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.failures.join("\n")).toContain("guard scenario is missing")
+  })
+
+  test("rejects unredacted secret-like payloads", () => {
+    const db = createFakeDb({
+      job: createJob(),
+      events: [
+        createEvent({ sequence: 1, type: "status" }),
+        createEvent({
+          sequence: 2,
+          type: "completed",
+          payload: { authorization: "Bearer secret-token" },
+        }),
+      ],
+    })
+
+    const result = inspectRuntimeControlSmokeJob({
+      db,
+      jobId: "job-1",
+      scenarioId: "claude-plan",
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.failures.join("\n")).toContain(
+      "unredacted secret-like payload",
+    )
+  })
+})

@@ -26,6 +26,19 @@ Task 6.6 requires all of the following for each scenario:
 - Provider/runtime logs checked for leaked provider secrets, OAuth tokens,
   headers, gateway tokens, and raw MCP secret payloads.
 
+After each real desktop run, validate the persisted job trace with:
+
+```bash
+bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=<scenario-id>
+```
+
+This DB inspector proves the `agent_jobs` row, runtime/mode/source, ordered
+semantic events, terminal event, guard event presence for guarded scenarios, and
+event redaction metadata. Adapter source is not yet persisted in `agent_jobs`,
+so `adapterSource=claude-agent-sdk` or
+`adapterSource=codex-acp-temporary-compat` still needs app log or UI/debug
+evidence.
+
 ## Required Scenarios
 
 | Scenario ID | Runtime path | Mode | Status |
@@ -52,6 +65,8 @@ Required evidence:
 - Desktop run request reached the Claude Agent SDK adapter with
   `adapterSource=claude-agent-sdk`.
 - Semantic `agent_job_events` query output for the job.
+- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=claude-plan`
+  passes for the job.
 - Workbench timeline screenshot or recording.
 - Secret grep result across logs and artifacts.
 
@@ -75,6 +90,8 @@ Required evidence:
   `adapterSource=claude-agent-sdk`.
 - Semantic `agent_job_events` query output showing guard decision or scope
   expansion events.
+- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=claude-guard`
+  passes for the job.
 - Workbench timeline screenshot or recording.
 - Secret grep result across logs and artifacts.
 
@@ -95,6 +112,8 @@ Required evidence:
 - Desktop run request reached the Codex ACP temporary-compat adapter with
   `adapterSource=codex-acp-temporary-compat`.
 - Semantic `agent_job_events` query output for the job.
+- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=codex-temporary-compat-plan`
+  passes for the job.
 - Workbench timeline screenshot or recording.
 - Secret grep result across logs and artifacts.
 
@@ -118,5 +137,7 @@ Required evidence:
   `adapterSource=codex-acp-temporary-compat`.
 - Semantic `agent_job_events` query output showing guard decision or scope
   expansion events.
+- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=codex-temporary-compat-guard`
+  passes for the job.
 - Workbench timeline screenshot or recording.
 - Secret grep result across logs and artifacts.
