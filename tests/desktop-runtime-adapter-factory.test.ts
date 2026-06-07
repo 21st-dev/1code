@@ -678,6 +678,12 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain("env: finalEnv")
     expect(claudeRouter).not.toContain("const finalEnv =")
     expect(claudeRouter).not.toContain("const resolvedModel =")
+    expect(claudeRouter).not.toContain(
+      "const hasExistingApiConfig = runtimeStartup.hasExistingApiConfig",
+    )
+    expect(runtimeLifecycle).toContain(
+      "hasExistingApiConfig: runtimeHasExistingApiConfig",
+    )
     expect(runtimeLifecycle).toContain(
       "isUsingOllama: runtimeQueryInput.isUsingOllama ?? input.isUsingOllama",
     )

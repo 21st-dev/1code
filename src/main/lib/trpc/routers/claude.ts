@@ -904,7 +904,6 @@ export const claudeRouter = router({
               logPrefix: `[${input.subChatId}] `,
             })
             const { isolatedConfig } = runtimeStartup
-            const hasExistingApiConfig = runtimeStartup.hasExistingApiConfig
 
             // MCP servers to pass to SDK (read from ~/.claude.json)
             let mcpServersForSdk: Record<string, any> | undefined
@@ -1071,7 +1070,6 @@ export const claudeRouter = router({
                 isUsingOllama,
                 isObservableActive: () => isObservableActive,
                 customConfig: finalCustomConfig,
-                hasExistingApiConfig,
                 oauthToken: claudeCodeToken,
                 historyEnabled,
                 db,

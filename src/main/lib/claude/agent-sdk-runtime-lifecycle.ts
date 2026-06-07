@@ -86,6 +86,7 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     | "prompt"
     | "cwd"
     | "abortSignal"
+    | "hasExistingApiConfig"
     | "chatId"
     | "subChatId"
     | "mode"
@@ -103,6 +104,9 @@ export type RunClaudeAgentSdkDesktopRuntimeLifecycleInput =
     runtimeStreamSetup?: ClaudeAgentSdkRuntimeStreamSetup
     runtimePrompt?: RunClaudeAgentSdkDesktopRuntimeLifecyclePromptInput
     runtimeStartupDiagnostics?: RunClaudeAgentSdkDesktopRuntimeLifecycleStartupDiagnosticsInput
+    hasExistingApiConfig?: RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput[
+      "hasExistingApiConfig"
+    ]
     desktopJobSawError: boolean
     streamStart: number
     nowMs?: () => number
@@ -151,6 +155,10 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     runtimeQueryInput.env ?? runtimeStartupContext?.finalEnv ?? {}
   const runtimeResolvedModel =
     runtimeQueryInput.resolvedModel ?? runtimeStartupContext?.resolvedModel
+  const runtimeHasExistingApiConfig =
+    input.hasExistingApiConfig ??
+    runtimeStartupContext?.hasExistingApiConfig ??
+    false
 
   if (input.runtimeStartupDiagnostics) {
     const {
@@ -164,7 +172,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     const { runtimeStartup, resumeSessionId } = diagnosticsInput
     logStartupDiagnostics({
       auth: {
-        hasExistingApiConfig: input.hasExistingApiConfig,
+        hasExistingApiConfig: runtimeHasExistingApiConfig,
         claudeCodeToken: input.oauthToken,
         credentialMetadata,
         finalEnv: runtimeStartup.finalEnv,
@@ -252,6 +260,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
       subChatId: requestContext.subChatId,
       mode: requestContext.mode,
       resolvedModel: runtimeResolvedModel,
+      hasExistingApiConfig: runtimeHasExistingApiConfig,
       transform: streamSetup.transform,
       parts,
       stderrLines,

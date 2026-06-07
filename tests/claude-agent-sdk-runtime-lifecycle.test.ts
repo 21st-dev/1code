@@ -102,6 +102,7 @@ function createLifecycleInput(
     },
     isolatedConfigDir: "/tmp/claude-config",
     resolvedModel: "claude-sonnet",
+    hasExistingApiConfig: true,
   }
 
   return {
@@ -317,12 +318,14 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     const db = createAgentJobTestDb()
     seedChat(db)
     const query = mock(() => createClaudeAssistantStream())
+    const logStartupDiagnostics = mock(() => {})
     const input = createLifecycleInput(db, {
       query,
-      logStartupDiagnostics: mock(() => {}),
+      logStartupDiagnostics,
     })
     delete (input.runtimeQuery as any).env
     delete (input.runtimeQuery as any).resolvedModel
+    delete (input as any).hasExistingApiConfig
 
     await expect(
       runClaudeAgentSdkDesktopRuntimeLifecycle(input),
@@ -338,6 +341,9 @@ describe("Claude Agent SDK runtime lifecycle", () => {
       CLAUDE_CODE_OAUTH_TOKEN: "oauth-token",
     })
     expect(query.mock.calls[0][0].options.model).toBe("claude-sonnet")
+    expect(logStartupDiagnostics.mock.calls[0][0].auth).toMatchObject({
+      hasExistingApiConfig: true,
+    })
   })
 
   test("runs the adapter and finalizes a successful desktop runtime turn", async () => {
