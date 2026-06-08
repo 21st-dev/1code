@@ -129,6 +129,19 @@ export function processClaudeAgentSdkUiChunk(input: {
       }
       break
     }
+    case "tool-output-error": {
+      const toolPart = parts.find(
+        (part) =>
+          part.type?.startsWith("tool-") &&
+          part.toolCallId === chunk.toolCallId,
+      )
+      if (toolPart) {
+        toolPart.errorText = chunk.errorText
+        toolPart.error = chunk.errorText
+        toolPart.state = "output-error"
+      }
+      break
+    }
     case "message-metadata":
       metadata = { ...metadata, ...chunk.messageMetadata }
       break

@@ -21,6 +21,30 @@ export interface ChangedFileInfo {
   deletions: number
 }
 
+function hasToolError(part: any): boolean {
+  return (
+    part?.errorText !== undefined ||
+    part?.error !== undefined ||
+    part?.isError === true ||
+    part?.state === "output-error" ||
+    part?.output?.success === false ||
+    part?.result?.success === false
+  )
+}
+
+export function isSuccessfulFileChangeToolPart(part: any): boolean {
+  if (part?.type !== "tool-Edit" && part?.type !== "tool-Write") return false
+  if (!part?.input?.file_path) return false
+  if (hasToolError(part)) return false
+
+  return (
+    part.state === "result" ||
+    part.state === "output-available" ||
+    part.output !== undefined ||
+    part.result !== undefined
+  )
+}
+
 /**
  * Extract commit message from a git commit command and its output.
  */
@@ -180,9 +204,8 @@ export function extractChangedFiles(parts: any[], projectPath?: string): Changed
   const fileMap = new Map<string, ChangedFileInfo>()
 
   for (const part of parts) {
-    if (part.type !== "tool-Edit" && part.type !== "tool-Write") continue
+    if (!isSuccessfulFileChangeToolPart(part)) continue
     const filePath: string = part.input?.file_path || ""
-    if (!filePath) continue
 
     // Skip session/plan files
     if (filePath.includes("claude-sessions") || filePath.includes("Application Support")) continue

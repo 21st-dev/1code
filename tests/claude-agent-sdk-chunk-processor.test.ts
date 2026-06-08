@@ -186,6 +186,35 @@ describe("Claude Agent SDK chunk processor", () => {
     ])
   })
 
+  test("marks write-like tool errors without notifying file changes", () => {
+    const notifications: any[] = []
+    const parts: Array<Record<string, any>> = [
+      {
+        type: "tool-Write",
+        toolCallId: "tool-1",
+        input: { file_path: ".env", content: "SECRET=1" },
+        state: "call",
+      },
+    ]
+
+    processChunk({
+      chunk: {
+        type: "tool-output-error",
+        toolCallId: "tool-1",
+        errorText: "Observed mode blocked Write: Write targets a sensitive path.",
+      },
+      parts,
+      notifications,
+    })
+
+    expect(parts[0]).toMatchObject({
+      state: "output-error",
+      errorText: "Observed mode blocked Write: Write targets a sensitive path.",
+      error: "Observed mode blocked Write: Write targets a sensitive path.",
+    })
+    expect(notifications).toEqual([])
+  })
+
   test("stops before accumulating when the stream observer is closed", () => {
     const emitted: UIMessageChunk[] = []
     const parts: Array<Record<string, any>> = []

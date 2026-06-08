@@ -1,6 +1,7 @@
 import { useSetAtom } from "jotai"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { subChatFilesAtom, subChatToChatMapAtom, type SubChatFileChange } from "../atoms"
+import { isSuccessfulFileChangeToolPart } from "../utils/git-activity"
 // import { REPO_ROOT_PATH } from "@/lib/codesandbox-constants"
 const REPO_ROOT_PATH = "/workspace" // Desktop mock
 
@@ -130,15 +131,15 @@ export function useChangedFilesTracking(
       for (const msg of inputMessages) {
         if (msg.role !== "assistant") continue
         for (const part of msg.parts || []) {
-          if (part.type === "tool-Edit" || part.type === "tool-Write") {
+          if (isSuccessfulFileChangeToolPart(part)) {
             const filePath = part.input?.file_path
             if (!filePath) continue
 
-          // Skip session/plan files stored in local app storage
-          if (isSessionFile(filePath)) continue
+            // Skip session/plan files stored in local app storage
+            if (isSessionFile(filePath)) continue
 
-          const oldString = part.input?.old_string || ""
-          const newString = part.input?.new_string || part.input?.content || ""
+            const oldString = part.input?.old_string || ""
+            const newString = part.input?.new_string || part.input?.content || ""
 
             const existing = fileStates.get(filePath)
             if (existing) {

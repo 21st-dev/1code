@@ -41,4 +41,4 @@
 - [x] 7.3 Run focused policy, guard-risk, Claude permission, Codex ACP permission, event mapper, and Workbench UI tests.
 - [x] 7.4 Run `bun run ts:check`.
 - [x] 7.5 Run `bun run build`.
-- [x] 7.6 Record desktop smoke evidence for Claude and Codex observed Agent runs, including one normal action, one high-risk highlighted action, and cancel/stop.
+- [x] 7.6 Record desktop smoke evidence for Claude and Codex observed Agent runs, including one normal action, one high-risk highlighted action, and cancel/stop. **PASSED 2026-06-08 rerun — see `smoke-evidence.md` for DB job IDs, deny traces, cancel traces, and canary filesystem checks.**
