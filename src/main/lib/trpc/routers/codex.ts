@@ -57,6 +57,10 @@ import {
   saveCodexApiKey as saveStoredCodexApiKey,
 } from "../../codex/api-key-store"
 import {
+  assertValidCodexApiKey,
+  validateCodexApiKey,
+} from "../../codex/api-key-validation"
+import {
   resolveBundledCodexCliPath,
 } from "../../codex/cli-path"
 import {
@@ -675,7 +679,8 @@ export const codexRouter = router({
 
   saveCodexApiKey: publicProcedure
     .input(z.object({ apiKey: z.string().min(1) }))
-    .mutation(({ input }) => {
+    .mutation(async ({ input }) => {
+      await assertValidCodexApiKey(input.apiKey)
       const status = saveStoredCodexApiKey(input.apiKey)
       cleanupAllCodexAcpProviders()
       return status
@@ -1200,6 +1205,46 @@ export const codexRouter = router({
                   {
                     id: "provider-profile",
                     status: "needs-auth",
+                    message: blocker.message,
+                    hint: blocker.hint,
+                  },
+                  [
+                    buildCodexRuntimeStatusChunk(blocker),
+                    buildCodexCapabilityErrorChunk(blocker),
+                  ],
+                )
+                return
+              }
+
+              const apiKeyValidation = await validateCodexApiKey(
+                appManagedCodexApiKey,
+                { signal: abortController.signal },
+              )
+              if (!apiKeyValidation.ok) {
+                if (
+                  apiKeyValidation.category === "cancelled" &&
+                  abortController.signal.aborted
+                ) {
+                  safeEmit({ type: "finish", finishReason: "stop" })
+                  safeComplete()
+                  return
+                }
+
+                const blocker = createCodexRuntimeBlocker({
+                  id: "login",
+                  label: "Codex API key",
+                  status: apiKeyValidation.status,
+                  ok: false,
+                  message: apiKeyValidation.message,
+                  hint: apiKeyValidation.hint,
+                })
+                emitPreflightBlocker(
+                  {
+                    id: "provider-profile",
+                    status:
+                      apiKeyValidation.status === "needs-auth"
+                        ? "needs-auth"
+                        : "blocked",
                     message: blocker.message,
                     hint: blocker.hint,
                   },

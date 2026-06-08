@@ -35,7 +35,7 @@ export function redactProviderSecrets(
     )
 
   return exactRedacted
-    .replace(/sk-[A-Za-z0-9_-]+/g, "sk-***")
+    .replace(/sk-[A-Za-z0-9_*-]+/g, "sk-***")
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer ***")
     .replace(
       /("(?:access|refresh|id)_?token"\s*:\s*")[^"]+(")/gi,
