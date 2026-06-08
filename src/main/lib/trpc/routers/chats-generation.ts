@@ -44,38 +44,11 @@ import {
 } from "./commit-message-utils"
 
 import {
-  COMMIT_MESSAGE_PROVIDER_TIMEOUT_MS,
-  ChatCompletionLocalApiProviderPurpose,
-  ChatCompletionRequestBody,
-  ContextUsageSummary,
-  LocalChatCompletionProviderConfig,
-  PROVIDER_ERROR_DETAIL_MAX_LENGTH,
-  UsageAmounts,
-  UsageTotals,
-  WorktreeSetupFailurePayload,
-  addUsageTotals,
-  buildChatCompletionUrl,
-  buildUtilityChatCompletionBody,
-  buildUtilityProviderHeaders,
-  cleanGeneratedChatName,
-  emptyUsageTotals,
   generateChatNameWithConfiguredProvider,
   generateChatNameWithOllama,
   generateCommitMessageWithConfiguredProvider,
   generateCommitMessageWithOllama,
-  getCodexRollbackUnsupportedMessage,
-  getContextUsage,
   getFallbackName,
-  getLocalChatCompletionProviderConfig,
-  getMessageTimestampMs,
-  getUsageAmounts,
-  hasCodexBackedMessages,
-  isCodexBackedMessage,
-  isDeepSeekChatCompletionProvider,
-  logProviderRequestFailure,
-  readNumber,
-  readObject,
-  sendWorktreeSetupFailure,
 } from "./chats-helpers"
 
 export const generationProcedures = {
