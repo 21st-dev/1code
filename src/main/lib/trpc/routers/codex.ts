@@ -1137,6 +1137,7 @@ export const codexRouter = router({
                   name: string
                   baseUrl: string
                   token: string
+                  defaultModel: string
                 }
               | undefined
             let appManagedCodexApiKey: string | null = null
@@ -1182,6 +1183,7 @@ export const codexRouter = router({
                 name: profile.name,
                 baseUrl: gateway.baseUrl,
                 token: gateway.token,
+                defaultModel: profile.defaultModel,
               }
             } else if (wantsAppManagedCodexApiKey) {
               appManagedCodexApiKey = readCodexApiKey()
@@ -1238,7 +1240,8 @@ export const codexRouter = router({
               requestedModel: input.model,
               hasAppManagedApiKey: Boolean(appManagedCodexApiKey),
             })
-            const metadataModel = selectedModelId
+            const metadataModel =
+              codexProviderProfile?.defaultModel ?? selectedModelId
 
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
@@ -1430,6 +1433,7 @@ export const codexRouter = router({
                 : appManagedCodexApiKey,
               providerProfile: codexProviderProfile,
               modelId: selectedModelId,
+              metadataModelId: metadataModel,
               images: resolvedImages,
               longTextAttachments: input.longTextAttachments,
               messagesForStream,

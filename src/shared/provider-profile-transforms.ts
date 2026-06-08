@@ -287,17 +287,29 @@ export function responsesToChatCompletions(body: AnyRecord): AnyRecord {
 
   const input = Array.isArray(body.input)
     ? body.input
-    : typeof body.input === "string"
-      ? [{ role: "user", content: body.input }]
-      : []
+      : typeof body.input === "string"
+        ? [{ role: "user", content: body.input }]
+        : []
+
+  const pendingToolCalls: AnyRecord[] = []
+  const flushPendingToolCalls = () => {
+    if (pendingToolCalls.length === 0) return
+    messages.push({
+      role: "assistant",
+      content: "",
+      tool_calls: pendingToolCalls.splice(0),
+    })
+  }
 
   for (const item of input) {
     if (typeof item === "string") {
+      flushPendingToolCalls()
       messages.push({ role: "user", content: item })
       continue
     }
 
     if (item?.type === "function_call_output" && typeof item.call_id === "string") {
+      flushPendingToolCalls()
       messages.push({
         role: "tool",
         tool_call_id: item.call_id,
@@ -309,29 +321,25 @@ export function responsesToChatCompletions(body: AnyRecord): AnyRecord {
     if (item?.type === "function_call") {
       const name = typeof item.name === "string" ? item.name : undefined
       if (name) {
-        messages.push({
-          role: "assistant",
-          content: "",
-          tool_calls: [
-            {
-              id: item.call_id || item.id || `call_${crypto.randomUUID()}`,
-              type: "function",
-              function: {
-                name,
-                arguments: stringifyArguments(item.arguments),
-              },
-            },
-          ],
+        pendingToolCalls.push({
+          id: item.call_id || item.id || `call_${crypto.randomUUID()}`,
+          type: "function",
+          function: {
+            name,
+            arguments: stringifyArguments(item.arguments),
+          },
         })
       }
       continue
     }
 
+    flushPendingToolCalls()
     const role = item?.role === "assistant" || item?.role === "system"
       ? item.role
       : "user"
     messages.push({ role, content: contentToText(item?.content) })
   }
+  flushPendingToolCalls()
 
   const tools = asArray(body.tools)
     .map((tool) => responsesToolToChatTool(tool as AnyRecord))

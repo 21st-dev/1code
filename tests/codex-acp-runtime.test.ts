@@ -17,7 +17,7 @@ describe("Codex ACP runtime", () => {
   test("defers finish until usage metadata can be emitted", async () => {
     const emitted: any[] = []
 
-    await emitCodexAcpUiStream({
+    const result = await emitCodexAcpUiStream({
       uiStream: streamFrom([
         { type: "text-delta", delta: "hello" },
         { type: "finish", finishReason: "stop" },
@@ -33,12 +33,13 @@ describe("Codex ACP runtime", () => {
       { type: "message-metadata", messageMetadata: { totalTokens: 12 } },
       { type: "finish", finishReason: "stop" },
     ])
+    expect(result).toEqual({ status: "succeeded" })
   })
 
   test("normalizes auth errors before emission", async () => {
     const emitted: any[] = []
 
-    await emitCodexAcpUiStream({
+    const result = await emitCodexAcpUiStream({
       uiStream: streamFrom([{ type: "error", errorText: "raw" }]),
       emit: (chunk) => emitted.push(chunk),
       normalizeError: () => ({ message: "login required" }),
@@ -50,6 +51,10 @@ describe("Codex ACP runtime", () => {
       { type: "auth-error", errorText: "login required" },
       { type: "finish" },
     ])
+    expect(result).toEqual({
+      status: "failed",
+      error: { message: "login required" },
+    })
   })
 
   test("stops dynamic ACP tool streams when permission hook denies", async () => {
@@ -73,7 +78,7 @@ describe("Codex ACP runtime", () => {
       },
     }
 
-    await emitCodexAcpUiStream({
+    const result = await emitCodexAcpUiStream({
       uiStream: streamFrom([
         dynamicToolChunk,
         {
@@ -116,6 +121,10 @@ describe("Codex ACP runtime", () => {
       },
       { type: "finish", finishReason: "error" },
     ])
+    expect(result).toEqual({
+      status: "failed",
+      error: { message: "Observed mode blocked Edit: sensitive path" },
+    })
   })
 
   test("returns when the abort signal fires while waiting for ACP chunks", async () => {
@@ -138,10 +147,11 @@ describe("Codex ACP runtime", () => {
     })
 
     abortController.abort()
-    await streamPromise
+    const result = await streamPromise
     await Promise.resolve()
 
     expect(cancelReason).toBe("Session cancelled.")
     expect(emitted).toEqual([{ type: "finish", finishReason: "stop" }])
+    expect(result).toEqual({ status: "canceled" })
   })
 })

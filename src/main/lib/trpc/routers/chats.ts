@@ -6,6 +6,10 @@ import simpleGit from "simple-git"
 import { z } from "zod"
 import { buildAgentRuntimeCapabilityDiagnostic } from "../../../../shared/agent-runtime-capabilities"
 import {
+  agentChatProviders,
+  buildAgentChatMessageMetadata,
+} from "../../../../shared/agent-chat-provider"
+import {
   trackPRCreated,
   trackWorkspaceArchived,
   trackWorkspaceCreated,
@@ -708,6 +712,9 @@ export const chatsRouter = router({
         projectId: z.string(),
         name: z.string().optional(),
         model: z.string().optional(),
+        provider: z.enum(agentChatProviders).optional(),
+        modelSource: z.string().optional(),
+        providerProfileId: z.string().nullable().optional(),
         initialMessage: z.string().optional(),
         initialMessageParts: z
           .array(
@@ -794,7 +801,12 @@ export const chatsRouter = router({
       // Create initial sub-chat with user message (AI SDK format)
       // If initialMessageParts is provided, use it; otherwise fallback to text-only message
       let initialMessages = "[]"
-      const initialMetadata = input.model ? { model: input.model } : undefined
+      const initialMetadata = buildAgentChatMessageMetadata({
+        model: input.model,
+        provider: input.provider,
+        modelSource: input.modelSource,
+        providerProfileId: input.providerProfileId,
+      })
 
       if (input.initialMessageParts && input.initialMessageParts.length > 0) {
         initialMessages = JSON.stringify([

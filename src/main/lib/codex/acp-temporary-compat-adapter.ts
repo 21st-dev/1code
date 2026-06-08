@@ -53,6 +53,7 @@ export type CreateCodexAcpTemporaryCompatAdapterInput = {
   mcpServers: CodexAcpMcpServerForSession[]
   mcpFingerprint: string
   modelId: string
+  metadataModelId?: string
   images: CodexAcpResolvedImage[]
   longTextAttachments?: CodexPromptLongTextAttachment[]
   messagesForStream: any[]
@@ -108,6 +109,7 @@ export function createCodexAcpTemporaryCompatAdapter({
   mcpServers,
   mcpFingerprint,
   modelId,
+  metadataModelId,
   images,
   longTextAttachments,
   messagesForStream,
@@ -223,7 +225,7 @@ export function createCodexAcpTemporaryCompatAdapter({
         abortSignal: request.signal,
         originalMessages: messagesForStream,
         provider,
-        metadataModel: modelId,
+        metadataModel: metadataModelId ?? modelId,
         runId: request.identity.runId,
         startedAt,
         guardedContract: guardedRun?.contract ?? null,
@@ -266,7 +268,7 @@ export function createCodexAcpTemporaryCompatAdapter({
         },
       })
 
-      await emitCodexAcpUiStream({
+      const streamResult = await emitCodexAcpUiStream({
         uiStream,
         emit,
         normalizeError: extractCodexError,
@@ -317,8 +319,23 @@ export function createCodexAcpTemporaryCompatAdapter({
         }
       }
 
+      if (streamResult.status === "failed") {
+        return {
+          status: "failed" as const,
+          sessionId: provider.getSessionId() ?? null,
+          error: streamResult.error,
+        }
+      }
+
+      if (streamResult.status === "canceled" || request.signal.aborted) {
+        return {
+          status: "canceled" as const,
+          sessionId: provider.getSessionId() ?? null,
+        }
+      }
+
       return {
-        status: request.signal.aborted ? "canceled" as const : "succeeded" as const,
+        status: "succeeded" as const,
         sessionId: provider.getSessionId() ?? null,
       }
     },

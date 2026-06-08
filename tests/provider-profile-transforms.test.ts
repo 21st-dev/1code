@@ -202,6 +202,79 @@ describe("provider profile request transforms", () => {
     ])
   })
 
+  test("bridges parallel Responses function calls before their tool outputs", () => {
+    const body = responsesToChatCompletions({
+      model: "deepseek-v4-flash",
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: "Read package and README." }],
+        },
+        {
+          type: "function_call",
+          call_id: "call_package",
+          name: "read_file",
+          arguments: "{\"path\":\"package.json\"}",
+        },
+        {
+          type: "function_call",
+          call_id: "call_readme",
+          name: "read_file",
+          arguments: "{\"path\":\"README.md\"}",
+        },
+        {
+          type: "function_call_output",
+          call_id: "call_package",
+          output: "{\"name\":\"locus\"}",
+        },
+        {
+          type: "function_call_output",
+          call_id: "call_readme",
+          output: "Quick Start",
+        },
+      ],
+    })
+
+    expect(body.messages).toEqual([
+      {
+        role: "user",
+        content: "Read package and README.",
+      },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [
+          {
+            id: "call_package",
+            type: "function",
+            function: {
+              name: "read_file",
+              arguments: "{\"path\":\"package.json\"}",
+            },
+          },
+          {
+            id: "call_readme",
+            type: "function",
+            function: {
+              name: "read_file",
+              arguments: "{\"path\":\"README.md\"}",
+            },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        tool_call_id: "call_package",
+        content: "{\"name\":\"locus\"}",
+      },
+      {
+        role: "tool",
+        tool_call_id: "call_readme",
+        content: "Quick Start",
+      },
+    ])
+  })
+
   test("redacts no secrets while converting provider responses", () => {
     const chatCompletion = {
       id: "chatcmpl_1",

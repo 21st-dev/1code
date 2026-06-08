@@ -1,12 +1,16 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
+import { normalizeAgentChatMetadataModel } from "../../../../shared/agent-chat-provider"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import {
   normalizeLongTextAttachmentPart,
   type LongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
 import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
-import { parseProviderProfileSource } from "../../../../shared/provider-profile-types"
+import {
+  parseProviderProfileSource,
+  providerProfileSource,
+} from "../../../../shared/provider-profile-types"
 import {
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
@@ -66,6 +70,14 @@ type ImageAttachment = {
 // When a sub-chat hits auth-error, force one fresh Codex ACP session on next send.
 const forceFreshSessionSubChats = new Set<string>()
 const DEFAULT_CODEX_MODEL = "gpt-5.5/high"
+const PROVIDER_PROFILE_CODEX_REASONING = "none"
+
+function formatProviderProfileCodexModel(model: string): string {
+  return /\/(?:none|low|medium|high|xhigh)$/.test(model)
+    ? model
+    : `${model}/${PROVIDER_PROFILE_CODEX_REASONING}`
+}
+
 async function getStoredCodexCredentials(): Promise<{
   hasApiKey: boolean
   hasSubscription: boolean
@@ -169,7 +181,18 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     if (forceNewSession) {
       forceFreshSessionSubChats.delete(this.config.subChatId)
     }
-    const selectedCodexModelSource = appStore.get(
+    const userMetadata = lastUser?.metadata as
+      | { model?: unknown; modelSource?: unknown; providerProfileId?: unknown }
+      | undefined
+    const metadataModel = normalizeAgentChatMetadataModel(userMetadata?.model)
+    const metadataModelSource =
+      typeof userMetadata?.modelSource === "string" && userMetadata.modelSource.trim()
+        ? userMetadata.modelSource.trim()
+        : typeof userMetadata?.providerProfileId === "string" &&
+            userMetadata.providerProfileId.trim()
+          ? providerProfileSource(userMetadata.providerProfileId.trim())
+          : null
+    const selectedCodexModelSource = metadataModelSource ?? appStore.get(
       subChatCodexModelSourceAtomFamily(this.config.subChatId),
     )
     const selectedCodexAuthMethod = appStore.get(codexOnboardingAuthMethodAtom)
@@ -185,7 +208,10 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     const providerProfileId = parseProviderProfileSource(effectiveCodexModelSource)
     const codexAuthMethod =
       effectiveCodexModelSource === "openai-api-key" ? "api_key" : "chatgpt"
-    const selectedModel = getSelectedCodexModel(this.config.subChatId)
+    const selectedModel =
+      providerProfileId && metadataModel
+        ? formatProviderProfileCodexModel(metadataModel)
+        : getSelectedCodexModel(this.config.subChatId)
 
     return new ReadableStream({
       start: (controller) => {

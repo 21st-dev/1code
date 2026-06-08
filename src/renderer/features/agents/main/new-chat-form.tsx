@@ -107,6 +107,7 @@ import {
   isProviderProfileSource,
   parseProviderProfileSource,
 } from "../../../../shared/provider-profile-types"
+import type { AgentChatProvider } from "../../../../shared/agent-chat-provider"
 import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
@@ -1164,6 +1165,15 @@ export function NewChatForm({
       projectId: projectForChat.id,
       name: message.trim().slice(0, 50), // Use first 50 chars as chat name
       model: selectedChatModel,
+      provider: selectedAgent.id as AgentChatProvider,
+      modelSource:
+        selectedAgent.id === "codex"
+          ? lastSelectedCodexModelSource
+          : effectiveClaudeModelSource,
+      providerProfileId:
+        selectedAgent.id === "codex"
+          ? selectedCodexProfileId
+          : selectedClaudeProfileId,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         workMode === "worktree" ? selectedBranch || undefined : undefined,
@@ -1184,6 +1194,11 @@ export function NewChatForm({
     files,
     pastedTexts,
     selectedChatModel,
+    selectedAgent.id,
+    lastSelectedCodexModelSource,
+    effectiveClaudeModelSource,
+    selectedCodexProfileId,
+    selectedClaudeProfileId,
     agentMode,
     imageAttachmentBlocked,
     t,

@@ -7,6 +7,10 @@ import {
 } from "./acp-permission"
 
 export type CodexAcpNormalizedError = { message: string; code?: string }
+export type CodexAcpUiStreamResult = {
+  status: "succeeded" | "failed" | "canceled"
+  error?: CodexAcpNormalizedError
+}
 
 export type CodexAcpDynamicToolPermissionHook = (
   tool: CodexAcpPermissionTool,
@@ -120,13 +124,16 @@ export async function emitCodexAcpUiStream({
   abortSignal,
   onDynamicToolPermission,
   onDynamicToolDenied,
-}: EmitCodexAcpUiStreamInput): Promise<void> {
+}: EmitCodexAcpUiStreamInput): Promise<CodexAcpUiStreamResult> {
   const reader = uiStream.getReader()
   let pendingFinishChunk: any | null = null
+  let streamError: CodexAcpNormalizedError | null = null
+  let canceled = false
 
   while (true) {
     const readResult = await readChunk(reader, abortSignal)
     if ("aborted" in readResult) {
+      canceled = true
       cancelReaderQuietly(reader, "Session cancelled.")
       pendingFinishChunk = { type: "finish", finishReason: "stop" }
       break
@@ -137,6 +144,7 @@ export async function emitCodexAcpUiStream({
 
     if (value?.type === "error") {
       const normalized = normalizeError(value)
+      streamError = normalized
 
       if (isAuthError(normalized)) {
         emit({ ...value, type: "auth-error", errorText: normalized.message })
@@ -155,6 +163,7 @@ export async function emitCodexAcpUiStream({
         permissionDecision = await onDynamicToolPermission(dynamicTool)
       } catch (error) {
         const normalized = normalizeError(error)
+        streamError = normalized
         emit({ type: "error", errorText: normalized.message })
         cancelReaderQuietly(reader, normalized.message)
         pendingFinishChunk = { type: "finish", finishReason: "error" }
@@ -165,6 +174,7 @@ export async function emitCodexAcpUiStream({
         const message =
           permissionDecision.message ||
           `Codex ACP blocked ${dynamicTool.toolName} before execution.`
+        streamError = { message }
         onDynamicToolDenied?.(dynamicTool, permissionDecision)
         emit({
           type: "tool-output-error",
@@ -181,6 +191,9 @@ export async function emitCodexAcpUiStream({
     }
 
     if (value?.type === "finish") {
+      if (value.finishReason === "error" && !streamError) {
+        streamError = { message: "Codex ACP stream ended with an error." }
+      }
       pendingFinishChunk = value
       continue
     }
@@ -200,4 +213,12 @@ export async function emitCodexAcpUiStream({
   } else {
     emit({ type: "finish" })
   }
+
+  if (streamError) {
+    return { status: "failed", error: streamError }
+  }
+  if (canceled) {
+    return { status: "canceled" }
+  }
+  return { status: "succeeded" }
 }

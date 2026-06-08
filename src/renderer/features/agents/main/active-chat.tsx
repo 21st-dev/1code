@@ -57,6 +57,10 @@ import { flushSync } from "react-dom"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
 import { isRuntimeCapabilitySupported } from "../../../../shared/agent-runtime-capabilities"
+import {
+  inferAgentChatProviderFromMessages,
+  type AgentChatProvider,
+} from "../../../../shared/agent-chat-provider"
 import type { FileStatus } from "../../../../shared/changes-types"
 import { isProviderProfileSource } from "../../../../shared/provider-profile-types"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
@@ -5413,7 +5417,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   }, [agentSubChats, activeSubChatIdForPlan, setCurrentPlanPath])
 
   const inferProviderFromMessages = useCallback(
-    (subChatId?: string): "claude-code" | "codex" => {
+    (subChatId?: string): AgentChatProvider => {
       if (!subChatId) return "claude-code"
 
       const override = subChatProviderOverrides[subChatId]
@@ -5436,24 +5440,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         }
       }
 
-      for (const message of messages) {
-        const provider = (message as any)?.metadata?.provider
-        if (provider === "codex") {
-          return "codex"
-        }
-
-        const model = (message as any)?.metadata?.model
-        if (typeof model !== "string") continue
-        const normalizedModel = model.toLowerCase()
-        if (
-          normalizedModel.includes("codex") ||
-          normalizedModel.startsWith("gpt-")
-        ) {
-          return "codex"
-        }
-      }
-
-      return "claude-code"
+      return inferAgentChatProviderFromMessages(messages)
     },
     [agentChat, subChatProviderOverrides],
   )

@@ -14,6 +14,29 @@ describe("provider routing UX source guards", () => {
     join(process.cwd(), "src/renderer/features/settings/settings-content.tsx"),
     "utf8",
   )
+  const newChatFormSource = readFileSync(
+    join(process.cwd(), "src/renderer/features/agents/main/new-chat-form.tsx"),
+    "utf8",
+  )
+  const chatsRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/chats.ts"),
+    "utf8",
+  )
+  const acpChatTransportSource = readFileSync(
+    join(
+      process.cwd(),
+      "src/renderer/features/agents/lib/acp-chat-transport.ts",
+    ),
+    "utf8",
+  )
+  const codexRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/codex.ts"),
+    "utf8",
+  )
+  const acpCompatAdapterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/codex/acp-temporary-compat-adapter.ts"),
+    "utf8",
+  )
 
   test("Models settings uses a wide layout for provider routing controls", () => {
     expect(settingsContentSource).toContain('activeTab === "models"')
@@ -42,5 +65,18 @@ describe("provider routing UX source guards", () => {
     expect(modelsTabSource).toContain(
       "settings.models.providerProfiles.tokenRefreshRequired",
     )
+  })
+
+  test("new chats persist selected provider metadata for transport routing", () => {
+    expect(newChatFormSource).toContain("provider: selectedAgent.id as AgentChatProvider")
+    expect(newChatFormSource).toContain("modelSource:")
+    expect(newChatFormSource).toContain("providerProfileId:")
+    expect(chatsRouterSource).toContain("buildAgentChatMessageMetadata")
+    expect(chatsRouterSource).toContain("provider: input.provider")
+    expect(acpChatTransportSource).toContain("normalizeAgentChatMetadataModel")
+    expect(acpChatTransportSource).toContain("formatProviderProfileCodexModel")
+    expect(acpChatTransportSource).toContain("providerProfileId && metadataModel")
+    expect(codexRouterSource).toContain("metadataModelId: metadataModel")
+    expect(acpCompatAdapterSource).toContain("metadataModelId ?? modelId")
   })
 })
