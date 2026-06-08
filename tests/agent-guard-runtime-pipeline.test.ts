@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
+
+// The chats router is split across `chats*.ts` modules; read them together so
+// source guards verify the implementation regardless of internal file layout.
+function readChatsRouterSource(): string {
+  const dir = "src/main/lib/trpc/routers"
+  return readdirSync(dir)
+    .filter((file) => /^chats.*\.ts$/.test(file))
+    .map((file) => readFileSync(`${dir}/${file}`, "utf8"))
+    .join("\n")
+}
 
 describe("agent guard runtime pipeline", () => {
   test("Claude transport, router, and stream chunks are wired for hard enforcement", () => {
@@ -259,7 +269,7 @@ describe("agent guard runtime pipeline", () => {
   })
 
   test("Codex rollback and fork controls fail closed instead of using Claude session semantics", () => {
-    const chats = readFileSync("src/main/lib/trpc/routers/chats.ts", "utf8")
+    const chats = readChatsRouterSource()
     const activeChat = readFileSync(
       "src/renderer/features/agents/main/active-chat.tsx",
       "utf8",

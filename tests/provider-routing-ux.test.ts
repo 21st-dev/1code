@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
+
+// The chats router is split across `chats*.ts` modules; read them together so
+// source guards verify the implementation regardless of internal file layout.
+function readChatsRouterSource(): string {
+  const dir = join(process.cwd(), "src/main/lib/trpc/routers")
+  return readdirSync(dir)
+    .filter((file) => /^chats.*\.ts$/.test(file))
+    .map((file) => readFileSync(join(dir, file), "utf8"))
+    .join("\n")
+}
 
 describe("provider routing UX source guards", () => {
   const modelsTabSource = readFileSync(
@@ -18,10 +28,7 @@ describe("provider routing UX source guards", () => {
     join(process.cwd(), "src/renderer/features/agents/main/new-chat-form.tsx"),
     "utf8",
   )
-  const chatsRouterSource = readFileSync(
-    join(process.cwd(), "src/main/lib/trpc/routers/chats.ts"),
-    "utf8",
-  )
+  const chatsRouterSource = readChatsRouterSource()
   const acpChatTransportSource = readFileSync(
     join(
       process.cwd(),
