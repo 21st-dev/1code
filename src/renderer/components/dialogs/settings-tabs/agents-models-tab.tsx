@@ -1679,14 +1679,20 @@ export function AgentsModelsTab() {
 
     setIsSavingCodexApiKey(true)
     try {
-      await saveCodexApiKeyMutation.mutateAsync({ apiKey: normalized })
+      const saveResult = await saveCodexApiKeyMutation.mutateAsync({ apiKey: normalized })
       setCodexApiKey("")
       setCodexOnboardingAuthMethod("api_key")
       setCodexOnboardingCompleted(true)
       setLastSelectedCodexModelSource("openai-api-key")
       await trpcUtils.codex.getCodexApiKeyStatus.invalidate()
       await trpcUtils.codex.getIntegration.invalidate()
-      toast.success(t("toast.models.codexApiKeySaved"))
+      if (saveResult.verified === false) {
+        // Key was stored but OpenAI could not be reached to verify it
+        // (offline / rate-limited / transient) — accept it, but be honest.
+        toast.warning(saveResult.warning ?? t("toast.models.codexApiKeySaved"))
+      } else {
+        toast.success(t("toast.models.codexApiKeySaved"))
+      }
     } catch (error) {
       toast.error(
         error instanceof Error

@@ -92,8 +92,11 @@ describe("Codex API key validation", () => {
 
     expect(codexRouterSource).toContain("../../codex/api-key-validation")
     expect(codexRouterSource).toContain(
-      "await assertValidCodexApiKey(input.apiKey)",
+      "const validation = await validateCodexApiKey(input.apiKey)",
     )
+    // Save must still hard-reject a key that is confirmed bad, while a transient
+    // network/rate-limit failure is allowed to store as unverified.
+    expect(codexRouterSource).toContain('validation.category === "auth_failed"')
 
     const validationIndex = codexRouterSource.indexOf(
       "const apiKeyValidation = await validateCodexApiKey",

@@ -57,7 +57,7 @@ import {
   saveCodexApiKey as saveStoredCodexApiKey,
 } from "../../codex/api-key-store"
 import {
-  assertValidCodexApiKey,
+  CodexApiKeyValidationError,
   validateCodexApiKey,
 } from "../../codex/api-key-validation"
 import {
@@ -680,10 +680,30 @@ export const codexRouter = router({
   saveCodexApiKey: publicProcedure
     .input(z.object({ apiKey: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      await assertValidCodexApiKey(input.apiKey)
+      const validation = await validateCodexApiKey(input.apiKey)
+      // Only refuse to store a key we know is bad. Transient/network/rate-limit
+      // failures must not block save (local-first: the key may be valid and the
+      // user may simply be offline) — store it but flag it unverified so the UI
+      // can warn instead of silently accepting an unchecked key.
+      if (
+        !validation.ok &&
+        (validation.category === "auth_failed" ||
+          validation.category === "invalid_format")
+      ) {
+        throw new CodexApiKeyValidationError(validation)
+      }
       const status = saveStoredCodexApiKey(input.apiKey)
       cleanupAllCodexAcpProviders()
-      return status
+      if (!validation.ok) {
+        return {
+          ...status,
+          verified: false as const,
+          warning: validation.hint
+            ? `${validation.message} ${validation.hint}`
+            : validation.message,
+        }
+      }
+      return { ...status, verified: true as const }
     }),
 
   removeCodexApiKey: publicProcedure.mutation(() => {
