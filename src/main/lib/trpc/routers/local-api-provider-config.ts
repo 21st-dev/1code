@@ -1,11 +1,13 @@
 import { eq } from "drizzle-orm"
 import { z } from "zod"
 import { getDatabase, localApiProviderConfigs } from "../../db"
+import { isSecureStorageAvailable } from "../../secure-storage"
 import {
-  decryptStringFromStorage,
-  encryptStringForStorage,
-  isSecureStorageAvailable,
-} from "../../secure-storage"
+  decryptProviderToken,
+  encryptProviderToken,
+  normalizeProviderBaseUrl,
+  normalizeProviderToken,
+} from "../../provider-token"
 import { publicProcedure, router } from "../index"
 
 export const localApiProviderPurposeSchema = z.enum([
@@ -33,36 +35,6 @@ type LocalApiProviderMetadata = {
   updatedAt: string | null
 }
 
-const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
-const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
-
-function encryptToken(token: string): string {
-  return encryptStringForStorage(token)
-}
-
-function decryptToken(encrypted: string): string | null {
-  return decryptStringFromStorage(encrypted)
-}
-
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, "")
-}
-
-function normalizeProviderToken(token: string): string {
-  const normalized = token
-    .trim()
-    .replace(ZERO_WIDTH_TOKEN_CHARS_REGEX, "")
-
-  if (!normalized) {
-    throw new Error("Token is required")
-  }
-
-  if (!HEADER_SAFE_TOKEN_REGEX.test(normalized)) {
-    throw new Error("Token contains whitespace or unsupported characters")
-  }
-
-  return normalized
-}
 
 export function getLocalApiProviderTokenRequirement(input: {
   baseUrl: string
@@ -72,7 +44,7 @@ export function getLocalApiProviderTokenRequirement(input: {
 }): "none" | "missing" | "destination_changed" {
   if (input.token?.trim()) return "none"
 
-  const baseUrl = normalizeBaseUrl(input.baseUrl)
+  const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
   const destinationChanged = Boolean(
     input.existingEncryptedToken && input.existingBaseUrl !== baseUrl,
   )
@@ -112,7 +84,7 @@ export function getActiveLocalApiProviderConfig(
     return undefined
   }
 
-  const token = decryptToken(row.encryptedToken)
+  const token = decryptProviderToken(row.encryptedToken)
   if (!token) return undefined
 
   return {
@@ -145,7 +117,7 @@ export const localApiProviderConfigRouter = router({
 
   save: publicProcedure.input(saveInputSchema).mutation(({ input }) => {
     const model = input.model.trim()
-    const baseUrl = normalizeBaseUrl(input.baseUrl)
+    const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
     const token = input.token ? normalizeProviderToken(input.token) : undefined
     const existing = getStoredProviderRow(input.purpose)
 
@@ -169,7 +141,7 @@ export const localApiProviderConfigRouter = router({
     }
 
     const encryptedToken = token
-      ? encryptToken(token)
+      ? encryptProviderToken(token)
       : existing?.encryptedToken
 
     if (!encryptedToken) {

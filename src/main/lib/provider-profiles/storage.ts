@@ -25,12 +25,15 @@ import {
 import { getActiveClaudeProviderConfig } from "../claude/provider-config-store"
 import { getActiveLocalApiProviderConfig } from "../trpc/routers/local-api-provider-config"
 import {
-  decryptStringFromStorage,
-  encryptStringForStorage,
-} from "../secure-storage"
+  decryptProviderToken,
+  encryptProviderToken,
+  normalizeProviderBaseUrl,
+  normalizeProviderToken,
+} from "../provider-token"
 
-const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
-const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
+// Re-exported for existing consumers (e.g. provider-profiles/gateway.ts).
+export { normalizeProviderToken, normalizeProviderBaseUrl }
+
 const LEGACY_CLAUDE_PROFILE_ID = "legacy-claude-provider"
 const SAFE_METADATA_HEADER_NAMES = new Set([
   "anthropic-beta",
@@ -95,26 +98,6 @@ export type ProviderProfileRuntimeConfig = {
   capabilities: ProviderProfileCapabilities
 }
 
-function encryptToken(token: string): string {
-  return encryptStringForStorage(token)
-}
-
-function decryptToken(encrypted: string): string | null {
-  return decryptStringFromStorage(encrypted)
-}
-
-export function normalizeProviderToken(token: string): string {
-  const normalized = token.trim().replace(ZERO_WIDTH_TOKEN_CHARS_REGEX, "")
-  if (!normalized) throw new Error("Token is required")
-  if (!HEADER_SAFE_TOKEN_REGEX.test(normalized)) {
-    throw new Error("Token contains whitespace or unsupported characters")
-  }
-  return normalized
-}
-
-export function normalizeProviderBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, "")
-}
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback
@@ -244,7 +227,7 @@ export function getProviderProfileRuntimeConfig(
 
   const authMode = providerProfileAuthModeSchema.parse(row.authMode)
   const encryptedToken = row.encryptedToken
-  const decryptedToken = encryptedToken ? decryptToken(encryptedToken) : null
+  const decryptedToken = encryptedToken ? decryptProviderToken(encryptedToken) : null
   const token = decryptedToken ? normalizeProviderToken(decryptedToken) : null
   if (authMode !== "none" && !token) {
     throw new Error("Provider profile token is missing")
@@ -350,7 +333,7 @@ export function saveProviderProfile(input: {
   }
 
   const encryptedToken = token
-    ? encryptToken(token)
+    ? encryptProviderToken(token)
     : authMode === "none"
       ? null
       : existing?.encryptedToken
@@ -506,7 +489,7 @@ function insertLegacyProfile(input: {
       baseUrl: normalizeProviderBaseUrl(input.baseUrl),
       defaultModel: input.model,
       authMode: input.authMode,
-      encryptedToken: encryptToken(input.token),
+      encryptedToken: encryptProviderToken(input.token),
       headersJson: "{}",
       targetRuntimesJson: JSON.stringify(input.targets),
       capabilitiesJson: JSON.stringify({

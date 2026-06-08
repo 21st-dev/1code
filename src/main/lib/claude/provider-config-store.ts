@@ -1,19 +1,19 @@
 import { eq } from "drizzle-orm"
 import { z } from "zod"
 import { claudeProviderConfig, getDatabase } from "../db"
+import { isSecureStorageAvailable } from "../secure-storage"
 import {
-  decryptStringFromStorage,
-  encryptStringForStorage,
-  isSecureStorageAvailable,
-} from "../secure-storage"
+  decryptProviderToken,
+  encryptProviderToken,
+  normalizeProviderBaseUrl,
+  normalizeProviderToken,
+} from "../provider-token"
 import type {
   ClaudeProviderAuthMode,
   ClaudeProviderRuntimeConfig,
 } from "./provider-runtime-config"
 
 const CONFIG_ID = "default"
-const ZERO_WIDTH_TOKEN_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g
-const HEADER_SAFE_TOKEN_REGEX = /^[\x21-\x7E]+$/
 
 export const claudeProviderAuthModeSchema = z.enum(["api_key", "auth_token"])
 export type { ClaudeProviderAuthMode, ClaudeProviderRuntimeConfig }
@@ -44,32 +44,6 @@ export type ImportLegacyClaudeProviderConfigResult = {
   migrated: boolean
   reason: "secure_config_exists" | null
   encryptionAvailable: boolean
-}
-
-function encryptToken(token: string): string {
-  return encryptStringForStorage(token)
-}
-
-function decryptToken(encrypted: string): string | null {
-  return decryptStringFromStorage(encrypted)
-}
-
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, "")
-}
-
-function normalizeProviderToken(token: string): string {
-  const normalized = token.trim().replace(ZERO_WIDTH_TOKEN_CHARS_REGEX, "")
-
-  if (!normalized) {
-    throw new Error("Token is required")
-  }
-
-  if (!HEADER_SAFE_TOKEN_REGEX.test(normalized)) {
-    throw new Error("Token contains whitespace or unsupported characters")
-  }
-
-  return normalized
 }
 
 function rowToMetadata(
@@ -114,7 +88,7 @@ export function getActiveClaudeProviderConfig():
     return undefined
   }
 
-  const token = decryptToken(row.encryptedToken)
+  const token = decryptProviderToken(row.encryptedToken)
   if (!token) return undefined
 
   return {
@@ -131,7 +105,7 @@ export function saveClaudeProviderConfig(
   input: SaveClaudeProviderConfigInput,
 ): ClaudeProviderConfigResponse {
   const model = input.model.trim()
-  const baseUrl = normalizeBaseUrl(input.baseUrl)
+  const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
   const token = input.token ? normalizeProviderToken(input.token) : undefined
   const existing = getStoredProviderRow()
 
@@ -143,7 +117,7 @@ export function saveClaudeProviderConfig(
     throw new Error("Token is required for a new provider config")
   }
 
-  const encryptedToken = token ? encryptToken(token) : existing?.encryptedToken
+  const encryptedToken = token ? encryptProviderToken(token) : existing?.encryptedToken
 
   if (!encryptedToken) {
     throw new Error("Token is required for a new provider config")
@@ -198,9 +172,9 @@ export function importLegacyClaudeProviderConfig(
       .values({
         id: CONFIG_ID,
         model: input.model.trim(),
-        baseUrl: normalizeBaseUrl(input.baseUrl),
+        baseUrl: normalizeProviderBaseUrl(input.baseUrl),
         authMode: input.authMode,
-        encryptedToken: encryptToken(normalizeProviderToken(input.token)),
+        encryptedToken: encryptProviderToken(normalizeProviderToken(input.token)),
         createdAt: new Date(),
         updatedAt: new Date(),
       })
